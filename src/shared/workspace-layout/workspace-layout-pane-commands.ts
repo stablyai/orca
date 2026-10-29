@@ -1,5 +1,4 @@
-// Commands on the panes of one terminal tab. Pane ids never change; a moved pane keeps its id,
-// and so its data and scrollback, which are keyed by it.
+// Pane IDs and their keyed data/scrollback survive moves.
 
 import { getNextTerminalOrdinal } from './terminal-tab-ordinal'
 import {
@@ -101,7 +100,7 @@ export function movePane(model: WorkspaceLayoutModel, command: CommandOf<'movePa
   return updateTab(model, command.workspace, { ...tab, panes: { ...tab.panes, root: moved } })
 }
 
-/** Divider sizes only: a different tree or different panes is refused (rule 11). */
+/** Accept divider ratios only when the tree and panes still match (rule 11). */
 export function setPaneRatios(
   model: WorkspaceLayoutModel,
   command: CommandOf<'setPaneRatios'>
@@ -235,7 +234,6 @@ export function movePaneToNewTab(
     createdAt: context.now(),
     customTitle: null,
     color: null,
-    // The chat pane's new tab opens in chat view, as the window's drag-out opens it.
     ...(tab.panes.chatLeafId === leafId ? { viewMode: 'chat' as const } : {}),
     kind: 'terminal',
     terminal: {

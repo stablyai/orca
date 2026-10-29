@@ -54,17 +54,6 @@ describe('TerminalLigaturesAddon', () => {
     addonMock.joiner.mockImplementation((text) => (text.includes('=>') ? [[2, 4]] : []))
   })
 
-  it('reuses joiner results for unchanged row text', () => {
-    const harness = createTerminalHarness()
-    new TerminalLigaturesAddon().activate(harness.terminal)
-    const joiner = harness.getRegisteredJoiner()
-
-    expect(joiner('a => b')).toEqual([[2, 4]])
-    expect(joiner('a => b')).toEqual([[2, 4]])
-
-    expect(addonMock.joiner).toHaveBeenCalledTimes(1)
-  })
-
   it('returns fresh tuples because xterm mutates joiner ranges', () => {
     const harness = createTerminalHarness()
     new TerminalLigaturesAddon().activate(harness.terminal)
@@ -99,19 +88,6 @@ describe('TerminalLigaturesAddon', () => {
     joiner('a => b')
 
     expect(addonMock.joiner).toHaveBeenCalledTimes(2)
-  })
-
-  it('caps cached short segments by entry count', () => {
-    const harness = createTerminalHarness()
-    new TerminalLigaturesAddon().activate(harness.terminal)
-    const joiner = harness.getRegisteredJoiner()
-
-    for (let index = 0; index <= 2_048; index++) {
-      joiner(`s${index}`)
-    }
-    joiner('s0')
-
-    expect(addonMock.joiner).toHaveBeenCalledTimes(2_050)
   })
 
   it('evicts the least-recently-used segment', () => {

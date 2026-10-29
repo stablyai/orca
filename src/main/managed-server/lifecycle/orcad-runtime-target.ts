@@ -5,10 +5,13 @@ import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import { pinnedRuntimeTargetForHost } from '../../ssh/pinned-runtime-host-target'
 import type { RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 
-/**
- * The runtime target managed orcad deploys on a host, picked by glibc: the host's own target, or
- * its compat runtime below the default's glibc floor.
- */
+/** Lets a caller that knows the host kind add its own fix; the message is the one SSH shows. */
+export class OrcadHostGlibcUnsupportedError extends OrcadHostUnsupportedError {
+  constructor(target: string, glibc: string) {
+    super(`No Orca runtime supports ${target} with glibc ${glibc}.`)
+  }
+}
+
 export async function resolveOrcadRuntimeTarget(options: {
   conn: OrcadHostTransport
   host: RemoteHostPlatform
@@ -19,9 +22,7 @@ export async function resolveOrcadRuntimeTarget(options: {
   const target = pinnedRuntimeTargetForHost(facts)
   if (!target) {
     const glibc = facts.glibc ? `${facts.glibc.major}.${facts.glibc.minor}` : 'unknown'
-    throw new OrcadHostUnsupportedError(
-      `No Orca runtime supports ${facts.target} with glibc ${glibc}.`
-    )
+    throw new OrcadHostGlibcUnsupportedError(facts.target, glibc)
   }
   return target
 }

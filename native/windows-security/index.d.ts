@@ -51,3 +51,31 @@ export declare function grantAccessAsync(
   accessMask: number,
   options: GrantAccessOptions
 ): Promise<void>
+
+export type StdHandleInheritanceFailure = { stream: 'stdin' | 'stdout' | 'stderr'; code: number }
+
+/**
+ * Makes the process's std handles non-inheritable, skipping absent ones. Never throws; returns the
+ * handles SetHandleInformation rejected (e.g. a legacy console pseudo-handle) with their Win32 code.
+ */
+export declare function clearStdHandleInheritance(): StdHandleInheritanceFailure[]
+
+/** `exitWatchError` is the Win32 code when the exit can't be observed; the child still runs. */
+export type IsolatedSpawnResult = { pid: number; exitWatchError: number | null }
+
+/**
+ * Starts `file` detached and hidden, inheriting only a NUL handle for its stdio, so none of this
+ * process's other inheritable handles reach it. `commandLine` is the full, already quoted line
+ * (argv[0] included); an empty `cwd` keeps ours; `environmentBlock` is `K=V\0…\0\0`. `onExit` gets the exit code and never
+ * keeps the event loop alive. Throws an Error naming the failed Win32 call.
+ */
+export declare function spawnDetachedIsolated(
+  file: string,
+  commandLine: string,
+  cwd: string,
+  environmentBlock: string,
+  onExit: (code: number) => void
+): IsolatedSpawnResult
+
+/** Whether the resolved binary exports `name`; loads it, but calls nothing else. */
+export declare function hasNativeExport(name: string): boolean

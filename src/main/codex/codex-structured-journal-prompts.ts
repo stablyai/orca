@@ -151,7 +151,6 @@ export class CodexJournalPrompts {
         event.threadId
       )}:${encodeURIComponent(event.promptKey)}`,
       items,
-      // A child's approval arrives on the child's own thread, so it names the asker.
       this.deps.attributionFor(event.threadId, turnId)
     )
   }

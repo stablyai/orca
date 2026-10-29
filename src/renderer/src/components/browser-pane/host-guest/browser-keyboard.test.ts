@@ -3,8 +3,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { isEditableKeyboardTarget } from './browser-keyboard'
 
-// Why: the old fakes passed a single joined selector to `closest`, so any
-// `selector.includes(token)` check matched every token. Use the real DOM instead.
+// Use real closest(): substring-based fakes matched every token in the joined selector.
 function targetInside(hostHtml: string): Element {
   const host = document.createElement('div')
   host.innerHTML = `${hostHtml}`

@@ -1,14 +1,4 @@
-/**
- * Where a CLI create — or an edit that moves the record's project/workspace —
- * wants the automation to land.
- *
- * The CLI cannot project a host itself, so it asks the same authority that will
- * perform the write to resolve the selector it was given and to name its
- * current SSH registrations. That captured incarnation rides along on the
- * request, and the authority re-checks it inside the write, so a target that
- * disappears in between fails the write instead of silently repointing the
- * record at a dead or re-registered host.
- */
+// Capture the authority's SSH generation so it can reject removed or re-registered targets at write time.
 
 import {
   AUTOMATION_OWNER_CONFLICT_CODES,
@@ -21,7 +11,7 @@ import type { Repo } from '../shared/repo-types'
 import type { RuntimeClient } from './runtime-client'
 import { fetchSshTargetSummaries } from './host-selector-alternatives'
 
-/** The project/workspace selectors the same request carries; both empty means the host cannot change. */
+/** Empty selectors mean the execution host cannot change. */
 export type AutomationDestinationTarget = { repo?: string; workspace?: string }
 
 async function resolveTargetRepo(
@@ -40,12 +30,7 @@ async function resolveTargetRepo(
     .repo
 }
 
-/**
- * `undefined` means the authority registers the target but assigns no
- * generation, which is a host with nothing to fence — not a host to fail
- * against. A target the authority does not register at all is positive
- * evidence that the destination is gone.
- */
+// A registered target without a generation needs no fence; an unregistered target is gone.
 async function sshTargetGeneration(
   client: RuntimeClient,
   targetId: string

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Trans } from 'react-i18next'
 import { ChevronDown, CircleAlert, Copy, RefreshCw } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible'
@@ -11,7 +12,7 @@ import { MobileRelayMintFailureNotice } from './mobile-relay-mint-failure-notice
 import { WindowsFirewallNotice } from './WindowsFirewallNotice'
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
 import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
-import { translate } from '@/i18n/i18n'
+import { i18n, translate } from '@/i18n/i18n'
 
 /** Why: one full sentence per device kind so translators own word order and punctuation. */
 function pairDeviceHeading(): string {
@@ -25,7 +26,6 @@ function pairDeviceHeading(): string {
   return translate('auto.components.mobile.MobileHero.pairThisComputer', 'Pair this computer.')
 }
 
-/** Short copy for the QR frame when no image can be shown. */
 function emptyPairingQrMessage(args: {
   relayMintFailure: MobileRelayMintFailure | null
   canGeneratePairing: boolean
@@ -119,8 +119,7 @@ export function MobileHeroPairingStep({
   const pairingWasReadyRef = useRef(pairingUrl != null && !pairLoading)
   const usingRelay = connectionMode === 'automatic'
   const [networkDisclosureOpen, setNetworkDisclosureOpen] = useState(false)
-  // A custom address is a deliberate override: show the row outright rather than
-  // behind a trigger that could not collapse it anyway.
+  // Show custom addresses directly; their pinned row cannot be collapsed by a disclosure trigger.
   const networkDisclosurePinned = selectedAddressIsCustom
   const emptyQrMessage =
     !pairLoading && pairQrDataUrl == null
@@ -192,11 +191,14 @@ export function MobileHeroPairingStep({
         </div>
         <h2 className="mp-h2">{pairDeviceHeading()}</h2>
         <p className="mp-lead-sm">
-          {translate('auto.components.mobile.MobileHero.d1495e5e64', 'Open Orca Mobile, tap')}{' '}
-          <strong>
-            {translate('auto.components.mobile.MobileHero.3aa7bb2d8b', 'Pair Desktop')}
-          </strong>
-          {translate('auto.components.mobile.MobileHero.2f077ef4eb', ', and scan the code.')}
+          <Trans
+            i18n={i18n}
+            defaults={translate(
+              'auto.components.mobile.MobileHero.openAppAndScan',
+              'Open Orca Mobile, tap <strong>Pair Desktop</strong>, and scan the code.'
+            )}
+            components={{ strong: <strong /> }}
+          />
         </p>
         <MachineNameField id="mobile-hero-machine-name" className="mp-pairing-machine" />
       </div>
@@ -277,9 +279,7 @@ export function MobileHeroPairingStep({
       </div>
       <div className="mp-pairing-controls">
         {usingRelay && !networkDisclosurePinned ? (
-          // Why: Relay is the default path; this only configures the LAN/Tailscale
-          // endpoint the phone prefers when nearby. Noun phrasing + muted style so
-          // it reads as an alternative, not a mode switch next to "Copy pairing code".
+          // Relay stays primary; this disclosure configures its optional nearby LAN/Tailscale endpoint.
           <Collapsible
             open={networkDisclosureOpen}
             onOpenChange={setNetworkDisclosureOpen}
@@ -300,10 +300,7 @@ export function MobileHeroPairingStep({
               </button>
             </CollapsibleTrigger>
             <CollapsibleContent>
-              {/* The row's own 18px gap moves to the Collapsible so the spacing
-                  below stays identical whether the disclosure is open. `!` is
-                  required: mobile-page.css is unlayered and so outranks Tailwind's
-                  utilities layer on specificity ties. */}
+              {/* Move the gap to the disclosure; ! overrides unlayered mobile-page.css, which outranks Tailwind utilities. */}
               <div className="mt-2 space-y-2 [&>.mp-network-row]:mb-0!">
                 <p className="mp-disclosure-hint">
                   {translate(

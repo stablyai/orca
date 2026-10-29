@@ -9,10 +9,7 @@ import { RuntimeClientError, type RuntimeRpcResponse } from './types'
 
 type StatusProbe = (metadata: RuntimeMetadata) => Promise<RuntimeRpcResponse<RuntimeStatus>>
 
-/**
- * The stamp to enforce for a CLI dialing `userDataPath`. Explicitly choosing another profile (e.g.
- * `orca-dev` from a packaged Orca's terminal) is the user's target, not a fallback, so it is not fenced.
- */
+/** A different nondefault profile opts out of the inherited runtime fence. */
 export function resolveFencedRuntimeSource(
   stamp: RuntimeSourceStamp | null,
   userDataPath: string,
@@ -21,17 +18,13 @@ export function resolveFencedRuntimeSource(
   if (!stamp?.profilePath || isSameUserDataPath(userDataPath, stamp.profilePath)) {
     return stamp
   }
-  // Why: the platform default is what an unpinned terminal falls back to, which is the case to fence.
+  // Fence unpinned terminals falling back to the platform default.
   return platformDefaultPath !== null && isSameUserDataPath(userDataPath, platformDefaultPath)
     ? stamp
     : null
 }
 
-/**
- * Refuses, before the request is sent, a runtime other than the one that launched this process.
- * A new incarnation of the same source (restart, update) is accepted so surviving panes keep working.
- * Returns what the request must carry so the host itself refuses it if it is not that runtime.
- */
+/** Fence requests to their launching source, allowing new incarnations after restarts and updates. */
 export class RuntimeSourceFence {
   private readonly verifiedRuntimeIds = new Set<string>()
 
@@ -48,7 +41,7 @@ export class RuntimeSourceFence {
     metadata: RuntimeMetadata,
     method: string
   ): Promise<ExpectedRuntimeSource | undefined> {
-    // Why status.get is exempt: it is the read-only probe itself.
+    // status.get is the read-only probe itself.
     if (!this.expected || method === 'status.get') {
       return undefined
     }
@@ -56,7 +49,7 @@ export class RuntimeSourceFence {
     if (this.verifiedRuntimeIds.has(metadata.runtimeId)) {
       return expectation
     }
-    // Why trust the answer: the transport rejects a response from any runtime but metadata's.
+    // The transport verifies that this response came from metadata’s runtime.
     const response = await this.probe(metadata)
     if (response.ok === false) {
       throw new RuntimeClientError(
@@ -91,7 +84,7 @@ export function createRuntimeSourceFence(
   try {
     platformDefaultPath = getPlatformUserDataPath()
   } catch {
-    // Why: no resolvable default (Windows without APPDATA) means nothing can fall back to it.
+    // Without a platform default, no terminal can fall back to it.
   }
   return new RuntimeSourceFence(
     resolveFencedRuntimeSource(readRuntimeSourceStamp(env), userDataPath, platformDefaultPath),

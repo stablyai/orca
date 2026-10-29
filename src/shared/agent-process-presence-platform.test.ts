@@ -32,6 +32,7 @@ describe('platform process evidence', () => {
     platform('linux')
     read.mockRejectedValueOnce(Object.assign(new Error('gone'), { code: 'ENOENT' }))
     expect(await readAgentProcess(4242)).toEqual({ verdict: 'exited' })
+    expect(read).toHaveBeenLastCalledWith('/proc/4242/stat', 'utf8')
     const fields = ['S', ...Array(18).fill('0'), '100']
     read
       .mockResolvedValueOnce(`4242 (agent (name)) ${fields.join(' ')}`)
@@ -46,6 +47,7 @@ describe('platform process evidence', () => {
       zombie: false,
       stopped: false
     })
+    expect(read).toHaveBeenLastCalledWith('/proc/sys/kernel/random/boot_id', 'utf8')
     read
       .mockResolvedValueOnce(`4242 (agent) ${['T', ...fields.slice(1)].join(' ')}`)
       .mockResolvedValueOnce('boot-id\n')

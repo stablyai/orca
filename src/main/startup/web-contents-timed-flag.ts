@@ -1,4 +1,4 @@
-// Why: webContents-scoped auto-expiring flag so an intent can't leak to a later renderer load; `consume` clears on match for one-shot signals.
+// Expire intents per WebContents so later loads cannot inherit them; consume supports one-shot matches.
 export function createWebContentsTimedFlag(defaultDurationMs = 10_000): {
   mark: (webContentsId: number, durationMs?: number) => void
   clear: (webContentsId?: number) => void

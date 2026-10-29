@@ -1,13 +1,4 @@
-/**
- * One place where a row action decides between its fenced path and its legacy
- * one, so the page's handlers stay three lines each.
- *
- * The order is deliberate. A captured owner always wins. A row the authority
- * qualified but could not make executable is refused with the reason. Only a
- * row with no owner metadata at all falls back to the unfenced call, and that
- * arm exists solely so mixed-version clients keep working until the inference
- * is removed — it is the legacy path, not a default.
- */
+/** Prefer captured ownership, refuse qualified non-executable rows, and use unfenced fallback only when metadata was never captured, preserving mixed-version clients. */
 
 import type {
   Automation,
@@ -38,11 +29,7 @@ import type { AutomationHostRecoveryAction } from './automation-host-status-desc
 export type AutomationActionNotice = {
   message: string
   recovery: AutomationHostRecoveryAction | null
-  /**
-   * `owner` means the request was refused because of who owns the record, so
-   * the caller must not proceed with a stale copy; `failure` is an ordinary
-   * error the caller may still degrade around.
-   */
+  /** Owner refusal forbids degrading to stale data; ordinary failures may still permit it. */
   severity: 'owner' | 'failure'
 }
 
@@ -52,12 +39,7 @@ export type AutomationDispatchContext = {
   authority: AutomationAuthorityRef
 }
 
-/**
- * Which copy of a record an action addresses. Both halves are load-bearing and
- * neither derives the other: the row key picks the owner out of a list that may
- * hold the same ID twice, and the ID is what that owner's authority stores it
- * under.
- */
+/** Keep both identities: row key selects the captured host; record ID addresses that authority’s stored copy. */
 export type AutomationDispatchRow = {
   rowKey: string
   automationId: string

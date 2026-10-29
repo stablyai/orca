@@ -14,8 +14,8 @@ import {
   type RemotePairingFailure,
   type VerifyAndAddRuntimeEnvironmentResult
 } from '../../../shared/remote-pairing-verification'
-import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-error'
-import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime-client'
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
+import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import {
   getPreferredPairingOffer,
@@ -23,6 +23,10 @@ import {
   redactRuntimeEnvironment
 } from '../../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
+import {
+  remoteServerPairingFailureText,
+  type RemoteServerPairingFailureCode
+} from '../../../shared/remote-server-pairing-failure-copy'
 
 type VerifyAndAddRuntimeEnvironmentArgs = {
   name: string
@@ -97,19 +101,12 @@ export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
   try {
     outcome = addOrUpdateEnvironmentFromPairingCode(userDataPath, {
       ...args,
-      // Why: recorded only if the link is for a saved server, which the key match proves it is.
+      // Only a verified key match permits updating an existing server identity.
       runtimeId: runtimeStatus.runtimeId,
       ...(usesSshTunnel ? { connectionDependency: 'ssh-tunnel' as const } : {})
     })
   } catch (error) {
-    return {
-      ok: false,
-      kind: 'environment-save-failed',
-      message:
-        error instanceof RuntimeEnvironmentStoreError && error.code === 'invalid_argument'
-          ? error.message
-          : 'Orca verified the host but could not save it. Check local settings storage and try again.'
-    }
+    return pairingSaveFailure(error, 'hostSaveFailed')
   }
   return {
     ok: true,
@@ -119,24 +116,16 @@ export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
   }
 }
 
-/**
- * Replaces a saved server's revoked pairing with a fresh link to the same server. Nothing is
- * written unless the link verifies and carries the saved server's key, so a bad or foreign link
- * leaves the working record untouched.
- */
+/** Replace pairing only after verifying the saved host key; invalid or foreign links leave it untouched. */
 export async function verifyAndRepairRuntimeEnvironmentFromPairingCode(
   userDataPath: string,
   args: { selector: string; pairingCode: string }
 ): Promise<VerifyAndAddRuntimeEnvironmentResult> {
   const existing = resolveEnvironment(userDataPath, args.selector)
   if (isEphemeralVmRuntimeEnvironment(existing)) {
-    return {
-      ok: false,
-      kind: 'environment-save-failed',
-      message: 'This server belongs to a cloud workspace, which pairs it again when it resumes.'
-    }
+    return pairingSaveFailure(null, 'repairCloudWorkspace')
   }
-  // Why: a tunnel-backed server is legitimately re-paired with a loopback link.
+  // SSH tunnel pairings legitimately use loopback links.
   const verified = await verifyPairingCode(
     args.pairingCode,
     existing.connectionDependency === 'ssh-tunnel'
@@ -144,7 +133,7 @@ export async function verifyAndRepairRuntimeEnvironmentFromPairingCode(
   if (!verified.ok) {
     return verified
   }
-  // Why the key, not runtimeId: runtimeId is minted per server process, so a restart changes it.
+  // Host key persists across restarts; runtimeId does not.
   if (verified.link.pairing.publicKeyB64 !== getPreferredPairingOffer(existing).publicKeyB64) {
     return {
       ok: false,
@@ -156,23 +145,37 @@ export async function verifyAndRepairRuntimeEnvironmentFromPairingCode(
   try {
     environment = updateEnvironmentFromPairingCode(userDataPath, existing.id, {
       pairingCode: args.pairingCode,
-      // Why: the key match proves the same server; a restarted one may report a new runtimeId.
+      // The verified same host may have restarted with a new runtimeId.
       runtimeId: verified.runtimeStatus.runtimeId
     })
   } catch (error) {
-    return {
-      ok: false,
-      kind: 'environment-save-failed',
-      message:
-        error instanceof RuntimeEnvironmentStoreError && error.code === 'invalid_argument'
-          ? error.message
-          : 'Orca verified the server but could not save the new pairing. Check local settings storage and try again.'
-    }
+    return pairingSaveFailure(error, 'repairSaveFailed')
   }
   return {
     ok: true,
     environment: redactRuntimeEnvironment(environment),
     runtimeStatus: verified.runtimeStatus
+  }
+}
+
+/** A store refusal keeps its own message and code; anything else gets the generic save failure. */
+function pairingSaveFailure(
+  error: unknown,
+  fallback: RemoteServerPairingFailureCode
+): RemotePairingFailure {
+  if (error instanceof RuntimeEnvironmentStoreError && error.code === 'invalid_argument') {
+    return {
+      ok: false,
+      kind: 'environment-save-failed',
+      message: error.message,
+      ...error.pairingFailure
+    }
+  }
+  return {
+    ok: false,
+    kind: 'environment-save-failed',
+    message: remoteServerPairingFailureText(fallback),
+    errorCode: fallback
   }
 }
 

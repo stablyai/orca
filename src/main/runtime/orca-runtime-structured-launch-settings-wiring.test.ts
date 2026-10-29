@@ -20,6 +20,7 @@ vi.mock('electron', () => ({
 }))
 
 import { OrcaRuntimeService } from './orca-runtime'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 describe('execution host structured launch settings wiring', () => {
   it('reads saved Command and Arguments from the host settings and rereads changes', async () => {
@@ -28,8 +29,7 @@ describe('execution host structured launch settings wiring', () => {
       agentCmdOverrides: { claude: `"${process.execPath}"`, codex: `"${process.execPath}"` },
       agentDefaultArgs: { claude: '--model "model one"', codex: '-c model_reasoning_effort=high' }
     }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked installer only reads the store's getSettings method.
-    const runtime = new OrcaRuntimeService({ getSettings: () => settings } as never)
+    const runtime = new OrcaRuntimeService(partialRuntimeStore({ getSettings: () => settings }))
     await runtime.ensureStructuredAgentSessionHost()
     const deps = installed.mock.calls[0]?.[0]
     expect(deps).toBeDefined()
@@ -43,7 +43,7 @@ describe('execution host structured launch settings wiring', () => {
     settings.agentDefaultArgs = { claude: '--dangerously-skip-permissions', codex: '' }
     expect(deps?.resolveAgentFullAccess?.('claude')).toBe(true)
     expect(deps?.resolveAgentFullAccess?.('codex')).toBe(false)
-    // OMP has no bypass argument, so its chats from before modes take the new-chat setting.
+    // OMP lacks bypass arguments; legacy chats inherit the new-chat permission setting.
     settings.nativeChatPermissionMode = 'full-access'
     expect(deps?.resolveAgentFullAccess?.('omp')).toBe(true)
     settings.nativeChatPermissionMode = 'ask'
@@ -58,7 +58,7 @@ describe('execution host structured launch settings wiring', () => {
     expect(deps?.resolveCodexCommand?.()).toBe(resolveCliCommand('codex'))
   })
 
-  // The chat child's PATH and home decide which binary runs, for a saved bare command and the stock one.
+  // Both stock and bare saved commands must resolve in the chat child's PATH/home.
   it.skipIf(process.platform === 'win32')(
     'resolves both agents against the PATH and home the chat child will run with',
     async () => {
@@ -72,8 +72,7 @@ describe('execution host structured launch settings wiring', () => {
         const settings: Partial<GlobalSettings> = {
           agentCmdOverrides: { claude: 'custom-claude', codex: 'custom-codex' }
         }
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked installer only reads the store's getSettings method.
-        const runtime = new OrcaRuntimeService({ getSettings: () => settings } as never)
+        const runtime = new OrcaRuntimeService(partialRuntimeStore({ getSettings: () => settings }))
         await runtime.ensureStructuredAgentSessionHost()
         const deps = installed.mock.calls[0]?.[0]
         const childLookup = { pathEnv: bin, homePath: bin }

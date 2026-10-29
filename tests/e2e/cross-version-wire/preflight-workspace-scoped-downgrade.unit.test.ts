@@ -1,15 +1,5 @@
-// Workspace-scoped agent detection, paired across two builds: current code against the newest
-// published release.
-//
-// `preflight.detectAgents` / `refreshAgents` gained an optional `{ worktreeId }` so the host probes
-// the workspace's own runtime (a WSL distro on a Windows host). Each skew must keep today's answer:
-//
-//  - an old client sends nothing, and a new host answers with its own default as it always did;
-//  - a new client asks an old host only for its default, because the capability is absent — and an
-//    old host that is sent the field anyway (mobile does not gate) discards it rather than refusing.
-//
-// The old side's capability list is read from its checkout and the capability removed from it, so
-// this stays exercised after a release ships the capability.
+// Pair workspace-scoped preflight across builds: old clients keep host defaults; old hosts strip unsupported worktreeId.
+// Remove the capability from released lists so rolling releases cannot erase the downgrade case.
 
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -23,10 +13,10 @@ import { getRuntimeAgentInventoryKey } from '../../../src/renderer/src/store/sli
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
-  resolveBaselineReleaseRef
+  resolveBaselineReleaseRef,
+  releaseModuleExport
 } from './release-checkout'
 
-// Why: a cold CI run extracts the baseline checkout before the first pairing.
 const SUITE_TIMEOUT_MS = 180_000
 const WORKTREE = 'repo-1::\\\\wsl.localhost\\Ubuntu\\home\\me\\repo'
 
@@ -76,15 +66,6 @@ globalThis.window = { api: {} }
 const { createTestStore } =
   await import('../../../src/renderer/src/store/slices/store-test-helpers')
 
-function member<T>(module: Record<string, unknown>, name: string): T {
-  const value = module[name]
-  if (value === undefined) {
-    throw new Error(`the baseline release exports no ${name}`)
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a release module is typed unknown; the name is the same export this build calls, and a missing one throws above.
-  return value as T
-}
-
 function hostBuild(
   capabilities: readonly string[],
   catalog: Record<string, unknown>,
@@ -117,14 +98,14 @@ beforeAll(async () => {
     ),
     importReleaseCheckoutModule(checkout, 'src/main/runtime/rpc/dispatcher-request-parsing.ts')
   ])
-  const oldCatalog = member<Record<string, unknown>>(catalog, 'RPC_PARAMS_BY_METHOD')
+  const oldCatalog = releaseModuleExport<Record<string, unknown>>(catalog, 'RPC_PARAMS_BY_METHOD')
   oldHost = hostBuild(
-    member<readonly string[]>(protocol, 'RUNTIME_CAPABILITIES').filter(
+    releaseModuleExport<readonly string[]>(protocol, 'RUNTIME_CAPABILITIES').filter(
       (capability) => capability !== PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY
     ),
     // Why null: once a release ships the schema, the old side must still be the pre-schema host.
     { ...oldCatalog, 'preflight.detectAgents': null, 'preflight.refreshAgents': null },
-    member<ParseParams>(parsing, 'parseRpcRequestParams')
+    releaseModuleExport<ParseParams>(parsing, 'parseRpcRequestParams')
   )
   newHost = hostBuild(RUNTIME_CAPABILITIES, RPC_PARAMS_BY_METHOD, (request, method, meta) =>
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the parser only reads `params` from the declaration.

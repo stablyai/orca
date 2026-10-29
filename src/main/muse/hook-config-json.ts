@@ -15,7 +15,7 @@ export const MUSE_MANAGED_HOOK_ENV_VARS = [
   'ORCA_TAB_ID',
   'ORCA_WORKTREE_ID',
   'ORCA_AGENT_LAUNCH_TOKEN',
-  // Why: Windows cmd AutoRun scripts commonly live under %USERPROFILE%; without it every hook exits 1.
+  // Windows cmd AutoRun may need USERPROFILE or every hook exits 1.
   'USERPROFILE'
 ] as const
 
@@ -58,8 +58,7 @@ export function serializeMuseSettings(
   managedHooksPath: string | undefined
 ): string {
   if (originalText === null) {
-    // Why: a fresh settings.json needs `"schema_version": 1` or every muse
-    // command fails with `malformed settings file`.
+    // Muse rejects new settings without schema_version: 1.
     const config: Record<string, unknown> = { schema_version: 1 }
     if (managedHooksPath !== undefined) {
       config.managed_hooks_path = managedHooksPath
@@ -79,7 +78,6 @@ export function serializeMuseSettings(
   if (current?.managed_hooks_path !== managedHooksPath) {
     text = applyEdits(
       text,
-      // Why: `undefined` removes the key, which is how remove() drops the pointer.
       modify(text, ['managed_hooks_path'], managedHooksPath, {
         formattingOptions: { insertSpaces: true, tabSize: 2 }
       })

@@ -10,17 +10,15 @@ import { createUntitledMarkdownFile } from '@/lib/create-untitled-markdown'
 import { translate } from '@/i18n/i18n'
 
 function closedUnsavedFilesToastTitle(count: number, workspace: string): string {
-  return count === 1
-    ? translate(
-        'components.workspace.delete.unsavedEdits.closedToast_one',
-        'Closed {{count}} file with unsaved edits from {{workspace}}',
-        { count, workspace }
-      )
-    : translate(
-        'components.workspace.delete.unsavedEdits.closedToast_other',
-        'Closed {{count}} files with unsaved edits from {{workspace}}',
-        { count, workspace }
-      )
+  return translate(
+    'components.workspace.delete.unsavedEdits.closedToast',
+    'Closed {{count}} files with unsaved edits from {{workspace}}',
+    {
+      count,
+      workspace,
+      defaultValue_one: 'Closed {{count}} file with unsaved edits from {{workspace}}'
+    }
+  )
 }
 
 /** Recovery creates new files only in the active workspace, never at the removed paths. */
@@ -41,7 +39,7 @@ export async function reopenClosedUnsavedFiles(
         undefined,
         false
       )
-      // Why the provenance owner: a same-id workspace on another host must not supply the path.
+      // Use provenance ownership so a same-ID workspace on another host cannot supply the recovery path.
       const ownerHostId = operationProvenance.generation.route.executionHostId
       const activeHostId = state.activeWorkspaceExecutionHostId
       const worktree = state.getKnownWorktreeById(
@@ -95,10 +93,11 @@ export async function reopenClosedUnsavedFiles(
   return failed
 }
 
-/** Callbacks retained by the toast keep only a clearable holder, not the recovered text. */
+/** Toast callbacks retain a clearable holder; dismissal releases kept records and recovered text. */
 export function showClosedUnsavedFilesToast(
   closed: readonly ClosedUnsavedFile[],
-  workspaceLabel: string
+  workspaceLabel: string,
+  notice: number
 ): void {
   const holder: { files: readonly ClosedUnsavedFile[] | null } = { files: closed }
   let reopening = false
@@ -128,6 +127,7 @@ export function showClosedUnsavedFilesToast(
     onDismiss: () => {
       const files = holder.files
       holder.files = null
+      useAppStore.getState().releaseKeptEditorBuffers(notice)
       if (files) {
         console.warn('[editor] dropped unsaved edits from a removed workspace', {
           filePaths: files.map((file) => file.filePath)

@@ -16,7 +16,6 @@ import {
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const SESSION = 'session-alpha-1'
-/** The fixture lease's last renewal. */
 const LAST_RENEWED_AT = 30_000
 
 let directory: string
@@ -100,7 +99,7 @@ describe('who is told a proof of death landed', () => {
       })
     ).rejects.toThrow()
     await store.reconcileOnRestart({ probe: async () => ({ outcome: 'pid-absent' }), now: 90_000 })
-    // The proof already on the record is not news to a later write.
+    // Already-persisted proof must not notify again on unrelated writes.
     await store.setSessionTabVisibility(SESSION, true)
 
     expect(told).toEqual([expect.objectContaining({ kind: 'pid-absent', ownerFence: 7 })])
@@ -112,7 +111,6 @@ describe('a failed acquisition', () => {
   const NOW = 1_800_000_000_000
   const OPERATION_ID = `${NOW}-${'1'.padStart(32, '0')}`
 
-  /** Reserve and observe the spawn at NOW, as an attach does before it can fail. */
   async function spawnedOwner(store: AgentSessionRecordStore): Promise<number> {
     const reserved = await store.reserveOwner({
       sessionId: SESSION,

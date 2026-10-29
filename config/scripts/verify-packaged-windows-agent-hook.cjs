@@ -7,11 +7,7 @@ const { PE_MACHINE, describePeMachine, readPeMachine } = require('./windows-pe-m
 // electron-builder's `Arch` enum values for the Windows slices Orca can package.
 const ARCH_BY_ELECTRON_BUILDER_ENUM = { 1: 'x64', 3: 'arm64' }
 
-/**
- * Fails packaging when the native agent hook is absent or built for another machine.
- * Why here: electron-builder only warns on a missing extraResources source, and an
- * install without the hook silently keeps every user on the slower `.cmd` form.
- */
+// Require correct-arch native hook: missing extraResources only warns and otherwise silently leaves users on slower .cmd form.
 function verifyPackagedWindowsAgentHook(resourcesDir, electronBuilderArch) {
   const hookPath = join(resourcesDir, 'bin', 'orca-agent-hook.exe')
   if (!existsSync(hookPath)) {

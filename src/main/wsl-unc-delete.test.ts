@@ -1,9 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessResult } from '@orca/process-host/process-spec'
 
-const { runProcessMock } = vi.hoisted(() => ({ runProcessMock: vi.fn() }))
+const { runProcessMock, wokenMock } = vi.hoisted(() => ({
+  runProcessMock: vi.fn(),
+  wokenMock: vi.fn((_distro: string) => {})
+}))
 
 vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
+vi.mock('./wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  noteWslDistroWoken: wokenMock
+}))
 vi.mock('./wsl-interop-spawn-directory', () => ({
   resolveWslInteropSpawnCwd: () => 'C:\\Windows'
 }))
@@ -13,6 +20,7 @@ function exited(code: number, stderr = ''): ProcessResult {
 }
 
 import { tryDeleteWslUncPath } from './wsl-unc-delete'
+import { isWslUserActFor } from './wsl/wsl-user-act-scope'
 
 async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>): Promise<T> {
   const original = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -59,8 +67,6 @@ describe('tryDeleteWslUncPath', () => {
     const [{ program, args: spawnArgs, cwd, timeoutMs }] = runProcessMock.mock.calls[0]
     expect(program).toBe('wsl.exe')
     expect(timeoutMs).toBe(30000)
-    // Why a concrete directory (#16463): this deletes worktrees, so the cwd it
-    // would otherwise inherit is the very directory about to disappear.
     expect(cwd).toEqual('C:\\Windows')
     expect(spawnArgs).toEqual([
       '-d',
@@ -148,5 +154,22 @@ describe('tryDeleteWslUncPath', () => {
         tryDeleteWslUncPath('\\\\wsl.localhost\\Ubuntu\\home\\me\\repo\\file.txt')
       ).rejects.toThrow('Failed to delete WSL path: rm: cannot remove: Permission denied')
     })
+  })
+
+  // A user's delete may start a stopped distro; background readers must then stop trusting "stopped".
+  it('runs the delete as a user act on its distro and notes it woken', async () => {
+    let insideAct = false
+    runProcessMock.mockImplementation(async () => {
+      insideAct = isWslUserActFor('Ubuntu')
+      return exited(0)
+    })
+    wokenMock.mockClear()
+    await withPlatform('win32', async () => {
+      await expect(
+        tryDeleteWslUncPath('\\\\wsl.localhost\\Ubuntu\\home\\me\\old.jsonl')
+      ).resolves.toBe(true)
+    })
+    expect(insideAct).toBe(true)
+    expect(wokenMock).toHaveBeenCalledWith('Ubuntu')
   })
 })

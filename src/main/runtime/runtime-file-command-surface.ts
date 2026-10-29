@@ -15,6 +15,7 @@ type RuntimeFileCommandName =
   | 'readFileExplorerDir'
   | 'watchFileExplorer'
   | 'readFileExplorerPreview'
+  | 'readChatImagePreview'
   | 'readFileExplorerChunk'
   | 'readDocPreviewFile'
   | 'writeFileExplorerFile'
@@ -24,6 +25,7 @@ type RuntimeFileCommandName =
   | 'createFileExplorerDir'
   | 'createFileExplorerDirNoClobber'
   | 'commitFileExplorerUpload'
+  | 'replaceFileExplorerFileWithUpload'
   | 'renameFileExplorerPath'
   | 'copyFileExplorerPath'
   | 'deleteFileExplorerPath'
@@ -32,6 +34,7 @@ type RuntimeFileCommandName =
   | 'listRuntimeMarkdownDocuments'
   | 'pathsExistRuntimeFiles'
   | 'statRuntimeFile'
+  | 'stagedFileSaves'
 
 export type RuntimeFileCommandSurface = Pick<RuntimeFileCommands, RuntimeFileCommandName>
 
@@ -54,6 +57,7 @@ export function installRuntimeFileCommandSurface(
     readFileExplorerDir: commands.readFileExplorerDir.bind(commands),
     watchFileExplorer: commands.watchFileExplorer.bind(commands),
     readFileExplorerPreview: commands.readFileExplorerPreview.bind(commands),
+    readChatImagePreview: commands.readChatImagePreview.bind(commands),
     readFileExplorerChunk: commands.readFileExplorerChunk.bind(commands),
     readDocPreviewFile: commands.readDocPreviewFile.bind(commands),
     writeFileExplorerFile: commands.writeFileExplorerFile.bind(commands),
@@ -63,6 +67,7 @@ export function installRuntimeFileCommandSurface(
     createFileExplorerDir: commands.createFileExplorerDir.bind(commands),
     createFileExplorerDirNoClobber: commands.createFileExplorerDirNoClobber.bind(commands),
     commitFileExplorerUpload: commands.commitFileExplorerUpload.bind(commands),
+    replaceFileExplorerFileWithUpload: commands.replaceFileExplorerFileWithUpload.bind(commands),
     renameFileExplorerPath: commands.renameFileExplorerPath.bind(commands),
     copyFileExplorerPath: commands.copyFileExplorerPath.bind(commands),
     deleteFileExplorerPath: commands.deleteFileExplorerPath.bind(commands),
@@ -70,6 +75,7 @@ export function installRuntimeFileCommandSurface(
     listRuntimeFiles: commands.listRuntimeFiles.bind(commands),
     listRuntimeMarkdownDocuments: commands.listRuntimeMarkdownDocuments.bind(commands),
     pathsExistRuntimeFiles: commands.pathsExistRuntimeFiles.bind(commands),
-    statRuntimeFile: commands.statRuntimeFile.bind(commands)
+    statRuntimeFile: commands.statRuntimeFile.bind(commands),
+    stagedFileSaves: commands.stagedFileSaves
   } satisfies RuntimeFileCommandSurface)
 }

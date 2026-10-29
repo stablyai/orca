@@ -4,7 +4,6 @@ import {
   CodexTurnOrdinals,
   readCodexThreadItem
 } from './codex-structured-item-translation'
-import { createHash } from 'node:crypto'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
@@ -13,22 +12,19 @@ import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity
 } from '../../shared/agent-session-journal-types'
-import {
-  journalLifecycleItemMutation,
-  type JournalLifecycleMutationInput
-} from '../native-chat/agent-session-journal/journal-row-builders'
+import { journalLifecycleItemMutation } from '../native-chat/agent-session-journal/journal-row-builders'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionItemAppendOptions
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { StructuredAgentSessionTransitionJournal } from '../native-chat/agent-session-wire/structured-agent-session-transition'
-import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import {
-  CODEX_RESTORE_MAX_BYTES,
-  CODEX_RESTORE_MAX_OPERATIONS
-} from './codex-structured-journal-translation-restore'
+  continuedOutsideRecordId,
+  createHistoryCatchUpBatch
+} from '../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
+import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 
-/** Invocation-local shared translation: nothing reaches the live sink until this plan is whole. */
+/** Build the entire import before anything reaches the live sink. */
 export function createCodexHistoryImportPlan(input: {
   sessionId: string
   threadId: string
@@ -37,10 +33,9 @@ export function createCodexHistoryImportPlan(input: {
   outsideNotice?: AgentJournalItemBody
   check: () => void
 }) {
-  const mutations: JournalLifecycleMutationInput[] = []
+  const batch = createHistoryCatchUpBatch()
   const encoded = new Map<string, string>()
   const turnIds: string[] = []
-  let bytes = 0
   let outsideNoted = false
   let omitted = new Map<string, string>()
   const append = (
@@ -72,11 +67,7 @@ export function createCodexHistoryImportPlan(input: {
       }
       return { accepted: true } as const
     }
-    bytes += Buffer.byteLength(serialized, 'utf8') + 1
-    if (mutations.length >= CODEX_RESTORE_MAX_OPERATIONS || bytes > CODEX_RESTORE_MAX_BYTES) {
-      throw new Error('too-large')
-    }
-    mutations.push(mutation)
+    batch.push(mutation, serialized)
     encoded.set(key, serialized)
     return { accepted: true } as const
   }
@@ -141,7 +132,7 @@ export function createCodexHistoryImportPlan(input: {
             provider: 'legacy',
             agent: 'codex',
             sessionId: input.sessionId,
-            recordId: `continued-outside:${turn.id}`
+            recordId: continuedOutsideRecordId(turn.id)
           },
           input.outsideNotice,
           { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
@@ -157,17 +148,13 @@ export function createCodexHistoryImportPlan(input: {
     finish: () => {
       input.check()
       const keys = [...encoded.keys()]
-      const digest = createHash('sha256')
-        .update(JSON.stringify([input.journal.epoch, input.threadId, turnIds, keys]))
-        .digest('hex')
-      const settlementId = `codex-history-import:${digest}`
-      // Match the existing batch envelope charge, plus the transition's one publication byte.
-      const reservedBytes =
-        Buffer.byteLength(JSON.stringify({ settlementId, mutations }), 'utf8') + 512
-      if (reservedBytes + 1 > CODEX_RESTORE_MAX_BYTES) {
-        throw new Error('too-large')
-      }
-      return { settlementId, mutations, keys, turnIds, reservedBytes }
+      const plan = batch.finish('codex-history-import', [
+        input.journal.epoch,
+        input.threadId,
+        turnIds,
+        keys
+      ])
+      return { ...plan, turnIds }
     },
     dispose: () => translator.dispose()
   }

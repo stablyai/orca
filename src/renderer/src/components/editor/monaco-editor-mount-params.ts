@@ -1,5 +1,5 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
-import type { editor } from 'monaco-editor'
+import type { editor, IRange } from 'monaco-editor'
 import type { useContextualCopySetup } from './useContextualCopySetup'
 import type { MonacoContentSyncMode } from './monaco-content-sync'
 import type { MarkdownDocLinkDecorationController } from './monaco-markdown-doc-link-decorations'
@@ -19,6 +19,8 @@ export type MonacoEditorMountParams = {
   filePath: string
   viewStateKey: string
   viewStateId: string | undefined
+  // Why: a read-only mirror of another tab's id must not move that tab's cursor line or take its reveals.
+  passiveMirror?: boolean
   worktreeId: string | undefined
   autoHeight: boolean
   autoHeightLineHeight: number
@@ -46,7 +48,6 @@ export type MonacoEditorMountParams = {
     lastSyncedContentRef: MutableRefObject<string>
     contentSyncModeRef: MutableRefObject<MonacoContentSyncMode>
     isApplyingProgrammaticContentRef: MutableRefObject<boolean>
-    isApplyingLargePasteRef: MutableRefObject<boolean>
   }
   decorations: {
     markdownDocLinkDecorationsRef: MutableRefObject<MarkdownDocLinkDecorationController | null>
@@ -65,5 +66,6 @@ export type MonacoEditorMountParams = {
     setGutterMenuOpen: Dispatch<SetStateAction<boolean>>
     setGutterMenuPoint: Dispatch<SetStateAction<{ x: number; y: number }>>
     setGutterMenuLine: Dispatch<SetStateAction<number>>
+    setGutterMenuSelection: Dispatch<SetStateAction<IRange | null>>
   }
 }

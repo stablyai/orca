@@ -8,7 +8,9 @@ import {
 } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../platform/haptics'
+import { translate } from '../i18n/mobile-i18n'
 import { cancelMobileCommitMessage, requestMobileCommitMessage } from './mobile-commit-message-ai'
+import { textGenerationErrorText } from './text-generation-failure-copy'
 
 type Params = {
   client: RpcClient | null
@@ -21,8 +23,6 @@ type Params = {
   setActionError: (next: string | null) => void
 }
 
-// AI commit-message generation + cancellation. Split from the runners hook to
-// keep each file under the line limit; behavior is unchanged.
 export function useMobileCommitMessageGeneration(params: Params) {
   const {
     client,
@@ -46,8 +46,6 @@ export function useMobileCommitMessageGeneration(params: Params) {
     }
   }, [client, worktreeId, setGeneratingMessage])
 
-  // AI-generate a commit message from the staged diff. Matches desktop: the
-  // button is always available; a missing model surfaces as a toast.
   const generateCommitMessage = useCallback(async () => {
     if (!client || generatingMessage || activeRunRef.current !== null || busyActionRef.current) {
       return
@@ -63,19 +61,25 @@ export function useMobileCommitMessageGeneration(params: Params) {
         return
       }
       if (result.success) {
-        // Why: same rule as desktop — text typed while the agent ran wins over the generated message.
+        // Text typed during generation wins over the generated message.
         setCommitMessage((current) => (current.length > 0 ? current : result.message))
         triggerSuccess()
       } else if (!result.canceled) {
         triggerError()
-        setActionError(result.error)
+        setActionError(textGenerationErrorText(result))
       }
     } catch (err) {
-      // Why: a transport drop rejects the RPC; without this the error haptic +
-      // message are skipped and the rejection escapes the void-called handler.
+      // Catch transport drops because callers void this handler; retain error feedback.
       if (mountedRef.current && run === runRef.current) {
         triggerError()
-        setActionError(err instanceof Error ? err.message : 'Failed to generate commit message')
+        setActionError(
+          err instanceof Error
+            ? err.message
+            : translate(
+                'sourceControl.useMobileCommitMessageGeneration.generateFailed',
+                'Failed to generate commit message'
+              )
+        )
       }
     } finally {
       if (activeRunRef.current === run) {
@@ -100,10 +104,9 @@ export function useMobileCommitMessageGeneration(params: Params) {
     if (!client || !generatingMessage) {
       return
     }
-    // Why: like desktop's canceled record — a run the host still finishes must not fill the box.
+    // Retire even a host run that finishes after cancellation so it cannot refill the box.
     runRef.current += 1
-    // Why: commit and Create PR call this without awaiting; a dropped transport must not surface
-    // as an unhandled rejection, and the run's own reply still clears the spinner.
+    // Commit/Create PR do not await cancellation; contain rejection and let the run’s reply clear the spinner.
     cancelMobileCommitMessage(client, worktreeId).catch(() => {})
   }, [client, generatingMessage, worktreeId])
 

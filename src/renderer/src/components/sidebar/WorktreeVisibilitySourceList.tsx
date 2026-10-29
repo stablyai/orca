@@ -324,7 +324,7 @@ export default function WorktreeVisibilitySourceList({
                   )}
                   className="h-7"
                   onValueChange={(next) => {
-                    // Why: re-picking the selected segment clears Radix's value; it is not a change.
+                    // Radix clears reselected segments; ignore that non-change.
                     if (next === 'show' || next === 'hide') {
                       void onToggle(source, next === 'show')
                     }

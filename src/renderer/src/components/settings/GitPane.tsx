@@ -149,12 +149,7 @@ export function GitPane({
   const keepLocalMainUpToDateTitle = getKeepLocalMainUpToDateTitle()
 
   const isBranchPrefixInputMode = settings.branchPrefix !== 'none'
-  // Local draft for the editable custom prefix: updateSettings persists through
-  // an async IPC round-trip, so a directly-controlled value would only reflect
-  // the edit a tick later and React would then re-assign it, snapping the caret
-  // to the end. The draft keeps the caret put; the ref guard adopts only genuine
-  // external changes (settings reloaded/reset), not the async echo of our own
-  // keystrokes, which would clobber fast typing on slow (SSH) round-trips.
+  // Local drafts preserve caret/fast typing through async IPC; adopt external reloads but ignore delayed echoes of our own edits.
   const [customPrefixDraft, setCustomPrefixDraft] = useState(settings.branchPrefixCustom)
   const lastCommittedPrefixRef = useRef(settings.branchPrefixCustom)
   useEffect(() => {

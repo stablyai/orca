@@ -81,7 +81,6 @@ for (const taskId of ['task-1', undefined]) {
       value: { cancelled: false }
     })
     expect(stopBackgroundTasks).not.toHaveBeenCalled()
-    // Saved, so the answer is its receipt; the chat says the Stop went unconfirmed.
     expect(await unconfirmedNotes(testRig)).toHaveLength(1)
     setReadFails(false)
     expect(await testRig.host.cancel(QUEUED_RIG_CALLER, taskStop(testRig, taskId))).toMatchObject({

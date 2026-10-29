@@ -4,7 +4,7 @@ import type {
   LocalNetworkConnectionTestFailure,
   LocalNetworkConnectionTestResult
 } from '../../../../shared/developer-permissions-types'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { Button } from '../ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible'
@@ -125,7 +125,8 @@ export function LocalNetworkConnectionTest(): React.JSX.Element {
                     'auto.components.settings.DeveloperPermissionsPane.connectionTestLastVerified',
                     'Last verified'
                   )}{' '}
-                  {new Date(lastSuccess.testedAt).toLocaleString()} · {formatTarget(lastSuccess)}
+                  {new Date(lastSuccess.testedAt).toLocaleString(getIntlLocale())} ·{' '}
+                  {formatTarget(lastSuccess)}
                 </>
               ) : (
                 translate(

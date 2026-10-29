@@ -1,3 +1,4 @@
+import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
 import { useMemo, useState } from 'react'
 import type { AgentSessionUnavailable } from '../../../../shared/agent-session-availability'
 import { readAgentSessionFailureFact } from '../../../../shared/agent-session-failure'
@@ -7,12 +8,15 @@ import type {
 } from '../../../../shared/agent-session-journal-types'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
-import { inSendOrder } from '../../../../shared/native-chat-send-order'
+import { inSendOrder } from '../../../../shared/native-chat/native-chat-send-order'
 import { agentSessionRefusalReasonWords } from '../../../../shared/agent-session-refusal-reason-words'
 import type { AgentSessionWriteRefusal } from '../../../../shared/agent-session-write-failure'
 import { isStructuredAgentSessionStartFailureRow } from '../../../../shared/structured-agent-session-start-failure-row-key'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
-import { notSignedInSentence } from '../../../../shared/agent-session-availability-sentences'
+import {
+  cliMissingSentence,
+  notSignedInSentence
+} from '../../../../shared/agent-session-availability-sentences'
 import { nativeChatAntigravitySignInContent } from './native-chat-antigravity-settings'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 
@@ -37,8 +41,7 @@ type NoticeSubmission = Pick<
   'clientMessageId' | 'dispatchState' | 'rejection' | 'submittedAt' | 'submittedSequence'
 >
 
-/** Why the newest send was turned away, while that send's own line on screen says so: its row is
- *  loaded and carries the line. */
+/** Return the newest rejection reason only while its loaded message and delivery line are visible. */
 function shownRejectionReason(
   submissions: readonly NoticeSubmission[],
   shownLines: ReadonlyMap<string, unknown>,
@@ -54,13 +57,12 @@ function shownRejectionReason(
     : null
 }
 
-/** The host's verdict on why no chat can start here, as a notice that never holds Send: the
- *  verdict can be wrong while a send would work. Dismissed per verdict, so a changed or returning
- *  one shows again; left out while the chat's failed start or newest send already says it. */
+/** Advisory host verdicts never block Send; dismiss per verdict and omit reasons already explained by a failed start or newest send. */
 export function useNativeChatAvailabilityNotice(input: {
   unavailable: AgentSessionUnavailable | null | undefined
   agent: AgentType
-  agentLabel: string
+  /** The WSL distro the chat's host runs in, to say where the agent is missing. */
+  wslDistro?: string | null
   launchFailure: AgentSessionWriteRefusal | null
   journalItems: readonly AgentJournalRenderItem[] | undefined
   submissions?: readonly NoticeSubmission[]
@@ -99,14 +101,21 @@ export function useNativeChatAvailabilityNotice(input: {
   ) {
     return null
   }
+  const agentName = structuredAgentLabel(input.agent)
   return {
     key: 'availability',
     kind: 'error',
     text:
       unavailable.reason === 'cliMissing'
-        ? sayAgentSessionFailureTranslated('cliMissing', { agent: input.agentLabel })
+        ? cliMissingSentence(
+            {
+              agentName,
+              ...(input.wslDistro ? { wslDistro: input.wslDistro } : {})
+            },
+            sayAgentSessionFailureTranslated
+          )
         : notSignedInSentence(
-            { agentName: input.agentLabel },
+            { agentName },
             { kind: 'notSignedIn', account: unavailable.account },
             sayAgentSessionFailureTranslated
           ),

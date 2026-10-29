@@ -1,9 +1,4 @@
-/**
- * The seam a new weak-ready rank plugs into. Weak ready is a verdict class, not a per-evidence
- * flag: no settle site may act on it before a rendered-screen read, whatever evidence produced
- * it. The stand-in below fires over Claude's trust dialog itself, as a composer-ready signal
- * such as bracketed paste would, and the dialog must still win.
- */
+/** Every weak-ready source needs a rendered-screen check; the stand-in must not settle over Claude's trust dialog. */
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'

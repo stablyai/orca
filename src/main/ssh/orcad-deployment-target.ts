@@ -11,7 +11,7 @@ import { probeLinuxLibc, type GlibcVersion } from '../node-runtime/linux-libc-pr
 import { execCommand } from './remote-exec/remote-exec-command'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 
-export type OrcadDeploymentTargetFacts = {
+type OrcadDeploymentTargetFacts = {
   target: ServerTarget
   /** The host's glibc, when the libc probe printed one; null on musl and non-Linux hosts. */
   glibc: GlibcVersion | null
@@ -37,7 +37,7 @@ export async function resolveOrcadDeploymentTargetFacts(options: {
   }
 }
 
-/** The runtime target an assembled bundle was built for, a compat one included. */
+/** Read the assembled bundle's recorded runtime target, including compatibility builds. */
 export function readOrcadBundleTarget(localOrcadDir: string): NodeRuntimeTarget {
   const recorded = readFileSync(join(localOrcadDir, ORCAD_SERVER_TARGET_FILENAME), 'utf8').trim()
   if (!isNodeRuntimeTarget(recorded)) {

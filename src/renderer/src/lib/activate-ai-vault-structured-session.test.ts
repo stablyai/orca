@@ -75,8 +75,7 @@ describe('activateAiVaultStructuredSession', () => {
   })
 
   it('still reveals when the inventory refresh itself fails', async () => {
-    // The refresh is an optimization. Letting its failure end the click reinstates the dead end
-    // this whole path exists to remove: a closed chat, and advice to retry that cannot come true.
+    // Refresh is advisory; its failure must still allow reveal to repair a closed chat.
     const parts = deps({
       activate: vi.fn().mockReturnValueOnce(false).mockReturnValue(true),
       refresh: vi.fn().mockRejectedValueOnce(new Error('structured_session_restore_timeout'))
@@ -100,8 +99,7 @@ describe('activateAiVaultStructuredSession', () => {
 
     await expect(activateAiVaultStructuredSession(structuredSession, parts)).resolves.toBe(true)
 
-    // The reveal already emitted a snapshot of its own, so a failed confirmation refresh must not
-    // discard a tab that has in fact arrived.
+    // Reveal may already have published the tab; failed confirmation must not discard it.
     expect(parts.activate).toHaveBeenCalledTimes(3)
     expect(parts.unavailable).not.toHaveBeenCalled()
     expect(parts.gone).not.toHaveBeenCalled()

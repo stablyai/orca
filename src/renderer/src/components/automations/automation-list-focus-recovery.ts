@@ -1,13 +1,4 @@
-/**
- * Where focus goes when the row the user was on disappears.
- *
- * A refresh, a host filter change, or a delete can remove the focused row while
- * the keyboard is still in the list. Without this, focus falls back to the
- * document body and the next Tab restarts from the top of the page. The order —
- * next row, then previous row, then the host picker — keeps the user near where
- * they were, and the picker is the last resort because it is the control that
- * put them in this list to begin with.
- */
+/** After refresh/filter/delete removes a focused row, prefer the next row, previous row, then caller fallback control; avoid dropping keyboard navigation to document body. */
 
 export type AutomationListFocusTarget = { kind: 'row'; rowKey: string } | { kind: 'picker' }
 

@@ -54,7 +54,6 @@ describe('session tab status on the phone clock', () => {
   ])('ages a host %s from when the phone saw the evidence', (_label, skew) => {
     const first = withSessionTabStatusReceipts([terminal(PHONE_NOW + skew)], [], PHONE_NOW)
     expect(dot(first[0], PHONE_NOW)).toBe('working')
-    // A replay of the same evidence is a repaint, so the window keeps its first start.
     const replay = withSessionTabStatusReceipts(
       [terminal(PHONE_NOW + skew)],
       first,

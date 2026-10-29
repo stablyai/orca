@@ -129,18 +129,22 @@ describe('New Workspace agent detection', () => {
     }
   )
 
-  it('keeps the SSH request and connection gate', async () => {
+  it('waits for the SSH connection before detecting remote agents', async () => {
     const client = new FakeSession('connected')
-    client.sendRequest.mockImplementation(async (method: string) => ({
-      id: 'reply',
-      ok: true,
-      result:
-        method === 'ssh.getState'
-          ? { state: { targetId: 'ssh-1', status: 'connected', error: null, reconnectAttempt: 0 } }
-          : ['codex']
-    }))
+    let connect: ((reply: RpcResponse) => void) | undefined
+    client.sendRequest.mockImplementation(async (method: string) => {
+      if (method === 'ssh.getState') {
+        return new Promise<RpcResponse>((resolve) => {
+          connect = resolve
+        })
+      }
+      return { id: 'reply', ok: true, result: ['codex'] }
+    })
+    const observed: { current: ReturnType<typeof useNewWorkspaceExecutionTarget> | null } = {
+      current: null
+    }
     function Harness() {
-      useNewWorkspaceExecutionTarget({
+      observed.current = useNewWorkspaceExecutionTarget({
         client,
         repoId: 'remote-repo',
         connectionId: 'ssh-1',
@@ -151,6 +155,20 @@ describe('New Workspace agent detection', () => {
     await act(async () => {
       mounted.push(create(createElement(Harness)))
     })
+    expect(client.sendRequest.mock.calls).toEqual([['ssh.getState', { targetId: 'ssh-1' }]])
+    expect(observed.current?.detectedAgentIds).toBeNull()
+    expect(observed.current?.sshGate.requiresConnection).toBe(true)
+    await act(async () => {
+      connect?.({
+        id: 'connected',
+        ok: true,
+        result: {
+          state: { targetId: 'ssh-1', status: 'connected', error: null, reconnectAttempt: 0 }
+        }
+      })
+    })
+    expect(observed.current?.detectedAgentIds).toEqual(new Set(['codex']))
+    expect(observed.current?.sshGate.status).toBe('connected')
     expect(client.sendRequest).toHaveBeenCalledWith('preflight.detectRemoteAgents', {
       connectionId: 'ssh-1'
     })

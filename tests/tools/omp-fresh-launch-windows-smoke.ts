@@ -10,7 +10,7 @@ if (process.platform !== 'win32') {
 const root = mkdtempSync(join(tmpdir(), 'orca-fresh-windows-'))
 const config = join(root, 'fresh settings.yml')
 const capture = join(root, 'calls')
-const results = []
+const results: { shell: 'cmd' | 'powershell'; state: string; code: number; passed: boolean }[] = []
 try {
   writeFileSync(join(root, 'omp.cmd'), '@echo off\r\necho %*>>"%CAPTURE%"\r\nexit /b 17\r\n')
   for (const shell of ['cmd', 'powershell'] as const) {

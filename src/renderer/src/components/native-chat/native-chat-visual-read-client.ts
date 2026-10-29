@@ -1,8 +1,4 @@
-// Reading a chat visual from the host that owns the chat, through a small revision cache.
-//
-// The cache only spares bytes: every mount still asks the host, passing the revision it holds, so a
-// file the agent rewrote shows its new content and a deleted one stops showing. Failures are never
-// cached; the next mount or retry asks again.
+// Revalidate every mount against the owner host; cache revisions to spare bytes, never failures.
 
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
@@ -134,11 +130,7 @@ async function readOnce(
   }
 }
 
-/**
- * One read per visual at a time; concurrent mounts of the same visual share it. `fresh` waits out
- * a read already in flight and then starts its own, so a read after a save never answers with
- * bytes from before it.
- */
+/** Share concurrent reads; fresh waits for any in-flight read then refetches so post-save reads cannot return pre-save bytes. */
 export function readNativeChatVisual(
   identity: NativeChatVisualIdentity,
   options?: { fresh?: boolean }

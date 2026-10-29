@@ -3,22 +3,20 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import { fingerprintPluginConsent } from '../../shared/plugins/plugin-consent-fingerprint'
+import { fingerprintPluginConsent } from '../../shared/plugins/approval/plugin-consent-fingerprint'
 import {
   PLUGIN_MANIFEST_FILENAME,
   pluginManifestSchema,
   qualifiedPluginKey,
   type PluginManifest
-} from '../../shared/plugins/plugin-manifest'
-import { PluginService, type PluginServiceOptions } from './plugin-service'
-import type { PluginWorkerFactory } from './plugin-worker-manager'
+} from '../../shared/plugins/manifest/plugin-manifest'
+import { PluginService } from './plugin-service'
+import type { PluginServiceOptions } from './plugin-service-options'
+import type { PluginWorkerFactory } from './workers/plugin-worker-manager'
 
 const PLUGIN_COUNT = 20
 const SAMPLE_COUNT = 20
-// Real disk I/O, so the number moves with machine load: ~16-34ms idle, higher
-// when the suite saturates the box. Sized to catch an order-of-magnitude
-// regression rather than scheduling noise — the behavioral assertions below
-// (no worker spawned, no plugin code run) are what this test really guards.
+// Disk scheduling varies; catch large regressions while separately asserting no worker/code execution.
 const STARTUP_P95_BUDGET_MS = 400
 
 let userDataPath = ''

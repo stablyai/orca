@@ -96,10 +96,7 @@ export function worktreeVisibilityValueLabel(visibility: ExternalWorktreeVisibil
     : translate('auto.components.sidebar.WorktreeVisibilitySourceList.hide', 'Hide')
 }
 
-/**
- * Names the global value a project is ignoring — only where the two genuinely disagree,
- * so an override that happens to match Global Settings stays quiet.
- */
+/** Show an override notice only when the project disagrees with the global value. */
 export function getWorktreeVisibilityOverrideNotice(
   provenance: WorktreeVisibilitySourceProvenance | null,
   visibility: ExternalWorktreeVisibility

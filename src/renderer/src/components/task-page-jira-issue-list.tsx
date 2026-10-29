@@ -11,7 +11,7 @@ import { JiraLinkedWorkspaceAction } from './JiraLinkedWorkspaceAction'
 import type { Worktree } from '../../../shared/worktree/types'
 import { jiraListColumnVisibility, type JiraListColumn } from './jira-list-columns'
 import { JiraIssueCell, JiraPriorityText, unassignedLabel } from './task-page-jira-issue-cells'
-import type { JiraIssue, JiraProjectStatusOrder } from '../../../shared/jira-types'
+import type { JiraIssue, JiraProjectStatusOrder } from '../../../shared/jira/jira-types'
 
 export type TaskPageJiraIssueSection = {
   key: string

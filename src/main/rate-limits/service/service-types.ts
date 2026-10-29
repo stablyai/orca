@@ -29,9 +29,12 @@ export type {
 export { normalizeCodexAccountSelectionTarget } from '../../codex-accounts/runtime-selection'
 export type { CodexRateLimitHomeResolution } from '../../codex-accounts/runtime-home-service'
 
+export type InactiveCodexHome = { kind: 'ready'; managedHomePath: string } | { kind: 'skip' }
+
 export type InactiveCodexAccountInfo = {
   id: string
-  resolveHome: () => { kind: 'ready'; managedHomePath: string } | { kind: 'skip' }
+  /** May be async: a WSL home is checked before a preview reads it. */
+  resolveHome: () => InactiveCodexHome | Promise<InactiveCodexHome>
 }
 
 export type CodexHomePathResolver = (
@@ -81,7 +84,6 @@ export type ZcodePlanResolvedConfig = {
 
 export type GeminiCliOAuthEnabledResolver = () => boolean
 
-/** Whether the user is actually showing Antigravity usage, so the `agy` probe is worth spawning. */
 export type AntigravityUsageEnabledResolver = () => boolean
 export type ActiveRateLimitProvider = ProviderRateLimits['provider']
 export type ActiveProviderState = {
@@ -93,34 +95,32 @@ export type ActiveWindowRefreshPlan =
   | { kind: 'full' }
   | { kind: 'providers'; providers: ActiveRateLimitProvider[] }
 
-// Why: Claude's usage endpoint has a tight budget and quota is only informational; prefer a recent snapshot over polling into 429s.
-export const DEFAULT_POLL_MS = 15 * 60 * 1000 // 15 minutes
-export const MIN_POLL_MS = 30 * 1000 // 30 seconds — renderer input should never create a tight loop.
+// Informational Claude quota has a tight endpoint budget; prefer recent snapshots to 429s.
+export const DEFAULT_POLL_MS = 15 * 60 * 1000
+export const MIN_POLL_MS = 30 * 1000 // Bound renderer input to avoid tight polling loops.
 export const MAX_POLL_MS = 2_147_483_647 // Max safe setInterval delay before Node clamps back to 1ms.
-export const MIN_REFETCH_MS = 5 * 60 * 1000 // 5 minutes — debounce resume/manual refresh bursts
+export const MIN_REFETCH_MS = 5 * 60 * 1000
 export const ACTIVE_FAILURE_REFETCH_MS = MIN_POLL_MS
-// Why: retrying a persistent failure at the 30s floor hammers endpoints into 429s; back off per failure, capped at the poll cadence.
+// Back off persistent failures up to poll cadence instead of repeatedly hitting the 30s floor.
 export const MAX_ACTIVE_FAILURE_REFETCH_MS = DEFAULT_POLL_MS
 export const MAX_ACTIVE_FAILURE_STREAK = 8
-// Why: these providers have a dedicated fetch cycle, so an activation retry refreshes just the failing one; others force a full fetchAll.
+// Dedicated cycles retry only the failing provider; other providers need fetchAll.
 export const INDIVIDUALLY_REFRESHABLE_PROVIDERS: ReadonlySet<ActiveRateLimitProvider> = new Set([
   'claude',
   'codex',
   'grok'
 ])
-export const STALE_THRESHOLD_MS = 30 * 60 * 1000 // 30 minutes — after this, stale data is dropped
-// Why: usage-endpoint 429 windows can outlast the generic threshold (Retry-After ~1h); quota is informational, so a stale snapshot beats a bare "Limited".
-export const RATE_LIMITED_STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000
-// Why: statusline posts arrive on every turn; skip renderer pushes for identical windows so streaming sessions don't spam state updates.
+export const STALE_THRESHOLD_MS = 30 * 60 * 1000
+// 429 Retry-After and an idle Claude login's lapsed token outlast generic expiry; keep informational quota visible.
+export const LONG_STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000
+// Deduplicate identical per-turn live posts to avoid renderer push floods.
 export const LIVE_CLAUDE_INGEST_DEDUPE_MS = 30 * 1000
-export const INACTIVE_FETCH_DEBOUNCE_MS = 60 * 1000 // 60 seconds — debounce fetch-on-open
-// Why: each inactive Codex probe spawns a real codex process inside that
-// account's live credential home; pace them out instead of bursting every
-// account the moment the switcher opens.
+export const INACTIVE_FETCH_DEBOUNCE_MS = 60 * 1000
+// Pace real Codex probes in live credential homes instead of bursting when the switcher opens.
 export const INACTIVE_CODEX_PROBE_STAGGER_MS = 2_000
 export const DEFERRED_STARTUP_ACTIVE_REFRESH_MS = 1000
 
-// Why: inactive account arrays are derived from provider caches on demand in getState()/pushToRenderer().
+// Derive inactive-account arrays from provider caches on demand.
 export type InternalRateLimitState = {
   claude: ProviderRateLimits | null
   codex: ProviderRateLimits | null
@@ -144,7 +144,7 @@ export function normalizePollingInterval(ms: number): number {
 export function isSystemDefaultClaudeAuth(
   authPreparation: ClaudeRuntimeAuthPreparation | undefined
 ): boolean {
-  // Why: fetch cycles treat missing Claude auth as system-default; align the PTY gate so refresh can't trigger auth flows.
+  // Missing auth is System Default; its refresh must not launch Claude auth flows.
   if (!authPreparation) {
     return true
   }
@@ -157,17 +157,7 @@ export function toErrorMessage(error: unknown): string {
 }
 
 export function normalizeClaudeConfigDir(dir: string | null | undefined): string | null {
-  // Why: normalize mixed Windows separators for path attribution; preserve Linux case sensitivity.
+  // Normalize Windows slashes for attribution while preserving Linux case sensitivity.
   const trimmed = dir?.trim().replace(/\\/g, '/').replace(/\/+$/, '')
   return trimmed || null
-}
-
-export function isSameUsageWindow(
-  a: ProviderRateLimits['session'],
-  b: ProviderRateLimits['session']
-): boolean {
-  if (!a || !b) {
-    return a === b
-  }
-  return a.usedPercent === b.usedPercent && a.resetsAt === b.resetsAt
 }

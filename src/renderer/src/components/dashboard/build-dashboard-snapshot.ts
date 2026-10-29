@@ -1,3 +1,6 @@
+import { agentVerdictDisplayMark } from '../../../../shared/agent-main-agent-verdict'
+import type { StructuredChatTabNames } from '@/runtime/structured-chat-tab-name'
+import type { AgentLaunchRouteView } from '@/lib/agent-launch-route-input'
 import type { AppState } from '@/store/types'
 import {
   DASHBOARD_MAX_MAP_WORKSPACES,
@@ -47,8 +50,7 @@ import { groupSubagentsByParentPaneKey } from './dashboard-subagent-cards'
 import { selectDashboardOrchestration } from './dashboard-orchestration-selection'
 import { dashboardRowBucketProjection, readAgentRowTurnRecords } from './dashboard-row-bucket'
 
-/** The store slices the snapshot builder reads. Kept as a Pick so unit tests
- *  can pass a partial store without constructing the whole AppState. */
+/** Keep builder inputs as a Pick so tests need only construct the store slices read here. */
 export type DashboardSnapshotState = Pick<
   AppState,
   | 'repos'
@@ -68,24 +70,27 @@ export type DashboardSnapshotState = Pick<
   Partial<
     DashboardCardTerminalInputState &
       DashboardLaunchDetectionState &
-      Pick<AppState, 'runtimeEnvironments' | 'sshTargetLabels' | 'unifiedTabsByWorktree'>
+      Pick<
+        AppState,
+        | 'runtimeEnvironments'
+        | 'sshTargetLabels'
+        | 'unifiedTabsByWorktree'
+        | 'activeWorktreeId'
+        | 'activeWorkspaceExecutionHostId'
+      >
   >
 
-/**
- * Derive the serializable dashboard snapshot from the live renderer store.
- * Reuses the exact per-worktree row machinery the sidebar uses
- * (buildWorktreeAgentRows + the indexed selectors), then flattens every
- * worktree's rows into presentational cards. Provider subagents without their
- * own terminal stay folded into their spawning card.
- */
+export type DashboardSnapshotInput = DashboardSnapshotState & { chatNames: StructuredChatTabNames }
+
+/** Reuse sidebar row/index derivation for serializable cards; fold terminal-less subagents into their spawning card. */
 export function buildDashboardSnapshot(
-  state: DashboardSnapshotState,
+  state: DashboardSnapshotInput,
   now: number,
   options: {
+    launchRouteStore?: AgentLaunchRouteView
     includeCardDetails?: boolean
     includeFilterOptions?: boolean
-    /** Optional per-worktree row-pipeline reuse; card assembly always runs fresh
-     *  because cards also read review/host/status slices the cache does not key. */
+    /** Cache only row derivation; review/host/status inputs still require fresh card assembly. */
     rowsCache?: WorktreeAgentRowsCache
     /** Freshness token for rowsCache (agentStatusEpoch); required for the cache to be safe. */
     rowsGeneration?: unknown
@@ -164,10 +169,7 @@ export function buildDashboardSnapshot(
       if (row.rowSource === 'subagent') {
         continue
       }
-      // Title-derived rows (a live pane read only from its terminal title, no
-      // agent-hook status) carry synthetic prompt/lastAssistantMessage — the
-      // agent LABEL and a status word like "Idle". They're marked by
-      // startedAt === 0, and must NOT be shown as real conversation.
+      // Title-derived rows contain synthetic prompt/message labels, not real conversation; startedAt=0 distinguishes them.
       const { isTitleDerived, dotState, workingMode, unseen, bucket } =
         dashboardRowBucketProjection(row, turnRecords)
       const routingPaneKey = row.activationPaneKey ?? row.paneKey
@@ -176,16 +178,12 @@ export function buildDashboardSnapshot(
       const leafId = parsed?.leafId ?? null
       const layoutPtyId =
         (leafId ? terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId] : undefined) ?? null
-      // Layout entries survive app restarts, but their PTYs may not (parked
-      // tabs keep the pre-restart id). Only advertise a pty the terminal
-      // preview can actually serialize — ptyIdsByTabId is the liveness truth.
+      // Layouts survive restarts; advertise preview PTYs only when the live ptyIdsByTabId set still contains them.
       const ptyId =
         layoutPtyId && (state.ptyIdsByTabId?.[tabId] ?? []).includes(layoutPtyId)
           ? layoutPtyId
           : null
-      // Why: only a live pty can open a preview terminal, and only a
-      // card-rendering caller can open one — the sidebar's bucket counts must
-      // not pay host resolution on every agent-status tick.
+      // Only live preview-capable cards need host resolution; count-only sidebar rebuilds must skip that cost.
       const terminalInput =
         ptyId && includeCardDetails
           ? resolveDashboardCardTerminalInput(state, {
@@ -218,6 +216,7 @@ export function buildDashboardSnapshot(
         agentType: row.agentType,
         bucket,
         dotState,
+        verdict: agentVerdictDisplayMark(row.entry) ?? undefined,
         ...(workingMode ? { workingMode } : {}),
         task: isTitleDerived ? '' : rowTask(row),
         repoId: workspace.projectId,
@@ -245,7 +244,6 @@ export function buildDashboardSnapshot(
         finishedAt,
         stateChangedAt: row.entry.stateStartedAt || row.startedAt,
         statusUpdatedAt: row.entry.updatedAt,
-        // `isAgentSubjectUnread`, the rule the sidebar card bolds by too.
         unseen,
         askSummary: bucket === 'attention' ? (row.entry.interactivePrompt ?? undefined) : undefined,
         conversationName: boundedLabelOrUndefined(
@@ -253,7 +251,9 @@ export function buildDashboardSnapshot(
             row,
             generatedTitlesEnabled,
             terminalLayoutsByTabId[row.tab.id],
-            paneTitlesByTabId[row.tab.id]
+            paneTitlesByTabId[row.tab.id],
+            state.chatNames,
+            state.unifiedTabsByWorktree
           )
         ),
         ...(terminalInput ? { terminalInput } : {})
@@ -271,14 +271,14 @@ export function buildDashboardSnapshot(
     ...(workspaces ? { workspaces } : {}),
     showIdle,
     filterOptions,
-    // Only the dashboard surfaces offer a launcher; the count-only rebuild that
-    // feeds the sidebar must not pay for host-detection lookups.
+    // Count-only callers offer no launcher; skip host-detection lookups for sidebar rebuilds.
     ...(includeCardDetails
       ? {
           launchableAgentsByWorktreeId: buildDashboardWorktreeLaunchOptions(
             state,
             cards,
-            workspaces
+            workspaces,
+            options.launchRouteStore
           )
         }
       : {}),

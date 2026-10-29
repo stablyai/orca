@@ -33,8 +33,7 @@ function parseProcessIncarnation(
   }
   const ptyId = value.slice(0, separator)
   const incarnationId = value.slice(separator + 1)
-  // A structured worker's incarnation names a session lineage, not a PTY; adopting it as one
-  // would hand a live chat session's dispatch to the PTY recovery path.
+  // Structured incarnations name session lineage; never adopt a live chat through PTY recovery.
   if (sessionIdFromStructuredWorkerIncarnation(value)) {
     return null
   }
@@ -62,7 +61,7 @@ export function planLegacyWorkerTerminalRecovery(
     const paneKey = row.assignee_pane_key?.trim()
     const pane = paneKey ? parsePaneKey(paneKey) : null
     const settled = WORKER_SETTLED_STATES.includes(row.worker_state)
-    // Settled dispatches need no adoption and must not make an active worker's identity ambiguous.
+    // Settled Dispatches must not make an active worker identity ambiguous.
     if (settled) {
       continue
     }

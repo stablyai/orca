@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { create } from 'zustand'
+import { ensurePluginAutoUpdatesWatched } from './plugin-auto-updates'
 import type { PluginHostListEntry, PluginHostPanel } from '../../../preload/api-types'
 
 /** A panel contribution from an enabled plugin, flattened for sidebar use. */
@@ -60,8 +61,7 @@ export const usePluginPanelsStore = create<PluginPanelsState>()((set) => ({
   fetchPlugins: async () => {
     const generation = ++pluginListGeneration
     clearPluginListRetryTimer()
-    // Why: preload may predate the plugins namespace (web client pairing an
-    // older desktop build); treat a missing bridge as "no plugins" fail-soft.
+    // Older paired preload may lack plugins namespace; treat missing bridge as empty content.
     const pluginsApi = window.api?.plugins
     if (!pluginsApi) {
       if (generation === pluginListGeneration) {
@@ -83,9 +83,7 @@ export const usePluginPanelsStore = create<PluginPanelsState>()((set) => ({
       }
     } catch {
       if (generation === pluginListGeneration) {
-        // A failed authority refresh must not leave previously enabled panel
-        // documents mounted from stale state. Bounded retries recover from a
-        // transient preload/main startup race without spinning indefinitely.
+        // Failed authority refresh must unmount stale panel documents; bounded retries recover startup races without endless polling.
         set({ plugins: [], panelErrors: {}, fetchStatus: 'error' })
         schedulePluginListRetry(generation)
       }
@@ -103,6 +101,10 @@ export const usePluginPanelsStore = create<PluginPanelsState>()((set) => ({
   },
   setPanelHealth: (tabKey, health) => {
     set((state) => {
+      // Why: sidebar badges subscribe to this map; an unchanged health must keep its identity.
+      if ((health === 'error') === (state.panelErrors[tabKey] === true)) {
+        return state
+      }
       const panelErrors = { ...state.panelErrors }
       if (health === 'error') {
         panelErrors[tabKey] = true
@@ -119,20 +121,24 @@ function retainInstalledPanelErrors(
   plugins: readonly PluginHostListEntry[]
 ): Record<string, true> {
   const installed = collectInstalledPluginTabKeys(plugins)
-  return Object.fromEntries(
-    Object.entries(panelErrors).filter(([tabKey]) => installed.has(tabKey))
-  ) as Record<string, true>
+  const kept: Record<string, true> = {}
+  for (const tabKey of Object.keys(panelErrors)) {
+    if (installed.has(tabKey)) {
+      kept[tabKey] = true
+    }
+  }
+  return kept
 }
 
 let changeSubscriptionStarted = false
 
-/** Kicks off the startup fetch and subscribes to main-process change pushes
- *  (install/remove/enable/dev-reload); safe to call repeatedly. */
+/** Install startup fetch/change subscription once; safe for repeated callers. */
 export function ensurePluginPanelsLoaded(): void {
   const { fetchStatus, fetchPlugins } = usePluginPanelsStore.getState()
   if (fetchStatus === 'idle') {
     void fetchPlugins()
   }
+  ensurePluginAutoUpdatesWatched()
   if (!changeSubscriptionStarted && window.api?.plugins?.onChanged) {
     changeSubscriptionStarted = true
     window.api.plugins.onChanged(() => {
@@ -141,26 +147,52 @@ export function ensurePluginPanelsLoaded(): void {
   }
 }
 
-/** Panels of plugins the user enabled (consented + not disabled). `idle` and
- *  `restarting` still show panels — the panel itself never needs a worker. */
-export function collectActivePluginPanels(plugins: PluginHostListEntry[]): ActivePluginPanel[] {
-  return plugins
-    .filter(
-      (plugin) =>
-        plugin.status === 'running' || plugin.status === 'restarting' || plugin.status === 'idle'
-    )
-    .flatMap((plugin) =>
-      plugin.panels.map((panel) => ({
-        ...panel,
-        pluginKey: plugin.pluginKey,
-        pluginName: plugin.name
-      }))
-    )
+/** Enabled and consented, whether or not a worker runs: its contributions are offered. */
+export function isLivePlugin(plugin: PluginHostListEntry): boolean {
+  return plugin.status === 'running' || plugin.status === 'restarting' || plugin.status === 'idle'
 }
 
-/** Tab keys of every installed plugin panel (any status) — used by the
- *  persisted-route normalizer to drop keys of uninstalled plugins while
- *  keeping keys that are merely disabled. */
+/** A contribution tagged with the plugin it came from. */
+export function fromPlugin<T>(
+  plugin: PluginHostListEntry,
+  contribution: T
+): T & { pluginKey: string; pluginName: string } {
+  return { ...contribution, pluginKey: plugin.pluginKey, pluginName: plugin.name }
+}
+
+/** A contribution keyed across plugins, with its own icon or else the plugin's. */
+export function keyedPluginContribution<T extends { id: string; icon?: string }>(
+  plugin: PluginHostListEntry,
+  contribution: T
+): T & { key: string; pluginKey: string; pluginName: string; iconUrl?: string } {
+  const iconUrl = contribution.icon ?? plugin.images?.icon?.url
+  return {
+    ...fromPlugin(plugin, contribution),
+    key: `${plugin.pluginKey}/${contribution.id}`,
+    ...(iconUrl ? { iconUrl } : {})
+  }
+}
+
+/** The plugin list loaded on first use, derived once per change; `derive` must be stable. */
+export function usePluginListDerived<T>(derive: (plugins: readonly PluginHostListEntry[]) => T): T {
+  const plugins = usePluginPanelsStore((state) => state.plugins)
+  useEffect(() => {
+    ensurePluginPanelsLoaded()
+  }, [])
+  // Derive outside selector in useMemo or unstable snapshots loop through useSyncExternalStore.
+  return useMemo(() => derive(plugins), [derive, plugins])
+}
+
+/** Panels need no worker, so they stay available while it is idle or restarting. */
+export function collectActivePluginPanels(
+  plugins: readonly PluginHostListEntry[]
+): ActivePluginPanel[] {
+  return plugins
+    .filter(isLivePlugin)
+    .flatMap((plugin) => plugin.panels.map((panel) => fromPlugin(plugin, panel)))
+}
+
+/** Installed keys normalize persisted routes: remove uninstalled panels, retain merely disabled ones. */
 export function collectInstalledPluginTabKeys(
   plugins: readonly PluginHostListEntry[]
 ): Set<string> {
@@ -171,59 +203,30 @@ export function collectActivePluginCommands(
   plugins: readonly PluginHostListEntry[]
 ): ActivePluginCommand[] {
   return plugins
-    .filter(
-      (plugin) =>
-        plugin.status === 'running' || plugin.status === 'restarting' || plugin.status === 'idle'
-    )
-    .flatMap((plugin) =>
-      plugin.commands.map((command) => ({
-        ...command,
-        pluginKey: plugin.pluginKey,
-        pluginName: plugin.name
-      }))
-    )
+    .filter(isLivePlugin)
+    .flatMap((plugin) => plugin.commands.map((command) => fromPlugin(plugin, command)))
 }
 
 export function collectEditablePluginCommands(
   plugins: readonly PluginHostListEntry[]
 ): ActivePluginCommand[] {
   return plugins
-    .filter((plugin) => ['running', 'restarting', 'idle', 'errored'].includes(plugin.status))
-    .flatMap((plugin) =>
-      plugin.commands.map((command) => ({
-        ...command,
-        pluginKey: plugin.pluginKey,
-        pluginName: plugin.name
-      }))
-    )
+    .filter((plugin) => isLivePlugin(plugin) || plugin.status === 'errored')
+    .flatMap((plugin) => plugin.commands.map((command) => fromPlugin(plugin, command)))
 }
 
 /** Panel contributions of enabled plugins, loading the list on first use. */
 export function usePluginPanels(): ActivePluginPanel[] {
-  const plugins = usePluginPanelsStore((s) => s.plugins)
-  useEffect(() => {
-    ensurePluginPanelsLoaded()
-  }, [])
-  // Why: derive in useMemo (not the selector) so the store snapshot stays
-  // referentially stable and doesn't retrigger useSyncExternalStore loops.
-  return useMemo(() => collectActivePluginPanels(plugins), [plugins])
+  return usePluginListDerived(collectActivePluginPanels)
 }
 
 /** Commands of enabled plugins, sharing the authoritative plugin-list refresh. */
 export function usePluginCommands(): ActivePluginCommand[] {
-  const plugins = usePluginPanelsStore((state) => state.plugins)
-  useEffect(() => {
-    ensurePluginPanelsLoaded()
-  }, [])
-  return useMemo(() => collectActivePluginCommands(plugins), [plugins])
+  return usePluginListDerived(collectActivePluginCommands)
 }
 
 /** Enabled commands remain editable while a chord conflict has errored the
  * plugin, so a saved override can recover both conflicting plugins. */
 export function useEditablePluginCommands(): ActivePluginCommand[] {
-  const plugins = usePluginPanelsStore((state) => state.plugins)
-  useEffect(() => {
-    ensurePluginPanelsLoaded()
-  }, [])
-  return useMemo(() => collectEditablePluginCommands(plugins), [plugins])
+  return usePluginListDerived(collectEditablePluginCommands)
 }

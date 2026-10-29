@@ -28,9 +28,6 @@ vi.mock('../github/client', async () =>
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
 )
-vi.mock('../providers/ssh-filesystem-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
-)
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
 )
@@ -127,7 +124,6 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
-  // Why: a row may name its SSH host only as `executionHostId`; local git must not run for it.
   it('refuses local git for a PR base on an executionHostId-only SSH repo', async () => {
     store.getRepo.mockReturnValue({ ...harnessRepo, executionHostId: 'ssh:gpu' })
     gitExecFileAsyncMock.mockResolvedValue({ stdout: `${ORIGIN_REMOTE_URL}\n`, stderr: '' })
@@ -176,7 +172,7 @@ describe('registerWorktreeHandlers', () => {
         'origin',
         '+refs/heads/feat/onboarding-model-choice-782:refs/remotes/origin/feat/onboarding-model-choice-782'
       ],
-      { cwd: '/workspace/repo' }
+      { cwd: '/workspace/repo', timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
     )
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       [

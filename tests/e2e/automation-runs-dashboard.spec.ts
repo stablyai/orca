@@ -1,10 +1,4 @@
-/**
- * End-to-end coverage for the Automations runs surface.
- *
- * The test intentionally does not depend on seeded run history: a fresh E2E
- * profile may have no automations, but the Runs navigation and empty state must
- * still be usable.
- */
+// A fresh profile may have no automation history; Runs navigation and its empty state must still work.
 
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'

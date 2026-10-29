@@ -62,7 +62,7 @@ export function pruneLineageForMissingRepoWorktrees(
   const worktreeLineage = store.getAllWorktreeLineage()
   const workspaceLineage = store.getAllWorkspaceLineage?.() ?? {}
   const repoPrefix = `${repo.id}::`
-  // Why: one empty observation cannot prove every registered lineage edge disappeared at once.
+  // One empty scan cannot prove every stored lineage edge disappeared.
   if (
     gitWorktrees.length === 0 &&
     hasStoredRepoLineage(repoPrefix, worktreeLineage, workspaceLineage)
@@ -114,7 +114,7 @@ export function pruneLineageForMissingRepoWorktrees(
       canMutateWorktree(childId) &&
       !isLive(childId)
     ) {
-      // Why: a proven-missing path must not transfer its lineage to a future checkout at that path.
+      // Path reuse must not inherit a proven-missing checkout's lineage.
       store.removeWorktreeLineage(hostWorktreeTarget({ id: childId, hostId: expectedHostId }))
     }
     if (
@@ -124,7 +124,7 @@ export function pruneLineageForMissingRepoWorktrees(
     ) {
       const parentMeta = store.getWorktreeMeta(lineage.parentWorktreeId)
       if (parentMeta?.instanceId === lineage.parentWorktreeInstanceId) {
-        // Why: rotate a proven-missing parent's identity once so path reuse cannot validate old lineage.
+        // Rotate once so path reuse cannot validate the missing parent's old identity.
         store.setWorktreeMeta(
           hostWorktreeTarget({ id: lineage.parentWorktreeId, hostId: expectedHostId }),
           { instanceId: randomUUID() }

@@ -1,7 +1,4 @@
-// A browser page create, close, convert or profile switch in a layout-owner build: the window sends
-// the command first and changes nothing until main answers. Main's frame shows the tab's own
-// fields (its pages, its profile); the window then writes what only it holds (each page's state).
-// A refusal leaves the tab as it was.
+// In layout-owner builds send browser commands before changing state; main frames draw tab/page/profile fields, then window writes page-local state. Refusal preserves tabs.
 
 import { sendLayoutApply, type WindowLayoutCommand } from '@/runtime/layout-apply-send'
 import { beginPendingTab } from '@/runtime/layout-owner-pending-tabs'
@@ -12,11 +9,7 @@ type BrowserLayoutCommand = Extract<
   { type: 'openBrowserPage' | 'closeBrowserPage' | 'replaceBrowserPage' | 'setBrowserTabProfile' }
 >
 
-/**
- * False when main is not asked (a paired server owns the workspace's layout): the caller writes
- * the change as today. `here` is today's write, for a twin main may route to a paired server;
- * `shown` runs once main's frame is in.
- */
+/** Return false for paired-owned layouts and use here directly. Main may route twins to paired servers; shown runs only after frames arrive. */
 export function sendBrowserLayoutCommand(
   get: BrowserSliceGet,
   worktreeId: string,

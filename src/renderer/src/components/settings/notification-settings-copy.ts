@@ -12,15 +12,27 @@ export function getSystemNotificationSettingsCopy(
 ): SystemNotificationSettingsCopy | null {
   if (platform === 'darwin') {
     return {
-      failureTitle: 'macOS did not show the notification',
-      failureDescription: 'Enable Allow notifications for Orca in System Settings.'
+      failureTitle: translate(
+        'auto.components.settings.notification.settings.copy.macFailureTitle',
+        'macOS did not show the notification'
+      ),
+      failureDescription: translate(
+        'auto.components.settings.notification.settings.copy.macFailureDescription',
+        'Enable Allow notifications for Orca in System Settings.'
+      )
     }
   }
 
   if (platform === 'win32') {
     return {
-      failureTitle: 'Windows did not show the notification',
-      failureDescription: 'Enable notifications for Orca in Windows Settings.'
+      failureTitle: translate(
+        'auto.components.settings.notification.settings.copy.windowsFailureTitle',
+        'Windows did not show the notification'
+      ),
+      failureDescription: translate(
+        'auto.components.settings.notification.settings.copy.windowsFailureDescription',
+        'Enable notifications for Orca in Windows Settings.'
+      )
     }
   }
 
@@ -53,9 +65,7 @@ export function resolveNotificationVolumeDraftState(
 export type NotificationTestOutcome = 'delivered' | 'not-displayed' | 'not-sent'
 
 type SendTestNotificationOptions = {
-  /** Why: the onboarding step renders delivery state inline, so the ambiguous
-   *  darwin "check if a banner appeared" toasts would just duplicate (or
-   *  contradict) the card the user is already looking at. */
+  /** Inline delivery cards replace ambiguous macOS banner-check toasts that could contradict them. */
   suppressSystemPermissionToasts?: boolean
 }
 

@@ -9,6 +9,12 @@ import {
   type ProjectRef
 } from './gl-utils'
 import { withProjectRef } from './merge-request-project-resolution'
+import { codeHostFailure } from '../../shared/code-host-failure-copy'
+
+// Why: glab's MRCheckErrors refuses a no-op close/reopen with these fixed texts; every other
+// failure, including "has already been merged", must surface.
+const GLAB_MR_ALREADY_CLOSED = 'this merge request has been closed'
+const GLAB_MR_ALREADY_OPEN = 'this merge request is already open'
 
 export async function closeMR(
   repoPath: string,
@@ -33,8 +39,7 @@ export async function closeMR(
         return { ok: true }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        // Why: glab exits non-zero when the MR is already closed — treat as success.
-        if (msg.toLowerCase().includes('already')) {
+        if (msg.toLowerCase().includes(GLAB_MR_ALREADY_CLOSED)) {
           return { ok: true }
         }
         return { ok: false, error: msg }
@@ -42,7 +47,7 @@ export async function closeMR(
         release()
       }
     },
-    { ok: false, error: 'Could not resolve GitLab project for this repository' },
+    codeHostFailure('gitlab.projectUnresolved'),
     localGitOptions
   )
 }
@@ -70,7 +75,7 @@ export async function reopenMR(
         return { ok: true }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        if (msg.toLowerCase().includes('already')) {
+        if (msg.toLowerCase().includes(GLAB_MR_ALREADY_OPEN)) {
           return { ok: true }
         }
         return { ok: false, error: msg }
@@ -78,7 +83,7 @@ export async function reopenMR(
         release()
       }
     },
-    { ok: false, error: 'Could not resolve GitLab project for this repository' },
+    codeHostFailure('gitlab.projectUnresolved'),
     localGitOptions
   )
 }
@@ -100,7 +105,6 @@ export async function mergeMR(
     async (projectRef, repoFlag) => {
       await acquire()
       try {
-        // Why: omitting both --squash and --rebase yields a regular merge commit.
         const methodFlag =
           method === 'squash' ? ['--squash'] : method === 'rebase' ? ['--rebase'] : []
         await glabExecFileAsync(
@@ -117,7 +121,7 @@ export async function mergeMR(
         release()
       }
     },
-    { ok: false, error: 'Could not resolve GitLab project for this repository' },
+    codeHostFailure('gitlab.projectUnresolved'),
     localGitOptions
   )
 }

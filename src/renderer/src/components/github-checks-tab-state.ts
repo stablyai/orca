@@ -84,11 +84,7 @@ export function toggleGitHubChecksTabExpandedKey(
   }
 }
 
-/**
- * Unfenced write: an entry stored without a `requestId` silently drops the
- * settlement of any request already in flight for that key. Use
- * `beginGitHubChecksTabDetails` whenever a settlement is expected.
- */
+/** Writes without requestId retire in-flight settlements; use beginGitHubChecksTabDetails when a result must settle. */
 export function updateGitHubChecksTabDetails(
   state: GitHubChecksTabState,
   key: string,
@@ -117,11 +113,7 @@ export function beginGitHubChecksTabDetails(
   })
 }
 
-/**
- * A context change is fenced indirectly: `resolveGitHubChecksTabState` swaps in
- * a state with an empty `detailsByCheckKey`, so requests from the old context
- * find no owning entry here and settle into nothing.
- */
+/** Context swaps clear owning entries so requests from the old context cannot settle. */
 export function settleGitHubChecksTabDetails(
   state: GitHubChecksTabState,
   key: string,

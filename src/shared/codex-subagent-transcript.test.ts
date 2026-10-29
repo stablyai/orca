@@ -4,8 +4,7 @@ import type * as NodeFs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-// Why: ESM namespaces are not configurable, so counting rollout opens needs a
-// delegating mock rather than vi.spyOn. Every other export stays real.
+// Delegate a module mock because ESM namespaces cannot be spied on; count opens while keeping other exports real.
 const openSyncCalls = vi.hoisted(() => vi.fn())
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
@@ -44,7 +43,7 @@ function activity(kind: string, occurredAtMs = 1234): unknown {
   }
 }
 
-/** `<root>/YYYY/MM/DD` for a timestamp, matching how Codex buckets rollouts by local start date. */
+/** Match Codex’s local-start-date rollout directories. */
 function dayDirectory(root: string, atMs: number): string {
   const at = new Date(atMs)
   const pad = (value: number): string => String(value).padStart(2, '0')
@@ -282,8 +281,7 @@ describe('Codex subagent transcript reconciliation', () => {
 
       reconcileCodexSubagentTranscript(state, roster, parentPath)
 
-      // Why: model extraction reuses the records already read for completion
-      // detection, so it must add no file I/O of its own.
+      // Model discovery reuses completion records and must add no file I/O.
       expect(openSyncCalls).toHaveBeenCalledTimes(2)
       expect(codexRosterToSnapshots(roster)?.[0]?.model).toBe('gpt-5.6-terra')
     })

@@ -36,7 +36,11 @@ test('refreshes followed directory links after target changes and retargeting', 
   await waitForSessionReady(orcaPage)
   await waitForActiveWorktree(orcaPage)
   await orcaPage.evaluate(async () => {
-    await window.__store.getState().updateSettings({ followSymlinkedDirectories: true })
+    const store = window.__store
+    if (!store) {
+      throw new Error('window.__store is unavailable')
+    }
+    await store.getState().updateSettings({ followSymlinkedDirectories: true })
   })
   const row = (name: string) =>
     orcaPage.locator('[data-file-explorer-row]').filter({

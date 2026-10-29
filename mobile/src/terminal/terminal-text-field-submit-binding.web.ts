@@ -4,17 +4,11 @@ import { createTerminalKeyChordInput } from './terminal-key-chord-input'
 import { getTerminalLiveSpecialKeyId } from './terminal-live-input'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
 
-/**
- * Claim the page's own submit signal for the live input, because react-native-web withholds
- * `onSubmitEditing` whenever the Enter keydown reports an open composition (`isComposing`, or the
- * Android `keyCode` 229 that stands for it) — the normal state of a soft keyboard mid-word.
- *
- * `beforeinput`/`insertLineBreak` is the browser saying the user asked to end the line, and it is
- * dispatched only when nothing cancelled the keydown. react-native-web calls `preventDefault` on
- * every keydown it does submit on, so this fires in exactly the cases it dropped, never twice. A
- * composing IME that is still choosing a candidate produces `insertCompositionText` instead and is
- * left alone, which is how an interrupted composition survives here as it does natively.
- */
+// Plain caret keys reach onKeyPress, which keeps them in the field while it holds text.
+const FIELD_CARET_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'Home', 'End'])
+
+// RN Web skips composing Enter keydowns; beforeinput line breaks recover those submits.
+// Submitted keydowns are cancelled, preventing duplicates; candidate acceptance emits insertCompositionText and remains untouched.
 export function bindTerminalTextFieldSubmit(
   node: TextInput | null,
   onSubmit: () => void,
@@ -65,6 +59,7 @@ export function bindTerminalTextFieldSubmit(
       event.key === 'Enter' ||
       event.key === 'Backspace' ||
       event.key === 'Delete' ||
+      (FIELD_CARET_KEYS.has(event.key) && !event.ctrlKey && !event.altKey && !event.shiftKey) ||
       (!specialKey && !(event.key.length === 1 && (event.ctrlKey || event.altKey)))
     ) {
       return

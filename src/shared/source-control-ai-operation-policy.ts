@@ -1,11 +1,16 @@
+import { trimActionArgumentDocument } from './source-control-action-argument-choices'
+import {
+  selectSourceControlActionRecipe,
+  type CurrentActionSelection,
+  type SelectedSourceControlActionRecipe
+} from './source-control-action-selection'
 import type { GlobalSettings } from './global-settings-types'
 import type { Repo } from './repo-types'
 import {
   readSourceControlActionDefault,
   resolveSourceControlActionCommandTemplate,
   type AiActionId,
-  type SourceControlTextActionId,
-  type SourceControlActionRecipe
+  type SourceControlTextActionId
 } from './source-control-ai-actions'
 import { commandTemplateFromOperationInstruction } from './source-control-ai-command-template'
 import { normalizeRepoSourceControlAiOverrides } from './source-control-ai-repo-settings'
@@ -182,11 +187,11 @@ export function resolveSourceControlAiEnabled(input: {
   )
 }
 
-export function resolveSourceControlActionRecipe(input: {
+export function captureSourceControlActionSelection(input: {
   settings: Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi'> | null | undefined
   repo?: Pick<Repo, 'sourceControlAi'> | null
   actionId: AiActionId
-}): SourceControlActionRecipe {
+}): CurrentActionSelection {
   const source = normalizeSourceControlAiSettings(
     input.settings?.sourceControlAi,
     input.settings?.commitMessageAi
@@ -202,19 +207,48 @@ export function resolveSourceControlActionRecipe(input: {
     source.actions,
     input.actionId
   )
-  return repoRecipe
-    ? {
-        ...globalRecipe,
-        commandInputTemplate,
-        ...(repoRecipe.agentId !== undefined ? { agentId: repoRecipe.agentId } : {}),
-        ...(typeof repoRecipe.commandInputTemplate === 'string'
-          ? { commandInputTemplate: repoRecipe.commandInputTemplate.trim() }
-          : {}),
-        ...(typeof repoRecipe.agentArgs === 'string'
-          ? { agentArgs: repoRecipe.agentArgs.trim() }
-          : repoRecipe.agentArgs === null
-            ? { agentArgs: '' }
-            : {})
-      }
-    : { ...globalRecipe, commandInputTemplate }
+  const ownsRaw = repoRecipe?.agentArgs !== undefined
+  const raw = ownsRaw ? repoRecipe : globalRecipe
+  const {
+    launchPreferences: _globalPreferences,
+    argumentChoices: _globalDocument,
+    agentArgs: _globalArgs,
+    surface: globalSurface,
+    ...globalBase
+  } = globalRecipe
+  const current = trimActionArgumentDocument({
+    ...globalBase,
+    commandInputTemplate,
+    ...(raw?.agentArgs !== undefined ? { agentArgs: raw.agentArgs ?? '' } : {}),
+    ...(raw?.argumentChoices ? { argumentChoices: raw.argumentChoices } : {}),
+    ...((repoRecipe?.surface ?? (repoRecipe?.agentId === undefined ? globalSurface : undefined))
+      ? { surface: repoRecipe?.surface ?? globalSurface }
+      : {}),
+    ...(repoRecipe?.agentId !== undefined ? { agentId: repoRecipe.agentId } : {}),
+    ...(typeof repoRecipe?.commandInputTemplate === 'string'
+      ? { commandInputTemplate: repoRecipe.commandInputTemplate.trim() }
+      : {})
+  })
+  return {
+    current,
+    source: repoRecipe
+      ? {
+          scope: 'repo',
+          authoredAgentId: repoRecipe.agentId,
+          authoredPreferences: repoRecipe.launchPreferences,
+          parentPreferences: globalRecipe.launchPreferences,
+          ownsArgs: ownsRaw
+        }
+      : {
+          scope: 'global',
+          authoredAgentId: globalRecipe.agentId,
+          authoredPreferences: globalRecipe.launchPreferences
+        }
+  }
+}
+
+export function resolveSourceControlActionRecipe(
+  input: Parameters<typeof captureSourceControlActionSelection>[0]
+): SelectedSourceControlActionRecipe {
+  return selectSourceControlActionRecipe(captureSourceControlActionSelection(input))
 }

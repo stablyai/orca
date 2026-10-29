@@ -1,14 +1,7 @@
 import type { StructuredAgentSessionStatusFeedOwner } from '@/runtime/structured-agent-session-status-feed'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 
-/**
- * Asks the host again once an offered or failed chat shows new activity, so a message the user
- * sent there, or its agent starting, retires its entry here too. The host stays the judge; this
- * only asks again.
- *
- * Held only while something is offered or failed. Keyed on status and prompt rather than every
- * summary, so an agent streaming in such a chat costs one re-read, not one per tool call.
- */
+/** Watch offered/failed chats only; debounce status/prompt changes into host rereads without one request per streamed summary. */
 
 const OFFERED_CHAT_REFRESH_DELAY_MS = 500
 
@@ -46,8 +39,7 @@ export function createOfferedChatWatch(deps: {
       const previous = seen.get(sessionId)
       if (previous !== key) {
         seen.set(sessionId, key)
-        // A first sighting is news only if newer than the list; a change to a known chat always is,
-        // since the host may have answered the list just before the change was delivered here.
+        // A first sighting must postdate the list; known changes count even when host timestamps or delivery order disagree.
         changed ||= previous !== undefined || summary.updatedAt > deps.listedAt()
       }
     }

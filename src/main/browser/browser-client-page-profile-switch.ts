@@ -90,7 +90,7 @@ export async function switchBrowserClientPageProfile(input: {
       pageHostGeneration: old.generation,
       registration: old.registration
     })
-    // A fence that landed during that await must stop the staged guest before it navigates.
+    // Fencing during automation retirement must stop the staged guest before navigation.
     assertBrowserClientPageCommandNotAborted(signal)
     input.assertAvailable()
     assertCurrentBrowserClientPageRenderer(staged.renderer)
@@ -133,7 +133,7 @@ export async function switchBrowserClientPageProfile(input: {
         await cleanup
         switches.retainedCleanups.delete(cleanup)
       } else if (isBrowserClientPageCleanupFailure(error)) {
-        // Staging failed before handing over its guest; keep the unreleased resources visible to close.
+        // Retain staging failures so close() reports unreleased resources.
         const unresolved = Promise.reject(error)
         unresolved.catch(() => {})
         switches.retainedCleanups.add(unresolved)
@@ -142,7 +142,7 @@ export async function switchBrowserClientPageProfile(input: {
       switches.stagedPages.delete(event.browserPageId)
       old.reconciling = false
       if (!old.lifecycleClaim.isCurrent()) {
-        // Its loss was reported once while reconciling suppressed it, so report it now.
+        // Reconciliation suppressed the original loss notification; report it now.
         markBrowserClientPageUnavailable(input.pages, old.registration, (id, generation) =>
           dependencies.onPageUnavailable?.(id, generation)
         )
@@ -155,13 +155,12 @@ export async function switchBrowserClientPageProfile(input: {
   await switches.retire(old, (page) => input.cleanup(page, true))
 }
 
-/** Profile-switch state the executor's fencing and close must also see. */
 export class BrowserClientProfileSwitches {
   readonly retainedCleanups = new Set<Promise<void>>()
-  /** In-flight switches by page; the staged guest once mounted. */
+  /** Null reserves a switch before its staged guest mounts. */
   readonly stagedPages = new Map<string, BrowserClientRetainedPage | null>()
 
-  // Why: a staged guest holds a navigation grant and owns downloads before it replaces the page.
+  // Staged guests already hold navigation grants and own downloads.
   withStagedPages(pages: Iterable<BrowserClientRetainedPage>): BrowserClientRetainedPage[] {
     return [...pages, ...[...this.stagedPages.values()].filter((page) => page !== null)]
   }

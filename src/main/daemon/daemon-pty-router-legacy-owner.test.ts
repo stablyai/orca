@@ -4,10 +4,9 @@ import { DaemonPtyRouter } from './daemon-pty-router'
 import { TerminalSessionOwnerUnverifiedError } from './daemon-errors'
 
 const SPAWN = { cols: 80, rows: 24 }
-// Above any real pid ceiling, so the exit probe always finds it missing.
+// Keep the fake PID outside the real process range.
 const MISSING_PID = 2_147_483_000
 
-// #26296: after a daemon update, the old daemon keeps the sessions it runs; the new one takes only new ids.
 describe('DaemonPtyRouter keeps live sessions on their older daemon', () => {
   it('reattaches on the older daemon when startup discovery could not route the id', async () => {
     const current = createAdapter('current')
@@ -74,7 +73,7 @@ describe('DaemonPtyRouter keeps live sessions on their older daemon', () => {
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
     await router.discoverLegacySessions()
 
-    // A dropped current connection answers the probe with null; the inventory reconnects.
+    // Model reconnect through inventory after the current connection drops.
     vi.mocked(current.probePtyLiveness).mockResolvedValue(null)
 
     await router.spawn({ ...SPAWN, sessionId: 'current-session' })
@@ -97,7 +96,6 @@ describe('DaemonPtyRouter keeps live sessions on their older daemon', () => {
     expect(legacy.probePtyLiveness).toHaveBeenCalledOnce()
   })
 
-  // A daemon still on its socket is not proven exited by a missing pid alone.
   it('refuses while the older daemon socket answers even if its pid is gone', async () => {
     const current = createAdapter('current')
     const legacy = createAdapter('legacy', ['claude-session'])

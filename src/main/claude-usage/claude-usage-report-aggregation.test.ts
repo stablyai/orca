@@ -37,9 +37,7 @@ function stateWithDaily(dailyAggregates: ClaudeUsageDailyAggregate[]): ClaudeUsa
 }
 
 describe('buildSummary Claude Sonnet 5 pricing over time', () => {
-  // Why: the "All" range re-prices historical days on every render, so a day inside the
-  // announced 2026-08-31 introductory window has to price the same as a later day —
-  // the scheduled $3/$15 increase was cancelled and never took effect.
+  // The cancelled price increase must not reprice historical usage.
   it('prices an introductory-window day and a post-window day at the same $2/$10 rate', () => {
     const inWindow = buildSummary(
       stateWithDaily([dailyRow('2026-08-15', 'claude-sonnet-5')]),
@@ -108,7 +106,6 @@ describe('buildSummary Haiku 5.5 long-context requests', () => {
     }
     const state = stateWithDaily([row])
 
-    // 500K input at $0.10 + 500K at $0.50 + 1M output at $0.50.
     expect(buildSummary(state, 'all', 'all').estimatedCostUsd).toBeCloseTo(0.8)
     expect(buildSummary(state, 'all', 'all').hasUnpricedModels).toBe(false)
     expect(buildBreakdown(state, 'all', 'all', 'model')[0]?.estimatedCostUsd).toBeCloseTo(0.8)

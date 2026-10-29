@@ -1,6 +1,4 @@
-// While main's local layout stream is down, a change the window sends is applied by main but not
-// drawn by the window; the reopened stream's snapshot shows it. The local host is the same build,
-// so the window never needs to draw these itself.
+// During local stream outage, main applies intents and reconnect snapshot draws them. Local main shares this build, so window fallback drawing is unnecessary.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
@@ -196,7 +194,7 @@ describe('changes made while main’s layout stream is down', () => {
         ?.activeTabId
     ).toBe('tab-unbound')
   })
-  it('keep an agent’s first generated title when a second prompt comes before the snapshot', async () => {
+  it('leave an agent’s generated titles to main, and show the one main kept from the snapshot', async () => {
     useAppStore.setState({
       settings: { ...useAppStore.getState().settings!, tabAutoGenerateTitle: true }
     })
@@ -205,12 +203,20 @@ describe('changes made while main’s layout stream is down', () => {
     stream.onStatus!({ state: 'lost' })
 
     useAppStore.getState().setGeneratedTabTitleFromAgentPrompt(paneKey, 'Refactor the auth module')
-    await mainAppliesEach()
-    // The answer settled the first title, so the second prompt is sent too.
     useAppStore.getState().setGeneratedTabTitleFromAgentPrompt(paneKey, 'Fix the flaky login test')
-    expect(rpc.calls.map((call) => call.command.type)).toEqual(['renameTabs'])
-    await mainAppliesEach()
+    expect(rpc.calls.filter((call) => call.command.type === 'renameTabs')).toEqual([])
     expect(terminalRow('tab-unbound').generatedTitle).toBeUndefined()
+    // Main derives both from its own agent status and keeps the first, as its deriver sends them.
+    mainRenames({
+      type: 'renameTabs',
+      kind: 'generated',
+      renames: [{ workspace: GIT_KEY, tabId: 'tab-unbound', title: 'Refactor the auth module' }]
+    })
+    mainRenames({
+      type: 'renameTabs',
+      kind: 'generated',
+      renames: [{ workspace: GIT_KEY, tabId: 'tab-unbound', title: 'Fix the flaky login test' }]
+    })
 
     stream.onStatus!({ state: 'connecting' })
     stream.onFrame!(frames.snapshot(published(), ++seq))

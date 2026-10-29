@@ -13,7 +13,7 @@
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.chunk\",\"params\":{\"dictationId\":\"dictation-1\",\"audioBase64\":\"ACVKb5S53gM=\",\"sampleRate\":16000}}"
     },
-    "182109450de8": {
+    "99956eef8fff": {
       "name": "speech.dictation.chunk#1",
       "ordinal": 1,
       "args": [
@@ -32,7 +32,7 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "timeoutMs": 30000
           }
         }
       ],
@@ -69,7 +69,7 @@
       {
         "id": "acknowledged",
         "observation": {
-          "sender": ["182109450de8"],
+          "sender": ["99956eef8fff"],
           "payloads": ["12521d219054"],
           "settlements": {
             "chunk": "bc459c132276"

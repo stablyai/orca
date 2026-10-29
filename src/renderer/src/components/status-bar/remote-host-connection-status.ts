@@ -1,12 +1,10 @@
 import { translate } from '@/i18n/i18n'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
-import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime-shared-control-types'
+import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-types'
 import type { RuntimeHostBlockedReason } from '../../../../shared/runtime-host-status'
 import type { RuntimePairingRepairRoute } from '../../../../shared/runtime-environments'
-import {
-  describeRuntimeCompatBlock,
-  type RuntimeCompatVerdict
-} from '../../../../shared/protocol-compat'
+import type { RuntimeCompatVerdict } from '../../../../shared/protocol-compat'
+import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
 import {
   runtimeStatusForOverall,
   type HostStatus,
@@ -16,47 +14,6 @@ import { isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
 
 /** 'blocked' is a host that refused us (revoked pairing or incompatible versions). */
 export type OverallHostStatus = HostStatus | 'blocked'
-export type OverallRemoteHostsStatus =
-  | 'connected'
-  | 'partial'
-  | 'disconnected'
-  | 'connecting'
-  | 'attention'
-
-export function overallStatus(statuses: OverallHostStatus[]): OverallRemoteHostsStatus {
-  if (statuses.length === 0) {
-    return 'disconnected'
-  }
-  if (statuses.every((s) => s === 'connected')) {
-    return 'connected'
-  }
-  if (statuses.some((s) => s === 'connecting')) {
-    return 'connecting'
-  }
-  // Why: a refused host never recovers on its own, so it must not hide behind "partial"/idle grey.
-  if (statuses.some((s) => s === 'blocked')) {
-    return 'attention'
-  }
-  if (statuses.some((s) => s === 'connected')) {
-    return 'partial'
-  }
-  return 'disconnected'
-}
-
-export function overallDotColor(status: OverallRemoteHostsStatus, connectedCount: number): string {
-  switch (status) {
-    case 'connected':
-      return 'bg-emerald-500'
-    case 'partial':
-      return connectedCount > 0 ? 'bg-emerald-500' : 'bg-muted-foreground/40'
-    case 'connecting':
-      return 'bg-yellow-500'
-    case 'attention':
-      return 'bg-destructive'
-    case 'disconnected':
-      return 'bg-muted-foreground/40'
-  }
-}
 
 export function sshStatusForOverall(status: SshConnectionStatus): HostStatus {
   if (status === 'connected') {
@@ -161,9 +118,6 @@ export function runtimeHostConnectionDetail(
       { value0: remoteControl.lastClose.reason }
     )
   }
-  // Why: pending-request / subscription counts are internal RPC plumbing (e.g. a
-  // live browser screencast shows as "N streams"). They're noise in a user-facing
-  // status row and make the line truncate — only surface actionable detail
-  // (errors, close reasons, reconnect attempts) above.
+  // Hide internal RPC counts; only errors, close reasons and reconnect attempts help users act.
   return undefined
 }

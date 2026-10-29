@@ -60,7 +60,7 @@ describe('bounded regular metadata reads', () => {
     2000
   )
 
-  it('retains ordinary metadata and regular-file symlinks within the byte bound', async () => {
+  it('retains ordinary metadata within the byte bound', async () => {
     const file = await filePath()
     await writeFile(file, '{"project":"/workspace"}')
     expect(await readLocalAntigravityHistory(file)).toBe('{"project":"/workspace"}')

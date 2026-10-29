@@ -7,8 +7,7 @@ import {
 } from '@/components/native-chat/native-chat-composer-draft-store'
 import { recheckNativeChatComposerDraftImagesIn } from '@/components/native-chat/native-chat-composer-draft-image-check'
 
-// Why bounded: loading drafts is bookkeeping and must never hold startup; a slower load still
-// fills in every draft not edited meanwhile when it lands.
+// Bound startup waiting; a late load still fills drafts the user has not edited.
 const DRAFT_LOAD_WAIT_MS = 1_500
 
 /** Before any startup step, so a step that fails can't leave the drafts unloaded. */
@@ -24,8 +23,7 @@ export function startNativeChatDraftLoad(): (() => void) | undefined {
   return stopRechecks
 }
 
-/** Startup waits for the drafts alongside the session read, so a composer shows its draft from
- *  its first frame. */
+/** Overlap draft loading with the session read so composers show drafts on their first frame. */
 export function waitForNativeChatDraftsAtStartup(): Promise<void> {
   return waitForNativeChatComposerDrafts(DRAFT_LOAD_WAIT_MS)
 }

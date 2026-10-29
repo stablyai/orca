@@ -61,8 +61,7 @@ const TRICKY_LABELS: readonly (string | null)[] = [
 ]
 
 function makeWorktree(index: number, displayName: string | null): Worktree {
-  // Trailing separators and Windows separators exercise `basename()`'s
-  // normalisation on the rows whose displayName is blank.
+  // Blank names must normalize trailing and Windows path separators consistently.
   const suffixes = ['', '/', '//', '\\']
   return {
     id: `w${index}`,

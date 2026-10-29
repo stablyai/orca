@@ -14,13 +14,15 @@ import {
   type ExecutionHostId
 } from '../../shared/execution-host'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
-import { AI_VAULT_AGENT_SOURCES, isDiscoverableSessionFile } from './session-scanner-agent-sources'
+import {
+  AI_VAULT_AGENT_SOURCES,
+  isDiscoverableSessionFile,
+  sessionRowRootDirs
+} from './session-scanner-agent-sources'
 import { subagentTranscriptsDirFor } from './session-scanner-subagent-transcripts'
 import type { AiVaultScanOptions } from './session-scanner-types'
 
-// Agents whose session IS the directory holding the scanned file: everything
-// beside it belongs to the same session (rovo's session_context.json, grok's
-// chat_history.jsonl), so the directory is the only complete delete unit.
+// These sessions own their containing directory, including companion files.
 const AI_VAULT_WHOLE_DIRECTORY_DELETE_AGENTS = new Set<AiVaultDeletableAgent>([
   'rovo',
   'grok',
@@ -31,17 +33,12 @@ export type ValidateAiVaultSessionDeleteTargetArgs = {
   agent: AiVaultAgent
   filePath: string
   executionHostId: ExecutionHostId | null | undefined
-  // Passed in rather than fetched (getAiVaultWslHomeDirs) so this stays
-  // synchronous and pure.
+  // Supply WSL roots to keep validation synchronous.
   wslHomeDirs?: readonly string[]
-  // Per-agent root overrides so tests never depend on the real home directory.
   rootOptions?: AiVaultScanOptions
 }
 
-// Pure path-only judgement: never touches the filesystem, and never throws —
-// a malformed or hostile filePath rejects like any other invalid input.
-// `allowed: true` alone is NOT enough to delete; see the caller contract on
-// AiVaultSessionDeleteAllowedResult.
+// Path approval still requires filesystem containment checks before removal.
 export function validateAiVaultSessionDeleteTarget(
   args: ValidateAiVaultSessionDeleteTargetArgs
 ): AiVaultSessionDeleteValidationResult {
@@ -53,8 +50,7 @@ export function validateAiVaultSessionDeleteTarget(
   if (!isAiVaultDeletableAgent(agent)) {
     return rejected(agent, 'unsupported-agent')
   }
-  // Electron shell/fs APIs only act on this computer; an ssh/runtime session's
-  // path exists on the remote host. Same limit as Open/Reveal Log.
+  // Electron removal acts only on this host; remote paths require their own execution host.
   if (normalizeExecutionHostId(args.executionHostId) !== LOCAL_EXECUTION_HOST_ID) {
     return rejected(agent, 'non-local-host')
   }
@@ -62,24 +58,19 @@ export function validateAiVaultSessionDeleteTarget(
     return rejected(agent, 'synthetic-path')
   }
 
-  // resolve() collapses `..` first: isPathInsideOrEqual compares textually and
-  // would otherwise pass `<root>/../../etc/x.jsonl`.
+  // Collapse traversal before textual containment checks.
   const resolvedPath = resolve(filePath)
   const source = AI_VAULT_AGENT_SOURCES[agent]
-  const roots = source
-    .rootDirs(args.rootOptions ?? {}, args.wslHomeDirs ?? [])
-    // Why: OMP_CODING_AGENT_DIR='/' normalizes to '', which resolve()s to the
-    // process cwd — an empty root would silently allowlist it.
+  const roots = sessionRowRootDirs(agent, args.rootOptions ?? {}, args.wslHomeDirs ?? [])
+    // An empty root resolves to cwd and would silently allowlist it.
     .filter((rootDir) => rootDir.trim().length > 0)
     .map((rootDir) => resolve(rootDir))
-  // Keep the root that actually contains this path: companion roots are derived
-  // from it, so a WSL-home session can't pair with the local host's companions.
+  // Match companion roots to this transcript's host, including WSL distros.
   const matchedRoot = roots.find((root) => isPathInsideOrEqual(root, resolvedPath))
   if (!matchedRoot) {
     return rejected(agent, 'path-outside-known-roots')
   }
-  // The scanner's own accept rule, so a path it would never have surfaced as a
-  // session row can't be accepted as a delete target either.
+  // Deletion must accept only paths the scanner could discover.
   if (!isDiscoverableSessionFile(source, matchedRoot, resolvedPath)) {
     return rejected(agent, 'undiscoverable-path')
   }
@@ -92,15 +83,7 @@ export function validateAiVaultSessionDeleteTarget(
   return { allowed: true, agent, resolvedPath, removals }
 }
 
-// The ordered path set that removing this session means: companions first, the
-// scanned path last. Null when the path names no session directory of its own,
-// which would otherwise reach the root holding every session.
-//
-// `session-env/<uuid>/` is a companion — it holds that session's generated
-// shell exports and nothing else. Its sibling `file-history/<uuid>/` is
-// deliberately NOT: that is the rewind buffer holding earlier versions of the
-// user's own files, and retiring a session is no reason to destroy the only
-// copy that can restore them.
+// Remove companions before the transcript; preserve file-history rewind backups of the user's files.
 function sessionDeleteRemovals(args: {
   agent: AiVaultDeletableAgent
   resolvedPath: string
@@ -119,17 +102,13 @@ function sessionDeleteRemovals(args: {
 
   if (agent === 'claude') {
     const sessionId = basename(resolvedPath, extname(resolvedPath))
-    // A degenerate stem ('.' from `..jsonl`, or empty) would resolve the session
-    // dir to the project dir and trash every session in it.
+    // Empty or dot stems would resolve to a project directory containing other sessions.
     if (!sessionId || sessionId === '.' || sessionId === '..') {
       return null
     }
-    // <enc>/<uuid>/, named after the transcript. Taking it rather than just the
-    // `subagents/` it holds is what stops an empty <uuid>/ being left behind.
-    // Derived from the scanner's subagents path so the two can't drift.
+    // Reuse the scanner's companion layout and remove the enclosing session directory too.
     const sessionDir = dirname(subagentTranscriptsDirFor(resolvedPath))
-    // Derived from the matched root, so a WSL-home session cleans up that
-    // distro's session-env rather than the local host's.
+    // Use this distro's session-env, never the local host's.
     const sessionEnvRoot = join(dirname(matchedRoot), 'session-env')
     return [
       { path: sessionDir, kind: 'directory', roots },

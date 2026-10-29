@@ -25,6 +25,7 @@ function resumeStartup(
   return {
     command: 'codex resume conv-1',
     agent: 'codex',
+    resumeOrigin: 'saved',
     resumeProviderSession: { key: 'session_id', id: 'conv-1' },
     launchConfig: { agentArgs: '', agentEnv: {} },
     launchToken: 'token-1',

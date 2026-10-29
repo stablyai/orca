@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
@@ -33,17 +32,6 @@ describe('SparsePresetSettingsSection', () => {
     storeMock.state.fetchSparsePresets.mockReset()
     storeMock.state.saveSparsePreset.mockReset()
     storeMock.state.removeSparsePreset.mockReset()
-  })
-
-  it('surfaces sparse preset load failures inline instead of showing an endless loader', () => {
-    storeMock.state.sparsePresetsLoadStatusByRepo = { 'repo-1': 'error' }
-    storeMock.state.sparsePresetsErrorByRepo = { 'repo-1': 'disk failed' }
-
-    const markup = renderToStaticMarkup(<SparsePresetSettingsSection repoId="repo-1" />)
-
-    expect(markup).toContain('role="alert"')
-    expect(markup).toContain('disk failed')
-    expect(markup).toContain('Sparse presets could not be loaded.')
   })
 
   it('offers a load retry and prevents creating against an unknown preset list', () => {

@@ -1,6 +1,6 @@
 import type { WorkspaceSessionState } from './workspace-session-state-types'
 
-/** Unsaved drafts the base held that the adopted rows lack: no other channel holds one. */
+/** Preserve base-only drafts because no other channel can recover them. */
 export function keepUnsavedDrafts(next: WorkspaceSessionState, base: WorkspaceSessionState): void {
   for (const [key, baseFiles] of Object.entries(base.openFilesByWorktree ?? {})) {
     const files = next.openFilesByWorktree?.[key] ?? []

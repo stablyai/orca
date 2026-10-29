@@ -1,12 +1,3 @@
-/**
- * Settling the dialog the stream reported, on the session that reported it.
- *
- * Measured against Chromium 1217 on 2026-09-20: only the CDP session that received
- * `Page.javascriptDialogOpening` can answer it — a second client that attaches afterwards gets
- * `No dialog is showing`, and every renderer-bound command it sends (`Page.enable`,
- * `Runtime.evaluate`, `DOM.getDocument`) hangs for as long as the dialog is up. So a reply that
- * travels through a fresh session cannot land, and the page stays blocked with no second dialog.
- */
 import { describe, expect, it, vi } from 'vitest'
 
 import { startBrowserScreencast } from './browser-screencast-stream'
@@ -29,7 +20,7 @@ function openDialog(
   webContents.debugger.emit('message', {}, 'Page.javascriptDialogOpening', { type, message })
 }
 
-/** `sendDebuggerCommand` issues on a microtask, so a call is visible a turn after the caller ran. */
+/** Debugger commands are issued on a microtask. */
 async function flushMicrotasks(): Promise<void> {
   await Promise.resolve()
   await Promise.resolve()
@@ -114,8 +105,6 @@ describe('the browser screencast settles the dialog it reported', () => {
 
     await flushMicrotasks()
     expect([first, second]).toEqual([true, true])
-    // Two taps on a slow link are two calls. Chromium takes one answer per dialog: the second
-    // command is refused, or settles the page's next dialog unseen.
     expect(dialogCalls(webContents)).toEqual([['Page.handleJavaScriptDialog', { accept: true }]])
 
     session.stop()
@@ -146,8 +135,6 @@ describe('the browser screencast settles the dialog it reported', () => {
     await flushMicrotasks()
     expect(dialogCalls(webContents)).toHaveLength(2)
 
-    // A's command fails after B has armed its own. If that cleared the slot, the next caller on B
-    // would send a third command against a dialog that already has an answer on the way.
     answers[0]?.reject(new Error('No dialog is showing'))
     await expect(answeringA).rejects.toThrow('No dialog is showing')
     void session.settleDialog(true)
@@ -169,8 +156,6 @@ describe('the browser screencast settles the dialog it reported', () => {
     session.stop()
     await session.done
 
-    // Before `Page.stopScreencast`, because a stopped screencast is still an attached session and
-    // the order is what makes the answer land rather than race the teardown.
     const methods = webContents.debugger.sendCommand.mock.calls.map((call) => call[0])
     expect(dialogCalls(webContents)).toEqual([['Page.handleJavaScriptDialog', { accept: false }]])
     expect(methods.indexOf('Page.handleJavaScriptDialog')).toBeLessThan(

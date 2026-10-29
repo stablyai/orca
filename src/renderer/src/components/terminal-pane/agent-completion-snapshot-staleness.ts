@@ -12,8 +12,7 @@ export function isSupersededAgentCompletionSnapshot(
   if (typeof comparableStateStartedAt !== 'number') {
     return storedAgentStatus.state !== snapshot.state
   }
-  // Why: hook completion notifications are delayed by a quiet window; by the
-  // time they fire, the same pane may already belong to a newer agent turn.
+  // Quiet-window delays can outlive the observed turn; reject snapshots after newer pane activity.
   if (storedAgentStatus.stateStartedAt > comparableStateStartedAt) {
     return true
   }

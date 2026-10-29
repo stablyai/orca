@@ -18,7 +18,6 @@ export function findPaneSleepingRecord(
   if (record) {
     return worktreeIdsEqual(record.worktreeId, worktreeId) ? { record, aliases: [] } : null
   }
-  // Switch point: main starts every pane, so it reads the numbered records the window read.
   if (!ORCA_LAYOUT_OWNER_IS_MAIN || !records) {
     return null
   }
@@ -41,8 +40,7 @@ export function findPaneSleepingRecord(
     inWorkspace
   )
   const exact = parseLegacyNumericPaneKey(found?.paneKey)?.numericPaneId === numericPaneId
-  // Why: in a split the one-conversation fallback goes to pane 1 alone, and only when no pane
-  // owns a numbered record, so no two panes resume one conversation.
+  // Only pane 1 may take an unowned fallback, and only with no numbered owner, or two panes could resume one conversation.
   const fallback =
     collectPersistedTerminalLeafIds(layoutOf(session, pane)).length <= 1 ||
     (owned.length === 0 && resolveRuntimePaneTitleLeafIdFromRoot(root, '1') === pane.leafId)

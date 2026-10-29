@@ -1,36 +1,74 @@
 import type Database from '../../sqlite/sync-database'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
-import type { JournalQueuedMessages } from './journal-queued-messages'
-import type { JournalRowTransactionHook } from './journal-row-writer'
-import type { JournalSubmissionConsume, JournalSubmissionInput } from './journal-store-contracts'
+import type { JournalRow } from './journal-row-schema'
 
-/** Claims the stored chat attachments a message written to this journal names, in the write's own
- *  transaction; `required` refuses the whole write when one is no longer stored, except one the
- *  `previous` body it replaces already named. */
+/** Claim attachments atomically; required rejects missing uploads except references retained from previous. */
 export type JournalAttachmentClaim = (
   db: Database.Database,
   body: AgentJournalMessageItem,
   required: boolean,
-  previous?: AgentJournalMessageItem
-) => void
+  previous?: AgentJournalMessageItem,
+  goalId?: string
+) => (() => void) | void
 
-/** The submission append's hook, inside its transaction: converts the draft it hands off, if any,
- *  and claims the stored attachments it names. A client's new message must name only attachments
- *  still stored; a draft's conversion was claimed when the draft was written. */
-export function journalSubmissionHook(
-  queuedMessages: JournalQueuedMessages,
-  claimAttachments: JournalAttachmentClaim,
-  input: Pick<JournalSubmissionInput, 'clientMessageId' | 'body' | 'origin' | 'payloadFingerprint'>,
-  consume: JournalSubmissionConsume | undefined
-): JournalRowTransactionHook {
-  return (db) => {
-    if (consume) {
-      queuedMessages.consumeInTransaction(db, {
-        ...consume,
-        consumedAs: input.clientMessageId,
-        fingerprint: input.payloadFingerprint
-      })
+import { composeJournalOperationReceipts, type JournalOperationReceipt } from './journal-row-writer'
+
+/** Committed accepted inputs revoke any live permission to retract their protection. */
+export function journalAttachmentClaimsReceipt(
+  claim: JournalAttachmentClaim,
+  bodies: readonly AgentJournalMessageItem[],
+  receipt?: JournalOperationReceipt
+): JournalOperationReceipt {
+  const commits: (() => void)[] = []
+  const claims: JournalOperationReceipt = {
+    write: (db) => {
+      for (const body of bodies) {
+        const commit = claim(db, body, false)
+        if (commit) {
+          commits.push(commit)
+        }
+      }
+    },
+    committed: () => commits.forEach((commit) => commit())
+  }
+  return receipt ? composeJournalOperationReceipts(claims, receipt) : claims
+}
+
+/** Select actual independent input after building once, before choosing transaction durability. */
+export function journalInputClaimsReceipt(
+  claim: JournalAttachmentClaim,
+  isLiveGoal: (id: string) => boolean,
+  rows: readonly JournalRow[],
+  receipt?: JournalOperationReceipt
+): JournalOperationReceipt | undefined {
+  const bodies: AgentJournalMessageItem[] = []
+  for (const row of rows) {
+    for (const item of row.kind === 'lifecycle-batch' ? row.mutations : [row]) {
+      if (
+        item.kind === 'item' &&
+        item.body.kind === 'message' &&
+        item.body.role === 'user' &&
+        !isLiveGoal(item.itemId)
+      ) {
+        bodies.push(item.body)
+      }
     }
-    claimAttachments(db, input.body, input.origin === 'client' && !consume)
+  }
+  return bodies.length ? journalAttachmentClaimsReceipt(claim, bodies, receipt) : receipt
+}
+
+export function journalAttachmentClaimReceipt(
+  claim: (db: Database.Database) => (() => void) | void,
+  afterCommit: () => void = () => {}
+): JournalOperationReceipt {
+  let committed: (() => void) | void
+  return {
+    write: (db) => {
+      committed = claim(db)
+    },
+    committed: () => {
+      committed?.()
+      afterCommit()
+    }
   }
 }

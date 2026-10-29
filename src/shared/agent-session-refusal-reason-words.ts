@@ -1,5 +1,4 @@
-// The words and next step each refusal reason gets, for every code: a reason the host adds does not
-// compile until it has words here.
+// Require wording and next steps for every new refusal reason at compile time.
 
 import type { AgentSessionFailureKind } from './agent-session-failure'
 import type { AgentSessionRefusalReason } from './agent-session-refusal-details'
@@ -62,9 +61,7 @@ const OWNER_UNPROVEN = causeWords('ownerUnproven', 'actFirst', 'reopenChat')
 // Only a terminal agent an older build recorded holds a claim; quitting it frees the chat.
 const TERMINAL_CLAIM = causeWords('terminalAgentHoldsChat', 'actFirst', 'quitTerminalAgent')
 
-// Every reason of every code, so a reason the host adds does not compile until it has words.
-// Reasons only a create, attach, hold or adopted import meets never reach a chat write; they keep
-// their code's words.
+// Require all code/reason pairs; create/attach/hold/import-only reasons retain code wording because they never reach chat writes.
 const REASON_WORDS = {
   agent_session_operation_invalid: {
     requestMalformed: codeWords('hostFinding'),
@@ -100,8 +97,7 @@ const REASON_WORDS = {
     rewindRefused: codeWords('hostFinding'),
     rewindUnconfirmed: codeWords('hostFinding'),
     promptGone: causeWords('questionChanged', 'nothingLeft'),
-    // An approval or question waited on the person when its agent stopped: said naming the agent,
-    // with sending a message as the step on.
+    // Name the agent that ended before an answer, with sending a message as the next step.
     promptOwnerEnded: { fact: 'providerExited', action: 'nothingLeft' },
     optionRejected: causeWords('optionRejected', 'retry'),
     providerStarting: AGENT_STARTING,
@@ -120,6 +116,10 @@ const REASON_WORDS = {
     claudeAccountSetupFailed: { fact: 'claudeAccountSetupFailed', action: 'retry' },
     agentCommandNotRunnable: { fact: 'agentCommandNotRunnable', action: 'actFirst' },
     runtimeNotInstalled: { fact: 'runtimeNotInstalled', action: 'actFirst' },
+    fullAccessAsRoot: { fact: 'fullAccessAsRoot', action: 'actFirst' },
+    launchPreparationFailed: { fact: 'launchPreparationFailed', action: 'retry' },
+    conversationOpenInTerminal: { fact: 'conversationOpenInTerminal', action: 'actFirst' },
+    conversationOpenElsewhere: { fact: 'conversationOpenElsewhere', action: 'actFirst' },
     attachFailed: codeWords('retry')
   },
   agent_session_ownership_unknown: {
@@ -181,18 +181,13 @@ const REASON_WORDS = {
     journalCorrupt: causeWords('historyUnusable', 'hostFinding'),
     // Says its step despite 'retry' unless a Retry stands beside it: the phone often has none.
     journalUnavailable: causeWords('historyUnavailable', 'retry', 'tryAgain'),
-    // A write meets it on a newer Orca's database, or from an older host keeping the chat
-    // read-only; a read meets it on this one chat, which only an update opens.
+    // Writes meet newer/read-only databases; reads meet this chat, opened only by an update.
     journalWrittenByNewerOrca: {
       ...causeWords('savedByNewerOrca', 'updateOrca', 'updateOrcaToKeepUsing'),
       history: { cause: 'chatSavedByNewerOrca', step: 'updateOrcaToOpenChat' }
     }
   },
-  // Mostly thrown as an RPC error; `hostUnsupported` is also returned and recorded. The code's own
-  // words ask for an update, which only a method the host doesn't know proves; no reason here means
-  // an older Orca. An unsupported location or agent, or no chat host, is not fixed by updating, and
-  // a client missing the capability words this with its own older copy. Only `hostUnsupported`
-  // names its cause: this agent or location can't run as a chat.
+  // Unknown methods justify the code's update advice; unsupported agents/locations or absent chat hosts do not. Only hostUnsupported names the unsupported cause; missing client capabilities retain older copy.
   structured_agent_session_unsupported: {
     clientCapabilityMissing: causeWords('notAvailable', 'hostFinding'),
     hostDisabled: causeWords('notAvailable', 'hostFinding'),

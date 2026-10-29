@@ -49,8 +49,6 @@ function rootStoppedBySigterm(stopMs: number, platform: NodeJS.Platform) {
   return { child, managed }
 }
 
-/** A root that leaves on stdin end when `leavesOnStdinEnd`, otherwise once killed (or, with
- *  `leavesOnKill` false, only when the test emits its exit). Closed under `closePlatform`'s rules. */
 function fixtureRoot(
   closePlatform: NodeJS.Platform,
   leavesOnStdinEnd: boolean,
@@ -129,7 +127,7 @@ describe('Claude child exit proof ladder', () => {
       proveClaudeChildExitWithReaper({ managed: root.managed, tree }, () => tree)
     ).resolves.toBe(true)
 
-    // No claim about what Claude started: nothing is read, reaped or taskkilled after it left.
+    // Voluntary Windows exit makes no claim about Claude's descendants.
     expect(reap).not.toHaveBeenCalled()
     expect(terminateWindowsTree).not.toHaveBeenCalled()
     expect(captureDescendants).not.toHaveBeenCalled()
@@ -167,7 +165,6 @@ describe('Claude child exit proof ladder', () => {
       await expect(proof).resolves.toBe(proven)
 
       expect(terminateWindowsTree).toHaveBeenCalledWith(4321)
-      // The root still leaves through its held handle whatever taskkill reported.
       expect(root.managed.rootVerdict).toBe('exited')
     },
     10_000
@@ -204,7 +201,7 @@ describe('Claude child exit proof ladder', () => {
     expect(root.managed.rootVerdict).toBe('live')
     await vi.advanceTimersByTimeAsync(1)
     await expect(proof).resolves.toBe(false)
-    // The exit lands only after the forced wait: it is not Claude leaving on its own.
+    // Exit after a forced reap must not count as voluntary.
     root.child.emit('exit', null, 'SIGKILL')
     await expect(close()).resolves.toBe(false)
 
@@ -219,7 +216,6 @@ describe('Claude child exit proof ladder', () => {
   ])(
     'on Windows a reap outside a close keeps taskkill as the verdict: taskkill $taskkill',
     async ({ taskkill, proven }) => {
-      // The transport-failure reap (stdin error, reader failure) kills the live tree itself.
       const root = fixtureRoot('win32', false)
       const terminateWindowsTree = vi.fn(async () => taskkill)
       const { tree } = windowsTree(root, terminateWindowsTree)

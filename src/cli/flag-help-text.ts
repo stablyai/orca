@@ -1,8 +1,8 @@
-/** One-line flag descriptions shared by every command's help output. */
 export const FLAG_HELP_TEXT: Record<string, string> = {
   'external-worktree-visibility':
     '--external-worktree-visibility show|hide|inherit  Override or inherit non-Orca worktree visibility',
   agent: '--agent <id>          Launch a known TUI agent in the first terminal',
+  'agent-wait': "--agent-wait           Add each agent row's terminal wait verdict to JSON output",
   'base-branch': '--base-branch <ref>    Base branch/ref to create the worktree from',
   command: '--command <text>       Command to run in the terminal on startup',
   comment: '--comment <text>       Comment stored in Orca metadata',
@@ -113,7 +113,6 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   'value-stdin': '--value-stdin         Read set-value payload from stdin',
   'window-id': '--window-id <id>      Target a window id from list-windows',
   'window-index': '--window-index <n>   Target a window index from list-windows',
-  // Browser automation flags
   element: '--element <ref>        Element ref from snapshot (e.g. e3)',
   url: '--url <url>            URL to navigate to',
   value: '--value <text>         Value to fill or select',

@@ -11,7 +11,7 @@ vi.mock('../../project-runtime-git-options', () => ({
 vi.mock('../registered-worktree-roots-cache', () => ({
   resolveRegisteredWorktreePath: async (path: string) => path
 }))
-vi.mock('../filesystem-auth', () => ({ resolveAuthorizedPath: vi.fn() }))
+vi.mock('./filesystem-auth', () => ({ resolveAuthorizedPath: vi.fn() }))
 import { getRepoForSourceControlAi } from './filesystem-source-control-ai-targets'
 
 const repo: Repo = {

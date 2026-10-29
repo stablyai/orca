@@ -1,12 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { create } from 'zustand'
 import type { PreflightStatus } from '../../../../preload/api-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { AppState } from '../types'
-import { createPreflightSlice } from './preflight'
-import { createRuntimeStatusSlice } from './runtime-status'
+import { createTestStore } from './store-test-helpers'
 import { resetRendererAppPlatformCacheForTests } from '@/lib/renderer-app-platform'
 
 const preflightCheck = vi.fn()
@@ -44,16 +42,6 @@ globalThis.window = {
     }
   } as unknown as Window['api']
 } as Window & typeof globalThis
-
-function createTestStore() {
-  return create<AppState>()(
-    (...a) =>
-      ({
-        ...createPreflightSlice(...a),
-        ...createRuntimeStatusSlice(...a)
-      }) as AppState
-  )
-}
 
 function resetPreflightMocks(): void {
   preflightCheck.mockReset()
@@ -111,6 +99,15 @@ function deferred<T>() {
     reject = rej
   })
   return { promise, resolve, reject }
+}
+
+function focusWorktree(store: ReturnType<typeof createTestStore>, path: string): void {
+  store.setState({
+    repos: [makeRepo({ id: 'repo-1', path: 'C:\\repo' })],
+    worktreesByRepo: { 'repo-1': [makeWorktree({ id: 'wt-1', repoId: 'repo-1', path })] },
+    activeRepoId: 'repo-1',
+    activeWorktreeId: 'wt-1'
+  })
 }
 
 describe('createPreflightSlice', () => {
@@ -183,6 +180,40 @@ describe('createPreflightSlice', () => {
     await Promise.all([forced, lazy])
 
     expect(store.getState().preflightStatus?.glab?.installed).toBe(true)
+  })
+
+  it('sends a focus wake instead of joining a background forced poll', async () => {
+    resetPreflightMocks()
+    const poll = deferred<PreflightStatus>()
+    preflightCheck.mockReturnValueOnce(poll.promise).mockResolvedValueOnce(makeStatus(true))
+    const store = createTestStore()
+    focusWorktree(store, '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo')
+
+    const background = store.getState().refreshPreflightStatus({ force: true })
+    // The poll may be refused for a stopped WSL distro; the user's focus must still reach main.
+    const focus = store.getState().refreshPreflightStatus({ force: true, wakeWslDistro: true })
+    const again = store.getState().refreshPreflightStatus({ force: true })
+
+    expect(preflightCheck).toHaveBeenCalledTimes(2)
+    expect(preflightCheck).toHaveBeenLastCalledWith({
+      force: true,
+      wakeWslDistro: true,
+      wslDistro: 'Ubuntu'
+    })
+    poll.resolve(makeStatus(false))
+    await Promise.all([background, focus, again])
+    expect(store.getState().preflightStatus?.glab?.installed).toBe(true)
+  })
+
+  it('a focus with a native workspace active wakes no WSL distro', async () => {
+    resetPreflightMocks()
+    preflightCheck.mockResolvedValue(makeStatus(true))
+    const store = createTestStore()
+    focusWorktree(store, '/home/alice/repo')
+
+    await store.getState().refreshPreflightStatus({ force: true, wakeWslDistro: true })
+
+    expect(preflightCheck).toHaveBeenCalledWith({ force: true })
   })
 
   it('checks integrations inside the active WSL worktree distro', async () => {

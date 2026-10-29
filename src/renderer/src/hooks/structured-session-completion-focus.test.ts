@@ -59,9 +59,7 @@ describe('structured session completion focus', () => {
   })
 
   it('still reveals the chat on a notification click, before activateWorktree has landed', async () => {
-    // The click sends ui:activateWorktree first, but that reveal is async, so the active id
-    // read here is still the workspace the user was on. Only the user-initiated flag separates
-    // this from the courtesy reveal above.
+    // Explicit clicks may arrive before async activation updates active ID; userInitiated distinguishes them from courtesy reveals.
     const store = createStoreState(OTHER_WORKSPACE_ID)
     const harness = await loadIpcEventsHarness(store)
     harness.useIpcEvents()

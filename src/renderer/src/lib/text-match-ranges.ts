@@ -75,17 +75,14 @@ function findCaseInsensitiveMatchRanges(
       start: normalizedText.originalStartByNormalizedOffset?.[matchStart] ?? matchStart,
       end: normalizedText.originalEndByNormalizedOffset?.[matchEnd - 1] ?? matchEnd
     })
-    // Why: advance by at least 1 to guarantee forward progress even if a
-    // future locale edge-case produces a zero-length normalizedQuery.
+    // Advance at least one even if future locale normalization yields an empty query.
     searchStart = matchEnd + (normalizedQuery.length === 0 ? 1 : 0)
   }
 
   return matches
 }
 
-// Why: whole-word matching treats Unicode letters, digits, and underscore as
-// word characters so a match only counts when both edges sit on a word boundary,
-// mirroring the editor's "whole word" find toggle.
+// Treat Unicode letters/digits/underscore as word characters, matching editor whole-word find boundaries.
 const WORD_CHARACTER = /[\p{L}\p{N}_]/u
 
 function isWordCharacter(char: string | undefined): boolean {
@@ -151,9 +148,7 @@ function buildLocaleLowercaseIndex(text: string): {
         (_, index) => index + 1
       )
     }
-    // Why: locale lowercasing can expand one original character into multiple
-    // UTF-16 code units (for example `İ` -> `i\u0307`). Search matches happen
-    // in normalized text but DOM slicing needs original offsets.
+    // Locale folding can expand UTF-16 (İ → i + combining dot); map normalized matches back to original DOM offsets.
     for (let i = 0; i < normalizedChar.length; i += 1) {
       originalStartByNormalizedOffset?.push(originalOffset)
       originalEndByNormalizedOffset?.push(originalEnd)

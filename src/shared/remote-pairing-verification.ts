@@ -16,7 +16,11 @@ export type RemotePairingFailureKind =
 export type RemotePairingFailure = {
   ok: false
   kind: RemotePairingFailureKind
+  /** English text; older clients show it as-is. */
   message: string
+  /** Absent from older hosts; clients then show `message`. */
+  errorCode?: string
+  errorParams?: Record<string, string | number>
 }
 
 export type VerifyAndAddRuntimeEnvironmentResult =

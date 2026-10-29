@@ -13,8 +13,8 @@ import {
   resetSshCredentialDeclinesForTests
 } from '../ssh-credential-decline'
 
-vi.mock('ssh2', async () =>
-  (await import('../__tests__/ssh-connection-test-client')).createSsh2Module()
+vi.mock('../ssh2-module-load', async () =>
+  (await import('../__tests__/ssh-connection-test-client')).createSsh2LoaderModule()
 )
 vi.mock('../system-transport/system-ssh-binary', async () =>
   (await import('./ssh-connection-test-harness')).createSystemSshBinaryModule()
@@ -101,8 +101,8 @@ describe('SshConnectionManager on a password host', () => {
 
   it('keeps the sign-in across a replacement that failed for a reason other than sign-in', async () => {
     await manager.disconnectConnection('target-1', manager.getConnection('target-1')!)
-    ssh2Mock.connectSequence = [new Error('Handshake failed: no matching cipher')]
-    await expect(manager.connect(createTarget())).rejects.toThrow('no matching cipher')
+    ssh2Mock.connectSequence = [new Error('Handshake failed: signature verification failed')]
+    await expect(manager.connect(createTarget())).rejects.toThrow('signature verification failed')
 
     ssh2Mock.connectSequence = ['ready']
     await manager.connect(createTarget())
@@ -152,8 +152,11 @@ describe('SshConnectionManager on a password host', () => {
   it('does not hand on a typed password the host never accepted', async () => {
     await manager.disconnect('target-1')
     onCredentialRequest.mockResolvedValueOnce('typo')
-    ssh2Mock.connectSequence = [authFailure(), new Error('Handshake failed: no matching cipher')]
-    await expect(manager.connect(createTarget())).rejects.toThrow('no matching cipher')
+    ssh2Mock.connectSequence = [
+      authFailure(),
+      new Error('Handshake failed: signature verification failed')
+    ]
+    await expect(manager.connect(createTarget())).rejects.toThrow('signature verification failed')
     expect(manager.hasCachedCredential(createTarget())).toBe(false)
 
     ssh2Mock.connectSequence = [authFailure(), 'ready']

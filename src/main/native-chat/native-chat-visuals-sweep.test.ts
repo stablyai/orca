@@ -45,7 +45,6 @@ function visualsFor(state: string, sessionId: string): string {
 
 const DAY_MS = 24 * 60 * 60_000
 
-/** Sets the mtime of `path` and everything under it to `daysAgo`, children before parents. */
 function age(path: string, daysAgo: number): void {
   if (statSync(path).isDirectory()) {
     for (const name of readdirSync(path)) {

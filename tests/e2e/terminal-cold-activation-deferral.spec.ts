@@ -8,8 +8,7 @@ import {
   waitForPaneIdentitySnapshot
 } from './helpers/terminal'
 
-// Why 8: deferral engages only when more than COLD_ACTIVATION_TAB_DEFER_THRESHOLD
-// (4) tabs would mount cold; 8 tabs with one visible leaves 7 deferred.
+// Use eight tabs: seven hidden tabs exceed the four-cold-tab deferral threshold.
 const TAB_COUNT = 8
 
 async function createActiveTerminalTab(page: Page, worktreeId: string): Promise<string> {
@@ -59,8 +58,7 @@ async function enableTerminalAccessibilityDom(page: Page, tabId: string): Promis
     if (!pane) {
       throw new Error(`Terminal pane for ${id} is unavailable`)
     }
-    // Why: xterm paints to canvas by default; screen-reader mode mirrors the
-    // visible buffer into DOM rows so the reveal oracle is user-observable.
+    // Enable screen-reader DOM rows for observable content from canvas-backed xterm.
     pane.terminal.options.screenReaderMode = true
     pane.terminal.refresh(0, pane.terminal.rows - 1)
   }, tabId)
@@ -78,9 +76,7 @@ test.describe('cold worktree activation deferral', () => {
     await waitForActiveWorktree(page)
     await waitForActiveTerminalManager(page, 30_000)
 
-    // Why a child worktree: deferral (like per-tab parking) requires
-    // snapshot-backed daemon PTYs, whose session ids embed `repoId::path` —
-    // primary-worktree tabs are conservatively never deferred.
+    // Use child-worktree daemon ids; primary-worktree tabs are conservatively excluded from deferral.
     const worktreeId = await page.evaluate(async (name) => {
       const store = window.__store
       if (!store) {
@@ -104,8 +100,7 @@ test.describe('cold worktree activation deferral', () => {
     while ((await getTerminalTabSnapshots(page, worktreeId)).length < TAB_COUNT) {
       await createActiveTerminalTab(page, worktreeId)
     }
-    // Why: deferral only covers tabs whose PTYs the parked byte watchers can
-    // own, which requires a daemon session id on every tab.
+    // Require daemon-backed PTYs so parked-byte watchers can own deferred side effects.
     await expect
       .poll(
         async () =>
@@ -117,8 +112,7 @@ test.describe('cold worktree activation deferral', () => {
     const tabIds = (await getTerminalTabSnapshots(page, worktreeId)).map((tab) => tab.id)
     const lastActiveTabId = await getActiveTabId(page)
 
-    // Why: trigger the production synchronous shutdown flush and verify its
-    // persisted result instead of sleeping through the debounce.
+    // Run the production synchronous shutdown flush and inspect its persisted result.
     await page.evaluate(() => window.dispatchEvent(new Event('beforeunload')))
     await expect
       .poll(
@@ -139,9 +133,7 @@ test.describe('cold worktree activation deferral', () => {
       )
       .toBe(true)
 
-    // Why reload: a fresh renderer against live daemon sessions is the field
-    // scenario — persisted tabs hydrate cold (unregistered, no pending spawn)
-    // and the activation must defer them instead of mounting all at once.
+    // Reload against live daemon sessions so persisted tabs hydrate cold before activation chooses what to defer.
     await page.reload()
     await waitForSessionReady(page)
     await expect.poll(() => waitForActiveWorktree(page), { timeout: 30_000 }).toBe(worktreeId)
@@ -160,9 +152,7 @@ test.describe('cold worktree activation deferral', () => {
       expect(mountedAfterActivation).toContain(lastActiveTabId)
     }
 
-    // Why: unmounted tabs must not go silent — the parked byte watchers own
-    // their side effects while deferred. This also deterministically proves
-    // the post-commit watcher effect flushed; no settle sleep is needed.
+    // Require pane-less side effects so unmounted tabs cannot go silent and watcher commit is proven without sleep.
     let watcherCoveredTabIds: string[] = []
     await expect
       .poll(

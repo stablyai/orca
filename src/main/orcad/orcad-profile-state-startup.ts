@@ -4,8 +4,19 @@ import { ensureActiveOrcaProfile, initOrcaProfilePaths } from '../orca-profiles/
 import { initSshHostKeyStoreFile } from '../ssh/ssh-host-key-store'
 import { initOrcadHeldFenceTokenFile } from '../ssh/orcad-held-fence-tokens'
 import { emitOrcadProfileStateAuthoritySelected } from './orcad-profile-state-telemetry'
+import { isWslHostOrcadProcess } from '../ipc/wsl-guest-windows-drive-path'
 
-export type OrcadProfileStateStartup = {
+/** WSL hosts are held to a per-distro memory budget; the idle writer thread costs ~13-15 MB. */
+export const WSL_HOST_PROFILE_WRITER_IDLE_STOP_MS = 60_000
+
+/** SSH hosts and the desktop keep their writer thread running. */
+export function orcadProfileWriterIdleStopMs(
+  isWslHost: () => boolean = isWslHostOrcadProcess
+): number | undefined {
+  return isWslHost() ? WSL_HOST_PROFILE_WRITER_IDLE_STOP_MS : undefined
+}
+
+type OrcadProfileStateStartup = {
   store: ProfileStateStoreFactoryResult['store']
   authority: {
     backend: ProfileStateStoreFactoryResult['backend']
@@ -16,22 +27,20 @@ export type OrcadProfileStateStartup = {
   }
 }
 
-/** Build the headless Store and publish its authority selection at one Node-only seam. */
 export async function createOrcadProfileStateStartup(
   userDataPath: string
 ): Promise<OrcadProfileStateStartup> {
   initOrcaProfilePaths()
   const profile = ensureActiveOrcaProfile(userDataPath)
-  // Why a real Store: without one, persistence-backed RPCs throw and `store?.x ?? []` reads answer
-  // "empty", so a server that pairs and lists nothing looks healthy. As the runtime authority,
-  // orcad must not load as 'desktop', which would orphan its own scheduled automations.
+  // Real persistence avoids falsely empty RPCs; headless authority keeps automations owned by this host.
   const result = await createProfileStateStoreForStartup({
     userDataPath,
     dataFile: profile.dataFile,
     databaseFile: profile.stateDatabaseFile,
     profileId: profile.profile.id,
     runtime: 'orcad',
-    storageAuthority: 'runtime'
+    storageAuthority: 'runtime',
+    writerIdleStopMs: orcadProfileWriterIdleStopMs()
   })
   const authority = {
     backend: result.backend,

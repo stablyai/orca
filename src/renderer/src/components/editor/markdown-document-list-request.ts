@@ -40,8 +40,7 @@ export function requestSharedMarkdownDocumentList(
   load: MarkdownDocumentListLoader = listRuntimeMarkdownDocuments
 ): Promise<MarkdownDocument[]> {
   const now = performance.now()
-  // Why: a never-settling scan for a route that is never requested again would
-  // otherwise pin its map entry (and captured context) for the renderer's life.
+  // Sweep abandoned routes so hung scans cannot retain their captured contexts for the renderer’s lifetime.
   for (const [staleKey, entry] of inFlightMarkdownDocumentLists) {
     if (now - entry.startedAt >= MARKDOWN_DOCUMENT_LIST_JOIN_WINDOW_MS) {
       inFlightMarkdownDocumentLists.delete(staleKey)
@@ -58,15 +57,13 @@ export function requestSharedMarkdownDocumentList(
     return existing.request
   }
 
-  // Why: split Markdown panes mount together and otherwise launch identical
-  // whole-worktree local/SSH scans; mutation refreshes bypass older snapshots.
+  // Share simultaneous pane scans; mutation refreshes bypass stale snapshots.
   const request = load(context, rootPath).finally(() => {
     if (inFlightMarkdownDocumentLists.get(key)?.request === request) {
       inFlightMarkdownDocumentLists.delete(key)
     }
   })
-  // Why: local and UNC filesystem calls have no timeout, so an abandoned scan
-  // must not suppress every ordinary retry for the renderer's lifetime.
+  // Bound joins because local/UNC calls can hang indefinitely and must not block later retries.
   inFlightMarkdownDocumentLists.set(key, { request, startedAt: now })
   return request
 }

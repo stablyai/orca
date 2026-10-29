@@ -31,7 +31,6 @@ type RuntimeRepairDialogProps = {
   name: string
 }
 
-/** Pastes a fresh pairing link into a saved server whose pairing it revoked. */
 export function RuntimeRepairDialog({
   open,
   onOpenChange,
@@ -42,7 +41,7 @@ export function RuntimeRepairDialog({
   return (
     <Dialog open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
       <DialogContent className="sm:max-w-md">
-        {/* Why inside the content: it unmounts on close, so a reopen starts from an empty link. */}
+        {/* Unmount form content on close so reopening starts with an empty link. */}
         <RuntimeRepairForm
           environmentId={environmentId}
           name={name}
@@ -87,7 +86,7 @@ function RuntimeRepairForm({
       })
       if (!result.ok) {
         if (mountedRef.current) {
-          setFailure({ kind: result.kind, message: result.message })
+          setFailure(result)
         }
         return
       }

@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -31,7 +31,7 @@ function retainedHeap(): number {
 }
 
 describe('trace sink rejected record retention', () => {
-  it('keeps small-record byte scans deferred until the batch flush', () => {
+  it('keeps small-record byte scans deferred until the batch flush', async () => {
     const filePath = join(directory, 'trace.ndjson')
     sink = createLocalFileSink({ filePath })
     const byteLength = vi.spyOn(Buffer, 'byteLength')
@@ -42,16 +42,16 @@ describe('trace sink rejected record retention', () => {
         sink.push({ index, text: '💡漢字' })
       }
       beforeFlush = byteLength.mock.calls.length
-      sink.flush()
+      await sink.flushAsync()
       afterFlush = byteLength.mock.calls.length
     } finally {
       byteLength.mockRestore()
     }
     expect(beforeFlush).toBe(0)
-    expect(afterFlush).toBe(20)
+    expect(afterFlush).toBeLessThanOrEqual(1)
   })
 
-  it('releases oversized serialized records before the pending batch flushes', () => {
+  it('releases oversized serialized records before the pending batch flushes', async () => {
     const filePath = join(directory, 'trace.ndjson')
     sink = createLocalFileSink({ filePath, maxBytes: 64 * 1024, batchWindowMs: 200 })
     const before = retainedHeap()
@@ -59,26 +59,26 @@ describe('trace sink rejected record retention', () => {
       sink.push({ index, payload: 'x'.repeat(1024 * 1024) })
     }
     const retained = retainedHeap() - before
-    expect(statSync(filePath).size).toBe(0)
+    expect(existsSync(filePath)).toBe(false)
     expect(vi.getTimerCount()).toBe(1)
     expect(retained).toBeLessThan(5 * 1024 * 1024)
     sink.push({ valid: true })
-    vi.advanceTimersByTime(200)
+    await sink.flushAsync()
     const written = readFileSync(filePath, 'utf8').split('\n').filter(Boolean).map(parseLine)
-    // Each rejected record leaves a marker, so the gap is readable instead of silent.
     expect(written.filter((entry) => entry.type === DROPPED_RECORD_TYPE)).toHaveLength(24)
     expect(written.at(-1)).toEqual({ valid: true })
   })
 
-  it('names the dropped record in the marker instead of leaving a silent gap', () => {
+  it('names the dropped record in the marker instead of leaving a silent gap', async () => {
     const filePath = join(directory, 'trace.ndjson')
-    sink = createLocalFileSink({ filePath, maxBytes: 64 * 1024, flushBufferThreshold: 1 })
+    sink = createLocalFileSink({ filePath, maxBytes: 64 * 1024 })
     sink.push({
       type: 'effect-span',
       name: 'worktree.create',
       traceId: 'a'.repeat(32),
       payload: 'x'.repeat(1024 * 1024)
     })
+    await sink.flushAsync()
     const [marker] = readFileSync(filePath, 'utf8').split('\n').filter(Boolean).map(parseLine)
     expect(marker).toMatchObject({
       type: DROPPED_RECORD_TYPE,
@@ -87,40 +87,29 @@ describe('trace sink rejected record retention', () => {
       traceId: 'a'.repeat(32)
     })
     expect(marker.droppedChars).toBeGreaterThan(1024 * 1024)
-    // Timestamped so the bundle collector's lookback filter ages markers out like any other span.
+    // The collector must be able to age dropped-record markers out of its lookback window.
     expect(BigInt(marker.endTimeUnixNano as string)).toBeGreaterThan(0n)
   })
 
-  it('omits the marker when even the marker would exceed the byte cap', () => {
+  it('omits the marker when even the marker would exceed the byte cap', async () => {
     const filePath = join(directory, 'trace.ndjson')
-    sink = createLocalFileSink({ filePath, maxBytes: 40, flushBufferThreshold: 1 })
+    sink = createLocalFileSink({ filePath, maxBytes: 40 })
     sink.push({ payload: 'x'.repeat(1_000) })
     sink.push({ ok: 1 })
+    await sink.flushAsync()
     expect(readFileSync(filePath, 'utf8')).toBe('{"ok":1}\n')
   })
 
-  it('keeps the same count-triggered flush for valid records beside rejected ones', () => {
-    const filePath = join(directory, 'trace.ndjson')
-    sink = createLocalFileSink({ filePath, maxBytes: 32, flushBufferThreshold: 3 })
-    sink.push({ valid: 1 })
-    sink.push({ payload: '💡'.repeat(20) })
-    expect(statSync(filePath).size).toBe(0)
-    sink.push({ payload: 'x'.repeat(100) })
-    expect(readFileSync(filePath, 'utf8')).toBe('{"valid":1}\n')
-    sink.push({ valid: 2 })
-    vi.advanceTimersByTime(200)
-    expect(readFileSync(filePath, 'utf8')).toBe('{"valid":1}\n{"valid":2}\n')
-  })
-
-  it('accepts the exact UTF-8 byte cap and preserves rotation and close flushes', () => {
+  it('accepts the exact UTF-8 byte cap and rotates at it', async () => {
     const filePath = join(directory, 'trace.ndjson')
     const record = { text: '💡' }
     const line = `${JSON.stringify(record)}\n`
     sink = createLocalFileSink({ filePath, maxBytes: Buffer.byteLength(line), maxFiles: 2 })
     sink.push(record)
     sink.push({ text: '💡x' })
+    await sink.flushAsync()
     sink.push(record)
-    sink.close()
+    await sink.flushAsync()
     expect(readFileSync(filePath, 'utf8')).toBe(line)
     expect(readFileSync(`${filePath}.1`, 'utf8')).toBe(line)
     expect(vi.getTimerCount()).toBe(0)

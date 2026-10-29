@@ -1,12 +1,12 @@
 import type { JiraClientForSite } from './authenticated-request'
-import type { JiraSiteSelection } from '../../shared/jira-types'
+import type { JiraSiteSelection } from '../../shared/jira/jira-types'
 
 export type JiraIssueSearchFailure = {
   error: unknown
   auth: boolean
 }
 
-/** Run against one signal that trips on the caller's abort or the request deadline. */
+/** Bound a fully consumed read by caller cancellation and a deadline, then retire its signal. */
 export async function withJiraDeadline<T>(
   signal: AbortSignal | undefined,
   timeoutMs: number,
@@ -24,6 +24,7 @@ export async function withJiraDeadline<T>(
   } finally {
     clearTimeout(timer)
     signal?.removeEventListener('abort', abort)
+    controller.abort()
   }
 }
 
@@ -75,8 +76,7 @@ export function shouldSurfaceSiteFailure(
   selection: JiraSiteSelection | null | undefined,
   entryCount: number
 ): boolean {
-  // getClients can resolve an omitted selection to the persisted 'all' choice;
-  // multi-entry reads need the same resilient fan-out policy as explicit 'all'.
+  // Omitted selections can resolve to persisted all-sites; apply the same resilient fan-out policy.
   return selection !== 'all' && entryCount <= 1
 }
 

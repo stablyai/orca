@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PROCESS_BOUNDARY_GROUND } from '../../shared/terminal-mode-reset-profiles'
+import { coldRestorePayloadFromInfo } from './cold-restore-payload-cache'
 import { buildDurableCheckpointSnapshot } from './daemon-durable-history-snapshot'
 import { DAEMON_RESTORE_SCROLLBACK_ROWS } from './daemon-restore-scrollback-depth'
 import { DAEMON_SESSION_SCROLLBACK_ROWS } from './daemon-session-scrollback-window'
@@ -9,8 +10,7 @@ import { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
 import type { ColdRestoreInfo } from './terminal-history-cold-restore-info'
 import type { TerminalSnapshot } from './types'
 
-// Why this suite: a new process must inherit none of a dead process's input
-// modes, whichever boundary (cold-restore seed or proven crash) starts it.
+// Recovery must ground dead-program input modes at both cold restore and a proven crash.
 
 const DEAD_PROCESS_ARMS = '\x1b[?1004h\x1b[?1h\x1b=\x1b[?66h\x1b[?2004h\x1b[?1002h\x1b[?1006h'
 const ARMED_TRAILERS = [
@@ -85,7 +85,7 @@ describe('process boundary ground at a cold restore', () => {
   })
 
   it('rebases a zero-record first fold even when TerminalModes cannot see the stale modes', async () => {
-    // Focus and keypad have no TerminalModes field, so only the trailer shows them.
+    // Focus and keypad modes are visible only in serialized trailers, outside TerminalModes.
     const dead = emulator(DAEMON_RESTORE_SCROLLBACK_ROWS)
     write(dead, 'OLD_OUTPUT\r\n$ \x1b[?1004h\x1b[?66h')
     const deadSnapshot = dead.getSnapshot()
@@ -104,13 +104,45 @@ describe('process boundary ground at a cold restore', () => {
     expect(checkpoint.snapshotAnsi).not.toContain('\x1b[?66h')
   })
 
-  it('keeps the cursor where the recovered history left it', () => {
+  it("keeps the dead process's title off the new process", async () => {
+    const dead = emulator(DAEMON_RESTORE_SCROLLBACK_ROWS)
+    write(dead, 'OLD_OUTPUT\r\n$ \x1b]0;\u2733 Claude Code\x07')
+    const restoreInfo: ColdRestoreInfo = { ...dead.getSnapshot(), cwd: '/tmp' }
+    expect(restoreInfo.lastTitle).toBe('\u2733 Claude Code')
+    const liveSnapshot = seededLive(restoreInfo).getSnapshot()
+
+    expect(coldRestorePayloadFromInfo(restoreInfo)).not.toHaveProperty('lastTitle')
+    // First fold rebuilds from records; a later idle fold may reuse the agreeing disk copy.
+    for (const fold of [
+      { pendingRecords: [{ kind: 'output' as const, data: 'fresh$ ' }], isFirstTake: true },
+      { pendingRecords: [], isFirstTake: false }
+    ]) {
+      const checkpoint = await buildDurableCheckpointSnapshot({
+        liveSnapshot,
+        restoreInfo,
+        ...fold
+      })
+      expect(checkpoint.lastTitle).toBeUndefined()
+    }
+  })
+
+  it('grounds without moving the cursor', () => {
+    const live = emulator(DAEMON_SESSION_SCROLLBACK_ROWS)
+    write(live, 'OLD_OUTPUT_1\r\n$ ')
+    write(live, PROCESS_BOUNDARY_GROUND)
+    write(live, 'X')
+    expect(live.getBufferTailLines(24)[1]).toBe('$ X')
+  })
+
+  // awin verify-11: a reattach after Wake showed the new prompt beside the dead shell's (`$ $`).
+  it("starts the new shell's prompt on its own line, keeping the recovered history", () => {
     const live = seededLive(checkpointOfDeadProcess(''))
     write(live, 'NEW_SHELL_PROMPT')
 
-    const rows = live.getBufferTailLines(24)
-    expect(rows[0]).toBe('OLD_OUTPUT_1')
-    expect(rows[2]).toBe('$ NEW_SHELL_PROMPT')
+    const rows = live.getBufferTailLines(60).filter((row) => row.length > 0)
+    expect(rows.slice(0, 2)).toEqual(['OLD_OUTPUT_1', 'OLD_OUTPUT_2'])
+    expect(rows.some((row) => row.trim() === '$')).toBe(true)
+    expect(rows.at(-1)).toBe('NEW_SHELL_PROMPT')
   })
 
   it('never lets the new shell complete a torn escape from the dead process', () => {
@@ -137,7 +169,7 @@ describe('process boundary ground at a proven crash', () => {
       isAlive: () => true
     })
 
-    // The prompt's 133;A: focus armed before any marker is the host's and survives the ground.
+    // Focus armed before the first prompt belongs to the host and survives recovery.
     const data = `\x1b]133;A\x07$ tui\r\n\x1b[?1049h${DEAD_PROCESS_ARMS}TUI\x1b]133;D;137\x07\x1b[?2004h$ `
     barrier.accept({ data, rawStartSeq: 0, rawEndSeq: data.length, transformed: false })
 

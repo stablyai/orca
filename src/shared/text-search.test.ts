@@ -193,7 +193,6 @@ describe('ingestRgJsonLine', () => {
     expect(match.matchLength).toBe(6)
     expect(match.displayColumn).toBeDefined()
     expect(match.displayMatchLength).toBe(6)
-    // Extracted column should still align with NEEDLE inside the snippet.
     const displayColumn = match.displayColumn ?? match.column
     const displayMatchLength = match.displayMatchLength ?? match.matchLength
     const sliced = match.lineContent.slice(
@@ -293,7 +292,6 @@ describe('buildSubmatchRegex', () => {
   it('returns null for queries git grep accepts but JS RegExp rejects', () => {
     // Unbalanced group — git grep ERE accepts it as literal, JS RegExp throws.
     expect(buildSubmatchRegex('(foo', { useRegex: true })).toBeNull()
-    // Unterminated character class.
     expect(buildSubmatchRegex('[abc', { useRegex: true })).toBeNull()
   })
 })
@@ -412,7 +410,6 @@ describe('ingestGitGrepLine', () => {
 
   it('zero-length regex does not loop', () => {
     const acc = createAccumulator()
-    // A pattern that matches zero-length at every position.
     const re = new RegExp('', 'g')
     ingestGitGrepLine('a.ts\x001\x00abc', '/r', re, acc, 5)
     expect(acc.totalMatches).toBeGreaterThan(0)

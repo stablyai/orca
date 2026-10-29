@@ -52,24 +52,19 @@ function toOwnerMatch(
   if (authority) {
     return { kind: 'resolved', owner: authority }
   }
-  // Why: a route that names a host (e.g. the unresolved-owner sentinel) is contested, not absent;
-  // `missing` would let callers read it as this app.
+  // An explicitly named host route is contested, not missing; missing could be read as this app.
   return resolution.route.executionHostId || resolution.route.runtimeEnvironmentId?.trim()
     ? { kind: 'ambiguous' }
     : { kind: 'missing' }
 }
 
-/**
- * A folder workspace, or the project group an unstamped folder inherits its host from, that two
- * hosts publish. The route resolvers read the first as missing and the second as local, because
- * their unqualified lookups collapse a twin to "no row" before any host fallback runs.
- */
+/** Detect folder/project twins before unqualified route lookups collapse them into missing/local ownership. */
 function isFolderTwin(state: WorktreeOperationRouteState, folderWorkspaceId: string): boolean {
   const folder = resolveIndexedFolderWorkspaceOwner(state.folderWorkspaces, folderWorkspaceId)
   if (folder.kind !== 'resolved') {
     return folder.kind === 'ambiguous'
   }
-  // Why: the folder's own host stamp or SSH connection names its owner; only an inherited host is moot.
+  // Folder host stamps/SSH connections prove ownership; only inherited host evidence is moot.
   return (
     !folder.owner.executionHostId?.trim() &&
     !folder.owner.connectionId?.trim() &&
@@ -99,11 +94,11 @@ export function resolveOwner(
   }
   const hostId = namedHostForOwnerRef(state, ref)
   const scope = parseWorkspaceKey(ref.workspaceId)
-  // Why: with no host named, nothing can pick a twin; refusing beats landing on the wrong machine.
+  // No host evidence can choose a twin; refuse rather than route to the wrong machine.
   if (!hostId && scope?.type === 'folder' && isFolderTwin(state, scope.folderWorkspaceId)) {
     return { kind: 'ambiguous' }
   }
-  // Why strict: rival servers proxying the same `ssh:t` must not read as a directly dialed target.
+  // Distinct servers proxying ssh:t must never collapse into directly dialed target ownership.
   const match = toOwnerMatch(
     hostId
       ? resolveWorktreeOperationRouteResultForHost(state, ref.workspaceId, hostId)
@@ -114,10 +109,7 @@ export function resolveOwner(
     : match
 }
 
-/**
- * A route names only the server; the owning folder or repo row's `connectionId` is the SSH target
- * behind it, the same reading `resolveWorktreeExecutionHost` applies.
- */
+/** Server routes omit nested SSH; resolve connectionId from the owning folder/repo row, matching resolveWorktreeExecutionHost. */
 function withNestedPlace(
   state: WorktreeOperationRouteState,
   ref: WorkspaceOwnerRef,
@@ -191,8 +183,7 @@ export function runtimeEnvironmentIdForWorkspaceOwner(
     case 'ambiguous':
       return match
     case 'missing':
-      // Why: no row places it on a server, which has always read as this app's — except a folder
-      // whose saved session names its server before that server's folder catalog loads.
+      // No server row normally means this app, except folder sessions can name a server before catalog hydration.
       return { kind: 'resolved', environmentId: restoredFolderEnvironmentId(state, ref) }
     case 'resolved': {
       const { endpoint } = match.owner
@@ -206,11 +197,7 @@ export function runtimeEnvironmentIdForWorkspaceOwner(
   }
 }
 
-/**
- * The paired server that owns the workspace, or `null` for this app, a directly dialed SSH target
- * or a twin: for readers and callers that keep main's path, where a twin names no server.
- * `refusalAction` logs a twin once, for callers that skip a host write because of it.
- */
+/** Resolve paired server, or null for local/direct SSH/twins, preserving main’s reader path. refusalAction logs ambiguous skipped writes once. */
 export function runtimeEnvironmentIdUnlessTwin(
   state: WorktreeOperationRouteState,
   workspaceId: string | null | undefined,
@@ -229,11 +216,7 @@ export function runtimeEnvironmentIdUnlessTwin(
   return null
 }
 
-/**
- * A server route to `ssh:X` that only a repo row proves: no worktree row names that server. The
- * row's `ssh:X` and the server's `connectionId: X` are different namespaces, so reads and spawn
- * may follow it but a host write could land on another machine with the same path.
- */
+/** A server route proven only by repo setup has no supporting worktree row. ssh:X and server connectionId X are different namespaces: reads/spawn can follow, but host writes may hit another machine with the same path. */
 export function isUnprovenServerSshRoute(
   state: Pick<WorktreeOperationRouteState, 'worktreesByRepo' | 'detectedWorktreesByRepo'>,
   workspaceId: string,

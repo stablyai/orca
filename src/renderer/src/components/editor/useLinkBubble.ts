@@ -10,11 +10,7 @@ import {
 } from './rich-markdown-html-superscript-link-context'
 import { copyRichMarkdownLink } from './rich-markdown-link-clipboard'
 
-/**
- * Extracts link-editing action handlers from the editor component to reduce
- * file size. State lives in the parent (declared before useEditor so the
- * editor callbacks can reference the setters).
- */
+// Keep state in the parent so callbacks created during editor initialization can access its setters.
 export function useLinkBubble(
   editor: Editor | null,
   rootRef: React.RefObject<HTMLElement | null>,
@@ -82,7 +78,6 @@ export function useLinkBubble(
         } else {
           const { from, to } = editor.state.selection
           if (from === to) {
-            // No selection: insert URL as both the link text and href.
             editor
               .chain()
               .focus()

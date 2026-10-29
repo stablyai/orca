@@ -1,6 +1,4 @@
-// A layout-owner build's browser tab and page commands: the window sends main each change under
-// the ids it proposes, and draws it from main's frame (content-tabs-from-main-frames.test.ts
-// covers what shows before and after main answers).
+// Layout-owner browser commands propose IDs to main and draw from frames; content-tabs-from-main-frames.test.ts covers answer boundaries.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'

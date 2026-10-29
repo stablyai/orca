@@ -3,8 +3,6 @@ import { dirname, join } from 'node:path'
 import Database from '../sqlite/sync-database'
 
 export async function writeOpenCode2SqliteFixture(root: string): Promise<string> {
-  // Why: opencode2 (beta) sessions come from the channel-scoped SQLite DB
-  // (session_v2/session_message schema) alongside the v1 store.
   const opencode2DbPath = join(root, 'opencode-next.db')
   const db = new Database(opencode2DbPath)
   db.exec(`
@@ -62,8 +60,7 @@ export function isolatedScanRoots(root: string) {
     copilotSessionsDir: join(root, 'copilot-sessions'),
     cursorProjectsDir: join(root, 'cursor-projects'),
     opencodeStorageDir: join(root, 'opencode-storage'),
-    // Why: prevent the SQLite scanner from picking up the real
-    // ~/.local/share/opencode/opencode.db during tests.
+    // Avoid discovering the user’s real OpenCode database.
     opencodeDbPaths: [] as readonly string[],
     zcodeDbPath: join(root, 'zcode', 'db.sqlite'),
     grokSessionsDir: join(root, 'grok-sessions'),
@@ -89,9 +86,7 @@ export function jsonLines(records: unknown[]): string {
   return records.map((record) => JSON.stringify(record)).join('\n')
 }
 
-// Newline-terminated, the way an agent writes each record: a file whose last
-// line has no break is a transcript mid-write, and the reader deliberately
-// withholds that line from consumers until it is complete.
+// Terminate records so the reader does not treat the last line as an incomplete write.
 export async function writeJsonlFile(filePath: string, records: unknown[]): Promise<void> {
   await mkdir(dirname(filePath), { recursive: true })
   await writeFile(filePath, `${jsonLines(records)}\n`)
@@ -111,8 +106,6 @@ export function writeAntigravityHistory(brainDir: string, records: unknown[]): P
   return writeJsonlFile(join(dirname(brainDir), 'history.jsonl'), records)
 }
 
-// Message-graph fixtures for the Pi forks: each writes one session transcript
-// and returns its path, since both agents resume by absolute transcript path.
 export async function writeOmpScannerFixture(sessionsDir: string): Promise<string> {
   const sessionFile = join(sessionsDir, 'omp-session.jsonl')
   await writeJsonlFile(sessionFile, [
@@ -141,8 +134,7 @@ export async function writeOmpScannerFixture(sessionsDir: string): Promise<strin
         role: 'assistant',
         content: [{ type: 'text', text: 'OMP answer' }],
         model: 'gpt-5.4-mini',
-        // totalTokens deliberately != input+output so the assertion proves
-        // the explicit-total field is read, not an input/output sum.
+        // Distinct total proves the explicit field wins over input + output.
         usage: { input: 10, output: 5, totalTokens: 160 }
       }
     }
@@ -150,8 +142,6 @@ export async function writeOmpScannerFixture(sessionsDir: string): Promise<strin
   return sessionFile
 }
 
-// Prime Agent shares Pi's message-graph format (and its `modelId` key) but
-// reads its own ~/.prime/agent/sessions root.
 export async function writePrimeAgentScannerFixture(sessionsDir: string): Promise<string> {
   const sessionFile = join(sessionsDir, 'prime-agent-session.jsonl')
   await writeJsonlFile(sessionFile, [
@@ -197,9 +187,7 @@ export function writeAntigravityScannerFixture(
   ])
 }
 
-// Muse sessions are date-sharded <root>/YYYY/MM/DD/<uuid>/session.jsonl
-// envelopes mixing bare records, retained_frame envelopes, and
-// omitted_live_only retention markers (verified against muse 1.0.3).
+// Muse 1.0.3 mixes bare records, retained frames, and omitted-live-only markers.
 export async function writeMuseScannerFixture(sessionsDir: string): Promise<string> {
   const sessionFile = join(sessionsDir, '2026', '05', '01', 'muse-session', 'session.jsonl')
   const bare = (payloadType: string, payload: unknown, recordedAt: number) => ({
@@ -219,8 +207,7 @@ export async function writeMuseScannerFixture(sessionsDir: string): Promise<stri
       { intent_id: 'intent-1', refill_blocks: [{ kind: 'text', text: 'Muse vault title' }] },
       1780000001000000
     ),
-    // Why: every turn also emits `run :: started` carrying the same prompt —
-    // the parser must fold it once (messageCount stays 2 below).
+    // The run-start prompt repeats the user message and must not count as another turn.
     bare(
       'runtime.session',
       { kind: 'run', run_id: 'run-1', event: { kind: 'started', prompt: 'Muse vault title' } },

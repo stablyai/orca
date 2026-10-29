@@ -11,36 +11,13 @@ import {
   type InstallDirPackageGrants
 } from './windows-install-dir-package-acl-grant'
 
-/**
- * Self-repair for the install-directory package ACL that
- * `windows-install-dir-acl-probe.ts` detects (electron/electron#51761).
- *
- * When the install tree carries an orphan AppContainer ACE (S-1-15-2-<x>) and no
- * well-known package grant at all, Chromium's LPAC children are denied
- * read on the shipped modules and die at init with 0x80000003. Reproduced on
- * win32 10.0.26200 / Electron 43.4.1: the GPU child dies six times and the
- * browser FATALs, or — once the GPU fallback engages `--in-process-gpu` — the
- * renderer dies on every load and the window stays blank forever.
- *
- * Two additive grants clear it. Both are required:
- * - the root grant is inheritable so files written later (an update) inherit it;
- * - every existing entry gets a FLAGLESS grant, because a directory grant alone
- *   does not fix a shipped module that carries its own explicit DACL.
- *
- * Both are applied in-process (windows-install-dir-package-acl-grant.ts). Never
- * a replacing grant: the install tree's SYSTEM/Administrators/user ACEs must
- * survive, and so must the orphan (removing an ACE is not ours to do).
- */
+/** electron/electron#51761: orphan package ACEs without well-known package grants deny LPAC module reads and kill children at init (0x80000003). Add root inheritance for future files and explicit flagless grants for existing protected files; preserve all original ACEs, including the orphan. */
 
 export const WINDOWS_INSTALL_DIR_ACL_REPAIR_BREADCRUMB = 'windows_install_dir_acl_repair'
 export const WINDOWS_INSTALL_DIR_ACL_REPAIR_MARKER_FILE = 'windows-install-dir-acl-repair.json'
 export const WINDOWS_INSTALL_DIR_ACL_REPAIR_SCHEME_VERSION = 1
 
-/**
- * The same two grants spelled for a user to run by hand when the repair cannot write the ACL:
- * `*`-prefixed so icacls reads a SID on every locale, and flagless on the /T pass because
- * icacls writes nothing for `(OI)(CI)` on a file while reporting success.
- */
+/** Manual fallback only: * forces locale-independent SID parsing; tree grants are flagless because icacls silently skips file grants with OI/CI. */
 export const INSTALL_DIR_ROOT_GRANT = `*${RESTRICTED_APP_PACKAGES_SID}:(OI)(CI)(RX)`
 export const INSTALL_DIR_TREE_GRANT = `*${RESTRICTED_APP_PACKAGES_SID}:(RX)`
 
@@ -54,15 +31,8 @@ export type WindowsInstallDirAclRepairOptions = {
   installDir?: string
   platform?: NodeJS.Platform
   isServeMode?: boolean
-  /**
-   * A DACL reading found this tree poisoned and nothing has read it clean since — this
-   * launch's probe, or a persisted poison marker from an earlier one. A marker claiming a
-   * completed repair therefore describes a tree that has since been re-poisoned, or a
-   * repair that silently no-opped: it stops outranking the reading. The attempt
-   * budget still bounds retries.
-   */
+  /** Outstanding poison evidence outranks a completed-repair marker: the tree may be re-poisoned or the grant a silent no-op. Preserve the retry cap. */
   poisonEvidenceOutstanding?: boolean
-  /** Test seams. */
   grants?: InstallDirPackageGrants
   recordBreadcrumb?: typeof recordDurableCrashBreadcrumb
   onDone?: (result: WindowsInstallDirAclRepairResult) => void
@@ -85,18 +55,10 @@ type RepairMarker = {
   attempts?: number
 }
 
-// Why bounded rather than one-and-done: the failure modes are not all permanent.
-// A Defender-locked file, a timeout or a contended volume fails one launch and
-// succeeds the next, and pinning on the first failure leaves the machine blank
-// forever for that version. Three is enough to stop a standard-user Program Files
-// install — which can never win — from re-walking the tree on every launch.
+// Retry transient Defender locks/timeouts across launches; cap at three to stop rewalking permanently unwritable Program Files installs.
 const MAX_REPAIR_ATTEMPTS = 3
 
-/**
- * The probe's verdict is the only trigger: an orphan package ACE with no
- * well-known package grant to satisfy it. The probe reads SDDL, so the verdict
- * holds on every Windows display language.
- */
+/** Only the locale-independent probe poison signature may trigger repair. */
 export function isInstallDirAclPoisonVerdict(data: CrashReportBreadcrumbData): boolean {
   return data.matchesPoisonSignature === true
 }
@@ -113,7 +75,6 @@ function markerPath(userDataPath: string): string {
   return join(userDataPath, WINDOWS_INSTALL_DIR_ACL_REPAIR_MARKER_FILE)
 }
 
-/** The marker for this exact install and version, or null. */
 function readMarkerFor(args: WindowsInstallDirAclRepairArgs): Partial<RepairMarker> | null {
   try {
     const parsed = JSON.parse(readFileSync(markerPath(args.userDataPath), 'utf-8')) as
@@ -128,7 +89,7 @@ function readMarkerFor(args: WindowsInstallDirAclRepairArgs): Partial<RepairMark
     }
     return parsed
   } catch {
-    return null // missing or corrupt -> attempt again
+    return null
   }
 }
 
@@ -143,8 +104,7 @@ function markerHitFor(args: WindowsInstallDirAclRepairArgs): { alreadyRepaired: 
   return (marker.attempts ?? 0) >= MAX_REPAIR_ATTEMPTS ? { alreadyRepaired: false } : null
 }
 
-// Why write it on failure too: re-walking the tree on every launch forever buys
-// nothing, so failures spend the retry budget. Reinstall or update changes the key.
+// Failures spend retry budget too; update/reinstall changes the key.
 function writeMarker(args: WindowsInstallDirAclRepairArgs, outcome: string): void {
   const marker: RepairMarker = {
     schemeVersion: WINDOWS_INSTALL_DIR_ACL_REPAIR_SCHEME_VERSION,
@@ -174,8 +134,7 @@ async function runRepair(args: WindowsInstallDirAclRepairArgs): Promise<void> {
     } else {
       const grants = args.grants ?? installDirPackageGrants
       const root = await grants.root(installDir)
-      // Unconditional: the root grant failing does not make the per-file pass —
-      // the one that actually unblocks the shipped modules — any less worth trying.
+      // Attempt per-file grants even after root failure: they can still unblock shipped modules.
       const tree = await grants.tree(installDir)
       const failedFileCount = root.failedFileCount + tree.failedFileCount
       if (root.ok && tree.ok) {
@@ -215,22 +174,14 @@ async function runRepair(args: WindowsInstallDirAclRepairArgs): Promise<void> {
   args.onDone?.(result)
 }
 
-// Why once per process: the DACL cannot usefully change mid-session, and
-// openMainWindow re-runs on re-activation.
+// Latch per process despite window reopen; ordinary install DACL is stable within a session.
 let repairStarted = false
 
 export function resetWindowsInstallDirAclRepairForTest(): void {
   repairStarted = false
 }
 
-/**
- * Fire-and-forget; returns before any ACL write. Call only when the probe reported
- * `matchesPoisonSignature`. win32 only, exempt in serve mode, and it must never
- * throw into window creation.
- *
- * Returns whether THIS call dispatched the repair. A caller that waits on `onDone`
- * would otherwise wait forever on the once-per-process latch.
- */
+/** Defer Windows desktop writes; never throw into window creation. Return whether dispatched so process-latch refusals cannot leave callers awaiting onDone. */
 export function repairWindowsInstallDirPackageAcl(args: WindowsInstallDirAclRepairArgs): boolean {
   if ((args.platform ?? process.platform) !== 'win32' || args.isServeMode === true) {
     return false

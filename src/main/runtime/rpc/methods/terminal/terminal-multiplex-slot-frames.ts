@@ -17,8 +17,13 @@ import {
   sendSnapshotFrames,
   serializeBudgetedRequestedSnapshot
 } from './terminal-snapshot-publication'
-import { updateViewportForClient } from './terminal-viewport-update'
+import { chainPassiveDesktopResize, updateViewportForClient } from './terminal-viewport-update'
 import { notePausedOutputDropped } from './terminal-multiplex-paused-output-drop'
+import {
+  answerUndeliveredYieldedQueries,
+  discardPendingMultiplexOutput,
+  replaySnapshotCoveredStatelessQueries
+} from './terminal-multiplex-yielded-queries'
 import {
   isMultiplexStreamAttached,
   type MultiplexSnapshotRequest,
@@ -79,16 +84,19 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
       if (typeof payload?.paused !== 'boolean' || stream.outputPaused === payload.paused) {
         return
       }
+      if (payload.paused) {
+        // Why: main yielded these batched bytes' query replies to this view at ingestion, so deliver them rather than drop them.
+        stream.outputBatcher.flush()
+      }
       stream.outputPaused = payload.paused
       if (stream.outputPaused) {
         stream.pausedOutputDropNoticeSent = false
         const discardsQueuedOutput =
           stream.ackPendingOutput.length > 0 || stream.ackPendingOutputOverflowed
-        // Why: batched bytes flush into the paused gate, which reports them as dropped.
-        stream.outputBatcher.flush()
         stream.ackPendingOutput = []
         stream.ackPendingOutputBytes = 0
         stream.ackPendingOutputOverflowed = false
+        answerUndeliveredYieldedQueries(runtime, stream)
         if (discardsQueuedOutput) {
           notePausedOutputDropped(state, stream)
         }
@@ -100,7 +108,7 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
       if (!viewport) {
         return
       }
-      // Why: resize registers stream-scoped geometry so detach can release it; older clients lack explicit claims.
+      // Register stream geometry for detach cleanup; older clients cannot claim explicitly.
       if (!stream.isMobile && stream.client?.id) {
         stream.registeredRemoteDesktopDriver = true
         if (stream.buffering) {
@@ -108,14 +116,11 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
           return
         }
       }
-      stream.desktopClaimTail = stream.desktopClaimTail
-        .then(async (priorClaimed) => {
-          const result = await applyStreamViewport(stream, stream.client!, viewport)
-          return stream.supportsDesktopViewportClaims
-            ? priorClaimed && result.applied
-            : result.applied
-        })
-        .catch(() => false)
+      stream.desktopClaimTail = chainPassiveDesktopResize(
+        stream.desktopClaimTail,
+        stream.supportsDesktopViewportClaims,
+        () => applyStreamViewport(stream, stream.client!, viewport)
+      )
       return
     }
     if (frame.opcode === TerminalStreamOpcode.ClaimViewport && stream.client && !stream.isMobile) {
@@ -155,6 +160,7 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
     stream.buffering = true
     const requestId = request.requestId
     let sentSnapshotOutputSeq: number | undefined
+    let sentSnapshotEscapeTail: string | undefined
     try {
       const scrollbackRows = normalizeMultiplexSnapshotScrollbackRows(request.scrollbackRows)
       let serialized = await serializeBudgetedRequestedSnapshot(
@@ -168,10 +174,8 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
       let size = runtime.getTerminalSize(stream.ptyId)
       let displayMode = runtime.getMobileDisplayMode(stream.ptyId)
       if (stream.pendingOutputOverflowed) {
-        // Why: the overflowed tail is newer than the first snapshot, so retry for a current image instead of null.
-        stream.pendingOutput.splice(0)
-        stream.pendingOutputBytes = 0
-        stream.pendingOutputOverflowed = false
+        // Overflow tail is newer than the initial snapshot; request a current image rather than return null.
+        discardPendingMultiplexOutput(stream)
         serialized = await serializeBudgetedRequestedSnapshot(runtime, stream.ptyId, scrollbackRows)
         if (!isMultiplexStreamAttached(state, stream)) {
           return
@@ -197,6 +201,7 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
         }
       }
       sentSnapshotOutputSeq = serialized?.seq
+      sentSnapshotEscapeTail = serialized?.pendingEscapeTailAnsi
       sendSnapshotFrames((opcode, payload) => state.sendFrame(stream.streamId, opcode, payload), {
         kind: 'scrollback',
         cols: serialized?.cols ?? size?.cols ?? 80,
@@ -209,12 +214,13 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
         kittyKeyboardFlags: serialized?.kittyKeyboardFlags,
         alternateScreen: serialized?.alternateScreen,
         terminalOwner: serialized?.terminalOwner,
+        lastTitle: serialized?.lastTitle,
         oscLinks: serialized?.oscLinks,
         pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
         truncated: false,
         truncatedByByteBudget: serialized?.truncatedByByteBudget,
         scrollbackRows: serialized?.scrollbackRows,
-        // Why: no serializer answered, which is not proof the pane is empty — say so instead of passing off '' as the buffer.
+        // No serializer answer does not prove emptiness; never publish an invented empty buffer.
         unavailable: serialized ? undefined : 'no-serializable-buffer',
         data: serialized?.data ?? ''
       })
@@ -227,13 +233,22 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
       if (streams.get(stream.streamId) === stream) {
         const shouldFlushPendingOutput = !stream.pendingOutputOverflowed
         stream.buffering = false
+        if (!shouldFlushPendingOutput) {
+          discardPendingMultiplexOutput(stream)
+        }
         const pendingOutput = stream.pendingOutput.splice(0)
         if (shouldFlushPendingOutput) {
+          if (typeof requestId !== 'number') {
+            replaySnapshotCoveredStatelessQueries(
+              state,
+              stream,
+              pendingOutput,
+              sentSnapshotOutputSeq,
+              sentSnapshotEscapeTail
+            )
+          }
           for (const chunk of pendingOutput) {
-            // Why: an untagged reply resets the client to the snapshot's
-            // high-water, so covered bytes would render twice; tagged
-            // snapshots feed a side consumer and the live view still
-            // needs every buffered chunk.
+            // Untagged snapshots reset live high-water, so suppress covered bytes; tagged side-consumer snapshots still owe live every chunk.
             const uncovered =
               typeof requestId === 'number'
                 ? chunk
@@ -246,7 +261,7 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
         stream.pendingOutputBytes = 0
         stream.pendingOutputOverflowed = false
         stream.outputBatcher.flush()
-        // Why: a resize parked during snapshot buffering must be applied now, or it is dropped until the viewer's next resize.
+        // Apply resize parked during buffering now or it waits until the viewer resizes again.
         if (
           !stream.isMobile &&
           stream.client?.id &&

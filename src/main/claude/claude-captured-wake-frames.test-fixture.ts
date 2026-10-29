@@ -1,6 +1,4 @@
-// Claude CLI 2.1.280 stream-json capture, cut to the frames and fields the child-work path reads.
-// Ids and prompts are replaced; the frame order and the relative clock (`at`, ms after the spawn)
-// are the captured ones.
+// CLI 2.1.280 capture: sanitized IDs/prompts; original frame order and spawn-relative times.
 
 import {
   result,
@@ -11,9 +9,7 @@ import {
   type CapturedFrame
 } from './claude-captured-frame-builders.test-fixture'
 
-/** A background agent backgrounds its own 40 s shell and ends its turn; the CLI reports it
- *  completed, then starts it again under the same spawn call when the shell ends, and it ends again
- *  with its answer. CLI 2.1.280. */
+/** Shell completion resumes the same agent under its original spawn call. */
 export const WAKES_AFTER_ITS_SHELL: CapturedFrame[] = [
   {
     at: 0,

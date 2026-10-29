@@ -22,6 +22,7 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 export function registerPtyConnectionRestartReplacementTests(): void {
   let mockStoreState: StoreState
@@ -86,8 +87,7 @@ export function registerPtyConnectionRestartReplacementTests(): void {
         ptyId: 'pty-main',
         bind: bindsPaneInStore(() => mockStoreState, 'tab-1', leafIdForPane(2))
       })
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
-      const args = [pane, createManager(1), deps] as unknown as Parameters<typeof connectPanePty>
+      const args = mockPanePtyArgs(pane, createManager(1), deps)
       const binding = connectPanePty(...args)
       await flushAsyncTicks()
       const onPtyExit = createdTransportOptions[0]?.onPtyExit

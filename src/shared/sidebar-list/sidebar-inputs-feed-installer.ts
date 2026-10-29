@@ -6,8 +6,7 @@ import {
   type SidebarInputsReadResult
 } from './sidebar-inputs-feed-contract'
 
-/** The inputs a reader has installed whole: every domain's entities at one revision. Its consumer
- *  compares the versions with its own and shows "Reopen to update" outside its range. */
+/** Install whole batches at one revision; consumers reject unreadable schema/semantics versions with “Reopen to update”. */
 export type InstalledSidebarInputs = {
   generation: string
   revision: number
@@ -22,10 +21,7 @@ type StagedBatch = Pick<SidebarInputsReadResult, 'generation' | 'revision' | 'ki
 
 type FeedPosition = Pick<SidebarInputsChangedEvent, 'generation' | 'revision'>
 
-/**
- * A phone's feed reader for one host connection. One read is awaited at a time and a refresh
- * supersedes it; a notice the read may not cover, during paging included, costs one more read.
- */
+/** One host-connection reader: refresh supersedes in-flight reads, and uncovered notices (even during paging) trigger another. */
 export type SidebarInputsFeedState = {
   installed: InstalledSidebarInputs | null
   /** The pages of the batch being read, installed only once its last page lands. */

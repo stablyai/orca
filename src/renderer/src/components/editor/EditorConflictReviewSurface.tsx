@@ -1,5 +1,5 @@
 import React from 'react'
-import { conflictOverviewFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
+import { conflictOverviewView } from '@/store/slices/editor/buffers/editor-buffer-conflict-overview'
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
@@ -11,6 +11,9 @@ import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
 import type { FileContent } from './editor-panel-content-types'
 import { translate } from '@/i18n/i18n'
 import type { EditorConflictNavigation } from './useEditorConflictNavigation'
+
+// Retry is a user act: it may start a stopped WSL distro.
+const USER_RETRY = { wakeWslDistro: true }
 
 export function EditorConflictReviewSurface({
   activeFile,
@@ -32,14 +35,20 @@ export function EditorConflictReviewSurface({
   openFiles: OpenFile[]
   worktreeEntries: GitStatusEntry[]
   pendingEditorReveal: PendingEditorReveal | null
-  getConflictNavigation: (file: OpenFile, content: string) => EditorConflictNavigation | undefined
+  getConflictNavigation: (
+    file: OpenFile,
+    content: string,
+    viewStateId: string
+  ) => EditorConflictNavigation | undefined
   handleContentChangeForFile: (file: OpenFile, content: string) => void
   handleSaveForFile: (file: OpenFile, content: string) => Promise<boolean>
-  reloadContent: (file: OpenFile) => void
+  reloadContent: (file: OpenFile, options?: { wakeWslDistro?: boolean }) => void
 }): React.JSX.Element {
   const openConflictReviewFile = useAppStore((s) => s.openConflictReviewFile)
   const openConflictReview = useAppStore((s) => s.openConflictReview)
   const closeFile = useAppStore((s) => s.closeFile)
+  // Follow shared-record view ownership changes even when no other selector updates.
+  useAppStore((s) => s.editorBufferViews)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
   const selectedConflictReviewFile = activeFile.conflictReview?.selectedFileId
     ? (openFiles.find((file) => file.id === activeFile.conflictReview?.selectedFileId) ?? null)
@@ -58,8 +67,16 @@ export function EditorConflictReviewSurface({
     [activeFile.filePath, activeFile.id, activeFile.worktreeId, openConflictReviewFile]
   )
 
-  const createContentFile = (entry: GitStatusEntry): OpenFile => {
+  const createContentFile = (
+    entry: GitStatusEntry
+  ): { contentFile: OpenFile; recordView: OpenFile | null } => {
     const absolutePath = joinPath(activeFile.filePath, entry.path)
+    // Borrow the open view’s ID to share its model and draft.
+    const recordView = conflictOverviewView(
+      useAppStore.getState(),
+      activeFile.worktreeId,
+      absolutePath
+    )
     const conflict =
       entry.conflictKind && entry.conflictStatus && entry.conflictStatusSource
         ? entry.status === 'deleted'
@@ -72,7 +89,10 @@ export function EditorConflictReviewSurface({
                 'auto.components.editor.EditorContent.8b1a605bae',
                 'This file is in a conflict state, but no working-tree file is available to edit.'
               ),
-              guidance: 'Resolve the conflict in Git or restore one side before reopening it.'
+              guidance: translate(
+                'auto.components.editor.EditorContent.resolveConflictGuidance',
+                'Resolve the conflict in Git or restore one side before reopening it.'
+              )
             }
           : {
               kind: 'conflict-editable' as const,
@@ -83,19 +103,23 @@ export function EditorConflictReviewSurface({
         : undefined
 
     return {
-      id: conflictOverviewFileId(openFiles, activeFile.worktreeId, absolutePath),
-      filePath: absolutePath,
-      relativePath: entry.path,
-      worktreeId: activeFile.worktreeId,
-      language: detectLanguage(entry.path),
-      isDirty: false,
-      mode: 'edit',
-      conflict
+      contentFile: {
+        id: recordView?.id ?? absolutePath,
+        filePath: recordView?.filePath ?? absolutePath,
+        relativePath: entry.path,
+        worktreeId: activeFile.worktreeId,
+        language: detectLanguage(entry.path),
+        isDirty: false,
+        mode: 'edit',
+        conflict
+      },
+      recordView
     }
   }
 
   const renderEditorContent = ({
     contentFile,
+    recordView = null,
     entry,
     className,
     viewStateKeySuffix,
@@ -103,6 +127,7 @@ export function EditorConflictReviewSurface({
     autoHeight = false
   }: {
     contentFile: OpenFile
+    recordView?: OpenFile | null
     entry: GitStatusEntry | null
     className: string
     viewStateKeySuffix: string
@@ -133,7 +158,8 @@ export function EditorConflictReviewSurface({
           <EditorFileLoadErrorView
             message={fileContent.loadError}
             code={fileContent.loadErrorCode}
-            onRetry={() => reloadContent(contentFile)}
+            // Borrowed views reload through their owning workspace.
+            onRetry={() => reloadContent(recordView ?? contentFile, USER_RETRY)}
           />
         </div>
       )
@@ -144,6 +170,8 @@ export function EditorConflictReviewSurface({
           <div className={className}>
             <ImageViewer
               content={fileContent.content}
+              src={fileContent.mediaUrl}
+              byteSize={fileContent.size}
               filePath={contentFile.filePath}
               mimeType={fileContent.mimeType}
             />
@@ -166,6 +194,15 @@ export function EditorConflictReviewSurface({
     const monacoLanguage = selectedLanguage === 'notebook' ? 'json' : selectedLanguage
     const selectedViewStateKey = `${contentFile.filePath}::${viewStateScopeId}:${viewStateKeySuffix}`
     const selectedContent = editBuffers[contentFile.id] ?? fileContent.content
+    const editorViewStateId = readOnly
+      ? `${viewStateScopeId}:${viewStateKeySuffix}`
+      : viewStateScopeId
+    // Overview navigation stays in its own mirror; borrowed-tab reveals belong to that tab.
+    const reveal =
+      matchesPendingEditorReveal(pendingEditorReveal, contentFile, editorViewStateId) &&
+      (!readOnly || pendingEditorReveal.viewStateId === editorViewStateId)
+        ? pendingEditorReveal
+        : null
 
     return (
       <div className={className}>
@@ -173,7 +210,11 @@ export function EditorConflictReviewSurface({
           <ConflictBanner
             file={contentFile}
             entry={entry}
-            conflictNavigation={getConflictNavigation(contentFile, selectedContent)}
+            conflictNavigation={getConflictNavigation(
+              contentFile,
+              selectedContent,
+              editorViewStateId
+            )}
           />
         )}
         <div className={autoHeight ? 'shrink-0' : 'min-h-0 flex-1'}>
@@ -182,6 +223,7 @@ export function EditorConflictReviewSurface({
             fileId={contentFile.id}
             filePath={contentFile.filePath}
             viewStateKey={selectedViewStateKey}
+            viewStateId={editorViewStateId}
             relativePath={contentFile.relativePath}
             content={selectedContent}
             language={monacoLanguage}
@@ -189,26 +231,15 @@ export function EditorConflictReviewSurface({
               readOnly ? () => {} : (content) => handleContentChangeForFile(contentFile, content)
             }
             onSave={readOnly ? () => {} : (content) => handleSaveForFile(contentFile, content)}
-            worktreeId={contentFile.worktreeId}
+            worktreeId={recordView?.worktreeId ?? contentFile.worktreeId}
             markdownAnnotationsEnabled={false}
             conflictDecorationsEnabled={contentFile.conflict?.conflictStatus === 'unresolved'}
             readOnly={readOnly}
+            passiveMirror={readOnly}
             autoHeight={autoHeight}
-            revealLine={
-              matchesPendingEditorReveal(pendingEditorReveal, contentFile)
-                ? pendingEditorReveal.line
-                : undefined
-            }
-            revealColumn={
-              matchesPendingEditorReveal(pendingEditorReveal, contentFile)
-                ? pendingEditorReveal.column
-                : undefined
-            }
-            revealMatchLength={
-              matchesPendingEditorReveal(pendingEditorReveal, contentFile)
-                ? pendingEditorReveal.matchLength
-                : undefined
-            }
+            revealLine={reveal?.line}
+            revealColumn={reveal?.column}
+            revealMatchLength={reveal?.matchLength}
           />
         </div>
       </div>
@@ -226,15 +257,18 @@ export function EditorConflictReviewSurface({
     })
   }
 
-  const renderInlineFile = (entry: GitStatusEntry): React.JSX.Element =>
-    renderEditorContent({
-      contentFile: createContentFile(entry),
+  const renderInlineFile = (entry: GitStatusEntry): React.JSX.Element => {
+    const { contentFile, recordView } = createContentFile(entry)
+    return renderEditorContent({
+      contentFile,
+      recordView,
       entry,
       className: 'flex min-h-[120px] flex-col border-b border-border last:border-b-0',
       viewStateKeySuffix: `overview:${entry.path}`,
       readOnly: true,
       autoHeight: true
     })
+  }
 
   const renderAllContent = (): React.JSX.Element => {
     const snapshotEntries = activeFile.conflictReview?.entries ?? []
@@ -279,9 +313,10 @@ export function EditorConflictReviewSurface({
 
 function matchesPendingEditorReveal(
   reveal: PendingEditorReveal | null,
-  file: Pick<OpenFile, 'id' | 'filePath'>
+  file: Pick<OpenFile, 'id' | 'filePath'>,
+  viewStateId: string
 ): reveal is PendingEditorReveal {
-  if (!reveal) {
+  if (!reveal || (reveal.viewStateId && reveal.viewStateId !== viewStateId)) {
     return false
   }
   return reveal.fileId ? reveal.fileId === file.id : reveal.filePath === file.filePath

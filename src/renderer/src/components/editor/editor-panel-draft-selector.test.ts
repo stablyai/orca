@@ -133,4 +133,23 @@ describe('createEditorPanelDraftSelector', () => {
       selectDrafts({ editorDrafts: { [serverFile.id]: 'unsaved' }, openFiles: [serverFile] })
     ).toEqual({ [serverFile.id]: 'unsaved' })
   })
+
+  it('follows an overview file to a tab that opens without a draft write', () => {
+    const conflictReview = makeFile('review', {
+      filePath: '/repo',
+      mode: 'conflict-review',
+      conflictReview: {
+        source: 'live-summary',
+        snapshotTimestamp: 1,
+        entries: [{ path: 'src/a.ts', conflictKind: 'both_modified' }]
+      }
+    })
+    const tab = makeFile('tab-a', { filePath: '/repo/src/a.ts', relativePath: 'src/a.ts' })
+    const editorDrafts = { [tab.id]: 'unsaved' }
+    const selectDrafts = createEditorPanelDraftSelector(conflictReview)
+
+    expect(selectDrafts({ editorDrafts, openFiles: [] })).toEqual({})
+    expect(selectDrafts({ editorDrafts, openFiles: [tab] })).toEqual({ [tab.id]: 'unsaved' })
+    expect(selectDrafts({ editorDrafts, openFiles: [] })).toEqual({})
+  })
 })

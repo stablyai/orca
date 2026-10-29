@@ -2,6 +2,8 @@ import { View, Text, TextInput, Pressable } from 'react-native'
 import { MessageSquare, Plus, X } from 'lucide-react-native'
 import { MobileSyntaxSegments } from '../components/MobileSyntaxSegments'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { RenderableDiffLine } from './mobile-session-route-types'
@@ -33,6 +35,8 @@ export function DiffLineRow({
   onSubmitComment: (lineNumber: number) => void
   onDeleteComment: (commentId: string) => void
 }) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const commentLine = line.newLineNumber
   const isCommenting = commentLine !== undefined && activeCommentLine === commentLine
   const canComment = commentLine !== undefined
@@ -51,7 +55,14 @@ export function DiffLineRow({
         <Text
           selectable
           style={styles.diffText}
-          accessibilityLabel={`${title} diff line ${index + 1}`}
+          accessibilityLabel={t(
+            'session.diffLineRow.diffLineLabel',
+            '{{title}} diff line {{line}}',
+            {
+              title,
+              line: index + 1
+            }
+          )}
         >
           <Text
             style={[
@@ -77,7 +88,9 @@ export function DiffLineRow({
                 onStartComment(commentLine)
               }
             }}
-            accessibilityLabel={`Add note on line ${commentLine}`}
+            accessibilityLabel={t('session.diffLineRow.addNoteLabel', 'Add note on line {{line}}', {
+              line: commentLine
+            })}
           >
             <Plus size={12} color={colors.textSecondary} strokeWidth={2.3} />
           </Pressable>
@@ -89,12 +102,22 @@ export function DiffLineRow({
             <View key={comment.id} style={styles.diffCommentCard}>
               <View style={styles.diffCommentHeader}>
                 <MessageSquare size={12} color={colors.textMuted} strokeWidth={2.2} />
-                <Text style={styles.diffCommentMeta}>Line {comment.lineNumber}</Text>
+                <Text style={styles.diffCommentMeta}>
+                  {t('session.diffLineRow.lineNumber', 'Line {{line}}', {
+                    line: comment.lineNumber
+                  })}
+                </Text>
                 <Pressable
                   style={styles.diffCommentDeleteButton}
                   disabled={commentsBusy}
                   onPress={() => onDeleteComment(comment.id)}
-                  accessibilityLabel={`Delete note on line ${comment.lineNumber}`}
+                  accessibilityLabel={t(
+                    'session.diffLineRow.deleteNoteLabel',
+                    'Delete note on line {{line}}',
+                    {
+                      line: comment.lineNumber
+                    }
+                  )}
                 >
                   <X size={12} color={colors.textMuted} strokeWidth={2.2} />
                 </Pressable>
@@ -110,7 +133,7 @@ export function DiffLineRow({
             style={[styles.textInput, styles.diffCommentInput]}
             value={commentDraft}
             onChangeText={onDraftChange}
-            placeholder="Add review note"
+            placeholder={t('session.diffLineRow.notePlaceholder', 'Add review note')}
             placeholderTextColor={colors.textMuted}
             editable={!commentsBusy}
             multiline
@@ -123,7 +146,7 @@ export function DiffLineRow({
               disabled={commentsBusy}
               onPress={onCancelComment}
             >
-              <Text style={styles.diffCommentSecondaryText}>Cancel</Text>
+              <Text style={styles.diffCommentSecondaryText}>{t('common.cancel', 'Cancel')}</Text>
             </Pressable>
             <Pressable
               style={[
@@ -137,7 +160,9 @@ export function DiffLineRow({
                 }
               }}
             >
-              <Text style={styles.diffCommentPrimaryText}>Save note</Text>
+              <Text style={styles.diffCommentPrimaryText}>
+                {t('session.diffLineRow.saveNote', 'Save note')}
+              </Text>
             </Pressable>
           </View>
         </View>

@@ -1,13 +1,5 @@
-// Why a submission is `rejected`: the message provably did not happen.
-//
-// The host writes each rejection twice: `reason`, a sentence (or, for the cases older clients
-// already recognise, one of the legacy markers below) that released clients print as it is, and
-// `rejection`, the typed fact newer clients read — both from `agentSessionFailureWords`.
-// `classifyDispatchRejection` is the only place a reader judges either.
-//
-// Every rejection makes the one claim that state exists to make: this message did not reach the
-// provider. None is ever re-delivered under its own id — `rejected` is terminal in the reducer — so
-// a retry rotates the client message id, which is a new message and cannot duplicate.
+// Rejected proves non-delivery. The host writes printable legacy reason plus typed rejection via agentSessionFailureWords;
+// classifyDispatchRejection owns interpretation. Rejected is terminal: Retry rotates message ID because the old ID never redelivers.
 
 import {
   isSubmissionRejectionKind,
@@ -16,33 +8,26 @@ import {
 } from './agent-session-failure'
 import type { AgentJournalSubmission } from './agent-session-journal-types'
 
-/** Orca could not hand the message over. Written bare: released clients hide it, and the error
- *  that once followed it belongs in the log. Rows from older hosts carry `: <error>` after it. */
+/** Bare marker is hidden by released clients; log the error separately. Older hosts append : <error>. */
 export const DISPATCH_REJECTED_WRITE_FAILED = 'provider_write_failed'
 
-/** Local admission refused the frame before any transport was involved. Two
- *  strings rather than one provider-neutral marker because both are already
- *  durable journal reasons; rewording either would relabel rows on disk. */
+/** Both provider-specific strings already exist in durable journals; replacing them would relabel saved rows. */
 export const DISPATCH_REJECTED_QUEUE_FULL = 'claude structured dispatch queue is full'
 export const DISPATCH_REJECTED_CODEX_QUEUE_FULL = 'codex structured dispatch queue is full'
 
 /** The provider confirmed a queued frame was withdrawn before execution. */
 export const DISPATCH_REJECTED_CANCELLED = 'provider_cancelled_before_start'
 
-/** Legacy marker: accepted by a host process that ended before handing it to any provider.
- *  Read only; released clients print it raw, so new rows carry a sentence. */
+/** Read-only restart marker; new hosts write a sentence because released clients print it raw. */
 export const DISPATCH_REJECTED_HOST_RESTARTED = 'host_restarted_before_delivery'
 
-/** Legacy marker: accepted, then the provider was closed before the message was handed to it.
- *  Read only, like the one above. */
+/** Read-only legacy marker: provider closed before handover. */
 export const DISPATCH_REJECTED_PROVIDER_CLOSED = 'provider_closed_before_delivery'
 
-/** Restart reconciliation found the send absent from a provider history it could trust. Rows
- *  written before rows carried a fact hold it as their reason; released clients printed it. */
+/** Read-only legacy restart guess: message absent from provider history. */
 export const DISPATCH_REJECTED_NOT_DELIVERED = 'not_delivered'
 
-/** True for the internal transport marker, false for a provider's own words. Legacy-reason half
- *  of `isWriteFailureSubmission`; readers go through that or the classifier. */
+/** Legacy transport-marker reader; use isWriteFailureSubmission or the classifier, not provider prose. */
 function dispatchRejectionWasTransportWriteFailure(reason: string | null | undefined): boolean {
   return (
     reason === DISPATCH_REJECTED_WRITE_FAILED ||
@@ -68,11 +53,9 @@ export type DispatchRejectionCategory =
 
 export type DispatchRejectionClassification = {
   category: DispatchRejectionCategory
-  /** `failure` when the chat reads Failed; null only when no one failed the user: a withdrawal, a
-   *  host restart, a chat close, or a send the provider never received after a restart. */
+  /** Failure verdict only when the user was failed; lifecycle withdrawals/restarts may be undelivered without failure. */
   verdict: 'failure' | null
-  /** The situation, when the row carried one or a legacy marker names it; absent for a legacy
-   *  sentence, whose words are all a reader has, and for a fact this build cannot place. */
+  /** Absent for untyped legacy prose or a typed fact this build cannot interpret. */
   kind?: SubmissionRejectionKind
 }
 
@@ -97,8 +80,14 @@ const KIND_CATEGORY = {
   claudeAccountSetupFailed: 'startFailed',
   agentCommandNotRunnable: 'startFailed',
   runtimeNotInstalled: 'startFailed',
+  fullAccessAsRoot: 'startFailed',
+  launchPreparationFailed: 'startFailed',
+  conversationOpenInTerminal: 'startFailed',
+  conversationOpenElsewhere: 'startFailed',
   restartFailed: 'startFailed',
   providerRejected: 'content',
+  modelUnavailable: 'content',
+  claudeEffortInvalid: 'content',
   attachmentInvalid: 'content',
   attachmentUnreadable: 'content',
   emptyMessage: 'content',
@@ -109,7 +98,7 @@ const KIND_CATEGORY = {
   hostFault: 'transport'
 } satisfies Record<SubmissionRejectionKind, DispatchRejectionCategory>
 
-/** Null only where no one failed the user; a new kind does not compile until it is placed here. */
+/** Exhaustive kind placement; null means no failure verdict. */
 const KIND_VERDICT = {
   cancelled: null,
   hostRestarted: null,
@@ -130,8 +119,14 @@ const KIND_VERDICT = {
   claudeAccountSetupFailed: 'failure',
   agentCommandNotRunnable: 'failure',
   runtimeNotInstalled: 'failure',
+  fullAccessAsRoot: 'failure',
+  launchPreparationFailed: 'failure',
+  conversationOpenInTerminal: 'failure',
+  conversationOpenElsewhere: 'failure',
   restartFailed: 'failure',
   providerRejected: 'failure',
+  modelUnavailable: 'failure',
+  claudeEffortInvalid: 'failure',
   attachmentInvalid: 'failure',
   attachmentUnreadable: 'failure',
   emptyMessage: 'failure',
@@ -144,7 +139,6 @@ const KIND_VERDICT = {
   hostStopped: 'failure'
 } satisfies Record<SubmissionRejectionKind, 'failure' | null>
 
-/** The legacy markers, by the kind each stands for. */
 const LEGACY_MARKER_KINDS: ReadonlyMap<string, SubmissionRejectionKind> = new Map([
   [DISPATCH_REJECTED_CANCELLED, 'cancelled'],
   [DISPATCH_REJECTED_HOST_RESTARTED, 'hostRestarted'],
@@ -154,7 +148,6 @@ const LEGACY_MARKER_KINDS: ReadonlyMap<string, SubmissionRejectionKind> = new Ma
   [DISPATCH_REJECTED_NOT_DELIVERED, 'notDelivered']
 ])
 
-/** The kind a legacy marker stands for; undefined for any other reason, which is a sentence. */
 function legacyMarkerKind(reason: string | null): SubmissionRejectionKind | undefined {
   if (dispatchRejectionWasTransportWriteFailure(reason)) {
     return 'writeFailed'
@@ -162,19 +155,15 @@ function legacyMarkerKind(reason: string | null): SubmissionRejectionKind | unde
   return reason === null ? undefined : LEGACY_MARKER_KINDS.get(reason)
 }
 
-/**
- * The one reader of why a submission was rejected. The typed fact decides when the row carries
- * one; a fact this build cannot place says only that the message was not sent. A row with no
- * fact, from an older host, is read by its legacy marker, and any other reason is a sentence — a
- * provider's, or Orca's before rows were typed — which reads as a content failure.
- */
+/** Typed facts outrank prose; unknown facts prove non-delivery without a failure verdict.
+ * Without facts, interpret legacy markers; other older-host/provider sentences remain content failures. */
 export function classifyDispatchRejection(
   submission: Pick<AgentJournalSubmission, 'reason'> & { rejection?: unknown }
 ): DispatchRejectionClassification {
   const { rejection } = submission
   const factKind = readAgentSessionFailureFact(rejection)?.kind
   if (typeof rejection === 'object' && rejection !== null && !isSubmissionRejectionKind(factKind)) {
-    // Undelivered, not content: all a fact this build can't place proves is the message didn't happen.
+    // Unknown facts prove non-delivery but cannot establish a content failure.
     return { category: 'undelivered', verdict: null }
   }
   const kind = isSubmissionRejectionKind(factKind) ? factKind : legacyMarkerKind(submission.reason)
@@ -184,7 +173,7 @@ export function classifyDispatchRejection(
   return { category: KIND_CATEGORY[kind], verdict: KIND_VERDICT[kind], kind }
 }
 
-/** A Stop withdrew it before it ran: it will not land, and only a person can send it again. */
+/** Withdrawn before running; only an explicit user resend may deliver it. */
 export function dispatchWasWithdrawn(
   submission: Pick<AgentJournalSubmission, 'dispatchState' | 'reason' | 'rejection'> | undefined
 ): boolean {
@@ -194,8 +183,7 @@ export function dispatchWasWithdrawn(
   )
 }
 
-/** A submission that says Orca never handed it over, in any dispatch state: journals written
- *  before this state moved hold it as `unknown` carrying the marker. */
+/** Read write failure even on legacy journals that kept this marker under dispatchState unknown. */
 export function isWriteFailureSubmission(
   submission: Pick<AgentJournalSubmission, 'reason' | 'rejection'>
 ): boolean {

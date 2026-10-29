@@ -1,6 +1,10 @@
 import type { OpenFile } from '@/store/slices/editor'
 import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
-import { resolveWorktreeOperationRoute } from '@/lib/worktree-operation-route'
+import { resolveEditorOwnerRoute } from '@/lib/editor-file-operation-owner'
+import {
+  isDetachedEditorBufferId,
+  type EditorBufferViewIndex
+} from '@/store/slices/editor/buffers/editor-buffer-views'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
 
 export type EditorModelOwner = { environmentId: string | null; hostId: string | null }
@@ -13,13 +17,8 @@ export function resolveEditorModelOwner(
   state: WorktreeOperationRouteState
 ): EditorModelOwner {
   const captured = file.operationProvenance?.generation.route
-  const route =
-    captured ??
-    // The same focus-free owner the file's writes take, so retained text keys on that host.
-    resolveWorktreeOperationRoute(
-      state.activeWorktreeId === file.worktreeId ? { ...state, activeWorktreeId: null } : state,
-      file.worktreeId
-    )
+  const owner = captured ? null : resolveEditorOwnerRoute(state, file.worktreeId)
+  const route = captured ?? (owner?.kind === 'resolved' ? owner.route : null)
   const environmentId = captured
     ? captured.runtimeEnvironmentId
     : file.runtimeEnvironmentId !== undefined
@@ -50,11 +49,18 @@ export function resolvedEditorModelOwnerKey({
   return hostId === 'local' && !environmentId ? '' : JSON.stringify([environmentId, hostId])
 }
 
-export function getEditorModelOwnerKey(file: OpenFile, state: WorktreeOperationRouteState): string {
+export function getEditorModelOwnerKey(
+  file: OpenFile,
+  state: WorktreeOperationRouteState & Partial<EditorBufferViewIndex>
+): string {
   const owner = resolveEditorModelOwner(file, state)
   // Unresolved owners must not borrow another host's retained text.
-  return (
+  const ownerKey =
     resolvedEditorModelOwnerKey(owner) ??
     JSON.stringify([owner.environmentId, 'unresolved', file.worktreeId, file.id])
-  )
+  const recordId = state.editorBufferIdOf?.[file.id]
+  // Detached records need separate models from their file’s other record; retain host ownership to isolate identical record IDs across hosts.
+  return recordId !== undefined && isDetachedEditorBufferId(recordId)
+    ? JSON.stringify(['detached', recordId, ownerKey])
+    : ownerKey
 }

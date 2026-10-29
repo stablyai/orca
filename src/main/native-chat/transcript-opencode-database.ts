@@ -2,7 +2,7 @@ import { homedir } from 'node:os'
 import { wslGatedAccess } from './wsl-transcript-fs-access'
 import { join } from 'node:path'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
-import { getAiVaultWslHomeDirs } from '../ai-vault/cached-session-list'
+import { getAiVaultWslScanHomeDirs } from '../ai-vault/cached-session-list'
 import { prepareOpenCodeWslReaders } from '../ai-vault/opencode-wsl-runtime-preparation'
 import {
   configureOpenCodeWslReaders,
@@ -94,10 +94,9 @@ export async function discoverOpenCodeTranscriptDatabase(
       if (native) {
         return native
       }
-      const homes = (await waitForPromiseWithSignal(getAiVaultWslHomeDirs(), boundedSignal)).slice(
-        0,
-        32
-      )
+      const homes = (
+        await waitForPromiseWithSignal(getAiVaultWslScanHomeDirs(), boundedSignal)
+      ).slice(0, 32)
       if (homes.length > 0) {
         const readers = await waitForPromiseWithSignal(
           prepareOpenCodeWslReaders(homes),
@@ -124,7 +123,7 @@ export async function discoverOpenCodeTranscriptDatabase(
     if (native) {
       return native
     }
-    const homes = await waitForPromiseWithSignal(getAiVaultWslHomeDirs(), boundedSignal)
+    const homes = await waitForPromiseWithSignal(getAiVaultWslScanHomeDirs(), boundedSignal)
     const sources = await waitForPromiseWithSignal(
       Promise.all(
         homes

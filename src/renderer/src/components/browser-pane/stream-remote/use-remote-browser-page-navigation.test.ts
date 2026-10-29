@@ -74,8 +74,7 @@ describe('useRemoteBrowserPageNavigation history recording', () => {
   it('files one entry however often the same page is re-read', () => {
     const { result } = renderNavigation()
 
-    // Why: a settled scroll, click or keystroke re-reads tab info, so an unconditional filing
-    // would rewrite the store — and re-render every address bar — on plain interaction.
+    // Post-input refreshes read tab info; unchanged history must not rewrite the store and re-render every address bar.
     for (let index = 0; index < 20; index += 1) {
       act(() =>
         result.current.applyRemoteTabInfo({ url: 'https://remote.internal/docs', title: 'Docs' })

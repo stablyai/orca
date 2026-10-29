@@ -1,17 +1,6 @@
 import { readFileSync } from 'node:fs'
 
-/**
- * A pin table read back out of its file's own text, which a spread cannot launder.
- *
- * A composed closure module spreads the table it inherits, so comparing the two objects is vacuous:
- * a hand-edited inherited entry is read back as the original's and agrees with itself. Reading the
- * committed source is the independent half of that comparison, and it is the same half for every
- * series — C2 and C3 each carried a byte-for-byte copy of this before it moved here.
- *
- * The formatter wraps a long entry onto two lines, an id alone and its verdict indented beneath, so
- * both forms are handled: a reader that saw only the single-line form is what once dropped three
- * `result-absent-stream-release` pins from C5's derivation while its mismatch list stayed empty.
- */
+// Read literal source pins so spreads cannot hide edited inherited entries; parse formatter-wrapped entries as well as single lines.
 export function pinsFromSource(path: string): Record<string, Record<string, string>> {
   const table: Record<string, Record<string, string>> = {}
   let family: Record<string, string> | undefined

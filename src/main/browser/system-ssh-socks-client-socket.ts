@@ -17,7 +17,6 @@ export class SystemSshSocksClientSocket extends EventEmitter implements BrowserN
   private handshake: Uint8Array<ArrayBufferLike> = new Uint8Array()
   private phase: 'method' | 'connect' | 'ready' = 'method'
 
-  /** `proxy` is a loopback port (the system-SSH forward) or any no-auth SOCKS5 endpoint. */
   constructor(proxy: number | { host: string; port: number }, target: BrowserNetworkTunnelOpen) {
     super()
     this.connectRequest = encodeConnectRequest(target)

@@ -13,15 +13,12 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
   let disposed = false
 
   const params = { includeDesktopSuppressed: true }
-  // The transport releases the host registration with the id from the current `ready`.
   const unsubscribeStream = client.subscribe('notifications.subscribe', params, (data: unknown) => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every frame a shipped host or the transport sends is an object with a string `type`: the host's `ready`, `end`, notification and dismiss events, or the transport's `error`.
     const event = data as DismissNotificationEvent | { type: string }
-    // No dispose-before-ready arm: every transport detaches this listener inside
-    // `unsubscribeStream()`, so a callback that runs at all runs before disposal.
+    // Transport detaches the listener on unsubscribe, so any callback still running precedes disposal.
     if (event.type === 'ready') {
-      // A max watermark asks only which delivered pushes are stale; socket history
-      // never becomes a second OS-notification delivery route.
+      // Use the watermark only to dismiss stale pushes; socket history must not become another OS delivery route.
       void requestNotificationCatchup(client, hostId, () => disposed).catch(() => {})
       return
     }

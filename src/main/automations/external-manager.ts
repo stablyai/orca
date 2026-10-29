@@ -33,11 +33,7 @@ export type ScopedExternalAutomations = {
   runAction: (request: ScopedExternalManagerActionRequest) => Promise<void>
 }
 
-/**
- * Scoped entry points: one captured desktop owner in, one host's managers out.
- * Every call re-resolves its scope before any probe, so a host that changed under
- * a held-open dialog fails closed instead of acting on the new incarnation.
- */
+/** Revalidate captured owners on each call so stale dialogs cannot act on replacement hosts. */
 export function createScopedExternalAutomations(
   deps: ScopedExternalAutomationDeps
 ): ScopedExternalAutomations {

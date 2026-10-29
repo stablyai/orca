@@ -1,6 +1,5 @@
-// The host owns start policy; expiry rechecks its current child before ending a stale attempt.
-
 import { randomUUID } from 'node:crypto'
+import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
 import {
   waitForStructuredAgentSessionStart,
   type StructuredAgentSessionStartReadiness
@@ -9,7 +8,7 @@ export type { StructuredAgentSessionStartReadiness } from './structured-agent-se
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
-import type { AgentChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
 import type { StructuredAgentSessionProviderChildIdentity } from './structured-agent-session-host-types'
 import { sameProviderChild } from './structured-agent-session-provider-child'
 import {
@@ -22,11 +21,10 @@ export function mintStructuredAgentSessionStartupAttempt(input: {
   record: AgentSessionRecord
   identity: AgentSessionJournalIdentity
   spawnToken: string
-  permissionMode?: AgentChatPermissionMode
+  permissionMode?: AgentChatPermissionChoice
   events?: StructuredAgentSessionEventSink
   signal?: AbortSignal
   startupOptions?: Readonly<Record<string, string>>
-  /** The id the host registered the start under, before any of its waits. */
   attemptId?: string
 }): StructuredAgentSessionStartupAttempt {
   const { record } = input
@@ -48,46 +46,38 @@ export function mintStructuredAgentSessionStartupAttempt(input: {
   }
 }
 
-/** Where an expired attempt stood: still spawning, or published as a starting child. */
 export type StructuredAgentSessionExpiredStartup = {
   sessionId: string
   attemptId: string
-  /** Null while spawn has not returned. */
   child: StructuredAgentSessionProviderChildIdentity | null
 }
 
-/** How one spawned start ended, for tuning the limits from what agents really take. */
 export type StructuredAgentSessionStartupSettled = {
   agent: AgentSessionJournalIdentity['agent']
   outcome: 'ready' | 'ceiling' | 'ended'
-  /** From spawn to the outcome. */
   durationMs: number
 }
 
-/** What the host learns about a start while spawn runs. */
 export type StructuredAgentSessionStartupProgress = {
-  /** The process exists: its start is measured from here. */
   spawned: () => void
 }
 
 type Tracked = {
   attemptId: string
-  /** Null until the start reaches its acquire. */
   attempt: StructuredAgentSessionStartupAttempt | null
   child: StructuredAgentSessionProviderChildIdentity | null
-  /** The ceiling counts from here: the start's registration, before any of its waits. */
+  /** Absolute ceiling starts before any startup wait. */
   registeredAt: number
   spawnedAt: number | null
   timer: ReturnType<typeof setTimeout> | null
   expired: boolean
-  /** The limit's measure, held until an aborted spawn settles: one that is ready anyway
-   *  reports that instead. */
+  /** Defer expiry reporting until aborted spawn settles; successful readiness overrides it. */
   expiry: StructuredAgentSessionStartupSettled | null
+  failure?: SubmissionRejectionFact
+  retry?: boolean
   readiness: PromiseWithResolvers<'ready' | 'ended'>
 }
 
-/** Each session's open attempt and its startup clock. A session starts one child at a time, so a
- *  new attempt replaces any older one. */
 export class StructuredAgentSessionStartupAttempts {
   private readonly open = new Map<string, Tracked>()
   private disposed = false
@@ -96,12 +86,11 @@ export class StructuredAgentSessionStartupAttempts {
 
   constructor(
     private readonly deps: {
-      /** Runs outside the session's queue: spawn or open may hold it through the handshake. */
+      /** Expire outside serialization so blocked provider startup cannot delay cancellation. */
       expire: (expired: StructuredAgentSessionExpiredStartup) => void
-      /** Never throws back into the clock. */
       settled?: (settled: StructuredAgentSessionStartupSettled) => void
       limits?: Partial<StructuredAgentSessionStartupLimits>
-      /** Real elapsed time: the host's own `now` may be pinned. */
+      /** Use elapsed time; host clocks may be pinned. */
       now?: () => number
     }
   ) {
@@ -110,17 +99,34 @@ export class StructuredAgentSessionStartupAttempts {
   }
 
   /** A start registered before its first wait: its ceiling runs from now. */
-  begin(sessionId: string, attemptId: string): void {
-    this.register(sessionId, attemptId)
+  begin(sessionId: string, attemptId: string, registeredAt = this.now()) {
+    const result = this.register(sessionId, attemptId, registeredAt)
+    return { ended: result.readiness.promise, result, registeredAt }
   }
 
-  private register(sessionId: string, attemptId: string): Tracked {
+  pastCeiling(registeredAt: number): boolean {
+    return this.now() - registeredAt >= this.limits.ceilingMs
+  }
+
+  childFailed(
+    sessionId: string,
+    child: StructuredAgentSessionProviderChildIdentity,
+    failure: SubmissionRejectionFact,
+    retry: boolean
+  ): void {
+    const tracked = this.open.get(sessionId)
+    if (tracked?.child && sameProviderChild(tracked.child, child)) {
+      Object.assign(tracked, { failure, retry })
+    }
+  }
+
+  private register(sessionId: string, attemptId: string, registeredAt = this.now()): Tracked {
     this.end(sessionId)
     const tracked: Tracked = {
       attemptId,
       attempt: null,
       child: null,
-      registeredAt: this.now(),
+      registeredAt,
       spawnedAt: null,
       timer: null,
       expired: false,
@@ -154,7 +160,7 @@ export class StructuredAgentSessionStartupAttempts {
     }
   }
 
-  /** Capture the attempt while the selected child still holds the session's queue. */
+  /** Capture readiness while the selected child still owns serialization. */
   readiness(
     sessionId: string,
     child: StructuredAgentSessionProviderChildIdentity
@@ -168,8 +174,7 @@ export class StructuredAgentSessionStartupAttempts {
     }
   }
 
-  /** The acquire returned: its `starting` child stays on the clock until it proves its start, and
-   *  one published after the limit passed is expired now. */
+  /** Published starts retain their clock; expire immediately if acquisition outlasted its limit. */
   published(
     sessionId: string,
     attemptId: string,
@@ -179,21 +184,19 @@ export class StructuredAgentSessionStartupAttempts {
     if (tracked?.attemptId !== attemptId) {
       return
     }
+    tracked.child = { generation: child.generation, fence: child.fence }
     if (child.phase === 'ready') {
       this.settle(sessionId, tracked, 'ready')
       return
     }
-    tracked.child = { generation: child.generation, fence: child.fence }
     if (tracked.expired) {
       this.expire(sessionId, tracked, null)
       return
     }
-    // A child published without a spawn report has existed since at least now.
     this.markSpawned(tracked)
   }
 
-  /** Whether `child`'s start is still on its clock: false once its limit passed, so a `started`
-   *  that lost the race to the limit is never accepted. */
+  /** Reject readiness that lost the race to expiry. */
   onClock(sessionId: string, child: StructuredAgentSessionProviderChildIdentity): boolean {
     const tracked = this.open.get(sessionId)
     return (
@@ -204,7 +207,6 @@ export class StructuredAgentSessionStartupAttempts {
     )
   }
 
-  /** The child proved its start: its attempt is over. A stale child's proof ends nothing. */
   ready(sessionId: string, child: StructuredAgentSessionProviderChildIdentity): void {
     const tracked = this.open.get(sessionId)
     if (tracked?.child && sameProviderChild(tracked.child, child)) {
@@ -212,7 +214,6 @@ export class StructuredAgentSessionStartupAttempts {
     }
   }
 
-  /** The child ended (exit, crash, Stop, close): nothing is left for its attempt to time. */
   childEnded(sessionId: string, child: StructuredAgentSessionProviderChildIdentity): void {
     const tracked = this.open.get(sessionId)
     if (tracked?.child && sameProviderChild(tracked.child, child)) {
@@ -220,8 +221,7 @@ export class StructuredAgentSessionStartupAttempts {
     }
   }
 
-  /** The attempt failed, or its attach did: nothing it started is left to time out. A published
-   *  child stays on its clock until it proves its start or ends. */
+  /** Abandoned unpublished attempts stop timing; published children remain tracked until ready/ended. */
   abandon(sessionId: string, attemptId: string): void {
     const tracked = this.open.get(sessionId)
     if (tracked?.attemptId === attemptId && !tracked.child) {
@@ -229,12 +229,10 @@ export class StructuredAgentSessionStartupAttempts {
     }
   }
 
-  /** Whether the session still has an attempt open; for tests and diagnostics. */
   isOpen(sessionId: string): boolean {
     return this.open.has(sessionId)
   }
 
-  /** Quit: no limit fires after this. */
   dispose(): void {
     this.disposed = true
     for (const tracked of this.open.values()) {
@@ -253,7 +251,6 @@ export class StructuredAgentSessionStartupAttempts {
   private schedule(sessionId: string, tracked: Tracked): void {
     const due = tracked.registeredAt + this.limits.ceilingMs
     tracked.timer = setTimeout(() => this.check(sessionId, tracked), Math.max(0, due - this.now()))
-    // A start's clock must never be the reason a process stays alive at quit.
     tracked.timer.unref?.()
   }
 
@@ -269,7 +266,7 @@ export class StructuredAgentSessionStartupAttempts {
     }
   }
 
-  /** `reason` null: a start whose limit already passed inside spawn was published now. */
+  /** null means an already-expired spawn just published its child. */
   private expire(sessionId: string, tracked: Tracked, reason: 'ceiling' | null): void {
     if (this.open.get(sessionId) !== tracked || this.disposed) {
       return
@@ -278,8 +275,7 @@ export class StructuredAgentSessionStartupAttempts {
       tracked.expiry = this.measure(tracked, reason)
     }
     tracked.expired = true
-    // A published child's stop is under way and ends nothing a newer attempt owns; one still
-    // spawning stays tracked until its aborted spawn is abandoned or published.
+    // Published children stop independently; spawning attempts remain tracked until cleanup/publication.
     if (tracked.child) {
       this.report(tracked.expiry)
       this.end(sessionId)
@@ -315,7 +311,7 @@ export class StructuredAgentSessionStartupAttempts {
     try {
       this.deps.settled?.(settled)
     } catch {
-      // Measurement is bookkeeping: it never decides a start.
+      // Measurement must never decide startup.
     }
   }
 

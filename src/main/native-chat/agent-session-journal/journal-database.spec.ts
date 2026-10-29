@@ -89,7 +89,7 @@ export function registerJournalDatabaseTests(): void {
         expect(journalPragmaNumber(db, 'checkpoint_fullfsync')).toBe(1)
         expect(journalPragmaNumber(db, 'busy_timeout')).toBe(JOURNAL_BUSY_TIMEOUT_MS)
         expect(journalPragmaNumber(db, 'foreign_keys')).toBe(1)
-        // 2 is INCREMENTAL, which only takes on an empty file before WAL.
+        // INCREMENTAL takes effect only on empty files before WAL.
         expect(journalPragmaNumber(db, 'auto_vacuum')).toBe(2)
         expect(journalPragmaNumber(db, 'journal_size_limit')).toBe(JOURNAL_SIZE_LIMIT_BYTES)
         expect(journalPragmaNumber(db, 'user_version')).toBe(JOURNAL_DB_SCHEMA_VERSION)
@@ -98,7 +98,6 @@ export function registerJournalDatabaseTests(): void {
       }
     })
 
-    // T5: a newer build's database opens read-only, its rows readable, and is left byte-identical.
     it('opens a newer user_version read-only without touching the file', async () => {
       const seeded = openJournalDatabase(dbPath).db
       publishJournalSessionEpoch(seeded, SESSION, 'epoch-1')
@@ -118,7 +117,7 @@ export function registerJournalDatabaseTests(): void {
       }
 
       expect(await digest(dbPath)).toBe(before)
-      // A read-only reader of a WAL file may leave an empty log beside it, never a frame.
+      // Read-only WAL access may create empty logs, but must never append frames.
       expect((await stat(`${dbPath}-wal`).catch(() => null))?.size ?? 0).toBe(0)
     })
 
@@ -151,7 +150,6 @@ export function registerJournalDatabaseTests(): void {
           4, 5
         ])
 
-        // Another chat in the same file is untouched by this chat's discard.
         deleteJournalEpochRows(db, 'session-1', 'epoch-1')
         expect(rowsOf(db, 'session-1', 'epoch-1')).toEqual([])
         expect(rowsOf(db, 'session-2', 'epoch-1')).toEqual([1])
@@ -240,7 +238,6 @@ export function registerJournalDatabaseTests(): void {
       }
     })
 
-    // Versions 1 and 2 were written only by unreleased builds; neither is migrated.
     it.each([1, 2])('refuses a version %i database without touching the file', async (version) => {
       const earlier = new Database(dbPath)
       earlier.pragma('journal_mode = WAL')

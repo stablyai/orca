@@ -156,40 +156,33 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     return workspace
   }
 
-  protected async resolveEmulatorWorkspaceId(selector: string): Promise<string> {
-    const folderWorkspace = this.resolveFolderWorkspaceSelector(selector)
+  /** Folder workspaces first, then Git worktrees; project-group folders have no repo row (STA-12562). Launching needs the folder on disk; teardown must not. */
+  protected async resolveWorkspaceSelector(
+    selector: string,
+    options: { requireUsableFolderPath?: boolean } = {}
+  ): Promise<ResolvedWorktree> {
+    const folderWorkspace = options.requireUsableFolderPath
+      ? (await this.resolveFolderWorkspaceLaunchScope(selector))?.folderWorkspace
+      : this.resolveFolderWorkspaceSelector(selector)
     return folderWorkspace
-      ? folderWorkspaceKey(folderWorkspace.id)
-      : (await this.resolveWorktreeSelector(selector)).id
+      ? this.folderWorkspaceToResolvedWorktree(folderWorkspace)
+      : this.resolveGitWorktreeSelector(selector)
   }
 
-  protected async resolveBrowserWorkspace(selector: string): Promise<ResolvedWorktree> {
-    const folderScope = await this.resolveFolderWorkspaceLaunchScope(selector)
-    return folderScope?.folderWorkspace
-      ? this.folderWorkspaceToResolvedWorktree(folderScope.folderWorkspace)
-      : this.resolveWorktreeSelector(selector)
+  protected async resolveEmulatorWorkspaceId(selector: string): Promise<string> {
+    return (await this.resolveWorkspaceSelector(selector)).id
   }
 
-  /**
-   * Closes the window in which snapshots warn that this client's client-hosted pages are still
-   * unaccounted for. Keyed by paired device because one client attaching says nothing about another.
-   */
+  protected resolveBrowserWorkspace(selector: string): Promise<ResolvedWorktree> {
+    return this.resolveWorkspaceSelector(selector, { requireUsableFolderPath: true })
+  }
+
+  /** Reconcile client-hosted pages per paired device; one attached client cannot account for another's pages. */
   markClientHostedPagesReconciled(pairedDeviceId: string): void {
     this.clientHostedPageReconciliation.markReconciled(pairedDeviceId)
   }
 
-  /**
-   * The execution-host key a client-hosted page in this workspace would be created under now.
-   *
-   * Adoption cannot reuse the key an inventory entry reports: native and WSL keys name the runtime
-   * that minted them, and an SSH key carries a per-process provider epoch, so a restart always
-   * invalidates them.
-   *
-   * The two failure modes are not the same answer. A workspace that no longer resolves is gone and
-   * its pages have nothing left to be restored into; an execution host that is merely not up yet --
-   * an SSH provider mid-reconnect, a project runtime still repairing -- is a "not now", and must
-   * never be read as permission to retire the page.
-   */
+  /** Resolve the current host key; native/WSL runtime ids and SSH provider epochs expire on restart. Missing workspaces are gone; reconnect/repair is temporary and never authorizes page retirement. */
   async resolveBrowserExecutionHostKeyForWorkspace(
     workspaceId: string
   ): Promise<BrowserExecutionHostKeyResolution> {
@@ -238,8 +231,7 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
       signal: context.signal,
       hostEnabled: isDesktopBrowserBridgeHostEnabled(),
       registry: getDesktopBrowserBridgeRegistry(this),
-      // Why desktop-hosted pages count, even with their desktop gone: this runtime lists and
-      // retires them itself, so those commands never need the bridge.
+      // This runtime lists/retires desktop-hosted pages even while their desktop is gone, so those commands need no bridge.
       localBrowserAvailable:
         runtimeBrowserCommandsFactoryIsAvailable() ||
         getRuntimeBrowserPageRegistry(this).listPages().length > 0 ||

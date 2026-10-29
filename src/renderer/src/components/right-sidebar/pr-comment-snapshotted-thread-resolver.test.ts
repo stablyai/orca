@@ -142,7 +142,6 @@ describe('buildSnapshottedThreadResolver', () => {
     expect(onResolvedOptimistically).not.toHaveBeenCalled()
   })
 
-  // Why: one rejected host call must not abort the bulk ack pool.
   it('reports a rejected host call as a failure', async () => {
     const onResolveFailed = vi.fn()
     const resolve = buildSnapshottedThreadResolver(
@@ -169,8 +168,7 @@ describe('buildSnapshottedThreadResolver', () => {
     expect(onResolvedOptimistically).not.toHaveBeenCalled()
   })
 
-  // Why: the host call still belongs to the launch review, but the optimistic row would land
-  // in whatever review the panel navigated to.
+  // Host resolution retains its launch target; optimistic writes must not enter the newly selected review.
   it('still resolves on the host but skips the optimistic update after the panel moved', async () => {
     const resolveReviewThread = vi.fn().mockResolvedValue(true)
     const onResolvedOptimistically = vi.fn()

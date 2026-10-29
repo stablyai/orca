@@ -754,8 +754,7 @@ describe('submitFolderWorkspaceCreate native-chat launch draft', () => {
       onOpenChange: vi.fn()
     })
 
-    // The draft rides in on `--prefill`, so the plan carries no draftPrompt at
-    // all — keying the mirror off it would silently drop this whole branch.
+    // Argv prefill carries no draftPrompt, so it cannot decide whether chat should mirror the draft.
     const startup = mocks.activateAndRevealFolderWorkspace.mock.calls[0]?.[1]?.startup
     expect(startup?.draftPrompt).toBeUndefined()
     expect(startup?.command).toContain(ISSUE_URL)
@@ -817,8 +816,7 @@ describe('folder-workspace draft: seeded set == chat-opening set', () => {
     vi.restoreAllMocks()
   })
 
-  // Claude takes its draft on argv; Codex receives a startup paste. Both keep
-  // the draft available for an explicit switch to terminal chat.
+  // Mirror both argv prefill and startup paste for an explicit switch to terminal chat.
   it.each([
     ['argv-prefill', 'claude' as const, '', true],
     ['argv-prefill multi-line', 'claude' as const, 'Reproduce on Windows first', true],
@@ -840,7 +838,6 @@ describe('folder-workspace draft: seeded set == chat-opening set', () => {
 
     const startup = mocks.activateAndRevealFolderWorkspace.mock.calls[0]?.[1]?.startup
     const seededDraft = useAppStore.getState().nativeChatLaunchDraftByTabId['tab-1']
-    // The draft always reaches the TUI, whichever way it is delivered.
     expect(`${startup?.command ?? ''}${startup?.draftPrompt ?? ''}`).toContain(ISSUE_URL)
     expect(seededDraft != null).toBe(expectMirrored)
     if (expectMirrored) {

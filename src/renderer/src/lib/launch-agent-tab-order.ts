@@ -1,7 +1,6 @@
 import { useAppStore } from '@/store'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 
-/** Keep a newly-created agent tab at the end of the tab-bar order. */
 export function persistAgentLaunchTabOrder(worktreeId: string, tabId: string): void {
   const store = useAppStore.getState()
   const terminalIds = (store.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)

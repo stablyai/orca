@@ -26,9 +26,7 @@ export function shouldIgnoreMonacoContentChange(args: {
 }): boolean {
   const { modelKey, isApplyingProgrammaticContent } = args
 
-  // Why: split panes can share one retained model. If any
-  // pane is currently reconciling prop content into that shared model, every
-  // pane sees the echoed change event and must treat it as programmatic.
+  // Every pane sharing a retained model must ignore programmatic update echoes from any sibling.
   return isApplyingProgrammaticContent || isProgrammaticContentSyncInFlight(modelKey)
 }
 

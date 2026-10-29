@@ -6,7 +6,7 @@ import {
   agentSessionPromptQuestions,
   legacyAgentSessionQuestionAnswers
 } from './agent-session-question-answer'
-import type { NativeChatAskRowSubject } from './native-chat-ask-row'
+import type { NativeChatAskRowSubject } from './native-chat/input/native-chat-ask-row'
 
 /** Desktop's fallbacks for its translations; the phone's words. */
 export const NATIVE_CHAT_RECEIPT_COPY = {
@@ -67,8 +67,7 @@ export function nativeChatReceiptSubject(
   if (body.questions && body.questions.length > 1) {
     return { kind: 'questions', questions: body.questions.map((entry) => entry.question) }
   }
-  // Claude keeps a generic grouped label for a single multi-select question. Use it after
-  // resolution so the answer's question line is not repeated in the heading.
+  // After resolution keep Claude’s grouped heading for a lone multi-select to avoid repeating the question above its answer.
   return {
     kind: 'question',
     text:

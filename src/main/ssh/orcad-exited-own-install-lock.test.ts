@@ -12,8 +12,9 @@ import { hostname, tmpdir, uptime } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as ExecCommandModule from './remote-exec/remote-exec-command'
+import { unusedOrcadHostTransport } from './unused-host-transport.test-fixture'
 
-// Every remote command runs in a real local shell, so the host-side checks are the real ones.
+// Run generated host-side checks in a real local shell.
 vi.mock('./remote-exec/remote-exec-command', async (importOriginal) => {
   const { runProcess } = await import('@orca/process-host')
   const { sshCommandExitError } = await import('./remote-exec/remote-exec-command')
@@ -64,8 +65,7 @@ function versionDirWithLock(owner: string, heldToken: string) {
       { token: heldToken, pid: EXITED_PID, host: hostname(), bootedAt, at: Date.now() }
     ])
   )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: execCommand is mocked to a local shell, so the connection is never used.
-  const target = { conn: {} as never, host: getRemoteHostPlatform('linux-x64') }
+  const target = { conn: unusedOrcadHostTransport(), host: getRemoteHostPlatform('linux-x64') }
   const proof = exitedOwnLockProof(target, {
     baseDir: join(home, '.orca-remote'),
     guardsStateMutation: false
@@ -80,7 +80,7 @@ function versionDirWithLock(owner: string, heldToken: string) {
   return { lock, store, proof, acquire }
 }
 
-// BUG-23: a quit mid-upload left the version dir's install lock, and the relaunch waited 20 minutes.
+// BUG-23: a quit mid-upload previously left relaunch waiting 20 minutes on its own install lock.
 describe.skipIf(process.platform === 'win32')(
   'an install lock this desktop’s exited process left',
   () => {
@@ -100,7 +100,7 @@ describe.skipIf(process.platform === 'win32')(
       expect(statSync(lock).mtimeMs).toBe(before)
     })
 
-    // Astra 26087: a live successor that replaces the lock after the proof must never be aged or taken.
+    // A successor replacing the proven-exited lock must never be aged or stolen.
     it('leaves a successor that replaced the lock after the proof alone', async () => {
       const { lock, store, proof, acquire } = versionDirWithLock('t-exited', 't-exited')
       const replacing = {

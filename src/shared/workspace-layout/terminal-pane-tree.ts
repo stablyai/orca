@@ -41,7 +41,6 @@ export function layoutContainsLeafId(node: TerminalPaneLayoutNode | null, leafId
   return layoutContainsLeafId(node.first, leafId) || layoutContainsLeafId(node.second, leafId)
 }
 
-/** The tree without `leafId`; its parent split collapses into the sibling. */
 export function removeLayoutLeaf(
   node: TerminalPaneLayoutNode | null,
   leafId: string
@@ -62,7 +61,6 @@ export function removeLayoutLeaf(
 
 export type PaneSide = 'left' | 'right' | 'top' | 'bottom'
 
-/** Replaces `targetLeafId` with a split holding it and `newLeafId` on `side` of it. */
 export function insertLeafBeside(
   node: TerminalPaneLayoutNode,
   targetLeafId: string,
@@ -91,7 +89,6 @@ export function insertLeafBeside(
   }
 }
 
-/** Same splits, directions and panes in the same places; only ratios may differ. */
 export function samePanesIgnoringRatios(
   left: TerminalPaneLayoutNode,
   right: TerminalPaneLayoutNode

@@ -15,10 +15,8 @@
 1 src/main/ipc/registered-worktree-root-owner.ts
 4 src/main/ipc/repos/local-repo-registration.ts
 1 src/main/ipc/repos/nested-repo-import-handler.ts
-1 src/main/ipc/repos/repo-git-username-handler.ts
 2 src/main/ipc/workspace-cleanup-candidate.ts
 1 src/main/ipc/workspace-cleanup-disconnected-ssh.ts
-2 src/main/ipc/worktree-base-directory-watch-targets.ts
 1 src/main/ipc/worktrees-test-metadata-pruning-store.ts
 1 src/main/ipc/worktrees/listing/authoritative-local-worktree-metadata-pruning.ts
 1 src/main/ipc/worktrees/listing/register-host-catalog-handlers.ts

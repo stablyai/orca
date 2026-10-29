@@ -1,5 +1,3 @@
-// A complete, typed agent-session record for tests that care about a few of its fields.
-
 import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
   type AgentSessionExecutionLocation,

@@ -1,14 +1,9 @@
-import { i18n, translate } from '@/i18n/i18n'
+import { translate } from '@/i18n/i18n'
+import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 export type CodeBlockLanguage = { value: string; label: string }
 
-/**
- * Common languages shown in the selector. The user can also type a language
- * name directly in the markdown fence (```rust) and it will be preserved —
- * this list is just for quick picking in the UI.
- *
- * A null key means the label is identical in every locale.
- */
+/** Quick-pick languages allow arbitrary fence names too; null translation keys mean locale-independent labels. */
 type LanguageEntry = readonly [value: string, key: string | null, label: string]
 
 const LANGUAGE_ENTRIES: readonly LanguageEntry[] = [
@@ -39,24 +34,13 @@ const LANGUAGE_ENTRIES: readonly LanguageEntry[] = [
   ['yaml', 'auto.components.editor.RichMarkdownCodeBlock.74eab1d9b2', 'YAML']
 ]
 
-let cachedLocale: string | null = null
-let cachedResourceBundle: unknown = null
-let cachedLanguages: CodeBlockLanguage[] = []
-
-/** Why: labels were getters that re-translated on every property read, so one
- *  render of a code-block-heavy document cost thousands of i18next lookups. */
-export function getCodeBlockLanguages(): CodeBlockLanguage[] {
-  const resourceBundle = i18n.getResourceBundle(i18n.language, 'translation')
-  if (cachedLocale !== i18n.language || cachedResourceBundle !== resourceBundle) {
-    cachedLocale = i18n.language
-    cachedResourceBundle = resourceBundle
-    cachedLanguages = LANGUAGE_ENTRIES.map(([value, key, label]) => ({
-      value,
-      label: key === null ? label : translate(key, label)
-    }))
-  }
-  return cachedLanguages
-}
+/** Cache translated labels to avoid thousands of lookups per code-heavy render. */
+export const getCodeBlockLanguages = createLocalizedCatalog<CodeBlockLanguage[]>(() =>
+  LANGUAGE_ENTRIES.map(([value, key, label]) => ({
+    value,
+    label: key === null ? label : translate(key, label)
+  }))
+)
 
 export function getCodeBlockLanguageLabel(value: string): string {
   return getCodeBlockLanguages().find((language) => language.value === value)?.label ?? value

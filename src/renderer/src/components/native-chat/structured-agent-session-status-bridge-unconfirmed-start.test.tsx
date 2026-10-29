@@ -1,9 +1,8 @@
 // @vitest-environment happy-dom
 
-// A chat whose create got no answer (a lost reply, or a reload mid-start) may or may not exist on
-// its host. It shows no mark while that is unknown; when the host is reachable again the launch is
-// re-checked without the user, and settles to started (no mark) or failed (marked).
+// Lost create replies remain unmarked and recheck on reconnect; only confirmed failures earn failure marks.
 
+import type * as LaunchErrors from '@/lib/structured-agent-session-launch-errors'
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
@@ -66,15 +65,29 @@ vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => 
   refreshLocalStructuredSessionTabs: mocks.refresh
 }))
 
-vi.mock('@/lib/launch-structured-agent-session', () => {
+const launchErrorMocks = vi.hoisted(() => {
   class StructuredAgentSessionCreateRefusalError extends Error {}
+  return { StructuredAgentSessionCreateRefusalError }
+})
+
+vi.mock('@/lib/structured-agent-session-launch-errors', async () => ({
+  ...(await vi.importActual<typeof LaunchErrors>('@/lib/structured-agent-session-launch-errors')),
+  ...launchErrorMocks
+}))
+
+vi.mock('@/lib/structured-agent-session-launch-create-call', () => ({
+  launchStructuredAgentSession: mocks.launch
+}))
+
+vi.mock('@/lib/launch-structured-agent-session', () => {
   return {
     createStructuredAgentSessionLaunchIntent: mocks.createIntent,
     retryStructuredAgentSessionLaunchIntent: vi.fn((prior: unknown) => prior),
     restoreStructuredAgentSessionLaunchIntent: mocks.restoreIntent,
     abandonStructuredAgentSessionLaunchIntent: vi.fn(),
     launchStructuredAgentSession: mocks.launch,
-    StructuredAgentSessionCreateRefusalError
+    StructuredAgentSessionCreateRefusalError:
+      launchErrorMocks.StructuredAgentSessionCreateRefusalError
   }
 })
 
@@ -86,9 +99,9 @@ import {
   getStructuredAgentSessionLaunchLifecycle,
   markStructuredAgentSessionLaunchCancelled,
   resetStructuredAgentLaunchRegistryForTests
-} from '@/lib/structured-agent-session-launch-registry'
-import { resetStructuredAgentLaunchPersistenceForTests } from '@/lib/structured-agent-session-launch-persistence'
-import { recheckUnconfirmedStructuredAgentLaunches } from '@/lib/structured-agent-session-launch-unconfirmed-recheck'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { resetStructuredAgentLaunchPersistenceForTests } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
+import { recheckUnconfirmedStructuredAgentLaunches } from '@/lib/agent-session/launch/structured-agent-session-launch-unconfirmed-recheck'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
 import {
   resetTerminalTabActivityFlagsCacheForTest,
@@ -204,7 +217,6 @@ async function connect(): Promise<void> {
   }
 }
 
-/** A reload keeps the saved launch record and the tab, but nothing in memory. */
 async function reload(): Promise<void> {
   cleanup()
   store().setState({ agentStatusByPaneKey: {} })
@@ -216,7 +228,6 @@ async function reload(): Promise<void> {
   await connect()
 }
 
-/** The create's reply never arrives and the host lists nothing, so the outcome stays unknown. */
 async function loseStart(
   sessionId = CLAUDE_SESSION,
   agent: 'claude' | 'codex' = 'claude'
@@ -280,7 +291,6 @@ describe('a chat whose start was never confirmed', () => {
     await flush()
 
     expect(lifecycle()).toBeNull()
-    // The host already held the chat, so nothing is created twice.
     expect(createCalls()).toBe(creates)
     expect(rows()).toEqual([])
   })

@@ -19,6 +19,8 @@ describe('persisted connection log store', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
+    vi.clearAllTimers()
     vi.useRealTimers()
     vi.resetModules()
   })
@@ -40,7 +42,15 @@ describe('persisted connection log store', () => {
         message: 'Relay: active relay session failed'
       }
     ]
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue(JSON.stringify(stored))
+    const key = 'orca.mobile.connection-log.v1.host-a'
+    const storage = new Map([[key, JSON.stringify(stored)]])
+    vi.mocked(AsyncStorage.getItem).mockImplementation(
+      async (requestedKey) => storage.get(requestedKey) ?? null
+    )
+    vi.mocked(AsyncStorage.setItem).mockImplementation(async (requestedKey, value) => {
+      storage.set(requestedKey, value)
+    })
+    vi.spyOn(Math, 'random').mockReturnValueOnce(0.25).mockReturnValue(0.5)
     vi.resetModules()
     const { connectionLogStore, recordConnectionClientSessionStart } =
       await import('./persisted-connection-log-store')
@@ -48,10 +58,17 @@ describe('persisted connection log store', () => {
     recordConnectionClientSessionStart('host-a')
     await connectionLogStore.hydrate('host-a')
 
-    expect(connectionLogStore.get('host-a').map((entry) => entry.code)).toEqual([
+    const expected = connectionLogStore.get('host-a')
+    expect(expected.map((entry) => entry.code)).toEqual([
       'client-session-started',
       'relay-session-failed',
       'client-session-started'
     ])
+    await vi.advanceTimersByTimeAsync(0)
+    expect(storage.get(key)).toBe(JSON.stringify(expected))
+    vi.resetModules()
+    const reloaded = await import('./persisted-connection-log-store')
+    await reloaded.connectionLogStore.hydrate('host-a')
+    expect(reloaded.connectionLogStore.get('host-a')).toEqual(expected)
   })
 })

@@ -1,10 +1,10 @@
 import { Loader2 } from 'lucide-react'
 import type { RuntimeAccessGrant } from '../../../../shared/runtime-access-grants'
 import { Button } from '../ui/button'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 
 function formatAccessTimestamp(timestamp: number): string {
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(getIntlLocale(), {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
@@ -16,7 +16,7 @@ function formatAccessTimestamp(timestamp: number): string {
 function grantDisplayName(grant: RuntimeAccessGrant): string {
   return /^Runtime \d/.test(grant.name)
     ? translate('auto.components.settings.RuntimeAccessGrantList.linkName', 'Link · {{value0}}', {
-        value0: new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(
+        value0: new Intl.DateTimeFormat(getIntlLocale(), { month: 'short', day: 'numeric' }).format(
           new Date(grant.createdAt)
         )
       })

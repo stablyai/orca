@@ -1,5 +1,4 @@
-// Each chat's sends the host has not answered yet, in memory only: what the sender keeps and the
-// chat's view reads.
+// Keep unanswered sends in memory only for the sender and mounted views.
 
 import type { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-send-mutation'
 import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-types'
@@ -13,10 +12,7 @@ export type StructuredAgentSessionPendingSend = {
   delivery?: 'queue-if-active'
   options?: Readonly<Record<string, string>>
   usageLimitContinuationOfTurnItemId?: string
-  /**
-   * `sending`: on its way, its one request out or about to be; the chat takes no other send meanwhile.
-   * `recorded`: the host holds it; an open chat draws it until the host's row or card arrives.
-   */
+  /** Sending blocks new sends; recorded releases the slot but retains its echo until host rows/cards arrive. */
   phase: 'sending' | 'recorded'
   /** A read past this acknowledgement supersedes the echo even when its row is off-page. */
   recordedCursor?: AgentJournalCursor
@@ -87,19 +83,16 @@ export function findStructuredAgentSessionPendingSend(
   return sessions.get(sessionId)?.entries.find((entry) => entry.clientMessageId === clientMessageId)
 }
 
-/** What the chat's view reads: its pending sends and the line saying why one came back. */
 export function getStructuredAgentSessionPendingSends(
   sessionId: string
 ): readonly StructuredAgentSessionPendingSend[] {
   return sessions.get(sessionId)?.entries ?? EMPTY_STRUCTURED_AGENT_SESSION_SENDS
 }
 
-/** A view of this chat is mounted, so something draws its sends. */
 export function structuredAgentSessionSendsWatched(sessionId: string): boolean {
   return (sessions.get(sessionId)?.listeners.size ?? 0) > 0
 }
 
-/** A send of this chat is out and not yet settled, or a write holds sends: the chat takes none. */
 export function structuredAgentSessionSendOut(sessionId: string): boolean {
   return (
     structuredAgentSessionSendsHeld(sessionId) ||
@@ -111,7 +104,7 @@ export function structuredAgentSessionSendsHeld(sessionId: string): boolean {
   return (sessions.get(sessionId)?.holds ?? 0) > 0
 }
 
-/** Keeps every send of the chat out until the returned release runs (once). */
+/** Block sends until the idempotent release runs. */
 export function holdStructuredAgentSessionSends(sessionId: string): () => void {
   publishStructuredAgentSessionSends(sessionId, { holds: sessionSends(sessionId).holds + 1 })
   let held = true
@@ -129,7 +122,6 @@ export function getStructuredAgentSessionSendNotice(sessionId: string): string |
   return sessions.get(sessionId)?.notice ?? null
 }
 
-/** Says once, on the chat's line, why text came back to its composer. */
 export function setStructuredAgentSessionSendNotice(sessionId: string, notice: string): void {
   publishStructuredAgentSessionSends(sessionId, { notice })
 }

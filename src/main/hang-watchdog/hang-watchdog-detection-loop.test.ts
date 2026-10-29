@@ -42,8 +42,6 @@ describe('createHangWatchdogDetectionLoop', () => {
     expect(onHangDetected).toHaveBeenCalledTimes(1)
   })
 
-  // Why: the breadcrumb reports observed silence, so it must be the measured gap at the firing
-  // tick (the first one strictly past the timeout), not the timeout constant.
   it('reports the measured stall duration, not the timeout', () => {
     const { loop, onHangDetected, advance } = loopWithClock()
     loop.recordHeartbeat()
@@ -67,11 +65,11 @@ describe('createHangWatchdogDetectionLoop', () => {
   it('treats a large tick gap as system sleep and restarts the wait', () => {
     const { loop, onHangDetected, advance } = loopWithClock()
     loop.recordHeartbeat()
-    // Simulate suspension: the check timer did not run for far longer than the timeout.
+    // Model system suspension: the watchdog itself missed multiple timer ticks.
     advance(TIMEOUT_MS * 4)
     loop.tick()
     expect(onHangDetected).not.toHaveBeenCalled()
-    // A responsive parent resumes heartbeats after wake; the loop must fire only after a fresh full timeout of silence.
+    // After wake, require a fresh timeout of silence rather than counting suspended time.
     for (let i = 0; i < 9; i++) {
       advance(CHECK_INTERVAL_MS)
       loop.tick()
@@ -84,8 +82,6 @@ describe('createHangWatchdogDetectionLoop', () => {
     expect(onHangDetected).toHaveBeenCalledTimes(1)
   })
 
-  // Why: this is the measurement the whole PR exists for — a stall that clears would have been a
-  // destructive kill under the SIGKILL design, so it has to be counted separately.
   it('reports resolution when heartbeats resume after a detected hang', () => {
     const { loop, onHangDetected, onHangResolved, advance } = loopWithClock()
     loop.recordHeartbeat()
@@ -120,8 +116,7 @@ describe('createHangWatchdogDetectionLoop', () => {
     advance(CHECK_INTERVAL_MS)
     loop.recordHeartbeat()
     expect(onHangResolved).toHaveBeenCalledTimes(1)
-    // Why: the tick clock must keep advancing during the first hang, or this first tick reads as a
-    // sleep gap and silently restarts the wait instead of arming it.
+    // Keep the tick clock advancing during a hang so recovery cannot look like system suspension.
     for (let i = 0; i < 12; i++) {
       advance(CHECK_INTERVAL_MS)
       loop.tick()

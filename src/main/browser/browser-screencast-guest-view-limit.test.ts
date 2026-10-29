@@ -38,7 +38,7 @@ function createGuest(type: 'webview' | 'window') {
   return Object.assign(createMockScreencastWebContents(), { getType: vi.fn(() => type) })
 }
 
-// What a <webview> guest streams: its element's size, whatever viewport is emulated.
+// Model a webview compositor constrained by its embedder.
 function emitGuestFrame(
   guest: ReturnType<typeof createGuest>,
   sessionId: number,
@@ -51,7 +51,6 @@ function emitGuestFrame(
   })
 }
 
-// Each distinct emulated size in order; the stream re-applies one before every snapshot.
 function emulatedSizes(guest: ReturnType<typeof createGuest>): string[] {
   const sizes = guest.debugger.sendCommand.mock.calls
     .filter(([method]) => method === 'Emulation.setDeviceMetricsOverride')
@@ -118,7 +117,6 @@ describe('screencast of a guest smaller than the requested viewport (#30341)', (
     )
     expect(emulatedSizes(guest)).toEqual(['1833x1179'])
 
-    // This frame is the top-left crop of a 1833x1179 layout: it must not reach the client.
     emitGuestFrame(guest, 1, { width: 1463, height: 849 })
     await vi.waitFor(() => expect(emulatedSizes(guest)).toEqual(['1833x1179', '1463x849']))
     expect(guest.debugger.sendCommand).toHaveBeenCalledWith('Page.screencastFrameAck', {

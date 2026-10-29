@@ -35,6 +35,7 @@ function ChromeHarness({
   workspaceId = WORKSPACE_ID,
   chromeShortcutScope,
   hasGuest = true,
+  inputLocked = false,
   testId = 'a'
 }: {
   isActive?: boolean
@@ -42,6 +43,7 @@ function ChromeHarness({
   workspaceId?: string
   chromeShortcutScope?: BrowserChromeShortcutScope
   hasGuest?: boolean
+  inputLocked?: boolean
   testId?: string
 }): React.JSX.Element {
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
@@ -53,7 +55,8 @@ function ChromeHarness({
     isActive,
     chromeShortcutScope: chromeShortcutScope ?? (isActive ? 'focused' : 'inactive'),
     addressBarInputRef,
-    guestFocus
+    guestFocus,
+    inputLocked
   })
   return (
     <div data-browser-overlay-tab-id={workspaceId}>
@@ -129,7 +132,8 @@ describe('useBrowserPageChromeFocus', () => {
       value: {
         ui: {
           onFocusBrowserAddressBar: (callback: (target: BrowserPageCommandTarget) => void) =>
-            focusAddressBarFromIpc.subscribe(callback)
+            focusAddressBarFromIpc.subscribe(callback),
+          onShowBrowserHistory: () => () => {}
         }
       }
     })
@@ -164,6 +168,88 @@ describe('useBrowserPageChromeFocus', () => {
     expect(document.activeElement).toBe(guest())
   })
 
+  it('hands the page the keyboard when its tab is switched to (#20533)', () => {
+    const view = render(<ChromeHarness isActive={false} />)
+    act(() => addressBar().focus())
+
+    view.rerender(<ChromeHarness isActive />)
+
+    expect(document.activeElement).toBe(guest())
+  })
+
+  it('leaves the keyboard alone when a page activates in a split the user is not in', () => {
+    const view = render(<ChromeHarness isActive={false} />)
+    act(() => addressBar().focus())
+
+    view.rerender(<ChromeHarness isActive chromeShortcutScope="inactive" />)
+    act(() => flushFrames())
+
+    expect(document.activeElement).toBe(addressBar())
+  })
+
+  it('leaves the keyboard alone for splits that only own their target, as floating ones do', () => {
+    const view = render(<ChromeHarness isActive={false} />)
+    act(() => addressBar().focus())
+
+    view.rerender(<ChromeHarness isActive chromeShortcutScope="owned-target" />)
+    act(() => flushFrames())
+
+    expect(document.activeElement).toBe(addressBar())
+  })
+
+  it('focuses a page whose guest attaches a frame after the tab activates', () => {
+    const view = render(<ChromeHarness isActive={false} hasGuest={false} />)
+
+    view.rerender(<ChromeHarness isActive hasGuest={false} />)
+    view.rerender(<ChromeHarness isActive />)
+    act(() => flushFrames())
+
+    expect(document.activeElement).toBe(guest())
+  })
+
+  it('lets a late guest leave focus the user moved while it attached', () => {
+    const view = render(<ChromeHarness isActive={false} hasGuest={false} />)
+
+    view.rerender(<ChromeHarness isActive hasGuest={false} />)
+    act(() => addressBar().focus())
+    view.rerender(<ChromeHarness isActive />)
+    act(() => flushFrames())
+
+    expect(document.activeElement).toBe(addressBar())
+  })
+
+  it('keeps the desktop keyboard off a page a phone is driving', () => {
+    const view = render(<ChromeHarness isActive={false} inputLocked />)
+    act(() => addressBar().focus())
+
+    view.rerender(<ChromeHarness isActive inputLocked />)
+    act(() => flushFrames())
+
+    expect(document.activeElement).toBe(addressBar())
+  })
+
+  it('still focuses a guest that attaches long after the tab activates', () => {
+    const view = render(<ChromeHarness isActive={false} hasGuest={false} />)
+
+    view.rerender(<ChromeHarness isActive hasGuest={false} />)
+    act(() => flushFrames(30))
+    view.rerender(<ChromeHarness isActive />)
+    act(() => flushFrames())
+
+    expect(document.activeElement).toBe(guest())
+  })
+
+  it('drops a pending activation focus once the user focuses another split', () => {
+    const view = render(<ChromeHarness isActive={false} hasGuest={false} />)
+
+    view.rerender(<ChromeHarness isActive hasGuest={false} />)
+    view.rerender(<ChromeHarness isActive hasGuest={false} chromeShortcutScope="inactive" />)
+    view.rerender(<ChromeHarness isActive chromeShortcutScope="inactive" />)
+    act(() => flushFrames())
+
+    expect(document.activeElement).not.toBe(guest())
+  })
+
   it('ignores a pending request while the pane is not the active surface', () => {
     queuePendingAddressBarFocus()
 
@@ -180,8 +266,7 @@ describe('useBrowserPageChromeFocus', () => {
     act(() => flushFrames())
 
     expectAddressBarFocusedAndSelected()
-    // Why: the latch suppresses guest focus while a grab is in flight; a pane with no clearing
-    // path of its own would sit locked out of its own page forever if it never expired.
+    // A latch without expiry would leave panes lacking local load handlers permanently unable to focus their guest.
     expect(chromeFocus?.keepAddressBarFocusRef.current).toBe(false)
   })
 
@@ -207,8 +292,7 @@ describe('useBrowserPageChromeFocus', () => {
     act(() => outside.focus())
     act(() => flushFrames())
 
-    // Why: the pane is off screen by the time the remaining retry frames run, so a grab that
-    // outlives the switch drags focus into a tab the user has already left.
+    // Retry frames must stop on deactivation instead of pulling focus into the departed tab.
     expect(document.activeElement).toBe(outside)
     expect(chromeFocus?.keepAddressBarFocusRef.current).toBe(false)
   })
@@ -235,8 +319,7 @@ describe('useBrowserPageChromeFocus', () => {
     act(() => outside.focus())
     act(() => flushFrames())
 
-    // Why: two grabs overlap here, and only one canceller is reachable from an effect cleanup —
-    // the other has to be superseded on the way in, or it outlives the switch and steals focus.
+    // Supersede both overlapping grabs; only one canceller is reachable during cleanup.
     expect(document.activeElement).toBe(outside)
     expect(chromeFocus?.keepAddressBarFocusRef.current).toBe(false)
   })
@@ -250,8 +333,7 @@ describe('useBrowserPageChromeFocus', () => {
     act(() => requestBrowserFocus({ pageId: PAGE_ID, target: 'webview' }))
     act(() => flushFrames())
 
-    // Why: a grab still running would spend its remaining frames pulling focus back off the page
-    // the request just aimed at, so the guest gets it for a frame and then loses it again.
+    // Cancel outstanding bar retries or they will steal focus back from the requested page.
     expect(document.activeElement).toBe(guest())
   })
 
@@ -273,9 +355,7 @@ describe('useBrowserPageChromeFocus', () => {
     view.rerender(<ChromeHarness />)
     act(() => flushFrames())
 
-    // Why: the pending request was consumed on the first pass, so nothing starts a second grab —
-    // cancellation is the only thing left that can lower the latch, and a latch stuck up keeps
-    // the pane from ever handing focus back to its own page.
+    // StrictMode consumes the request on its first pass; cancellation must clear the latch without a second grab.
     expect(chromeFocus?.keepAddressBarFocusRef.current).toBe(false)
   })
 
@@ -295,8 +375,70 @@ describe('useBrowserPageChromeFocus', () => {
     act(() => addressBar().focus())
     act(() => flushFrames())
 
-    // Why: blurring for a guest that never materializes drops focus on document.body, where
-    // no shortcut lands at all.
+    // Do not blur for a missing guest; body focus would strand keyboard shortcuts.
+    expect(document.activeElement).toBe(addressBar())
+  })
+
+  // Why: #18832 — a link's new tab mounts before its guest attaches, so the request must outlast that.
+  it('focuses the page of a new tab once its guest attaches', () => {
+    act(() => requestBrowserFocus({ pageId: PAGE_ID, target: 'webview' }))
+
+    const view = render(<ChromeHarness hasGuest={false} />)
+    act(() => flushFrames(20))
+    view.rerender(<ChromeHarness />)
+    act(() => flushFrames())
+
+    expect(document.activeElement).toBe(guest())
+  })
+
+  // Why: a remote link's request can arrive after the pane mounted but before its guest attached.
+  it('focuses the page when a request event lands before its guest attaches', () => {
+    const view = render(<ChromeHarness hasGuest={false} />)
+    act(() => flushFrames())
+    act(() => requestBrowserFocus({ pageId: PAGE_ID, target: 'webview' }))
+    act(() => flushFrames(3))
+    view.rerender(<ChromeHarness />)
+    act(() => flushFrames())
+
+    expect(document.activeElement).toBe(guest())
+  })
+
+  it('leaves focus the user moves in the frame the guest attaches', () => {
+    act(() => requestBrowserFocus({ pageId: PAGE_ID, target: 'webview' }))
+
+    const view = render(<ChromeHarness hasGuest={false} />)
+    act(() => flushFrames(1))
+    act(() => addressBar().focus())
+    view.rerender(<ChromeHarness />)
+    act(() => flushFrames())
+
+    expect(document.activeElement).toBe(addressBar())
+  })
+
+  it('drops a pending page focus when the user leaves the tab before its guest attaches', () => {
+    act(() => requestBrowserFocus({ pageId: PAGE_ID, target: 'webview' }))
+
+    const view = render(<ChromeHarness hasGuest={false} />)
+    act(() => flushFrames(2))
+    view.rerender(<ChromeHarness hasGuest={false} isActive={false} />)
+    act(() => addressBar().focus())
+    // Why an unfocused split: switching back to a focused split's tab focuses its page anyway (#20533).
+    view.rerender(<ChromeHarness chromeShortcutScope="inactive" />)
+    act(() => flushFrames())
+
+    expect(document.activeElement).toBe(addressBar())
+  })
+
+  it('leaves focus the user moves while the guest of a new tab attaches', () => {
+    act(() => requestBrowserFocus({ pageId: PAGE_ID, target: 'webview' }))
+
+    const view = render(<ChromeHarness hasGuest={false} />)
+    act(() => flushFrames(2))
+    act(() => addressBar().focus())
+    act(() => flushFrames(2))
+    view.rerender(<ChromeHarness />)
+    act(() => flushFrames())
+
     expect(document.activeElement).toBe(addressBar())
   })
 
@@ -386,8 +528,7 @@ describe('useBrowserPageChromeFocus', () => {
 
     pressFocusAddressBarChord(true)
 
-    // Why: sibling panes all listen in capture on window, so a chord that only stops
-    // propagation gets handled again by every one of them and the last pane wins.
+    // Sibling panes share a window capture target; stopPropagation alone lets the last listener steal the chord.
     expect(document.activeElement).toBe(addressBar('a'))
   })
 

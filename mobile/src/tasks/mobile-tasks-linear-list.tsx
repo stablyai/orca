@@ -1,4 +1,5 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
+import { translate } from '../i18n/mobile-i18n'
 import {
   View,
   ActivityIndicator,
@@ -10,7 +11,8 @@ import {
   triggerMediumImpact,
   ChevronDown,
   FlatList,
-  TaskProviderLogo
+  TaskProviderLogo,
+  type MobileColorScheme
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
 import {
@@ -20,7 +22,10 @@ import {
   formatUpdatedAt
 } from './mobile-tasks-legacy-foundation'
 
-export function renderMobileTasksLinearList(model: ConnectionPresentationModel) {
+export function renderMobileTasksLinearList(
+  model: ConnectionPresentationModel,
+  colorScheme: MobileColorScheme
+) {
   const {
     effectiveLinearDisplayProperties,
     emptyLabel,
@@ -82,7 +87,13 @@ export function renderMobileTasksLinearList(model: ConnectionPresentationModel) 
                     style={[styles.statusPillSelf, styles.linearStatePill]}
                     disabled={mutatingStatus}
                     accessibilityRole="button"
-                    accessibilityLabel={`Change status from ${issue.state.name}`}
+                    accessibilityLabel={translate(
+                      'tasks.linearList.changeStatusFrom',
+                      'Change status from {{status}}',
+                      {
+                        status: issue.state.name
+                      }
+                    )}
                     onPress={(event) => {
                       event.stopPropagation()
                       triggerMediumImpact()
@@ -112,6 +123,7 @@ export function renderMobileTasksLinearList(model: ConnectionPresentationModel) 
   ) : (
     <FlatList
       data={linearListEntries}
+      extraData={colorScheme}
       keyExtractor={(entry) =>
         entry.type === 'section' ? `linear-section:${entry.section.key}` : entry.issue.id
       }
@@ -170,7 +182,13 @@ export function renderMobileTasksLinearList(model: ConnectionPresentationModel) 
                   style={[styles.statusPill, styles.linearStatePill]}
                   disabled={mutatingStatus}
                   accessibilityRole="button"
-                  accessibilityLabel={`Change status from ${issue.state.name}`}
+                  accessibilityLabel={translate(
+                    'tasks.linearList.changeStatusFrom',
+                    'Change status from {{status}}',
+                    {
+                      status: issue.state.name
+                    }
+                  )}
                   onPress={(event) => {
                     event.stopPropagation()
                     triggerMediumImpact()

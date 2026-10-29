@@ -8,15 +8,7 @@ import { runProcess, spawnProcess } from '@orca/process-host'
 import { _setWindowsTaskkillLauncherForTests } from '@orca/process-host/windows-tree-kill'
 import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 
-/**
- * A loaded Windows host can take 5-18 s to finish `taskkill /t /f`. The barrier
- * must leave that taskkill running past its caller's wait, and must not kill the
- * root first: a root killed before taskkill reads the tree orphans the grandchild.
- *
- * Runs only on win32. `ORCA_WINDOWS_TREE_KILL_LOAD=1` adds CPU burners and runs
- * the unmodified taskkill too; CI runs that in its own step so the burners never
- * share the machine with other test files.
- */
+/** Loaded taskkill can outlast its caller; killing root first orphans grandchildren before tree enumeration. ORCA_WINDOWS_TREE_KILL_LOAD adds CPU burners only in isolated CI steps. */
 const describeOnWindows = process.platform === 'win32' ? describe : describe.skip
 const underLoad = process.env.ORCA_WINDOWS_TREE_KILL_LOAD === '1'
 // Longer than the caller's 5 s wait, well inside the 30 s deadline.
@@ -33,19 +25,20 @@ describeOnWindows('Windows barrier with a taskkill slower than its caller', () =
       `require('node:fs').writeFileSync(require('node:path').join(__dirname, 'grandchild.pid'), String(process.pid)); setInterval(function () {}, 60000);`
     )
     writeFileSync(join(dir, 'hung.cmd'), `@echo off\r\n"${process.execPath}" "%~dp0hang.js"\r\n`)
-    if (underLoad) {
-      const count = availableParallelism() * 2
-      burners = Array.from({ length: count }, () =>
-        spawnProcess({ program: process.execPath, args: ['-e', 'for (;;) {}'], stdio: 'ignore' })
-      )
-    }
   })
 
-  afterEach(() => {
+  afterEach(async () => {
     _setWindowsTaskkillLauncherForTests(null)
-    for (const burner of burners) {
-      burner.kill()
-    }
+    await Promise.all(
+      burners.map(async (burner) => {
+        if (burner.exitCode !== null || burner.signalCode !== null) {
+          return
+        }
+        const closed = new Promise<void>((resolve) => burner.once('close', () => resolve()))
+        burner.kill()
+        await closed
+      })
+    )
     burners = []
     const pidFile = join(dir, 'grandchild.pid')
     if (existsSync(pidFile)) {
@@ -58,10 +51,11 @@ describeOnWindows('Windows barrier with a taskkill slower than its caller', () =
     removeTreeSync(dir)
   })
 
-  async function waitForGrandchildPid(): Promise<number> {
+  async function waitForGrandchildPid(signal: AbortSignal): Promise<number> {
     const pidFile = join(dir, 'grandchild.pid')
     const deadline = Date.now() + 30_000
     while (!existsSync(pidFile) || readFileSync(pidFile, 'utf8') === '') {
+      signal.throwIfAborted()
       if (Date.now() > deadline) {
         throw new Error('the grandchild never started')
       }
@@ -79,7 +73,9 @@ describeOnWindows('Windows barrier with a taskkill slower than its caller', () =
     }
   }
 
-  it('kills the grandchild when taskkill finishes after the caller stopped waiting', async () => {
+  it('kills the grandchild when taskkill finishes after the caller stopped waiting', async ({
+    signal
+  }) => {
     _setWindowsTaskkillLauncherForTests((rootPid) =>
       spawnProcess({
         program: process.execPath,
@@ -95,12 +91,12 @@ describeOnWindows('Windows barrier with a taskkill slower than its caller', () =
         stdio: 'ignore'
       })
     )
-    await expectBarrierKillsGrandchild()
+    await expectBarrierKillsGrandchild(signal)
   }, 90_000)
 
   it.skipIf(!underLoad)(
     'kills the grandchild with the real taskkill on a loaded host',
-    async () => {
+    async ({ signal }) => {
       let taskkillOutcome = 'still running'
       _setWindowsTaskkillLauncherForTests((rootPid) => {
         const startedAt = Date.now()
@@ -114,43 +110,68 @@ describeOnWindows('Windows barrier with a taskkill slower than its caller', () =
         })
         return taskkill
       })
-      await expectBarrierKillsGrandchild()
-      // Evidence only: how slow this load made taskkill (about 50 ms idle).
+      await expectBarrierKillsGrandchild(signal)
+      // Record measured taskkill duration under load (about 50ms idle).
       console.log(`[late-taskkill] taskkill under load: ${taskkillOutcome}`)
     },
     90_000
   )
 
-  async function expectBarrierKillsGrandchild(): Promise<void> {
+  async function expectBarrierKillsGrandchild(signal: AbortSignal): Promise<void> {
     const controller = new AbortController()
-    let reportTerminated!: () => void
-    const terminationReported = new Promise<void>((resolve) => {
-      reportTerminated = resolve
-    })
+    let reportedAt: number | undefined
     const pending = runProcess({
       program: join(dir, 'hung.cmd'),
       timeoutMs: null,
-      signal: controller.signal,
+      signal: AbortSignal.any([controller.signal, signal]),
       terminationBarrier: true,
-      onChildTerminated: () => reportTerminated()
+      onChildTerminated: () => {
+        reportedAt = Date.now()
+      }
     })
-    const grandchild = await waitForGrandchildPid()
-    expect(isAlive(grandchild)).toBe(true)
+    try {
+      const grandchild = await waitForGrandchildPid(signal)
+      expect(isAlive(grandchild)).toBe(true)
+      if (underLoad) {
+        // Load the shutdown, after the fixture has proved it can start.
+        const readyFiles = Array.from({ length: availableParallelism() * 2 }, (_, index) =>
+          join(dir, `burner-${index}.ready`)
+        )
+        burners = readyFiles.map((ready) =>
+          spawnProcess({
+            program: process.execPath,
+            args: [
+              '-e',
+              "require('node:fs').writeFileSync(process.argv[1], 'ready'); for (;;) {}",
+              ready
+            ],
+            stdio: 'ignore'
+          })
+        )
+        await expect
+          .poll(() => readyFiles.every((ready) => existsSync(ready)), { timeout: 30_000 })
+          .toBe(true)
+      }
 
-    const abortedAt = Date.now()
-    controller.abort()
-    await pending
-    const settledAfterMs = Date.now() - abortedAt
-    await terminationReported
-    const reportedAfterMs = Date.now() - abortedAt
-    console.log(
-      `[late-taskkill] caller settled ${settledAfterMs} ms, termination reported ${reportedAfterMs} ms after abort`
-    )
-    // TerminateProcess returns before the pid is fully released, so allow a short drain.
-    const goneBy = Date.now() + 5_000
-    while (isAlive(grandchild) && Date.now() < goneBy) {
-      await new Promise((resolve) => setTimeout(resolve, 50))
+      const abortedAt = Date.now()
+      controller.abort()
+      await pending
+      const settledAfterMs = Date.now() - abortedAt
+      await expect.poll(() => reportedAt, { timeout: 30_000 }).toBeDefined()
+      const reportedAfterMs = reportedAt === undefined ? null : reportedAt - abortedAt
+      console.log(
+        `[late-taskkill] caller settled ${settledAfterMs} ms, termination reported ${reportedAfterMs} ms after abort`
+      )
+      // TerminateProcess returns before the pid is fully released, so allow a short drain.
+      const goneBy = Date.now() + 5_000
+      while (isAlive(grandchild) && Date.now() < goneBy) {
+        signal.throwIfAborted()
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      }
+      expect(isAlive(grandchild)).toBe(false)
+    } finally {
+      controller.abort()
+      await pending
     }
-    expect(isAlive(grandchild)).toBe(false)
   }
 })

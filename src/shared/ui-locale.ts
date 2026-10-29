@@ -1,17 +1,18 @@
-import {
-  UI_LANGUAGE_CHINESE,
-  UI_LANGUAGE_ENGLISH,
-  UI_LANGUAGE_FRENCH,
-  UI_LANGUAGE_JAPANESE,
-  UI_LANGUAGE_KOREAN,
-  UI_LANGUAGE_PORTUGUESE,
-  UI_LANGUAGE_SPANISH,
-  UI_LANGUAGE_SYSTEM,
-  isPluginUiLanguage,
-  type UiLanguage
-} from './ui-language'
+import { UI_LANGUAGE_SYSTEM, isPluginUiLanguage, type UiLanguage } from './ui-language'
 
-export const SUPPORTED_UI_LOCALES = ['en', 'zh', 'ko', 'ja', 'es', 'fr', 'pt'] as const
+export const SUPPORTED_UI_LOCALES = [
+  'en',
+  'zh',
+  'zh-Hant',
+  'ko',
+  'ja',
+  'es',
+  'fr',
+  'pt',
+  'ru',
+  'tr',
+  'de'
+] as const
 export type SupportedUiLocale = (typeof SUPPORTED_UI_LOCALES)[number]
 
 export const DEFAULT_UI_LOCALE: SupportedUiLocale = 'en'
@@ -46,15 +47,36 @@ export function normalizeUiLocaleTag(value: string | undefined): string | null {
   }
 }
 
+export type UiLocaleParts = {
+  language: string
+  script?: string | null
+  region?: string | null
+}
+
+// Takes parsed subtags so runtimes without Intl.Locale (Hermes) share the same mapping.
+export function matchUiLocaleParts({
+  language,
+  script,
+  region
+}: UiLocaleParts): SupportedUiLocale | null {
+  const base = language.toLowerCase()
+  if (base === 'zh') {
+    if (script) {
+      const scriptName = script.toLowerCase()
+      return scriptName === 'hans' ? 'zh' : scriptName === 'hant' ? 'zh-Hant' : null
+    }
+    return ['TW', 'HK', 'MO'].includes(region?.toUpperCase() ?? '') ? 'zh-Hant' : 'zh'
+  }
+  return SUPPORTED_UI_LOCALES.find((supported) => supported === base) ?? null
+}
+
 function matchUiLocale(tag: string): SupportedUiLocale | null {
   const locale = new Intl.Locale(tag)
-  if (locale.language === 'zh') {
-    if (locale.script) {
-      return locale.script === 'Hans' ? 'zh' : null
-    }
-    return ['TW', 'HK', 'MO'].includes(locale.region ?? '') ? null : 'zh'
-  }
-  return SUPPORTED_UI_LOCALES.find((supported) => supported === locale.language) ?? null
+  return matchUiLocaleParts({
+    language: locale.language,
+    script: locale.script,
+    region: locale.region
+  })
 }
 
 export function detectUiLanguage(
@@ -109,28 +131,11 @@ export function resolveUiLocale(
   if (isPluginUiLanguage(language)) {
     return language
   }
-  if (language === UI_LANGUAGE_ENGLISH) {
-    return DEFAULT_UI_LOCALE
-  }
-  if (language === UI_LANGUAGE_CHINESE) {
-    return 'zh'
-  }
-  if (language === UI_LANGUAGE_KOREAN) {
-    return 'ko'
-  }
-  if (language === UI_LANGUAGE_JAPANESE) {
-    return 'ja'
-  }
-  if (language === UI_LANGUAGE_SPANISH) {
-    return 'es'
-  }
-  if (language === UI_LANGUAGE_FRENCH) {
-    return 'fr'
-  }
-  if (language === UI_LANGUAGE_PORTUGUESE) {
-    return 'pt'
-  }
-  return normalizeSupportedUiLocale(systemLocale)
+  // Built-in UI language values are their own locale codes; only 'system' needs detection.
+  return (
+    SUPPORTED_UI_LOCALES.find((locale) => locale === language) ??
+    normalizeSupportedUiLocale(systemLocale)
+  )
 }
 
 export function getRendererSystemLocale(): string {

@@ -1,33 +1,16 @@
+import type { HostedReviewLookupAuthority } from '../../../../shared/hosted-review-create-confirmation'
 import type { HostedReviewLookupOutcome } from '../../../../shared/hosted-review'
 import { isPositiveHostedReviewNumber } from '../../../../shared/hosted-review'
 
-/**
- * Four-state review evidence model for the Checks panel. Replaces the single
- * `hasAmbiguousGitHubHostedReview` Boolean, which collapsed materially different
- * states (missing lookup, failed lookup, positive-but-unrenderable evidence).
- *
- * - `found`: current review details are renderable — leave the empty state.
- * - `positive_unresolved`: a review is known to exist but details are not
- *   renderable. Never offer Create / Push & Create; prefer trusted Open Review.
- * - `not_found`: an accepted no-review result for the exact context.
- * - `unknown`: no accepted positive or no-review result (missing entry, failed
- *   or skipped lookup, in-flight).
- */
-export type ChecksPanelReviewLookup = 'found' | 'positive_unresolved' | 'not_found' | 'unknown'
+/** Separate renderable reviews, positive-unresolved evidence, accepted absence, and unknown lookups; only accepted absence permits create. */
+export type ChecksPanelReviewLookup = HostedReviewLookupAuthority
 
 type ReviewLookupNumberLike = number | null | undefined
 
 export type ChecksPanelReviewLookupInput = {
-  /**
-   * Renderable review details for the exact context (GitHub `PRInfo` payload or
-   * equivalent). Treated as renderable only when it carries a usable identity.
-   */
+  /** Exact-context review details; a usable identity is required to render. */
   pr: { number?: ReviewLookupNumberLike; url?: string | null } | null | undefined
-  /**
-   * Tri-state from the PR cache entry: `true` = has PR, `false` = accepted
-   * no-PR, `null` = no accepted entry (missing / never fetched). Distinguishes an
-   * accepted no-review outcome from a missing lookup.
-   */
+  /** True means PR; false means accepted absence; null means no accepted cache entry. */
   prCachedHasPR: boolean | null
   /** Positive hosted-review cache for the exact context, when present. */
   hostedReview:
@@ -48,11 +31,7 @@ export type ChecksPanelReviewLookupResult = {
   openReviewUrl: string | null
 }
 
-/**
- * Returns the URL only when it is a plain http(s) link with no embedded
- * credentials, so a credential-bearing or non-web value never reaches an Open
- * Review affordance (and never lands in browser history / shell logs).
- */
+/** Allow only credential-free HTTP(S) URLs to keep credentials out of browser history and shell logs. */
 export function normalizeTrustedReviewUrl(url: string | null | undefined): string | null {
   if (!url) {
     return null
@@ -64,8 +43,7 @@ export function normalizeTrustedReviewUrl(url: string | null | undefined): strin
   } catch {
     return null
   }
-  // Reject non-web schemes and any userinfo (`user:token@host`) — a prefix regex
-  // alone would forward embedded credentials to the browser/shell.
+  // Parse schemes/userinfo; a prefix regex alone would forward embedded credentials.
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     return null
   }
@@ -75,11 +53,7 @@ export function normalizeTrustedReviewUrl(url: string | null | undefined): strin
   return trimmed
 }
 
-/**
- * Review details render the normal review chrome only with a usable identity: a
- * positive review number. A provider-neutral summary without renderable details
- * maps to `positive_unresolved`, not `found`.
- */
+/** Require a positive number to render review details; summary-only evidence remains positive_unresolved. */
 export function isRenderableChecksPanelReviewDetails(
   pr: { number?: ReviewLookupNumberLike } | null | undefined
 ): boolean {
@@ -96,9 +70,7 @@ export function resolveChecksPanelReviewLookup(
     }
   }
 
-  // Positive evidence wins over an accepted null no-PR entry: a conflict must
-  // stay `positive_unresolved` until a newer accepted result clears it, never
-  // collapse to "no PR."
+  // Positive evidence overrides cached absence until a newer accepted result resolves the conflict.
   const openReviewUrl =
     normalizeTrustedReviewUrl(input.hostedReview?.url) ??
     normalizeTrustedReviewUrl(input.eligibilityReview?.url)

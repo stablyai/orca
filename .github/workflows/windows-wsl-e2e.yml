@@ -16,6 +16,9 @@ on:
 permissions:
   contents: read
 
+# Candidate source must not write caches in the dispatch branch's scope.
+cache-mode: read
+
 concurrency:
   group: windows-wsl-e2e-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -23,7 +26,8 @@ concurrency:
 jobs:
   wsl-terminal:
     runs-on: windows-2022
-    timeout-minutes: 30
+    # The E9 guard adds three ~2-5 minute runs to the launch, paste and image checks.
+    timeout-minutes: 50
     env:
       NODE_OPTIONS: --max-old-space-size=4096
     steps:
@@ -72,6 +76,26 @@ jobs:
           --output=test-results/terminal-images
           --repeat-each=3
           --workers=1
+      - name: Guard that background work never starts the stopped WSL distro
+        env:
+          SKIP_BUILD: '1'
+          ORCA_BACKGROUND_LAUNCH: '1'
+          ORCA_E2E_FORWARD_APP_LOGS: '1'
+          # The spec terminates this distro; it is the one this job imported.
+          ORCA_E2E_WSL_TERMINATE_DISTRO: Ubuntu
+          PLAYWRIGHT_JSON_OUTPUT_FILE: test-results/wsl-no-background-boot-results.json
+        run: >-
+          pnpm exec playwright test
+          tests/e2e/wsl-bridge-no-background-boot.spec.ts
+          --config tests/playwright.config.ts
+          --project=electron-headless
+          --output=test-results/wsl-no-background-boot
+          --repeat-each=3
+          --workers=1
+          --reporter=list,json
+      - name: Require all three E9 guard executions
+        if: always()
+        run: node config/scripts/verify-wsl-no-background-boot-participation.mjs test-results/wsl-no-background-boot-results.json
       - name: Upload terminal image proof
         uses: actions/upload-artifact@v7
         if: always()

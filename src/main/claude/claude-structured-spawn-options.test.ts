@@ -5,17 +5,25 @@ import {
   type ClaudeStructuredSdkOptions
 } from './claude-structured-launch-resolution'
 import { claudeStructuredSpawnOptions } from './claude-structured-spawn-options'
+import type { ClaudeCliFlagFact } from './claude-cli-flag-support'
 
 function launched(
   saved: Record<string, string>,
-  options: { resumesTranscript?: boolean; base?: ClaudeStructuredSdkOptions } = {}
+  options: {
+    resumesTranscript?: boolean
+    base?: ClaudeStructuredSdkOptions
+    effortFlag?: ClaudeCliFlagFact
+    flagSettingsControl?: ClaudeCliFlagFact
+  } = {}
 ) {
   return claudeStructuredSpawnOptions({
     launch: {
       options: options.base ?? CLAUDE_STRUCTURED_BASE_OPTIONS,
       resumesTranscript: options.resumesTranscript ?? true
     },
-    saved
+    saved,
+    effortFlag: options.effortFlag ?? 'supported',
+    flagSettingsControl: options.flagSettingsControl ?? 'supported'
   })
 }
 
@@ -35,7 +43,6 @@ describe('a Claude chat launched with its saved options', () => {
       model: 'opus',
       effort: 'high',
       settings: { fastMode: true },
-      // The base launch is kept whole.
       includePartialMessages: true,
       extraArgs: { 'replay-user-messages': null }
     })
@@ -46,14 +53,23 @@ describe('a Claude chat launched with its saved options', () => {
     })
   })
 
-  // A resolved id, a model newer than any listing Orca holds, a retired one: the CLI's own answer
-  // decides, and a turn's model-not-found error drops it then.
   it.each(['claude-sonnet-5', 'claude-next-9', 'claude-retired-1'])(
     'passes the saved model %s as it was picked',
     (model) => {
       const spawn = launched({ model, effort: 'xhigh' })
 
       expect(spawn.sdkOptions).toMatchObject({ model, effort: 'xhigh' })
+    }
+  )
+
+  it.each(['unknown', 'unsupported'] as const)(
+    'keeps saved effort off the command line when --effort is %s',
+    (flag) => {
+      const spawn = launched({ model: 'opus', effort: 'high' }, { effortFlag: flag })
+
+      expect(spawn.sdkOptions).toMatchObject({ model: 'opus' })
+      expect(spawn.sdkOptions).not.toHaveProperty('effort')
+      expect(Object.fromEntries(spawn.options)).toEqual({ model: 'opus' })
     }
   )
 
@@ -70,6 +86,13 @@ describe('a Claude chat launched with its saved options', () => {
     expect(spawn.sdkOptions).not.toHaveProperty('settings')
     expect(spawn.options.get('fastMode')).toBe('true')
     expect(spawn.fastModeAtStart).toBe(true)
+    // A CLI that never answers the control cannot apply it at start; never claim it is on.
+    const old = launched(
+      { fastMode: 'true' },
+      { resumesTranscript: false, flagSettingsControl: 'unsupported' }
+    )
+    expect(old.options.has('fastMode')).toBe(false)
+    expect(old.fastModeAtStart).toBe(false)
   })
 
   it('passes a saved Fast off to a new conversation', () => {
@@ -79,8 +102,7 @@ describe('a Claude chat launched with its saved options', () => {
     expect(spawn.fastModeAtStart).toBe(false)
   })
 
-  // The SDK writes the agent Arguments after its own options, so left in, the Arguments' flag would
-  // reach the CLI as a second `--model` after the chat's pick.
+  // SDK extraArgs follow its own flags, so configured flags would override saved choices.
   it("replaces the agent Arguments' model and effort with the chat's saved ones", () => {
     const base = {
       ...CLAUDE_STRUCTURED_BASE_OPTIONS,
@@ -95,11 +117,9 @@ describe('a Claude chat launched with its saved options', () => {
     expect(launched({ model: 'sonnet', effort: 'low' }, { base }).sdkOptions.extraArgs).toEqual({
       'replay-user-messages': null
     })
-    // With nothing saved, the Arguments decide.
     expect(launched({}, { base }).sdkOptions.extraArgs).toEqual(base.extraArgs)
   })
 
-  // One `--settings` reaches the CLI: the Arguments' file is kept, and the start applies Fast.
   it.each(['true', 'false'])(
     "keeps the agent Arguments' settings and leaves a saved Fast %s to the start",
     (fastMode) => {
@@ -116,7 +136,6 @@ describe('a Claude chat launched with its saved options', () => {
     }
   )
 
-  // The chat's permission mode is the launch's, never a saved option: the record keeps it whole.
   it.each(['full-access', 'plan', 'bypassPermissions'])(
     'leaves the launch permission alone with a saved permission mode %s',
     (permissionMode) => {

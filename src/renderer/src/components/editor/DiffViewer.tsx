@@ -29,7 +29,12 @@ import { buildDiffEditorHideUnchangedOptions } from './diff-editor-hide-unchange
 import { useDiffEditorRegistration } from './diff-navigation-context'
 import { preserveDiffViewStateAcrossModelSwaps } from './diff-model-swap-view-state'
 import { monacoFindOptions } from './monaco-find-options'
-import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import { usePluginSyntaxLanguage } from './use-plugin-syntax-language'
+import {
+  PLUGIN_SYNTAX_EDITOR_OPTIONS,
+  applyModelLanguage
+} from '@/lib/monaco-languages/plugin-syntax-editor-options'
+import { useMonacoTheme } from '@/hooks/use-monaco-theme'
 
 export default function DiffViewer({
   modelKey,
@@ -37,7 +42,7 @@ export default function DiffViewer({
   modifiedModelKey,
   originalContent,
   modifiedContent,
-  language,
+  language: coreLanguage,
   filePath,
   relativePath,
   sideBySide,
@@ -53,14 +58,15 @@ export default function DiffViewer({
   largeDiffSaveContentAvailable
 }: DiffViewerProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
-  const isDark = useDocumentDarkTheme()
+  const monacoTheme = useMonacoTheme()
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
+  const language = usePluginSyntaxLanguage(filePath, coreLanguage)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
   const scrollToDiffCommentId = useAppStore((s) => s.scrollToDiffCommentId)
   const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
-  // Why: subscribe to the raw array so selector identity only changes when this worktree's comments change; filtering happens below.
+  // Select the stable worktree array; filter below so unrelated writes do not invalidate this viewer.
   const allDiffComments = useAppStore((s): DiffComment[] | undefined =>
     selectWorktreeDiffComments(s, worktreeId)
   )
@@ -82,6 +88,10 @@ export default function DiffViewer({
     diffWordWrapRef.current = diffWordWrap
   }, [diffWordWrap])
   const [modifiedEditor, setModifiedEditor] = useState<editor.ICodeEditor | null>(null)
+  useEffect(() => {
+    const models = diffEditorRef.current?.getModel()
+    applyModelLanguage([models?.original, models?.modified], language)
+  }, [modifiedEditor, language])
 
   const renderLimit = useMemo(
     () => largeDiffRenderLimit ?? getLargeDiffRenderLimit({ originalContent, modifiedContent }),
@@ -89,7 +99,7 @@ export default function DiffViewer({
   )
   const hasLineCommentAction = Boolean(worktreeId || onAddLineComment)
 
-  // Why: only forward the pending scroll id when this viewer owns the comment, else unrelated viewers race to ack it.
+  // Forward only owned notes so viewers cannot race to acknowledge another surface’s request.
   const pendingScrollForThisViewer = useMemo(() => {
     if (!worktreeId || !scrollToDiffCommentId) {
       return null
@@ -136,7 +146,7 @@ export default function DiffViewer({
     [addDiffComment, onAddLineComment, relativePath, worktreeId]
   )
 
-  // Why: gate the decorator on a comment target; updateDiffComment is only wired for local diffs (worktreeId present).
+  // Only local diffs can edit notes; gate the decorator on a valid comment target.
   useDiffCommentDecorator({
     editor: hasLineCommentAction ? modifiedEditor : null,
     monacoModelIdentity: modifiedModelKey ?? modelKey,
@@ -168,13 +178,13 @@ export default function DiffViewer({
   })
 
   const handleEnterLargeDiffFallback = useCallback(() => {
-    // Why: on fallback transition, drop stale Monaco refs so decorators/save handlers don't talk to disposed UI.
+    // Fallback disposes Monaco; clear refs before decorators or save handlers can use them.
     lineNumberOptionsSubRef.current?.dispose()
     lineNumberOptionsSubRef.current = null
     cancelAnimationFrame(wordWrapMountFrameRef.current)
     wordWrapOptionsSubRef.current?.dispose()
     wordWrapOptionsSubRef.current = null
-    // Why: capture before nulling so we unregister the exact instance (identity guard no-ops a stale dispose).
+    // Capture the exact instance before clearing; unregister ignores stale identities.
     const fallenBackEditor = diffEditorRef.current
     diffEditorRef.current = null
     if (fallenBackEditor) {
@@ -183,7 +193,6 @@ export default function DiffViewer({
     setModifiedEditor(null)
   }, [unregisterDiffEditor])
 
-  // Keep refs to latest callbacks so the mounted editor always calls current versions
   const onSaveRef = useRef(onSave)
   onSaveRef.current = onSave
   const onContentChangeRef = useRef(onContentChange)
@@ -206,7 +215,7 @@ export default function DiffViewer({
     (diffEditor, monaco) => {
       diffEditorRef.current = diffEditor
       registerDiffEditor(diffEditor)
-      // Why: Monaco applies the inline-layout wrap override after mount, once width is known.
+      // Monaco applies its inline wrap override after mount when width is known.
       wordWrapMountFrameRef.current = requestAnimationFrame(() => {
         if (diffEditorRef.current !== diffEditor) {
           return
@@ -241,12 +250,12 @@ export default function DiffViewer({
       setupCopy(modifiedEditor, monaco, filePath, propsRef)
       setModifiedEditor(modifiedEditor)
 
-      // Why: restore full diff view state (not just scrollTop) so cursor/selection stay consistent across both panes.
+      // Restore cursor and selection across both panes alongside scroll.
       const savedViewState = diffViewStateCache.get(modelKey)
       if (savedViewState) {
         requestAnimationFrame(() => diffEditor.restoreViewState(savedViewState))
       }
-      // Auto-scroll to first diff lives in a separate effect below so it sequences after the decorator's view zones land.
+      // Auto-scroll runs separately after decorator view zones mount.
 
       if (editable) {
         const cleanupSaveShortcut = installEditorSaveShortcut(
@@ -258,12 +267,11 @@ export default function DiffViewer({
         const cleanupOriginalFindShortcut = installMonacoEditorFindShortcut(originalEditor)
         const cleanupModifiedFindShortcut = installMonacoEditorFindShortcut(modifiedEditor)
 
-        // Track changes
         const modelContentSub = modifiedEditor.onDidChangeModelContent(() => {
           onContentChangeRef.current?.(modifiedEditor.getValue())
         })
         modifiedEditor.onDidDispose(() => {
-          // Why: this diff instance owns both panes' shortcut bridges + the model sub, so dispose them with it.
+          // Shortcut bridges and model subscriptions belong to this diff instance.
           cleanupSaveShortcut()
           cleanupOriginalFindShortcut()
           cleanupModifiedFindShortcut()
@@ -278,7 +286,7 @@ export default function DiffViewer({
     [editable, setupCopy, modelKey, filePath, sideBySide, registerDiffEditor, unregisterDiffEditor]
   )
 
-  // Why: snapshot view state on deactivation (layoutEffect cleanup fires before unmount), not on scroll.
+  // Snapshot on layout cleanup before unmount, avoiding scroll-time writes.
   useLayoutEffect(() => {
     return () => {
       const de = diffEditorRef.current
@@ -332,9 +340,9 @@ export default function DiffViewer({
             language={language}
             original={originalContent}
             modified={modifiedContent}
-            theme={isDark ? 'vs-dark' : 'vs'}
+            theme={monacoTheme}
             onMount={handleMount}
-            // Why: key models by tab identity and preserve the modified undo stack across Changes-mode HEAD rotations.
+            // Tab-owned models preserve modified undo across Changes-mode HEAD rotations.
             originalModelPath={currentDiffModelPaths.originalModelPath}
             modifiedModelPath={currentDiffModelPaths.modifiedModelPath}
             keepCurrentOriginalModel
@@ -346,6 +354,7 @@ export default function DiffViewer({
               renderSideBySide: sideBySide,
               minimap: { enabled: false },
               scrollBeyondLastLine: false,
+              ...PLUGIN_SYNTAX_EDITOR_OPTIONS,
               fontSize: diffEditorFontSize,
               fontFamily: resolveEditorFontFamily(settings),
               lineNumbers: 'on',

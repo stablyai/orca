@@ -85,7 +85,6 @@ describe('projectClientHostedBrowserRows', () => {
     ])
   })
 
-  // Why: nothing is driving an absent host's page, so a spinner on that row would never stop.
   it('settles the loading flag on an absent host', () => {
     const rows = projectClientHostedBrowserRows(registryWithPages().listPages('wt-1'), {
       hasLivePlacement: () => false,

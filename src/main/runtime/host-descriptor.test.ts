@@ -92,7 +92,6 @@ describe('loadHostDescriptor', () => {
     const blocker = join(userDataPath, 'blocker')
     writeFileSync(blocker, '')
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    // A read that fails with anything but ENOENT (here ENOTDIR) must not mint a replacement id.
     expect(await loadHostDescriptor(join(blocker, 'profile'), () => 'machine-a')).toBeNull()
     expect(warn).toHaveBeenCalledOnce()
     warn.mockRestore()

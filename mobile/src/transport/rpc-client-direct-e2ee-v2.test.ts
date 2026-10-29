@@ -72,6 +72,7 @@ async function nextSocket(): Promise<MockWebSocket> {
   for (let elapsed = 0; sockets.length === count && elapsed < 60_000; elapsed += 100) {
     await vi.advanceTimersByTimeAsync(100)
   }
+  expect(sockets).toHaveLength(count + 1)
   return sockets.at(-1)!
 }
 
@@ -81,7 +82,16 @@ function firstFrame(socket: MockWebSocket): unknown {
 
 function requestIdOf(plaintext: string | null): string {
   const value: unknown = JSON.parse(plaintext ?? 'null')
-  return value && typeof value === 'object' && 'id' in value ? String(value.id) : ''
+  expect(value).toEqual({
+    id: expect.any(String),
+    deviceToken: 'device-token',
+    method: 'status.get',
+    params: {}
+  })
+  if (!value || typeof value !== 'object' || !('id' in value) || typeof value.id !== 'string') {
+    throw new Error('Expected the sealed request ID')
+  }
+  return value.id
 }
 
 // Plays the current host's direct v2 handshake with real crypto.
@@ -119,6 +129,7 @@ describe('direct connections use E2EE v2 framing', () => {
     sockets.length = 0
     storage.clear()
     resetE2EEV2HostLatchForTests()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This socket fixture supplies the constructor, states, handlers, send and close consumed by the real client.
     globalThis.WebSocket = MockWebSocket as unknown as typeof WebSocket
   })
 

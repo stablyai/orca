@@ -14,9 +14,7 @@ export function ActionButton({
   onClick: (event: React.MouseEvent) => void
   disabled?: boolean
 }): React.JSX.Element {
-  // Why: use Radix Tooltip (not native title) to match sidebar chrome.
-  // Why (no local TooltipProvider): reuse App.tsx's single one so Radix's adjacent-trigger delay-skip handoff still works.
-  // Why (disabled): a disabled <button> loses pointer-events in Chromium and hides the Radix tooltip; keep it interactive and no-op via the caller's isExecutingBulk early-return.
+  // Share App's TooltipProvider for adjacent-trigger handoff; keep buttons interactive because Chromium disables tooltip pointers.
   return (
     <Tooltip>
       <TooltipTrigger asChild>

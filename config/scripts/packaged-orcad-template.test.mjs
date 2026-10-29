@@ -136,5 +136,14 @@ describe('packaged orcad template', () => {
     )
 
     expect(() => resealSignedWindowsApp(appDir, list)).not.toThrow()
+    const manifest = JSON.parse(
+      await readFile(join(templateDir, ORCAD_TEMPLATE_MANIFEST_FILENAME), 'utf8')
+    )
+    const signedBytes = await readFile(
+      join(templateDir, ORCAD_TEMPLATE_TARGETS_DIR, 'win32-x64', ...conpty.split('/'))
+    )
+    expect(manifest.targets['win32-x64'].files[conpty]).toBe(
+      createHash('sha256').update(signedBytes).digest('hex')
+    )
   })
 })

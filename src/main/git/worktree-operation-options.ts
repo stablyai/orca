@@ -11,6 +11,7 @@ import type { WorktreeCheckoutProgressListener } from './worktree-checkout-progr
 export type AddWorktreeResult = {
   localBaseRefRefresh?: LocalBaseRefRefreshResult
   localBaseRefUpdateSuggestion?: LocalBaseRefUpdateSuggestion
+  upstreamWarning?: string
 }
 
 export type SparseWorktreeCreateError = Error & {
@@ -23,6 +24,7 @@ export type GitWorktreeExecOptions = {
   timeout?: number
   includeCreatePreparations?: boolean
   admissionTier?: GitAdmissionTier
+  spawnOnWorkerThread?: boolean
 }
 
 export type WorktreeRemovalPreflightOptions = GitWorktreeExecOptions & {
@@ -31,6 +33,8 @@ export type WorktreeRemovalPreflightOptions = GitWorktreeExecOptions & {
 
 export type AddWorktreeOptions = GitWorktreeExecOptions & {
   checkoutExistingBranch?: boolean
+  /** Require a remote-tracking start point; set its upstream after creation when Git permits it. */
+  trackRemoteBranch?: boolean
   /** Progress of the checkout `git worktree add` performs; never called for `--no-checkout`. */
   onCheckoutProgress?: WorktreeCheckoutProgressListener
   suggestLocalBaseRefUpdate?: boolean
@@ -44,39 +48,32 @@ export type AddWorktreeOptions = GitWorktreeExecOptions & {
 export type RemoveWorktreeOptions = GitWorktreeExecOptions & {
   deleteBranch?: boolean
   forceBranchDelete?: boolean
-  knownRemovedWorktree?: Pick<GitWorktreeInfo, 'branch' | 'head' | 'locked' | 'lockReason'>
+  knownRemovedWorktree?: Pick<GitWorktreeInfo, 'branch' | 'head' | 'locked' | 'lockReason'> | null
   /** Stops only `git worktree remove`; a killed branch cleanup could strand a ref lock. */
   checkoutDeleteSignal?: AbortSignal
 }
 
-// Why: bound `git worktree add` so a OneDrive cloud-placeholder stall fails fast (STA-1292); ample for an ordinary large checkout, but not one behind a slow content filter (#12696).
-// Doubles as the floor for ORCA_WORKTREE_ADD_TIMEOUT_MS — lowering it to fail faster also lowers the minimum any override can request.
+// Bound stalled checkouts; this default also sets the floor for ORCA_WORKTREE_ADD_TIMEOUT_MS.
 export const WORKTREE_ADD_TIMEOUT_MS = 180_000
-// Why: ceiling for ORCA_WORKTREE_ADD_TIMEOUT_MS (#12696) — ~8x the slowest reported checkout (3.5 min). The cost is that a genuine stall now blocks a create for up to 30 min instead of 3.
+// Allow slow content filters while bounding overrides to 30 minutes.
 export const WORKTREE_ADD_TIMEOUT_MAX_MS = 30 * 60_000
 export const WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS = 30_000
 export const WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS = 30_000
-// Why: one wedged shared scan otherwise hangs every later list, including create's post-add re-list.
+// A wedged shared scan would otherwise stall every later listing.
 export const WORKTREE_LIST_TIMEOUT_MS = 30_000
 
-/**
- * `ORCA_WORKTREE_ADD_TIMEOUT_MS` clamped into [{@link WORKTREE_ADD_TIMEOUT_MS},
- * {@link WORKTREE_ADD_TIMEOUT_MAX_MS}]; unset, blank, or unparseable yields the default.
- * Warns when a non-blank value is rejected or clamped; trimming and fractional truncation are silent.
- * `env` is injectable for tests.
- */
+/** Clamp ORCA_WORKTREE_ADD_TIMEOUT_MS; warn for nonblank rejected/clamped values, not fractional truncation. */
 export function resolveWorktreeAddTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
   const raw = env.ORCA_WORKTREE_ADD_TIMEOUT_MS?.trim()
   const requested = Math.floor(Number(raw))
-  // Why: `=300` reads as seconds to most operators, so clamp rather than obey.
+  // Guard against values entered in seconds rather than milliseconds.
   const resolved = Number.isNaN(requested)
     ? WORKTREE_ADD_TIMEOUT_MS
     : Math.min(Math.max(requested, WORKTREE_ADD_TIMEOUT_MS), WORKTREE_ADD_TIMEOUT_MAX_MS)
-  // Why: an `isNaN` guard here would delete the unparseable-value warning — comparing against NaN is unequal, and that is what catches it.
+  // NaN compares unequal, so malformed nonblank values also warn.
   if (raw && resolved !== requested) {
     const problem = Number.isNaN(requested)
-      ? // Why: `600_000` copied out of this file is NaN, not out of range — say which.
-        'is not a number'
+      ? 'is not a number'
       : `is outside [${WORKTREE_ADD_TIMEOUT_MS}, ${WORKTREE_ADD_TIMEOUT_MAX_MS}]ms`
     console.warn(
       `[git/worktree] ORCA_WORKTREE_ADD_TIMEOUT_MS="${raw}" ${problem}; using ${resolved}ms`
@@ -85,12 +82,21 @@ export function resolveWorktreeAddTimeoutMs(env: NodeJS.ProcessEnv = process.env
   return resolved
 }
 
+export function worktreeAddTimeoutMessage(timeoutMs: number): string {
+  const stopped = `Creating the worktree took longer than ${Math.round(timeoutMs / 1000)} seconds, so Orca stopped Git.`
+  if (timeoutMs >= WORKTREE_ADD_TIMEOUT_MAX_MS) {
+    return stopped
+  }
+  return `${stopped} To allow more time, set ORCA_WORKTREE_ADD_TIMEOUT_MS (milliseconds, up to ${WORKTREE_ADD_TIMEOUT_MAX_MS}) in the environment that starts Orca on the machine running Git (the remote host for SSH or \`orca serve\` workspaces), then restart Orca there.`
+}
+
 export type GitExecOptionsForWorktree = {
   cwd: string
   wslDistro?: string
   signal?: AbortSignal
   timeout?: number
   admissionTier?: GitAdmissionTier
+  spawnOnWorkerThread?: boolean
 }
 
 export function gitExecOptions(
@@ -102,7 +108,8 @@ export function gitExecOptions(
     ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
     ...(options.signal ? { signal: options.signal } : {}),
     ...(options.timeout ? { timeout: options.timeout } : {}),
-    ...(options.admissionTier ? { admissionTier: options.admissionTier } : {})
+    ...(options.admissionTier ? { admissionTier: options.admissionTier } : {}),
+    ...(options.spawnOnWorkerThread ? { spawnOnWorkerThread: true } : {})
   }
 }
 

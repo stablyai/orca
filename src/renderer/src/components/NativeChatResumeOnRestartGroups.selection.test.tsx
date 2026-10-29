@@ -1,7 +1,5 @@
 // @vitest-environment happy-dom
 
-// The resume tree as a control: tri-state at every level, exclusions, busy, and collapsing.
-
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it } from 'vitest'

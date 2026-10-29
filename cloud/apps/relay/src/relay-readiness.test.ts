@@ -18,26 +18,6 @@ function database(query: () => Promise<Record<string, unknown>[]>): RelayDatabas
 }
 
 describe('relay readiness', () => {
-  it('fails readiness while liveness remains independent of SQL and JWKS', async () => {
-    const jwksFailure = createRelayReadiness(database(async () => [{ ready: 1 }]), 'https://jwks', {
-      fetch: vi.fn(async () => new Response('', { status: 503 })) as typeof fetch,
-      cacheMs: 0
-    })
-    const sqlFailure = createRelayReadiness(
-      database(async () => {
-        throw new Error('sql down')
-      }),
-      'https://jwks',
-      {
-        fetch: vi.fn(async () => new Response('{}', { status: 200 })) as typeof fetch,
-        cacheMs: 0
-      }
-    )
-
-    expect(await jwksFailure.check()).toBe(false)
-    expect(await sqlFailure.check()).toBe(false)
-  })
-
   it.each([
     {
       name: 'JWKS HTTP failure',
@@ -224,16 +204,6 @@ describe('relay readiness last-known-good grace', () => {
     expect(observations.every((observation) => observation.degraded === undefined)).toBe(true)
   })
 
-  it('measures the grace window on the injected clock, not wall time', async () => {
-    const now = 1_000
-    let jwksOk = true
-    const { readiness } = graceProbe({ jwksOk: () => jwksOk, sqlOk: () => true, now: () => now })
-
-    expect(await readiness.check()).toBe(true)
-    jwksOk = false
-    for (let attempt = 0; attempt < 5; attempt++) expect(await readiness.check()).toBe(true)
-  })
-
   it('logs once on entering grace and once on leaving it', async () => {
     let now = 1_000
     let jwksOk = true
@@ -408,7 +378,7 @@ describe('relay readiness last-known-good grace', () => {
     expect(query).toHaveBeenCalledTimes(4)
   })
 
-  it('serves a stale ready answer for at most the cache window after grace expires', async () => {
+  it('bounds a cached ready answer after dependency success has expired', async () => {
     let now = 1_000
     let jwksOk = true
     const { readiness, fetchImpl } = graceProbe({

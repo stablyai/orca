@@ -10,16 +10,13 @@ type ClaudeTokenRates = {
   input: number
   output: number
   cacheRead: number
-  /** 5-minute TTL cache write (1.25x base input). */
+  /** 5-minute TTL cache-write rate. */
   cacheWrite: number
-  /** 1-hour TTL cache write (2x base input). */
   cacheWrite1h: number
 }
 
 type ClaudeModelPricing = ClaudeTokenRates & {
-  /** Rates for a whole request whose prompt (input plus cache reads and writes) exceeds
-   *  `thresholdTokens`. Why: turns are classified when scanned, so adding or changing a tier needs
-   *  CLAUDE_USAGE_PROJECTION_VERSION bumped for saved history to rescan. */
+  /** Applies to whole requests; bump CLAUDE_USAGE_PROJECTION_VERSION when tiers change. */
   longContext?: ClaudeTokenRates & { thresholdTokens: number }
 }
 
@@ -48,10 +45,7 @@ const FABLE_5_PRICING: ClaudeModelPricing = {
   cacheWrite1h: 20
 }
 
-/**
- * Keyed by `claude-<family>-<major>[-<minor>]`; `normalizeModelForPricing` resolves only exact
- * keys, so a new model stays unpriced (and flagged in the UI) until its row lands here.
- */
+// Unknown model versions stay unpriced until explicitly added.
 export const MODEL_PRICING: Record<string, ClaudeModelPricing> = {
   'claude-fable-5-1': FABLE_5_1_PRICING,
   'claude-mythos-5-1': FABLE_5_1_PRICING,
@@ -59,11 +53,8 @@ export const MODEL_PRICING: Record<string, ClaudeModelPricing> = {
   'claude-mythos-5': FABLE_5_PRICING,
   'claude-opus-5-5': { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5, cacheWrite1h: 8 },
   'claude-opus-5': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25, cacheWrite1h: 10 },
-  // Why: Sonnet 5.5 cache reads are 0.05x base input, half of Sonnet 5's.
   'claude-sonnet-5-5': { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5, cacheWrite1h: 4 },
-  // Why: Sonnet 5 bills its full 1M window at flat rates, so no long-context tier here.
-  // Why: $2/$10 needs no date dimension — it launched as introductory pricing through
-  // 2026-08-31 but is now the standard price; the 2026-09-01 rise to $3/$15 was cancelled.
+  // Sonnet 5 has no long-context premium or scheduled increase from its $2/$10 rates.
   'claude-sonnet-5': { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5, cacheWrite1h: 4 },
   'claude-opus-4-8': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25, cacheWrite1h: 10 },
   'claude-opus-4-7': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25, cacheWrite1h: 10 },
@@ -71,7 +62,7 @@ export const MODEL_PRICING: Record<string, ClaudeModelPricing> = {
   'claude-opus-4-5': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25, cacheWrite1h: 10 },
   'claude-opus-4-1': { input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75, cacheWrite1h: 30 },
   'claude-opus-4': { input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75, cacheWrite1h: 30 },
-  // Claude 4.6 and later keep standard rates across the full 1M context window.
+  // Sonnet 4.6 keeps standard rates across its full 1M context window.
   'claude-sonnet-4-6': {
     input: 3,
     output: 15,
@@ -123,20 +114,18 @@ export const MODEL_PRICING: Record<string, ClaudeModelPricing> = {
   }
 }
 
-// Opaque IDs that carry no family or version to parse.
+// These opaque IDs have no parsable model version.
 const MODEL_ALIASES: Record<string, string> = {
   model_placeholder_m26: 'claude-opus-4-6',
   model_placeholder_m35: 'claude-sonnet-4-6'
 }
 
 const MODEL_FAMILIES = 'fable|mythos|opus|sonnet|haiku'
-// `claude-opus-5-5[1m]`, `us.anthropic.claude-sonnet-4-5-20250929-v1:0`, `claude-opus-4@20250514`.
-// Why: a minor is at most two digits and not followed by a letter, so date stamps and the
-// `-1m` context suffix are not read as point releases.
+// Exclude date stamps and context suffixes such as -1m from minor-version matches.
 const FAMILY_FIRST_ID = new RegExp(
   `(?:^|[^a-z])(?<family>${MODEL_FAMILIES})-(?<major>\\d{1,2})(?:-(?<minor>\\d{1,2})(?![0-9a-z]))?(?![0-9])`
 )
-// Legacy version-first IDs such as `claude-3-5-sonnet-20241022`, still in historical logs.
+// Retain legacy version-first IDs from historical logs, such as claude-3-5-sonnet-20241022.
 const VERSION_FIRST_ID = new RegExp(
   `(?:^|[^0-9a-z])(?<major>\\d{1,2})(?:-(?<minor>\\d{1,2}))?-(?<family>${MODEL_FAMILIES})(?![a-z])`
 )
@@ -185,7 +174,6 @@ function priceTokens(rates: ClaudeTokenRates, tokens: ClaudeUsageTokenTotals): n
   )
 }
 
-/** The whole turn when its prompt exceeds `model`'s long-context threshold. */
 export function longContextTurnTokens(
   model: string | null,
   turn: ClaudeUsageTokenTotals

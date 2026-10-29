@@ -3,12 +3,14 @@ import { removeManagedOrcadEnvironment } from '../../shared/runtime-environment-
 import { listEnvironments, removeEnvironment } from '../../shared/runtime-environment-store'
 import { getOrcadSshDeployment } from '../../shared/runtime-environments'
 
-/** Forgets the servers a destroyed VM ran; a managed one's tunnel would otherwise keep redialing. */
+/** Remove destroyed VM servers so managed tunnels stop reconnecting. */
 export async function releaseEphemeralVmRuntimeEnvironments(
   userDataPath: string,
-  runtime: Pick<EphemeralVmRuntimeRecord, 'runtimeEnvironmentId' | 'sshTargetId'>
+  runtime: Pick<EphemeralVmRuntimeRecord, 'runtimeEnvironmentId' | 'sshTargetId'>,
+  // Same retirement as a Settings removal, so the host's session partition and transport go too.
+  retireRemovedEnvironment: (environmentId: string) => void
 ): Promise<void> {
-  // Why the target too: a relay-era VM converted on connect never recorded its server's id.
+  // Relay-era conversions may have recorded only the SSH target, not the server ID.
   const environments = listEnvironments(userDataPath).filter(
     (entry) =>
       entry.id === runtime.runtimeEnvironmentId ||
@@ -18,11 +20,13 @@ export async function releaseEphemeralVmRuntimeEnvironments(
   for (const environment of environments) {
     if (!environment.orcadDeployment) {
       removeEnvironment(userDataPath, environment.id)
+      retireRemovedEnvironment(environment.id)
       continue
     }
     const { closeOrcadManagedTunnel } =
       await import('../managed-server/lifecycle/orcad-managed-tunnel')
     await closeOrcadManagedTunnel(environment.id).catch(() => undefined)
     removeManagedOrcadEnvironment(userDataPath, environment.id)
+    retireRemovedEnvironment(environment.id)
   }
 }

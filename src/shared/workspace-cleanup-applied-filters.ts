@@ -3,14 +3,7 @@ import {
   type WorkspaceCleanupFilterState
 } from './workspace-cleanup-filter-model'
 
-/**
- * One constraint the user can see and remove from the filter bar.
- *
- * Deliberately per-field, not per-group: "Activity" tells a reader nothing, while
- * "Idle >= 20d" names the thing that is hiding their workspaces. That naming *is* the
- * fix — the reported defect was never that the effect was invisible (the bar always
- * read "Showing 546 of 799"), it was that the cause was.
- */
+/** Name removable constraints per field (Idle >=20d), not vague groups (Activity), so users can see why workspaces are hidden. */
 export type WorkspaceCleanupAppliedFilter = {
   /** Stable across renders and unique per constraint. */
   id: string
@@ -37,13 +30,7 @@ type Formatters = {
   completelyEmpty: () => string
 }
 
-/**
- * Every constraint currently narrowing the fleet, in panel order.
- *
- * A field counts only when its matcher actually narrows. That is why minimums count
- * above zero but `size.maxBytes` counts *at* zero: a `0` minimum matches every row,
- * while "at most 0 MB" hides every measured non-empty workspace.
- */
+/** List only constraints that narrow results: a zero minimum is inert, but maxBytes=0 excludes measured nonempty workspaces. */
 export function listAppliedWorkspaceCleanupFilters(
   filters: WorkspaceCleanupFilterState,
   format: Formatters

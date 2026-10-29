@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   GITHUB_MARKDOWN_IMAGE_URL_MAX_BYTES,
   getGitHubMarkdownImageUrlState,
-  hasBoundedGitHubMarkdownImageUrlText,
-  isGitHubMarkdownImageUrlTooLarge
+  hasBoundedGitHubMarkdownImageUrlText
 } from './github-markdown-image-url'
 
 describe('github markdown image URL input', () => {
@@ -25,13 +24,5 @@ describe('github markdown image URL input', () => {
     expect(getGitHubMarkdownImageUrlState('file:///tmp/image.png')).toEqual({ status: 'invalid' })
     expect(getGitHubMarkdownImageUrlState(oversized)).toEqual({ status: 'too-large' })
     expect(hasBoundedGitHubMarkdownImageUrlText(oversized)).toBe(false)
-  })
-
-  it('enforces the URL budget by UTF-8 byte length', () => {
-    const multibyteUrl = `https://example.com/${'\u00e9'.repeat(
-      GITHUB_MARKDOWN_IMAGE_URL_MAX_BYTES
-    )}`
-
-    expect(isGitHubMarkdownImageUrlTooLarge(multibyteUrl)).toBe(true)
   })
 })

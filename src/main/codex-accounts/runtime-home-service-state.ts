@@ -19,16 +19,14 @@ import type { CodexAccountSelectionTarget } from './runtime-selection'
 import type { LegacyWslRuntimeAuthDestination } from './legacy-wsl-runtime-auth-drain'
 import type { WslCodexAuthRead } from './wsl-codex-auth-batch-reader'
 
-/** Shared state and method contracts for the focused runtime-home layers. */
 export abstract class CodexRuntimeHomeState {
-  // Which managed account runtime auth.json mirrors; null means it follows system-default ~/.codex instead of a managed account.
+  // Mirror baseline owner; null means system default.
   protected lastSyncedAccountId: string | null = null
-  // Last auth.json Orca wrote to the runtime home; a later diff signals an out-of-band change (Codex token refresh, or external login to adopt).
+  // Differences from this baseline indicate an external login or Codex token refresh.
   protected lastWrittenAuthJson: string | null = null
-  // Why: a managed host account refreshes auth in its own home. Remember that provenance so a later deselect never adopts stale shared bytes.
+  // Deselecting a self-contained account must not adopt stale shared-mirror credentials.
   protected lastHostAccountUsedSelfContainedHome = false
   protected sharedAuthRefreshBlockedByManagedTransition = false
-  // Why: transient auth.json read/parse failures must not deselect an account.
   protected readonly credentialAbsenceGrace = new CodexCredentialAbsenceGrace()
   protected hostSystemDefaultSessionMigrationPending = false
   protected pendingHostSystemDefaultSessionMigrationNeedsFullScan = false
@@ -96,7 +94,10 @@ export abstract class CodexRuntimeHomeState {
   abstract reconcileLegacySharedHomeForRetainedPanes(): void
   abstract syncActiveWslSelectionsBeforeRestart(): Promise<void>
 
-  protected abstract getWslSystemCodexHomePath(target: CodexAccountSelectionTarget): string | null
+  protected abstract getWslSystemCodexHomePath(
+    target: CodexAccountSelectionTarget,
+    options?: { probeHome?: boolean }
+  ): string | null
   protected abstract finishWslLaunchPreparation(
     target: CodexAccountSelectionTarget,
     homePath: string | null

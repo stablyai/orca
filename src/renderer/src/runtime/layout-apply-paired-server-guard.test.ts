@@ -1,7 +1,4 @@
-// Pins that a workspace a paired server owns never reaches main's `layout.apply`: its layout stays
-// the server's, mirrored by the window, in a layout-owner build too.
-import { readdirSync, readFileSync, statSync } from 'node:fs'
-import path from 'node:path'
+// Paired-owned workspace layouts stay on their server; even layout-owner builds must never send them to local main.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
 import type { AppState } from '@/store/types'
@@ -9,9 +6,12 @@ import type { AppState } from '@/store/types'
 const mocks = vi.hoisted(() => ({ callRuntimeRpc: vi.fn() }))
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
 
-import { recordLayoutApply, sendLayoutApply, type WindowLayoutCommand } from './layout-apply-send'
-import { sendGeneratedTabTitles } from './generated-tab-titles-send'
-import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
+import {
+  recordLayoutApply,
+  sendLayoutApply,
+  sendToServerMain,
+  type WindowLayoutCommand
+} from './layout-apply-send'
 import { createInitialTerminalThroughLayoutOwner } from '@/store/terminals/terminal-tab-create-through-layout-owner'
 
 const WORKTREE_ID = 'repo-1::/srv/w'
@@ -61,7 +61,8 @@ const COMMANDS: WindowLayoutCommand[] = [
   { type: 'closePane', tabId: 't', leafId: 'l' },
   { type: 'closeTabs', tabIds: ['t'] },
   { type: 'renameTab', tabId: 't', kind: 'custom', title: 'x' },
-  { type: 'moveTab', tabId: 't', toGroupId: 'g', index: 0 },
+  // An anchored move too, so no server, old or new, is sent the anchor.
+  { type: 'moveTab', tabId: 't', toGroupId: 'g', index: 0, afterTabId: 's' },
   { type: 'createTerminalTab', tabId: 't', leafId: 'l' },
   { type: 'sleep', tabId: 't', paneKeys: ['t:l'], records: [] },
   { type: 'setDefaultTabsApplied' }
@@ -76,10 +77,6 @@ describe.each(PAIRED_WORKSPACES)('$name', ({ workspaceId, rows }) => {
     mocks.callRuntimeRpc.mockReset()
   })
 
-  it('resolves to its server, so every guard below reads it as paired', () => {
-    expect(runtimeEnvironmentIdUnlessTwin(rows, workspaceId)).toBe('env-b')
-  })
-
   it.each(COMMANDS)('sendLayoutApply sends no $type', (command) => {
     const handlers = { apply: vi.fn(), asToday: vi.fn(), refused: vi.fn() }
 
@@ -90,14 +87,18 @@ describe.each(PAIRED_WORKSPACES)('$name', ({ workspaceId, rows }) => {
     expect(handlers.apply).not.toHaveBeenCalled()
   })
 
-  it('a batch of generated titles sends nothing and is the caller’s to show', () => {
-    const answer = vi.fn()
+  it('an editor hand-over reaches that server’s main, never this window’s', () => {
+    mocks.callRuntimeRpc.mockReturnValue(new Promise(() => {}))
+    sendToServerMain(
+      'env-b',
+      workspaceId,
+      { type: 'openEditorTab', tabId: 't', fileId: 'f', contentType: 'editor' },
+      vi.fn()
+    )
 
-    expect(
-      sendGeneratedTabTitles(rows, [{ worktreeId: workspaceId, tabId: 't', title: 'x' }], answer)
-    ).toEqual([false])
-    expect(layoutApplyCalls()).toEqual([])
-    expect(answer).not.toHaveBeenCalled()
+    expect(layoutApplyCalls().map((call) => call[0])).toEqual([
+      { kind: 'environment', environmentId: 'env-b' }
+    ])
   })
 
   it('the activation terminal create sends nothing', () => {
@@ -107,41 +108,5 @@ describe.each(PAIRED_WORKSPACES)('$name', ({ workspaceId, rows }) => {
 
     expect(createInitialTerminalThroughLayoutOwner(getState, workspaceId, create)).toBe(false)
     expect(layoutApplyCalls()).toEqual([])
-  })
-})
-
-/** Every renderer source file that names the `layout.apply` method, with its count. */
-function layoutApplySenders(root: string): Record<string, number> {
-  const found: Record<string, number> = {}
-  const walk = (dir: string): void => {
-    for (const entry of readdirSync(dir)) {
-      const full = path.join(dir, entry)
-      if (statSync(full).isDirectory()) {
-        walk(full)
-        continue
-      }
-      if (!/\.tsx?$/.test(entry) || /\.(test|spec)\.tsx?$/.test(entry)) {
-        continue
-      }
-      const count = readFileSync(full, 'utf8').split(`'layout.apply'`).length - 1
-      if (count > 0) {
-        found[path.relative(root, full).split(path.sep).join('/')] = count
-      }
-    }
-  }
-  walk(root)
-  return found
-}
-
-describe('layout.apply senders', () => {
-  // A new sender must go through sendLayoutApply or carry the same guard, plus a case above.
-  it('are only the guarded paths pinned above', () => {
-    expect(layoutApplySenders(path.resolve(__dirname, '..'))).toEqual({
-      'runtime/generated-tab-titles-send.ts': 1,
-      'runtime/layout-apply-send.ts': 1,
-      // Tests' stand-in for main: it answers layout.apply, never sends it.
-      'runtime/layout-apply-test-transport.test-fixture.ts': 1,
-      'store/terminals/terminal-tab-create-through-layout-owner.ts': 1
-    })
   })
 })

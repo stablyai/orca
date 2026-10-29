@@ -1,7 +1,3 @@
-// The strip's roster rides each subscriber's frames: stated on its first frame and on every
-// hydrating frame, re-sent when it differs from what that subscriber last got, and never read for
-// an ordinary journal batch.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -82,14 +78,12 @@ describe('the background-task roster on subscriber frames', () => {
       emit: toPane
     })
     expect(pane.backgroundTasks).toEqual(MONITORING)
-    // The pane is hidden; the task ends with nobody listening, and the turn keeps journaling.
     close()
     roster = null
     subscribers.republishBackgroundTasks(SESSION, 1)
     await appendRow(journal, 'after')
     subscribers.publish(SESSION, journal)
 
-    // The idle sweep stopped the provider; the pane comes back from its cursor.
     subscribers.open({
       id: 'pane-2',
       sessionId: SESSION,
@@ -178,7 +172,6 @@ describe('the background-task roster on subscriber frames', () => {
 
     roster = MONITORING
     subscribers.republishBackgroundTasks(SESSION, 1)
-    // Opens holding the current roster already.
     subscribers.open({
       id: 'second',
       sessionId: SESSION,

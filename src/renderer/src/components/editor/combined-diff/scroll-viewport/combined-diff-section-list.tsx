@@ -10,6 +10,7 @@ import { DiffNotesSendMenu } from '../../DiffNotesSendMenu'
 import { canOpenDiffSectionPreviewToSide } from '../../diff-section-preview'
 import type { DiffSection } from '../../diff-section-types'
 import type { CombinedDiffScrollThumb } from './use-combined-diff-scrollbar'
+import { translate } from '@/i18n/i18n'
 
 export function CombinedDiffSectionList({
   activeGroupId,
@@ -70,7 +71,7 @@ export function CombinedDiffSectionList({
   toggleSection: (index: number) => void
   virtualizer: Virtualizer<HTMLDivElement, Element>
 }): React.JSX.Element {
-  // Why: per-row filter() rescanned all worktree comments per visible row per render — index once, same order preserved.
+  // Index comments once by file instead of rescanning all worktree comments per visible row.
   const commentCountByFilePath = useMemo(() => {
     const counts = new Map<string, number>()
     for (const comment of diffCommentsForWorktree) {
@@ -102,7 +103,7 @@ export function CombinedDiffSectionList({
                 data-combined-diff-section-key={section.key}
                 ref={virtualizer.measureElement}
                 className="absolute left-0 top-0 w-full"
-                // Why: position via top, not transform, so sticky file headers don't jump (transform creates a containing block).
+                // Position with top: transforms create containing blocks that make sticky headers jump.
                 style={{ top: `${virtualItem.start}px` }}
               >
                 <DiffSectionItem
@@ -120,7 +121,12 @@ export function CombinedDiffSectionList({
                   toggleSection={toggleSection}
                   openSection={openSection}
                   openSectionTitle={
-                    isAllMode || isBranchMode || isCommitMode ? 'Open diff' : 'Open in editor'
+                    isAllMode || isBranchMode || isCommitMode
+                      ? translate('auto.components.editor.CombinedDiffViewer.openDiff', 'Open diff')
+                      : translate(
+                          'auto.components.editor.CombinedDiffViewer.openInEditor',
+                          'Open in editor'
+                        )
                   }
                   onOpenPreview={
                     canOpenDiffSectionPreviewToSide({

@@ -1,7 +1,4 @@
-/**
- * #30045: moving a project to a managed server copies its project group to the server under the
- * same id, and the desktop keeps its own copy. The sidebar must still draw that group once.
- */
+/** A project moved to a server can leave same-ID group copies on both hosts; render one group header. */
 import { describe, expect, it } from 'vitest'
 import { buildRows } from './worktree-list/grouping/build-rows.test-fixture'
 import { repo, worktree } from './worktree-list-groups-test-fixtures'

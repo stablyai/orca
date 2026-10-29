@@ -3,8 +3,7 @@ import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 
 export type GitHubRemoteIdentity = GitHubOwnerRepo & { host: string }
 
-// Why: HTTP ports identify the GHES web/API endpoint; SSH and git ports are
-// transport-only and must not leak into gh's host identity.
+// HTTP ports identify API endpoints; SSH/git ports are transport-only.
 function hostFromRemoteUrl(url: URL): string {
   const protocol = url.protocol.toLowerCase()
   return protocol === 'http:' || protocol === 'https:' ? url.host : url.hostname
@@ -31,10 +30,7 @@ export function remoteUrlUsesSshTransport(remoteUrl: string): boolean {
   )
 }
 
-/**
- * Why: GitHub SSH certificate organizations hand out `org-<id>@github.com:<owner>/<repo>`,
- * so the SCP user is not always `git`.
- */
+/** GitHub SSH certificate users can be org-<id>, not just git. */
 function isScpStyleRemote(remoteUrl: string): boolean {
   return /^[^@\s/:]+@[^:\s/]+:[^\s]+$/.test(remoteUrl)
 }

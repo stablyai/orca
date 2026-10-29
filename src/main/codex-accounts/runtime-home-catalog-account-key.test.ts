@@ -1,7 +1,3 @@
-// A new Codex chat's picker reads the catalog under the account key the record-less resolver
-// answers; the chat it launches saves under the key launch preparation pins. Both run for real
-// here, wired as the runtime service wires them, so a drift between the two fails this test.
-
 import type * as NodeOs from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
@@ -46,7 +42,7 @@ vi.mock('../codex/codex-account-session-bridge', () => ({
   startCodexAccountSessionBridgeInBackground: async () => {}
 }))
 
-/** The production wiring: the host's one runtime home service behind both resolvers. */
+// Use production wiring so catalog reads and launches cannot silently drift apart.
 async function wireCodexAccountKey(settings: ReturnType<typeof createSettings>) {
   const { CodexRuntimeHomeService } = await import('./runtime-home-service')
   const { mainProcessState } = await import('../startup/main-process-state')
@@ -61,7 +57,6 @@ async function wireCodexAccountKey(settings: ReturnType<typeof createSettings>) 
   const codex = structuredAgentRuntimeRegistration('codex')!
   const services = {
     getClaudeConfigDirectory: () => null,
-    // The resolvers main-process-runtime-service hands the runtime.
     prepareCodexLaunchHome: codexStructuredLaunchHomeResolvers.prepareCodexStructuredLaunch,
     readCodexLaunchHome: codexStructuredLaunchHomeResolvers.resolveCodexStructuredLaunchHome,
     workspaceTrustSettings: () => settings,
@@ -95,7 +90,6 @@ describe('Codex catalog account key: picker read vs launch', () => {
     release = wired.release
     const before = await wired.resolve('read')
     const launched = await wired.resolve('launch')
-    // Launch preparation syncs homes; the next picker read must still land on the same key.
     const after = await wired.resolve('read')
 
     expect(launched).toMatchObject({ variable: 'CODEX_HOME', path: expectedPath })

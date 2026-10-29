@@ -4,7 +4,7 @@
   "family": "components.execution-target-local",
   "namedDeltas": [],
   "values": {
-    "1e4520fe6576": {
+    "5779e5e854f7": {
       "detected": {
         "$rpc": "null"
       },
@@ -13,19 +13,7 @@
         "error": {
           "$rpc": "null"
         },
-        "requiresConnection": false,
-        "status": {
-          "$rpc": "null"
-        }
-      }
-    },
-    "986a776213e8": {
-      "detected": ["claude"],
-      "gate": {
-        "connectInProgress": true,
-        "error": {
-          "$rpc": "null"
-        },
+        "needsDesktopServerRecovery": false,
         "requiresConnection": false,
         "status": {
           "$rpc": "null"
@@ -61,6 +49,20 @@
       "settlement": {
         "status": "pending",
         "startedAt": 0
+      }
+    },
+    "d3a709c13f9d": {
+      "detected": ["claude"],
+      "gate": {
+        "connectInProgress": true,
+        "error": {
+          "$rpc": "null"
+        },
+        "needsDesktopServerRecovery": false,
+        "requiresConnection": false,
+        "status": {
+          "$rpc": "null"
+        }
       }
     },
     "eb79a9b3682a": {
@@ -115,7 +117,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "1e4520fe6576",
+          "state": "5779e5e854f7",
           "effects": []
         }
       },
@@ -127,7 +129,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "986a776213e8",
+          "state": "d3a709c13f9d",
           "effects": []
         }
       }

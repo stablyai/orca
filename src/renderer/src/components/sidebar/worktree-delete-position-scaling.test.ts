@@ -2,7 +2,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { preserveDeleteSiblingPosition } from './worktree-context-menu-policy'
 
-/** Deterministic non-monotonic tops, so DOM order and visual order genuinely disagree. */
+/** Non-monotonic tops force visual order to differ from DOM order. */
 const topFor = (index: number): number => (index * 73) % 200
 
 function mountSidebar(rowCount: number): {
@@ -43,8 +43,7 @@ it('measures each mounted sidebar row once when choosing a delete-position ancho
   expect(total).toBe(201)
 })
 
-// Why: hoisting the layout read out of the comparator must not change which row anchors the
-// scroll position — that anchor is what keeps the list still under the user's cursor.
+// Hoisting layout reads must preserve the anchor that holds the sidebar under the pointer.
 it('anchors on the same row the pre-hoist comparator sort would have chosen', () => {
   const { rows, measurementsByRow } = mountSidebar(200)
   const target = rows[100]!

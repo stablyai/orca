@@ -18,6 +18,7 @@ export type WorktreeActivationSurfaceSelection = {
 }
 
 export type WorktreeActivationOptions = WorktreeActivationSurfaceSelection & {
+  worktreeCreationId?: string
   startup?: WorktreeStartupPayload
   initialCwd?: string
   setup?: WorktreeSetupLaunch

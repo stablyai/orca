@@ -29,6 +29,9 @@ vi.mock('../browser/local-ssh-browser-partitions', () => ({
   isLocalSshBrowserPartition: () => false,
   enforceLocalSshWebRtcPolicyForGuest: vi.fn()
 }))
+vi.mock('../browser/extensions/browser-extension-session-loader', () => ({
+  getBrowserExtensionSessionForProfile: () => null
+}))
 vi.mock('../browser/doc-preview-protocol', () => ({
   isDocPreviewSession: (candidate: unknown) => candidate === 'doc-preview-session'
 }))
@@ -47,13 +50,14 @@ import { buildDocPreviewUrl, DOC_PREVIEW_PARTITION } from '../../shared/doc-prev
 
 function installOnFakeWindow(): {
   handlers: Record<string, (...args: never[]) => void>
-  webContents: { on: ReturnType<typeof vi.fn> }
+  webContents: { on: ReturnType<typeof vi.fn>; setWebRTCIPHandlingPolicy: ReturnType<typeof vi.fn> }
 } {
   const handlers: Record<string, (...args: never[]) => void> = {}
   const webContents = {
     on: vi.fn((event: string, handler: (...args: never[]) => void) => {
       handlers[event] = handler
-    })
+    }),
+    setWebRTCIPHandlingPolicy: vi.fn()
   }
   installMainWindowWebviewSecurity({ webContents } as never)
   return { handlers, webContents }
@@ -88,6 +92,7 @@ describe('main window webview security', () => {
     expect(preventDefault).toHaveBeenCalledOnce()
     expect(mocks.installNavigationPolicy).toHaveBeenCalledWith(webContents)
     expect(mocks.registerPluginGuard).toHaveBeenCalledWith(webContents)
+    expect(webContents.setWebRTCIPHandlingPolicy).toHaveBeenCalledWith('disable_non_proxied_udp')
   })
 
   it('removes renderer preload input and restores every hardened preference', () => {
@@ -113,12 +118,28 @@ describe('main window webview security', () => {
       partition: 'persist:orca-browser',
       contextIsolation: true,
       nodeIntegration: false,
-      nodeIntegrationInSubFrames: false,
+      nodeIntegrationInSubFrames: true,
       sandbox: true,
       webSecurity: true
     })
     expect(preferences).not.toHaveProperty('preloadURL')
     expect(String(preferences.preload)).toMatch(/browser-window-close-preload\.js$/)
+  })
+
+  it('runs preloads in subframes of every local profile tab, so extensions switched on later reach it', () => {
+    const { handlers } = installOnFakeWindow()
+    mocks.isAllowedPartition.mockReturnValue(true)
+    const preferences: Record<string, unknown> = {
+      partition: 'persist:orca-browser-work',
+      nodeIntegrationInSubFrames: false
+    }
+    handlers['will-attach-webview']?.(
+      { preventDefault: vi.fn() } as never,
+      preferences as never,
+      { src: 'https://example.com' } as never
+    )
+
+    expect(preferences.nodeIntegrationInSubFrames).toBe(true)
   })
 })
 
@@ -157,9 +178,7 @@ describe('orca-preview scheme admission', () => {
     expect(preferences).not.toHaveProperty('preloadURL')
   })
 
-  // Why both directions: the preview preload is the only script that can turn a press into a
-  // browser tab, so a browsing guest must never receive it — and a preview must never receive
-  // anything else, least of all a value the renderer supplied.
+  // Only preview guests get the pinned link preload; browsing guests must never acquire it and renderer values must never replace it.
   it('pins the preview preload onto a preview attach, replacing whatever the renderer asked for', () => {
     const { handlers } = installOnFakeWindow()
     const grant = mintPreviewGrant()
@@ -238,9 +257,7 @@ describe('orca-preview scheme admission', () => {
     expect(preventDefault).toHaveBeenCalledOnce()
   })
 
-  // Why the host is asserted and not just the profile: it is the renderer that minted the grant,
-  // and it is the only sink a link the reader presses can be reported to. A preview attached
-  // against another window's contents would report its clicks to a reader who is not there.
+  // The granting renderer is the only valid click sink; verify this window hosts the preview, not merely its profile.
   it('attaches a preview guest under the workspace-doc profile, hosted by this window', () => {
     const { handlers, webContents } = installOnFakeWindow()
 
@@ -267,8 +284,7 @@ describe('orca-preview scheme admission', () => {
     expect(mocks.attachRouteGuest).toHaveBeenCalledOnce()
   })
 
-  // Why: every live preview belongs to this window, so its teardown is the one moment no grant can
-  // still have a reader — and the failure sink must stop pointing at dead WebContents.
+  // WebContents teardown leaves no preview readers; clear grants and the dead failure sink.
   it('drops the failure sink and every grant when the window contents are destroyed', () => {
     const { handlers } = installOnFakeWindow()
     const grant = mintPreviewGrant()
@@ -287,8 +303,7 @@ describe('orca-preview scheme admission', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
-  // Why: the renderer is the only side that remembers which preview owns which grant, so a grant
-  // that outlives its renderer is a read authority nobody can release.
+  // A renderer owns grant-to-preview bookkeeping; replacing it must revoke otherwise unreleasable read authority.
   it('clears grants a previous renderer left behind when the window is created', () => {
     const stranded = mintPreviewGrant()
 

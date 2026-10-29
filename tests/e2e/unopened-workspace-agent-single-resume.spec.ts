@@ -1,15 +1,5 @@
-/**
- * The first visit to a never-opened workspace resumes its sleeping agent once, in its own pane.
- *
- * A CLI-started agent's tab lives only in main's layout. After a quit with its resume record on
- * disk and the terminal daemon gone (as after a reboot), showing that workspace must resume the
- * agent in the pane that owns the record, and must not also launch it in a new tab: two resumes
- * put two agents on one transcript.
- *
- * Run:
- *   pnpm exec playwright test tests/e2e/unopened-workspace-agent-single-resume.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */
+// A never-visited CLI agent tab exists only in main’s layout. After quit/reboot-like daemon loss, first visit must resume once in its owning pane.
+// Reject a second fresh-tab resume that would put two agents on one transcript.
 import { chmodSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { RuntimeClient } from '../../src/cli/runtime-client'

@@ -1,8 +1,13 @@
+import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SkillCloudVersion } from '../../shared/skill-cloud-contract'
+import {
+  computeSkillPackageDigest,
+  parseSkillPackageManifest
+} from '../../shared/skill-package-manifest'
 import { SkillCloudService } from './skill-cloud-service'
 
 const { packaged } = vi.hoisted(() => ({ packaged: { value: false } }))
@@ -32,26 +37,38 @@ function userDataPath(): string {
 }
 
 function publishedVersion(archiveSha256: string, compressedBytes: number): SkillCloudVersion {
+  const digest = createHash('sha256').update('# Retry skill').digest('hex')
+  const files = [
+    {
+      path: 'SKILL.md',
+      size: Buffer.byteLength('# Retry skill'),
+      executable: false,
+      classification: 'text' as const,
+      sha256: digest,
+      identitySha256: digest
+    }
+  ]
+  const packageDigest = computeSkillPackageDigest(files)
   return {
     packageId: 'pkg_retry',
     versionId: 'ver_retry',
     name: 'retry-skill',
     description: 'Retry publication',
-    packageDigest: 'a'.repeat(64),
+    packageDigest,
     archiveSha256,
     compressedBytes,
     createdAt: '2026-08-12T12:00:00.000Z',
     releaseNotes: 'retry',
-    manifest: {
+    manifest: parseSkillPackageManifest({
       schemaVersion: 1,
       packageId: 'pkg_retry',
       versionId: 'ver_retry',
       name: 'retry-skill',
       description: 'Retry publication',
       createdAt: '2026-08-12T12:00:00.000Z',
-      packageDigest: 'a'.repeat(64),
-      files: []
-    }
+      packageDigest,
+      files
+    })
   }
 }
 
@@ -69,24 +86,31 @@ function publishRequest(archivePath: string, archiveSha256: string, compressedBy
 describe('SkillCloudService bearer links', () => {
   it('resolves and grants downloads without an Orca session', async () => {
     const requests: RequestInit[] = []
+    const version = publishedVersion('a'.repeat(64), 12)
+    const grant = {
+      grant: { url: 'https://storage.test/package', expiresAt: '2026-08-11T00:05:00Z' },
+      version
+    }
+    const share = { id: 'share_1', version }
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
         requests.push(init ?? {})
         return String(input).endsWith('/download-grants')
-          ? Response.json({
-              grant: { url: 'https://storage.test/package', expiresAt: '2026-08-11T00:05:00Z' },
-              version: { versionId: 'ver_1' }
-            })
-          : Response.json({ share: { id: 'share_1', version: { versionId: 'ver_1' } } })
+          ? Response.json(grant)
+          : Response.json({ share })
       })
     )
     const service = new SkillCloudService('/unused')
     const options = { apiUrl: 'http://127.0.0.1:8787' }
 
-    await expect(service.resolveShare('share_1', options)).resolves.toMatchObject({ status: 'ok' })
-    await expect(service.createDownloadGrant('share_1', options)).resolves.toMatchObject({
-      status: 'ok'
+    await expect(service.resolveShare('share_1', options)).resolves.toEqual({
+      status: 'ok',
+      value: share
+    })
+    await expect(service.createDownloadGrant('share_1', options)).resolves.toEqual({
+      status: 'ok',
+      value: grant
     })
 
     expect(requests).toHaveLength(2)
@@ -129,7 +153,7 @@ describe('SkillCloudService publication retries', () => {
     const root = userDataPath()
     const archivePath = join(root, 'package.tar.gz')
     const archive = Buffer.from('skill archive')
-    const archiveSha256 = 'b'.repeat(64)
+    const archiveSha256 = createHash('sha256').update(archive).digest('hex')
     const version = publishedVersion(archiveSha256, archive.byteLength)
     writeFileSync(archivePath, archive)
     let createAttempts = 0
@@ -182,7 +206,7 @@ describe('SkillCloudService publication retries', () => {
     const root = userDataPath()
     const archivePath = join(root, 'package.tar.gz')
     const archive = Buffer.from('skill archive')
-    const archiveSha256 = 'c'.repeat(64)
+    const archiveSha256 = createHash('sha256').update(archive).digest('hex')
     const version = publishedVersion(archiveSha256, archive.byteLength)
     writeFileSync(archivePath, archive)
     let createAttempts = 0

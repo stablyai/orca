@@ -72,7 +72,7 @@ describe('Store.applyLayoutCommand (layout.apply)', () => {
       first: { type: 'leaf', leafId: LEAF },
       second: { type: 'leaf', leafId }
     })
-    // The new pane has no terminal yet: the window starts it when it mounts the pane.
+    // Pane mounting starts its terminal later.
     expect(layout?.ptyIdsByLeafId).toEqual({ [LEAF]: 'pty-1' })
   })
 
@@ -97,7 +97,6 @@ describe('Store.applyLayoutCommand (layout.apply)', () => {
       worktreeId: WORKTREE,
       reason: 'user'
     })
-    // A stale window save cannot bring the tab back.
     expect(revision(store)).toBeGreaterThan(revisionBefore)
   })
 
@@ -143,7 +142,7 @@ describe('Store.applyLayoutCommand (layout.apply)', () => {
     const window = new WindowSession(getDefaultWorkspaceSession())
     window.addTab(WORKTREE, TAB, LEAF)
     window.bind(TAB, LEAF, 'pty-1')
-    // Leftovers a full load-and-save rewrite would drop or renumber.
+    // Verify record patches preserve residue that full load/save normalization would drop.
     window.session.terminalPtyIncarnationsByPaneKey = { [`${TAB}:${LEAF}`]: 'incarnation-1' }
     window.session.tabsByWorktree[WORKTREE]![0]!.sortOrder = 7
     store.setWorkspaceSession(window.snapshot())

@@ -20,8 +20,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { buildCliWorkspaceProvenance } from '../../../../shared/cli-workspace-provenance'
 import { isInactiveWorkspace } from '@/lib/worktree-activity-state'
 
-// Parity with the sidebar's own filter chain and comparator as they stood before the shared
-// Workspace options evaluator, over every combination of the filter toggles.
+// Compare the shared evaluator against the previous sidebar filter/comparator over every filter combination.
 
 const repos: Repo[] = [
   { id: 'git', path: '/git', displayName: 'Git', badgeColor: '#000', addedAt: 0 },

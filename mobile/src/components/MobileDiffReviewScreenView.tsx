@@ -13,6 +13,7 @@ import { RightDrawer } from './RightDrawer'
 import { mobilePrSidebarStyles, PR_SIDEBAR_DOCK_WIDTH } from './pr-sidebar/mobile-pr-sidebar-styles'
 import { canDockPrSidebar, resolvePresentationMode } from './mobile-pr-sidebar-presentation'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 type Props = {
   controller: ReturnType<typeof useMobileDiffReviewController>
@@ -20,6 +21,7 @@ type Props = {
 }
 
 export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
+  useMobileColorScheme()
   const { isWideLayout } = useResponsiveLayout()
   const insets = useSafeAreaInsets()
   const [contentRowWidth, setContentRowWidth] = useState(0)
@@ -29,13 +31,11 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
     dockWidth: PR_SIDEBAR_DOCK_WIDTH
   })
   const presentationMode = resolvePresentationMode(isWideLayout, canDockSidebar)
-  // Inline-dock the sidebar only when wide and the repo is GitHub; otherwise it
-  // lives in the RightDrawer overlay toggled by showPRSidebar.
+  // Dock GitHub sidebar only when wide; otherwise showPRSidebar toggles RightDrawer overlay.
   const showInlineDock = presentationMode === 'inline' && controller.prSidebarIsGithubRepo
   const gitStatus = controller.screenState.kind === 'ready' ? controller.screenState.status : null
 
-  // The docked sidebar has no trigger to tap, so load its PR data once it becomes
-  // visible (the overlay loads on trigger press instead).
+  // Load docked PR data on visibility; overlay loads on trigger press.
   const prSidebarKind = controller.prSidebarState.kind
   const loadPRSidebar = controller.refetchPRSidebar
   useEffect(() => {
@@ -66,8 +66,7 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
         onSelectFilter={controller.selectFilter}
       />
       <View style={{ flex: 1, flexDirection: 'row' }} onLayout={handleContentRowLayout}>
-        {/* Diff column keeps its full layout; in wide mode the docked sidebar sits
-            beside it and each column scrolls independently. */}
+        {/* Keep diff layout full; wide sidebar and diff scroll independently. */}
         <View style={{ flex: 1, minWidth: 0 }}>
           {controller.currentItem ? (
             <MobileDiffReviewFileSummary

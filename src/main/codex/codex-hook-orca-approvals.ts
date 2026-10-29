@@ -27,7 +27,6 @@ import {
 } from './codex-real-home-hooks-json'
 import type { CodexHookHashes } from './codex-hook-trust-derivation'
 
-/** One Codex home's hook files, and every path Codex may key its entries by. */
 export type CodexHookHome = {
   homePath: string
   hooksJsonPath: string
@@ -45,7 +44,7 @@ export function getManagedCodexHookHome(runtimeHomePath: string): CodexHookHome 
   }
 }
 
-/** A Codex home Orca edits in place as it does ~/.codex: user hooks and approvals stay put. */
+/** In-place homes keep user hooks and approvals in their original slots. */
 export function getInPlaceCodexHookHome(homePath: string): CodexHookHome {
   const hooksJsonPath = getConfigPath(homePath)
   return {
@@ -56,7 +55,6 @@ export function getInPlaceCodexHookHome(homePath: string): CodexHookHome {
   }
 }
 
-/** ~/.codex, under every spelling Codex may key its entries by. */
 export function getRealHomeCodexHookHome(): CodexHookHome {
   return {
     homePath: getSystemCodexHomePath(),
@@ -70,7 +68,6 @@ type CodexEventName = (typeof CODEX_EVENTS)[number]
 type OrcaEntrySlot = { groupIndex: number; handlerIndex: number }
 type OrcaEntryApproval = CodexHookTrustState & { key: string; trustedHash: string }
 
-/** Where each event holds Orca's entry first. */
 export function findOrcaEntrySlots(
   hooks: HooksConfig['hooks'],
   command: string
@@ -88,7 +85,7 @@ export function findOrcaEntrySlots(
   )
 }
 
-/** Per event, the approvals holding a hash at Orca's entry, one per spelling Codex keys it by. */
+/** Include approvals under every source-path spelling Codex uses. */
 export function approvalsAtOrcaEntries(
   trustStates: ReadonlyMap<string, CodexHookTrustState>,
   slots: ReadonlyMap<CodexEventName, OrcaEntrySlot>,
@@ -108,11 +105,7 @@ export function approvalsAtOrcaEntries(
   )
 }
 
-/**
- * Every hash Orca's entry may carry in `home`: Orca's own, every answer Codex
- * gave this Orca, and what main's grant recorded there. Keys are positional, so
- * an approval at Orca's key holding any other hash is a removed user hook's.
- */
+// Positional keys may hold removed user hooks' approvals; only recognize known Orca hashes.
 export function readKnownOrcaHashes(home: CodexHookHome, command: string): CodexHookHashes[] {
   return [
     computeOrcaCodexHookHashes(command),
@@ -121,7 +114,6 @@ export function readKnownOrcaHashes(home: CodexHookHome, command: string): Codex
   ]
 }
 
-/** The one rule for whether an approval's hash is Orca's. */
 export function isKnownOrcaHash(
   knownOrcaHashes: readonly CodexHookHashes[],
   eventLabel: CodexEventLabel,
@@ -133,7 +125,7 @@ export function isKnownOrcaHash(
   )
 }
 
-/** Until Codex answers: Orca's own hash, overlaid with each event's approval at Orca's entry holding a known Orca hash. */
+/** Until Codex answers, prefer existing known approvals over local hashes. */
 export function readStopgapOrcaHashes(home: CodexHookHome, command: string): CodexHookHashes {
   let trustStates: ReadonlyMap<string, CodexHookTrustState>
   try {
@@ -150,7 +142,6 @@ export function readStopgapOrcaHashes(home: CodexHookHome, command: string): Cod
   })
 }
 
-/** `readStopgapOrcaHashes` over files already read, counting only `knownOrcaHashes`. */
 export function findStopgapOrcaHashes(found: {
   trustStates: ReadonlyMap<string, CodexHookTrustState>
   hooks: HooksConfig['hooks']
@@ -169,7 +160,7 @@ export function findStopgapOrcaHashes(found: {
     ...computeOrcaCodexHookHashes(found.command),
     ...Object.fromEntries(
       [...approvals].flatMap(([eventLabel, held]) => {
-        // Why a known hash also holds for a rewritten copy: Codex hashes content, not position.
+        // Codex hashes content, so a known hash survives position changes.
         const approval = held.find(({ trustedHash }) =>
           isKnownOrcaHash(found.knownOrcaHashes, eventLabel, trustedHash)
         )

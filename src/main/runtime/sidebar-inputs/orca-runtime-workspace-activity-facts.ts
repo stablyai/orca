@@ -13,12 +13,7 @@ import {
 
 type Runtime = OrcaRuntimeWithAgentTransitions
 
-/**
- * Feeds the activity producer from the runtime's own funnels: every per-workspace session.tabs
- * publication (already coalesced, and fired for status-only changes too), the graph sync that
- * replaces the tabs agent rows are attributed through, and the PTY liveness writers no
- * publication follows: exits, verdicts and the inventory sweep.
- */
+/** Refresh from coalesced session publications, graph attribution changes and PTY exits/verdicts/inventory sweeps that have no following publication. */
 export abstract class OrcaRuntimeWithWorkspaceActivityFacts extends OrcaRuntimeWithAgentTransitions {
   readonly sidebarClock = new SidebarClock()
   readonly workspaceActivityFacts = new WorkspaceActivityFactsProducer({
@@ -42,8 +37,7 @@ export abstract class OrcaRuntimeWithWorkspaceActivityFacts extends OrcaRuntimeW
     if (moved || [...previousTabs.keys()].some((tabId) => !this.tabs.has(tabId))) {
       this.workspaceActivityFacts.resyncAgentPanes()
     }
-    // Now, not on the session publication: a closed pane's stopping PTY stops counting here.
-    // syncWindowGraph replaces this.leaves (session-window-graph.ts), so previousLeaves stays intact.
+    // Refresh on graph replacement so stopped PTYs without panes stop counting immediately; previousLeaves remains intact.
     this.refreshWorkspaces(leafPtyChangedWorktrees(previousLeaves, this.leaves))
     return result
   }
@@ -142,8 +136,7 @@ export abstract class OrcaRuntimeWithWorkspaceActivityFacts extends OrcaRuntimeW
     }
   }
 
-  // Matches every host form of the worktree's id. A host that only lost contact keeps its terminals
-  // unverifiable, never gone, even while the record still reads connected or is being closed.
+  // Match all workspace path spellings; lost-contact terminals stay unverifiable even if records read connected or closing.
   private readWorkspaceTerminalLiveness(worktreeId: string): WorkspaceTerminalLiveness | null {
     const key = worktreeIdentityKey(worktreeId)
     const owns = (id: string): boolean => id === worktreeId || worktreeIdentityKey(id) === key

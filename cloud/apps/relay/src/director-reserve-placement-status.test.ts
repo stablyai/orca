@@ -40,7 +40,9 @@ describe('a director reports its reserve placement as built', () => {
   })
 
   it('says what the built placement does', async () => {
-    expect(await status({ reservePlacement: { placementMode: 'on' } }, { reservePlacement: 'on' })).toMatchObject({
+    expect(
+      await status({ reservePlacement: { placementMode: 'on' } }, { reservePlacement: 'off' })
+    ).toMatchObject({
       reservePlacement: 'on'
     })
   })

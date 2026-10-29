@@ -4,12 +4,13 @@
   "private": true,
   "scripts": {
     "build": "pnpm -r build",
+    "build:process-host": "tsc -p ../src/packages/process-host/tsconfig.json --typeRoots ./node_modules/@types",
     "dev": "pnpm --filter @orca-cloud/relay dev",
     "lint": "pnpm -r lint",
     "pretest": "pnpm test:runner",
     "test": "pnpm -r --filter \"!@orca-cloud/relay\" test && pnpm --filter @orca-cloud/relay test",
     "typecheck": "pnpm -r typecheck",
-    "test:runner": "node --import tsx --conditions=orca-source --test dev/scripts/run-relay-tests.test.mjs"
+    "test:runner": "node --import tsx --conditions=orca-source --test dev/scripts/run-relay-tests.test.mjs \"../.github/actions/cloud-sql-rollout-lease/*.test.mjs\""
   },
   "devDependencies": {
     "@orca/process-host": "link:../src/packages/process-host",

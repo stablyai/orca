@@ -12,21 +12,22 @@ export function byteLabel(bytes: number): string {
 }
 
 function scriptCountLabel(count: number): string {
-  return count === 1
-    ? translate('auto.components.skills.share.scriptOne', '{{count}} script', { count })
-    : translate('auto.components.skills.share.scriptOther', '{{count}} scripts', { count })
+  return translate('auto.components.skills.share.script', '{{count}} scripts', {
+    count,
+    defaultValue_one: '{{count}} script'
+  })
 }
 
 function executableCountLabel(count: number): string {
-  return count === 1
-    ? translate('auto.components.skills.share.executableOne', '{{count}} executable', { count })
-    : translate('auto.components.skills.share.executableOther', '{{count}} executables', { count })
+  return translate('auto.components.skills.share.executable', '{{count}} executables', {
+    count,
+    defaultValue_one: '{{count}} executable'
+  })
 }
 
 export type SkillShareRiskSummary = { risky: boolean; label: string }
 
-/** Scripts and executables are the only part of a package that can act on the
- *  recipient's machine, so the summary names them instead of showing two zeros. */
+/** Name executable/script content explicitly; omit empty counts. */
 export function summarizeExecutableContent(
   scriptCount: number,
   executableCount: number
@@ -55,8 +56,7 @@ export function summarizeShareRisk(preview: SkillSharePreview): SkillShareRiskSu
 
 export type SkillShareSensitiveFile = { path: string; script: boolean; executable: boolean }
 
-/** The reviewable subset the preview actually carries: a package's full file
- *  list is not part of `SkillSharePreview`, only these two path sets are. */
+/** Preview exposes script/executable paths only, not the full package file list. */
 export function sensitiveShareFiles(preview: SkillSharePreview): SkillShareSensitiveFile[] {
   const scripts = new Set(preview.scriptPaths)
   const executables = new Set(preview.executablePaths)

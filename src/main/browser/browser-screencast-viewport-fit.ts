@@ -24,8 +24,7 @@ function scaleToFit(
   }
 }
 
-// Why: capturePage returns device pixels, so a hi-DPI viewport yields a bitmap several times
-// larger than the live path is allowed to send. Apply the caller's cap here too.
+// capturePage returns device pixels; enforce the same frame cap used by live captures.
 export function scaleSnapshotToFit(
   image: NativeImage,
   options: BrowserScreencastOptions
@@ -72,9 +71,7 @@ export function isLiveFrameCompatibleWithViewport(
     options.maxWidth,
     options.maxHeight
   )
-  // Why: Chromium can stream CSS-sized, DPR-sized, or maxWidth/maxHeight-scaled
-  // bitmaps for the same emulated viewport. All are client-authoritative; stale
-  // host BrowserView frames are the incompatible ones we need to drop.
+  // Accept CSS, DPR and capped bitmap sizes; reject incompatible host-surface frames.
   return (
     isNearSize(imageSize, cssViewport) ||
     isNearSize(imageSize, deviceViewport) ||

@@ -24,7 +24,7 @@ const mocks = vi.hoisted(() => ({
     ): Promise<OpenCodeTranscriptSignal | null> => null
   )
 }))
-vi.mock('../ai-vault/cached-session-list', () => ({ getAiVaultWslHomeDirs: mocks.homes }))
+vi.mock('../ai-vault/cached-session-list', () => ({ getAiVaultWslScanHomeDirs: mocks.homes }))
 vi.mock('./wsl-transcript-fs-access', () => ({ wslGatedAccess: mocks.access }))
 vi.mock('../opencode-usage/opencode-database-discovery', () => ({
   listOpenCodeDatabases: mocks.native,

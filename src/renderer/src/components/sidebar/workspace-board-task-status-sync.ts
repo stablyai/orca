@@ -179,7 +179,7 @@ async function syncLinearWorktreeStatus(
     return skipped(result)
   }
 
-  // Why: no source has always meant this computer.
+  // Legacy callers without source settings route to this computer.
   const settings = args.getSettingsForWorktree
     ? args.getSettingsForWorktree(worktreeId)
     : (args.settings ?? { kind: 'local' })
@@ -218,8 +218,7 @@ async function syncLinearWorktreeStatus(
       return skipped(result)
     }
 
-    // Why: board moves are local-first; slow provider reads must not let an
-    // older board move overwrite a newer local status in Linear.
+    // Board moves are local-first; a slow provider read must not let an older move overwrite a newer one.
     if (args.getLatestWorkspaceStatus(worktreeId) !== args.targetStatus.id) {
       return skipped(result)
     }

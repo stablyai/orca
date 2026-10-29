@@ -26,9 +26,7 @@ export function getFilteredSessions(
 ) {
   const cutoff = getUsageRangeCutoff(range)
   return state.sessions.filter((session) => {
-    // Why: daily aggregates use local calendar days, so session filtering has
-    // to use the same conversion or the sessions table/counts can disagree
-    // with the chart around UTC day boundaries.
+    // Match daily aggregates using local calendar days to avoid UTC boundary mismatches.
     const day = getLocalUsageDay(session.lastTimestamp)
     if (!day) {
       return false

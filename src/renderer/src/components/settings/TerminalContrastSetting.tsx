@@ -8,7 +8,7 @@ import {
   MIN_TERMINAL_CONTRAST_RATIO,
   MAX_TERMINAL_CONTRAST_RATIO,
   normalizeTerminalMinimumContrastRatio
-} from '@/lib/terminal-contrast-correction'
+} from '../../../../shared/terminal-contrast-correction'
 import { translate } from '@/i18n/i18n'
 
 type ContrastMode = 'auto' | 'off' | 'custom'

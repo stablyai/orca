@@ -1,8 +1,7 @@
 import type { TerminalDocumentScope } from './document-scope'
 
-// Why: a leaf of pure reads, so fit, transform and overlay modules can share them without a cycle.
+// Keep pure metrics below fit/transform/overlay dependencies to avoid cycles.
 
-/** 0 until the renderer has measured a cell. */
 export function getMeasuredCellHeight(scope: TerminalDocumentScope) {
   const core = scope.term?._core
   if (core && core._renderService && core._renderService.dimensions) {

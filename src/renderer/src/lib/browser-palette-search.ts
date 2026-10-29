@@ -8,23 +8,26 @@ import {
   isOmniboxPaletteTabFieldAllowed,
   matchPaletteTabDocument,
   preparePaletteTabQuery
-} from './palette-match/tab-match'
-import { buildPaletteTabDocument } from './palette-match/tab-document'
+} from '../../../shared/palette-match/tab-match'
+import { buildPaletteTabDocument } from '../../../shared/palette-match/tab-document'
 import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
 } from './worktree-default-display-name'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { MatchRange } from './palette-match/normalized-text'
-import type { PaletteDocument, PaletteDocumentRank } from './palette-match/palette-document'
-import type { PaletteResultQualityClass } from './palette-match/match-quality'
+import type { MatchRange } from '../../../shared/palette-match/normalized-text'
+import type {
+  PaletteDocument,
+  PaletteDocumentRank
+} from '../../../shared/palette-match/palette-document'
+import type { PaletteResultQualityClass } from '../../../shared/palette-match/match-quality'
 import {
   createPaletteSearchContext,
   encodePaletteIdentity,
   preparePaletteActivity,
   type PaletteActivityRank,
   type PaletteSearchContext
-} from './palette-match/palette-ranking'
+} from '../../../shared/palette-match/palette-ranking'
 
 const NO_RANGES: readonly MatchRange[] = []
 
@@ -149,8 +152,7 @@ function compareEmptyQueryResults(
   return compareText(a.title, b.title)
 }
 
-// Why: empty-query browser ordering is intentionally deterministic and context-first;
-// lastActiveAt only breaks ties between equally-ranked query matches.
+// Empty-query order is deterministic/context-first; use recency only to break equally ranked query hits.
 function positionScore(entry: SearchableBrowserPage): number {
   if (entry.isCurrentPage) {
     return entry.worktreeSortIndex * 100 - 4000
@@ -214,8 +216,7 @@ export function searchBrowserPages(
   }
   const prepared = preparePaletteTabQuery(query)
   if (!prepared) {
-    // Why not [] on an over-token query: the empty branch also serves the no-query
-    // listing, so the invalid case is filtered out by the token guard below.
+    // Do not treat too many tokens as empty input: that branch lists all entries; reject below instead.
     return query.trim()
       ? []
       : entries.map((entry) => baseResult(entry, context)).sort(compareEmptyQueryResults)

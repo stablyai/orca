@@ -108,8 +108,7 @@ describe('resolveDashboardCardTerminalInput', () => {
     expect(pi.ctrlEnterCsiU).toBe(false)
   })
 
-  // Why: the pty runs Linux inside WSL, so byte protocols must follow it and
-  // not the Windows client — the pane resolves this from its own session cwd.
+  // WSL PTYs speak Linux byte protocols even on Windows clients; mirror pane cwd-based resolution.
   it('treats a WSL shell override as a non-ConPTY Linux-hosted pty', () => {
     const profile = resolveDashboardCardTerminalInput(stateWith(), {
       ...WINDOWS_ARGS,

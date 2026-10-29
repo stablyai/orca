@@ -21,7 +21,6 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree: vi.fn() }))
-// Main answers the window's browser-tab commands and its frames draw them (switch-on builds).
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -81,8 +80,7 @@ const resolution = {
   targetId: 'host',
   workspaceWorktreeIds: [active.id],
   hostRepoIds: ['repo1'],
-  workspaceCount: 1,
-  isConnected: false
+  workspaceCount: 1
 }
 
 describe('deleting the active workspace', () => {
@@ -116,9 +114,7 @@ describe('deleting the active workspace', () => {
       throw new Error('host unavailable')
     })
     removeForHost.mockRejectedValueOnce(new Error('host unavailable'))
-    expect((await clearSshHostWorkspaces(resolution, 'forget-local')).failedIds).toContain(
-      active.id
-    )
+    expect((await clearSshHostWorkspaces(resolution)).failedIds).toContain(active.id)
     expect(store.getState().activeWorktreeId).toBe(active.id)
     expect(activateAndRevealWorktree).not.toHaveBeenCalled()
     await forget(store, active)
@@ -130,7 +126,7 @@ describe('deleting the active workspace', () => {
     const tab = store.getState().createTab(active.id)
     store.getState().closeTab(tab.id, { reason: 'pty-exit' })
     expect(store.getState().activeWorktreeId).toBeNull()
-    await clearSshHostWorkspaces(resolution, 'forget-local')
+    await clearSshHostWorkspaces(resolution)
     expect(activateAndRevealWorktree).not.toHaveBeenCalled()
   })
 

@@ -1,12 +1,11 @@
 import { useState } from 'react'
-import { Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle } from 'react-native'
+import { Pressable, Text, View, type StyleProp, type TextStyle } from 'react-native'
 import { useClipboardWriter } from '../platform/clipboard'
-import {
-  AGENT_LAUNCH_STATUS_UNREADABLE_MESSAGE,
-  AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE
-} from '../session/mobile-existing-agent-launch'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileAgentLaunchAvailability } from '../session/mobile-agent-launch-availability'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 type Props = {
   availability: MobileAgentLaunchAvailability
@@ -29,13 +28,24 @@ export function AgentLaunchNotice({
   undeliveredPrompt,
   errorStyle
 }: Props) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   const clipboard = useClipboardWriter()
-  const [copyState, setCopyState] = useState<{ prompt: string; label: string } | null>(null)
+  const [copyState, setCopyState] = useState<{
+    prompt: string
+    status: 'copied' | 'failed'
+  } | null>(null)
   const availabilityMessage =
     availability === 'update-required'
-      ? AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE
+      ? t(
+          'components.agentLaunchNotice.updateRequired',
+          'Update Orca on your computer to start an agent from your phone.'
+        )
       : availability === 'unverified'
-        ? AGENT_LAUNCH_STATUS_UNREADABLE_MESSAGE
+        ? t(
+            'components.agentLaunchNotice.statusUnreadable',
+            "Could not read this host's status. Retrying…"
+          )
         : null
   const message = availabilityMessage ?? error
   const note = availabilityMessage ? null : warning
@@ -44,7 +54,11 @@ export function AgentLaunchNotice({
     return null
   }
   const copyLabel =
-    copyState && copyState.prompt === undeliveredPrompt ? copyState.label : 'Copy prompt'
+    copyState && copyState.prompt === undeliveredPrompt
+      ? copyState.status === 'copied'
+        ? t('common.copied', 'Copied')
+        : t('components.agentLaunchNotice.copyFailed', "Couldn't copy")
+      : t('components.agentLaunchNotice.copyPrompt', 'Copy prompt')
   return (
     <View style={styles.notice}>
       {confirmation ? <Text style={styles.successText}>{confirmation}</Text> : null}
@@ -54,12 +68,12 @@ export function AgentLaunchNotice({
         <Pressable
           onPress={() => {
             clipboard.writeText(undeliveredPrompt).then(
-              () => setCopyState({ prompt: undeliveredPrompt, label: 'Copied' }),
-              () => setCopyState({ prompt: undeliveredPrompt, label: "Couldn't copy" })
+              () => setCopyState({ prompt: undeliveredPrompt, status: 'copied' }),
+              () => setCopyState({ prompt: undeliveredPrompt, status: 'failed' })
             )
           }}
           accessibilityRole="button"
-          accessibilityLabel="Copy prompt"
+          accessibilityLabel={t('components.agentLaunchNotice.copyPrompt', 'Copy prompt')}
           hitSlop={spacing.sm}
         >
           <Text style={styles.copyText}>{copyLabel}</Text>
@@ -69,7 +83,7 @@ export function AgentLaunchNotice({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   notice: {
     gap: spacing.xs
   },
@@ -86,4 +100,4 @@ const styles = StyleSheet.create({
     fontSize: typography.metaSize,
     fontWeight: '600'
   }
-})
+}))

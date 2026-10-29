@@ -110,7 +110,6 @@ export class GrowingByteBuffer {
   }
 
   private reclaimHeadRoom(required: number): void {
-    // Slide the live bytes down while they fit in half the storage; only grow when they do not.
     if (required * 2 <= this.storage.byteLength) {
       this.storage.copy(this.storage, 0, this.start, this.start + this.length)
     } else {

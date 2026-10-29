@@ -20,4 +20,10 @@ export const RunListParams = z.object({
   cursor: z.string().min(1).optional()
 })
 
-export const RunShowParams = z.object({ id: requiredString('Missing --id'), from: OptionalString })
+export const RunShowParams = z.object({
+  id: requiredString('Missing --id'),
+  from: OptionalString,
+  // Lists removed work 200 entries per page; older hosts strip both and return no removedWork.
+  removed: OptionalBoolean,
+  cursor: z.string().min(1).optional()
+})

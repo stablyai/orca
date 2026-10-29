@@ -26,13 +26,15 @@ export function useAutomationsPageSetupState({
   local: AutomationsPageLocalState
   list: AutomationsPageListState
 }) {
-  const { repos, settings, projectHostSetups, worktreesByRepo } = store
+  const { repos, settings, projectHostSetups, worktreesByRepo, pendingAutomationRunNavigation } =
+    store
   const {
     automationYamlHooksByRepoKey,
     automationHookCheckPromisesRef,
     setAutomationYamlHooksByRepoKey,
     setupDecisionTouchedRef,
     selectedAutomationRuns,
+    runHistoryReloadToken,
     draft,
     automationHostTargetKey,
     selectedAutomationRunPageId
@@ -48,8 +50,7 @@ export function useAutomationsPageSetupState({
     (
       candidate: Pick<AutomationDraft, 'projectId' | 'workspaceMode'>
     ): AutomationDraft['setupDecision'] => {
-      // During an edit the selected destination, not the ambient repo-id lookup,
-      // owns setup policy. Repo ids can collide across runtime authorities.
+      // Derive edit setup from the selected destination; ambient repo-ID lookup can collide across authorities.
       const selectedEditEntry =
         local.editingAutomationId !== null && local.editingHostStableKey
           ? list.hostCatalog.entries.find((entry) => entry.stableKey === local.editingHostStableKey)
@@ -100,12 +101,18 @@ export function useAutomationsPageSetupState({
     [repos, settings]
   )
   const loadAutomationYamlHooksForRepo = useCallback(
-    async (repoId: string, hostId?: ExecutionHostId): Promise<OrcaHooks | null> => {
+    async (
+      repoId: string,
+      hostId?: ExecutionHostId,
+      options: { background?: boolean } = {}
+    ): Promise<OrcaHooks | null> => {
       const key = getAutomationHooksCacheKey(repoId, hostId)
       if (Object.hasOwn(automationYamlHooksByRepoKey, key)) {
         return automationYamlHooksByRepoKey[key] ?? null
       }
-      const existingPromise = automationHookCheckPromisesRef.current.get(key)
+      // A save must not join a preview check that refused a stopped WSL distro.
+      const flightKey = options.background ? `${key}:background` : key
+      const existingPromise = automationHookCheckPromisesRef.current.get(flightKey)
       if (existingPromise) {
         return (await existingPromise).hooks
       }
@@ -115,7 +122,7 @@ export function useAutomationsPageSetupState({
         hostId ?? (ownerRows.length === 1 ? getRepoExecutionHostId(ownerRows[0]) : null)
       const promise = (
         ownerHostId
-          ? checkRuntimeHooks(ownerHostId, repoId)
+          ? checkRuntimeHooks(ownerHostId, repoId, options)
           : Promise.reject(new Error('The project host is unknown.'))
       )
         .then((result) => ({
@@ -123,9 +130,9 @@ export function useAutomationsPageSetupState({
           ok: result.status !== 'error'
         }))
         .catch(() => ({ hooks: null, ok: false }))
-      automationHookCheckPromisesRef.current.set(key, promise)
+      automationHookCheckPromisesRef.current.set(flightKey, promise)
       const { hooks, ok } = await promise
-      automationHookCheckPromisesRef.current.delete(key)
+      automationHookCheckPromisesRef.current.delete(flightKey)
       if (!ok) {
         return hooks
       }
@@ -160,7 +167,12 @@ export function useAutomationsPageSetupState({
     selectedAutomationRuns.rowKey === selectedRow.key &&
     selectedAutomationRuns.ownerKey ===
       capturedAutomationOwnerKey(capturedAutomationOwner(capturedAutomationOwners, selectedRow.key))
-  const selectedRunsNotice = selectedRunsMatchSelection ? selectedAutomationRuns.notice : null
+  const selectedRunsReady =
+    selectedRunsMatchSelection &&
+    selectedAutomationRuns.reloadToken === runHistoryReloadToken &&
+    (!pendingAutomationRunNavigation ||
+      selectedAutomationRuns.navigation === pendingAutomationRunNavigation)
+  const selectedRunsNotice = selectedRunsReady ? selectedAutomationRuns.notice : null
   const selectedRuns = useMemo(
     () =>
       selected && selectedRunsMatchSelection
@@ -187,6 +199,7 @@ export function useAutomationsPageSetupState({
     getDraftSetupDecisionDefaultSignature,
     markSetupDecisionTouched,
     selectedRuns,
+    selectedRunsReady,
     selectedRunsNotice,
     selectedAutomationRunPage,
     worktrees,

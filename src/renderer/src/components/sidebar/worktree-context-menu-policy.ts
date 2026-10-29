@@ -15,15 +15,10 @@ export const WORKTREE_NATIVE_CONTEXT_MENU_ATTR = 'data-worktree-native-context-m
 const CONTEXT_MENU_CLICK_SUPPRESSION_MS = 500
 const DELETE_POSITION_RESTORE_MAX_FRAMES = 180
 const DELETE_POSITION_RESTORE_STABLE_FRAMES = 6
-// Why: the picker is unmounted on close, which would cut PopoverContent's
-// data-[state=closed] exit animation short; hold the subtree for its duration.
+// Keep the closing picker mounted through its PopoverContent exit animation.
 export const PARENT_PICKER_EXIT_ANIMATION_MS = 200
 
-// Why: stable empty sentinels let closed menu wrappers subscribe to a referentially
-// stable value instead of the high-churn maps that delete teardown replaces. The
-// selector returns these when the menu is closed, so the wrapper stays inert to
-// teardown set() churn. Module-level (one allocation, never recreated per render) so
-// the reference is constant and Zustand's Object.is equality short-circuits.
+// Closed menus reuse empty identities so teardown map churn cannot wake their subscriptions.
 export const EMPTY_TABS_BY_WORKTREE: AppState['tabsByWorktree'] = {}
 export const EMPTY_PTY_IDS_BY_TAB_ID: AppState['ptyIdsByTabId'] = {}
 export const EMPTY_BROWSER_TABS_BY_WORKTREE: AppState['browserTabsByWorktree'] = {}
@@ -35,18 +30,12 @@ export const EMPTY_WORKTREE_LINEAGE_BY_ID: AppState['worktreeLineageById'] = {}
 export const EMPTY_WORKSPACE_LINEAGE_BY_CHILD_KEY: AppState['workspaceLineageByChildKey'] = {}
 export const EMPTY_CYCLIC_LINEAGE_IDS: ReadonlySet<string> = new Set()
 
-// Why: the gating decision for the menu-only store subscriptions. When the menu is
-// closed we MUST return the same `empty` reference every render so Zustand's Object.is
-// equality short-circuits the subscription and the closed wrapper stays inert to delete
-// teardown's high-churn set()s. When open we return the live map so menu items see real
-// data. Extracted as a pure function so the stable-reference contract is unit-testable.
+// Return the shared empty reference while closed; open menus read current maps.
 export function selectMenuScopedMap<T>(menuOpen: boolean, live: T, empty: T): T {
   return menuOpen ? live : empty
 }
 
-// Why: the Developer submenu is hidden by default and revealed only by holding
-// Option/Alt at right-click. altKey is the same physical key on every platform
-// (Option on macOS, Alt on Windows/Linux), so no platform branch is needed.
+// Reveal Developer on Option/Alt at right-click; altKey works across macOS, Windows and Linux.
 export function shouldRevealWorktreeDeveloperMenu(args: {
   developerMenuRevealed: boolean
   isMultiContext: boolean
@@ -89,8 +78,7 @@ export function shouldIgnoreNestedWorktreeContextMenuScope(
   const closestScope =
     maybeScopedTarget?.closest?.(scopeSelector) ??
     maybeScopedTarget?.parentElement?.closest?.(scopeSelector)
-  // Why: lineage child previews live inside the parent card DOM but own their
-  // context menu target. The parent must ignore only those nested scopes.
+  // Nested lineage previews own context menus even though they sit inside the parent DOM.
   return closestScope != null && closestScope !== currentTarget
 }
 
@@ -159,8 +147,7 @@ export function shouldContinueDeleteSiblingPositionRestore(args: {
   attempts: number
   stableFrames: number
 }): boolean {
-  // Why: slow deletes leave the target row mounted; after initial focus/remount
-  // settling, the restore loop must stop so user scrolling wins.
+  // Stop restoring once position settles so user scrolling wins during slow deletes.
   return (
     args.attempts < DELETE_POSITION_RESTORE_MAX_FRAMES &&
     args.stableFrames < DELETE_POSITION_RESTORE_STABLE_FRAMES
@@ -227,25 +214,35 @@ export function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => 
   }
 }
 
+/** The status every context worktree shares, or '' when they differ or there are none. */
+export function getSharedWorkspaceStatus(
+  worktrees: readonly Worktree[],
+  statusesFor: (worktree: Worktree) => readonly WorkspaceStatusDefinition[]
+): WorkspaceStatus {
+  const [first, ...rest] = worktrees
+  if (!first) {
+    return ''
+  }
+  const status = getWorkspaceStatus(first, statusesFor(first))
+  return rest.every((item) => getWorkspaceStatus(item, statusesFor(item)) === status) ? status : ''
+}
+
 export type WorkspaceStatusAssignmentPlan =
   | { readonly kind: 'board-sync'; readonly worktreeIds: readonly string[] }
   | { readonly kind: 'local-only'; readonly localWriteIds: readonly string[] }
 
-// Why: the context-menu "Move to Status" routes to the board's local-first +
-// Linear-sync path when the board wired a callback, else a local-only write of
-// only the status-changed worktrees. Extracted pure so the routing and the
-// no-op filter stay unit-testable without opening the Radix menu.
+// Board callbacks own local-first/provider sync; otherwise write only changed statuses locally.
 export function planWorkspaceStatusAssignment(
   worktrees: readonly Worktree[],
   status: WorkspaceStatus,
-  workspaceStatuses: readonly WorkspaceStatusDefinition[],
+  statusesFor: (worktree: Worktree) => readonly WorkspaceStatusDefinition[],
   boardSyncEnabled: boolean
 ): WorkspaceStatusAssignmentPlan {
   if (boardSyncEnabled) {
     return { kind: 'board-sync', worktreeIds: worktrees.map((item) => item.id) }
   }
   const localWriteIds = worktrees
-    .filter((item) => getWorkspaceStatus(item, workspaceStatuses) !== status)
+    .filter((item) => getWorkspaceStatus(item, statusesFor(item)) !== status)
     .map((item) => item.id)
   return { kind: 'local-only', localWriteIds }
 }

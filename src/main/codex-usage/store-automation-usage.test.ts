@@ -101,8 +101,7 @@ describe('CodexUsageStore', () => {
 
     expect(beforeRefresh).toHaveBeenCalledWith(true)
 
-    // That forced scan failed: it recorded an attempt but no completion. Later
-    // lookups must not keep forcing a full rescan of all Codex history.
+    // A failed forced attempt must prevent repeated full-history rescans.
     const afterAttempt = createStoreWithState({ scanState: failedScanState(completedAt + 1000) })
     const afterRefresh = vi.spyOn(afterAttempt, 'refresh').mockResolvedValue(scanStateResult)
     const usage = await afterAttempt.getAutomationRunUsage(request)
@@ -121,7 +120,7 @@ describe('CodexUsageStore', () => {
         lastScanError: null
       }
     })
-    // Prime the worktree fingerprint so an unforced refresh can return early.
+    // Prime the fingerprint so an unforced refresh can return early.
     await store.refresh(true)
 
     const completedAt = Date.now() + 10_000
@@ -157,8 +156,6 @@ describe('CodexUsageStore', () => {
     finishScan()
     await inFlight
 
-    // The in-flight scan's start time is not a finished attempt, so the lookup
-    // forces and rides that scan instead of reading a pre-run cache.
     expect((await usage).status).toBe('known')
     expect((await usage).providerSessionId).toBe('session-1')
   })

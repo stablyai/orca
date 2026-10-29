@@ -1,5 +1,6 @@
 import type { editor, IRange } from 'monaco-editor'
 import { forEachLine } from './text-line-offsets'
+import { translate } from '@/i18n/i18n'
 
 type ConflictBlock = {
   startLine: number
@@ -188,12 +189,30 @@ export function buildGitConflictDecorations(content: string): editor.IModelDelta
     }
 
     decorations.push(
-      makeMarkerDecoration(block.startLine, block.startText, 'Current change'),
+      makeMarkerDecoration(
+        block.startLine,
+        block.startText,
+        translate('auto.components.editor.conflictMarkers.currentChange', 'Current change')
+      ),
       ...(block.baseLine
-        ? [makeMarkerDecoration(block.baseLine, block.baseText ?? '', 'Common ancestor')]
+        ? [
+            makeMarkerDecoration(
+              block.baseLine,
+              block.baseText ?? '',
+              translate('auto.components.editor.conflictMarkers.commonAncestor', 'Common ancestor')
+            )
+          ]
         : []),
-      makeMarkerDecoration(block.separatorLine, block.separatorText, 'Incoming change'),
-      makeMarkerDecoration(block.endLine, block.endText, 'End conflict')
+      makeMarkerDecoration(
+        block.separatorLine,
+        block.separatorText,
+        translate('auto.components.editor.conflictMarkers.incomingChange', 'Incoming change')
+      ),
+      makeMarkerDecoration(
+        block.endLine,
+        block.endText,
+        translate('auto.components.editor.conflictMarkers.endConflict', 'End conflict')
+      )
     )
   }
 

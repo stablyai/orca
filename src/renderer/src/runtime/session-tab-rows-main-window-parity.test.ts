@@ -1,5 +1,4 @@
-// Diff and markdown-preview rows: main's projection of its layout model (the window's session plus
-// the editor views the window publishes) must equal the rows the window builds for the same tabs.
+// Main and window projections must agree on mobile file rows and withhold virtual views.
 
 import { describe, expect, it, vi } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
@@ -98,6 +97,25 @@ const files: OpenFile[] = [
     diffSource: 'branch',
     isDirty: false
   },
+  // Virtual reviews have display labels in place of file paths.
+  {
+    id: `${GIT_KEY}::conflict-review`,
+    filePath: '/Users/dev/orca',
+    relativePath: 'Merge conflicts',
+    worktreeId: GIT_KEY,
+    language: 'plaintext',
+    mode: 'conflict-review',
+    isDirty: false
+  },
+  {
+    id: `${GIT_KEY}::check-details::build`,
+    filePath: '/Users/dev/orca',
+    relativePath: 'build',
+    worktreeId: GIT_KEY,
+    language: 'plaintext',
+    mode: 'check-details',
+    isDirty: false
+  },
   {
     id: `${GIT_KEY}::all-diffs::uncommitted`,
     filePath: '/Users/dev/orca',
@@ -121,7 +139,10 @@ function scenario(activeFileId: string) {
       tabs: files.map((file) => ({
         id: tabIdOf(file),
         entityId: file.id,
-        kind: file.mode === 'diff' ? ('diff' as const) : ('editor' as const),
+        kind:
+          file.mode === 'diff' || file.mode === 'conflict-review' || file.mode === 'check-details'
+            ? file.mode
+            : ('editor' as const),
         entry: { color: file.mode === 'diff' ? '#00ff00' : null }
       }))
     }
@@ -177,14 +198,16 @@ function published(snapshot: Pick<RuntimeMobileSessionTabsSnapshot, 'tabs' | 'ta
   return { tabs: snapshot.tabs, tabGroups: snapshot.tabGroups }
 }
 
-describe("main's diff and markdown-preview rows", () => {
+describe("main's mobile editor rows", () => {
   it.each([
     ['a diff', `${GIT_KEY}::diff::unstaged::src/app.ts`],
-    ['a markdown preview', `markdown-preview::${README}`]
+    ['a markdown preview', `markdown-preview::${README}`],
+    ['a check-details view', `${GIT_KEY}::check-details::build`],
+    ['a conflict review', `${GIT_KEY}::conflict-review`]
   ])("equal the window's rows with %s active", (_label, activeFileId) => {
     const { main, window } = scenario(activeFileId)
-    // Every file but the combined diff, which neither side lists.
-    expect(window.tabs).toHaveLength(files.length - 1)
+    // Neither publisher lists virtual reviews or the combined diff.
+    expect(window.tabs).toHaveLength(files.length - 3)
     expect(published(main)).toEqual(published(window))
     expect(main.activeTabId).toBe(window.activeTabId)
     expect(main.activeTabType).toBe(window.activeTabType)

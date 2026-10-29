@@ -1,0 +1,323 @@
+{
+  "agentHistory": {
+    "panel": {
+      "skipped_one": "{{count}} transcript skipped",
+      "skipped_other": "{{count}} transcripts skipped"
+    },
+    "sessionHistoryList": {
+      "messages_one": "{{count}} message",
+      "messages_other": "{{count}} messages"
+    }
+  },
+  "app": {
+    "terminalSettings": {
+      "restoreAfterMinutes_one": "After {{count}} minute",
+      "restoreAfterMinutes_other": "After {{count}} minutes",
+      "restoreAfterSeconds_one": "After {{count}}s",
+      "restoreAfterSeconds_other": "After {{count}}s"
+    }
+  },
+  "chat": {
+    "subagentGroup": {
+      "ran_one": "Ran {{count}} subagent",
+      "ran_other": "Ran {{count}} subagents",
+      "started_one": "Kicked off {{count}} subagent",
+      "started_other": "Kicked off {{count}} subagents",
+      "stateFailedCount_one": "{{count}} failed",
+      "stateFailedCount_other": "{{count}} failed",
+      "stateIdleCount_one": "{{count}} idle",
+      "stateIdleCount_other": "{{count}} idle",
+      "stateStoppedCount_one": "{{count}} stopped",
+      "stateStoppedCount_other": "{{count}} stopped",
+      "stateUnverifiableCount_one": "{{count}} with status unavailable",
+      "stateUnverifiableCount_other": "{{count}} with status unavailable",
+      "stateWorkingCount_one": "{{count}} working",
+      "stateWorkingCount_other": "{{count}} working"
+    },
+    "toolActivity": {
+      "count_one": "{{count}} tool call",
+      "count_other": "{{count}} tool calls"
+    },
+    "toolRun": {
+      "liveBrowserTimes_other": "Using the browser {{count}} times",
+      "liveFileChange_one": "Editing {{count}} file",
+      "liveFileChange_other": "Editing {{count}} files",
+      "liveListFiles_one": "Listing {{count}} directory",
+      "liveListFiles_other": "Listing {{count}} directories",
+      "liveMcpToolCall_one": "Using {{count}} integration",
+      "liveMcpToolCall_other": "Using {{count}} integrations",
+      "liveOther_one": "Using {{count}} tool",
+      "liveOther_other": "Using {{count}} tools",
+      "liveRead_one": "Reading {{count}} file",
+      "liveRead_other": "Reading {{count}} files",
+      "liveSearch_one": "Searching {{count}} time",
+      "liveSearch_other": "Searching {{count}} times",
+      "liveSubAgentActivity_one": "Running {{count}} agent",
+      "liveSubAgentActivity_other": "Running {{count}} agents",
+      "liveTodoListTimes_other": "Updating the plan {{count}} times",
+      "liveUnknown_one": "Running {{count}} command",
+      "liveUnknown_other": "Running {{count}} commands",
+      "liveWebSearch_one": "Searching the web {{count}} time",
+      "liveWebSearch_other": "Searching the web {{count}} times",
+      "settledBrowserTimes_other": "Used the browser {{count}} times",
+      "settledFileChange_one": "Edited {{count}} file",
+      "settledFileChange_other": "Edited {{count}} files",
+      "settledListFiles_one": "Listed {{count}} directory",
+      "settledListFiles_other": "Listed {{count}} directories",
+      "settledMcpToolCall_one": "Used {{count}} integration",
+      "settledMcpToolCall_other": "Used {{count}} integrations",
+      "settledOther_one": "Used {{count}} tool",
+      "settledOther_other": "Used {{count}} tools",
+      "settledRead_one": "Read {{count}} file",
+      "settledRead_other": "Read {{count}} files",
+      "settledSearch_one": "Searched {{count}} time",
+      "settledSearch_other": "Searched {{count}} times",
+      "settledSubAgentActivity_one": "Ran {{count}} agent",
+      "settledSubAgentActivity_other": "Ran {{count}} agents",
+      "settledTodoListTimes_other": "Updated the plan {{count}} times",
+      "settledUnknown_one": "Ran {{count}} command",
+      "settledUnknown_other": "Ran {{count}} commands",
+      "settledWebSearch_one": "Searched the web {{count}} time",
+      "settledWebSearch_other": "Searched the web {{count}} times"
+    },
+    "turnStatus": {
+      "seconds_one": "{{count}}s",
+      "seconds_other": "{{count}}s"
+    }
+  },
+  "components": {
+    "codexResetCredit": {
+      "available_one": "{{count}} reset available",
+      "available_other": "{{count}} resets available"
+    },
+    "diffReviewDrawers": {
+      "fileSummary_one": "{{fileCount}} file reviewed, {{count}} note",
+      "fileSummary_other": "{{fileCount}} file reviewed, {{count}} notes",
+      "filesSummary_one": "{{fileCount}} files reviewed, {{count}} note",
+      "filesSummary_other": "{{fileCount}} files reviewed, {{count}} notes",
+      "stageableFiles_one": "{{count}} reviewed unstaged files can be staged",
+      "stageableFiles_other": "{{count}} reviewed unstaged files can be staged",
+      "unsentNotes_one": "{{count}} unsent notes",
+      "unsentNotes_other": "{{count}} unsent notes"
+    },
+    "diffReviewFileSummary": {
+      "notes_one": "{{count}} note",
+      "notes_other": "{{count}} notes"
+    },
+    "diffReviewHeader": {
+      "unsentNotes_one": "{{count}} unsent note",
+      "unsentNotes_other": "{{count}} unsent notes"
+    },
+    "worktreeListRow": {
+      "children_one": "{{count}} child",
+      "children_other": "{{count}} children"
+    }
+  },
+  "dictation": {
+    "setup": {
+      "alreadyActive": "Dictation is already in use on the computer or another phone.",
+      "repairRequired": "Re-pair this phone with the computer to use dictation.",
+      "sessionLost": "Dictation lost its connection to the computer. Try again."
+    }
+  },
+  "hostScreen": {
+    "hostScreenHeader": {
+      "activeFilters_one": "Workspace options ({{count}} filter active)",
+      "activeFilters_other": "Workspace options ({{count}} filters active)"
+    }
+  },
+  "pullRequest": {
+    "checksSection": {
+      "failingChecks_one": "{{count}} failing check",
+      "failingChecks_other": "{{count}} failing checks"
+    },
+    "commentCard": {
+      "daysAgo_one": "{{count}}d ago",
+      "daysAgo_other": "{{count}}d ago",
+      "hoursAgo_one": "{{count}}h ago",
+      "hoursAgo_other": "{{count}}h ago",
+      "minutesAgo_one": "{{count}}m ago",
+      "minutesAgo_other": "{{count}}m ago",
+      "monthsAgo_one": "{{count}}mo ago",
+      "monthsAgo_other": "{{count}}mo ago",
+      "yearsAgo_one": "{{count}}y ago",
+      "yearsAgo_other": "{{count}}y ago"
+    },
+    "conflictingFilesSection": {
+      "commitsBehind_one": "{{count}} commit behind (base commit: {{baseCommit}})",
+      "commitsBehind_other": "{{count}} commits behind (base commit: {{baseCommit}})"
+    },
+    "prActionsState": {
+      "mergeThrough_one": "Merge through #{{number}} · {{count}} PR",
+      "mergeThrough_other": "Merge through #{{number}} · {{count}} PRs",
+      "queueThrough_one": "Queue through #{{number}} · {{count}} PR",
+      "queueThrough_other": "Queue through #{{number}} · {{count}} PRs"
+    },
+    "prChecksPresentation": {
+      "failing_one": "{{count}} failing",
+      "failing_other": "{{count}} failing",
+      "neutral_one": "{{count}} neutral",
+      "neutral_other": "{{count}} neutral",
+      "passed_one": "{{count}} passed",
+      "passed_other": "{{count}} passed",
+      "pending_one": "{{count}} pending",
+      "pending_other": "{{count}} pending"
+    }
+  },
+  "session": {
+    "agentChildRow": {
+      "days_one": "{{count}}d",
+      "days_other": "{{count}}d",
+      "hours_one": "{{count}}h",
+      "hours_other": "{{count}}h",
+      "minutes_one": "{{count}}m",
+      "minutes_other": "{{count}}m"
+    },
+    "backgroundTask": {
+      "countAgents_one": "{{count}} agent",
+      "countAgents_other": "{{count}} agents",
+      "countMonitors_one": "{{count}} monitor",
+      "countMonitors_other": "{{count}} monitors",
+      "countShell_one": "{{count}} shell",
+      "countShell_other": "{{count}} shells",
+      "countTasks_one": "{{count}} task",
+      "countTasks_other": "{{count}} tasks",
+      "countWorkflows_one": "{{count}} workflow",
+      "countWorkflows_other": "{{count}} workflows",
+      "headerTotalCount_one": "{{count}} background task",
+      "headerTotalCount_other": "{{count}} background tasks",
+      "stateBlockedCount_one": "{{value0}} blocked",
+      "stateBlockedCount_other": "{{value0}} blocked",
+      "stateDoneCount_one": "{{value0}} done",
+      "stateDoneCount_other": "{{value0}} done",
+      "stateIdleCount_one": "{{value0}} stopped",
+      "stateIdleCount_other": "{{value0}} stopped",
+      "stateMonitoringCount_one": "{{value0}} monitoring",
+      "stateMonitoringCount_other": "{{value0}} monitoring",
+      "stateUnverifiableCount_one": "{{value0}} with status unavailable",
+      "stateUnverifiableCount_other": "{{value0}} with status unavailable",
+      "stateWaitingCount_one": "{{value0}} waiting",
+      "stateWaitingCount_other": "{{value0}} waiting",
+      "stateWorkingCount_one": "{{value0}} working",
+      "stateWorkingCount_other": "{{value0}} working"
+    },
+    "fileReader": {
+      "reviewNotes_one": "{{count}} review note",
+      "reviewNotes_other": "{{count}} review notes"
+    },
+    "queuedMessageCardRow": {
+      "images_one": "{{count}} image",
+      "images_other": "{{count}} images"
+    },
+    "useDiffReviewGitActions": {
+      "reviewedFilesStaged_one": "{{count}} reviewed file staged",
+      "reviewedFilesStaged_other": "{{count}} reviewed files staged"
+    }
+  },
+  "settings": {
+    "appUpdateSettingsRows": {
+      "lastCheckedDays_one": "Last checked {{count}}d ago",
+      "lastCheckedDays_other": "Last checked {{count}}d ago",
+      "lastCheckedHours_one": "Last checked {{count}}h ago",
+      "lastCheckedHours_other": "Last checked {{count}}h ago",
+      "lastCheckedMinutes_one": "Last checked {{count}}m ago",
+      "lastCheckedMinutes_other": "Last checked {{count}}m ago"
+    },
+    "pendingCredentialCleanupCard": {
+      "cleanupUnconfirmed_one": "Couldn't confirm cleanup for {{count}} credential on this device.",
+      "cleanupUnconfirmed_other": "Couldn't confirm cleanup for {{count}} credentials on this device."
+    }
+  },
+  "sourceControl": {
+    "actions": {
+      "pullCommits_one": "Pull {{count}} commit.",
+      "pullCommits_other": "Pull {{count}} commits.",
+      "pushCommits_one": "Push {{count}} commit.",
+      "pushCommits_other": "Push {{count}} commits."
+    },
+    "branchCompare": {
+      "commits_one": "{{count}} commit",
+      "commits_other": "{{count}} commits",
+      "files_one": "{{count}} file",
+      "files_other": "{{count}} files"
+    },
+    "dropdownCounts": {
+      "fastForwardCount_one": "Fast-forward {{count}} commit",
+      "fastForwardCount_other": "Fast-forward {{count}} commits",
+      "pullCount_one": "Pull {{count}} commit",
+      "pullCount_other": "Pull {{count}} commits",
+      "pushCount_one": "Push {{count}} commit",
+      "pushCount_other": "Push {{count}} commits",
+      "titleForcePushOlderCopiesCount_one": "Remote only has older copies of local commits. Force push {{count}} branch commit with lease to update {{upstreamName}}.",
+      "titleForcePushOlderCopiesCount_other": "Remote only has older copies of local commits. Force push {{count}} branch commits with lease to update {{upstreamName}}.",
+      "titleManualForcePushReplaceRemote_one": "Force push {{count}} local commit with lease to update {{upstreamName}} and replace remote-only commits.",
+      "titleManualForcePushReplaceRemote_other": "Force push {{count}} local commits with lease to update {{upstreamName}} and replace remote-only commits.",
+      "titleManualForcePush_one": "Force push {{count}} local commit with lease to update {{upstreamName}}.",
+      "titleManualForcePush_other": "Force push {{count}} local commits with lease to update {{upstreamName}}.",
+      "titleUnpublishedForcePushCount_one": "Force push {{count}} branch commit with lease and set an upstream if needed.",
+      "titleUnpublishedForcePushCount_other": "Force push {{count}} branch commits with lease and set an upstream if needed."
+    },
+    "gitHistory": {
+      "days_one": "{{count}}d",
+      "days_other": "{{count}}d",
+      "hours_one": "{{count}}h",
+      "hours_other": "{{count}}h",
+      "minutes_one": "{{count}}m",
+      "minutes_other": "{{count}}m",
+      "months_one": "{{count}}mo",
+      "months_other": "{{count}}mo",
+      "years_one": "{{count}}y",
+      "years_other": "{{count}}y"
+    },
+    "prChip": {
+      "openWithComments_one": "Pull request #{{number}}, {{state}}, {{checks}}, {{count}} unresolved comments. Open pull request.",
+      "openWithComments_other": "Pull request #{{number}}, {{state}}, {{checks}}, {{count}} unresolved comments. Open pull request."
+    }
+  },
+  "tasks": {
+    "detailCommentRenderers": {
+      "comments_one": "{{count}} comment",
+      "comments_other": "{{count}} comments"
+    },
+    "filterPickers": {
+      "teams_one": "{{count}} team",
+      "teams_other": "{{count}} teams"
+    },
+    "githubProjectList": {
+      "moreFields_one": "+{{count}} field",
+      "moreFields_other": "+{{count}} fields"
+    },
+    "itemDetailContent": {
+      "pipelineJobs_one": "{{count}} jobs",
+      "pipelineJobs_other": "{{count}} jobs"
+    },
+    "pickerProjection": {
+      "repos_one": "{{count}} repo",
+      "repos_other": "{{count}} repos",
+      "sources_one": "{{count}} source",
+      "sources_other": "{{count}} sources"
+    },
+    "projectComments": {
+      "comments_one": "{{count}} comment",
+      "comments_other": "{{count}} comments"
+    },
+    "providerViewProjection": {
+      "teams_one": "{{count}} team",
+      "teams_other": "{{count}} teams"
+    },
+    "workspaceTrustDrawers": {
+      "directories_one": "{{count}} directory",
+      "directories_other": "{{count}} directories"
+    }
+  },
+  "worktree": {
+    "agentRowDisplay": {
+      "days_one": "{{count}}d",
+      "days_other": "{{count}}d",
+      "hours_one": "{{count}}h",
+      "hours_other": "{{count}}h",
+      "minutes_one": "{{count}}m",
+      "minutes_other": "{{count}}m"
+    }
+  }
+}

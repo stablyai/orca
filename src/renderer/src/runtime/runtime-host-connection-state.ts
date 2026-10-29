@@ -6,20 +6,17 @@ import { isRuntimeWorkspaceWindowClosed } from '../../../shared/runtime-workspac
 export type HostStatus = 'connected' | 'disconnected' | 'connecting'
 export type RuntimeHostTransportState = 'connected' | 'checking' | 'disconnected'
 
-// Why: 'workspace-window-closed' is a reachable host that cannot serve graph-backed
-// work — connected for counting purposes, but not interchangeable with 'connected'.
+// Closed workspace windows leave reachable but graph-less hosts; count connected while preserving degraded status.
 export type RuntimeHostConnectionState =
   | 'connected'
-  // The SSH/control transport is up, but the Orca runtime did not answer its
-  // status probe. This is distinct from a disconnected transport.
+  // Live SSH/control transport with unanswered runtime probe is distinct from disconnected.
   | 'runtime-unavailable'
   | 'workspace-window-closed'
   | 'checking'
   | 'reconnecting'
   | 'disconnected'
 
-// Why: one derivation for every host surface (status bar + Settings > Available Hosts),
-// so a degraded host can never read "Connected" in one place and "Ready" in the other.
+// Share derivation across status bar/Settings so degraded hosts get consistent labels.
 export function runtimeHostConnectionState({
   hasStatusEntry,
   status,
@@ -53,12 +50,10 @@ export function runtimeHostConnectionState({
     if (transportState === 'connected') {
       return 'runtime-unavailable'
     }
-    // The control channel is still negotiating/reconnecting, so the host's
-    // runtime outcome is not yet knowable.
+    // Negotiating/reconnecting transport cannot yet prove runtime outcome.
     return transportState === 'checking' ? 'checking' : 'disconnected'
   }
-  // Why no lastError requirement: a clean close (server restart, host sleep, network
-  // blip) leaves lastError null, and demanding an error string painted those hosts green.
+  // Clean closes leave no lastError; requiring one falsely paints dead hosts green.
   if (statusRemoteControl?.state === 'closed') {
     return 'disconnected'
   }
@@ -66,22 +61,17 @@ export function runtimeHostConnectionState({
   if (statusRemoteControl && statusRemoteControl.state !== 'ready') {
     return 'checking'
   }
-  // Why: reachable but graph-less — the transport is fine, so this is not a network
-  // disconnect, but calling it "Connected" hides that nothing will run there.
+  // Reachable but graph-less is degraded: transport works, but Connected hides that no work runs.
   if (isRuntimeWorkspaceWindowClosed(status)) {
     return 'workspace-window-closed'
   }
-  // Why: "connected" means attached/reachable, NOT "is the active default host".
-  // Both surfaces must agree on that single definition, or a reachable-but-not-active
-  // host reads "Connected" in one place and "Available" in the other. Active/default is
-  // a separate concept (surfaced elsewhere), so it must not change this state.
+  // Connected means reachable regardless of active/default selection; every surface must use that definition.
   return 'connected'
 }
 
 export function runtimeStatusForOverall(state: RuntimeHostConnectionState): HostStatus {
   switch (state) {
-    // Why: a closed workspace window is a degraded host, not a lost connection —
-    // it must keep counting toward the connected-host total.
+    // Closed workspace windows degrade runtime service, not contact; retain connected-host count.
     case 'connected':
     case 'runtime-unavailable':
     case 'workspace-window-closed':
@@ -121,9 +111,7 @@ export function runtimeHostConnectionStateForEntry(
 ): RuntimeHostConnectionState {
   const snapshot = entry?.snapshot
   if (snapshot) {
-    // Why the contact and not the snapshot fields: these four branches were the only place that
-    // knew a non-verified probe has kinds, and every other reader had to re-derive them or guess.
-    // Naming them once means the next reader picks an arm instead of re-reading a null.
+    // Name nonverified contact outcomes once so readers choose an arm instead of guessing from null snapshot fields.
     const contact = runtimeHostContactFromSnapshot(snapshot, entry?.status ?? null)
     if (contact.verdict === 'retired' || contact.verdict === 'refused') {
       return 'disconnected'
@@ -143,11 +131,7 @@ export function runtimeHostConnectionStateForEntry(
   return runtimeHostConnectionState({
     hasStatusEntry: Boolean(entry),
     status: entry?.status ?? null,
-    // Why only 'connecting': a transport mid-handshake fell through to the default and
-    // reported a host still establishing contact as down. 'unknown' keeps that default on
-    // purpose — it means no transport was ever attempted, which for an unreachable paired
-    // host is the permanent state, and 'checking' there withdraws its Connect action and
-    // pins the status bar to "connecting" forever.
+    // Connecting is ongoing negotiation; unknown is never attempted and may remain so permanently. Calling unknown checking hides Connect and pins the spinner forever.
     ...(snapshot?.transport === 'connecting' ? { transportStatus: 'checking' as const } : {}),
     remoteControl: entry?.remoteControl ?? entry?.status?.remoteControl ?? null
   })

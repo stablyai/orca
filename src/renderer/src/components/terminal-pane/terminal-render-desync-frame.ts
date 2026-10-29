@@ -99,8 +99,7 @@ export function reachRenderInternals(terminal: unknown): SentinelRenderInternals
       canvas: renderer._canvas,
       cellWidth: cell.width,
       cellHeight: cell.height,
-      // xterm packs colors as RRGGBBAA; compare against the active theme so
-      // light terminals do not make every background pixel look like glyph ink.
+      // Compare RRGGBBAA against live theme background so light terminals do not classify all background pixels as ink.
       backgroundRgb: [
         backgroundRgba >>> 24,
         (backgroundRgba >>> 16) & 255,
@@ -222,8 +221,7 @@ function getReadbackContext(width: number, height: number): CanvasRenderingConte
 }
 
 export function releaseRenderDesyncReadback(): void {
-  // Why: the diagnostic reuses one backing store during its burst, then drops
-  // the potentially multi-megabyte canvas instead of retaining it for the app lifetime.
+  // Reuse backing storage during a burst, then release its potentially large canvas.
   if (readbackCanvas) {
     readbackCanvas.width = 0
     readbackCanvas.height = 0

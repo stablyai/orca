@@ -100,7 +100,6 @@ export function registerOrcaRuntimeAutomationsTests(): void {
           workspaceId: null,
           setupDecision: 'skip'
         }),
-        // Owner options are absent on an unfenced RPC create; the arg still rides.
         undefined
       )
       expect(automation.id).toBe('auto-1')

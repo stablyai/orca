@@ -1,10 +1,3 @@
-// A typed background-task row is provider output. Journaling one must reopen a
-// turn the provider resumed on its own, or the session renders the row while
-// the projector — and so the sidebar row and the chat indicator — read idle.
-//
-// This is the same failure shape as the reported incident: a `result` settles
-// the turn, then a background task reports in and wakes the agent.
-
 import { describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalItemBody,
@@ -62,7 +55,6 @@ function systemFrame(uuid: string, fields: Record<string, unknown>) {
   }
 }
 
-/** The assistant turn that invokes the spawn tool, which admission requires. */
 function spawnToolCall(translator: ReturnType<typeof harness>['translator']) {
   translator.handle({
     type: 'message' as const,
@@ -110,7 +102,6 @@ describe('a typed background-task row opens the turn it resumes', () => {
       })
     )
     settleTurn(translator)
-    // The turn is settled: this is the state the reported session was in.
     expect(projected(items())).toBe('idle')
 
     translator.handle(
@@ -123,15 +114,82 @@ describe('a typed background-task row opens the turn it resumes', () => {
       })
     )
 
-    // The typed row is journaled...
-    // `agentJournalItemKey` percent-encodes the ':', so the durable row reads
-    // `orca:claude-background-task%3Abyjnee2no`.
     const taskRow = items().find((item) => item.itemId.includes('byjnee2no'))
     expect(taskRow).toBeDefined()
-    // ...and it opened a turn, so the session does not read idle beside it.
     const running = items().filter((item) => readAgentJournalTurn(item.body)?.state === 'running')
     expect(running).toHaveLength(1)
     expect(projected(items())).toBe('working')
+  })
+
+  it('keeps an idle chat idle when a live task only reports progress', () => {
+    const { translator, items } = harness()
+    spawnToolCall(translator)
+    translator.handle(
+      systemFrame('s1', {
+        subtype: 'task_started',
+        task_id: 'live-progress',
+        tool_use_id: TOOL,
+        task_type: 'local_bash',
+        description: 'Wait for the verification verdict',
+        is_backgrounded: true
+      })
+    )
+    settleTurn(translator)
+    expect(projected(items())).toBe('idle')
+
+    translator.handle(
+      systemFrame('s2', {
+        subtype: 'task_progress',
+        task_id: 'live-progress',
+        tool_use_id: TOOL,
+        usage: { total_tokens: 14866 }
+      })
+    )
+
+    const taskRow = items().find((item) => item.itemId.includes('live-progress'))
+    expect(taskRow).toBeDefined()
+    expect(JSON.stringify(taskRow?.body)).toContain('14866')
+    expect(
+      items().filter((item) => readAgentJournalTurn(item.body)?.state === 'running')
+    ).toHaveLength(0)
+    expect(projected(items())).toBe('idle')
+  })
+
+  it('keeps an idle chat idle when a live task roster only refreshes its name', () => {
+    const { translator, items } = harness()
+    spawnToolCall(translator)
+    translator.handle(
+      systemFrame('s1', {
+        subtype: 'task_started',
+        task_id: 'live-roster',
+        tool_use_id: TOOL,
+        task_type: 'local_bash',
+        is_backgrounded: true
+      })
+    )
+    settleTurn(translator)
+    expect(projected(items())).toBe('idle')
+
+    translator.handle(
+      systemFrame('s2', {
+        subtype: 'background_tasks_changed',
+        tasks: [
+          {
+            task_id: 'live-roster',
+            task_type: 'local_bash',
+            description: 'Named after the turn settled'
+          }
+        ]
+      })
+    )
+
+    const taskRow = items().find((item) => item.itemId.includes('live-roster'))
+    expect(taskRow).toBeDefined()
+    expect(JSON.stringify(taskRow?.body)).toContain('Named after the turn settled')
+    expect(
+      items().filter((item) => readAgentJournalTurn(item.body)?.state === 'running')
+    ).toHaveLength(0)
+    expect(projected(items())).toBe('idle')
   })
 
   it('does not reopen a completed turn for a late task revision', () => {

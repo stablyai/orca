@@ -40,7 +40,7 @@ function userMessageWith(part: unknown) {
   }
 }
 
-/** Exactly what claudeDispatchMessageContent sends for a local attachment. */
+/** Local-image replay shape emitted by claudeDispatchMessageContent. */
 const BASE64_IMAGE = {
   type: 'image',
   source: { type: 'base64', media_type: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUg==' }
@@ -160,9 +160,7 @@ describe('Claude message content parts', () => {
 
     const rows = providerRows(state.items)
     expect(rows).toHaveLength(1)
-    // The kind stays on the row for debugging, behind the disclosure.
     expect(rows[0].kind).toBe('message:assistant:content:some_future_part')
-    // ...but the visible text is a sentence, not the opcode.
     expect(rows[0].text).not.toContain('message:assistant:content')
     expect(rows[0].text.toLowerCase()).toContain('claude')
   })

@@ -39,7 +39,8 @@ function harness(options: { startupTerminal?: Record<string, unknown> | null } =
       paneKey: 'tab-1:leaf-1',
       ptyId: 'pty-1',
       worktreeId: 'wt-1',
-      title: 'Nightly'
+      title: 'Nightly',
+      suppressStartupUpdatePrompt: true
     })),
     showManagedWorktree: vi.fn(async () => ({ displayName: 'repo' })),
     getAgentStatusRowsForPane: vi.fn((_paneKey: string) => [
@@ -50,7 +51,7 @@ function harness(options: { startupTerminal?: Record<string, unknown> | null } =
     ),
     getTerminalPtyIdForHandle: vi.fn((_handle: string) => 'pty-prev'),
     deliverStartupFollowup: vi.fn(
-      async (_handle: string, _followup: { expectedProcess: string; prompt: string }) => true
+      async (_handle: string, _followup: { agent: string; prompt: string }) => true
     )
   }
   return runtime
@@ -67,7 +68,12 @@ function automation(overrides: Record<string, unknown>) {
   }
 }
 
-const RUN = { id: 'run-1', title: 'Nightly', scheduledFor: Date.UTC(2026, 9, 9, 3) }
+const RUN = {
+  id: 'run-1',
+  title: 'Nightly',
+  scheduledFor: Date.UTC(2026, 9, 9, 3),
+  trigger: 'scheduled' as const
+}
 const TARGET = { ok: true, repo: { id: 'repo-1', path: '/repo', displayName: 'repo' } }
 
 function previousRun(overrides: Partial<AutomationRun> = {}): AutomationRun {
@@ -99,7 +105,8 @@ function previousRun(overrides: Partial<AutomationRun> = {}): AutomationRun {
 function launch(
   runtime: ReturnType<typeof harness>,
   overrides: Record<string, unknown>,
-  runs: AutomationRun[] = []
+  runs: AutomationRun[] = [],
+  run: typeof RUN | (Omit<typeof RUN, 'trigger'> & { trigger: 'manual' }) = RUN
 ) {
   return launchHeadlessAutomationAgent(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch reads only the members faked in harness().
@@ -107,7 +114,7 @@ function launch(
     {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only these automation fields are read.
       automation: automation(overrides) as never,
-      run: RUN,
+      run,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the repo is read.
       target: TARGET as never,
       runs
@@ -116,41 +123,18 @@ function launch(
 }
 
 describe('headless automation agent launch', () => {
-  it('launches Hermes through the ordinary agent contract', async () => {
-    const runtime = harness()
+  // E9: the runtime holds a background start on a stopped WSL distro; only Run now names the user.
+  it("starts Run now as the user's act, and a scheduled run as background work", async () => {
+    const scheduled = harness()
+    await launch(scheduled, {})
+    expect(scheduled.launchAgentTerminal.mock.calls[0]?.[1]).not.toHaveProperty('wslUserAct')
 
-    const launched = await launch(runtime, { agentId: 'hermes' })
-
-    expect(runtime.launchAgentTerminal).toHaveBeenCalledWith('id:wt-1', {
-      agent: 'hermes',
-      prompt: 'fix the flaky test',
-      title: 'Nightly'
-    })
-    expect(runtime.deliverStartupFollowup).not.toHaveBeenCalled()
-    expect(launched.terminalHandle).toBe('term_existing')
-  })
-
-  it('starts an argv agent in an existing workspace with the prompt on its command', async () => {
-    const runtime = harness()
-
-    const launched = await launch(runtime, { extraAgentArgs: '--model opus' })
-
-    expect(runtime.launchAgentTerminal).toHaveBeenCalledWith('id:wt-1', {
-      agent: 'claude',
-      prompt: 'fix the flaky test',
-      title: 'Nightly',
-      extraAgentArgs: '--model opus'
-    })
-    expect(runtime.deliverStartupFollowup).not.toHaveBeenCalled()
-    expect(runtime.getStructuredAgentSessionCreateSupport).not.toHaveBeenCalled()
-    expect(launched).toEqual({
-      workspaceId: 'wt-1',
-      workspaceDisplayName: 'repo',
-      terminalHandle: 'term_existing',
-      terminalSessionId: 'tab-1',
-      terminalPaneKey: 'tab-1:leaf-1',
-      terminalPtyId: 'pty-1'
-    })
+    const manual = harness()
+    await launch(manual, {}, [], { ...RUN, trigger: 'manual' })
+    expect(manual.launchAgentTerminal).toHaveBeenCalledWith(
+      'id:wt-1',
+      expect.objectContaining({ wslUserAct: true })
+    )
   })
 
   it('starts a post-start agent bare and delivers its prompt once, after the terminal is recorded', async () => {
@@ -162,7 +146,6 @@ describe('headless automation agent launch', () => {
 
     const launched = await launch(runtime, { agentId: 'aider' })
 
-    // The run is recorded while the agent is still coming up, as before.
     expect(launched.terminalPaneKey).toBe('tab-1:leaf-1')
     expect(runtime.launchAgentTerminal).toHaveBeenCalledWith(
       'id:wt-1',
@@ -170,58 +153,10 @@ describe('headless automation agent launch', () => {
     )
     expect(runtime.deliverStartupFollowup).toHaveBeenCalledTimes(1)
     expect(runtime.deliverStartupFollowup).toHaveBeenCalledWith('term_existing', {
-      expectedProcess: 'aider',
+      agent: 'aider',
       prompt: 'fix the flaky test'
     })
     finishDelivery(true)
-  })
-
-  it('creates a new-per-run workspace agent-first with the argv prompt', async () => {
-    const runtime = harness()
-
-    const launched = await launch(runtime, {
-      workspaceMode: 'new_per_run',
-      workspaceId: null,
-      extraAgentArgs: '--model opus'
-    })
-
-    expect(runtime.createManagedWorktree).toHaveBeenCalledTimes(1)
-    const args = runtime.createManagedWorktree.mock.calls[0]![0]
-    expect(args).toMatchObject({
-      repoSelector: 'repo-1',
-      activate: false,
-      setupDecision: 'skip',
-      startupAgent: 'claude',
-      startupPrompt: 'fix the flaky test',
-      startupExtraAgentArgs: '--model opus',
-      createdWithAgent: 'claude',
-      telemetrySource: 'unknown'
-    })
-    expect(args).not.toHaveProperty('awaitTerminalProvisioning')
-    expect(args).not.toHaveProperty('observeSetupCompletion')
-    expect(runtime.launchAgentTerminal).not.toHaveBeenCalled()
-    expect(runtime.deliverStartupFollowup).not.toHaveBeenCalled()
-    expect(launched).toEqual({
-      workspaceId: 'repo-1::/wt/auto',
-      workspaceDisplayName: 'auto-nightly',
-      terminalHandle: 'term_new',
-      terminalSessionId: 'tab-new',
-      terminalPaneKey: 'tab-new:leaf-1',
-      terminalPtyId: 'pty-new'
-    })
-  })
-
-  it('creates a new-per-run workspace for a post-start agent and delivers its prompt once', async () => {
-    const runtime = harness()
-
-    await launch(runtime, { agentId: 'goose', workspaceMode: 'new_per_run', workspaceId: null })
-
-    expect(runtime.createManagedWorktree.mock.calls[0]![0]).not.toHaveProperty('startupPrompt')
-    expect(runtime.deliverStartupFollowup).toHaveBeenCalledTimes(1)
-    expect(runtime.deliverStartupFollowup).toHaveBeenCalledWith('term_new', {
-      expectedProcess: 'goose',
-      prompt: 'fix the flaky test'
-    })
   })
 
   it('fails the run with the create warning when no agent terminal started, without a second one', async () => {
@@ -231,18 +166,6 @@ describe('headless automation agent launch', () => {
       launch(runtime, { workspaceMode: 'new_per_run', workspaceId: null })
     ).rejects.toThrow('Startup terminal failed.')
     expect(runtime.launchAgentTerminal).not.toHaveBeenCalled()
-  })
-
-  it('launches bare and delivers nothing for a blank prompt', async () => {
-    const runtime = harness()
-
-    await launch(runtime, { agentId: 'aider', prompt: '   ' })
-
-    expect(runtime.launchAgentTerminal).toHaveBeenCalledWith(
-      'id:wt-1',
-      expect.objectContaining({ prompt: '' })
-    )
-    expect(runtime.deliverStartupFollowup).not.toHaveBeenCalled()
   })
 
   it('logs a failure after the terminal was recorded instead of dropping it', async () => {

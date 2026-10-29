@@ -92,6 +92,13 @@ export function computerUseErrorRecoveryData(
         'If the message mentions the payload cap, target a smaller/current window or use `--no-screenshot`.'
       )
     case 'accessibility_error':
+      // Why: an Orca server installed before it bundled computer use reports only this exit (#31777).
+      if (message?.startsWith('computer sidecar exited with code')) {
+        return recoverWith(
+          'If this targets an Orca server (`orca serve`, SSH or WSL), its install may not include computer use: update or reprovision the server, then retry.',
+          'Run `orca computer capabilities --json` to confirm the provider is available before retrying.'
+        )
+      }
       return recoverWith(
         'Run `orca computer capabilities --json` to confirm the provider is available before retrying.',
         'If the message mentions permissions, run `orca computer permissions --id accessibility --json` and grant access.',

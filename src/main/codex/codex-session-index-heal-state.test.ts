@@ -34,7 +34,7 @@ function createPaths(systemSessionsRoot = WINDOWS_SESSIONS_ROOT): CodexSessionIn
 }
 
 function appendAuditRecord(paths: CodexSessionIndexHealPaths, target: string, recordId: string) {
-  // Mirrors the real writer's leading newline, which quarantines a torn tail.
+  // Match the production newline that isolates torn ledger tails.
   appendFileSync(
     paths.auditLogPath,
     `\n${JSON.stringify({ action: 'hardlink', source: '/managed/x.jsonl', target, recordId })}\n`
@@ -124,13 +124,11 @@ describe('codex session index heal state', () => {
     clearInterval(ticker)
 
     expect(pending).toHaveLength(20_000)
-    // A blocking readFileSync + whole-file JSON.parse would starve every timer.
     expect(ticks).toBeGreaterThan(0)
   })
 
   it('refuses to treat an unreadable audit ledger as an empty work queue', async () => {
     const paths = createPaths()
-    // A directory in the audit's place surfaces EISDIR rather than ENOENT.
     mkdirSync(paths.auditLogPath, { recursive: true })
 
     await expect(collectPendingHealThreads(paths)).rejects.toThrow()

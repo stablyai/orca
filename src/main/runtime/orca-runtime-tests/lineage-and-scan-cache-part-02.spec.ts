@@ -117,7 +117,6 @@ describe('OrcaRuntimeService', () => {
     const [aId, bId, cId, dId, eId, fId, hId] = names.map(
       (name) => `${TEST_REPO_ID}::/tmp/worktree-${name}`
     )
-    // A remote project's row saved without a host by an older build.
     const gId = 'repo-remote::/remote/worktree-g'
     const metaById: Record<string, WorktreeMeta> = Object.fromEntries(
       [aId, bId, cId, dId, eId, fId, gId, hId].map((id) => [
@@ -137,10 +136,9 @@ describe('OrcaRuntimeService', () => {
     const lineageById: Record<string, WorktreeLineage> = {
       [aId]: edge(aId, bId),
       [bId]: edge(bId, cId),
-      // d <-> e is a loop saved by an older build.
       [dId]: edge(dId, eId),
       [eId]: edge(eId, dId),
-      // Cross-host links an older create could save; readers never follow them.
+      // Legacy cross-host lineage must never be followed.
       [fId]: edge(fId, gId),
       [gId]: edge(gId, hId)
     }
@@ -161,7 +159,7 @@ describe('OrcaRuntimeService', () => {
     )
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
-    // Why: the reparent itself invalidates the resolved-worktree cache, so the walk must not need it.
+    // Reparent invalidates resolved cache; lineage walks must not depend on it.
     await expect(
       runtime.updateManagedWorktreeMeta(`id:${cId}`, { lineage: { parentWorktree: `id:${aId}` } })
     ).rejects.toThrow('lineage cycle')
@@ -421,9 +419,7 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
-  // Why (#10562): the renderer purges its state regardless of the sweep result, so
-  // revalidating against a cached scan (30s TTL) that still lists an already-deleted
-  // directory would strand those PTYs permanently — nothing asks a second time.
+  // #10562: renderer purges even after failed sweep; stale 30s scan rows would strand PTYs with no later retry.
   it('revalidates against a fresh scan instead of a warm worktree-scan cache', async () => {
     const deletedId = `${TEST_REPO_ID}::/tmp/deleted`
     const localProvider = {
@@ -436,14 +432,12 @@ describe('OrcaRuntimeService', () => {
       getLocalProvider: () => localProvider as never
     })
 
-    // Warm the scan cache while the worktree still exists.
     vi.mocked(listWorktrees).mockResolvedValueOnce([
       { path: '/tmp/deleted', head: 'abc', branch: 'd', isBare: false, isMainWorktree: false }
     ])
     await runtime.teardownMissingManagedWorktreeTerminals(`id:${TEST_REPO_ID}`, [deletedId])
     expect(localProvider.shutdown).not.toHaveBeenCalled()
 
-    // The worktree is now gone; the cached scan must not mask that.
     vi.mocked(listWorktrees).mockResolvedValue([])
     const result = await runtime.teardownMissingManagedWorktreeTerminals(`id:${TEST_REPO_ID}`, [
       deletedId
@@ -481,9 +475,7 @@ describe('OrcaRuntimeService', () => {
     expect(localProvider.listProcesses).not.toHaveBeenCalled()
   })
 
-  // Why: an explicit connection identity only narrows the selector, it must not
-  // change the grammar. Treating the selector as a bare repo id made every
-  // `path:`/`name:` selector fail repo_not_found on this path alone.
+  // Connection identity narrows scope, never selector grammar; path/name selectors must still resolve.
   it('resolves non-id selectors when a connection identity is supplied', async () => {
     const deletedId = `${TEST_REPO_ID}::/tmp/deleted`
     const localProvider = {
@@ -508,7 +500,6 @@ describe('OrcaRuntimeService', () => {
       worktrees: []
     })
 
-    // `path:` is ambiguous across the two rows; connectionId null selects the local one.
     const result = await runtime.teardownMissingManagedWorktreeTerminals(
       `path:${localRepo.path}`,
       [deletedId],
@@ -552,7 +543,6 @@ describe('OrcaRuntimeService', () => {
 
     await runtime.teardownMissingManagedWorktreeTerminals(TEST_REPO_ID, [deletedId], 'ssh-1')
 
-    // The SSH repo was selected, so the local inventory is never swept.
     expect(localProvider.listProcesses).not.toHaveBeenCalled()
   })
 
@@ -630,7 +620,6 @@ describe('OrcaRuntimeService', () => {
         createdAt: 1
       }
     }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial store mock; the code under test reads only the members it defines.
     const runtime = new OrcaRuntimeService({
       ...store,
       getRepos: () => [folderRepo],
@@ -642,7 +631,7 @@ describe('OrcaRuntimeService', () => {
         return metaById[worktreeId]
       },
       getAllWorktreeLineage: () => lineageById
-    } as never)
+    })
 
     const result = await runtime.listDetectedManagedWorktrees(`id:${folderRepo.id}`)
 

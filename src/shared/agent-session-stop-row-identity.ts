@@ -1,8 +1,4 @@
-// The identities of the rows a host writes about a stop, shared with the readers that must not say
-// the same stop twice (`native-chat-cut-turn-notice`).
-//
-// Contract: a new row that explains a stop must carry the providerExited fact or one of these
-// prefixes, or a client derives a second notice beside it.
+// New stop-explanation rows need providerExited or these prefixes; otherwise native-chat-cut-turn-notice derives a duplicate notice.
 
 /** The exit row the child-exit settle writes for an unexpected exit, keyed by the child that exited. */
 export const PROVIDER_EXIT_ROW_PREFIX = 'provider-exit:'

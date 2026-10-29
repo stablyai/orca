@@ -54,7 +54,7 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
         return
       }
       const ptyId = paneTransportsRef.current.get(paneId)?.getPtyId() ?? null
-      closeWebRuntimeTerminal(ptyId)
+      closeWebRuntimeTerminal(ptyId, worktreeId)
       clearSessionRestoredBannerForPane(paneId)
       const leafId = manager.getLeafId(paneId)
       if (leafId) {
@@ -93,14 +93,16 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
       }
       manager.closePane(paneId)
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     [
       clearSessionRestoredBannerForPane,
       onCloseTab,
       syncPanePtyLayoutBinding,
       syncPanePtyLayoutBindingForLeaf,
       tabId,
-      worktreeId
+      worktreeId,
+      managerRef,
+      paneTransportsRef,
+      setTerminalErrorsByPaneId
     ]
   )
   const executeClosePane = useCallback(
@@ -127,13 +129,11 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
       }
       closePaneLocally(paneId)
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-    [closePaneLocally, onCloseTab, tabId, worktreeId]
+    [closePaneLocally, onCloseTab, tabId, worktreeId, managerRef]
   )
   const getCloseDialogCopyKind = useCallback(
     (paneId: number) => resolveLeafCloseCopyKind(tabId, managerRef.current?.getLeafId(paneId)),
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-    [tabId]
+    [tabId, managerRef]
   )
   const handleRequestClosePane = useCallback(
     (paneId: number) => {
@@ -179,8 +179,7 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
           ),
         RUNNING_CLOSE_PROBE_TIMEOUT_MS
       )
-      // Why the shared probe rather than a direct inspect: this is the same question the tab-close
-      // guard asks, and the two must not drift on what an unanswered host means.
+      // Reuse tab-close admission so unanswered-host behavior cannot drift between split and tab closes.
       void probePtyRunningWork([ptyId], { timeoutMs: RUNNING_CLOSE_PROBE_TIMEOUT_MS })
         .then((probes) => {
           clearTimeout(probeTimeout)
@@ -212,8 +211,7 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
     if (pane) {
       handleRequestClosePane(pane.id)
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [handleRequestClosePane])
+  }, [handleRequestClosePane, managerRef])
   useEffect(
     () => onActiveTerminalPaneCloseRequest(tabId, closeActivePane),
     [closeActivePane, tabId]
@@ -236,14 +234,12 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
       }
       confirmedClose()
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-    [executeClosePane, pendingCloseConfirmation, updateSettings]
+    [pendingCloseConfirmation, updateSettings, setPendingCloseConfirmation]
   )
   const handleCancelClose = useCallback(() => {
     confirmedCloseRef.current = null
     setPendingCloseConfirmation(null)
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [])
+  }, [setPendingCloseConfirmation])
   const resolveExternalPaneDropTarget = useCallback(
     ({
       sourcePaneId,
@@ -265,8 +261,7 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
         worktreeId
       })
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-    [worktreeId]
+    [worktreeId, managerRef]
   )
   const handleExternalPaneDrop = useCallback(
     (sourcePaneId: number, target: PaneExternalDropTarget): boolean => {
@@ -291,8 +286,7 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
       }).catch((error) => console.warn('[terminal-pane-detach] move failed', error))
       return true
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-    [persistLayoutSnapshot, tabId, worktreeId]
+    [persistLayoutSnapshot, tabId, worktreeId, managerRef, paneCwdRef, paneTransportsRef]
   )
 
   return {

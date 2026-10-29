@@ -1,26 +1,15 @@
 import { z } from 'zod'
+import type { TextGenerationFailureFields } from '../../../src/shared/text-generation-failure-copy'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 
-// Mirrors the host GenerateCommitMessageResult (src/main/text-generation/
-// commit-message-text-generation.ts) — a single resolved result, not a stream.
 export type MobileGenerateCommitMessageResult =
   | { success: true; message: string }
-  | { success: false; error: string; canceled?: boolean }
+  | ({ success: false; canceled?: boolean } & TextGenerationFailureFields)
 
-// Host-state changes. A lost reply here is unknown, never failed: none of these operations
-// interprets a transport rejection, so the delivery-unknown marker reaches the caller intact.
+// Preserve delivery-unknown on lost mutation replies; rejection does not prove the host did nothing.
 
-/**
- * git.commit answers in-band: an accepted reply can still carry `success: false`.
- *
- * Nullish and every member optional because that is exactly what the consumer tolerates —
- * mobile-hosted-review-git-preparation.ts:107 compares `outcome.success === true` and :109 passes
- * `outcome.error` through hostReplyErrorTextOrFallback, which already reads a non-string as absent.
- * An absent or null payload stays a failed commit carrying the screen's copy, which is main's
- * documented contract for this reply ("reads as absent, not as a throw"), not an accident.
- * A present but non-boolean `success` is a malformed reply and now says so.
- */
+// Accepted commits may fail in-band; absent/null payloads remain failed outcomes, while malformed success flags reject.
 const gitCommitOutcomeSchema = z
   .object({
     success: z.boolean().optional(),
@@ -40,12 +29,9 @@ export const gitCommitRun = bindDeferredRpcOperation(
   })
 )
 
-// Three replies with no reader anywhere in mobile: the caller needs acceptance and nothing else.
-// `z.unknown()` is the honest schema for that, not a holdout — there is no member to require, and
-// requiring a shape mobile never looks at would reject hosts for no gain.
+// Only acceptance is consumed; requiring unread payload fields would reject compatible hosts.
 const unreadPayload = z.unknown()
 
-/** Publish, push and force-with-lease are one operation; only the params differ. */
 export const gitPushRun = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'git.push-branch',
@@ -53,6 +39,16 @@ export const gitPushRun = bindDeferredRpcOperation(
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('push-accepted', unreadPayload)
+  })
+)
+
+export const gitFastForwardRun = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'git.fast-forward-branch',
+    method: 'git.fastForward',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('fast-forward-accepted', unreadPayload)
   })
 )
 
@@ -68,15 +64,7 @@ export const gitBulkStageRun = bindDeferredRpcOperation(
 
 const GENERATE_FAILED = 'Failed to generate commit message'
 
-/**
- * Normalizes the host GenerateCommitMessageResult into the discriminated result the UI switches on.
- *
- * Always compatible by construction: every shape maps to a declared outcome, because a malformed
- * reply here must show the screen's copy rather than a decode error in a commit-message field.
- * The arms are main's four branches in main's order, including the one the recorded
- * `sc-commit-message-canceled` scenario takes — `{ success: false, error: '', canceled: true }`
- * keeps its cancel mark while its empty error falls back to the screen's copy.
- */
+// Normalize malformed generation replies to UI fallbacks; preserve cancellation even with an empty error.
 const NO_MESSAGE_GENERATED = 'No commit message generated'
 
 const generatedCommitMessageSchema: z.ZodType<MobileGenerateCommitMessageResult, unknown> = z
@@ -91,26 +79,25 @@ const generatedCommitMessageSchema: z.ZodType<MobileGenerateCommitMessageResult,
     z
       .object({
         success: z.literal(false),
-        error: z.string().min(1),
+        error: z.string().min(1).catch(NO_MESSAGE_GENERATED),
+        errorCode: z.string().optional().catch(undefined),
+        errorParams: z
+          .record(z.string(), z.union([z.string(), z.number()]))
+          .optional()
+          .catch(undefined),
+        errorDetail: z.string().optional().catch(undefined),
         canceled: z.unknown().optional()
       })
 
       .transform((value): MobileGenerateCommitMessageResult => ({
         success: false,
         error: value.error,
+        ...(value.errorCode !== undefined ? { errorCode: value.errorCode } : {}),
+        ...(value.errorParams !== undefined ? { errorParams: value.errorParams } : {}),
+        ...(value.errorDetail !== undefined ? { errorDetail: value.errorDetail } : {}),
         ...(value.canceled ? { canceled: true } : {})
       })),
-    z
-      .object({ success: z.literal(false), canceled: z.unknown().optional() })
-
-      .transform((value): MobileGenerateCommitMessageResult => ({
-        success: false,
-        error: NO_MESSAGE_GENERATED,
-        ...(value.canceled ? { canceled: true } : {})
-      })),
-    // Main split its fallback in two: a non-object reply says the generation failed, while an
-    // object it could not read says none was generated. `typeof null === 'object'` is why the
-    // guard is falsy rather than nullish.
+    // Null/non-object means generation failed; unreadable objects use the no-message fallback.
     z
       .unknown()
       .refine((value) => !value || typeof value !== 'object')
@@ -131,7 +118,6 @@ export const gitGenerateCommitMessageRun = bindDeferredRpcOperation(
   })
 )
 
-/** Cancel is advisory: a refusal means the generation already finished, which is not an error. */
 export const gitCancelGenerateCommitMessageRun = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'git.cancel-generate-commit-message-or-skip',

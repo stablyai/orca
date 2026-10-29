@@ -19,6 +19,8 @@ describe('real WSL terminal lane', () => {
     'tests/e2e/golden-tab-bar-agent-launch.spec.ts',
     'tests/e2e/terminal-windows-shell-paste-ownership.spec.ts',
     'tests/e2e/terminal-inline-images-windows.spec.ts',
+    'tests/e2e/wsl-bridge-no-background-boot.spec.ts',
+    'config/scripts/verify-wsl-no-background-boot-participation.mjs',
     '.github/actions/setup-wsl-test-runtime/setup.ps1',
     '.github/workflows/windows-wsl-e2e.yml'
   ])('routes %s to both WSL sentinels', (path) => {
@@ -68,5 +70,14 @@ describe('real WSL terminal lane', () => {
     expect(receipt.run).toBe(
       'node config/scripts/verify-wsl-e2e-participation.mjs test-results/wsl-results.json'
     )
+    // E9: the guard terminates only the distro this job imported, and must prove it ran.
+    const guard = steps.find(
+      (step) => step.name === 'Guard that background work never starts the stopped WSL distro'
+    )
+    expect(guard.env.ORCA_E2E_WSL_TERMINATE_DISTRO).toBe('Ubuntu')
+    expect(guard.run).toContain('tests/e2e/wsl-bridge-no-background-boot.spec.ts')
+    expect(guard.run).toContain('--repeat-each=3')
+    const guardReceipt = steps.find((step) => step.name === 'Require all three E9 guard executions')
+    expect(guardReceipt.if).toBe('always()')
   })
 })

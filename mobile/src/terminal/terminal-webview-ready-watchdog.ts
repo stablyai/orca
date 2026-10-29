@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import { AppState } from 'react-native'
+import { translate } from '../i18n/mobile-i18n'
 
-// Why: if the document dies before the glue can post anything (or the RN
-// message bridge never comes up), no webview error and no native handler
-// fires — without a native watchdog that failure is a silent blank pane.
+// Silent startup/bridge failures may emit no error; a native watchdog must turn the blank pane into a reported failure.
 const WEB_READY_WATCHDOG_MS = 15000
 
 export function useTerminalWebReadyWatchdog(
@@ -27,12 +26,15 @@ export function useTerminalWebReadyWatchdog(
         return
       }
       if (AppState.currentState !== 'active') {
-        // Why: backgrounded WebViews legitimately stall; only judge foreground loads.
+        // Background WebViews may legitimately stall; judge readiness only in foreground.
         watchdogRef.current = setTimeout(fire, WEB_READY_WATCHDOG_MS)
         return
       }
       reportEngineError(
-        'Terminal did not initialize - no ready signal from the terminal view',
+        translate(
+          'terminal.webviewReadyWatchdog.initializeFailed',
+          'Terminal did not initialize - no ready signal from the terminal view'
+        ),
         true
       )
     }

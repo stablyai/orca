@@ -19,6 +19,7 @@ import type { OrchestrationDb } from './orchestration/db'
 import { structuredSessionMailReach } from './orchestration/structured-session-mail-address'
 import {
   clearedInto,
+  conversationRecordReader,
   readAgentSessionRecordStore,
   type AgentSessionRecordReader
 } from './orchestration/structured-session-lineage'
@@ -51,7 +52,7 @@ export function createReferenceAgentIndex(
   runtime: ReferenceAgentSource,
   db: OrchestrationDb | null,
   sessions: AgentSessionRecordReader | null = readAgentSessionRecordStore() ??
-    peekOpenedAgentSessionRecordStore(),
+    coldConversationReader(),
   workspaceKeys?: ReadonlySet<string>,
   connectionHosts?: ReadonlyMap<string, ExecutionHostId | null>
 ): ReferenceAgentIndex {
@@ -64,10 +65,14 @@ export function createReferenceAgentIndex(
     index.set(key, entries)
   }
   const visible = sessions?.getVisibleSessionTabIndex?.()
+  let canonicalRecords: ReturnType<AgentSessionRecordReader['listRecords']> | undefined
+  const canonicalStore = {
+    listRecords: () => (canonicalRecords ??= readAgentSessionRecordStore()?.listRecords() ?? [])
+  }
   for (const record of sessions?.listRecords() ?? []) {
     if (
       clearedInto(record) ||
-      // Why: records outlive their chat tab; a closed chat is not an agent on the workspace.
+      // Closed chat records outlive tabs and must not surface as workspace agents.
       (visible?.present && !visible.sessionIds.includes(record.sessionId)) ||
       (workspaceKeys &&
         !workspaceKeys.has(
@@ -84,7 +89,7 @@ export function createReferenceAgentIndex(
     const local = structuredWorkerHostScope(record.location) !== null
     const reachable =
       local && sessions
-        ? structuredSessionMailReach(sessions, record, db).kind === 'reachable'
+        ? structuredSessionMailReach(sessions, record, db, canonicalStore).kind === 'reachable'
         : false
     append(record.location.workspaceId, {
       hostId: record.location.executionHostId,
@@ -180,4 +185,9 @@ export function createReferenceAgentIndex(
     })
   }
   return index
+}
+
+function coldConversationReader(): AgentSessionRecordReader | null {
+  const store = peekOpenedAgentSessionRecordStore()
+  return store ? conversationRecordReader(store) : null
 }

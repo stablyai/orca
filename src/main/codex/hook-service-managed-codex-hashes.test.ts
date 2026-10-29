@@ -26,7 +26,6 @@ vi.mock('os', async (importOriginal) => ({
   ...(await importOriginal<typeof Os>()),
   homedir: homedirMock
 }))
-// Why: stands in for the codex on PATH; each test says what it answers.
 vi.mock('./codex-hook-trust-derivation', async (importOriginal) => ({
   ...(await importOriginal<typeof TrustDerivation>()),
   ...codex
@@ -69,11 +68,7 @@ import { CODEX_DAEMON_OVERRIDE_MARKER } from './codex-daemon-socket-path-guard'
 import { writeCodexTrustGrantLedgerHome } from './codex-trust-grant-ledger'
 import { getCodexHookTrustSignature } from './codex-hook-identity'
 
-// Why this file: a managed CODEX_HOME's approval for Orca's entry is Codex's
-// own hash, not one Orca computes, and is written before the entry.
-
 const homes = setupCodexHookHomes(homedirMock, getPathMock)
-// Why started: lets the lookup ask the stand-in Codex, as the app does.
 beforeEach(() => {
   startCodexHookHashLookup(Promise.resolve())
 })
@@ -101,7 +96,6 @@ function managedKey(eventLabel: CodexEventLabel, groupIndex: number): string {
   })
 }
 
-/** The approval at Orca's entry in each event Codex listed. */
 function listedEventApprovals(): Record<string, string | undefined> {
   const trust = readHookTrustEntries(join(managedHome(), 'config.toml'))
   return Object.fromEntries(
@@ -131,7 +125,7 @@ function seedSystemUserStopHook(): void {
 
 let codexBinaries = 0
 
-/** From now on the codex on PATH is a new binary that gives `answer`, as after an update. */
+/** Change the binary fingerprint as well as the answer to simulate an update. */
 function useAnswer(answer: CodexHookAnswer | Promise<CodexHookAnswer>): void {
   codexBinaries += 1
   codex.fingerprintCodex.mockReturnValue(`codex-${codexBinaries}`)
@@ -173,7 +167,6 @@ describe('managed-home Codex hook approval', () => {
       enabled: true
     })
     expect(trust.get(managedKey('subagent_start', 0))).toBeUndefined()
-    // Why: the mirrored user hook moved behind Orca's group, and its approval with it.
     expect(
       trust.get(
         computeTrustKey({
@@ -224,7 +217,6 @@ describe('managed-home Codex hook approval', () => {
 
     const runtimeHooks = JSON.parse(readFileSync(join(managedHome(), 'hooks.json'), 'utf-8')).hooks
     expect(runtimeHooks.Stop).toEqual([{ hooks: [{ type: 'command', command: 'user-stop.sh' }] }])
-    // Why: the user's hook moved back to group 0, so only its own approval is at that key.
     expect(
       readHookTrustEntries(join(managedHome(), 'config.toml')).get(managedKey('stop', 0))
         ?.trustedHash
@@ -275,7 +267,6 @@ describe('managed-home Codex hook approval', () => {
     upsertHookTrustEntries(join(systemHome, 'config.toml'), [
       { ...userInterrupt, sourcePath: join(systemHome, 'hooks.json') }
     ])
-    // Why: a Codex before 0.150 does not know Interrupt, so Orca's entry does not lead that event.
     useAnswer({ kind: 'hashes', codexVersion: 'codex-cli 0.149.0', hashes: CODEX_HASHES })
 
     expect((await new CodexHookService().install()).state).toBe('installed')
@@ -296,7 +287,6 @@ describe('managed-home Codex hook approval', () => {
     useCodexHashes()
     const service = new CodexHookService()
     expect((await service.install()).state).toBe('installed')
-    // Why: before the shell PATH is hydrated, the codex a pane runs may not be found yet.
     codex.fingerprintCodex.mockReturnValue(null)
 
     const status = await service.install()
@@ -329,7 +319,6 @@ describe('managed-home Codex hook approval', () => {
   it("turning hooks off removes an approval from an older Codex version's hash", async () => {
     useCodexHashes()
     expect((await new CodexHookService().install()).state).toBe('installed')
-    // Why: Codex updated since; the current binary's version hashes the entry differently.
     lookupInternals.resetForTesting()
     memoizeCodexHookAnswer(join(homes.userDataDir, 'codex'), 'codex-0.160', command(), {
       kind: 'hashes',
@@ -357,7 +346,6 @@ describe('managed-home Codex hook approval', () => {
     useCodexHashes()
     const service = new CodexHookService()
     expect((await service.install()).state).toBe('installed')
-    // Why: a Codex update makes the answer for the new binary slower than the launch may wait.
     useAnswer(
       new Promise((resolve) => {
         setTimeout(
@@ -435,7 +423,6 @@ describe('managed-home Codex hook approval', () => {
     useCodexHashes()
     const service = new CodexHookService()
     expect((await service.install()).state).toBe('installed')
-    // Why: a new process that may not ask, and a codex it has no saved answer for.
     lookupInternals.resetForTesting()
     codex.fingerprintCodex.mockReturnValue('codex-unknown-to-the-cli')
 
@@ -680,7 +667,7 @@ describe('managed-home Codex hook approval', () => {
       useAnswer(timedOut)
       const service = new CodexHookService()
       await service.install()
-      // Why: keys are positional; removing a user hook ahead of Orca's leaves its approval here.
+      // Positional keys can retain a removed user hook's approval at the managed hook's position.
       upsertHookTrustEntries(join(managedHome(), 'config.toml'), [
         {
           sourcePath: getCodexExplicitHomeHookSourcePath(join(managedHome(), 'hooks.json')),
@@ -727,7 +714,6 @@ describe('managed-home Codex hook approval', () => {
     })
 
     it("approves with Orca's hash in a process that may not ask Codex, as the offline CLI is", async () => {
-      // Why reset: no resolver stub and no permission to ask, as in the CLI's process.
       lookupInternals.resetForTesting()
 
       expect((await new CodexHookService().install()).state).toBe('installed')

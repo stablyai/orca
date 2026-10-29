@@ -3,10 +3,7 @@ import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
 
-// Why: a federated worker terminal is created from an agent id. Passing that id
-// as a shell command launched Cursor's desktop app instead of `cursor-agent`
-// (issue #11926), so the remote path must resolve through the TUI agent config
-// exactly like the local one.
+// Resolve agent ids through TUI config on remote hosts too; using cursor as a command launched its desktop app (#11926).
 describe('federated worker agent launch', () => {
   let db: OrchestrationDb | undefined
 
@@ -35,8 +32,7 @@ describe('federated worker agent launch', () => {
       status: 'running',
       exitCode: null
     })
-    // Why: without a stable pane the handler bails at agent_readiness, so the
-    // assertions below would pass against a worker that never actually started.
+    // Supply a stable pane so the handler reaches agent_readiness rather than refusing before the assertions.
     vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_remote:leaf_remote')
     vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockReturnValue(
       'runtime_test:term_remote_worker:1'
@@ -83,8 +79,7 @@ describe('federated worker agent launch', () => {
       launch: unknown
     }
 
-    // Why: assert the worker actually reached ready — a spy-only assertion would
-    // stay green even if every stage after terminal_create regressed.
+    // Assert ready, not just the launch spy, so later-stage regressions fail.
     expect(result).toMatchObject({
       state: 'ready',
       launch: {

@@ -6,7 +6,6 @@ type OwnerProjection = {
   mapWorktreeId: (worktreeId: string) => string
 }
 
-/** Map file-keyed markdown visibility along with the persisted open-file identity it belongs to. */
 export function mapMarkdownFrontmatterVisible(
   visibleByFileId: Record<string, boolean> | undefined,
   filesByOwner: WorkspaceSessionState['openFilesByWorktree'] | undefined,
@@ -16,8 +15,7 @@ export function mapMarkdownFrontmatterVisible(
   const sourceToDestination = buildMarkdownFrontmatterIdMap(filesByOwner, projection)
   for (const [sourceFileId, visible] of Object.entries(visibleByFileId ?? {})) {
     if (visible) {
-      // Visible is the hydration default; preserving only hidden overrides avoids carrying stale
-      // positive entries while retaining the exact rendered result.
+      // Visible is the hydration default; carry only hidden overrides.
       continue
     }
     const destinationId = sourceToDestination.get(sourceFileId)
@@ -28,10 +26,7 @@ export function mapMarkdownFrontmatterVisible(
   return next
 }
 
-/**
- * Builds the file-id mapping used by hydration, marking a source id null when two transferred
- * files claim it. An ambiguous visibility override is never guessed at by the migration.
- */
+/** Null marks IDs claimed by multiple transferred files; never guess visibility ownership. */
 export function buildMarkdownFrontmatterIdMap(
   filesByOwner: WorkspaceSessionState['openFilesByWorktree'] | undefined,
   projection: OwnerProjection
@@ -70,7 +65,7 @@ export function buildMarkdownFrontmatterIdMap(
   return result
 }
 
-/** Returns the IDs hydration can assign to a persisted file before any runtime data is loaded. */
+/** IDs hydration can assign before runtime data loads. */
 export function markdownFileIdCandidates(
   filePath: string,
   worktreeId: string,

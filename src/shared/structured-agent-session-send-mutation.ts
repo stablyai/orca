@@ -11,7 +11,7 @@ import {
 } from './rpc-contract/structured-agent-session-message-params'
 import { structuredAgentSessionPayloadFingerprint } from './structured-agent-session-mutation'
 
-/** What a send carries beside its message: both join the OPERATION fingerprint, never the body's. */
+/** Control fields affect the operation fingerprint, never the body hash used for provider echoes. */
 export type StructuredAgentSessionSendControl = {
   delivery?: 'queue-if-active'
   options?: Readonly<Record<string, string>>
@@ -23,7 +23,6 @@ export type StructuredAgentSessionSendMutation = StructuredAgentSessionSendContr
   body: AgentJournalMessageItem
 }
 
-/** The control fields a send names, as the client sends them and the host digests them. */
 export function agentSessionSendControlFields(
   send: StructuredAgentSessionSendControl
 ): StructuredAgentSessionSendControl {
@@ -36,15 +35,13 @@ export function agentSessionSendControlFields(
   }
 }
 
-/** What a send's operation fingerprint covers, on the client and the host alike. */
 export function agentSessionSendFields(
   send: StructuredAgentSessionSendControl & { body: AgentJournalMessageItem }
 ): StructuredAgentSessionSendControl & { body: AgentJournalMessageItem } {
   return { body: agentSessionMessagePayload(send.body), ...agentSessionSendControlFields(send) }
 }
 
-/** What every send fingerprint covers: the message without its sender, which never reaches the
- *  provider, so its echo still matches. A body with no sender hashes exactly as it always has. */
+/** Exclude sender metadata because the provider never receives it; preserve body hashes for legacy messages and echo matching. */
 export function agentSessionMessagePayload(body: AgentJournalMessageItem): AgentJournalMessageItem {
   const { from: _sender, ...payload } = body
   return payload
@@ -62,8 +59,7 @@ export function agentSessionSendBodyFingerprint(
   })
 }
 
-/** The `agentSession.send` arguments for one message. Typed rather than wire-shaped so a host
- *  calling its own send path builds the same envelope a client would, fingerprint included. */
+/** Host-owned sends use the same typed envelope/fingerprint as clients. */
 export function structuredAgentSessionMessageSendMutation(
   message: {
     sessionId: string
@@ -98,8 +94,7 @@ export type StructuredAgentSessionAttachment = {
 
 export class SkillRefLimitError extends Error {}
 
-/** The journal body for a message a person sends: its text, then its images, and the skills it
- *  picked whose `$name` the text still carries. */
+/** Text then images, retaining only picked skills still mentioned by $name. */
 export function structuredAgentSessionSendBody(
   text: string,
   attachments: readonly StructuredAgentSessionAttachment[],
@@ -120,14 +115,14 @@ export function structuredAgentSessionSendBody(
   }
 }
 
-/** The picked skills a message still names, once per file: an edit can delete a `$name`. */
 export function pickedSkillsInText(
   text: string,
-  skills: readonly AgentJournalSkillRef[]
+  skills: readonly AgentJournalSkillRef[],
+  sigils: readonly ('$' | '/')[] = ['$']
 ): AgentJournalSkillRef[] {
   const seen = new Set<string>()
   return skills.filter((skill) => {
-    if (seen.has(skill.path) || !textNamesSkill(text, skill.name)) {
+    if (seen.has(skill.path) || !sigils.some((sigil) => textNamesSkill(text, skill.name, sigil))) {
       return false
     }
     seen.add(skill.path)
@@ -135,11 +130,14 @@ export function pickedSkillsInText(
   })
 }
 
-function textNamesSkill(text: string, name: string): boolean {
-  const token = `$${name}`
+function textNamesSkill(text: string, name: string, sigil: '$' | '/'): boolean {
+  const token = `${sigil}${name}`
   for (let at = text.indexOf(token); at !== -1; at = text.indexOf(token, at + 1)) {
-    // Ends where a skill name can't continue, as Codex reads a mention: `$review,` names `review`.
-    if (!/[\w:-]/u.test(text.charAt(at + token.length))) {
+    // Match Codex mention boundaries: $review, ends at review.
+    if (
+      (sigil !== '/' || at === 0 || /\s/u.test(text.charAt(at - 1))) &&
+      !/[\w:-]/u.test(text.charAt(at + token.length))
+    ) {
       return true
     }
   }

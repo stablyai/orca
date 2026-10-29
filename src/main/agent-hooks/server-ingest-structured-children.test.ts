@@ -77,7 +77,6 @@ describe('structured child-work ingest', () => {
         membership: 'live'
       })
     ])
-    // Nothing reads the records yet: every published row is exactly what it was.
     expect(server.getStatusSnapshot()).toEqual(rows)
     expect(changed).not.toHaveBeenCalled()
   })
@@ -116,9 +115,7 @@ describe('structured child-work ingest', () => {
     expect(server.getStructuredChildWork(SUBJECT)).toEqual([first])
   })
 
-  // A quit stops hook ingress before the chat teardown decides which chats to offer to resume,
-  // and that decision reads these records: a chat whose only work was a background command or a
-  // subagent was otherwise never offered.
+  // Quit reads child records after hook ingress stops to decide which chats to offer for resume.
   it('keeps the children readable through a quit stop', () => {
     const server = new AgentHookServer()
     server.ingestStructuredStatus(summary(), SUBJECT)

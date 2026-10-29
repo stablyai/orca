@@ -35,8 +35,7 @@ describe('positionStableNodeViewUpdate', () => {
   })
 
   it('re-renders when decorations changed', () => {
-    // Why: search highlights and review annotations arrive as decorations — dropping
-    // those updates would leave a code block visually stale.
+    // Decorations carry search/review updates; skipping them would leave code blocks stale.
     const args = updateArgs({ newDecorations: [] as unknown as UpdateArgs['newDecorations'] })
 
     expect(positionStableNodeViewUpdate(args)).toBe(true)

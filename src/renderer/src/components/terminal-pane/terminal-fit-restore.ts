@@ -9,11 +9,7 @@ import {
 
 type TerminalFitRestoreSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | undefined
 
-// Why: "take back all terminals" can target a phone that controls hundreds of
-// PTYs. Fanning out one IPC/RPC reclaim per PTY unbounded would burst the
-// runtime transport; cap the in-flight reclaims so a huge session degrades to
-// steady throughput instead of a thundering herd. Each reclaim is a short
-// round-trip, so a modest pool keeps latency low without overwhelming it.
+// Mobile takeover can reclaim hundreds of PTYs; bound concurrent RPCs to avoid bursting the transport.
 const RESTORE_FIT_CONCURRENCY = 8
 
 const restoreFailedResult = (): { restored: boolean } => {
@@ -21,9 +17,7 @@ const restoreFailedResult = (): { restored: boolean } => {
   return { restored: false }
 }
 
-// Why: a wedged runtime/daemon after system sleep can leave the invoke pending
-// forever, which pins the held-fit modal's buttons disabled (#9447). Fail the
-// restore instead so the user can retry.
+// Bound sleep-wedged invokes so held-fit buttons re-enable for retry (#9447).
 const withRestoreFitTimeout = async (
   pending: Promise<{ restored: boolean }>,
   timeoutMs: number

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useLocalSearchParams, usePathname } from 'expo-router'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -29,45 +30,51 @@ import { countActiveWorkspaceFilters } from '../../../src/shared/workspace-view/
 import { useHostWorktreeActions } from './use-host-worktree-actions'
 import { useHostWorktreeCatalog } from './use-host-worktree-catalog'
 import { useHostDisplay } from '../transport/use-host-display'
+import { classifyConnection } from '../transport/connection-health'
 
 export type HostScreenProps = {
-  // When true, rendered as the persistent tablet sidebar by the host layout, not as its own routed screen.
   embedded?: boolean
-  // Route params aren't in scope when rendered from the layout, so the caller passes these explicitly.
+  // Layout-mounted sidebars lack route params; receive them explicitly.
   hostId?: string
   onHideSidebar?: () => void
+  // The detail pane is empty, so a side rail beside it may carry the sidebar's actions.
+  actionsInRail?: boolean
 }
 
 export function useHostScreenController({
   embedded = false,
   hostId: hostIdProp,
-  onHideSidebar
+  onHideSidebar,
+  actionsInRail = false
 }: HostScreenProps = {}) {
+  useMobileTranslation()
   const params = useLocalSearchParams<{ hostId: string; notice?: string }>()
   const hostId = hostIdProp ?? params.hostId
   const [dismissedNotice, setDismissedNotice] = useState<string | null>(null)
   const noticeParam = params.notice?.trim()
   const routeNotice = visibleHostRouteNotice(embedded, noticeParam, dismissedNotice)
-  // Not `useRouter` directly: the list is the one screen that also runs inside the shell's page,
-  // where a route it does not render is handed back to the app rather than pushed into this
-  // document. On a phone this is the router and nothing else.
+  // Use route handoff so the shell opens routes absent from the page instead of pushing them into this document.
   const router = useRouteHandoff()
   const pathname = usePathname()
   const insets = useSafeAreaInsets()
-  // Why: cap and center the list on wide/tablet canvases; on phones isWideLayout is false so it stays edge-to-edge.
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
-  // Shared client per host owned by RpcClientProvider. See docs/mobile-shared-client-per-host.md.
   const { client, state: connState } = useHostClient(hostId)
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
   const relayRecovery = useRelayRecoveryStatus(hostId)
   const forgetHostClient = useForgetHostClient()
   const forceReconnectHost = useForceReconnect()
-  // One tick drives every visible agent row's relative timestamp.
   const now = useNow(30_000)
   const { hostCapabilities, floatingWorkspaceEnabled } = useHostProtocolGates()
   const state = useHostScreenState(hostId)
   const settings = useHostViewSettings({ client, connState, state })
+  const connectionVerdict = classifyConnection({
+    state: connState,
+    reconnectAttempts,
+    lastConnectedAt,
+    hostName: state.hostName,
+    ...relayRecovery
+  })
   const hostDisplay = useHostDisplay(
     hostId && state.hostName
       ? { id: hostId, name: state.hostName, ...state.hostStoredDescriptor }
@@ -155,9 +162,9 @@ export function useHostScreenController({
     catalog,
     collapsedGroups,
     feed,
-    // Resolved: the desktop's value once read; the served catalog's (or the default) before.
     projectOrderBy,
     client,
+    connectionVerdict,
     connState,
     contentMaxWidth,
     displayWorktrees,
@@ -175,6 +182,7 @@ export function useHostScreenController({
     noticeParam,
     now,
     onHideSidebar,
+    actionsInRail,
     reconnectAttempts,
     relayRecovery,
     routeNotice,

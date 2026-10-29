@@ -8,6 +8,7 @@ let items: AgentJournalRenderItem[] = []
 let unloadedTurnRevisions: number | undefined
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
   callStructuredAgentSession: mocks.call,
   readStructuredAgentSessionConversationOutline: vi.fn(async () => null)
 }))

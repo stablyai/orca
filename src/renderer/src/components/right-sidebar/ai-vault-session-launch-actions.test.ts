@@ -35,7 +35,7 @@ vi.mock('@/lib/ai-vault-session-resume-preparation', () => ({
   prepareAiVaultSessionForFork: mocks.prepareAiVaultSessionForFork,
   prepareAiVaultSessionForResume: mocks.prepareAiVaultSessionForResume,
   prepareAiVaultSessionForTerminalResume: mocks.prepareAiVaultSessionForTerminalResume,
-  dropDeletedSshResumeCwd: async (session: unknown) => session,
+  dropDeletedRemoteResumeCwd: async (session: unknown) => session,
   aiVaultCliForkHostTooOldMessage: () =>
     'Update Orca on the host that runs this chat to resume it in a new CLI.'
 }))
@@ -198,7 +198,6 @@ describe('Switch to Terminal launch', () => {
     expect(mocks.launchAiVaultSessionInNewTab).not.toHaveBeenCalled()
   })
 
-  // A host whose guard predates the fork refuses it as a second writer.
   it('asks for a host update, once, when an older paired host refuses the fork', async () => {
     mocks.launchAiVaultSessionInNewTab.mockReturnValue({
       tabId: null,

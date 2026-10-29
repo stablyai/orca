@@ -1,4 +1,3 @@
-// Exercise the real screen state and mic bindings across connection, focus and foreground changes.
 import { createElement, useEffect, useRef } from 'react'
 import { act, create, type ReactTestRenderer, type ReactTestInstance } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -17,12 +16,16 @@ const env = vi.hoisted(() => ({
   refuseRead: false
 }))
 
+vi.mock('../platform/clipboard', () => ({
+  useClipboardWriter: () => ({ writeText: async () => {} })
+}))
 vi.mock('expo-router', () => ({
   useFocusEffect: (effect: () => void | (() => void)) => {
     useEffect(() => (env.focused ? effect() : undefined), [effect, env.focused])
   }
 }))
 vi.mock('react-native', () => ({
+  StyleSheet: { create: <T,>(styles: T) => styles },
   Animated: { Value: class {} },
   ActivityIndicator: 'ActivityIndicator',
   Pressable: 'Pressable',
@@ -36,12 +39,15 @@ vi.mock('react-native', () => ({
 }))
 vi.mock('lucide-react-native', () => ({ ImagePlus: 'ImagePlus', Mic: 'Mic' }))
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: {} }))
-vi.mock('../platform/haptics', () => ({ triggerError: () => {} }))
+vi.mock('../platform/haptics', () => ({
+  triggerError: () => {},
+  triggerEdgeBump: () => {},
+  triggerSelection: () => {}
+}))
 vi.mock('./use-terminal-live-input-mode-preference', () => ({
   useTerminalLiveInputModePreference: () => ({ liveInputTerminalHandles: new Set<string>() })
 }))
-// The capture pipeline and the native-chat surface are off this path; the real modules would pull
-// the Expo audio runtime in behind them.
+// Stub unused capture/native-chat paths to avoid Expo runtime imports.
 vi.mock('../hooks/use-mobile-dictation', () => ({
   useMobileDictation: (options: { enabled: boolean }) => {
     env.captureEnabled = options.enabled
@@ -55,7 +61,7 @@ vi.mock('../hooks/use-mobile-dictation', () => ({
     }
   }
 }))
-vi.mock('./use-mobile-native-chat-send-error', () => ({
+vi.mock('./native-chat/use-mobile-native-chat-send-error', () => ({
   useMobileNativeChatSendError: () => ({
     show: () => {},
     clear: () => {},
@@ -66,7 +72,7 @@ vi.mock('./use-mobile-native-chat-send-error', () => ({
 vi.mock('./use-mobile-native-chat-readability', () => ({
   useMobileNativeChatReadability: () => false
 }))
-vi.mock('./use-mobile-native-chat-input-lease', () => ({
+vi.mock('./native-chat/use-mobile-native-chat-input-lease', () => ({
   useMobileNativeChatInputLease: () => ({
     ready: true,
     readyRef: { current: true },
@@ -100,8 +106,7 @@ function setupReply(mode: string, enabled = true): RpcResponse {
   return { id: 'desktop', ok: true, result: { enabled, dictationMode: mode, models: [] } }
 }
 
-// One logical client for the route's lifetime, like the shared per-host client: its identity does
-// not change across a reconnect. While down it refuses sends the way a relay session does.
+// Keep client identity stable across reconnects; refuse sends while disconnected.
 const client = {
   getState: () => (env.connected ? 'connected' : 'reconnecting'),
   sendRequest: async (): Promise<RpcResponse> => {
@@ -127,6 +132,7 @@ function Probe() {
   } as never)
   const activeHandleRef = useRef('terminal')
   const dictationRouteContextRef = useRef(null)
+  const commandFieldAnchorRef = useRef(null)
   const deviceTokenRef = useRef('device')
   const scope = {
     ...screen,
@@ -139,9 +145,11 @@ function Probe() {
     activeSessionTab: null,
     activeHandleRef,
     dictationRouteContextRef,
+    commandFieldAnchorRef,
     deviceTokenRef,
     flushPendingLiveInputBeforeExternalSend: async () => true,
     canSend: env.connected,
+    canCompose: true,
     liveInputEnabled: false,
     showToast: () => {},
     resetLiveInputFocus: () => {}
@@ -176,7 +184,6 @@ async function render(): Promise<void> {
   })
 }
 
-/** What a press on the mic does: hold binds press-in/out, toggle binds a tap. */
 function micBinding(): 'hold' | 'toggle' | 'inert' | 'hidden' {
   const mic = renderer?.root.findAll(
     (node) =>
@@ -246,7 +253,7 @@ describe('the mic follows the host dictation mode', () => {
     env.deferReply = false
     env.connected = true
     await render()
-    // The host's answer before the drop, arriving after the reconnected client's own.
+    // Deliver the pre-drop answer last to prove it cannot override the new generation.
     await act(async () => answerOld(setupReply('toggle', false)))
     expect(micBinding()).toBe('hold')
     expect(env.captureEnabled).toBe(true)
@@ -330,6 +337,18 @@ describe('the mic follows the host dictation mode', () => {
     await render()
     expect(micBinding()).toBe('hidden')
     expect(env.captureEnabled).toBe(false)
+  })
+
+  it('offers the mic on a host that never had a speech model selected', async () => {
+    env.connected = true
+    env.deferReply = true
+    env.slowReply = Promise.resolve({
+      id: 'first-run',
+      ok: true,
+      result: { enabled: false, selectedModelId: '', dictationMode: 'toggle', models: [] }
+    })
+    await render()
+    expect(micBinding()).toBe('toggle')
   })
 
   it('keeps legacy controls when the host omits the enabled field', async () => {

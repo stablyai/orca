@@ -11,7 +11,7 @@ import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protect
 import { ApiKeyFileUnreadableError } from './api-key-file-unreadable-error'
 
 type EncryptedApiKeyFileStore = {
-  /** Where the envelope lives and how it starts, for orcad's plaintext migration. */
+  /** Envelope location and prefix used by orcad's plaintext migration. */
   envelopeFile: () => { path: string; envelopePrefix: string }
   protection: () => SecretAtRestProtection | null
   has: () => boolean
@@ -145,7 +145,7 @@ export function createEncryptedApiKeyFileStore({
     if (!existsSync(keyPath)) {
       return null
     }
-    // Why: permission failures must not be reported as decryption failures.
+    // Keep permission failures distinct from decryption failures.
     try {
       hardenExistingSecureFile(keyPath)
     } catch (error) {

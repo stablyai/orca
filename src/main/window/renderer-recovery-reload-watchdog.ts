@@ -44,10 +44,7 @@ export type RendererRecoveryReloadWatchdog = {
     cause: RecoveryExhaustionCause,
     lowCommit?: LowCommitOomVerdict
   ) => void
-  /**
-   * A main-frame document finished loading. Only an attempt whose load was superseded takes this as its outcome;
-   * every other attempt settles through its own load promise, which an error page or a later navigation cannot fool.
-   */
+  /** Only superseded loads use global finish events; normal attempts settle through their own promises so stale events/error pages cannot fake success. */
   notifyDocumentLoaded: () => void
   /** Restarts the stall budget after a suspend froze the timer mid-load. */
   notifySystemResume: () => void
@@ -69,7 +66,7 @@ type RecoveryReload = {
 }
 
 type RecoveryReloadSeed = Pick<RecoveryReload, 'attempt' | 'details' | 'recentRecoveryCount'>
-/** What a raised prompt is about; the crash-loop breaker has no attempt to hand over, only the crash. */
+/** Breaker escalation has no load attempt, only the crash that exhausted recovery. */
 export type RecoveryPromptSubject = Pick<RecoveryReload, 'details' | 'recentRecoveryCount'>
 
 /** Bounds stalled recovery reloads while still observing success after escalation. */

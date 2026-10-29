@@ -1,6 +1,5 @@
 import type { RefObject } from 'react'
 import type { Root } from 'react-dom/client'
-import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
 import { formatDiffComments } from '@/lib/diff-comments-format'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { DiffCommentDeliverySnapshot } from '@/store/slices/diffComments'
@@ -80,7 +79,6 @@ export function renderDiffCommentZoneCard(
       <DiffCommentCard
         lineNumber={comment.lineNumber}
         startLine={comment.startLine}
-        label={comment.author ? getDiffCommentLineLabel(comment).toLowerCase() : undefined}
         body={comment.body}
         sentAt={comment.sentAt}
         author={comment.author}
@@ -109,9 +107,15 @@ export function renderDiffCommentZoneCard(
               groupId={activeGroupId}
               modeIdParts={['diff-comment-note', worktreeId, filePath, comment.id]}
               scopes={getSingleCommentSendScopes(comment, formatCommentPrompt)}
-              targetModeLabel="This note"
+              targetModeLabel={translate(
+                'auto.components.diff.comments.useDiffCommentDecorator.995fa28b50',
+                'This note'
+              )}
               triggerClassName="orca-diff-comment-edit"
-              disabledTooltip="Note already sent"
+              disabledTooltip={translate(
+                'auto.components.diff.comments.diffCommentZoneCard.noteAlreadySent',
+                'Note already sent'
+              )}
               onDelivered={(notes) => void clearDeliveredDiffComments(worktreeId, notes)}
             />
           ) : null

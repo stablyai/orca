@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RelayAssignmentStore } from './assignment-store.js'
 import type { RelayConfig } from './config.js'
+import type { RegionalRehomeSafetySnapshot } from './relay-observability.js'
 import { startRegionalRehomeWorker } from './regional-rehome-worker.js'
 
 const candidate = {
@@ -15,6 +16,15 @@ const candidate = {
   sourceGeneration: 3,
   targetCellId: 'target'
 }
+const safety = {
+  observedAt: 100,
+  sqlFailures: 0,
+  reconnects: 0,
+  controlActivityRecoveryFailures: 0,
+  databasePoolWaiting: 0,
+  databasePoolWaitersMax: 0,
+  databasePoolWaitMsMax: 0
+} satisfies RegionalRehomeSafetySnapshot
 const config = {
   role: 'director',
   regionCorrectionCohortPercent: 100,
@@ -37,7 +47,7 @@ function setup(fetch: typeof globalThis.fetch) {
       recordRegionalRehomeDispatchFailure
     } as unknown as RelayAssignmentStore,
     {
-      safetySnapshot: () => ({ observedAt: 100 }) as never,
+      safetySnapshot: () => safety,
       intervalMs: 60_000,
       identityToken: async () => 'private-token',
       fetch
@@ -58,19 +68,22 @@ describe('idle regional worker dispatch', () => {
       Response.json({ v: 1, outcome: 'committed' })
     )
     const c = setup(fetch)
-    await vi.waitFor(() => expect(c.selectIdleRegionalRehomeCandidates).toHaveBeenCalledOnce())
-    await c.worker.run()
-    c.worker.stop()
-    expect(c.claimRegionalRehome).not.toHaveBeenCalled()
-    expect(fetch).toHaveBeenCalledOnce()
-    const [url, init] = fetch.mock.calls[0]!
-    expect(String(url)).toBe('https://source.example.test/v1/admin/host-idle-rehome')
-    const { sourceCellUrl: _, ...request } = candidate
-    expect(JSON.parse(String(init?.body))).toEqual({
-      ...request,
-      cohortPercent: 100,
-      directorSafety: { observedAt: 100 }
-    })
+    try {
+      await vi.waitFor(() => expect(c.selectIdleRegionalRehomeCandidates).toHaveBeenCalledOnce())
+      await c.worker.run()
+      expect(c.claimRegionalRehome).not.toHaveBeenCalled()
+      expect(fetch).toHaveBeenCalledOnce()
+      const [url, init] = fetch.mock.calls[0]!
+      expect(String(url)).toBe('https://source.example.test/v1/admin/host-idle-rehome')
+      const { sourceCellUrl: _, ...request } = candidate
+      expect(JSON.parse(String(init?.body))).toEqual({
+        ...request,
+        cohortPercent: 100,
+        directorSafety: safety
+      })
+    } finally {
+      c.worker.stop()
+    }
   })
   it('progresses past busy hosts without charging a dispatch failure', async () => {
     const fetch = vi
@@ -78,28 +91,40 @@ describe('idle regional worker dispatch', () => {
       .mockResolvedValueOnce(Response.json({ v: 1, outcome: 'busy' }))
       .mockResolvedValueOnce(Response.json({ v: 1, outcome: 'committed' }))
     const c = setup(fetch)
-    await vi.waitFor(() => expect(c.selectIdleRegionalRehomeCandidates).toHaveBeenCalledOnce())
-    c.selectIdleRegionalRehomeCandidates.mockResolvedValue([
-      candidate,
-      {
-        ...candidate,
-        relayHostId: 'ponmlkjihgfedcba',
-        attemptId: '33333333-3333-4333-8333-333333333333'
-      }
-    ])
-    await c.worker.run()
-    c.worker.stop()
-    expect(fetch).toHaveBeenCalledTimes(2)
-    expect(c.recordRegionalRehomeDispatchFailure).not.toHaveBeenCalled()
+    try {
+      await vi.waitFor(() => expect(c.selectIdleRegionalRehomeCandidates).toHaveBeenCalledOnce())
+      c.selectIdleRegionalRehomeCandidates.mockResolvedValue([
+        candidate,
+        {
+          ...candidate,
+          relayHostId: 'ponmlkjihgfedcba',
+          attemptId: '33333333-3333-4333-8333-333333333333'
+        }
+      ])
+      await c.worker.run()
+      expect(fetch).toHaveBeenCalledTimes(2)
+      expect(c.recordRegionalRehomeDispatchFailure).not.toHaveBeenCalled()
+    } finally {
+      c.worker.stop()
+    }
   })
   it('does not charge a lost response as a claimed migration failure', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const fetch = vi.fn<typeof globalThis.fetch>(async () => {
       throw new Error('response lost')
     })
     const c = setup(fetch)
-    await vi.waitFor(() => expect(c.selectIdleRegionalRehomeCandidates).toHaveBeenCalledOnce())
-    await c.worker.run()
-    c.worker.stop()
-    expect(c.recordRegionalRehomeDispatchFailure).not.toHaveBeenCalled()
+    try {
+      await vi.waitFor(() => expect(c.selectIdleRegionalRehomeCandidates).toHaveBeenCalledOnce())
+      await c.worker.run()
+      expect(fetch).toHaveBeenCalledOnce()
+      expect(warning).toHaveBeenCalledWith(
+        expect.stringContaining('"event":"orca_relay_idle_rehome_request_failed"')
+      )
+      expect(warning).toHaveBeenCalledWith(expect.stringContaining('"outcomes":{"failed":1}'))
+      expect(c.recordRegionalRehomeDispatchFailure).not.toHaveBeenCalled()
+    } finally {
+      c.worker.stop()
+    }
   })
 })

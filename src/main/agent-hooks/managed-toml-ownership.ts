@@ -1,11 +1,4 @@
-// Orca appends marker-delimited blocks to user-owned TOML config files. Two
-// independent things can make a byte Orca's: it sits between a matched start and
-// end marker, or the provider positively recognizes it as content Orca emitted.
-// The end marker is the only proof of a block's extent, so once a hand-edit
-// deletes it the rest of the file is unknown text — #18861: assuming otherwise
-// deleted user tables through EOF. An orphaned block therefore owns nothing but
-// its own stray marker line, and anything Orca actually wrote is reclaimed by
-// recognition instead, wherever in the file it ended up.
+// Own only complete marker-delimited blocks or provider-recognized content; orphan markers never own through EOF.
 
 export type ManagedTomlMarkers = {
   startMarker: string
@@ -13,16 +6,14 @@ export type ManagedTomlMarkers = {
 }
 
 export type ManagedTomlRegion = {
-  /** First removable offset — includes the blank-line run above the content. */
+  /** Includes preceding blank lines. */
   startOffset: number
-  /** Offset one past the last owned line, terminator included. */
+  /** Exclusive offset, including the line terminator. */
   endOffset: number
 }
 
 export type ManagedTomlBlockRegion = ManagedTomlRegion & {
-  /** Offset of the start-marker line itself. */
   markerOffset: number
-  /** End marker found: everything between the markers is Orca's. */
   terminated: boolean
 }
 
@@ -57,8 +48,7 @@ function scanLines(text: string): ScannedLine[] {
   return lines
 }
 
-// Absorb the blank run above so install/remove cycles do not accumulate
-// whitespace; overlapping runs are merged away by stripManagedTomlRegions.
+// Absorb preceding blanks so install/remove cycles do not accumulate whitespace.
 function startOffsetAbsorbingBlanksAbove(lines: readonly ScannedLine[], index: number): number {
   let startLine = index
   while (startLine > 0 && lines[startLine - 1].text.trim() === '') {
@@ -72,10 +62,7 @@ export function findManagedTomlBlocks(
   markers: ManagedTomlMarkers
 ): ManagedTomlBlockRegion[] {
   const lines = scanLines(text)
-  // Exact, not startsWith: a user quoting a marker in a comment of their own
-  // ("# >>> ... >>> (example from the docs)") would otherwise open or close a
-  // region and take every byte between the two quoted lines. Both emitters
-  // write the marker as its own line, so nothing legitimate carries a suffix.
+  // Match whole marker lines so user comments quoting a marker cannot claim surrounding text.
   const isStart = (index: number): boolean => lines[index].text.trim() === markers.startMarker
   const isEnd = (index: number): boolean => lines[index].text.trim() === markers.endMarker
 
@@ -97,8 +84,7 @@ export function findManagedTomlBlocks(
         break
       }
     }
-    // Not terminated: `last` stays on the marker line, so the orphan owns only
-    // the stray marker. Its body, if Orca wrote it, is reclaimed by recognition.
+    // Orphan markers own no body; reclaim emitted content separately by recognition.
     regions.push({
       startOffset: startOffsetAbsorbingBlanksAbove(lines, index),
       markerOffset: lines[index].offset,
@@ -110,11 +96,7 @@ export function findManagedTomlBlocks(
   return regions
 }
 
-/**
- * Every table the provider recognizes as its own, anywhere in the file. Marker
- * position is irrelevant: content Orca emitted is Orca's to remove even when a
- * hand-edit stranded it outside the block (#18861).
- */
+/** Recognition reclaims emitted tables even when hand edits move them outside their marked block. */
 export function findRecognizedManagedTables<T>(
   text: string,
   recognize: ManagedTableRecognizer<T>

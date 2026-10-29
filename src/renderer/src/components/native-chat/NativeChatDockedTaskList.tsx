@@ -3,7 +3,6 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { NativeChatTaskList } from './NativeChatTaskList'
 import { nativeChatTaskListState } from './native-chat-task-list-state'
 
-/** The conversation's current task list, docked under the transcript. */
 export function NativeChatDockedTaskList({
   messages
 }: {

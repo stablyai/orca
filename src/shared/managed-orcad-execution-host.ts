@@ -1,8 +1,4 @@
-/**
- * An SSH host and the managed Orca server Orca runs on it are one machine to the user. The registry
- * keeps both ids, since workspaces, setups and folders are owned by one or the other; pickers show
- * one row for the pair and expand a choice of that row to both ids.
- */
+/** SSH and its managed server are one machine in pickers. Keep both ownership ids in the registry; expand each picker selection to both. */
 import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
@@ -36,10 +32,7 @@ export function getManagedOrcadSshTargetId(
   return (deployment?.kind !== 'wsl' && deployment?.sshTargetId.trim()) || null
 }
 
-/**
- * Pairs each listed SSH host with its managed server, in place. The row pickers show is keyed by
- * the route serving the host now: the server, unless main reports the host on its relay.
- */
+/** Pair SSH hosts with managed servers in place. Show the serving route’s row: the server unless main reports SSH on its relay. */
 export function annotateManagedOrcadExecutionHosts(args: {
   hosts: Map<ExecutionHostId, ExecutionHostRegistryEntry>
   runtimeEnvironments: readonly ManagedOrcadEnvironmentSummary[]
@@ -54,7 +47,7 @@ export function annotateManagedOrcadExecutionHosts(args: {
     const runtimeHostId = toRuntimeExecutionHostId(environment.id.trim())
     const sshHost = args.hosts.get(sshHostId)
     const runtimeHost = args.hosts.get(runtimeHostId)
-    // Why: an orphaned server (its SSH host removed) is the only row left for that machine.
+    // An orphaned server is the machine’s only remaining row.
     if (!sshHost || !runtimeHost) {
       continue
     }
@@ -119,10 +112,7 @@ export function expandEquivalentExecutionHostIds(
   return [...expanded]
 }
 
-/**
- * A saved host list widened to every id its merged rows stand for, or null when it already is.
- * Lists saved by an older build, or before a route flip, may hold only one of a pair.
- */
+/** Widen saved selections to both ownership ids; older builds or pre-route-flip lists may hold only one. Null if unchanged. */
 export function widenSavedExecutionHostIds(
   hosts: readonly MergedExecutionHost[],
   hostIds: readonly ExecutionHostId[] | null

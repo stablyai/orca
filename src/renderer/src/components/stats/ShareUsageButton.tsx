@@ -5,7 +5,7 @@ import { Button } from '../ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { ShareUsageCard, type ShareUsageCardProps } from './ShareUsageCard'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 
 type ShareUsageButtonProps = ShareUsageCardProps
 
@@ -22,8 +22,7 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
   const [copied, setCopied] = useState(false)
   const [capturing, setCapturing] = useState(false)
   const copiedResetTimerRef = useRef<number | null>(null)
-  // Why: image capture/clipboard IPC can resolve after dialog teardown; avoid
-  // state writes and reset timers after this control unmounts.
+  // Capture/clipboard IPC may finish after unmount; guard later state writes and reset timers.
   const isMountedRef = useRef(false)
 
   const clearCopiedResetTimer = useCallback((): void => {
@@ -102,7 +101,7 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
       if (v >= 1_000) {
         return `${(v / 1_000).toFixed(1)}k`
       }
-      return v.toLocaleString()
+      return v.toLocaleString(getIntlLocale())
     }
 
     const lines = [

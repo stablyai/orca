@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
 import { SourceControlFixSplitButton } from '@/components/right-sidebar/source-control-fix-split-button'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useCheckRunDetailsFixWithAI } from './check-run-details-fix-with-ai'
 import { formatCheckRunOutputForClipboard } from './check-run-clipboard-text'
 import { CheckRunAnnotations } from './CheckRunAnnotations'
@@ -22,7 +22,7 @@ function formatCheckTimestamp(value: string | null | undefined): string | null {
   if (Number.isNaN(parsed.getTime())) {
     return value
   }
-  return parsed.toLocaleString(undefined, {
+  return parsed.toLocaleString(getIntlLocale(), {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',

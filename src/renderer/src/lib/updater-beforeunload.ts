@@ -36,9 +36,7 @@ export function registerUpdaterBeforeUnloadBypass(): () => void {
     window.removeEventListener(ORCA_APP_RESTART_STARTED_EVENT, markInProgress)
     window.removeEventListener(ORCA_APP_RESTART_ABORTED_EVENT, clearInProgress)
     window.removeEventListener(ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT, clearInProgress)
-    // Why: hot reloads can re-register this listener inside the same renderer.
-    // Reset the module flag on cleanup so a failed earlier restart attempt
-    // cannot silently suppress future unsaved-change prompts.
+    // HMR can re-register listeners; cleanup must reset the flag so failed restarts cannot suppress later unsaved-change prompts.
     intentionalAppRestartInProgress = false
   }
 }

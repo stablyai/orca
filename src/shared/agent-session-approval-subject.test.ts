@@ -5,7 +5,10 @@ import {
   pendingPromptsAllUnanswerableHere
 } from './agent-session-approval-subject'
 import type { AgentJournalItemBody } from './agent-session-journal-types'
-import { AGENT_JOURNAL_APPROVAL_SUBJECT_KINDS } from './agent-session-journal-schemas'
+import {
+  AGENT_JOURNAL_APPROVAL_SUBJECT_KINDS,
+  isAdmissibleAgentJournalItemBody
+} from './agent-session-journal-schemas'
 
 it('draws exactly the subject kinds the journal schema knows', () => {
   expect([...DRAWN_APPROVAL_SUBJECT_KINDS].sort()).toEqual(
@@ -20,14 +23,14 @@ it("reads only a subject of a kind it does not draw as a newer build's", () => {
 })
 
 function pending(body: Record<string, unknown>): { body: AgentJournalItemBody } {
-  return JSON.parse(
-    JSON.stringify({
-      body: {
-        ...body,
-        resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
-      }
-    })
-  )
+  const promptBody = {
+    ...body,
+    resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+  }
+  if (!isAdmissibleAgentJournalItemBody(promptBody)) {
+    throw new Error('Invalid pending prompt fixture')
+  }
+  return { body: promptBody }
 }
 const NEWER = pending({
   kind: 'approval',
@@ -43,7 +46,7 @@ const PLAN = pending({
   subject: { kind: 'plan', text: 'do it' },
   options: [{ id: 'allow', label: 'Approve' }]
 })
-const QUESTION = pending({ kind: 'question', title: 'Which?', options: [] })
+const QUESTION = pending({ kind: 'question', question: 'Which?', options: [] })
 
 it('holds only while every pending prompt is an approval this build cannot answer', () => {
   expect(pendingPromptsAllUnanswerableHere([])).toBe(false)
@@ -54,6 +57,8 @@ it('holds only while every pending prompt is an approval this build cannot answe
   const cancelled = JSON.parse(
     JSON.stringify(NEWER).replace('"state":"pending"', '"state":"cancelled"')
   )
+  expect(pendingPromptsAllUnanswerableHere([cancelled, NEWER])).toBe(true)
+  expect(pendingPromptsAllUnanswerableHere([NEWER, cancelled])).toBe(true)
   expect(pendingPromptsAllUnanswerableHere([cancelled, PLAN])).toBe(false)
   expect(pendingPromptsAllUnanswerableHere([cancelled])).toBe(false)
 })

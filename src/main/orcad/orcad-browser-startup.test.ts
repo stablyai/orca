@@ -20,7 +20,6 @@ afterEach(() => {
   setRuntimeBrowserUnavailableCause(null)
 })
 
-// No desktop hosts pages for this runtime, so only the engine can answer.
 const host: RuntimeBrowserCommandHost = Object.assign(Object.create(null), {
   getRuntimeBrowserPageRegistry: () => new RuntimeBrowserPageRegistry(),
   getBrowserHostLeaseRegistry: () => ({
@@ -116,7 +115,7 @@ function closeHost(pages: RuntimeBrowserPageRegistry): RuntimeBrowserCommandHost
     getRuntimeBrowserPageRegistry: () => pages,
     getBrowserHostLeaseRegistry: () => ({ getPlacement: () => undefined }),
     resolveBrowserWorkspace: async (selector: string) => ({ id: selector.replace(/^id:/, '') }),
-    resolveWorktreeSelector: async (selector: string) => ({ id: selector.replace(/^id:/, '') }),
+    resolveWorkspaceSelector: async (selector: string) => ({ id: selector.replace(/^id:/, '') }),
     retireRuntimeOwnedBrowserSessionTab: vi.fn(() => true)
   })
 }
@@ -153,7 +152,6 @@ it('refuses a member the provider does not implement instead of invoking it', as
   const commands = createRuntimeBrowserCommands(host)
   pending.resolve(provider)
   await startup.ready
-  // The fixture provider implements only browserTabList.
   expect(() => commands.browserTabCreate({ worktree: 'wt-a' })).toThrow('Unknown browser command')
   await startup.stop()
 })

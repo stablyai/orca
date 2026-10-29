@@ -1,3 +1,5 @@
+import { translate } from '@/i18n/i18n'
+import { taskProviderErrorText } from '@/lib/task-provider-error-copy'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -107,7 +109,7 @@ export function useLinearIssueWorkspaceDetail({
       id: comment.id || createBrowserUuid(),
       body: comment.body,
       createdAt: comment.createdAt,
-      user: { displayName: 'You' }
+      user: { displayName: translate('auto.components.issueComments.you', 'You') }
     }
     optimisticCommentsRef.current.push(added)
     setComments((current) => [...current, added])
@@ -126,7 +128,11 @@ export function useLinearIssueWorkspaceDetail({
         })
         .catch((error) => {
           if (mountedRef.current && requestId === commentsRequestIdRef.current) {
-            setCommentsError(error instanceof Error ? error.message : 'Failed to load comments.')
+            setCommentsError(
+              error instanceof Error
+                ? taskProviderErrorText(error.message)
+                : translate('taskProviders.linear.commentsLoadFailed', 'Failed to load comments.')
+            )
           }
         })
         .finally(() => {

@@ -10,15 +10,13 @@ type CodexMirroredHomeResolver = {
   getMirroredHostHomePathForStatus: () => CodexMirroredHomeStatus
 }
 
-/** Registers the read-only IPC channel the settings pane reads once per mount for Codex config sync health. */
 export function registerCodexConfigSyncHandlers(runtimeHome: CodexMirroredHomeResolver): void {
   ipcMain.removeHandler('codexConfigSync:status')
   ipcMain.handle('codexConfigSync:status', (): CodexConfigSyncStatus => {
     const systemHomePath = getSystemCodexHomePath()
     const mirrored = runtimeHome.getMirroredHostHomePathForStatus()
     if (mirrored.kind === 'unavailable') {
-      // Why: do not throw — the settings pane catches thrown status errors and
-      // would show nothing at all. Report the stall so the user sees why.
+      // Return a stall: Settings catches thrown status errors and otherwise displays nothing.
       return {
         state: 'stalled',
         reason: 'managed-home-unavailable',
@@ -27,9 +25,7 @@ export function registerCodexConfigSyncHandlers(runtimeHome: CodexMirroredHomeRe
     }
     const runtimeHomePath = mirrored.homePath
     if (!runtimeHomePath) {
-      // Why: the system default runs Codex directly against ~/.codex, so there
-      // is no mirror that can fall behind. Reporting on the shared home here
-      // would warn about a config that lane never reads.
+      // System default reads ~/.codex directly; stale shared mirrors are irrelevant.
       return {
         state: 'synced',
         reason: null,

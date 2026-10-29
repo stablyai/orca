@@ -1,10 +1,4 @@
-// The unload journal: changes storage had not confirmed when a window went away, written
-// synchronously to localStorage and replayed by the next load. Every window of the app shares it,
-// so each entry is pruned the moment any window confirms a change to that draft.
-//
-// Two kinds of entry: a whole draft (or its removal) journaled when the window goes away, and an
-// addition (text or images given back) journaled the moment it is made, because the copy it came
-// from is deleted right after and a crash fires no unload event.
+// Journal unconfirmed drafts synchronously on unload; journal returned additions immediately because crashes skip unload and their source is deleted.
 
 import type { UnconfirmedDraftChange } from './native-chat-composer-draft-memory'
 import {
@@ -17,15 +11,11 @@ import {
 } from './native-chat-composer-draft-storage'
 
 const JOURNAL_KEY = 'orca:nativeChatComposerDraftJournal:v1'
-// Why: localStorage is shared with every other saved setting, so the journal stays small: whole
-// drafts together stop at the first cap, and additions, at most one message each with their source
-// deleted right after, at the second, which fits the largest. A removal is never capped: it is
-// tiny, and it is what keeps a sent draft from coming back.
+// Cap whole drafts and additions separately to protect localStorage quota; always retain tiny removal entries to prevent sent drafts returning.
 export const MAX_JOURNAL_CHARS = 256_000
 export const MAX_JOURNAL_ADDITIONS_CHARS = 800_000
 
-// Why: a load replays only what earlier runs left, never this run's own entries, which its
-// memory already holds.
+// Replay only earlier runs’ entries; this run already holds its own changes in memory.
 const THIS_RUN = `${Date.now()}-${Math.random()}`
 
 type EntryBase = { readonly scopeKey: string; readonly at: number; readonly run?: string }
@@ -53,9 +43,10 @@ function parseEntry(entry: unknown): JournalEntry[] {
   if (!isRecord(addition)) {
     return [{ scopeKey, draft: parseStoredNativeChatComposerDraft(draft), at, run }]
   }
-  // Parsed as a draft, so its text and images are checked the same way.
   const parsed = parseStoredNativeChatComposerDraft({
     text: typeof addition.text === 'string' ? addition.text : '',
+    document: addition.document,
+    pastedTextFiles: addition.pastedTextFiles,
     images: Array.isArray(addition.images) ? addition.images : [],
     savedAt: at
   })
@@ -68,6 +59,8 @@ function parseEntry(entry: unknown): JournalEntry[] {
           addition: {
             text: parsed.text,
             images: parsed.images,
+            document: parsed.document,
+            pastedTextFiles: parsed.pastedTextFiles,
             ...(addition.fromUser === true ? { fromUser: true } : {}),
             ...(typeof addition.before === 'string' ? { before: addition.before } : {}),
             ...(Array.isArray(addition.fills)
@@ -105,17 +98,12 @@ function writeEntries(entries: readonly JournalEntry[]): boolean {
 
 export type NativeChatComposerDraftJournalSnapshot = readonly JournalEntry[]
 
-/** Other runs' entries as a load begins reading storage. Why then: an entry journaled later is a
- *  live window's, whose own write is ordered after this read and must not be overwritten by it. */
+/** Snapshot before reading storage so later live-window writes cannot be overwritten by replay. */
 export function snapshotNativeChatComposerDraftJournal(): NativeChatComposerDraftJournalSnapshot {
   return readEntries().filter((entry) => entry.run !== THIS_RUN)
 }
 
-/**
- * Replays a snapshot onto the loaded drafts: a whole draft newer than the stored one replaces it,
- * then each addition newer than the draft it meets is made again, once. Returns the drafts it
- * changed, which must be written; entries already older than storage are dropped.
- */
+/** Replay newer drafts and additions once, return changed drafts for persistence, and discard entries older than storage. */
 export function replayNativeChatComposerDraftJournal(
   drafts: Map<string, StoredNativeChatComposerDraft | null>,
   entries: NativeChatComposerDraftJournalSnapshot
@@ -156,8 +144,7 @@ export function replayNativeChatComposerDraftJournal(
   return changed
 }
 
-/** Adds this window's unconfirmed changes, keeping other entries, with whole drafts within the
- *  cap. A draft that doesn't fit is left out; its change was still issued to storage. */
+/** Preserve other windows’ entries and journal unconfirmed changes within the whole-draft cap; omitted writes still go to storage. */
 export function journalNativeChatComposerDraftChanges(
   changes: ReadonlyMap<string, UnconfirmedDraftChange>
 ): void {
@@ -187,8 +174,7 @@ export function journalNativeChatComposerDraftChanges(
   }
 }
 
-/** Journals an addition the moment it is made; false when it doesn't fit or localStorage
- *  refused it, and the addition is then durable only once storage confirms it. */
+/** Journal additions immediately; false means they need storage confirmation before their source can be deleted. */
 export function journalNativeChatComposerDraftAddition(
   scopeKey: string,
   addition: NativeChatComposerDraftAddition,
@@ -199,8 +185,7 @@ export function journalNativeChatComposerDraftAddition(
   return additions <= MAX_JOURNAL_ADDITIONS_CHARS && writeEntries(entries)
 }
 
-/** Drops a draft's entries once a change to it at least as new is confirmed, by any window, so a
- *  replay never brings back what was sent or replaced since. */
+/** Any window’s newer confirmed write prunes older entries so replay cannot resurrect sent or replaced drafts. */
 export function pruneNativeChatComposerDraftJournal(scopeKey: string, confirmedAt: number): void {
   try {
     if (localStorage.getItem(JOURNAL_KEY) === null) {

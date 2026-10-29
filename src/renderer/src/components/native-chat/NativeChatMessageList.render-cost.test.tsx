@@ -2,7 +2,8 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, screen } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Why: these fixtures have neither inline visual owners nor sender navigation.
@@ -24,19 +25,18 @@ afterEach(() => {
   expect(unusedChatLeaves.inlineVisual).not.toHaveBeenCalled()
   expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
 })
-import type * as NativeChatWorkRunModule from '../../../../shared/native-chat-work-run'
-import type * as NativeChatProseModule from '../../../../shared/native-chat-prose'
+import type * as NativeChatWorkRunModule from '../../../../shared/native-chat/native-chat-work-run'
+import type * as NativeChatProseModule from '../../../../shared/native-chat/transcript/native-chat-prose'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { projectStructuredAgentSessionMessages } from '../../../../shared/structured-agent-session-message-projection'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
-import type * as UnifiedPatchModule from '../../../../shared/native-chat-unified-patch'
+import type * as UnifiedPatchModule from '../../../../shared/native-chat/tools/native-chat-unified-patch'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
 
-// Counting real per-row work rather than a render counter: a future refactor could keep the
-// render count low while still re-deriving every row's markdown.
+// Count markdown derivations: low render counts alone can hide repeated settled-row work.
 const proseCalls = vi.hoisted(() => ({ count: 0 }))
-vi.mock('../../../../shared/native-chat-prose', async (importOriginal) => {
+vi.mock('../../../../shared/native-chat/transcript/native-chat-prose', async (importOriginal) => {
   const actual = await importOriginal<typeof NativeChatProseModule>()
   return {
     ...actual,
@@ -48,25 +48,27 @@ vi.mock('../../../../shared/native-chat-prose', async (importOriginal) => {
 })
 
 const patchCalls = vi.hoisted(() => ({ detailed: 0, summary: 0 }))
-vi.mock('../../../../shared/native-chat-unified-patch', async (importOriginal) => {
-  const actual = await importOriginal<typeof UnifiedPatchModule>()
-  return {
-    ...actual,
-    editLinesFromUnifiedPatch: (...args: Parameters<typeof actual.editLinesFromUnifiedPatch>) => {
-      patchCalls.detailed += 1
-      return actual.editLinesFromUnifiedPatch(...args)
-    },
-    summarizeUnifiedPatch: (...args: Parameters<typeof actual.summarizeUnifiedPatch>) => {
-      patchCalls.summary += 1
-      return actual.summarizeUnifiedPatch(...args)
+vi.mock(
+  '../../../../shared/native-chat/tools/native-chat-unified-patch',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof UnifiedPatchModule>()
+    return {
+      ...actual,
+      editLinesFromUnifiedPatch: (...args: Parameters<typeof actual.editLinesFromUnifiedPatch>) => {
+        patchCalls.detailed += 1
+        return actual.editLinesFromUnifiedPatch(...args)
+      },
+      summarizeUnifiedPatch: (...args: Parameters<typeof actual.summarizeUnifiedPatch>) => {
+        patchCalls.summary += 1
+        return actual.summarizeUnifiedPatch(...args)
+      }
     }
   }
-})
+)
 
-// Counts each run rebuilding its lines and thoughts: a rebuilt transcript hands every run a fresh
-// member list, and only the row's memo keeps a settled run from redoing that work every frame.
+// Count work-run derivations because rebuilt member arrays can defeat row memoization.
 const entriesCalls = vi.hoisted(() => ({ count: 0 }))
-vi.mock('../../../../shared/native-chat-work-run', async (importOriginal) => {
+vi.mock('../../../../shared/native-chat/native-chat-work-run', async (importOriginal) => {
   const actual = await importOriginal<typeof NativeChatWorkRunModule>()
   return {
     ...actual,
@@ -149,8 +151,7 @@ describe('native chat transcript re-render cost during a streaming turn', () => 
     }
 
     const perFrame = (proseCalls.count - afterFirstPaint) / STREAM_FRAMES
-    // Without row memoization every settled row rebuilt its markdown on every frame. Settled
-    // rows keep their block identity, so only the streaming tail should rebuild.
+    // Stable settled blocks should leave only the streaming tail rebuilding markdown.
     expect(perFrame).toBeLessThan(TRANSCRIPT_LENGTH / 10)
   })
 

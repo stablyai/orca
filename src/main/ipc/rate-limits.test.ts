@@ -45,7 +45,6 @@ function makeService(): {
     refreshCodexForTarget: vi.fn(() => Promise.resolve({} as RateLimitState)),
     refreshClaudeForTarget: vi.fn(() => Promise.resolve({} as RateLimitState)),
     consumeCodexRateLimitResetCredit,
-    setPollingInterval: vi.fn(() => Promise.resolve()),
     fetchInactiveClaudeAccountsOnOpen: vi.fn(() => Promise.resolve()),
     fetchInactiveCodexAccountsOnOpen: vi.fn(() => Promise.resolve())
   }
@@ -62,21 +61,11 @@ describe('registerRateLimitHandlers', () => {
     ipcState.handleHandlers.clear()
   })
 
-  it('registers a refreshMiniMax channel that delegates to refresh()', async () => {
-    const { service, refresh } = makeService()
-    registerRateLimitHandlers(service, makeCodexAccounts().service)
-    const handler = ipcState.handleHandlers.get('rateLimits:refreshMiniMax')
-    expect(handler).toBeDefined()
-    await handler!({})
-    expect(refresh).toHaveBeenCalledTimes(1)
-  })
-
   it('keeps the existing rate-limit channels registered', () => {
     const { service } = makeService()
     registerRateLimitHandlers(service, makeCodexAccounts().service)
     expect(ipcState.handleHandlers.has('rateLimits:get')).toBe(true)
     expect(ipcState.handleHandlers.has('rateLimits:refresh')).toBe(true)
-    expect(ipcState.handleHandlers.has('rateLimits:refreshMiniMax')).toBe(true)
     expect(ipcState.handleHandlers.has('rateLimits:refreshGrok')).toBe(true)
   })
 

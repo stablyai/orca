@@ -32,9 +32,7 @@ const petUrlMock = vi.hoisted(() => ({
   } as PetUrlState
 }))
 
-// Why: keep the render focused on the overlay's layout structure — the real
-// store + pet-url resolution pull in IPC/asset loading we don't need to assert
-// the hit-area invariant.
+// Mock IPC/assets so this test isolates overlay hit-area structure.
 vi.mock('../../store', () => {
   const storeState = {
     petSize: 180,
@@ -76,24 +74,17 @@ function getDragHandle(container: HTMLElement): HTMLElement {
 
   expect(fixedEl).not.toBeNull()
   expect(sizeFullEl).not.toBeNull()
-  // Exactly one element opts into pointer events: the content-fit grab handle.
   expect(grabEls.length).toBe(1)
   const grabEl = grabEls[0] as HTMLElement
 
-  // The outer box and the size-full middle layer must stay pointer-events-none
-  // so they never become a grab surface around the rendered pet.
   expect(fixedEl?.className).toContain('pointer-events-none')
   expect(sizeFullEl?.className).toContain('pointer-events-none')
   expect(sizeFullEl?.className).not.toContain('pointer-events-auto')
 
-  // The grab handle (the element carrying the pointer handlers) is NOT the
-  // full-size box: it does not carry size-full and sits nested inside it.
   expect(grabEl.className).not.toContain('size-full')
   expect(grabEl).not.toBe(sizeFullEl)
   expect(sizeFullEl?.contains(grabEl)).toBe(true)
 
-  // The drag affordances (cursor + touch-action) live on that same handle,
-  // confirming it is the pointer-handler element rather than the box.
   expect(grabEl.style.cursor).toBe('grab')
   expect(grabEl.style.touchAction).toBe('none')
 

@@ -1,3 +1,4 @@
+import { sourceShapedKimiOutput } from '../../shared/__fixtures__/kimi-generation-source-shaped'
 import { describe, expect, it } from 'vitest'
 import { ChildProcess } from 'node:child_process'
 import { PassThrough } from 'node:stream'
@@ -27,17 +28,21 @@ function remoteTarget(execute: (plan: CommitMessagePlan) => Promise<string>) {
 }
 
 describe('generateJiraIssueSummaryFromContext', () => {
-  it('sanitizes agent output into a single-line summary', async () => {
+  it.each(['custom', 'kimi'] as const)('%s Jira summary', async (agentId) => {
     const result = await generateJiraIssueSummaryFromContext(
       { description: 'Login crashes when retried offline.' },
-      { agentId: 'custom', model: '', customAgentCommand: 'agent' },
-      remoteTarget(async () => '"Fix offline login retry crash"\nextra commentary')
+      { agentId, model: agentId === 'kimi' ? 'default' : '', customAgentCommand: 'agent' },
+      remoteTarget(async () =>
+        agentId === 'kimi'
+          ? sourceShapedKimiOutput('"Fix offline login retry crash"\nextra commentary')
+          : '"Fix offline login retry crash"\nextra commentary'
+      )
     )
 
     expect(result).toEqual({
       success: true,
       summary: 'Fix offline login retry crash',
-      agentLabel: 'agent'
+      agentLabel: agentId === 'kimi' ? 'Kimi' : 'agent'
     })
   })
 
@@ -76,7 +81,7 @@ describe('generateJiraIssueSummaryFromContext', () => {
       remoteTarget(async () => '""\n')
     )
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       success: false,
       error: 'Generated summary was empty after sanitization.'
     })

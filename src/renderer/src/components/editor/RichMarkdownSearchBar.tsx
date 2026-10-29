@@ -58,8 +58,7 @@ export function RichMarkdownSearchBar({
   onToggleReplaceMode,
   onToggleWholeWord
 }: RichMarkdownSearchBarProps): React.JSX.Element | null {
-  // Why: surface the same replace shortcut the source editor uses so the toggle
-  // is discoverable; reads the user's effective binding, formatted per platform.
+  // Show the effective source-editor replace binding, including user remaps and platform formatting.
   const replaceShortcut = useOptionalShortcutLabel('editor.replace')
   const readOnlyExplanationId = React.useId()
 
@@ -68,9 +67,7 @@ export function RichMarkdownSearchBar({
   }
 
   const keepSearchFocus = (event: React.MouseEvent<HTMLButtonElement>): void => {
-    // Why: rich-mode find drives navigation through the ProseMirror selection.
-    // Letting the toolbar buttons take focus interrupts that selection flow and
-    // makes mouse-based next/previous navigation appear broken.
+    // Keep focus in search so ProseMirror selection navigation continues across next/previous clicks.
     event.preventDefault()
   }
 
@@ -112,9 +109,7 @@ export function RichMarkdownSearchBar({
               value={query}
               onChange={(event) => onQueryChange(event.target.value)}
               onKeyDown={(event) => {
-                // Why: mid-composition Enter only confirms the candidate and Escape
-                // only cancels it, so navigating matches or closing the bar here acts
-                // on a keystroke that was aimed at the IME.
+                // IME Enter/Escape confirm or cancel composition; they must not navigate matches or dismiss search.
                 if (isImeCompositionKeyDown(event)) {
                   return
                 }
@@ -254,9 +249,7 @@ export function RichMarkdownSearchBar({
                 value={replaceQuery}
                 onChange={(event) => onReplaceQueryChange(event.target.value)}
                 onKeyDown={(event) => {
-                  // Why: replacing on the Enter that only confirms a candidate mutates
-                  // the document from a keystroke the user aimed at the IME; Escape
-                  // during composition belongs to the IME's cancel, not to the bar.
+                  // IME Enter/Escape belong to candidate confirmation/cancellation, not replacement or search dismissal.
                   if (isImeCompositionKeyDown(event)) {
                     return
                   }

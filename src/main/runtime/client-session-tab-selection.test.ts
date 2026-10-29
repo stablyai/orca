@@ -195,7 +195,6 @@ describe('client session-tab selection', () => {
     expect(projected.activeTabId).toBe('browser-unified')
     expect(projected.activeGroupId).toBe('group-right')
     expect(projected.tabs.find((tab) => tab.isActive)?.id).toBe('browser-unified')
-    // A later open follows where the host moved, not the first projection.
     expect(store.project(snapshot('terminal-a::leaf-b'), 'new-device').activeTabId).toBe(
       'terminal-a::leaf-b'
     )
@@ -241,7 +240,6 @@ describe('client session-tab selection', () => {
     store.activate(snapshot(), 'device-a', 'browser-unified')
     store.forgetClient('device-a')
     expect(persisted.at(-1)).toEqual({})
-    // Why: forgetting state that is already gone must not rewrite the persisted file.
     const writes = persisted.length
     store.forgetClient('device-a')
     store.forgetWorktree('wt-1')

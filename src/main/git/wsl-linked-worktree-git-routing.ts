@@ -91,15 +91,7 @@ function forgetPathAndDescendants<T>(entries: Map<string, T>, root: string): voi
   }
 }
 
-/**
- * Drop the cached route and retry backoff after Git adds, moves, or removes a
- * worktree at `cwd`, so the next command re-reads the rewritten `.git` marker.
- * Descendants go too: a submodule under the worktree resolved its route from the
- * same marker walk.
- *
- * A probe already in flight is deliberately left alone: it still answers and still
- * caches, so a mutation that lands mid-probe is no worse off than the 30s TTL.
- */
+/** Invalidate this path and descendants after marker rewrites; in-flight probes still cache until the TTL. */
 export function invalidateWslLinkedWorktreeGitRouting(cwd: string): void {
   const normalizedCwd = normalize(cwd)
   forgetPathAndDescendants(routeByCwd, normalizedCwd)

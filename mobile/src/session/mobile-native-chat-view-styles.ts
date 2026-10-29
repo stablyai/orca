@@ -1,11 +1,13 @@
 import { StyleSheet } from 'react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
 const FLOATING_CONTROLS_BOTTOM = spacing.md
 const LOAD_EARLIER_HEIGHT = 44
 const LOAD_EARLIER_RETRY_HEIGHT = 28
 
-export const styles = StyleSheet.create({
+export const styles = themedStyleSheet(() => ({
+  hidden: { display: 'none' },
   root: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -104,4 +106,4 @@ export const styles = StyleSheet.create({
     fontSize: typography.metaSize,
     textAlign: 'center'
   }
-})
+}))

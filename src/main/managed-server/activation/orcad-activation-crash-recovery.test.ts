@@ -32,7 +32,7 @@ vi.mock('../install/remote-versioned-install', async (importOriginal) => ({
 }))
 vi.mock('../install/orcad-remote-install', () => ({ installOrcadBundle: vi.fn() }))
 vi.mock('../install/orcad-remote-preflight', () => ({
-  preflightInstalledOrcad: vi.fn()
+  preflightInstalledOrcad: vi.fn(async () => ({}))
 }))
 vi.mock('../../ssh/orcad-local-build-hash', () => ({
   computeLocalOrcadBuildHash: () => 'abc123def4567890'
@@ -131,7 +131,6 @@ beforeEach(() => {
   )
 })
 
-/** The candidate's terminal daemon reports absent, so it fails the activation gate. */
 function failCandidateReadinessGate(): void {
   vi.mocked(execCommand).mockImplementation(async (_conn, command) => {
     const answer = host.exec(command)
@@ -141,7 +140,6 @@ function failCandidateReadinessGate(): void {
   })
 }
 
-/** The invariant: the host serves exactly the slot its record names, on state that slot reads. */
 function expectExactlyTheRecordedSlot(): void {
   const active = host.activeVersion()
   expect([...host.alive]).toEqual(active ? [active] : [])
@@ -150,14 +148,13 @@ function expectExactlyTheRecordedSlot(): void {
   expect(host.fence).toBe(false)
 }
 
-/** Unconfirmed termination never deletes a slot directory or a snapshot. */
 function expectNoSlotOrSnapshotRemoved(): void {
   const removals = host.commands
     .filter((command) => /\brm -r?f\b/u.test(command))
-    // A failed capture's own partial archive was never a snapshot.
+    // A failed capture's partial archive is not a usable snapshot.
     .map((command) => command.replace(/rm -f '[^']*\/state\.tar'\.partial/gu, ''))
   for (const command of removals) {
-    // A file inside a slot (a consumed stop request) may go; the slot directory never does.
+    // Consumed request files may be removed; slot directories must remain.
     expect(command).not.toMatch(/rm -r?f '[^']*\/orcad-\d[^'/]*\/?'/u)
     expect(command).not.toMatch(/rm -r?f '[^']*orcad-state-snapshots/u)
   }
@@ -228,7 +225,7 @@ describe('the rollback terminal barrier', () => {
   )
 })
 
-/** The plan an older desktop makes for the host after recovery committed a newer app's update. */
+/** Model an older desktop reconnecting after recovery committed a newer app's update. */
 function olderDesktopPlan(): ReturnType<typeof planManagedOrcadAutoUpdate> {
   const read = parseOrcadActivationRecord(host.record)
   if (read.state !== 'ok') {
@@ -249,7 +246,7 @@ describe('recovery refusals keep the fence', () => {
     host = FakeOrcadHost.deployedOld()
     const total = await countMutations(FakeOrcadHost.deployedOld, run)
     host = FakeOrcadHost.deployedOld()
-    // The last three mutations are: candidate-ready journal, record, fence release.
+    // Crash before candidate-ready journal, activation record and fence release complete.
     host.crashAt = total - 2
     host.crashMode = 'before'
     await run().catch(() => undefined)
@@ -257,7 +254,6 @@ describe('recovery refusals keep the fence', () => {
     expect(host.alive.has(NEW)).toBe(true)
   }
 
-  // P1-A: the client quit before committing, and the candidate it launched kept serving.
   it('commits the candidate an interrupted run left serving, without restoring state', async () => {
     await interruptedAfterCandidateLaunch()
     const data = host.data
@@ -271,6 +267,44 @@ describe('recovery refusals keep the fence', () => {
     expect(host.commands.filter((command) => command.includes('kill -TERM'))).toHaveLength(1)
     expectExactlyTheRecordedSlot()
     expect(host.record).toContain(`"previous": "${OLD}"`)
+  })
+
+  it('skips its reads only when a connect just saw no journal and an open fence', async () => {
+    await interruptedAfterCandidateLaunch()
+    const before = host.commands.length
+    expect(
+      await recoverInterruptedOrcadActivation(slot, { transactionAbsent: true, fenceOpen: true })
+    ).toEqual({ outcome: 'none' })
+    expect(host.commands).toHaveLength(before)
+    // Any other answer reads the host as before, and so finds the interrupted run.
+    const result = await recoverInterruptedOrcadActivation(slot, {
+      transactionAbsent: false,
+      fenceOpen: true
+    })
+    expect(result).toMatchObject({ outcome: 'recovered', resolution: 'committed' })
+  })
+
+  it('skips the deploy fence only for a same-version WSL deploy whose caller re-checks', async () => {
+    const sameVersion = { sameVersionFencedByCaller: true }
+    host = FakeOrcadHost.activatedNew()
+    const deployWith = (extra: { sameVersionFencedByCaller?: boolean }) =>
+      deployOrcad({
+        ...slot,
+        localOrcadDir: '/local/out/orcad',
+        target: 'linux-x64-glibc',
+        census,
+        recountCensus: async () => census,
+        releaseIncumbentAdmission: async () => {},
+        ...extra
+      })
+    expect(await deployWith(sameVersion)).toEqual({ outcome: 'already-active', fullVersion: NEW })
+    expect(acquireInstallLock).not.toHaveBeenCalled()
+    // Without the flag, or on a host running another version, the deploy fences as before.
+    expect(await deployWith({})).toMatchObject({ outcome: 'already-active' })
+    expect(acquireInstallLock).toHaveBeenCalledOnce()
+    host = FakeOrcadHost.deployedOld()
+    await deployWith(sameVersion)
+    expect(acquireInstallLock).toHaveBeenCalledTimes(2)
   })
 
   it('relaunches and commits that candidate after a host reboot left nothing running', async () => {
@@ -319,7 +353,6 @@ describe('recovery refusals keep the fence', () => {
     expect(host.record).not.toContain(`"active": "${NEW}"`)
     expect(host.fence).toBe(true)
 
-    // The operator's Restore undoes it.
     await expect(
       recoverInterruptedOrcadActivation({ ...slot, acceptChangedState: true })
     ).resolves.toMatchObject({ outcome: 'recovered', resolution: 'restored-incumbent' })
@@ -330,7 +363,6 @@ describe('recovery refusals keep the fence', () => {
 
   it('keeps changed state, unverifiable, until an operator accepts restoring over it', async () => {
     await interruptedAfterCandidateLaunch()
-    // The candidate's terminal daemon is down, so recovery undoes it instead of committing.
     failCandidateReadinessGate()
     const result = await recoverInterruptedOrcadActivation(slot)
     expect(result).toMatchObject({
@@ -342,7 +374,7 @@ describe('recovery refusals keep the fence', () => {
     expect(host.journal).not.toBeNull()
     expect(host.alive.size).toBe(0)
 
-    // BUG-17: the refused takeover left the lock ownerless, so the accepting re-run need not wait.
+    // Refused recovery marks its fence ownerless so an accepting retry need not await staleness.
     await expect(
       recoverInterruptedOrcadActivation({ ...slot, acceptChangedState: true })
     ).resolves.toMatchObject({
@@ -411,7 +443,6 @@ describe('recovery refusals keep the fence', () => {
   })
 })
 
-// P1-A: the app quit mid-update, then the host rebooted; nothing ran a manual Recover.
 describe('a wake over an update its client abandoned', () => {
   const wakeSlot = {
     ...slot,
@@ -427,7 +458,7 @@ describe('a wake over an update its client abandoned', () => {
     host.crashAt = total - 2
     await run().catch(() => undefined)
     host.crashAt = null
-    // The reboot: no orcad runs, while the fence and its journal stay on disk.
+    // Reboot removes processes while retaining the recovery journal and fence.
     host.alive.clear()
     expect(host.journal).not.toBeNull()
     expect(host.fence).toBe(true)
@@ -505,7 +536,7 @@ describe('every launch is a managed one', () => {
   )
 })
 
-// About 1 in 125 random fence tokens contains `-cf`, which the fake host once read as a capture.
+// Tokens containing -cf must not make the fake host misclassify restore as capture.
 it('restores the pre-activation snapshot under a fence token that contains a tar flag', async () => {
   uuid.fixed = '00000000-cf00-4000-8000-000000000000'
   host = FakeOrcadHost.activatedNew()

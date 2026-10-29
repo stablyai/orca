@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { JIRA_IMAGE_SCHEME } from '../../../shared/jira-attachment-image'
+import { JIRA_IMAGE_SCHEME } from '../../../shared/jira/jira-attachment-image'
 import { attachmentImagesEpoch } from './image-cache'
 import type { JiraClientForSite } from '../authenticated-request'
 import type { AttachmentMeta } from './meta'

@@ -276,7 +276,7 @@ describe.each(['orcadDeployment', 'sshAccess'] as const)(
       )
       await state.manager.ensure(environment())
       bound = after
-      // A plain ensure keeps the forward: nothing it compares names the bound port.
+      // Persisted deployment identity does not change when the server binds a fallback port.
       await state.manager.ensure(environment())
       expect(state.addForward).toHaveBeenCalledOnce()
 
@@ -812,7 +812,6 @@ describe('OrcadManagedTunnelManager bound port', () => {
     )
     expect(state.addForward.mock.calls[0]?.[4]).toBe(58_520)
     state.addForward.mockClear()
-    // The persisted link names the preferred port, so the next ensure reuses this forward.
     await state.manager.ensure({
       ...createEnvironment('orcadDeployment'),
       orcadDeployment: {

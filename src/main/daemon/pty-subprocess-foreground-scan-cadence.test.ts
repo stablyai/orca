@@ -1,10 +1,3 @@
-// Regression guard: bound the volume of whole-process-table scans the daemon
-// schedules for persisted sessions. On Windows each agent-foreground refresh
-// forks a powershell.exe/CIM whole-table scan (the daemon-side analogue of
-// #6288), so an idle shell with no agent identity and no recent output must
-// retry slowly no matter how often readers poll getForegroundProcess; PTY
-// output re-arms the fast retry so agent starts still resolve promptly, and
-// sessions with a cached agent identity keep the 1s refresh unrelaxed.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -25,8 +18,7 @@ vi.mock('../pwsh', () => ({
   isPwshAvailable: isPwshAvailableMock
 }))
 
-// Resolve PowerShell family names to deterministic absolute paths so these
-// tests run on non-Windows CI (mirrors pty-subprocess.test.ts).
+// Keep PowerShell resolution deterministic on non-Windows hosts.
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
@@ -58,12 +50,14 @@ vi.mock('../providers/agent-foreground-process', () => ({
 }))
 
 import { createPtySubprocess } from './pty-subprocess'
+import { createConptyPreludeSender } from './pty-subprocess-test-harness'
 
 // Well past any hot window or retry throttle so t=0 reads behave as idle.
 const BASE_TIME_MS = 1_000_000
 
 function mockPtyProcess(processName: string, pid = 12345) {
   const onDataListeners: ((data: string) => void)[] = []
+  const sendConptyPrelude = createConptyPreludeSender()
   return {
     pid,
     write: vi.fn(),
@@ -72,6 +66,7 @@ function mockPtyProcess(processName: string, pid = 12345) {
     process: processName,
     onData: vi.fn((cb: (data: string) => void) => {
       onDataListeners.push(cb)
+      sendConptyPrelude(cb)
       return { dispose: vi.fn() }
     }),
     onExit: vi.fn(() => ({ dispose: vi.fn() })),
@@ -85,8 +80,7 @@ async function flushAsyncTicks(count = 6): Promise<void> {
   }
 }
 
-// One renderer/daemon reader poll: read the foreground and let the scheduled
-// background refresh (if any) settle so its cache write lands before the next.
+// Settle each scheduled refresh before advancing the clock for the next reader poll.
 async function readForegroundAt(
   handle: { getForegroundProcess: () => string | null },
   atMs: number
@@ -135,7 +129,10 @@ describe('daemon pty foreground scan cadence', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: targetPlatform })
     const proc = mockPtyProcess(shellProcessName)
     spawnMock.mockReturnValue(proc)
+    // Startup output (ConPTY DA1 query) lands before the 10s hot window these idle cases measure.
+    vi.setSystemTime(BASE_TIME_MS - 11_000)
     const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    vi.setSystemTime(BASE_TIME_MS)
     return { proc, handle }
   }
 
@@ -147,8 +144,7 @@ describe('daemon pty foreground scan cadence', () => {
       expect(await readForegroundAt(handle, atMs)).toBe('powershell.exe')
     }
 
-    // Scans at t=0s, 16s, 32s, 48s. Pre-fix (5s retry) the same 31 reads drove
-    // 11 whole-table scans; the 2s read cadence itself would drive 31.
+    // The 15s retry tier yields scans at 0s, 16s, 32s, and 48s under 2s polling.
     expect(resolveAgentForegroundProcessMock).toHaveBeenCalledTimes(4)
   })
 
@@ -160,17 +156,14 @@ describe('daemon pty foreground scan cadence', () => {
     await readForegroundAt(handle, 2_000)
     await readForegroundAt(handle, 4_000)
     await readForegroundAt(handle, 6_000)
-    // Idle: only the t=0 scan ran (6s is within the relaxed 15s retry).
     expect(resolveAgentForegroundProcessMock).toHaveBeenCalledTimes(1)
 
-    // The user launches an agent; its startup output re-arms the 5s retry.
     resolveAgentForegroundProcessMock.mockResolvedValue('claude')
     vi.setSystemTime(BASE_TIME_MS + 6_500)
     proc._simulateData('claude\r\n')
 
     await readForegroundAt(handle, 8_000)
     expect(resolveAgentForegroundProcessMock).toHaveBeenCalledTimes(2)
-    // The resolved identity is served from the cache on the next read.
     expect(await readForegroundAt(handle, 8_500)).toBe('claude')
   })
 
@@ -183,8 +176,7 @@ describe('daemon pty foreground scan cadence', () => {
     await readForegroundAt(handle, 3_000)
     await readForegroundAt(handle, 5_000)
 
-    // Every read past the 1s cache TTL refreshes (t=0s, 1s, 3s, 5s): agent-exit
-    // detection through the identity cache must not be relaxed by the idle tier.
+    // Cached identity keeps the 1s refresh tier even without recent output.
     expect(resolveAgentForegroundProcessMock).toHaveBeenCalledTimes(4)
   })
 
@@ -196,7 +188,7 @@ describe('daemon pty foreground scan cadence', () => {
       expect(await readForegroundAt(handle, atMs)).toBe('zsh')
     }
 
-    // Scans at t=0s, 6s, 12s, 18s, 24s, 30s — the cheap `ps` path is unchanged.
+    // The 5s tier yields scans at 0s, 6s, 12s, 18s, 24s, and 30s under 2s polling.
     expect(resolveAgentForegroundProcessMock).toHaveBeenCalledTimes(6)
   })
 
@@ -211,8 +203,7 @@ describe('daemon pty foreground scan cadence', () => {
         reads.push(await readForegroundAt(handle, atMs))
       }
 
-      // The first synchronous read precedes enrichment; every later read stays on
-      // OMP even when its 1s cache entry expires while the next scan is in flight.
+      // Serve the enriched owner across cache expiry while its next scan is in flight.
       expect(reads).toEqual(['pi', ...Array.from({ length: 12 }, () => 'omp')])
       expect(resolveAgentForegroundProcessMock).toHaveBeenCalledTimes(4)
 

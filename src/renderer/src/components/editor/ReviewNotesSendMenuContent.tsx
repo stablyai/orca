@@ -2,6 +2,10 @@ import React, { useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
+import {
+  useStructuredChatTabNames,
+  getStructuredChatTabNames
+} from '@/runtime/structured-chat-name-observation'
 import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
 import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
 import { AgentTypeIcon } from '@/lib/agent-type-icon'
@@ -30,6 +34,7 @@ import { useWorktreeAgentRows } from '@/components/sidebar/useWorktreeAgentRows'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import { agentRowDisplayDotState } from '@/lib/agent-row-dot-state'
 import { translate } from '@/i18n/i18n'
+import { agentSendDisabledReasonLabel } from '@/lib/agent-send-disabled-reason-label'
 
 type OrderedSendTarget = {
   target: NotesSendAgentTarget
@@ -56,9 +61,7 @@ export function ReviewNotesSendMenuContent({
 }): React.JSX.Element {
   const hasPrompt = prompt.trim().length > 0
 
-  // Why: enumerate every running agent of the worktree so the user can target
-  // any of them — not only the focused pane. Derive from store slices in a memo
-  // to avoid the new-array identity churn of selecting the function result.
+  // Include every workspace agent, not just the focused pane; memoize slice-derived targets to avoid fresh selector arrays.
   const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const unifiedTabsByWorktree = useAppStore((s) => s.unifiedTabsByWorktree)
@@ -68,6 +71,7 @@ export function ReviewNotesSendMenuContent({
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
   const agentRows = useWorktreeAgentRows(worktreeId)
   const now = useNow(30_000)
+  const chatNames = useStructuredChatTabNames()
   const sendTargets = useMemo(() => {
     void agentStatusEpoch
     return deriveNotesSendAgentTargets(
@@ -79,12 +83,13 @@ export function ReviewNotesSendMenuContent({
         ptyIdsByTabId,
         runtimePaneTitlesByTabId
       },
-      worktreeId
+      worktreeId,
+      chatNames
     )
   }, [
-    // Why: stale-boundary timers bump this epoch without replacing the
-    // status map, so eligibility must derive again when freshness flips.
+    // Freshness timers can change eligibility through this epoch without replacing the status map.
     agentStatusEpoch,
+    chatNames,
     agentStatusByPaneKey,
     tabsByWorktree,
     unifiedTabsByWorktree,
@@ -104,8 +109,7 @@ export function ReviewNotesSendMenuContent({
       onSent: () => void,
       options: { explicitTarget?: boolean } = {}
     ) => {
-      // Why: settle the loading toast in place; a separate dismiss can land before sonner mounts
-      // the loading toast when the send resolves at once (a chat send), leaving it stuck.
+      // Settle the loading toast in place: immediate sends can resolve before Sonner mounts, racing a separate dismissal.
       const pending = toast.loading(
         translate(
           'auto.components.editor.ReviewNotesSendMenuContent.50f7e753ea',
@@ -127,7 +131,7 @@ export function ReviewNotesSendMenuContent({
             return
           }
 
-          // Why: a typed call is required; toast.message on the loading id keeps its spinner forever.
+          // Use a typed toast update; toast.message preserves the loading spinner.
           toast.info(
             activeAgentNotesSendFailureMessage(result.status, {
               explicitTarget: options.explicitTarget,
@@ -167,8 +171,7 @@ export function ReviewNotesSendMenuContent({
         () => sendMessageToAgent({ worktreeId, prompt, target: target.messageTarget }),
         () => {
           onPromptDelivered?.()
-          // Why: mirror the sidebar send-target telemetry so dropdown-routed
-          // follow-up notes show up identically on `agent_prompt_sent`.
+          // Match sidebar telemetry for follow-up notes sent through the dropdown.
           track('agent_prompt_sent', {
             agent_kind: agentKindForAgentType(target.agentType),
             launch_source: launchSource,
@@ -221,18 +224,25 @@ function resolveCurrentSendTargetEligibility(
 ): { status: 'eligible' } | { status: 'disabled'; disabledReason: string } {
   const goneReason =
     target.messageTarget.kind === 'terminal'
-      ? 'Terminal is no longer available'
-      : 'Chat is no longer open'
+      ? translate(
+          'auto.components.editor.ReviewNotesSendMenu.terminalGone',
+          'Terminal is no longer available'
+        )
+      : translate('auto.components.editor.ReviewNotesSendMenu.chatGone', 'Chat is no longer open')
   const state = useAppStore.getState()
-  const currentTarget = deriveNotesSendAgentTargets(state, worktreeId).find(
-    (candidate) => candidate.paneKey === target.paneKey
-  )
+  const currentTarget = deriveNotesSendAgentTargets(
+    state,
+    worktreeId,
+    getStructuredChatTabNames()
+  ).find((candidate) => candidate.paneKey === target.paneKey)
   if (currentTarget) {
     return currentTarget.status === 'eligible'
       ? { status: 'eligible' }
       : {
           status: 'disabled',
-          disabledReason: currentTarget.disabledReason ?? goneReason
+          disabledReason: currentTarget.disabledReason
+            ? agentSendDisabledReasonLabel(currentTarget.disabledReason)
+            : goneReason
         }
   }
 
@@ -253,10 +263,13 @@ function AgentTargetMenuItem({
   onSend: (target: NotesSendAgentTarget) => void
 }): React.JSX.Element {
   const tabTitle = target.tabTitle.trim()
-  // Why: the sidebar row's own state, so a failed or stopped agent reads the same in both places.
+  // Use the sidebar’s display state so failed/stopped agents agree across surfaces.
   const state = agent ? agentRowDisplayDotState(agent) : 'idle'
   const timeAgo = agent ? formatAgentRelativeTime(agent, now) : null
-  const disabledReason = target.status === 'disabled' ? target.disabledReason : undefined
+  const disabledReason =
+    target.status === 'disabled' && target.disabledReason
+      ? agentSendDisabledReasonLabel(target.disabledReason)
+      : undefined
   const secondaryParts = [
     agentStateLabel(state),
     ...(timeAgo ? [timeAgo] : []),
@@ -266,9 +279,7 @@ function AgentTargetMenuItem({
     <DropdownMenuItem
       disabled={disabled}
       onSelect={() => onSend(target)}
-      // Why: surface the ineligibility reason (permission/stale/no-terminal) as a
-      // hover tooltip rather than inline text, matching DashboardAgentRow's
-      // title-attribute treatment of the same disabledReason.
+      // Match dashboard tooltips for permission, stale-state and missing-terminal reasons.
       title={disabledReason}
       className="min-w-[240px] gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
     >
@@ -330,15 +341,21 @@ function formatAgentRelativeTime(agent: DashboardAgentRowData, now: number): str
 function formatTimeAgo(ts: number, now: number): string {
   const delta = now - ts
   if (delta < 60_000) {
-    return 'just now'
+    return translate('auto.components.editor.ReviewNotesSendMenu.justNow', 'just now')
   }
   const minutes = Math.floor(delta / 60_000)
   if (minutes < 60) {
-    return `${minutes}m ago`
+    return translate('auto.components.editor.ReviewNotesSendMenu.minutesAgo', '{{minutes}}m ago', {
+      minutes
+    })
   }
   const hours = Math.floor(minutes / 60)
   if (hours < 24) {
-    return `${hours}h ago`
+    return translate('auto.components.editor.ReviewNotesSendMenu.hoursAgo', '{{hours}}h ago', {
+      hours
+    })
   }
-  return `${Math.floor(hours / 24)}d ago`
+  return translate('auto.components.editor.ReviewNotesSendMenu.daysAgo', '{{days}}d ago', {
+    days: Math.floor(hours / 24)
+  })
 }

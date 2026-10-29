@@ -1,10 +1,4 @@
-/**
- * Watching for stop requests addressed to this orcad.
- *
- * Two listeners share one shutdown: the plain slot request (`.orcad-stop-request` beside
- * `orcad.js`, consumed by unlinking it) and the instance-bound managed request in the data
- * root, which is validated and kept as evidence until the completion command proves exit.
- */
+// Consume slot stop files; retain validated instance-bound requests as evidence until exit is proven.
 import { unlinkSync, watch, type FSWatcher } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import {
@@ -24,7 +18,6 @@ export type OrcadStopRequestListener = { close(): void }
 
 const DEFAULT_POLL_INTERVAL_MS = 1_000
 
-/** `consume` returns the request that should stop orcad, or null; a missing file throws ENOENT. */
 function listenForRequest<T>(
   requestPath: string,
   consume: (path: string) => T | null,
@@ -42,7 +35,6 @@ function listenForRequest<T>(
       request = consume(requestPath)
     } catch (error) {
       if (!hasErrorCode(error, 'ENOENT')) {
-        // Polling retries every interval; report each distinct refusal once.
         const failure = error instanceof Error ? error.message : String(error)
         if (failure !== lastFailure) {
           lastFailure = failure
@@ -68,7 +60,7 @@ function listenForRequest<T>(
     watcher.on('error', (error) => console.error('[orcad] stop-request watcher failed:', error))
     watcher.unref()
   } catch (error) {
-    // The poll below still delivers requests; a watcher only makes them prompt.
+    // Polling still delivers requests when filesystem watching fails.
     console.error('[orcad] stop-request watcher could not start:', error)
   }
   const poll = setInterval(check, pollIntervalMs)
@@ -77,7 +69,6 @@ function listenForRequest<T>(
     watcher?.close()
     clearInterval(poll)
   }
-  // Covers a request written before this listener was installed.
   check()
   return {
     close: () => {
@@ -92,13 +83,13 @@ export function installOrcadStopRequestListeners(
   options: {
     installRoot: string
     managedStop?: OrcadManagedStopContext
-    /** Runs once for a validated managed request before the stop; it cannot prevent it. */
+    /** Best-effort preparation runs before shutdown and cannot prevent it. */
     beforeManagedStop?: (request: OrcadManagedStopRequest) => Promise<void>
     pollIntervalMs?: number
   }
 ): OrcadStopRequestListener {
   const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS
-  // Declared first: a listener's initial check can consume a request and close before returning.
+  // Initial checks can close listeners synchronously before setup returns.
   const listeners: OrcadStopRequestListener[] = []
   const close = (): void => {
     for (const listener of listeners) {
@@ -124,9 +115,8 @@ export function installOrcadStopRequestListeners(
         orcadManagedStopRequestPath(managedStop.instance),
         (path) => {
           const request = validateOrcadManagedStopRequest(managedStop, path)
-          // A cancelled request is never acted on; keep listening for the next transaction.
           if (claimOrcadManagedStopDecision(request, 'dispatched') === 'canceled') {
-            // A cancelled request left behind would block every later transaction's request.
+            // Withdraw canceled requests so later transactions can publish their own.
             withdrawOrcadManagedStopRequest(request)
             throw new Error('orcad_managed_stop_canceled')
           }
@@ -134,7 +124,6 @@ export function installOrcadStopRequestListeners(
         },
         (request) => {
           close()
-          // Preparation is best effort: whatever it reports, the stop proceeds.
           void prepare(request)
             .catch((error: unknown) =>
               console.error('[orcad] managed stop preparation failed:', error)

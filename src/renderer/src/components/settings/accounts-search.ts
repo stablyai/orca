@@ -219,7 +219,7 @@ export const getAccountsCursorSearchEntries = createLocalizedCatalog(() => [
     title: translate('auto.components.settings.accounts.search.cursor.title', 'Cursor Usage'),
     description: translate(
       'auto.components.settings.accounts.search.cursor.description',
-      'Monthly plan usage read from the Cursor sign-in already on this computer (cursor-agent login).'
+      'Plan usage read from the Cursor sign-in already on this computer (cursor-agent login).'
     ),
     keywords: [
       ...translateSearchKeyword(

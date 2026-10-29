@@ -79,10 +79,7 @@ type MutableSelection = {
   activeWorkspaceExecutionHostId: ExecutionHostId | null
 }
 
-/**
- * The harness stub answers with a frozen object; the latch these tests are about
- * only shows up when `setActiveWorktree` actually moves what the next read sees.
- */
+// Selection rollback requires a mutable harness store; frozen setActiveWorktree stubs mask the latch.
 function stubSelectableWorkspaceStore(selection: MutableSelection): void {
   const base = mocks.getState() as Record<string, unknown>
   mocks.getState.mockImplementation(() => ({ ...base, ...selection }))

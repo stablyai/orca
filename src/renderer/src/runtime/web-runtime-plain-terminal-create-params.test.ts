@@ -6,7 +6,7 @@ vi.mock('./runtime-rpc-client', () => ({
   runtimeEnvironmentSupportsCapability: supportsCapability
 }))
 
-const { buildPlainCreateTerminalParams, resolveCreateTerminalShellParams } =
+const { resolveCreateTerminalShellParams } =
   await import('./web-runtime-plain-terminal-create-params')
 
 describe('resolveCreateTerminalShellParams', () => {
@@ -32,24 +32,5 @@ describe('resolveCreateTerminalShellParams', () => {
     await expect(resolveCreateTerminalShellParams('env-1', { shell: 'cmd.exe' })).resolves.toEqual({
       command: 'cmd.exe'
     })
-  })
-
-  it('does not probe the host when no shell was picked', async () => {
-    await expect(resolveCreateTerminalShellParams('env-1', { command: 'ls' })).resolves.toEqual({
-      command: 'ls'
-    })
-    expect(supportsCapability).not.toHaveBeenCalled()
-  })
-
-  it('builds caller-selected plain terminal params with the shell pick', async () => {
-    supportsCapability.mockResolvedValue(true)
-
-    const params = await buildPlainCreateTerminalParams('env-1', {
-      worktreeId: 'repo-1::/repo',
-      shell: 'cmd.exe'
-    })
-
-    expect(params).toMatchObject({ shell: 'cmd.exe', select: true, navigation: 'caller' })
-    expect(params.command).toBeUndefined()
   })
 })

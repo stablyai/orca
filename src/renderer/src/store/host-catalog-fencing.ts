@@ -15,10 +15,7 @@ import { getLocalSshTargetConnectionGeneration } from './slices/ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from './slices/runtime-status'
 import { getRuntimeTargetHostId } from '../runtime/runtime-client-target'
 
-/**
- * Who answered: pairing, runtime incarnation (connection generation) and, for an SSH place, that
- * target's connection generation. Guards mutations; unrelated catalog or SSH churn never moves it.
- */
+/** Fence by pairing/runtime incarnation and SSH target generation, not unrelated catalog/connection churn. */
 export type HostIdentityFence = {
   route: HostRoute
   pairingRevision: number | undefined
@@ -122,19 +119,16 @@ export function isHostCatalogFenceCurrent(
   )
 }
 
-async function listRuntimeEnvironmentsForAllHostLoad(): Promise<{ id: string }[]> {
+async function listRuntimeEnvironmentsForAllHostLoad(): Promise<{ id: string }[] | null> {
   try {
     return (await window.api.runtimeEnvironments.list()) ?? []
   } catch (err) {
     console.warn('Failed to list runtime environments for all-host load:', err)
-    return []
+    return null
   }
 }
 
-/**
- * Remote half of an all-host catalog load: claims each runtime's fence, then loads it. Settlement
- * stays with the caller; a load that stops being current while listing claims no fence.
- */
+/** Claim each runtime fence before listing; stale loads claim none and callers own settlement. */
 export async function loadRuntimeHostCatalogs(
   get: CatalogFenceStore,
   kind: HostCatalogKind,
@@ -142,11 +136,17 @@ export async function loadRuntimeHostCatalogs(
     target: Extract<RuntimeClientTarget, { kind: 'environment' }>,
     fence: HostCatalogFence
   ) => Promise<void>,
-  isCurrentLoad: () => boolean = () => true
+  isCurrentLoad: () => boolean = () => true,
+  /** Called only when the environment list itself answered, so absence from it is authoritative. */
+  onListed?: (environmentIds: readonly string[]) => void
 ): Promise<void> {
-  const environments = await listRuntimeEnvironmentsForAllHostLoad()
+  const listed = await listRuntimeEnvironmentsForAllHostLoad()
   if (!isCurrentLoad()) {
     return
+  }
+  const environments = listed ?? []
+  if (listed) {
+    onListed?.(listed.map((environment) => environment.id))
   }
   await Promise.all(
     environments.map((environment) => {

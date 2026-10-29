@@ -4,8 +4,7 @@ import { join, sep } from 'node:path'
 import type * as FsPromises from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Why: the regression is measured in filesystem syscalls, not in returned data, so
-// the walk's own readdir is what the assertions below count.
+// Count readdir syscalls: unchanged results alone cannot prove scan reuse.
 const { readdirPaths } = vi.hoisted(() => ({ readdirPaths: [] as string[] }))
 
 vi.mock('node:fs/promises', async () => {
@@ -26,7 +25,6 @@ async function writeSkill(directory: string, name: string): Promise<void> {
   await writeFile(join(directory, 'SKILL.md'), `---\nname: ${name}\ndescription: d\n---\n`)
 }
 
-/** A home with three provider roots populated, plus `paneCount` workspace roots. */
 async function buildFixture(
   paneCount: number
 ): Promise<{ home: string; panes: string[]; noWorkspace: string }> {
@@ -41,14 +39,11 @@ async function buildFixture(
     await writeSkill(join(pane, '.agents', 'skills', `pane-${index}`), `pane-${index}`)
     panes.push(pane)
   }
-  // Why: with no cwd the source builder falls back to process.cwd(), which would
-  // drag this repo's own skills into every count below.
+  // Supply cwd or discovery would scan this repo and pollute fixture counts.
   return { home, panes, noWorkspace: join(root, 'no-workspace') }
 }
 
-// One populated root costs two readdirs per real walk: the root itself, and the
-// package directory while looking for SKILL.md. Anything above that is a root
-// walked more than once.
+// One populated root needs two reads (root and package); more means a repeat walk.
 const READDIR_CALLS_PER_POPULATED_ROOT = 2
 
 function readdirCountUnder(path: string): number {
@@ -60,8 +55,7 @@ function readdirCountUnder(path: string): number {
 beforeEach(() => {
   clearSkillRootScanCache()
   readdirPaths.length = 0
-  // Why: the Hermes root is the one home root an env var can move outside the
-  // fixture, so a developer with a real Hermes install would score it `present`.
+  // Isolate HERMES_HOME so developer installs cannot change present-root counts.
   vi.stubEnv('HERMES_HOME', '')
   vi.stubEnv('LOCALAPPDATA', '')
   vi.spyOn(console, 'info').mockImplementation(() => undefined)
@@ -101,7 +95,6 @@ describe('bounded concurrent skill discovery', () => {
     )
 
     expect(results).toHaveLength(32)
-    // Every pane still sees the shared home skills plus its own workspace skill.
     for (const [index, result] of results.entries()) {
       const paneIndex = Math.floor(index / 4)
       expect(result.skills.map((skill) => skill.name).sort()).toEqual([
@@ -111,7 +104,6 @@ describe('bounded concurrent skill discovery', () => {
         'shared'
       ])
     }
-    // The home roots are walked once for all 32 scans; only the per-pane roots repeat.
     expect(readdirCountUnder(join(home, '.agents', 'skills'))).toBe(
       READDIR_CALLS_PER_POPULATED_ROOT
     )
@@ -153,9 +145,7 @@ describe('bounded concurrent skill discovery', () => {
     })
     expect(refreshed.skills.map((skill) => skill.name)).toContain('added-later')
 
-    // Why: asserting only that the skill is present would pass with no caching at
-    // all — the roots would simply re-walk and find it. The refresh has to leave
-    // every root cached, or the next scan re-walks the whole set.
+    // Presence alone does not prove caching; the scan after refresh must perform no new walks.
     readdirPaths.length = 0
     const afterRefresh = await discoverSkills({ homeDir: home, repos: [], cwd: noWorkspace })
     expect(afterRefresh.skills.map((skill) => skill.name)).toContain('added-later')
@@ -183,18 +173,15 @@ describe('bounded concurrent skill discovery', () => {
     await discoverSkills({ homeDir: home, repos: [], cwd: noWorkspace })
 
     const line = String(info.mock.calls.at(0)?.at(0))
-    // `present` is the signal that separates "big tree" from "big root set", and
-    // is not derivable from the other counts.
-    expect(line).toContain('[skills] scan roots=33 present=3 walked=33 skills=3')
+    // Present-root count distinguishes large trees from large root sets.
+    expect(line).toContain('[skills] scan roots=35 present=3 walked=35 skills=3')
     expect(line).toContain('home-claude')
     expect(line).not.toContain(home)
     expect(line).not.toContain(tmpdir())
-    // The id list is capped so one line cannot grow with the repo count.
     expect(line.slice(line.indexOf('ids=')).split(',')).toHaveLength(MAX_LOGGED_ROOT_IDS)
 
     info.mockClear()
     await discoverSkills({ homeDir: home, repos: [], cwd: noWorkspace })
-    // A fully cached scan did no filesystem work, so it must stay silent.
     expect(info).not.toHaveBeenCalled()
   })
 })

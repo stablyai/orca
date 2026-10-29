@@ -1,4 +1,6 @@
 import type { AutomationRun } from '../../../../shared/automations-types'
+import { translate } from '@/i18n/i18n'
+import { automationRunErrorText } from './automation-run-error-copy'
 
 export function getAutomationRunContent(run: AutomationRun): string {
   const savedOutput = run.outputSnapshot?.content.trim()
@@ -13,5 +15,9 @@ export function getAutomationRunContent(run: AutomationRun): string {
       return output
     }
   }
-  return run.error ?? run.usage?.unavailableMessage ?? 'No output content available.'
+  return (
+    automationRunErrorText(run) ??
+    run.usage?.unavailableMessage ??
+    translate('auto.components.automations.runContent.noOutput', 'No output content available.')
+  )
 }

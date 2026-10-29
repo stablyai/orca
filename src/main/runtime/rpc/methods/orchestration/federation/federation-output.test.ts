@@ -229,8 +229,7 @@ describe('orchestration federated worker output', () => {
         status: 'running'
       } as never
     })
-    // The execution host must publish a positive liveness verdict; a missing
-    // verdict is intentionally treated as unverifiable for old peers.
+    // Old peers without a positive host verdict remain unverifiable.
     vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue({
       status: 'live',
       ptyIds: ['term_windows_worker']
@@ -386,8 +385,7 @@ describe('orchestration federated worker output', () => {
         data: { reason: 'remote_capability_unavailable' }
       }
     })
-    // The worker-start capability negotiation already populated this epoch's
-    // cache; mixed-version fallback must not issue a redundant status probe.
+    // Reuse this epoch's capability cache populated by worker-start.
     expect(remoteCalls.filter((method) => method === 'status.get')).toHaveLength(0)
     expect(
       remoteCalls.filter((method) => method === 'orchestration.federationReadOutput')
@@ -555,8 +553,6 @@ describe('orchestration federated worker output', () => {
     })
     expect(workerRuntime.closeTerminal).toHaveBeenCalledWith('term_windows_worker')
 
-    // A confirmed remote release converges the home projection and is safe to
-    // replay after a response/relay race.
     expect(homeDb.getWorkerDispatch(dispatchId)).toMatchObject({
       stage: 'released',
       agent_terminal_handle: null
@@ -696,8 +692,7 @@ describe('orchestration federated worker output', () => {
 
   it('keeps reads, fleet snapshots, and release on legacy fallbacks for an old peer', async () => {
     workerAdvertisesNewCapabilities = false
-    // A shipped host that does not advertise structured read still has to be asked; only its
-    // own method_not_found may downgrade the read to a terminal scrape.
+    // Ask shipped hosts directly for structured output; only method_not_found permits terminal fallback.
     workerSupportsStructuredRead = false
     const dispatchId = await startRemoteWorker()
     remoteCalls = []
@@ -773,7 +768,6 @@ describe('orchestration federated worker output', () => {
       method: 'orchestration.workerRead',
       params: { dispatch: dispatchId }
     })
-    // The unadvertised capability never blocks the call; only method_not_found would.
     expect(remoteCalls).toContain('orchestration.federationReadOutput')
 
     const oldEpoch = homeDb.getFederatedDispatch(dispatchId)?.remote_runtime_epoch
@@ -802,7 +796,6 @@ describe('orchestration federated worker output', () => {
       method: 'orchestration.workerList',
       params: { includeRemote: true }
     })
-    // Read and fleet negotiate through the methods themselves, so neither spends a probe.
     expect(remoteCalls.filter((method) => method === 'status.get')).toHaveLength(0)
     const release = await homeDispatcher.dispatch({
       id: 'rpc_restarted_peer_release',
@@ -816,7 +809,7 @@ describe('orchestration federated worker output', () => {
     expect(read).toMatchObject({ ok: true, result: { source: 'terminal' } })
     expect(fleet).toMatchObject({ ok: true })
     expect(release).toMatchObject({ ok: true, result: { state: 'released' } })
-    // Only release still probes: its capability asserts a durable archive, not method existence.
+    // Release still probes because its capability promises a durable archive, not merely method presence.
     expect(remoteCalls).toContain('orchestration.federationReadOutput')
     expect(remoteCalls).toContain('orchestration.federationFleetSnapshot')
     expect(remoteCalls).toContain('orchestration.federationRelease')

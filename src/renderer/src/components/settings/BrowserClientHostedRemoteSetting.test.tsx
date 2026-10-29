@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '../ui/tooltip'
 import { BrowserClientHostedRemoteSetting } from './BrowserClientHostedRemoteSetting'
 import { getBrowserPaneSearchEntries } from './browser-search'
+import { matchesSettingsSearch } from './settings-search'
 import { getBrowserClientHostedRemoteTitle } from './browser-client-hosted-remote-copy'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
@@ -57,7 +58,10 @@ describe('BrowserClientHostedRemoteSetting', () => {
       (candidate) => candidate.title === getBrowserClientHostedRemoteTitle()
     )
 
-    expect(entry?.keywords).toContain('placement')
-    expect(entry?.description).toContain('new pages only')
+    expect(entry).toBeDefined()
+    expect(matchesSettingsSearch(getBrowserClientHostedRemoteTitle(), entry ?? [])).toBe(true)
+    expect(matchesSettingsSearch('placement', entry ?? [])).toBe(true)
+    expect(matchesSettingsSearch('new pages only', entry ?? [])).toBe(true)
+    expect(matchesSettingsSearch('unrelated setting query', entry ?? [])).toBe(false)
   })
 })

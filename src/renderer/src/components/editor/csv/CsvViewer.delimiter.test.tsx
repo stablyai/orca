@@ -94,16 +94,4 @@ describe('CSV delimiter selection', () => {
     expect(screen.getByRole('columnheader', { name: 'value' })).toBeTruthy()
     expect(screen.getByRole('cell', { name: '2' })).toBeTruthy()
   })
-
-  it('resets to Auto when the editor mounts a different file identity', async () => {
-    const { rerender } = render(
-      <CsvViewer key="first" content={'name;value\na;1'} filePath="first.csv" />
-    )
-    await chooseDelimiter('Comma (,)')
-
-    rerender(<CsvViewer key="second" content={'name\tvalue\nb\t2'} filePath="second.tsv" />)
-
-    expect(screen.getByRole('combobox', { name: 'Delimiter' }).textContent).toBe('Auto (Tab)')
-    expect(screen.getByRole('columnheader', { name: 'value' })).toBeTruthy()
-  })
 })

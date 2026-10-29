@@ -1,12 +1,4 @@
-/**
- * Unit coverage for the pure predicates/reducer behind the #8881 store purge.
- *
- * The removal-diff scoping is the load-bearing safety property: `isRemovedRuntimeHostId`
- * may only match runtime hosts whose env id is in the *removed* (tombstoned) set —
- * never local/ssh/unhosted, and never a runtime host merely absent from a
- * not-yet-hydrated saved list. The reducer must preserve reference identity when
- * nothing changed so it never churns the render pipeline.
- */
+/** Only removed/tombstoned runtime owners may match (#8881), never local/SSH/unhosted or merely unhydrated environments; unchanged reductions must preserve identity. */
 import { describe, it, expect } from 'vitest'
 import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import {
@@ -45,9 +37,7 @@ describe('isRemovedRuntimeHostId', () => {
   })
 
   it("is false for a 'local' catalog host even when a serving instance's repos carry runtime stamps", () => {
-    // The catalog-merge guard keys on catalog.hostId (the fetch *target*). A serving
-    // instance's own catalog is fetched as hostId 'local' regardless of the runtime:
-    // stamps its repos carry, so it is exempt by construction.
+    // Serving-local fetch targets remain local despite runtime-stamped repo rows, so cannot match removal.
     expect(isRemovedRuntimeHostId('local', new Set(['env-a']))).toBe(false)
   })
 })
@@ -89,11 +79,8 @@ describe('dropWorktreeRowsForRemovedRuntimeEnvironments', () => {
     const changing = [row('w-keep', 'local'), row('w-a', runtimeA)]
     const rowsByRepo = { repoUnchanged: unchanged, repoChanging: changing }
     const result = dropWorktreeRowsForRemovedRuntimeEnvironments(rowsByRepo, new Set(['env-a']))
-    // A change anywhere returns a new top-level map...
     expect(result.rowsByRepo).not.toBe(rowsByRepo)
-    // ...the untouched repo keeps its exact original array reference...
     expect(result.rowsByRepo.repoUnchanged).toBe(unchanged)
-    // ...and only the changed repo gets a fresh filtered array.
     expect(result.rowsByRepo.repoChanging).not.toBe(changing)
     expect(result.rowsByRepo.repoChanging).toEqual([row('w-keep', 'local')])
   })

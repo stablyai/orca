@@ -7,14 +7,8 @@ import {
   SSH_SIGN_IN_CANCELLED_SUFFIX
 } from '../../shared/ssh-sign-in-required-copy'
 
-/**
- * Hosts whose credential prompt the user cancelled (or left unanswered). Until the user explicitly
- * connects again, no automatic connect may prompt for them: background status checks, managed
- * server tunnels and reconnect ladders would otherwise reopen the modal every few seconds.
- */
-// `attempt` is the declining attempt's credential signal: that attempt may still offer its other
-// methods (a password after a cancelled passphrase), only later attempts are barred.
-// `awaiting-sign-in`: the host needs a typed credential this run has not been given yet.
+/** Suppress automatic prompts after decline until explicit connect; background status/tunnels/reconnects would otherwise reopen the modal repeatedly. */
+// The declining attempt may try other methods; only later attempts are barred. awaitingSignIn records credentials not yet supplied this launch.
 type SshCredentialDecline = { attempt: AbortSignal | undefined; awaitingSignIn: boolean }
 const declinedTargets = new Map<string, SshCredentialDecline>()
 
@@ -22,10 +16,7 @@ export function recordSshCredentialDeclined(targetId: string, attempt?: AbortSig
   declinedTargets.set(targetId, { attempt, awaitingSignIn: false })
 }
 
-/**
- * At launch nothing is remembered, so background reconnects to a host that needs a typed
- * credential would open the sign-in dialog before the user touched that host.
- */
+/** Remember required sign-in at launch so background reconnect cannot open prompts before user interaction. */
 export function recordSshSignInAwaited(targetId: string): void {
   if (!declinedTargets.has(targetId)) {
     declinedTargets.set(targetId, { attempt: undefined, awaitingSignIn: true })
@@ -46,7 +37,7 @@ export function clearSshCredentialDeclined(targetId: string): void {
   declinedTargets.delete(targetId)
 }
 
-/** An explicit connect to a server reached over SSH is a sign-in to that SSH host too. */
+/** Explicit managed-server connect also signs into its SSH host. */
 export function clearSshCredentialDeclinedForEnvironment(
   environment: Pick<KnownRuntimeEnvironment, 'orcadDeployment' | 'sshAccess'>
 ): void {
@@ -60,7 +51,7 @@ export function resetSshCredentialDeclinesForTests(): void {
   declinedTargets.clear()
 }
 
-/** Classified as an auth failure, so callers report "needs sign-in" and never retry it as transient. */
+/** Classify as needs-sign-in, never a transient reconnect failure. */
 export function createSshCredentialDeclinedError(targetId: string, label: string): Error {
   const message =
     declinedTargets.get(targetId)?.awaitingSignIn === true

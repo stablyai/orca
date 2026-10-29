@@ -1,7 +1,4 @@
 import { createClaudeStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
-// The real Claude CLI, launched through Orca's own launch resolution with a chat's visuals: the
-// CLI must report the bundled skill and its plugin in its own init frame. Opt-in, like every
-// real-CLI suite: it spends one short turn on the signed-in account.
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -13,7 +10,7 @@ import { createNativeChatVisualsDelivery } from '../native-chat/native-chat-visu
 import { nativeChatScratchFolderFor } from '../native-chat/native-chat-scratch-folder'
 import { NATIVE_CHAT_VISUALS_SKILL_NAME } from '../native-chat/native-chat-visuals-skill-location'
 import { createClaudeCliFlagSupport } from './claude-cli-flag-support'
-import { readClaudeInit } from './claude-structured-init-proof'
+import { readClaudeInit } from './structured/claude-structured-init-proof'
 import {
   realClaudeAuthenticated,
   realClaudeAvailable,
@@ -21,10 +18,8 @@ import {
   realClaudeCommand,
   realClaudeLaunchHome
 } from './claude-real-cli-availability-test-support'
-import {
-  ClaudeStructuredSessionAdapter,
-  type ClaudeStructuredSessionEvent
-} from './claude-structured-session-adapter'
+import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 
 const SESSION_ID = 'real-cli-visuals'
 const listed = (value: unknown): unknown[] => (Array.isArray(value) ? value : [])
@@ -108,8 +103,7 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
         const init = frames().find(
           (frame) => readClaudeInit(frame) !== null && frame.subtype === 'init'
         )
-        // The model's own skill catalog lists it, though it is kept out of the `/` menu (and
-        // so out of the init frame's skill and command lists).
+        // The model sees the skill even though the / menu and init lists hide it.
         const answer = frames().find((frame) => frame.type === 'result')?.result
         expect(String(answer)).toContain(NATIVE_CHAT_VISUALS_SKILL_NAME)
         expect(

@@ -30,7 +30,6 @@ describe('a refused event changes nothing and its retry lands it once', () => {
     expect(assembler.apply(end)).toEqual({ admission: { accepted: true } })
     expect((await rig.row(providerItemId('item', 'tool')))?.body).toMatchObject({ state: 'failed' })
     expect(await rig.turn('t1')).toMatchObject({ state: 'completed', completedAt: 2_000 })
-    // A repeated end is admitted and writes nothing: the row keeps its first end.
     expect(assembler.apply(end)).toEqual({ admission: { accepted: true } })
     expect(await rig.turn('t1')).toMatchObject({ state: 'completed', completedAt: 2_000 })
   })
@@ -76,7 +75,7 @@ describe('a refused event changes nothing and its retry lands it once', () => {
     refusal = 'backpressure'
     assembler.apply({ type: 'text.delta', item: { id: 'm1' }, channel: 'assistant', text: 'Kept' })
     runs.splice(0).forEach((run) => run())
-    // Refused under backpressure: still owed, and the window is scheduled again.
+    // Backpressure retains work and schedules retry.
     expect(runs).toHaveLength(1)
     refusal = null
     runs.splice(0).forEach((run) => run())
@@ -85,7 +84,7 @@ describe('a refused event changes nothing and its retry lands it once', () => {
     assembler.apply({ type: 'text.delta', item: { id: 'm2' }, channel: 'assistant', text: 'Lost' })
     refusal = 'failed'
     runs.splice(0).forEach((run) => run())
-    // A failed sink can never take it: no retry is scheduled.
+    // Permanent sink failure must not schedule retry.
     expect(runs).toHaveLength(0)
   })
 
@@ -168,7 +167,6 @@ describe('what the assembler holds open is bounded', () => {
     ).toEqual(refused)
     expect(await rig.row(providerItemId('item', 'one-more'))).toBeUndefined()
 
-    // Settling frees the budget again.
     rig.assembler.apply({ type: 'turn.end', at: 2_000, state: 'completed' })
     rig.assembler.apply({ type: 'turn.open', turn: 't2', at: 3_000 })
     expect(

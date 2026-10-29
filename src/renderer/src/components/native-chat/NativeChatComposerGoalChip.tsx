@@ -3,7 +3,6 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 
-/** Marks the draft as a goal objective; hovering reveals that a click leaves goal mode. */
 export function NativeChatComposerGoalChip(props: { onExit: () => void }): React.JSX.Element {
   // Not "Clear goal": that is the banner's action on the provider's goal, and this only leaves the mode.
   const exitLabel = translate('components.native-chat.goal.exitMode', 'Exit goal mode')

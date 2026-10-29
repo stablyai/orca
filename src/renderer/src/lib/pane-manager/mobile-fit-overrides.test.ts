@@ -14,21 +14,13 @@ import {
 } from './mobile-fit-overrides'
 
 afterEach(() => {
-  // Reset module-level maps between tests by clearing all overrides
-  // and unbinding all known panes.
   hydrateOverrides([])
-  // Unbind any panes bound during tests. We don't have direct access
-  // to the internal map, but we can unbind known test keys.
   for (const tabId of ['tab-0', 'tab-1', 'tab-2']) {
     for (let paneId = 0; paneId < 5; paneId++) {
       unbindPane(paneId, tabId)
     }
   }
 })
-
-// ---------------------------------------------------------------------------
-// setFitOverride + getFitOverrideForPty
-// ---------------------------------------------------------------------------
 
 describe('setFitOverride / getFitOverrideForPty', () => {
   it('stores a mobile-fit override keyed by ptyId', () => {
@@ -87,10 +79,6 @@ describe('setFitOverride / getFitOverrideForPty', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// bindPanePtyId + getFitOverrideForPane (tab-scoped composite key)
-// ---------------------------------------------------------------------------
-
 describe('bindPanePtyId / getFitOverrideForPane', () => {
   it('resolves override through tab:pane → ptyId → override chain', () => {
     setFitOverride('pty-1', 'mobile-fit', 49, 20)
@@ -144,10 +132,6 @@ describe('bindPanePtyId / getFitOverrideForPane', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// unbindPane
-// ---------------------------------------------------------------------------
-
 describe('unbindPane', () => {
   it('removes the tab:pane binding', () => {
     setFitOverride('pty-1', 'mobile-fit', 49, 20)
@@ -176,10 +160,6 @@ describe('unbindPane', () => {
     expect(getFitOverrideForPane(1, 'tab-0')).toEqual({ mode: 'mobile-fit', cols: 49, rows: 20 })
   })
 })
-
-// ---------------------------------------------------------------------------
-// getPaneIdsForPty
-// ---------------------------------------------------------------------------
 
 describe('getPaneIdsForPty', () => {
   it('returns pane IDs bound to a ptyId', () => {
@@ -210,10 +190,6 @@ describe('getPaneIdsForPty', () => {
     expect(getPaneIdsForPty('pty-1')).toEqual([1])
   })
 })
-
-// ---------------------------------------------------------------------------
-// onOverrideChange
-// ---------------------------------------------------------------------------
 
 describe('onOverrideChange', () => {
   it('fires listener on mobile-fit override', () => {
@@ -297,10 +273,6 @@ describe('onOverrideChange', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// hydrateOverrides
-// ---------------------------------------------------------------------------
-
 describe('hydrateOverrides', () => {
   it('replaces all overrides with the given list', () => {
     setFitOverride('pty-old', 'mobile-fit', 49, 20)
@@ -331,10 +303,6 @@ describe('hydrateOverrides', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// getAllOverrides
-// ---------------------------------------------------------------------------
-
 describe('getAllOverrides', () => {
   it('returns a copy of all current overrides', () => {
     setFitOverride('pty-1', 'mobile-fit', 49, 20)
@@ -343,7 +311,6 @@ describe('getAllOverrides', () => {
     const all = getAllOverrides()
     expect(all.size).toBe(2)
 
-    // Verify it's a copy, not the internal map
     all.delete('pty-1')
     expect(getFitOverrideForPty('pty-1')).not.toBeNull()
   })

@@ -50,7 +50,7 @@ describe('AdvancedNetworkSettingsSection proxy drafts', () => {
         'bad proxy'
       ),
       'http://old.test:8080',
-      'Invalid proxy URL'
+      'invalid'
     )
 
     expect(
@@ -100,7 +100,6 @@ describe('AdvancedNetworkSettingsSection proxy disclosure', () => {
       true
     )
     expect(hasConfiguredNetworkProxy(asSettings({ httpProxyBypassRules: 'localhost' }))).toBe(true)
-    // Whitespace-only values do not count as configured.
     expect(hasConfiguredNetworkProxy(asSettings({ httpProxyUrl: '   ' }))).toBe(false)
   })
 

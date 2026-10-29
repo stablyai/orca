@@ -57,7 +57,6 @@ export function findRepoForHost<T extends RepoIdentityParts>(
   const focusedMatches = matchingRepos.filter(
     (repo) => getRepoExecutionHostId(repo) === focusedHostId
   )
-  // Why: when duplicate ids exist even within the focused host, mutating by bare
-  // id would be ambiguous. Let callers surface no owner instead of guessing.
+  // Even focused hosts can contain duplicate IDs; refuse bare-ID ambiguity instead of guessing an owner.
   return focusedMatches.length === 1 ? focusedMatches[0] : null
 }

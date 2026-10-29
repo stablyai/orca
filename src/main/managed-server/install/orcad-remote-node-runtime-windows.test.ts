@@ -1,7 +1,12 @@
 import type * as ExecCommandModule from '../../ssh/remote-exec/remote-exec-command'
 import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { NODE_RUNTIME_ASSETS, NODE_RUNTIME_PIN } from '../../../shared/node-runtime-pin'
+import {
+  NODE_RUNTIME_ASSETS,
+  NODE_RUNTIME_PIN,
+  NODE_RUNTIME_WINDOWS_MINIMUM_BUILD
+} from '../../../shared/node-runtime-pin'
+import { classifyOrcadHostUnavailable } from '../../orcad/orcad-host-unavailable'
 import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { uploadRemoteInstallDirectory } from './remote-install-transfers'
@@ -148,7 +153,6 @@ describe('Windows runtime store commands', () => {
     ]) {
       expect(script).toContain(`Write-Output 'ORCA_NODE_RUNTIME_SECURITY_MODIFIED ${step}'`)
     }
-    // A post-publish change must not leave a marker the warm path would trust.
     expect(script).toMatch(
       /Remove-Item -LiteralPath \$verified -Force -ErrorAction SilentlyContinue; Write-Output 'ORCA_NODE_RUNTIME_SECURITY_MODIFIED node\.exe changed after it was published'/
     )
@@ -193,7 +197,6 @@ describe('ensureRemoteOrcadNodeRuntime on Windows', () => {
     expect(uploadRemoteInstallDirectory).not.toHaveBeenCalled()
   })
 
-  /** Answers the probe, the store lock and the promote script by what each script does. */
   function answer(promote: string, reprobe = REMOTE_NODE_RUNTIME_MISSING): string[] {
     const scripts: string[] = []
     let probes = 0
@@ -232,12 +235,11 @@ describe('ensureRemoteOrcadNodeRuntime on Windows', () => {
     const released = scripts.findIndex(
       (s) => s.startsWith('Remove-Item') && s.includes('.store-lock')
     )
-    // Store GC collects on Windows too, so promotion holds the lock it takes (design D5).
+    // Promotion shares the store lock with GC.
     expect(locked).toBeGreaterThan(0)
     expect(promoted).toBeGreaterThan(locked)
     expect(released).toBeGreaterThan(promoted)
     expect(calls[promoted][2]).toMatchObject({ timeoutMs: NODE_RUNTIME_PROMOTE_TIMEOUT_MS })
-    // The promote script removes its own stage, so no separate cleanup runs.
     expect(scripts.some((s) => s.startsWith('Remove-Item') && s.includes('.stage-node-'))).toBe(
       false
     )
@@ -277,6 +279,74 @@ describe('ensureRemoteOrcadNodeRuntime on Windows', () => {
     }).catch((error: unknown) => error)
     expect(failure).toBeInstanceOf(RemoteNodeRuntimeSecurityModifiedError)
     expect(failure).toMatchObject({ detail: 'node.exe changed after it ran' })
+  })
+
+  // A host answers each check the probe asks about; tar and Expand-Archive are absent on Server 2012 R2.
+  function oldHost(facts: { build: number; extractor: boolean }): string[] {
+    const scripts = answer(
+      "ORCA_NODE_RUNTIME_EXTRACT_FAILED The term 'Expand-Archive' is not recognized\r\n"
+    )
+    const respond = vi.mocked(execCommand).getMockImplementation()
+    vi.mocked(execCommand).mockImplementation(async (conn, command, options) => {
+      const script = decodeRemotePowerShellScript(command)
+      if (script.includes('New-Item') && script.includes(REMOTE_NODE_RUNTIME_MISSING)) {
+        scripts.push(script)
+        const floor = /\(\$build -lt (\d+)\)/.exec(script)?.[1]
+        if (floor && facts.build < Number(floor)) {
+          return `ORCA_WINDOWS_BUILD_UNSUPPORTED ${facts.build}\r\n`
+        }
+        if (script.includes('Get-Command Expand-Archive') && !facts.extractor) {
+          return 'ORCA_NODE_RUNTIME_NO_EXTRACTOR\r\n'
+        }
+        return REMOTE_NODE_RUNTIME_MISSING
+      }
+      return respond!(conn, command, options)
+    })
+    return scripts
+  }
+
+  it('refuses Windows below Node’s floor before staging or uploading the runtime', async () => {
+    oldHost({ build: 9600, extractor: false })
+    const failure = await ensureRemoteOrcadNodeRuntime({
+      conn,
+      host,
+      slotDir: relayDir,
+      target,
+      archivePath
+    }).catch((error: unknown) => error)
+    expect(failure).toMatchObject({ name: 'RemoteWindowsBuildUnsupportedError', build: '9600' })
+    expect(classifyOrcadHostUnavailable(failure)).toBe('windows_build_unsupported')
+    expect(execCommand).toHaveBeenCalledTimes(1)
+    expect(uploadRemoteInstallDirectory).not.toHaveBeenCalled()
+  })
+
+  it('names a supported Windows host with no way to unpack the runtime, before uploading it', async () => {
+    oldHost({ build: 17763, extractor: false })
+    const failure = await ensureRemoteOrcadNodeRuntime({
+      conn,
+      host,
+      slotDir: relayDir,
+      target,
+      archivePath
+    }).catch((error: unknown) => error)
+    expect(failure).toMatchObject({ name: 'RemoteNodeRuntimeNoExtractorError' })
+    expect(classifyOrcadHostUnavailable(failure)).toBe('windows_no_extractor')
+    expect(execCommand).toHaveBeenCalledTimes(1)
+    expect(uploadRemoteInstallDirectory).not.toHaveBeenCalled()
+  })
+
+  it('checks the host before creating the stage, so a refused host keeps nothing', () => {
+    const script = decodeRemotePowerShellScript(
+      windowsNodeRuntimeProbeCommand(runtimeDir, target, stageDir)
+    )
+    const stage = script.indexOf('New-Item')
+    expect(script.indexOf('CurrentBuildNumber')).toBeGreaterThan(0)
+    expect(script.indexOf('CurrentBuildNumber')).toBeLessThan(stage)
+    expect(script.indexOf('Get-Command Expand-Archive')).toBeLessThan(stage)
+    expect(script).toContain(`($build -lt ${NODE_RUNTIME_WINDOWS_MINIMUM_BUILD})`)
+    expect(
+      decodeRemotePowerShellScript(probeRemoteNodeRuntimeCommand(host, runtimeDir, target))
+    ).not.toContain('CurrentBuildNumber')
   })
 
   it('carries what node.exe said when it would not run', async () => {

@@ -62,8 +62,7 @@ describe('isDshNonInteractiveCommand', () => {
     'node /usr/local/lib/node_modules/.bin/dsh-tui web',
     'C:\\Users\\dev\\AppData\\npm\\dsh-tui.cmd web'
   ])('keeps %s interactive: the launcher already chose the TUI profile', (commandLine) => {
-    // Everything after `dsh-tui`/`dst` is the terminal app's argv — a workspace target or a
-    // resume id — so a folder named `web` or `plugin` is a directory name, not a subcommand.
+    // TUI launchers forward remaining argv as app targets/resume IDs, so web/plugin folder names cannot become launcher subcommands.
     expect(isDshNonInteractiveCommand(tokens(commandLine))).toBe(false)
   })
 })
@@ -104,8 +103,7 @@ describe('dsh foreground process recognition', () => {
   )
 
   it('still reports non-interactive dsh when headless one-shots are included', () => {
-    // Non-interactivity guards ask for the wider set: a `dsh web` pane is not a shell
-    // either, so callers that protect agent panes from reuse must still see it.
+    // Reuse guards need all noninteractive agent panes, including dsh web, to avoid treating them as shells.
     expect(
       recognizeAgentProcessFromCommandLine('dsh --profile headless "go"', {
         includeHeadlessOneShot: true

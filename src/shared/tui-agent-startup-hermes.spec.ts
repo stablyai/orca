@@ -1,29 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { buildAgentStartupPlan } from './tui-agent-startup'
+import { buildAgentResumeStartupPlan, buildAgentStartupPlan } from './tui-agent-startup'
 import {
   unwrapPosixShellScript,
   unwrapPowerShellScript
 } from './tui-agent-startup-script.test-fixture'
 
-// Hermes is the only agent whose launch Orca rewrites token by token — it owns the startup query,
-// the TUI mode, and where an override's flags may sit relative to the chat subcommand. Its cases
-// outgrew the general startup-plan file.
+// Hermes owns startup query/TUI/subcommand flag placement; keep its token-rewrite cases together.
 
 describe('hermes startup plans', () => {
-  it('moves Hermes command override flags after the chat subcommand', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'hermes',
-      prompt: 'run privately',
-      cmdOverrides: { hermes: 'hermes --tui --provider anthropic' },
-      agentArgs: '--yolo',
-      platform: 'linux'
-    })
-
-    const script = unwrapPosixShellScript(plan?.launchCommand)
-    expect(script).toContain("'--provider' 'anthropic' '--yolo' '--tui'")
-    expect(plan?.env?.ORCA_HERMES_STARTUP_QUERY).toBe('run privately')
-  })
-
   it.each([
     {
       shell: 'powershell' as const,
@@ -87,17 +71,6 @@ describe('hermes startup plans', () => {
     expect(script).not.toContain("'--cli'")
     expect(script.match(/'--tui'/g)).toHaveLength(1)
     expect(plan?.env?.ORCA_HERMES_STARTUP_QUERY).toBe('automation prompt')
-  })
-
-  it('preserves wrapper tokens before the Hermes executable', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'hermes',
-      prompt: 'run it',
-      cmdOverrides: { hermes: 'uv run hermes --tui' },
-      platform: 'linux'
-    })
-
-    expect(unwrapPosixShellScript(plan?.launchCommand)).toContain("'uv' 'run' 'hermes' 'chat'")
   })
 
   it('selects the final Hermes executable token in a wrapper', () => {
@@ -174,22 +147,6 @@ describe('hermes startup plans', () => {
     expect(plan).toBeNull()
   })
 
-  it.each(['quote "this"', 'print %PATH%', 'toggle !feature!', 'inspect C:\\repo\\'])(
-    'keeps a complex cmd Hermes query out of command text: %s',
-    (prompt) => {
-      const plan = buildAgentStartupPlan({
-        agent: 'hermes',
-        prompt,
-        cmdOverrides: {},
-        platform: 'win32',
-        shell: 'cmd'
-      })
-
-      expect(plan?.launchCommand).not.toContain(prompt)
-      expect(plan?.env?.ORCA_HERMES_STARTUP_QUERY).toBe(prompt)
-    }
-  )
-
   it('uses the Windows remote default shell for SSH Hermes queries', () => {
     const plan = buildAgentStartupPlan({
       agent: 'hermes',
@@ -215,16 +172,23 @@ describe('hermes startup plans', () => {
     expect(plan).toBeNull()
   })
 
-  it('keeps empty Hermes launches on the interactive TUI command', () => {
-    const plan = buildAgentStartupPlan({
+  it('keeps the override and agent args of a prompted Hermes launch when it resumes', () => {
+    const launch = buildAgentStartupPlan({
       agent: 'hermes',
-      prompt: '',
-      cmdOverrides: {},
+      prompt: 'start work',
+      cmdOverrides: { hermes: 'hermes --profile work' },
+      agentArgs: '--yolo',
+      platform: 'linux'
+    })
+    const resume = buildAgentResumeStartupPlan({
+      agent: 'hermes',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: { hermes: 'hermes --profile work' },
       platform: 'linux',
-      allowEmptyPromptLaunch: true
+      agentCommand: launch?.launchConfig.agentCommand,
+      agentArgs: launch?.launchConfig.agentArgs
     })
 
-    expect(plan?.launchCommand).toBe('hermes --tui')
-    expect(plan?.followupPrompt).toBeNull()
+    expect(resume?.launchCommand).toBe("hermes --profile work '--yolo' '--resume' 's1'")
   })
 })

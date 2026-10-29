@@ -1,5 +1,4 @@
-// The scrub gate is the only thing standing between a live agent transcript and a
-// committed account identifier, so it is pinned on the shapes those transcripts carry.
+// Pin identifier shapes from live agent transcripts so the commit-time scrub gate cannot leak account IDs.
 import { readdirSync, readFileSync } from 'node:fs'
 import os from 'node:os'
 import { join } from 'node:path'
@@ -10,7 +9,7 @@ import {
   redactTranscript,
   scanTranscriptForSecrets
 } from './pty-transcript-secret-scan.mjs'
-import { parseArgs, resolveSpawn } from './capture-agent-pty-transcript.mjs'
+import { parseArgs, resizeMarker, resolveSpawn } from './capture-agent-pty-transcript.mjs'
 
 describe('pty transcript secret scan', () => {
   it('finds the account row of a ready screen', () => {
@@ -55,8 +54,9 @@ describe('pty transcript secret scan', () => {
   })
 
   it('claims a span once, so a token inside an email is not double-reported', () => {
-    const findings = scanTranscriptForSecrets('longlivedaccountname@corp.internal')
-    expect(findings).toHaveLength(1)
+    const email = 'longlivedaccountnamefortycharacterslongenough@corp.internal'
+    const findings = scanTranscriptForSecrets(email)
+    expect(findings).toMatchObject([{ kind: 'email', match: email, index: 0 }])
   })
 
   it('passes a fixture that is already scrubbed, so "prove it is gone" can succeed', () => {
@@ -67,8 +67,7 @@ describe('pty transcript secret scan', () => {
 
 describe('redaction', () => {
   it('replaces every finding with the same number of characters', () => {
-    // Why length matters: the fixture's value is its exact wrapping. A shorter
-    // replacement reflows the screen and invalidates the capture.
+    // Same-length redaction preserves captured wrapping; shorter replacements invalidate evidence.
     const text = 'Antigravity CLI 1.1.17\njin.woo@acme.dev (Antigravity Business)\n> '
     const { text: redacted, redacted: count } = redactTranscript(text)
     expect(count).toBe(1)
@@ -84,19 +83,18 @@ describe('redaction', () => {
 
   it('leaves the rest of the screen byte-for-byte untouched', () => {
     const text = 'line one\nuser@corp.io\nline three'
-    expect(redactTranscript(text).text.split('\n')[2]).toBe('line three')
+    expect(redactTranscript(text).text).toBe('line one\nXXXXXXXXXXXX\nline three')
   })
 })
 
 describe('committed transcripts', () => {
-  // Why in CI and not just in the recorder: a transcript is committed once and read forever.
-  // The capture-time warning is skippable; this is not.
+  // Enforce in CI: recorder warnings can be skipped, while committed transcripts persist.
   const fixtureDir = join(import.meta.dirname, '..', '..', 'src', 'main', 'runtime', '__fixtures__')
   const transcripts = readdirSync(fixtureDir).filter((entry) => entry.endsWith('.txt'))
 
   it.each(transcripts)('%s carries no account identifier or credential', (name) => {
     const findings = scanTranscriptForSecrets(readFileSync(join(fixtureDir, name), 'utf8'))
-    expect(formatFindings(name, findings)).toContain('clean')
+    expect(findings, formatFindings(name, findings)).toEqual([])
   })
 })
 
@@ -121,6 +119,34 @@ describe('capture argv', () => {
     const { options } = parseArgs(['--scan', 'a.txt', 'b.txt', '--redact'])
     expect(options.scan).toEqual(['a.txt', 'b.txt'])
     expect(options.redact).toBe(true)
+  })
+
+  it('collects repeatable mid-capture resizes', () => {
+    const { options } = parseArgs([
+      '--name',
+      'codex-conpty-resize',
+      '--resize-at',
+      '3000:80x24',
+      '--resize-at',
+      '6000:140x40',
+      '--',
+      'codex'
+    ])
+    expect(options.resizes).toEqual([
+      { atMs: 3000, cols: 80, rows: 24 },
+      { atMs: 6000, cols: 140, rows: 40 }
+    ])
+  })
+
+  it('rejects a malformed resize', () => {
+    expect(() => parseArgs(['--resize-at', '3000:80'])).toThrow(/--resize-at expects/)
+    expect(() => parseArgs(['--resize-at', '3000:0x24'])).toThrow(/--resize-at expects/)
+  })
+
+  it('marks a resize with XTWINOPS rows;cols, which the secret scan ignores', () => {
+    const marker = resizeMarker(80, 24)
+    expect(marker).toBe(`${String.fromCharCode(27)}[8;24;80t`)
+    expect(scanTranscriptForSecrets(`before${marker}after`)).toEqual([])
   })
 
   it('routes a Windows shim through cmd.exe, which node-pty cannot spawn directly', () => {

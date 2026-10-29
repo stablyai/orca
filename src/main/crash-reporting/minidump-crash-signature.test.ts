@@ -5,11 +5,7 @@ const STREAM_TYPE_MODULE_LIST = 4
 const STREAM_TYPE_EXCEPTION = 6
 const STREAM_TYPE_CRASHPAD_INFO = 0x43500001
 
-/**
- * Builds real Crashpad-layout minidumps so the parser is tested against the
- * byte format rather than a mock. Regions are appended and referenced by RVA,
- * matching how Crashpad emits them.
- */
+// Build real Crashpad layouts with appended regions addressed by RVA.
 class MinidumpBuilder {
   private regions: Buffer[] = []
   private cursor = 0
@@ -79,11 +75,7 @@ const EMPTY_LOCATION = location(0, 0)
 
 type BuiltDump = { dump: Buffer }
 
-/**
- * @param annotations key/value pairs written as MinidumpAnnotation objects
- *   hanging off a module's crashpad info, which is where Chromium crash keys
- *   (including LOG_FATAL) actually live.
- */
+// Chromium crash keys are module-level MinidumpAnnotation objects.
 function buildDump(options: {
   annotations?: Record<string, string>
   simpleAnnotations?: Record<string, string>
@@ -95,7 +87,6 @@ function buildDump(options: {
   const builder = new MinidumpBuilder(32 + streamCount * 12)
   const streams: { type: number; size: number; rva: number }[] = []
 
-  // Module-level annotation objects.
   const annotationEntries = Object.entries(options.annotations ?? {})
   const annotationRecords = annotationEntries.map(([name, value]) => ({
     nameRva: builder.utf8String(name),
@@ -112,7 +103,6 @@ function buildDump(options: {
   })
   const annotationListRva = builder.append(annotationListBuf)
 
-  // Process-level simple string dictionary.
   const simpleEntries = Object.entries(options.simpleAnnotations ?? {})
   const simplePairs = simpleEntries.map(([key, value]) => ({
     keyRva: builder.utf8String(key),
@@ -194,7 +184,6 @@ function buildDump(options: {
   return { dump: builder.build(streams) }
 }
 
-/** Offset of a stream's directory entry: `{type, size, rva}`. */
 function streamEntry(dump: Buffer, type: number): number {
   const directoryRva = dump.readUInt32LE(12)
   for (let index = 0; index < dump.readUInt32LE(8); index += 1) {
@@ -257,7 +246,6 @@ describe('parseMinidumpCrashSignature', () => {
     })
 
     expect(signature?.processType).toBe('gpu-process')
-    // The whole-buffer scan is skipped; the caller discards this dump anyway.
     expect(signature?.checkMessage).toBeUndefined()
   })
 
@@ -277,7 +265,7 @@ describe('parseMinidumpCrashSignature', () => {
 
   it('ignores a log prefix further back than the prefix limit', async () => {
     const { dump } = buildDump({ annotations: { ptype: 'renderer' } })
-    // `[` separated from the marker by more than MAX_LOG_PREFIX_BYTES (96).
+    // Keep the opening bracket beyond the parser's bounded prefix search.
     const farPrefix = `[${'x'.repeat(200)}:FATAL:render_frame_impl.cc(4821)] Check failed: far.`
     const dumpWithMemory = Buffer.concat([dump, Buffer.from(`\0${farPrefix}\0`, 'utf8')])
 
@@ -357,8 +345,6 @@ describe('parseMinidumpCrashSignature', () => {
   })
 
   it('resolves a faulting module past index 1024 on a real macOS image count', async () => {
-    // A measured macOS renderer carries 1042 loaded images; a cap below that
-    // dropped the whole module list, so no macOS report could name a module.
     const modules = Array.from({ length: 1042 }, (_, index) => ({
       base: 0x1_0000_0000n + BigInt(index) * 0x1_0000n,
       size: 0x1000,

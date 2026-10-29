@@ -40,10 +40,7 @@ export const LEGACY_RELAY_CLI_BUSY =
   'This host already has too many older-terminal orca commands waiting on this desktop. ' +
   'Let some finish, then try again.'
 
-/**
- * Runs one call under the host's concurrency cap, aborted when the relay connection closes or the
- * per-host switch turns off (read on a timer, so every path that edits the setting is covered).
- */
+/** Bound calls per host and abort on disconnect or switch-off; polling covers every settings writer. */
 export async function runLegacyRelayCliCall<T>(
   targetId: string,
   allowed: () => boolean,
@@ -80,11 +77,7 @@ export async function runLegacyRelayCliCall<T>(
   }
 }
 
-/**
- * True only for a retry the executor will answer from its receipt: same method, same caller
- * fingerprint, and the exact payload hash it recorded. Call while the caller's identity is
- * registered, since the hash reads the caller's pane through the runtime.
- */
+/** Exact method/principal/payload receipts may replay. Check while caller identity is registered because hashing reads its pane. */
 export function isExactLegacyRelayCliReplay(
   runtime: OrcaRuntimeService,
   fingerprint: string,

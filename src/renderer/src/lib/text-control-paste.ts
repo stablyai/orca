@@ -230,8 +230,7 @@ export async function pasteTextIntoTextControl(
 
     let chunksWritten = 0
     let textIndex = 0
-    // Why: large text controls keep literal content; chunking only changes
-    // delivery cadence so the renderer can yield between DOM mutations.
+    // Preserve literal text; chunking only yields between DOM mutations for responsiveness.
     while (textIndex < text.length) {
       if (!isTextControlPasteTargetAvailable(target, continuePaste)) {
         if (chunksWritten > 0 && target.isConnected) {

@@ -95,8 +95,7 @@ export function prepareComputerCliJsonResult<TResult>(
       }
     } as RuntimeRpcSuccess<TResult>
   } catch {
-    // Why: temp-file export is an ergonomics optimization; keep inline screenshot
-    // data when disk, permissions, or path validation would otherwise fail --json.
+    // Preserve inline screenshot data if the optional temp-file export fails.
     return response
   }
 }
@@ -124,8 +123,7 @@ function cleanupComputerScreenshots(outputDir: string): void {
   const now = Date.now()
   const markerPath = join(outputDir, COMPUTER_SCREENSHOT_CLEANUP_MARKER)
   try {
-    // Why: agents can call computer-use CLI commands in loops; a marker keeps
-    // temp cleanup from becoming a synchronous directory scan per screenshot.
+    // Throttle synchronous cleanup scans across repeated screenshots.
     if (statSync(markerPath).mtimeMs > now - COMPUTER_SCREENSHOT_CLEANUP_INTERVAL_MS) {
       return
     }
@@ -144,13 +142,13 @@ function cleanupComputerScreenshots(outputDir: string): void {
         rmSync(path, { force: true })
       }
     } catch {
-      // Best-effort cleanup only; formatting should not fail because a temp file raced.
+      // A raced temp file must not fail screenshot formatting.
     }
   }
   try {
     writeFileSync(markerPath, `${now}\n`, { mode: 0o600 })
   } catch {
-    // Best-effort marker only; stale cleanup state should not hide a screenshot.
+    // A failed cleanup marker must not hide the screenshot.
   }
 }
 

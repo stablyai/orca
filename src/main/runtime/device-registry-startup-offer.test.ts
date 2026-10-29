@@ -12,7 +12,7 @@ afterEach(() => {
   dir = null
 })
 
-// Pins why managed SSH and WSL re-pair from the enrolled grant: the startup offer is not stable.
+// SSH/WSL re-pair from enrolled grants because startup offers rotate after use.
 describe("orcad's startup pairing offer", () => {
   it('repeats while unused, and names a new device once a client has paired with it', () => {
     dir = mkdtempSync(join(tmpdir(), 'orca-startup-offer-'))
@@ -22,7 +22,6 @@ describe("orcad's startup pairing offer", () => {
       first.deviceId
     )
     registry.updateLastSeen(first.deviceId)
-    // A restarted orcad loads the same registry from disk.
     const next = new DeviceRegistry(dir).getOrCreatePendingDevice('CLI', 'runtime')
     expect(next.deviceId).not.toBe(first.deviceId)
     expect(next.token).not.toBe(first.token)

@@ -2,6 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Worktree } from '../../../shared/worktree/types'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorkspace, activateAndRevealWorktree } from './worktree-activation'
+import {
+  lastUserWorkspaceSwitchAt,
+  resetWorkspaceSwitchUserActsForTests
+} from './workspace-switch-user-act'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
@@ -81,6 +85,23 @@ function seedAutomationWorktreeState(
     ...overrides
   })
 }
+
+// e9 review: only an open its caller marks as the user's may later start a stopped WSL distro.
+describe("activateAndRevealWorktree and the user's own switch (E9)", () => {
+  it("notes a switch only for 'user-open', not for programmatic activations", () => {
+    resetWorkspaceSwitchUserActsForTests()
+    const worktree = makeAutomationWorktree()
+    seedAutomationWorktreeState(worktree, { revealWorktreeInSidebar: vi.fn() })
+
+    // What the CLI/agent worktree event and the delete successor pass: no navigation intent.
+    activateAndRevealWorktree(worktree.id, { notifyHostRuntime: false })
+    activateAndRevealWorktree(worktree.id, { revealInSidebar: false })
+    expect(lastUserWorkspaceSwitchAt(worktree.id)).toBeUndefined()
+
+    activateAndRevealWorktree(worktree.id, { navigationIntent: 'user-open' })
+    expect(lastUserWorkspaceSwitchAt(worktree.id)).toEqual(expect.any(Number))
+  })
+})
 
 describe('activateAndRevealWorktree automation filters', () => {
   it('clears the automation-generated filter before revealing an automation-created worktree', () => {

@@ -16,11 +16,7 @@ function workspaceViewUiValues(ui: PersistedUIState): unknown[] {
   return ALL_WORKSPACE_VIEW_UI_FIELDS.map((key) => ui[key])
 }
 
-/**
- * Tells subscribed clients when the Workspace options change, so a phone re-reads the value it
- * shares with this host instead of waiting for its next focus. Other UI edits (a sidebar drag)
- * would otherwise trigger a re-read on every frame.
- */
+/** Publish workspace-option changes promptly without re-reading on every UI drag frame. */
 export function publishWorkspaceViewChanges(
   store: Pick<RuntimeStore, 'getUI' | 'onUIChanged' | 'onSettingsChanged'> | null,
   emit: (event: RuntimeClientEvent) => void
@@ -36,7 +32,6 @@ export function publishWorkspaceViewChanges(
       emit({ type: 'workspaceViewChanged' })
     }
   })
-  // Card layout and the card style are settings, not UI state.
   store.onSettingsChanged?.((updates) => {
     if (WORKSPACE_VIEW_SETTINGS.some((key) => key in updates)) {
       emit({ type: 'workspaceViewChanged' })

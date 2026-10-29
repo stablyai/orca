@@ -1,8 +1,4 @@
-/**
- * When to open the launch record ahead of a launch: once startup has settled AND a client that can
- * call `agent.launch` is connected. A profile no launching client uses never pays the open, and it
- * never runs during startup. Admission still opens it on demand.
- */
+/** Warm the launch ledger only after startup settles and a launch-capable client connects; admission still opens it on demand. */
 export type AgentLaunchRecordWarmupGate = {
   startupSettled(): void
   launchClientReady(): void
@@ -19,7 +15,7 @@ export function createAgentLaunchRecordWarmupGate(args: {
       return
     }
     args.open().catch((error: unknown) => {
-      // A failed warm-up costs only the first launch, which opens it itself.
+      // Admission retries the open if warmup fails.
       console.warn('[agent-launch] could not open the launch record ahead of a launch', error)
     })
   }

@@ -1,12 +1,4 @@
-/**
- * Builds the ssh2 `hostVerifier` and the host-key algorithm order that makes it safe.
- *
- * Separated from `SshConnection` so the decision path can be tested without a handshake, and so the
- * two halves that must ship together — type-scoped matching and algorithm ordering — live in one
- * file where the dependency is visible.
- *
- * See docs/reference/ssh-host-key-verification.md.
- */
+/** Keep type-scoped matching and proposal ordering together; ordering known types first prevents alternate-type downgrade to first contact. */
 import { createHash } from 'node:crypto'
 import {
   formatHostKeyFingerprint,
@@ -17,7 +9,7 @@ import {
 } from './config/ssh-known-hosts'
 import { decideHostKey, type HostKeyDecision, type HostKeyPolicy } from './ssh-host-key-decision'
 
-export type TrustedHostKeyLookup = (query: {
+type TrustedHostKeyLookup = (query: {
   host: string
   port: number
   keyType: string
@@ -34,10 +26,8 @@ export type HostKeyVerifierDeps = {
   policy: HostKeyPolicy
   siteConfigSuppressed: boolean
   knownHostsUnreadable: boolean
-  /** Already unioned across every known_hosts file. */
   entries: readonly KnownHostsEntry[]
   isTrusted: TrustedHostKeyLookup
-  /** Passed straight through so a changed-key rejection can name the file to edit. */
   hostKeyStoreFile?: string
   rememberHostKey: (record: {
     host: string
@@ -46,36 +36,23 @@ export type HostKeyVerifierDeps = {
     key: Buffer
     fingerprint: string
   }) => void
-  /** Called on every decision so accepts and rejections are auditable. */
   onDecision?: (decision: HostKeyDecision & { fingerprint: string; keyType: string }) => void
-  /**
-   * False once this connect attempt has been superseded or disposed. A late verifier must deny
-   * rather than accept: the attempt it belongs to is gone, so nothing will consume the result, and
-   * accepting would record trust on behalf of a connection nobody is waiting for.
-   */
+  /** Superseded attempts must deny without recording trust for a connection nobody awaits. */
   isCurrentAttempt?: () => boolean
 }
 
-/**
- * ssh2's own default host-key proposal order, which we reorder rather than replace.
- *
- * Read from ssh2 rather than copied, so we cannot propose an algorithm this ssh2 build does not
- * support and cannot silently drop one it adds. The deep path is the only place ssh2 exports it;
- * ssh2 is an external dependency in the main bundle, so it resolves at runtime from the packaged
- * node_modules rather than being inlined.
- */
-export const DEFAULT_SERVER_HOST_KEY_ALGORITHMS = readSsh2DefaultServerHostKeyAlgorithms()
+let defaultServerHostKeyAlgorithms: string[] | null | undefined
 
-/**
- * Null rather than a copied list when ssh2's own cannot be read.
- *
- * A hardcoded fallback cannot be safe here. ssh2 prepends `ssh-ed25519` only when a RUNTIME PROBE
- * succeeds, and on a build where that probe fails the name is absent from ssh2's SUPPORTED list too,
- * so proposing it makes `generateAlgorithmList` THROW `Unsupported algorithm: ssh-ed25519` inside
- * client.connect. That throw matches no retry classifier, and it would fire only for hosts we
- * already know — working on new hosts and failing on trusted ones. Not reading the list is a reason
- * to leave ssh2's defaults alone, not to guess at them.
- */
+/** Read packaged ssh2 defaults at runtime so proposals track supported algorithms instead of a stale copy. */
+export function getDefaultServerHostKeyAlgorithms(): string[] | null {
+  // Read on first connect; this pulls in half of ssh2, too costly for startup (#35731).
+  if (defaultServerHostKeyAlgorithms === undefined) {
+    defaultServerHostKeyAlgorithms = readSsh2DefaultServerHostKeyAlgorithms()
+  }
+  return defaultServerHostKeyAlgorithms
+}
+
+/** Return null when defaults cannot be read: runtime probes can remove algorithms, so guessed lists may throw only for trusted hosts. */
 function readSsh2DefaultServerHostKeyAlgorithms(): string[] | null {
   try {
     const constants = require('ssh2/lib/protocol/constants.js') as {
@@ -87,8 +64,7 @@ function readSsh2DefaultServerHostKeyAlgorithms(): string[] | null {
     }
     console.warn('[ssh] ssh2 default host key list has an unexpected shape; leaving its defaults')
   } catch (error) {
-    // A future ssh2 could move the file. Leaving its defaults keeps connections working; the only
-    // cost is that a known host is no longer type-scoped, which is the pre-existing behaviour.
+    // If ssh2 moves its private export, leave defaults unchanged rather than propose unsupported algorithms.
     console.warn(
       '[ssh] could not read ssh2 default host key algorithms; leaving its defaults:',
       error
@@ -101,24 +77,13 @@ export function hostKeyFingerprintOf(key: Buffer): string {
   return formatHostKeyFingerprint(createHash('sha256').update(key).digest('base64'))
 }
 
-/**
- * Host-key algorithms to propose, ordered so the types we already hold for this host come first.
- *
- * This is what makes type-scoped matching safe rather than a downgrade. RFC 4253 gives the client's
- * order priority, so leading with the known types denies a server the choice of presenting some
- * other type to convert a hard failure into first contact. Without this, an attacker who cannot
- * forge the key on file simply offers a different algorithm.
- *
- * Returns undefined when we know nothing for the host, leaving ssh2's defaults alone.
- */
+/** RFC 4253 prioritizes client order: promote known key types so a server cannot choose an unfamiliar type to evade mismatch. Unknown hosts retain defaults. */
 export function orderServerHostKeyAlgorithms(
   entries: readonly KnownHostsEntry[],
   host: string,
   port: number,
   supported: readonly string[],
-  /** Types we recorded ourselves. Without these, a host known only to us is never promoted, and
-   *  type scoping degrades into the downgrade it exists to prevent for exactly the hosts we
-   *  learned on first contact. */
+  /** Include store-only known types or first-contact trust would lack downgrade protection. */
   storedKeyTypes: readonly string[] = [],
   isHostKeyAlias = false
 ): string[] | undefined {
@@ -142,10 +107,7 @@ export function orderServerHostKeyAlgorithms(
   if (known.size === 0) {
     return undefined
   }
-  // A known_hosts entry names the KEY type, which is not always the negotiated ALGORITHM name: one
-  // `ssh-rsa` key is offered as rsa-sha2-512, rsa-sha2-256 or ssh-rsa depending on the signature
-  // algorithm. Promoting only the literal name would leave the RSA host we know behind ed25519,
-  // which is the ordering this function exists to prevent.
+  // Promote every negotiated signature alias for ssh-rsa, not just its literal key type.
   const preferred = supported.filter(
     (algorithm) =>
       known.has(algorithm) || (known.has('ssh-rsa') && algorithm.startsWith('rsa-sha2-'))
@@ -157,38 +119,25 @@ export function orderServerHostKeyAlgorithms(
   return [...preferred, ...supported.filter((algorithm) => !preferredSet.has(algorithm))]
 }
 
-export type VerifyCallback = (accept: boolean) => void
+type VerifyCallback = (accept: boolean) => void
 
-/**
- * The ssh2 `hostVerifier`.
- *
- * MUST be a plain function that returns `undefined`. ssh2 does
- * `const ret = hostVerifier(key, verify); if (ret !== undefined) verify(ret)` — so an `async`
- * function returns a Promise, which is neither undefined nor falsy, and ssh2 accepts the key
- * immediately while ignoring whatever the callback later decides. Making this async would silently
- * restore the accept-everything behaviour this module exists to remove.
- */
+/** Return undefined synchronously: ssh2 accepts any non-undefined return, so an async Promise would bypass the verification callback. */
 export function createHostKeyVerifier(
   deps: HostKeyVerifierDeps
 ): (key: Buffer, verify: VerifyCallback) => undefined {
-  // Every denial must be reported, not just the ones the policy produced: the connect path decides
-  // whether to keep offering credentials by looking at the reported decision, so a denial that
-  // slipped past onDecision would reach it as ssh2's generic handshake failure and walk the
-  // credential ladder against a host we just refused.
+  // Report every denial so generic handshake errors cannot trigger credential prompts for a refused host.
   const deny = (verify: VerifyCallback, outcome: KnownHostsOutcome, reason: string): undefined => {
     try {
       deps.onDecision?.({
         action: 'reject',
         outcome,
         reason: `Host key verification failed for ${deps.displayHost}. ${reason}`,
-        // Empty: there is no host key here to identify. Consumers must not overwrite a fingerprint
-        // they already hold with this.
+        // Empty fingerprint signals no usable key; consumers must retain prior valid identity.
         fingerprint: '',
         keyType: ''
       })
     } catch {
-      // This path already runs from the verifier's own catch; a reporting failure must not become
-      // a throw that leaves the handshake hanging instead of denied.
+      // Reporting failure must still reach verify(false), never hang the handshake.
     }
     verify(false)
     return undefined
@@ -197,8 +146,7 @@ export function createHostKeyVerifier(
   return (key, verify) => {
     try {
       if (deps.isCurrentAttempt && !deps.isCurrentAttempt()) {
-        // No decision is reported: nobody is waiting on this attempt, and reporting would let a
-        // superseded verifier overwrite the live attempt's outcome.
+        // Silently deny stale attempts so they cannot overwrite their replacement's trust decision.
         verify(false)
         return undefined
       }
@@ -241,13 +189,10 @@ export function createHostKeyVerifier(
           fingerprint
         })
       }
-      // `prompt` is unreachable in this phase; treating it as a denial keeps the fail-closed
-      // property if it ever becomes reachable before the dialog exists.
+      // Deny future prompt actions until their UI is implemented.
       verify(decision.action === 'accept' || decision.action === 'accept-and-remember')
     } catch {
-      // ssh2 may not catch a throw from inside the verifier, which would leave the handshake
-      // hanging rather than failing. Denying is the only safe outcome for an error we cannot
-      // interpret.
+      // Contain dependency throws and deny; ssh2 may otherwise leave handshake hanging.
       return deny(verify, 'unknown', 'The host key could not be checked.')
     }
     return undefined

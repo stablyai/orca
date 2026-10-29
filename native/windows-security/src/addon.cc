@@ -1,14 +1,12 @@
-// In-process Windows DACL reads and writes for Orca's secure files.
-//
-// Why native: the alternative is spawning icacls.exe, which blocked the main thread for seconds
-// per write on hosts with slow process creation (#26027), and whose `/reset` + `/inheritance:r`
-// shape behavioural EDR scores as ransomware (#25583). Policy (which SIDs, which flags) lives in
-// JS; this file writes DACLs given as SDDL and reads them back as plain structure.
+// Native DACL IO avoids icacls.exe’s multi-second main-thread stalls (#26027) and EDR-scored
+// /reset + /inheritance:r pattern (#25583). JS owns SID/flag policy; native reads/writes structure.
 
 #include <napi.h>
 #include <windows.h>
 #include <aclapi.h>
 #include <sddl.h>
+
+#include "isolated-spawn.h"
 
 #include <functional>
 #include <memory>
@@ -142,9 +140,7 @@ Win32Result CreateFileWithDacl(const std::u16string& path, const std::u16string&
     return Fail("WriteFile", ERROR_INVALID_PARAMETER);
   }
   SECURITY_ATTRIBUTES attributes{sizeof(attributes), descriptor.get(), FALSE};
-  // Why CREATE_NEW: the descriptor only applies to a file this call creates; opening an
-  // existing one would keep that file's (possibly broader) DACL. Share mode 0 keeps every other
-  // opener out until the contents are complete.
+  // CREATE_NEW ensures the descriptor applies (existing files retain their DACL); share mode 0 excludes readers until complete.
   HANDLE file = CreateFileW(reinterpret_cast<LPCWSTR>(path.c_str()), GENERIC_WRITE, 0,
                             &attributes, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
   if (file == INVALID_HANDLE_VALUE) {
@@ -218,9 +214,8 @@ Napi::Value CurrentUserSid(const Napi::CallbackInfo& info) {
   return SidString(env, reinterpret_cast<TOKEN_USER*>(buffer.data())->User.Sid);
 }
 
-// Structure only, no policy: `{ protected, aces: [{ type, flags, mask, sid }] }`, or null for a
-// NULL DACL. Only plain allow/deny ACEs carry a SID; every other type comes back with sid null so
-// the caller can refuse what it does not understand (object, callback and conditional ACEs).
+// Return structure only; null means NULL DACL. Only plain allow/deny ACEs expose SIDs;
+// unknown/object/callback/conditional types retain sid null so JS can refuse them.
 Napi::Value GetDaclAces(const Napi::CallbackInfo& info) {
   auto env = info.Env();
   if (info.Length() < 1 || !info[0].IsString()) {
@@ -391,6 +386,34 @@ Napi::Value GrantAccessAsync(const Napi::CallbackInfo& info) {
   return promise;
 }
 
+// Clear HANDLE_FLAG_INHERIT on the std handles so a spawn with bInheritHandles=TRUE can't leak them
+// to a long-lived child; libuv duplicates an inheritable copy for an explicit stdio 'inherit'.
+// Returns only failures, as [{ stream, code }]; absent handles are skipped.
+Napi::Value ClearStdHandleInheritance(const Napi::CallbackInfo& info) {
+  auto env = info.Env();
+  struct Stream {
+    DWORD id;
+    const char* name;
+  };
+  const Stream streams[] = {{STD_INPUT_HANDLE, "stdin"},
+                            {STD_OUTPUT_HANDLE, "stdout"},
+                            {STD_ERROR_HANDLE, "stderr"}};
+  auto failures = Napi::Array::New(env);
+  for (const auto& stream : streams) {
+    HANDLE handle = GetStdHandle(stream.id);
+    if (handle == nullptr || handle == INVALID_HANDLE_VALUE) {
+      continue;
+    }
+    if (!SetHandleInformation(handle, HANDLE_FLAG_INHERIT, 0)) {
+      auto failure = Napi::Object::New(env);
+      failure.Set("stream", stream.name);
+      failure.Set("code", static_cast<double>(GetLastError()));
+      failures.Set(failures.Length(), failure);
+    }
+  }
+  return failures;
+}
+
 }  // namespace
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
@@ -401,6 +424,8 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("createFileWithDacl", Napi::Function::New(env, CreateFileWithDaclJs));
   exports.Set("grantAccess", Napi::Function::New(env, GrantAccessJs));
   exports.Set("grantAccessAsync", Napi::Function::New(env, GrantAccessAsync));
+  exports.Set("clearStdHandleInheritance", Napi::Function::New(env, ClearStdHandleInheritance));
+  exports.Set("spawnDetachedIsolated", Napi::Function::New(env, SpawnDetachedIsolated));
   return exports;
 }
 

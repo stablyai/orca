@@ -166,7 +166,7 @@ describe('getAutomationRunHistoryArrowTarget', () => {
     ).toBe(run1)
   })
 
-  it('defaults to index 0 on ArrowDown when nothing was selected', () => {
+  it('moves down from the first run when nothing was selected', () => {
     expect(
       getAutomationRunHistoryArrowTarget({
         runs,

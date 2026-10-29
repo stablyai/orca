@@ -3,7 +3,6 @@ import type { MinidumpSource } from './minidump-stream-reader'
 
 const PAGE_BYTES = 64 * 1024
 
-/** Size-zero readFile follows bytes until EOF, even when an open races the writer. */
 export type MinidumpExtentObservationOptions = {
   readonly deadlineMs?: number
   readonly now?: () => number
@@ -21,8 +20,7 @@ export async function observeMinidumpExtent(
   let size = 0
   const now = options.now ?? Date.now
   while (true) {
-    // A zero-length file still gets one read so a dump that is being promoted
-    // can be captured; stop before the next page once the polling deadline wins.
+    // A zero-length stat may race dump promotion; allow the first read before checking the deadline.
     if (size > 0 && options.deadlineMs !== undefined && now() >= options.deadlineMs) {
       return size
     }

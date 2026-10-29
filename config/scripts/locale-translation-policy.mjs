@@ -23,9 +23,7 @@ const OPEN_IN_APP_CATALOG_PREFIX = 'auto.lib.open.in.app.catalog.'
 // Why: product names and agent labels stay Latin — MT reads them as common words (Codex→copy, Gemini→zodiac).
 export const ENGLISH_ONLY_KEY_PREFIXES = [AGENT_CATALOG_PREFIX, OPEN_IN_APP_CATALOG_PREFIX]
 
-// Only genuine brand, product, and code tokens belong here. Ordinary UI words that happen to
-// name a product (agent, terminal, commit, repo, Continue) live in locale-generic-ui-terms.mjs
-// and are translated; their product sense is pinned by ENGLISH_ONLY_KEY_PREFIXES instead.
+// Preserve only brands/products/code; translate generic agent/terminal/commit/repo/Continue via locale-generic-ui-terms, pin product senses by key prefixes.
 export const NEVER_TRANSLATE_VALUES = new Set([
   'Aider',
   'Amp',
@@ -90,8 +88,7 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'GitHub',
   'no_proxy',
   'Beta',
-  // Round 6: product/tool names, language names, and code tokens that machine
-  // translation wrongly localized (e.g. tailscale→尾鱗, Swift→迅速, yarn→糸).
+  // Include tool/language/code names MT localizes as ordinary words (tailscale→尾鱗, Swift→迅速, yarn→糸).
   'Tailscale',
   'tailscale',
   'Ghostty',
@@ -222,6 +219,7 @@ export const NEVER_TRANSLATE_VALUES = new Set([
 export const NATIVE_PICKER_LABELS = {
   zh: {
     chinese: '中文（简体）',
+    chineseTraditional: '繁體中文（台灣）',
     korean: '한국어',
     japanese: '日本語',
     spanish: 'Español',
@@ -229,6 +227,7 @@ export const NATIVE_PICKER_LABELS = {
   },
   ko: {
     chinese: '中文（简体）',
+    chineseTraditional: '繁體中文（台灣）',
     korean: '한국어',
     japanese: '日本語',
     spanish: 'Español',
@@ -236,6 +235,7 @@ export const NATIVE_PICKER_LABELS = {
   },
   ja: {
     chinese: '中文（简体）',
+    chineseTraditional: '繁體中文（台灣）',
     korean: '한국어',
     japanese: '日本語',
     spanish: 'Español',
@@ -243,6 +243,7 @@ export const NATIVE_PICKER_LABELS = {
   },
   es: {
     chinese: '中文（简体）',
+    chineseTraditional: '繁體中文（台灣）',
     korean: '한국어',
     japanese: '日本語',
     spanish: 'Español',
@@ -250,6 +251,7 @@ export const NATIVE_PICKER_LABELS = {
   },
   fr: {
     chinese: '中文（简体）',
+    chineseTraditional: '繁體中文（台灣）',
     korean: '한국어',
     japanese: '日本語',
     spanish: 'Español',
@@ -315,8 +317,7 @@ function applyBrandMistranslationFixes(enValue, localeValue, locale, key = '') {
     if (!includesPreservedLatinTerm(enValue, brand)) {
       continue
     }
-    // Why: terminal/theme "Cursor" labels name the on-screen カーソル, not the Cursor product —
-    // skip the revert so カーソル survives for these settings.
+    // Terminal/theme Cursor means screen カーソル, so skip product-name revert.
     if (isScreenCursorContext(brand, enValue, key)) {
       continue
     }
@@ -327,8 +328,7 @@ function applyBrandMistranslationFixes(enValue, localeValue, locale, key = '') {
       if (!result.includes(wrong)) {
         continue
       }
-      // Why: #12113 — a generic term's correct translation is not a mistranslation; reverting it
-      // rewrote ~2000 translated values back to English on every repair run.
+      // #12113: protect valid generic translations or brand repair reverts ~2000 values to English.
       if (isCanonicalGenericRendering(brand, locale, wrong)) {
         continue
       }
@@ -365,8 +365,7 @@ function applyCjkLatinTermSpacing(localeValue, locale) {
       '$1 $2'
     )
   if (locale === 'ko') {
-    // Korean particles attach to the noun (no space) only when the particle is a complete token at a
-    // boundary — re-glue "Orca 에"/"PR 을"/"에서는" but keep "Jira 이슈"/"Orca 로고"/"agent 에뮬레이터".
+    // Re-glue Korean particles only at whole-token boundaries (Orca 에/PR 을); keep content-word spaces (Jira 이슈/Orca 로고/agent 에뮬레이터).
     result = result.replace(
       new RegExp(
         `(${CJK_LATIN_SPACED_TERM_PATTERN}) ((?:에서|에게|에는|에선|으로|로서|로써|부터|까지|보다|처럼|은|는|이|가|을|를|와|과|의|에|로|도|만)+)(?=$|[\\s.,!?…·:;)\\]}"'」』])`,
@@ -379,9 +378,7 @@ function applyCjkLatinTermSpacing(localeValue, locale) {
 }
 
 function phraseFixMatchesEnglish(enValue, fix) {
-  // Why: `whenEnMatches` (a RegExp) lets a rule guard on a real token (e.g. /\bPRs?\b/)
-  // instead of the looser case-insensitive `whenEnIncludes` substring, so a phrase fix can
-  // avoid firing on unrelated English that merely contains the substring (approve, preview).
+  // Guard phrase fixes with whenEnMatches for real tokens (PR/PRs); substring whenEnIncludes also matches unrelated approve/preview.
   if (fix.whenEnMatches) {
     return fix.whenEnMatches.test(enValue)
   }
@@ -490,8 +487,7 @@ export function repairCatalog(enCatalog, localeCatalog, locale) {
 
   for (const leaf of leaves) {
     const current = leaf.key.split('.').reduce((cursor, part) => cursor?.[part], localeCatalog)
-    // Why: en.json carries keys the locale catalog has not been bootstrapped with yet; repair only
-    // rewrites values that already exist, so skip instead of crashing on undefined.
+    // English may add keys before locales bootstrap; skip absent values instead of crashing repair.
     if (typeof current !== 'string') {
       continue
     }

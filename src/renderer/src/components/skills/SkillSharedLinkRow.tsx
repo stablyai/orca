@@ -14,22 +14,22 @@ import { translate } from '@/i18n/i18n'
 import type { SkillCloudOwnedShare } from '../../../../shared/skill-cloud-contract'
 import { skillCountLabel } from './skill-display-labels'
 import { isSkillBundleVersion } from './skill-share-version-summary'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 
-const createdFormatter = new Intl.DateTimeFormat(undefined, {
+const CREATED_OPTIONS: Intl.DateTimeFormatOptions = {
   year: 'numeric',
   month: 'short',
   day: 'numeric'
-})
+}
 
 function createdLabel(createdAt: string): string {
   const parsed = new Date(createdAt)
   return Number.isNaN(parsed.getTime())
     ? translate('auto.components.skills.SkillRow.updatedUnknown', 'No date')
-    : createdFormatter.format(parsed)
+    : uiDateTimeFormat(CREATED_OPTIONS).format(parsed)
 }
 
-/** The shares endpoint carries no membership, so the skill list is fetched from
- *  the package only when a row is opened — 50 links must not mean 50 requests. */
+/** Fetch package membership only on expansion because the shares endpoint omits it; avoid one request per collapsed link. */
 function useShareContents(share: SkillCloudOwnedShare): {
   names: string[] | null
   failed: boolean
@@ -145,8 +145,7 @@ export function SkillSharedLinkRow({
               size="xs"
               variant="destructive"
               className="shrink-0"
-              // Why: the icon button unmounts when it swaps to this one, so
-              // keyboard focus has to be handed over explicitly.
+              // The icon unmounts on confirmation; explicitly transfer keyboard focus to its replacement.
               autoFocus
               disabled={busy || deleting}
               onClick={() => (confirming === 'revoke' ? onRevoke() : void deletePackage())}
@@ -203,8 +202,7 @@ export function SkillSharedLinkRow({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  {/* Why: unsharing only closes the link; this removes the
-                      published copy itself, so it stays one level down. */}
+                  {/* Deleting the published package is more destructive than unsharing, so keep it in the nested menu. */}
                   <DropdownMenuItem variant="destructive" onSelect={() => setConfirming('delete')}>
                     <Trash2 />
                     {translate(

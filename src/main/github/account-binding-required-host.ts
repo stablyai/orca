@@ -14,10 +14,7 @@ export type SshAliasHostnameResolver = (
   context: SshConfigResolutionContext
 ) => Promise<{ hostname: string | null }>
 
-/**
- * Host filter for Settings GitHub account binding.
- * `undefined` means do not filter.
- */
+/** undefined leaves account binding unfiltered. */
 export async function resolveGhAccountRequiredHost(
   repo: {
     path: string
@@ -33,9 +30,7 @@ export async function resolveGhAccountRequiredHost(
   if (!host || !isUnresolvedSshHostAlias(host) || !remoteUrlUsesSshTransport(remoteUrl)) {
     return host
   }
-  // Why: `git@github-personal:owner/repo` keeps the OpenSSH alias in the identity key.
-  // No gh login is named after that alias, so filtering to it empties the dropdown.
-  // Resolve in the runtime that runs gh (WSL distro vs host) so both see the same ssh config.
+  // Expand SSH aliases in the runtime that runs gh; aliases themselves are not gh login hosts.
   const context: SshConfigResolutionContext = {
     repoPath: repo.path,
     connectionId: repo.connectionId ?? null,

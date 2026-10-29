@@ -1,6 +1,4 @@
-// Why: every retained pane in a group sits over the same tab-group body, so the
-// non-anchor fallback (web client) measures that body once per group instead of
-// once per pane, and only while some pane in the group can display.
+// Measure each visible group body once for all retained panes when CSS anchors are unavailable.
 
 export type TabGroupBodyRect = {
   top: number
@@ -90,7 +88,6 @@ function onGroupBodyChanged(groupId: string): void {
   }
 }
 
-/** Registers the element that is the body of `groupId`; returns the unregister function. */
 export function registerTabGroupBody(groupId: string, body: HTMLElement): () => void {
   bodiesByGroupId.set(groupId, body)
   onGroupBodyChanged(groupId)
@@ -144,10 +141,7 @@ function releaseSource(source: GroupBodyGeometrySource): void {
   }
 }
 
-/**
- * Subscribes to the rect of `groupId`'s body relative to `container`. The
- * listener is called synchronously with the current rect, then on each change.
- */
+/** Report the body rect relative to container synchronously, then on changes. */
 export function subscribeTabGroupBodyRect(
   groupId: string,
   container: HTMLElement,

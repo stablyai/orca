@@ -21,8 +21,7 @@ export default function ProjectAddedDialog(): null {
   const handoffRunRef = useRef(0)
   const pendingRepoHydrationRef = useRef<string | null>(null)
 
-  // Why: older onboarding builds wrote `projectId`; accepting both prevents a
-  // stale project-added modal from blocking follow-up contextual tours.
+  // Accept legacy projectId so old onboarding modals cannot block contextual tours.
   const repoId =
     typeof modalData?.repoId === 'string'
       ? modalData.repoId
@@ -48,7 +47,7 @@ export default function ProjectAddedDialog(): null {
       pendingRepoHydrationRef.current = repoId
       let cancelled = false
       void (async () => {
-        // Why: no row yet names the new project's host, so look on every host.
+        // The new repo’s host is not loaded yet; hydrate repositories across hosts.
         await fetchReposForAllHosts()
         if (cancelled) {
           return
@@ -75,8 +74,7 @@ export default function ProjectAddedDialog(): null {
         try {
           await fetchWorktrees(repoId)
         } catch {
-          // Why: folder compatibility exists to clear stale modal state; close
-          // even if the best-effort synthetic workspace refresh fails.
+          // This compatibility handoff must close even if synthetic folder refresh fails.
         }
         if (cancelled) {
           return
@@ -96,8 +94,7 @@ export default function ProjectAddedDialog(): null {
       try {
         await fetchWorktrees(repoId)
       } catch {
-        // Why: this is a compatibility handoff; fall back to whatever worktree
-        // state is already loaded rather than leaving a stale modal active.
+        // Fall back to loaded worktree state so compatibility failures cannot strand stale modals.
       }
       if (!cancelled && handoffRunRef.current === runId) {
         await finishProjectAddWithDefaultCheckout({

@@ -1,9 +1,14 @@
-// Why: `.orca/issue-command` is the per-user override; `orca.yaml` is the tracked project default.
+// .orca/issue-command is local; orca.yaml supplies the tracked project default.
 import { readFileSync, existsSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { loadHooks } from './hooks'
 import type { GitRuntimeOptions } from './git/git-runtime-options'
 import { checkIgnoredPaths } from './git/check-ignored-paths'
+import {
+  guardWslUncPathAccess,
+  WslDistroStoppedError,
+  WslDistroUnverifiableError
+} from './wsl/wsl-unc-access-gate'
 
 type IssueCommandGitOptions = GitRuntimeOptions | (() => GitRuntimeOptions)
 
@@ -26,9 +31,6 @@ export type ResolvedIssueCommand = {
   source: 'local' | 'shared' | 'none'
 }
 
-/**
- * Resolve the GitHub issue command using local override first, then tracked repo config.
- */
 export function readIssueCommand(repoPath: string): ResolvedIssueCommand {
   const filePath = getIssueCommandFilePath(repoPath)
   let localContent: string | null = null
@@ -55,9 +57,63 @@ export function readIssueCommand(repoPath: string): ResolvedIssueCommand {
 }
 
 /**
- * Write the per-user issue command override to `{repoRoot}/.orca/issue-command`.
- * Empty content deletes the override so the shared `orca.yaml` command applies again.
+ * `readIssueCommand` that never starts a stopped WSL distro for a background read (E9): its
+ * `\\wsl.localhost` touch is refused with the unreachable result. `wakeWslDistro` is a launch, a
+ * user act that may start it.
  */
+export async function readIssueCommandUnlessWslStopped(
+  repoPath: string,
+  options: { wakeWslDistro?: boolean } = {}
+): Promise<ResolvedIssueCommand & { status?: 'error'; refusedWslDistro?: string }> {
+  try {
+    return await guardWslUncPathAccess(repoPath, async () => readIssueCommand(repoPath), {
+      wake: options.wakeWslDistro === true
+    })
+  } catch (error) {
+    if (error instanceof WslDistroStoppedError || error instanceof WslDistroUnverifiableError) {
+      return {
+        status: 'error',
+        localContent: null,
+        sharedContent: null,
+        effectiveContent: null,
+        localFilePath: getIssueCommandFilePath(repoPath),
+        source: 'none',
+        // Names the distro so the editor can stay read-only and re-read once it runs.
+        refusedWslDistro: error.distro
+      }
+    }
+    throw error
+  }
+}
+
+/**
+ * `writeIssueCommand` that refuses a stopped WSL distro's repo unless the user is saving their own
+ * edit (`wakeWslDistro`): a write the user never made must not start it or replace a hidden file.
+ */
+export async function writeIssueCommandUnlessWslStopped(
+  repoPath: string,
+  content: string,
+  gitOptions: IssueCommandGitOptions,
+  options: { wakeWslDistro?: boolean } = {}
+): Promise<void> {
+  await guardWslUncPathAccess(repoPath, () => writeIssueCommand(repoPath, content, gitOptions), {
+    wake: options.wakeWslDistro === true,
+    // A host-path repo whose Git runs in WSL starts the distro through the ignore check a save
+    // runs; clearing runs no Git, so it leaves the options unresolved.
+    wslDistro: content.trim() ? gitWslDistro(gitOptions) : undefined
+  })
+}
+
+function gitWslDistro(gitOptions: IssueCommandGitOptions): string | undefined {
+  try {
+    return (typeof gitOptions === 'function' ? gitOptions() : gitOptions).wslDistro
+  } catch {
+    // A runtime awaiting repair resolves no Git distro; the path still gates UNC repos.
+    return undefined
+  }
+}
+
+/** Empty content removes the local override so the shared orca.yaml command applies. */
 export async function writeIssueCommand(
   repoPath: string,
   content: string,
@@ -82,7 +138,6 @@ export async function writeIssueCommand(
     writeFileSync(filePath, `${trimmed}\n`, 'utf-8')
   } catch (err) {
     console.error('[hooks] Failed to write issue command:', err)
-    // Why: re-throw so the IPC handler surfaces the write failure to the renderer's .catch().
     throw err
   }
 }
@@ -107,7 +162,6 @@ async function isIssueCommandIgnoredByGit(
   }
 }
 
-/** Ensure `.orca` is in `.gitignore` so the per-user directory is never committed. */
 function ensureOrcaDirIgnored(repoPath: string): void {
   const gitignorePath = join(repoPath, '.gitignore')
   try {

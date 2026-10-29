@@ -1,13 +1,4 @@
-/**
- * A paired client's open remote terminal must answer typing again on its own after the network to
- * its host goes away for 30 s (a lid close, a Tailscale re-key, a subway tunnel) and comes back.
- * Neither process restarts and nobody clicks Reconnect.
- *
- * Run:
- *   ORCA_BACKGROUND_LAUNCH=1 pnpm exec playwright test \
- *     tests/e2e/paired-remote-terminal-network-outage.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */
+// After a network outage, the open paired terminal must accept typing again without process restart or manual Reconnect.
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'

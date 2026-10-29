@@ -106,42 +106,6 @@ describe('feature tip startup gate', () => {
     ).toEqual({ kind: 'skip' })
   })
 
-  it('opens the CLI tip after the voice tip was marked seen', () => {
-    expect(
-      getFeatureTipsAppOpenDecision({
-        activeModal: 'none',
-        cliInstalled: false,
-        featureTipsSeenIds: ['voice-dictation'],
-        featureInteractions: {},
-        onboarding: existingUserOnboarding,
-        persistedUIReady: true,
-        inNativeChatUpgradeTipAudience: false,
-        promptedThisSession: false,
-        settings: makeSettings(),
-        suppressedByOnboardingThisSession: false,
-        webClient: false
-      })
-    ).toEqual({ kind: 'open', tipId: 'orca-cli' })
-  })
-
-  it('opens the CLI tip after voice dictation is already enabled', () => {
-    expect(
-      getFeatureTipsAppOpenDecision({
-        activeModal: 'none',
-        cliInstalled: false,
-        featureTipsSeenIds: [],
-        featureInteractions: {},
-        onboarding: existingUserOnboarding,
-        persistedUIReady: true,
-        inNativeChatUpgradeTipAudience: false,
-        promptedThisSession: false,
-        settings: makeSettings(true),
-        suppressedByOnboardingThisSession: false,
-        webClient: false
-      })
-    ).toEqual({ kind: 'open', tipId: 'orca-cli' })
-  })
-
   it('opens the command palette tip after the CLI tip was marked seen', () => {
     expect(
       getFeatureTipsAppOpenDecision({
@@ -202,24 +166,6 @@ describe('feature tip startup gate', () => {
         activeModal: 'none',
         cliInstalled: true,
         featureTipsSeenIds: ['voice-dictation', 'cmd-j-palette'],
-        featureInteractions: {},
-        onboarding: existingUserOnboarding,
-        persistedUIReady: true,
-        inNativeChatUpgradeTipAudience: false,
-        promptedThisSession: false,
-        settings: makeSettings(),
-        suppressedByOnboardingThisSession: false,
-        webClient: false
-      })
-    ).toEqual({ kind: 'skip' })
-  })
-
-  it('waits for CLI install status before opening the CLI tip', () => {
-    expect(
-      getFeatureTipsAppOpenDecision({
-        activeModal: 'none',
-        cliInstalled: null,
-        featureTipsSeenIds: ['voice-dictation'],
         featureInteractions: {},
         onboarding: existingUserOnboarding,
         persistedUIReady: true,

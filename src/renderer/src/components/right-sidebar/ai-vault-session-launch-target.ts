@@ -1,6 +1,6 @@
 import { getAiVaultResumeWorkspaceWslDistro } from '@/lib/ai-vault-resume-shell'
+import { canResumeAiVaultSessionOnTarget } from '../../../../shared/ai-vault-resume-target'
 import {
-  canResumeAiVaultSessionOnTarget,
   getAiVaultResumeWorkspaceExecutionHostId,
   getAiVaultResumeWorkspaceTargetStatus
 } from '@/lib/ai-vault-resume-target'
@@ -75,8 +75,7 @@ export function resolveAiVaultSessionLaunchTarget(args: {
 export function aiVaultResumeUnsupportedMessage(
   targetStatus: ReturnType<typeof getAiVaultResumeWorkspaceTargetStatus>
 ): string {
-  // Why: local and SSH targets can both be valid generally; this branch means
-  // the session's recorded host does not match the selected workspace.
+  // Otherwise-valid host types here mean the session host differs from the selected workspace.
   if (targetStatus === 'ssh' || targetStatus === 'local' || targetStatus === 'runtime') {
     return translate(
       'auto.components.right.sidebar.AiVaultPanel.sessionHostMismatchUnsupported',

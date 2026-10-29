@@ -5,8 +5,8 @@ import {
   onRuntimeEnvironmentsRetired,
   replaceRuntimeEnvironmentRevisions
 } from '@/runtime/runtime-environment-revision'
+import { detachedEditorBufferId } from './editor-buffer-views'
 import {
-  detachedEditorBufferId,
   editorBufferIdentityOf,
   editorBufferPathKey,
   isEditorBufferIdentityRetired

@@ -18,20 +18,7 @@ import {
 } from './pty-connection-test-environment'
 import { connectMockPanePty } from './pty-connection-test-connect-mock-pane'
 
-// STA-4869 route R6 — the renderer channel has no latch of its own:
-// dispatchPtyModelRestoreNeeded (pty-model-restore-channel.ts) drops a marker
-// for which no handler is registered. A pane that releases the last hidden claim
-// while retiring unhides after unregistering its handler, so a drop latch
-// consumed by unmark would be spent on a marker nobody can receive. The fix
-// keeps the latch armed across unhide and retires it where recovery actually
-// paints the bytes — the renderer's post-apply ack.
-//
-// This suite drives the REAL renderer channel from behind the
-// setHiddenRendererPty IPC, delivering main's marker one turn later the way
-// Electron does. Main's gate is modelled by mainDropLatch below rather than
-// imported — src/main is outside the renderer tsconfig project — and its two
-// rules are pinned against the real module in
-// src/main/ipc/pty-hidden-delivery-gate.test.ts.
+// STA-4869: unhide can emit after the retiring pane unregisters; keep main’s drop latch until a successor paints and acks. Drive the real renderer channel with a model of main’s gate, pinned by src/main/ipc/pty-hidden-delivery-gate.test.ts.
 
 const {
   resetAndRefreshAllTerminalWebglAtlases,
@@ -143,9 +130,7 @@ type PaneDrive = {
   writtenChunks: () => string[]
 }
 
-/** Main's droppedSinceHiddenPtys latch (pty-hidden-delivery-gate.ts): the first
- *  gated drop arms it, neither re-marking hidden nor unmarking clears it, and
- *  only the renderer's applied-ack (or teardown) retires it. */
+/** Model main’s drop latch: drops arm it; re-mark/unhide preserve it; applied ack or teardown retires it. */
 const mainDropLatch = {
   hidden: false,
   dropped: false,
@@ -175,8 +160,7 @@ const mainDropLatch = {
   }
 }
 
-/** Routes the renderer's hidden-state IPC and its applied-ack into main's gate,
- *  delivering main's marker back one turn later as the IPC round trip does. */
+/** Model IPC by delivering main’s restore marker one turn after hidden-state changes. */
 async function wireMainGateToRendererChannel(): Promise<{
   markersDelivered: () => number
 }> {
@@ -341,8 +325,7 @@ describe('hidden-output restore marker handoff (STA-4869 R6)', () => {
     await dropHiddenBytesInMain()
     expect(vi.mocked(window.api.pty.setHiddenRendererPty)).toHaveBeenCalledWith(PTY_ID, true)
 
-    // The pane retires (tab remount / recovery): releasing the last hidden claim
-    // unhides the PTY in main, which answers with the one restore marker.
+    // Retirement unregisters the pane before its last hidden-claim release makes main emit a marker.
     retiring.binding.dispose()
     await flushAsyncTicks(20)
     expect(gate.markersDelivered()).toBe(1)
@@ -352,8 +335,7 @@ describe('hidden-output restore marker handoff (STA-4869 R6)', () => {
     replacement.binding.syncProcessTracking()
     await flushAsyncTicks(20)
 
-    // Main still holds the dropped bytes and answers any snapshot request with
-    // them, so the replacement pane owes the user either those bytes or a banner.
+    // Main retains the bytes; the replacement owes either snapshot recovery or a loss banner.
     const disclosure = {
       ...observeDisclosure(replacement),
       modelSnapshotRequests: vi.mocked(window.api.pty.getMainBufferSnapshot).mock.calls.length
@@ -379,8 +361,7 @@ describe('hidden-output restore marker handoff (STA-4869 R6)', () => {
     replacement.binding.syncProcessTracking()
     await flushAsyncTicks(20)
 
-    // The latch outlived the marker nobody received, so the remount's own unhide
-    // re-emits it; the paint that heals the gap is what finally spends it.
+    // Unreceived markers must leave the latch armed; only the successor’s healing paint consumes it.
     expect(gate.markersDelivered()).toBe(2)
     expect(window.api.pty.ackHiddenOutputRestoreApplied).toHaveBeenCalledWith(PTY_ID, 1)
     expect(observeDisclosure(replacement)).toMatchObject({ markerWrites: 1 })
@@ -435,8 +416,7 @@ describe('hidden-output restore marker handoff (STA-4869 R6)', () => {
   })
 
   it('[fix] a snapshot served into a disposing pane leaves the latch armed for the remount', async () => {
-    // Main serializes multi-MB buffers across an IPC round trip; a tab/split
-    // switch or renderer reload inside that window disposes the pane that asked.
+    // Dispose during multi-MB snapshot serialization to model a tab/split switch or renderer reload.
     const snapshot = {
       data: `${R6_MARKER}\r\n`,
       cols: 120,
@@ -480,8 +460,7 @@ describe('hidden-output restore marker handoff (STA-4869 R6)', () => {
   })
 
   it('[fix] a permanently refused source discloses the gap once across repeated reveals', async () => {
-    // The longer-lived latch re-marks on every unhide, so without disclosed-gap
-    // dedupe each reveal re-banners and re-fetches the same historical gap.
+    // Deduplicate disclosed gaps despite repeated unhide markers, or every reveal re-fetches and re-banners historical loss.
     vi.mocked(window.api.pty.getMainBufferSnapshot).mockResolvedValue(null)
     const gate = await wireMainGateToRendererChannel()
     const drive = await connectPane(false)

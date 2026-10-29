@@ -47,8 +47,7 @@ export abstract class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWi
 
   private static readonly MAX_SSH_RELAY_RECOVERY_GENERATIONS = 512
   private sshRelayRecoveryGenerationSequence = 0
-  // Why: SSH state changes originate in main's ssh handlers, not in runtime
-  // methods, so they need a public entry point onto the client-event stream.
+  // Main SSH handlers bypass runtime methods, so they need a client-event entrypoint.
   notifySshStateChanged(targetId: string, state: SshConnectionState): void {
     this.bumpSshRelayRecoveryGeneration(targetId)
     this.invalidateSshWorktreeScanCache(targetId)
@@ -138,7 +137,7 @@ export abstract class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWi
       return
     }
 
-    // Why: relay readiness follows PTY reattach; rebuild the HUB-owned panes before paired clients consume the connected event.
+    // Rebuild hub-owned panes after PTY reattach, before paired clients consume connected.
     for (const worktreeId of worktreeIds) {
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
         allowAttachedWindow: true,
@@ -158,9 +157,7 @@ export abstract class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWi
     this.invalidateSshWorktreeScanCacheInternal(targetId)
   }
 
-  // Why: renderer-initiated meta updates intentionally skip the renderer
-  // notifier (the renderer already applied them optimistically), but remote
-  // clients hold no optimistic copy and need the invalidation event.
+  // Renderer meta writes skip its notifier after optimistic updates; remote clients still need invalidation.
   notifyWorktreesChangedForRemoteClients(repoId: string): void {
     this.invalidateResolvedWorktreeCache()
     this.emitClientEvent({ type: 'worktreesChanged', repoId })
@@ -172,21 +169,25 @@ export abstract class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWi
     this.notifyWorktreesChanged(repoId)
   }
 
-  // Why: structural catalog changes require a fresh Git scan; renderer metadata edits do not.
+  // Catalog changes need fresh Git scans; metadata-only edits do not.
   notifyWorktreeCatalogChangedForRemoteClients(repoId: string): void {
     this.invalidateWorktreeScanCacheForRepo(repoId)
     const matchingRepos = this.store?.getRepos().filter((repo) => repo.id === repoId) ?? []
-    if (matchingRepos.length !== 1 || matchingRepos[0]?.connectionId) {
+    if (matchingRepos.length !== 1 || getRepoRoutingConnectionId(matchingRepos[0])) {
       return
     }
     this.notifyWorktreesChangedForRemoteClients(repoId)
   }
 
-  // Why: host-local repo IPC mutations never enter runtime methods, so paired
-  // clients need an explicit catalog invalidation; the local renderer already
-  // got its own repos:changed and must not be re-notified (#11994).
+  // Host repo IPC bypasses runtime methods; invalidate paired clients without duplicating local repos:changed (#11994).
   notifyReposChangedForRemoteClients(): void {
     this.emitClientEvent({ type: 'reposChanged' })
+  }
+
+  // Why: browser profiles change in main's session registry, outside runtime methods.
+  notifyBrowserProfilesChanged(): void {
+    this.notifier?.browserProfilesChanged?.()
+    this.emitClientEvent({ type: 'browserProfilesChanged' })
   }
 
   /** `setup` and `defaultTabs` go to the host window only: main tried and failed to start them. */

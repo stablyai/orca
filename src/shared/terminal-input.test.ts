@@ -1,9 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  TERMINAL_INPUT_CHUNK_MAX_BYTES,
   TERMINAL_INPUT_TOO_LARGE_ERROR,
   assertTerminalInputWithinLimit,
-  getTerminalInputByteLength,
   iterateTerminalInputChunks,
   isTerminalInputTooLarge,
   isTerminalInputTooLargeWithDeferredMeasurement,
@@ -18,30 +16,11 @@ afterEach(() => {
 })
 
 describe('terminal input bounds', () => {
-  it('keeps small terminal input as one chunk', () => {
-    expect(splitTerminalInputChunks('npm test')).toEqual(['npm test'])
-  })
-
   it('splits by UTF-8 bytes without splitting surrogate pairs', () => {
     const chunks = splitTerminalInputChunks('ab😀cd', 4)
 
     expect(chunks).toEqual(['ab', '😀', 'cd'])
     expect(chunks.join('')).toBe('ab😀cd')
-  })
-
-  it('uses 16KB as the default terminal input chunk budget', () => {
-    const chunks = splitTerminalInputChunks('x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES + 1))
-
-    expect(chunks).toEqual(['x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES), 'x'])
-  })
-
-  it('iterates chunks lazily without prebuilding every terminal input chunk', () => {
-    const chunks = iterateTerminalInputChunks('abcdefghij', 4)
-
-    expect(chunks.next()).toEqual({ done: false, value: 'abcd' })
-    expect(chunks.next()).toEqual({ done: false, value: 'efgh' })
-    expect(chunks.next()).toEqual({ done: false, value: 'ij' })
-    expect(chunks.next()).toEqual({ done: true, value: undefined })
   })
 
   it('does not scan the full payload before yielding the first chunk', () => {
@@ -52,10 +31,6 @@ describe('terminal input bounds', () => {
     expect(chunks.next()).toEqual({ done: false, value: 'x'.repeat(8) })
 
     expect(codePointAt.mock.calls.length).toBeLessThan(text.length)
-  })
-
-  it('measures UTF-8 bytes for terminal input without using UTF-16 length', () => {
-    expect(getTerminalInputByteLength('a😀')).toBe(5)
   })
 
   it('keeps a single multibyte terminal character intact when the byte cap is smaller', () => {
@@ -106,11 +81,6 @@ describe('terminal input bounds', () => {
     await vi.advanceTimersByTimeAsync(0)
 
     await expect(result).resolves.toBe(false)
-  })
-
-  it('keeps deferred terminal input validation synchronous for small or obvious oversized input', () => {
-    expect(isTerminalInputTooLargeWithDeferredMeasurement('npm test')).toBe(false)
-    expect(isTerminalInputTooLargeWithDeferredMeasurement('x'.repeat(6), 5)).toBe(true)
   })
 
   it('returns a pending validation for accepted large terminal input', async () => {

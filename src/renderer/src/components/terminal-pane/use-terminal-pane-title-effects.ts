@@ -53,8 +53,7 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
     if (manager) {
       applyTerminalPaneAttentionToManager(manager, tabId)
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [tabId])
+  }, [tabId, managerRef])
   useLayoutEffect(() => {
     applyTerminalPaneAttention()
     return subscribeTerminalPaneAttention(tabId, applyTerminalPaneAttention)
@@ -74,7 +73,6 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
     if (needsFit && (isVisible || shouldMeasureHiddenStartup)) {
       fitPanes(manager)
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
   }, [
     paneCount,
     paneLayoutRevision,
@@ -82,7 +80,8 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
     renamingPaneId,
     sessionRestoredBannerPaneIds,
     isVisible,
-    shouldMeasureHiddenStartup
+    shouldMeasureHiddenStartup,
+    managerRef
   ])
 
   const syncPaneTitleOverlayRects = useCallback((): void => {
@@ -108,14 +107,17 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
     setPaneTitleOverlayRects((previous) =>
       arePaneTitleOverlayRectsEqual(previous, nextRects) ? previous : nextRects
     )
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [])
+  }, [containerRef, managerRef, setPaneTitleOverlayRects])
 
   useLayoutEffect(() => {
     const manager = managerRef.current
     const container = containerRef.current
     if (!manager || !container) {
       setPaneTitleOverlayRects(clearPaneTitleOverlayRects)
+      return
+    }
+    // Hidden overlays are display:none; keeping their last rects avoids a forced layout and a pane re-render on every workspace switch.
+    if (!isVisible && !shouldMeasureHiddenStartup) {
       return
     }
     let frame: number | null = null
@@ -140,7 +142,6 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
         cancelAnimationFrame(frame)
       }
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
   }, [
     expandedPaneId,
     isolatedPaneKey,
@@ -150,7 +151,11 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
     paneTitles,
     renamingPaneId,
     sessionRestoredBannerPaneIds,
-    syncPaneTitleOverlayRects
+    shouldMeasureHiddenStartup,
+    syncPaneTitleOverlayRects,
+    containerRef,
+    managerRef,
+    setPaneTitleOverlayRects
   ])
 
   useEffect(() => {
@@ -162,8 +167,7 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
       const next = pruneSessionRestoredBannerPaneIds(previous, manager.getPanes())
       return next === previous ? previous : next
     })
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [paneCount])
+  }, [paneCount, managerRef, setSessionRestoredBannerPaneIds])
 
   useEffect(() => {
     const captureBuffers = (options?: ShutdownBufferCaptureOptions): void => {
@@ -186,8 +190,7 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
         manager,
         paneTransports: paneTransportsRef.current,
         existingLayout: existing,
-        // Why resolved: a pane that serializes empty mid-replay must fall back to whichever home
-        // holds its last good copy, not only the shared one.
+        // Empty mid-replay captures must fall back to the last good shared or local buffer.
         priorBuffersByLeafId: resolveLeafScrollbackBuffers({
           shared: existing,
           localOnly: state.localOnlyScrollbackByTabId[tabId]
@@ -196,9 +199,7 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
         clearedScrollbackLeafIds: clearedScrollbackLeafIdsRef.current
       })
       if (options?.localOnly && layout.buffersByLeafId) {
-        // Why split: the ordinary cold park fires on every workspace hide, and buffersByLeafId
-        // rides the remote projection. Keep the structure (root, ptyIds, titles) in the shared
-        // layout and put the bytes in the local-only field, which the export never enumerates.
+        // Cold parks are frequent: keep layout structure shared but buffer bytes in the local-only field excluded from remote export.
         const { buffersByLeafId, ...structureOnly } = layout
         setTabLayout(tabId, structureOnly)
         setTabLocalOnlyScrollback(tabId, buffersByLeafId)
@@ -217,8 +218,15 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
         shutdownBufferCaptures.delete(tabId)
       }
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [tabId, worktreeId, setTabLayout, setTabLocalOnlyScrollback])
+  }, [
+    tabId,
+    worktreeId,
+    setTabLayout,
+    setTabLocalOnlyScrollback,
+    clearedScrollbackLeafIdsRef,
+    managerRef,
+    paneTransportsRef
+  ])
 
   useEffect(() => {
     if (renamingPaneId === null) {
@@ -243,6 +251,5 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
       document.removeEventListener('pointerdown', markPointerBlurIntent, true)
       document.removeEventListener('keydown', markKeyboardBlurIntent, true)
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [renamingPaneId])
+  }, [renamingPaneId, renameInputRef, renameUserRequestedBlurCommitRef])
 }

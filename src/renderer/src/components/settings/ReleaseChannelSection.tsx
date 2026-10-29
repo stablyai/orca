@@ -8,6 +8,9 @@ import { ReleaseBuildPicker } from './ReleaseBuildPicker'
 import { SettingsSegmentedControl, SettingsSubsectionHeader } from './SettingsFormControls'
 import { Badge } from '../ui/badge'
 import { translate } from '@/i18n/i18n'
+import { updaterMessageText } from '@/lib/updater-message-copy'
+import { errorMessage } from '../../../../shared/error-message'
+import type { UpdaterCodedMessage } from '../../../../shared/updater-failure-copy'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import {
   DEV_CHANNEL_PLATFORM_LABEL,
@@ -57,16 +60,14 @@ export function ReleaseChannelSection(): React.JSX.Element {
 
   const [appVersion, setAppVersion] = useState<string | null>(null)
   const [builds, setBuilds] = useState<ReleaseBuild[] | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<UpdaterCodedMessage | null>(null)
   const [loading, setLoading] = useState(false)
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
 
   const platform = getShortcutPlatform()
   const runningChannel = appVersion ? getVersionChannel(appVersion) : null
   const requestedChannel = releaseChannelOverride ?? runningChannel ?? 'stable'
-  // Why: a persisted 'hourly' can arrive on Linux/Windows — settings sync, or a
-  // profile carried over from a Mac. Fall back rather than rendering a selected
-  // segment the user cannot act on and a build list that can never install.
+  // Synced Mac profiles can carry unsupported hourly channels; fall back instead of offering uninstallable builds.
   const activeChannel = isChannelSupportedOnPlatform(requestedChannel, platform)
     ? requestedChannel
     : 'stable'
@@ -84,10 +85,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
     }
   }, [])
 
-  // Why: two loads can be in flight at once — activeChannel flips on mount when
-  // getVersion resolves, and rapid channel clicks stack requests. Without this
-  // guard a slower earlier request can land last and fill the list with builds
-  // from a channel the picker is no longer showing.
+  // Version resolution and rapid clicks can overlap loads; reject earlier requests that finish on the wrong channel.
   const latestRequestRef = useRef(0)
 
   const loadBuilds = useCallback(
@@ -107,17 +105,16 @@ export function ReleaseChannelSection(): React.JSX.Element {
           setSelectedTag(result.builds[0]?.tag ?? null)
         } else {
           setBuilds(null)
-          setLoadError(result.message)
+          setLoadError(result)
         }
       } catch (error) {
         if (isStale()) {
           return
         }
         setBuilds(null)
-        setLoadError(String((error as Error)?.message ?? error))
+        setLoadError({ message: errorMessage(error) })
       } finally {
-        // Why: only the newest request owns the spinner; a superseded one clearing
-        // it would show "no builds" while the current load is still running.
+        // Only the newest request may clear loading; old completions must not flash No builds.
         if (!isStale()) {
           setLoading(false)
         }
@@ -126,10 +123,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
     []
   )
 
-  // Why: reload whenever the channel changes so the picker never offers tags
-  // from the channel the user just switched away from. Not before the version
-  // resolves: the running channel is unknown until then, and a load for the
-  // 'stable' placeholder would be a GitHub request whose result is thrown away.
+  // Wait for the running version/channel before loading; a stable-placeholder request would be discarded.
   useEffect(() => {
     if (appVersion === null) {
       return
@@ -159,10 +153,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
   }
 
   const isRunningBuild = selectedBuild?.version === appVersion
-  // Why a download instead of an update: Windows dev builds are unsigned, and a
-  // signed build verifies every installer it downloads against its own baked-in
-  // publisher name. It is the one jump the in-app updater cannot make — and only
-  // the way in, so once someone is on a dev build every route back works.
+  // Signed Windows builds reject unsigned dev installers through publisher validation; entry to dev requires manual download, while returns work normally.
   const needsManualInstall = requiresManualDevChannelInstall({
     platform,
     runningChannel,
@@ -170,8 +161,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
   })
 
   const handleDownloadInstaller = (build: ReleaseBuild): void => {
-    // Falls back to the release page: better to land somewhere with the assets
-    // listed than to do nothing because the artifact was named unexpectedly.
+    // Fall back to release assets when installer naming is unexpected.
     void window.api.shell.openUrl(build.installerUrl ?? build.releaseUrl)
   }
 
@@ -196,10 +186,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
       <div className="space-y-2">
         <SettingsSegmentedControl<ReleaseChannel>
           value={activeChannel}
-          // Why: selecting the running build's own channel clears the override
-          // rather than pinning it. Without this there is no way back to "follow
-          // this build's channel", so a dev who merely looked at the panel would
-          // leave background checks pinned to whatever they last clicked.
+          // Selecting the running channel clears the override so browsing cannot permanently pin background checks.
           onChange={(channel) =>
             setReleaseChannelOverride(channel === runningChannel ? null : channel)
           }
@@ -207,9 +194,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
             'auto.components.settings.ReleaseChannelSection.channelAriaLabel',
             'Update channel'
           )}
-          // Why disabled rather than hidden: a Linux/Windows dev who has heard
-          // about a dev channel should see that it exists and why it is
-          // unavailable, instead of silently not finding it.
+          // Show unsupported channels disabled with reasons so users can discover why they are unavailable.
           options={RELEASE_CHANNELS.map((channel) => {
             const supported = isChannelSupportedOnPlatform(channel, platform)
             return {
@@ -330,7 +315,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
         </p>
 
         {loadError ? (
-          <p className="text-xs text-destructive">{loadError}</p>
+          <p className="text-xs text-destructive">{updaterMessageText(loadError)}</p>
         ) : needsManualInstall && selectedBuild ? (
           <p className="text-xs text-muted-foreground">
             {translate(

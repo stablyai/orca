@@ -17,6 +17,12 @@ export type InflightChecks = {
   requestId: number
   force: boolean
   noCache: boolean
+  /** A user act's request may start a stopped WSL distro; a poll's would be refused. */
+  wakeWslDistro?: boolean
+}
+export type InflightComments = {
+  promise: Promise<PRComment[]>
+  postedComments: PRComment[]
 }
 export type InflightWorkItems = {
   promise: Promise<readonly GitHubWorkItem[]>
@@ -24,6 +30,7 @@ export type InflightWorkItems = {
   force: boolean
   noCache: boolean
   requireComplete: boolean
+  wakeWslDistro?: boolean
 }
 export type InflightProjectView = {
   promise: Promise<GetProjectViewTableResult>
@@ -34,7 +41,7 @@ export type InflightProjectView = {
 export const inflightPRRequests = new Map<string, InflightPR>()
 export const inflightIssueRequests = new Map<string, Promise<IssueInfo | null>>()
 export const inflightChecksRequests = new Map<string, InflightChecks>()
-export const inflightCommentsRequests = new Map<string, Promise<PRComment[]>>()
+export const inflightCommentsRequests = new Map<string, InflightComments>()
 export const inflightWorkItemsRequests = new Map<string, InflightWorkItems>()
 export const inflightProjectViewRequests = new Map<string, InflightProjectView>()
 export const prRequestGenerations = new Map<string, number>()
@@ -51,11 +58,7 @@ export function nextProviderRequestId(): number {
   return providerRequestSequence
 }
 
-/**
- * Why: the upgrade wait is bounded, so a stronger request can run beside a weaker one for the same
- * key. Only the request the key currently resolves to may write that key's cache — otherwise a late
- * weaker reply overwrites the stronger request's fresher result under a brand-new `fetchedAt`.
- */
+/** Bounded upgrade waits permit concurrent strengths; only current key owner may cache replies or late weaker results gain fresh timestamps over newer data. */
 export function ownsInflightRequest<T extends { requestId: number }>(
   registry: ReadonlyMap<string, T>,
   key: string,

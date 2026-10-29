@@ -2,6 +2,7 @@ import { buildDefaultSettings } from '../../../../shared/default-global-settings
 import { createRoot } from 'react-dom/client'
 import { useAppStore } from '@/store'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
 import { BrowserPagePane } from '@/components/browser-pane/assemble-chrome/browser-page-pane'
 import { registerBrowserOverlaySlotViewport } from '@/components/browser-pane/host-guest/browser-page-viewport'
 import { registerBrowserStateIpcBridge } from './browser-state-ipc-bridge'
@@ -31,21 +32,23 @@ function mountTabs(): void {
     mounted.set(tab.id, root)
     root.render(
       <TooltipProvider>
-        <BrowserPagePane
-          browserTab={page}
-          workspaceId={tab.id}
-          worktreeId={worktreeId}
-          sessionProfileId={tab.sessionProfileId ?? null}
-          sessionPartition={tab.sessionPartition ?? null}
-          isActive={state.activeBrowserTabIdByWorktree[worktreeId] === tab.id}
-          chromeShortcutScope="inactive"
-          isAutomationVisible={false}
-          isMobileDriven={false}
-          isRemotelyViewed={false}
-          inputLocked={false}
-          onUpdatePageState={state.updateBrowserPageState}
-          onSetUrl={state.setBrowserPageUrl}
-        />
+        <ConfirmationDialogProvider>
+          <BrowserPagePane
+            browserTab={page}
+            workspaceId={tab.id}
+            worktreeId={worktreeId}
+            sessionProfileId={tab.sessionProfileId ?? null}
+            sessionPartition={tab.sessionPartition ?? null}
+            isActive={state.activeBrowserTabIdByWorktree[worktreeId] === tab.id}
+            chromeShortcutScope="inactive"
+            isAutomationVisible={false}
+            isMobileDriven={false}
+            isRemotelyViewed={false}
+            inputLocked={false}
+            onUpdatePageState={state.updateBrowserPageState}
+            onSetUrl={state.setBrowserPageUrl}
+          />
+        </ConfirmationDialogProvider>
       </TooltipProvider>
     )
   }

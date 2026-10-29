@@ -11,10 +11,7 @@ import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-ov
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { hydrateRuntimeEnvironmentSshState } from '@/runtime/runtime-environment-ssh-state'
-import {
-  isDisconnectedRuntimeHostState,
-  runtimeHostConnectionStateForEntry
-} from '@/runtime/runtime-host-connection-state'
+import { useRuntimeHostDisconnected } from '@/store/use-runtime-status-view'
 import { useAppStore } from '@/store'
 import {
   selectRuntimeAwareSshStatus,
@@ -58,8 +55,7 @@ export function useWorktreeCardFoundation({
       e.stopPropagation()
       openModal('edit-meta', {
         worktreeId: worktree.id,
-        // Why: the same workspace ID can exist under two hosts. Naming the owner
-        // keeps the dialog on the clicked row instead of the ambiguous lookup.
+        // Qualify the owner because the same workspace ID may exist on multiple hosts.
         repoId: worktree.repoId,
         executionHostId: worktree.hostId,
         currentDisplayName: worktree.displayName,
@@ -162,8 +158,7 @@ export function useWorktreeCardFoundation({
       EMPTY_WORKSPACE_PORTS
   )
 
-  // Why no hostId: the host-qualified lookup scans every row, and this runs per card per write.
-  // The chip only reads status, so a twin falls back to the direct SSH state.
+  // Avoid per-card host-qualified scans; twins use direct SSH status for this status-only chip.
   const sshOwnerEnvironmentId = useAppStore((s) =>
     repo?.connectionId ? runtimeEnvironmentIdUnlessTwin(s, worktree.id) : null
   )
@@ -180,9 +175,7 @@ export function useWorktreeCardFoundation({
     }
   }, [sshOwnerEnvironmentId])
   const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
-  // Why: only reported on positive evidence, so a removed host never offers a Connect that can
-  // only fail. Runtime-owned targets are excluded for the same reason sshStatus excludes them —
-  // ssh:listTargets filters them out, so "absent from the target list" is not evidence of removal.
+  // Require positive removal evidence; runtime-owned targets are absent from listTargets by design.
   const sshTargetRemoved = useAppStore((s) =>
     repo?.connectionId && !isRuntimeOwnedSshTargetId(repo.connectionId)
       ? selectRuntimeAwareSshTargetRemoved(s, sshOwnerEnvironmentId, repo.connectionId)
@@ -205,18 +198,8 @@ export function useWorktreeCardFoundation({
   const runtimeHostLabel = runtimeHostId
     ? (getHostDisplayLabelOverrides(settings).get(runtimeHostId) ?? runtimeEnvironmentName)
     : null
-  // Why the shared derivation, not raw truthiness: an absent entry means "not probed yet",
-  // which is not the same verdict as a probe that came back unreachable.
-  const isRuntimeDisconnected = useAppStore((s) => {
-    if (!runtimeOwnerEnvironmentId) {
-      return false
-    }
-    return isDisconnectedRuntimeHostState(
-      runtimeHostConnectionStateForEntry(
-        s.runtimeStatusByEnvironmentId.get(runtimeOwnerEnvironmentId)
-      )
-    )
-  })
+  // Missing runtime probe data means unknown, not disconnected.
+  const isRuntimeDisconnected = useRuntimeHostDisconnected(runtimeOwnerEnvironmentId || null)
   const [titleRenaming, setTitleRenaming] = useState(false)
   const [showRenameErrorDialog, setShowRenameErrorDialog] = useState(false)
   // Why: read the target label from its owning host's store instead of exposing HUB-private SSH metadata as client-local state.

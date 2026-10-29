@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, expect, it, vi } from 'vitest'
 import { TaskPageJiraStatusFilters } from './TaskPageJiraStatusFilters'
 import { getJiraStatusCatalogScopeKey } from './task-page-jira-status-catalog'
-import type { TaskPageComposerActionsModel } from './use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from './task-page/use-task-page-composer-actions'
 afterEach(cleanup)
 function model(): TaskPageComposerActionsModel {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies every field read by the status-controls component.

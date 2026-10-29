@@ -1,10 +1,4 @@
-/**
- * #15192 coverage gap: the model-snapshot fuzzers exercise wide text only through
- * a single `你好世界` word, so a leading/trailing-cell fault in the main-side
- * snapshot path could survive them. This sweeps Hangul across every width where
- * a syllable can straddle the wrap boundary and pins that the restore the
- * renderer replays holds the same text the model does.
- */
+/** Sweep Hangul across wrap boundaries to catch leading/trailing-cell faults in snapshot replay. */
 import { describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
@@ -45,7 +39,7 @@ describe('headless emulator wide-character snapshot fidelity', () => {
       const snap = emu.getSnapshot({ scrollbackRows: 200 })
       const src = textOf((emu as unknown as { terminal: Terminal }).terminal)
       const rt = replay(snap, cols, 14)
-      // Why: an empty read would satisfy src === rt and assert nothing.
+      // An empty read would make round-trip equality vacuous.
       expect(src.length).toBeGreaterThan(0)
       if (src !== rt) {
         bad.push(`cols=${cols}\n  src: ${src}\n  rt : ${rt}`)

@@ -1,4 +1,4 @@
-import type { JiraIssueFilter } from '../../../src/shared/jira-types'
+import type { JiraIssueFilter } from '../../../src/shared/jira/jira-types'
 
 export const JIRA_FILTER_LABELS: Record<JiraIssueFilter, string> = {
   assigned: 'My Issues',

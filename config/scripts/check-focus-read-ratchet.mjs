@@ -10,11 +10,8 @@ import {
   totalCount
 } from './ratchet-baseline.mjs'
 
-// Ratchet for renderer code that routes host-owned work by the "Active Server" setting instead of
-// by the resource's own host. Per file it counts every read of the setting plus every call of an
-// exported function that reads it for the caller (discovered, not hand-listed), so swapping one
-// form for another never lowers it. Counts may only go down. The deleted focus-routing helpers
-// are banned outright.
+// Count direct Active Server reads and discovered caller-returning wrappers so changing syntax cannot hide host-misrouting growth.
+// Route work by resource host; counts only decrease, and deleted helpers stay banned.
 
 const SCAN_ROOT = 'src/renderer/src'
 const BASELINE_PATH = 'config/focus-setting-read-baseline.txt'
@@ -91,9 +88,7 @@ export function topLevelDeclarations(sourceText) {
   })
 }
 
-// Statements that hand a value on: `return …` or an arrow's expression body, each running to the
-// first newline outside brackets. Object-literal results (`=> ({ … })`, `return { … }`) are
-// skipped: slice creators and hooks return bags of actions, which pulls in the whole store.
+// Follow returned values until bracket-free newline; skip object bags or store/slice exports pull in the whole graph.
 const VALUE_STATEMENT_START = /\breturn\s+(?!\(?\s*\{)|=>\s*(?!\(?\s*\{)/g
 
 function statementsFrom(body, start) {
@@ -205,14 +200,8 @@ function parseModule(rel, text, files) {
   return { imports, reexports, starFrom, declarations }
 }
 
-/**
- * Functions that read the setting for their caller, keyed by defining file so a same-named
- * function elsewhere (a test harness's `useAppStore`) is not mistaken for one. Seeds, then every
- * exported top-level function whose body reads the setting or calls a seed, then, to a fixpoint,
- * every one that returns a reader's result. Hand lists miss look-alikes such as a copy of
- * `getActiveRuntimeTarget` under another name; discovery does not. Following every call instead
- * of returned values pulls in most of the renderer through the store.
- */
+// Discover exported setting readers and returned-reader wrappers to a fixpoint, keyed by defining file.
+// Hand lists miss renamed copies; following every call instead of returned values pulls in most renderer code through the store.
 export function discoverFocusReaders(sources) {
   const files = new Set(sources.keys())
   const modules = new Map([...sources].map(([rel, text]) => [rel, parseModule(rel, text, files)]))
@@ -354,8 +343,12 @@ const BASELINE_HEADER = [
 const ADVICE =
   "Route by the resource's owner. Only a creation flow with no source row may use defaultCreationHost."
 
+// Why test support too: harnesses and fixtures seed settings for tests; they never route host work.
+const TEST_SUPPORT_PATH =
+  /(?:\.(?:test|spec)(?:-fixture|-support)?|-test-(?:harness|fixtures?))\.tsx?$/
+
 export function isScannedPath(rel) {
-  return /\.(ts|tsx)$/.test(rel) && !/\.(test|spec)(?:-fixture)?\.tsx?$/.test(rel)
+  return /\.(ts|tsx)$/.test(rel) && !TEST_SUPPORT_PATH.test(rel)
 }
 
 // One read and one discovery per root per run; `--prune` then `main` reuse them.

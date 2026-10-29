@@ -1,7 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { findIndexedWorktreeOwnerForHost } from './worktree-runtime-owner-index'
+import {
+  findIndexedWorktreeOwnerForHost,
+  worktreeOwnerHostIds
+} from './worktree-runtime-owner-index'
 
 describe('worktree runtime owner index', () => {
+  it('treats a legacy worktree without a host as local', () => {
+    const legacy = { id: 'legacy', repoId: 'repo-1' }
+    const worktreesByRepo = { 'repo-1': [legacy] }
+
+    expect(findIndexedWorktreeOwnerForHost(worktreesByRepo, legacy.id, 'local')).toBe(legacy)
+    expect(findIndexedWorktreeOwnerForHost(worktreesByRepo, legacy.id, 'runtime:hub-a')).toBeNull()
+    expect(worktreeOwnerHostIds(legacy)).toEqual(['local'])
+  })
+
   it('indexes paired worktrees by both runtime owner and physical host', () => {
     const paired = {
       id: 'repo-1::same-id',
@@ -15,6 +27,8 @@ describe('worktree runtime owner index', () => {
       hostId: 'ssh:direct-target' as const
     }
     const worktreesByRepo = { 'repo-1': [paired, directSsh] }
+
+    expect(worktreeOwnerHostIds(paired)).toEqual(['ssh:private-target', 'runtime:hub-a'])
 
     expect(findIndexedWorktreeOwnerForHost(worktreesByRepo, paired.id, 'runtime:hub-a')).toBe(
       paired

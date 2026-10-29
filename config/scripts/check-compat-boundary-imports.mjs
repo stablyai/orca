@@ -4,14 +4,17 @@ import { collectProcessHostSources } from './check-process-host-imports.mjs'
 import { collectModuleSpecifiers } from './static-module-specifiers.mjs'
 import { isTestOnlySourcePath } from './test-only-source-path.mjs'
 
-// Code kept only for old clients, servers or profiles. Each folder is reached only through its
-// listed entry modules and only from the listed importers, so deleting the folder plus those
-// import lines removes the path.
+// Legacy folders are reachable only through listed entrypoints/importers, keeping removal confined to those boundaries.
 export const COMPAT_FOLDERS = [
   {
     folder: 'src/shared/workspace-layout/old-client',
-    entries: ['old-client-session-tab-rows', 'old-client-session-tabs-projection'],
+    entries: [
+      'old-client-method-translation',
+      'old-client-session-tab-rows',
+      'old-client-session-tabs-projection'
+    ],
     importers: [
+      'src/main/runtime/session-tabs/main-layout-session-tab-move.ts',
       'src/main/runtime/terminal/launch/mobile-terminal-chat-fork-create.ts',
       'src/main/runtime/terminal/surface/terminal-surface-index.ts'
     ]

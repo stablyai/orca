@@ -50,19 +50,9 @@ export async function recoverUnavailableRuntimeBrowserClientPages(options: {
   notifyWorkspace(workspaceId: string): void
   /** Drops a page whose placement recovery destroyed without replacing it. */
   releaseUnrecoverablePage?: (page: RuntimeBrowserClientPage) => void
-  /**
-   * Pages an adoption pass just rebuilt from this same inventory. Their entries still describe the
-   * predecessor runtime's authority by construction, so every inventory comparison below would call
-   * them unhealthy and re-tear-down what adoption just settled.
-   */
+  /** Skip newly adopted pages: inventory still names predecessor authority and would wrongly trigger their teardown. */
   adoptedPageIds?: ReadonlySet<string>
-  /**
-   * The execution-host key a page in that workspace would be created under NOW.
-   *
-   * Required only for rehydrated pages, whose persisted record deliberately carries no key: the
-   * route key names the runtime process that minted it, so replaying one places the page under a
-   * predecessor the client refuses. Adoption re-resolves for the same reason.
-   */
+  /** Re-resolve routes for persisted pages: keys name their minting runtime process and clients refuse predecessor keys. */
   resolveExecutionHostKey?: (workspaceId: string) => Promise<BrowserExecutionHostKeyResolution>
   signal?: AbortSignal
 }): Promise<void> {
@@ -91,8 +81,7 @@ export async function recoverUnavailableRuntimeBrowserClientPages(options: {
       try {
         await recoverPage(page, inventoryByPageId.get(page.browserPageId), options)
       } catch (error) {
-        // Why: recovery failures are page-scoped (a refused URL, a creation timeout). Rejecting
-        // here aborts the whole attach and fences the lease, taking every healthy page with it.
+        // Contain page-scoped failures; rejecting attach would fence the lease and healthy pages too.
         console.warn('[browser-host-lease] client page recovery failed:', {
           browserPageId: page.browserPageId,
           error
@@ -104,12 +93,7 @@ export async function recoverUnavailableRuntimeBrowserClientPages(options: {
   )
 }
 
-/**
- * Whether the attach inventory can still speak for this page.
- *
- * Readiness is published before recovery runs, so the client can place a page the inventory predates
- * -- and absence from the inventory means "recreate". Those are left to the attach that can see them.
- */
+/** Readiness precedes recovery; skip placements created since this inventory or absent entries would wrongly trigger recreation. */
 function isPlacedAsObservedAtAttach(
   page: RuntimeBrowserClientPage,
   pagePlacementsAtAttach: ReadonlyMap<string, RuntimeBrowserClientPage['placement']> | undefined
@@ -121,19 +105,8 @@ function isPlacedAsObservedAtAttach(
   return observed !== undefined && sameRuntimeBrowserPlacement(observed, page.placement)
 }
 
-/**
- * Whether this lease is the one allowed to take a page back.
- *
- * A page placed by this desktop's current process names its `browserHostClientId`, and a page
- * retained across a host quit still names the generation that placed it, so recovery has to reach
- * back past this lease's own generation to pick it up again.
- *
- * A rehydrated page names neither: a desktop re-mints `browserHostClientId` per process, so the
- * persisted record deliberately carries only the paired device, and the device is what
- * re-authenticates the host. Matching on it is what keeps a second paired device -- or a device
- * whose pairing was revoked and later re-made -- from inheriting someone else's tab; such a row
- * stays host-absent and closable rather than being recovered to the wrong desktop.
- */
+/** Retained pages match client identity across generations. Restored pages match paired device because client ids rotate per process.
+ * Device matching prevents another or revoked/re-paired device from inheriting tabs; unmatched rows stay host-absent and closeable. */
 function isRecoverableByLease(
   page: RuntimeBrowserClientPage,
   lease: BrowserClientHostLeaseAuthority & { pairedDeviceId: string }
@@ -147,14 +120,7 @@ function isRecoverableByLease(
   )
 }
 
-/**
- * The key this recovery must place the page under, or null to leave the row held.
- *
- * A page this runtime still holds a key for keeps it: it was minted by this process and is still
- * current. A rehydrated one has none, so the workspace is asked where its pages route now. A
- * workspace that is gone drops its page; one whose route is merely not up yet is a "not now", and
- * the row waits host-absent for a later attach rather than being torn down on the strength of it.
- */
+/** Keep routes minted by this runtime; restored pages re-resolve. Retire only workspace-gone; unavailable routes leave held rows for later attach. */
 async function resolveRecoveryExecutionHostKey(
   page: RuntimeBrowserClientPage,
   options: Parameters<typeof recoverUnavailableRuntimeBrowserClientPages>[0]

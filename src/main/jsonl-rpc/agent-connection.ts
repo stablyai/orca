@@ -14,6 +14,7 @@ import {
   type JsonlRpcPeerHandlers,
   type JsonlRpcRecord
 } from './peer'
+import type { JsonlRpcRequestOptions } from './peer-oversized-record'
 import { resolveJsonlRpcPeerOptions, type JsonlRpcPeerOptions } from './peer-limits'
 
 export type JsonlRpcAgentConnectionOptions = JsonlRpcPeerHandlers & {
@@ -79,7 +80,6 @@ export class JsonlRpcAgentConnection {
     managed.child.stderr.on('error', this.onError)
     managed.onExit((exit) => {
       clearTimeout(this.streamExitTimer)
-      // The agent's last stderr lines are what a person can act on when it dies.
       const error = withProviderDiagnostic(
         new Error(
           exit.processless
@@ -151,7 +151,7 @@ export class JsonlRpcAgentConnection {
   request(
     command: string,
     params: Record<string, unknown> = {},
-    options: { timeoutMs?: number | null } = {}
+    options: JsonlRpcRequestOptions = {}
   ): Promise<unknown> {
     return this.peer.request(command, params, options)
   }
@@ -168,7 +168,7 @@ export class JsonlRpcAgentConnection {
     this.peer.resumeReading()
   }
 
-  /** Stop sends the dialect's abort first, then closes this connection through the supervisor. */
+  /** The dialect sends abort before the supervisor closes the process connection. */
   close(error?: Error): Promise<ProviderProcessCloseResult> {
     this.closing = true
     clearTimeout(this.streamExitTimer)

@@ -43,6 +43,31 @@ describe('requestMobileCommitMessage', () => {
     })
   })
 
+  it('preserves coded failures without changing the host error', async () => {
+    const failure = {
+      success: false,
+      error: 'Codex CLI command failed with code 2: unknown option',
+      errorCode: 'cliFailedWithDetail',
+      errorParams: { label: 'Codex', exitCode: 2 },
+      errorDetail: 'unknown option'
+    }
+    const client = clientWith([ok(failure)])
+    await expect(requestMobileCommitMessage(client, 'wt-1')).resolves.toEqual(failure)
+  })
+
+  it.each([
+    { errorCode: 42 },
+    { errorParams: { label: 'Codex', exitCode: null } },
+    { errorParams: ['Codex'] },
+    { errorDetail: { message: 'unknown option' } }
+  ])('drops malformed optional failure fields: %j', async (invalid) => {
+    const client = clientWith([ok({ success: false, error: 'host error', ...invalid })])
+    await expect(requestMobileCommitMessage(client, 'wt-1')).resolves.toEqual({
+      success: false,
+      error: 'host error'
+    })
+  })
+
   it('coerces a malformed failure payload to a non-empty error string', async () => {
     const client = clientWith([ok({ success: false })])
     const result = await requestMobileCommitMessage(client, 'wt-1')

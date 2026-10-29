@@ -9,6 +9,7 @@ import { isRuntimeEnvironmentRemovalBlocked } from './runtime-environment-host-d
 import { defaultServerNameForAccessLink } from './runtime-server-default-name'
 import { forgetCachedRuntimeHostDetails } from './use-runtime-environment-catalog'
 import type { RuntimeHostAccessFailure } from './RuntimeHostAccessFailureAlert'
+import { warnWslHostServerStop } from '../sidebar/wsl-host-removal'
 
 type RuntimeEnvironmentMutationActionParams = {
   settings: GlobalSettings
@@ -64,7 +65,7 @@ export function useRuntimeEnvironmentMutationActions({
     setAddServerFailure(null)
     setIsSaving(true)
     try {
-      // Why main judges a taken name: a code for that same saved server refreshes it instead.
+      // Main distinguishes duplicate names from refreshing the same saved server.
       const result = await window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
         name: trimmedName,
         pairingCode: trimmedPairingCode,
@@ -72,7 +73,7 @@ export function useRuntimeEnvironmentMutationActions({
       })
       if (!result.ok) {
         if (mountedRef.current) {
-          setAddServerFailure({ kind: result.kind, message: result.message })
+          setAddServerFailure(result)
         }
         return
       }
@@ -95,7 +96,7 @@ export function useRuntimeEnvironmentMutationActions({
       }
       if (!allowLocalRuntime) {
         const connected = await connectEnvironment(result.environment)
-        // Why not a refreshed entry: removing it would drop a server the user had already saved.
+        // Rollback must not remove an existing server refreshed by this pairing.
         if (!connected && !result.updatedExisting) {
           await window.api.runtimeEnvironments.remove({ selector: result.environment.id })
           await loadEnvironments()
@@ -150,10 +151,11 @@ export function useRuntimeEnvironmentMutationActions({
         }
         return false
       }
-      await window.api.runtimeEnvironments.remove({ selector: environment.id })
+      const removal = await window.api.runtimeEnvironments.remove({ selector: environment.id })
       forgetCachedRuntimeHostDetails(environment.id)
       await loadEnvironments()
-      if (mountedRef.current) {
+      // A WSL host whose Remove couldn't prove its server stopped says so instead of "Removed".
+      if (mountedRef.current && !warnWslHostServerStop(removal?.serverStop)) {
         toast.success(
           translate(
             'auto.components.settings.RuntimeEnvironmentsPane.b5b5114cb0',

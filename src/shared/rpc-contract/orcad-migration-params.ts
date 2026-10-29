@@ -4,8 +4,7 @@ import {
   OrcadMigrationBlobDescriptorSchema
 } from '../orcad-migration/orcad-migration-blob-transfer'
 
-// Why unknown: the handler parses and digest-checks the manifest itself, so a malformed one is
-// refused with a migration error rather than a generic params failure.
+// Let the handler parse/digest-check the manifest so malformed input receives a migration-specific refusal.
 export const OrcadMigrationCatalogParams = z.object({ manifest: z.unknown() })
 
 // Optional: sent only to a blob-channel destination, so SSH and older peers see `{ manifest }`.

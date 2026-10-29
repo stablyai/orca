@@ -1,4 +1,3 @@
-/** The managed tunnels a client holds, and the one rule for whether one still belongs to its server. */
 import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
 import {
   getRuntimeSshAccess,
@@ -16,7 +15,7 @@ export type ActiveOrcadTunnel = {
   connection: SshConnection
   forwardId: string
   localPort: number
-  /** The port orcad bound, which can differ from the persisted (preferred) one. */
+  /** Bound port may differ from the persisted preferred port. */
   remotePort: number
   preferredPort: number
   sshTargetGeneration: number
@@ -24,7 +23,7 @@ export type ActiveOrcadTunnel = {
   transportGeneration: number
 }
 
-export type ManagedTunnelExpectation = {
+type ManagedTunnelExpectation = {
   environmentId: string
   sshTargetId: string
   sshTargetGeneration: number
@@ -32,7 +31,6 @@ export type ManagedTunnelExpectation = {
   remotePort: number
 }
 
-/** The environment's SSH access while it and its target still name this tunnel; null otherwise. */
 export function managedTunnelAccess(
   environment: KnownRuntimeEnvironment | null | undefined,
   target: SshTarget | null | undefined,
@@ -51,7 +49,6 @@ export function managedTunnelAccess(
     : null
 }
 
-/** The build's environment is still the same pairing, with an SSH tunnel it may use. */
 export function managedTunnelStillPaired(
   built: KnownRuntimeEnvironment,
   current: KnownRuntimeEnvironment | null,
@@ -65,7 +62,6 @@ export function managedTunnelStillPaired(
   )
 }
 
-/** The SSH target and transport a managed environment's tunnel must use, or why it cannot. */
 export function resolveManagedTunnelBinding(
   environment: KnownRuntimeEnvironment,
   dependencies: {
@@ -97,7 +93,7 @@ export function resolveManagedTunnelBinding(
   return { deployment, targetStore, connectionManager, target }
 }
 
-/** Removes `entry`'s forward, and the record only if nothing replaced it meanwhile. */
+/** Delete the record only if a successor has not replaced this tunnel. */
 export async function dropActiveOrcadTunnel(
   active: Map<string, ActiveOrcadTunnel>,
   forwards: SshPortForwardManager,
@@ -110,7 +106,6 @@ export async function dropActiveOrcadTunnel(
   }
 }
 
-/** The recorded tunnel already rides this transport to this deployment, so a build can reuse it. */
 export function activeTunnelMatches(
   active: ActiveOrcadTunnel | undefined,
   current: {
@@ -136,7 +131,7 @@ export function recordActiveOrcadTunnel(
   forward: PortForwardEntry,
   tunnel: Omit<ActiveOrcadTunnel, 'forwardId' | 'localPort' | 'remotePort'>
 ): void {
-  // The tunnel now relies on this transport, so a cancelled connect that opened it must keep it.
+  // Adopt the transport so cancellation of its original connect cannot close this tunnel.
   adoptSshConnection(tunnel.connection)
   active.set(environmentId, {
     ...tunnel,
@@ -146,8 +141,8 @@ export function recordActiveOrcadTunnel(
   })
 }
 
-/** A run a close(), ownership change or transport change overtook: it must not read as success. */
-export class OrcadTunnelSupersededError extends Error {
+/** Superseded builds must not report success. */
+class OrcadTunnelSupersededError extends Error {
   constructor() {
     super('Orca SSH tunnel setup was superseded.')
     this.name = 'OrcadTunnelSupersededError'

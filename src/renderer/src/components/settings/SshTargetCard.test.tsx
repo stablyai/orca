@@ -68,8 +68,7 @@ describe('the connection error on an SSH target card', () => {
     expect(container.textContent).toContain('ssh-keygen -R build-01.internal')
   })
 
-  // This is the regression that made the careful wording pointless: `truncate` clamps to one line
-  // with an ellipsis and there is no title attribute, so the remedy was unreachable even on hover.
+  // Truncation without a tooltip hid the remedy at the end of host-key errors.
   it('does not clamp it to a single line', async () => {
     const container = await renderCard(errorState(HOST_KEY_ERROR))
     const paragraph = [...container.querySelectorAll('p')].find((node) =>

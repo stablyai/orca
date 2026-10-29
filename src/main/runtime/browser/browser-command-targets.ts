@@ -18,7 +18,7 @@ export class RuntimeBrowserCommandTargets {
     private readonly host: Pick<
       RuntimeBrowserCommandHost,
       | 'getAgentBrowserBridge'
-      | 'resolveWorktreeSelector'
+      | 'resolveWorkspaceSelector'
       | 'getAuthoritativeWindow'
       | 'retireRuntimeOwnedBrowserSessionTab'
       | 'serveBrowserTabs'
@@ -33,7 +33,6 @@ export class RuntimeBrowserCommandTargets {
     return bridge
   }
 
-  // A retained session row can outlive the page its host was able to close.
   retireGhostBrowserSessionRow(worktreeId: string | undefined, browserPageId: string): boolean {
     return (
       worktreeId !== undefined &&
@@ -67,30 +66,28 @@ export class RuntimeBrowserCommandTargets {
     return Boolean(guest && !guest.isDestroyed())
   }
 
-  // Why: the CLI sends selectors (e.g. "path:/...") but the bridge keys tabs by "repoId::path"; resolve to that store-compatible id.
+  // Resolve CLI selectors to the repoId::path keys the bridge uses.
   async resolveBrowserWorktreeId(selector?: string): Promise<string | undefined> {
     if (!selector) {
-      // Why: after restart, webviews mount only when the pane is visible; activate the view so persisted tabs become operable via registerGuest.
+      // Persisted webviews register only after mounting; wake them before use.
       const bridge = this.host.getAgentBrowserBridge()
       if (bridge && !this.hasLiveRegisteredBrowserTab(bridge, undefined)) {
         try {
           await this.ensureBrowserWorktreeActive(undefined)
         } catch {
-          // Window may not exist yet (e.g. during startup or in tests)
+          // Startup/tests may have no window.
         }
       }
       return undefined
     }
 
-    const worktreeId = (await this.host.resolveWorktreeSelector(selector)).id
-    // Why: explicit selectors are user intent, so resolution errors surface (not silently widen scope); only activation stays best-effort.
+    const worktreeId = (await this.host.resolveWorkspaceSelector(selector)).id
+    // Explicit selector failures must surface instead of widening scope; activation alone is best-effort.
     const bridge = this.host.getAgentBrowserBridge()
     if (bridge && !this.hasLiveRegisteredBrowserTab(bridge, worktreeId)) {
       try {
         await this.ensureBrowserWorktreeActive(worktreeId)
-      } catch {
-        // Fall through with the validated worktree id so routing stays scoped to the caller's explicit selector.
-      }
+      } catch {}
     }
     return worktreeId
   }
@@ -107,18 +104,16 @@ export class RuntimeBrowserCommandTargets {
     }
 
     const worktreeId = params.worktree
-      ? (await this.host.resolveWorktreeSelector(params.worktree)).id
+      ? (await this.host.resolveWorkspaceSelector(params.worktree)).id
       : undefined
     const bridge = this.host.getAgentBrowserBridge()
     if (bridge && !this.hasLiveRegisteredBrowserPage(bridge, worktreeId, browserPageId)) {
       try {
         await this.ensureBrowserPageActive(worktreeId, browserPageId)
-      } catch {
-        // Fall through with the explicit page target; downstream routing surfaces a clear "tab not found" error if wake fails.
-      }
+      } catch {}
     }
     return {
-      // Why: an explicit browserPageId is already a stable tab identity, so don't auto-resolve cwd worktree scoping on top of it.
+      // Explicit page ids already provide stable scope; do not add cwd-derived worktree scope.
       worktreeId,
       browserPageId
     }
@@ -151,14 +146,14 @@ export class RuntimeBrowserCommandTargets {
     return { browserPageId: resolvedPageId, webContents: guest }
   }
 
-  // Why: background-mount the worktree via a hidden visibility lease so the webview guest can register without stealing the user's visible pane.
+  // Mount under a hidden visibility lease so automation cannot steal the visible pane.
   private async ensureBrowserWorktreeActive(worktreeId: string | undefined): Promise<void> {
     if (await this.host.serveBrowserTabs?.start(worktreeId, undefined)) {
       return
     }
     const win = this.host.getAuthoritativeWindow()
     win.webContents.send('browser:activateView', worktreeId ? { worktreeId } : {})
-    // Why: the pane is operable only after the webview mounts and calls registerGuest; wait on that IPC rather than a flaky fixed sleep.
+    // Await registerGuest rather than guessing a fixed mount delay.
     await waitForWorktreeTabRegistration(worktreeId)
   }
 
@@ -177,17 +172,15 @@ export class RuntimeBrowserCommandTargets {
     await waitForTabRegistration(browserPageId)
   }
 
-  // Why: automation clicks can bypass Electron navigation events; push authoritative URL/title updates after automation.
+  // Automation may bypass Electron navigation events; publish authoritative URL/title updates.
   notifyRendererNavigation(browserPageId: string, url: string, title: string): void {
     try {
       const win = this.host.getAuthoritativeWindow()
       win.webContents.send('browser:navigation-update', { browserPageId, url, title })
-    } catch {
-      // Window may not exist during shutdown
-    }
+    } catch {}
   }
 
-  // Why: carry worktreeId (not a global setActiveWorktree) so one agent's --focus can't steal the screen from another agent's parallel worktree.
+  // Scope --focus to its worktree so parallel agents cannot move each other's view.
   notifyRendererBrowserPaneFocus(worktreeId: string | undefined, browserPageId: string): void {
     try {
       const win = this.host.getAuthoritativeWindow()
@@ -195,9 +188,7 @@ export class RuntimeBrowserCommandTargets {
         worktreeId: worktreeId ?? null,
         browserPageId
       })
-    } catch {
-      // Window may not exist during shutdown
-    }
+    } catch {}
   }
 
   async browserSnapshot(params: BrowserCommandTargetParams): Promise<BrowserSnapshotResult> {

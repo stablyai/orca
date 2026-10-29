@@ -1,35 +1,29 @@
+import { Trans } from 'react-i18next'
 import { DialogDescription } from '@/components/ui/dialog'
-import { translate } from '@/i18n/i18n'
+import { i18n, translate } from '@/i18n/i18n'
 
 export function DeleteWorktreeDialogDescription({
+  description,
   targetClassName,
-  targetLabel,
-  canDeleteAllLineage,
-  childTargetLabel,
-  descriptionSuffix,
+  targetName,
   showChangeLossWarning
 }: {
+  /** Translated sentence from delete-worktree-dialog-copy with <target> / <descendants> tags. */
+  description: string
   targetClassName: string
-  targetLabel: string | undefined
-  canDeleteAllLineage: boolean
-  childTargetLabel: string
-  descriptionSuffix: string
+  targetName: string | undefined
   showChangeLossWarning?: boolean
 }): React.JSX.Element {
   return (
     <DialogDescription className="text-xs">
-      {translate('auto.components.sidebar.DeleteWorktreeDialog.91492c9ad6', 'Remove')}{' '}
-      <span className={targetClassName}>{targetLabel}</span>
-      {canDeleteAllLineage ? (
-        <>
-          {' '}
-          {translate('auto.components.sidebar.DeleteWorktreeDialog.ff2a74ac0e', 'and')}{' '}
-          <span className="font-medium text-foreground">{childTargetLabel}</span>{' '}
-          {descriptionSuffix}
-        </>
-      ) : (
-        <> {descriptionSuffix}</>
-      )}
+      <Trans
+        i18n={i18n}
+        defaults={description}
+        components={{
+          target: <span className={targetClassName}>{targetName}</span>,
+          descendants: <span className="font-medium text-foreground" />
+        }}
+      />
       {showChangeLossWarning && (
         <span className="mt-1 block">
           {translate(

@@ -64,9 +64,9 @@ describe('resolveTabStripScrollOffset', () => {
         tabWidth: 128,
         viewportWidth: 0,
         contentWidth: 0,
-        currentOffset: 0
+        currentOffset: 150
       })
-    ).toBe(0)
+    ).toBe(150)
   })
 })
 

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const removeHostMock = vi.hoisted(() => vi.fn())
 const unregisterPushMock = vi.hoisted(() => vi.fn())
@@ -13,12 +13,10 @@ vi.mock('../storage/preferences', () => ({
 }))
 
 import { removeHostAndCloseClient } from './host-removal-lifecycle.web'
-import {
-  PAGE_HOST_REMOVAL_UNAVAILABLE_CODE,
-  isPageHostRemovalUnavailable
-} from './page-host-removal-refusal'
+import { isPageHostRemovalUnavailable } from './page-host-removal-refusal'
 
 describe('removing a host from the page', () => {
+  beforeEach(() => vi.clearAllMocks())
   it('refuses with a code the screen can branch on', async () => {
     const error = await removeHostAndCloseClient('host-1', vi.fn()).catch(
       (reason: unknown) => reason
@@ -29,7 +27,7 @@ describe('removing a host from the page', () => {
       code: isPageHostRemovalUnavailable(error) ? error.code : null
     }).toEqual({
       name: 'PageHostRemovalUnavailableError',
-      code: PAGE_HOST_REMOVAL_UNAVAILABLE_CODE
+      code: 'page_host_removal_unavailable'
     })
   })
 
@@ -40,10 +38,11 @@ describe('removing a host from the page', () => {
   })
 
   it('touches no store, no push subsystem and no client', async () => {
-    // The page storage adapter drops writes and reports it, and push needs a device token this
-    // document has none of: the refusal is what keeps either from being attempted at all.
+    // Refuse before storage/push work because the page has neither native writable state nor a device token.
     const forgetHostClient = vi.fn()
-    await removeHostAndCloseClient('host-1', forgetHostClient).catch(() => {})
+    await expect(removeHostAndCloseClient('host-1', forgetHostClient)).rejects.toMatchObject({
+      code: 'page_host_removal_unavailable'
+    })
     expect({
       removeHost: removeHostMock.mock.calls.length,
       unregisterPush: unregisterPushMock.mock.calls.length,

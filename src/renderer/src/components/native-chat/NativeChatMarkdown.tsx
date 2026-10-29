@@ -14,7 +14,7 @@ import CommentMarkdown, {
 } from '@/components/sidebar/CommentMarkdown'
 import { createDocumentCommentMarkdownComponents } from '@/components/sidebar/comment-markdown-element-renderers'
 import { cn } from '@/lib/utils'
-import { withoutPendingNativeChatVisualDirectiveTail } from '../../../../shared/native-chat-visual-directive'
+import { withoutPendingNativeChatVisualDirectiveTail } from '../../../../shared/native-chat/native-chat-visual-directive'
 import { NativeChatMarkdownRowKeyContext } from './native-chat-disclosure-store'
 import { useNativeChatVisualMarkdownExtension } from './native-chat-visual-markdown-extension'
 import { useNativeChatFileLinkExists } from './use-native-chat-file-link-existence'
@@ -22,6 +22,7 @@ import {
   NativeChatMarkdownImage,
   NativeChatMarkdownImageLinkContext
 } from './NativeChatMarkdownImage'
+import { remarkNativeChatFileDestinations } from './native-chat-markdown-file-destinations'
 import './native-chat-markdown.css'
 
 /** Existing words stay opaque when a reply first starts growing. */
@@ -47,6 +48,20 @@ type NativeChatMarkdownProps = Omit<ComponentProps<typeof CommentMarkdown>, 'fil
   rowKey?: string
 }
 
+/** Every chat surface rewrites `file:` destinations before sanitize can drop them. */
+function withFileDestinations(
+  visualExtension: CommentMarkdownExtension | undefined
+): CommentMarkdownExtension {
+  return {
+    remarkPlugins: [...(visualExtension?.remarkPlugins ?? []), remarkNativeChatFileDestinations],
+    extraFlowSyntaxMarkers: visualExtension?.remarkPlugins.length
+      ? visualExtension.extraFlowSyntaxMarkers
+      : [],
+    sanitizeAttributes: visualExtension?.sanitizeAttributes ?? {},
+    components: visualExtension?.components ?? {}
+  }
+}
+
 type MarkdownElementProps = { node?: { tagName: string }; children?: ReactNode }
 
 function containsImage(children: ReactNode): boolean {
@@ -62,11 +77,11 @@ function createNativeChatImageExtension(
   onLinkClick: CommentMarkdownLinkClickHandler | undefined
 ): CommentMarkdownExtension {
   const Anchor = createDocumentCommentMarkdownComponents(onLinkClick).a
+  const base = withFileDestinations(visualExtension)
   return {
-    remarkPlugins: visualExtension?.remarkPlugins ?? [],
-    sanitizeAttributes: visualExtension?.sanitizeAttributes ?? {},
+    ...base,
     components: {
-      ...visualExtension?.components,
+      ...base.components,
       img: ({ src, alt }) => (
         <NativeChatMarkdownImage src={src} alt={alt} onLinkClick={onLinkClick} />
       ),
@@ -116,7 +131,7 @@ export function NativeChatMarkdown({
     () =>
       variant === 'document'
         ? createNativeChatImageExtension(visualExtension, onLinkClick)
-        : visualExtension,
+        : withFileDestinations(visualExtension),
     [onLinkClick, variant, visualExtension]
   )
   const fileLinkExists = useNativeChatFileLinkExists(linkifyFilePaths, streaming)
@@ -131,11 +146,13 @@ export function NativeChatMarkdown({
             ? withoutPendingNativeChatVisualDirectiveTail(content)
             : content
         }
+        math
         extension={extension}
         fileLinkExists={fileLinkExists}
         fadeWords={fadeWords}
         renderMermaid={!streaming}
         keepMermaidSourceWhilePending
+        unknownHtmlAsText
         data-word-fade={wordFadeArmed ? '' : undefined}
         data-block-fade={wordFadeArmed && streaming ? '' : undefined}
         className={cn('native-chat-markdown', className)}

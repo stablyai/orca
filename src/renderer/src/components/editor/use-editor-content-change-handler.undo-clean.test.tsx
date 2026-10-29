@@ -6,6 +6,7 @@ import { useEditorContentChangeHandler } from './use-editor-content-change-handl
 import { useIpynbDocumentEditing } from './useIpynbDocumentEditing'
 import { parseIpynb } from './ipynb-parse'
 import { bumpEditorDiscardEpoch } from './editor-discard-epoch'
+import { editorBufferIdOfView } from '@/store/slices/editor/buffers/editor-buffer-views'
 
 const storeRef = vi.hoisted((): { current: ReturnType<typeof createEditorStore> | null } => ({
   current: null
@@ -101,7 +102,7 @@ it.each(['rejected', 'discarded', 'reverted', 'acknowledged'] as const)(
       )
       expect(store.getState().openFiles[0]?.isDirty).toBe(true)
       if (resolution === 'discarded') {
-        bumpEditorDiscardEpoch(file.id)
+        bumpEditorDiscardEpoch(editorBufferIdOfView(store.getState(), file.id))
       } else if (resolution === 'reverted') {
         act(() => hook.result.current.updateCellSource(0, 'saved'))
       } else {

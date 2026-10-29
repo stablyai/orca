@@ -11,8 +11,7 @@ export function canRestorePairedParkedTerminal(ptyId: string): boolean {
   if (environmentId === null) {
     return false
   }
-  // Why last-verified: losing contact mid-reattach would otherwise drop the parked session
-  // and cold-restore a fresh one. See docs/reference/ssh-execution-boundary.md.
+  // Retain last-verified capability across contact loss so reattach cannot cold-resume a duplicate (docs/reference/ssh-execution-boundary.md).
   const entry = useAppStore.getState().runtimeStatusByEnvironmentId.get(environmentId)
   if (isRuntimeHostContactRevoked(entry)) {
     return false
@@ -21,6 +20,5 @@ export function canRestorePairedParkedTerminal(ptyId: string): boolean {
   return status?.capabilities?.includes(TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY) === true
 }
 
-// Why: daemon session IDs use the format `${worktreeId}@@${shortUuid}`, so restore never reattaches
-// a session another workspace owns.
+// Daemon worktreeId@@shortUuid IDs prevent cross-workspace reattach.
 export { isPtySessionIdOwnedByWorktree as isSessionOwnedByWorktree } from '../../../../../shared/pty-session-id-format'

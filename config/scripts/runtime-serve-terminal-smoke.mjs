@@ -1,26 +1,5 @@
-/**
- * Boots the BUILT headless runtime server (`out/main/index.js --serve`), pairs a real
- * client to it over the advertised endpoint, creates a terminal, runs a command in it,
- * and asserts the output comes back — then shuts down.
- *
- * Why this exists: "the server started" proves almost nothing. The runtime dispatches
- * terminal creation into OrcaRuntimeService, and without an installed headless PTY
- * controller that path falls through to a renderer reply that never arrives and times
- * out after ten seconds. A boot probe, a port bind, and a `host.platform` call all pass
- * against a server whose terminals are dead. Only a PTY round trip catches it.
- *
- * This is also the acceptance gate for a future Node-only backend
- * (docs/design/node-only-runtime-backend.html): the same script should pass against
- * `orcad` unchanged, because it drives nothing but the public pairing + RPC surface.
- *
- * Hard assertions (fail the job):
- *   - the server emits its ready payload with a pairing offer,
- *   - a paired client can list worktrees and create a terminal,
- *   - a command run in that terminal produces its output,
- *   - the server exits when asked.
- * Optional `--browser` assertions:
- *   - create, navigate, evaluate, and screenshot through the selected host provider.
- */
+// Drive built Electron/orcad server through public pairing/RPC, create terminal and require real command output, then shutdown; --browser also checks provider actions.
+// Boot/port/host.platform can pass with dead PTYs when renderer fallback times out; both targets must satisfy the same end-to-end contract.
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -42,7 +21,7 @@ const ORCAD_ENTRY = join(ORCAD_DIR, ORCAD_SERVER_ENTRY_FILENAME)
 const READY_TIMEOUT_MS = 120_000
 const OUTPUT_TIMEOUT_MS = 30_000
 const SHUTDOWN_TIMEOUT_MS = 15_000
-// Why a random high port: a fixed one collides with a developer's own `orca serve`.
+// Offset the port when a developer's own `orca serve` is already using it.
 const PORT = 6800 + Math.floor(Number(process.env.ORCA_SMOKE_PORT_OFFSET ?? '0'))
 
 function log(message) {
@@ -54,9 +33,7 @@ function fail(message) {
   process.exitCode = 1
 }
 
-/**
- * Orcad uses its packaged CLI and Node; Electron prefers the checkout's desktop CLI.
- */
+// Use packaged Node/CLI for orcad and checkout desktop CLI for Electron.
 export function resolveCli(target, root = projectDir) {
   if (target === 'orcad') {
     const directory = join(root, 'out', 'orcad')
@@ -75,7 +52,6 @@ export function resolveCli(target, root = projectDir) {
     : { command: 'orca', prefix: [] }
 }
 
-/** The `orca` CLI, driven with an explicit pairing code so it targets this server only. */
 function orca(pairingCode, args) {
   const cli = resolveCli(smokeTarget())
   const result = spawnSync(
@@ -83,13 +59,17 @@ function orca(pairingCode, args) {
     [...cli.prefix, ...args, '--pairing-code', pairingCode, '--json'],
     {
       encoding: 'utf8',
-      // Why not shell:true — argument encoding is handled by spawnSync; a shell would
-      // re-split the pairing code, which is base64url and can contain '='.
+      // Keep argv shell-free so pairing code is not re-split by a command interpreter.
       shell: false
     }
   )
   if (result.error) {
     throw new Error(`orca ${args[0]} failed to spawn: ${result.error.message}`)
+  }
+  if (result.status !== 0) {
+    throw new Error(
+      `orca ${args.join(' ')} exited ${result.signal ?? result.status}:\n${result.stderr || result.stdout}`
+    )
   }
   const line = (result.stdout ?? '').trim()
   if (!line.startsWith('{')) {
@@ -112,8 +92,7 @@ function waitForReady(child) {
       () => rejectPromise(new Error(`no ready payload within ${READY_TIMEOUT_MS}ms`)),
       READY_TIMEOUT_MS
     )
-    // Why read stderr at all: an unread pipe can fill and block the child, and without it
-    // a boot failure surfaces only as "exited with 1", which says nothing actionable.
+    // Drain stderr to avoid pipe backpressure and retain actionable boot errors.
     child.stderr.setEncoding('utf8')
     child.stderr.on('data', (chunk) => {
       serverErr += chunk
@@ -175,17 +154,9 @@ async function waitForNonce(pairingCode, terminalHandle, nonce) {
   return false
 }
 
-/**
- * The two hosts this acceptance drives.
- *
- * Everything after boot — pairing, worktree list, terminal create, the nonce round trip —
- * is identical for both. That is the point: the Node artifact has to satisfy the same
- * contract as the Electron server, proven by the same code rather than a parallel test
- * that could drift into asserting less.
- */
+// Share pairing/list/create/round-trip assertions across Electron and Node targets so acceptance cannot drift.
 function smokeTarget() {
-  // Why a flag and not just an env var: package scripts have to set this on Windows too,
-  // and `FOO=bar cmd` is not portable there.
+  // Use CLI flag for package-script portability; inline FOO=bar env syntax fails on Windows.
   const flagIndex = process.argv.indexOf('--target')
   return flagIndex !== -1
     ? process.argv[flagIndex + 1]
@@ -224,7 +195,6 @@ function resolveLaunch(userDataDir) {
   }
 }
 
-/** A throwaway git repo with one commit, so `repo add` has something real to register. */
 function seedGitRepo() {
   const dir = mkdtempSync(join(tmpdir(), 'orca-smoke-repo-'))
   writeFileSync(join(dir, 'README.md'), '# orca smoke\n')
@@ -247,8 +217,7 @@ async function main() {
   const launch = resolveLaunch(userDataDir)
   log(`booting ${launch.label} on port ${PORT} with userData ${userDataDir}`)
 
-  // Why tracked out here: the worktree lands in the real workspaces root, not the temp
-  // profile, so the finally block has to remove it explicitly or every run leaks one.
+  // Track real-root worktree separately from temp profile or finally leaks it.
   let seeded = null
   let pairing = null
 
@@ -263,9 +232,7 @@ async function main() {
     const pairingCode = pairingCodeFrom(ready)
     pairing = pairingCode
 
-    // Why seed instead of using whatever the profile already holds: a hermetic repo makes
-    // this runnable on a clean CI box, keeps the assertion deterministic, and exercises
-    // repo.add + worktree.create rather than assuming someone else registered a worktree.
+    // Seed hermetic repo for clean CI and exercise repo.add/worktree.create instead of relying on existing registration.
     const repoPath = seedGitRepo()
     seeded = { repoPath }
     log(`seeded repo at ${repoPath}`)
@@ -291,9 +258,7 @@ async function main() {
     seeded.worktreeId = created.id
     log(`created worktree ${created.id}`)
 
-    // Why `show` and not membership in `list`: list is capped, and the Electron target
-    // reads a shared dev profile that can already hold more worktrees than the cap. The
-    // point is that the server persisted and can resolve THIS worktree.
+    // Use show to verify this persisted worktree: capped list may omit it in shared dev profile.
     const shown = orca(pairingCode, ['worktree', 'show', '--worktree', created.id])?.worktree
     if (shown?.id !== created.id) {
       throw new Error('worktree.create succeeded but worktree.show cannot resolve it')
@@ -351,18 +316,18 @@ async function main() {
     log(`created ${terminal.handle}`)
 
     // Why invoke node rather than `echo`: the shell differs per platform, node does not.
-    const nonce = `ORCA_SMOKE_${randomBytes(8).toString('hex')}`
+    const nonce = randomBytes(8).toString('hex')
     orca(pairingCode, [
       'terminal',
       'send',
       '--terminal',
       terminal.handle,
       '--text',
-      `"${process.execPath}" -e "console.log('${nonce}')"`,
+      `"${process.execPath}" -e "console.log('ORCA_SMOKE_' + '${nonce}')"`,
       '--enter'
     ])
 
-    if (!(await waitForNonce(pairingCode, terminal.handle, nonce))) {
+    if (!(await waitForNonce(pairingCode, terminal.handle, `ORCA_SMOKE_${nonce}`))) {
       throw new Error(
         `terminal produced no output containing ${nonce} within ${OUTPUT_TIMEOUT_MS}ms — ` +
           `the server started and answered RPC, but its PTY path is dead`
@@ -406,8 +371,7 @@ async function main() {
         ],
         { encoding: 'utf8' }
       )
-      // Why the parent too: `worktree rm` removes the worktree directory, leaving the
-      // empty `<workspaces>/<repo-name>/` container behind. Every run would leak one.
+      // Remove empty workspaces/repo parent left behind by worktree rm to avoid leaks.
       const worktreePath = seeded.worktreeId.split('::')[1]
       if (removed.status === 0 && worktreePath) {
         rmSync(dirname(worktreePath), { recursive: true, force: true })
@@ -419,15 +383,12 @@ async function main() {
         )
       }
     }
-    // Why the exitCode guard: a server that died during boot has already exited, and
-    // waiting for a second 'exit' that will never fire reported a bogus shutdown failure
-    // stacked on top of the real error.
+    // Guard already-exited server or waiting for another exit stacks bogus shutdown error over boot failure.
     if (child.exitCode === null && child.signalCode === null) {
       child.kill('SIGTERM')
       const exited = await Promise.race([
         new Promise((r) => child.on('exit', () => r(true))),
-        // unref'd: the loser of this race must not hold the event loop open after the
-        // winner already decided. The timer still bounds the wait.
+        // Unref losing timeout so it bounds wait without keeping process alive after race settles.
         new Promise((r) => setTimeout(() => r(false), SHUTDOWN_TIMEOUT_MS).unref())
       ])
       if (!exited) {

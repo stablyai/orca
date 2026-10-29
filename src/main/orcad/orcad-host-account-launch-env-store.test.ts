@@ -4,8 +4,9 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   readOrcadHostAccountLaunchEnv,
-  writeOrcadHostAccountLaunchEnv
+  restoreOrcadHostAccountLaunchEnv
 } from './orcad-host-account-launch-env-store'
+import { RuntimeAccountController } from '../runtime/runtime-account-controller'
 
 const dirs: string[] = []
 function userData(): string {
@@ -21,17 +22,6 @@ afterEach(() => {
 })
 
 describe('orcad host account launch env store', () => {
-  it('round-trips what the desktop pushed', () => {
-    const dir = userData()
-    const launchEnv = {
-      wslDistro: 'Ubuntu',
-      claude: { CLAUDE_CONFIG_DIR: '/home/u/.orca/claude/a' },
-      terminal: { CODEX_HOME: '/home/u/.orca/codex/b' }
-    }
-    writeOrcadHostAccountLaunchEnv(dir, launchEnv)
-    expect(readOrcadHostAccountLaunchEnv(dir)).toEqual(launchEnv)
-  })
-
   it('reads nothing from a missing, corrupt or unsafe file', () => {
     const dir = userData()
     expect(readOrcadHostAccountLaunchEnv(dir)).toBeNull()
@@ -42,5 +32,24 @@ describe('orcad host account launch env store', () => {
       JSON.stringify({ wslDistro: 'Ubuntu', claude: { PATH: '/evil' }, terminal: {} })
     )
     expect(readOrcadHostAccountLaunchEnv(dir)).toBeNull()
+  })
+
+  it("holds a fresh WSL host's first agent launch for the desktop's push, and nowhere else", async () => {
+    for (const isWslHost of [true, false]) {
+      const accounts = new RuntimeAccountController()
+      restoreOrcadHostAccountLaunchEnv(
+        { restoreHostAccountLaunchEnv: accounts.restoreHostLaunchEnv.bind(accounts) },
+        userData(),
+        () => isWslHost
+      )
+      let launched = false
+      void accounts.prepareHostAgentLaunch(null).then(() => {
+        launched = true
+      })
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(launched).toBe(!isWslHost)
+      accounts.setHostLaunchEnv({ wslDistro: 'Ubuntu', claude: {}, terminal: {} })
+    }
   })
 })

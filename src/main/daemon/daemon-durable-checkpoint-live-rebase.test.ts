@@ -8,10 +8,6 @@ import { getRecoveredHistorySeedSegments } from './terminal-history-seed-segment
 import type { ColdRestoreInfo } from './terminal-history-cold-restore-info'
 import type { TerminalSnapshot } from './types'
 
-// Why this suite: a checkpoint folded only from its predecessor kept a dead
-// TUI's alt screen and mouse modes forever after a cold restore, so reattach
-// armed mouse reporting for a process that never asked for it.
-
 const DEAD_TUI_MODES = ['\x1b[?1049h', '\x1b[?1003h', '\x1b[?1006h']
 const emulators: HeadlessEmulator[] = []
 
@@ -47,7 +43,6 @@ function restoreInfoFrom(snapshot: TerminalSnapshot): ColdRestoreInfo {
   return { ...snapshot, cwd: snapshot.cwd ?? '/tmp' }
 }
 
-/** Replays a snapshot the way reattach consumers do and returns its normal-buffer rows. */
 function replayedRows(snapshot: TerminalSnapshot): string[] {
   const target = emulator({
     scrollback: 20_000,
@@ -77,7 +72,6 @@ function expectConsecutive(ids: number[], first: number, last: number): void {
   expect(ids.every((id, index) => id === first + index)).toBe(true)
 }
 
-/** A dead TUI's checkpoint plus the live window a cold restore seeds from it. */
 function poisonedColdRestore(): {
   restoreInfo: ColdRestoreInfo
   live: HeadlessEmulator
@@ -404,9 +398,7 @@ describe('durable checkpoint rebased on the live snapshot', () => {
       isFirstTake: false
     })
 
-    // Measured seam loss: the live window reflows its orphaned continuation to
-    // the same row count as the deep replay's full line, so the straddling
-    // line loses the head row the live window had evicted. Cosmetic, one line.
+    // Reflow gives the orphaned continuation the full line's row count, losing its evicted head at the seam.
     const evictedRows = STRADDLE_LINES * 4 + 1 - (DAEMON_SESSION_SCROLLBACK_ROWS + 24)
     const straddleStart = Math.floor(evictedRows / 4) * STRADDLE_LINE_LENGTH
     const lostHead = (evictedRows % 4) * 80
@@ -419,8 +411,7 @@ describe('durable checkpoint rebased on the live snapshot', () => {
 const STRADDLE_LINES = 450
 const STRADDLE_LINE_LENGTH = 300
 
-/** 300-char lines wrap across four 80-col rows, so evicting 1023 rows leaves
- *  the live window's top row a continuation whose head it lost. */
+/** Four rows per line leave an orphaned continuation after 1023 rows are evicted. */
 function straddlingWrappedHistory(): {
   restoreInfo: ColdRestoreInfo
   live: HeadlessEmulator

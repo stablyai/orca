@@ -1,5 +1,4 @@
-// A running agent's resume record (origin 'live' or 'quit') loads to `leaf.resume`, a slept pane's
-// to `leaf.sleeping`; both save to the one sleepingAgentSessionsByPaneKey entry, unchanged.
+// Both live/quit resume records and sleep records round-trip through sleepingAgentSessionsByPaneKey, loading into separate mutually exclusive leaf fields.
 
 import { describe, expect, it } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../agent-session-resume'
@@ -23,7 +22,6 @@ function withOrigin(record: SleepingAgentSessionRecord, origin: Origin) {
   return origin ? { ...rest, origin } : rest
 }
 
-/** The desktop partition with its agent pane's record captured as `origin`. */
 function sessionWith(origin: Origin): WorkspaceSessionState {
   const session = localDesktopSession()
   const paneKey = `term-agent:${leaf(3)}`
@@ -128,7 +126,6 @@ describe('the sleep, wake and start commands on a resume record', () => {
     expect(woken.ok && leafOf(woken.model, leaf(1))).toMatchObject({ resume: { origin: 'live' } })
   })
 
-  // C1c: a start resumes the agent from the pane's record, so a record no longer refuses it.
   it('starts an unbound pane holding a resume record, keeping the record to resume from', () => {
     const context = testContext()
     const unboundPane = `tab-unbound:${leaf(4)}`
@@ -201,7 +198,6 @@ describe('a resume record moves and closes with its pane', () => {
       origin: 'live'
     })
     expect(saved.sleepingAgentSessionsByPaneKey![`tab-shell:${leaf(2)}`]).toBeUndefined()
-    // After a reload the record is still that pane's resume record.
     expect(leafOf(load(saved).layout, leaf(2))).toMatchObject({ resume: { origin: 'live' } })
 
     const paneClosed = build(

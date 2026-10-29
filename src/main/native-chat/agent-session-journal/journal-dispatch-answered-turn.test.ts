@@ -1,6 +1,3 @@
-// How a stored dispatch row's answered turn reads onto its submission: a named turn, none stated,
-// or absent on a row written before the field existed.
-
 import { describe, expect, it } from 'vitest'
 import { applyJournalRow, createJournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
@@ -11,7 +8,6 @@ function base(seq: number): { v: number; epoch: string; seq: number; fence: numb
   return { v: 1, epoch: EPOCH, seq, fence: 1, ts: 1_000 + seq }
 }
 
-/** The submission after a send and one dispatch row, stored with the given extra keys. */
 function readAfter(dispatch: Partial<Extract<JournalRow, { kind: 'dispatch' }>>) {
   const state = createJournalReducerState('session-1', EPOCH)
   applyJournalRow(state, {

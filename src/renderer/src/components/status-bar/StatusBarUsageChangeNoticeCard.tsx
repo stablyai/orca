@@ -14,8 +14,7 @@ function measureAnchorPosition(anchor: HTMLElement): AnchorPosition {
   const rect = anchor.getBoundingClientRect()
   const maxLeft = Math.max(8, window.innerWidth - CARD_WIDTH_PX - 8)
   return {
-    // Why: fixed + bottom keeps the card glued above the meters as the window
-    // resizes; CSS bottom is distance from the viewport bottom edge.
+    // Anchor fixed positioning above the meters through viewport resizing.
     bottom: Math.max(8, window.innerHeight - rect.top + ANCHOR_GAP_PX),
     left: Math.min(Math.max(8, rect.left), maxLeft)
   }
@@ -70,17 +69,14 @@ export function StatusBarUsageChangeNoticeCard({
 
     const update = (): void => {
       const next = measureAnchorPosition(anchor)
-      // Why: ResizeObserver/resize fire on every reflow, but measureAnchorPosition
-      // returns a fresh object each time; bail on unchanged geometry so equal
-      // deliveries don't churn re-renders (avoids feeding a layout-effect loop).
+      // Reuse equal geometry to prevent ResizeObserver deliveries from feeding a layout-effect render loop.
       setAnchorPosition((prev) =>
         prev && prev.bottom === next.bottom && prev.left === next.left ? prev : next
       )
     }
     update()
 
-    // Why: meters reflow when the status bar goes compact/icon-only or the
-    // window resizes; keep the fixed card locked to the live anchor box.
+    // Density changes can move meters without resizing the window; track the anchor itself.
     const observer = new ResizeObserver(update)
     observer.observe(anchor)
     window.addEventListener('resize', update)
@@ -112,8 +108,7 @@ export function StatusBarUsageChangeNoticeCard({
           <div
             role="status"
             aria-label={title}
-            // Why: dropdowns/context menus use z-[70]; this callout must sit
-            // under them so status-bar provider menus stay clickable.
+            // Stay below provider menus so they remain clickable.
             className="status-bar-change-notice-card fixed z-[50] w-[320px] max-w-[calc(100vw-16px)] rounded-lg p-3.5"
             style={{
               bottom: anchorPosition.bottom,

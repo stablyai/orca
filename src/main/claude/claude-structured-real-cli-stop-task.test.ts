@@ -1,7 +1,3 @@
-// A targeted Stop against the real CLI: `stop_task` on one live background agent. The CLI's
-// acknowledgement is what the host settles that run on until the agent's own ending arrives.
-// Runs only where a signed-in Claude CLI exists, like the rest of the real-CLI suite.
-
 import { randomUUID } from 'node:crypto'
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -10,17 +6,15 @@ import { describe, expect, it } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './claude-structured-launch-resolution'
-import {
-  ClaudeStructuredSessionAdapter,
-  type ClaudeStructuredSessionEvent
-} from './claude-structured-session-adapter'
+import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import {
   realClaudeAuthenticated,
   realClaudeAvailable,
   realClaudeCommand,
   realClaudeLaunchHome
 } from './claude-real-cli-availability-test-support'
-import { claudeStartupSettled } from './claude-structured-session-test-support'
+import { claudeStartupSettled } from './claude-structured-startup-settled-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const SESSION_ID = 'real-cli-stop-task'
@@ -47,7 +41,6 @@ async function until(check: () => boolean, timeoutMs: number): Promise<boolean> 
   return check()
 }
 
-/** The task frames the CLI sent about one task, in order. */
 function taskFrames(events: readonly ClaudeStructuredSessionEvent[], taskId: string) {
   return events.flatMap((event) =>
     event.type === 'message' &&
@@ -87,6 +80,7 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI targeted stop'
           providerSessionId,
           resumeLeafUuid: null,
           resumesTranscript: false,
+          cliFlag: async () => 'supported' as const,
           continuesChain: false
         }),
         onEvent: (event) => events.push(event),
@@ -144,7 +138,6 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI targeted stop'
         expect(outcome).toMatchObject({ cancelled: true })
         expect(acknowledged).toEqual([{ taskId }])
 
-        // The CLI sends the run its own ending, and it says the run stopped.
         const ended = await until(
           () =>
             taskFrames(events, taskId).some(

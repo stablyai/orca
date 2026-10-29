@@ -54,7 +54,6 @@ describe('quitFromUserCommand', () => {
     expect(state.isQuitting).toBe(false)
     expect(main.close).toHaveBeenCalledOnce()
     expect(dashboard.close).toHaveBeenCalledOnce()
-    // The main window's close carries the user-Quit intent that arms the frozen-renderer deadline.
     expect(consumeUserQuitWindowClose(main)).toBe(true)
   })
 

@@ -18,9 +18,14 @@ import time
 import uuid
 from dataclasses import dataclass
 
-import gi
+try:
+    import gi
 
-gi.require_version("Atspi", "2.0")
+    gi.require_version("Atspi", "2.0")
+except (ImportError, ValueError) as error:
+    # Why name it: PATH often puts a pyenv/Nix python3 without gi ahead of the system one.
+    sys.stderr.write(f"PyGObject unavailable in interpreter: {sys.executable}\n{error}\n")
+    sys.exit(1)
 try:
     gi.require_version("Gdk", "3.0")
     gi.require_version("GdkPixbuf", "2.0")
@@ -48,6 +53,10 @@ BLOCKED_APP_FRAGMENTS = (
 CLIPBOARD_COMMAND_TIMEOUT_SECONDS = 2
 CLIPBOARD_OWNER_SETTLE_SECONDS = 0.05
 CLIPBOARD_PASTE_SETTLE_SECONDS = 0.15
+ATSPI_METHOD_TIMEOUT_MS = 800
+ATSPI_STARTUP_TIMEOUT_MS = 15_000
+GEOMETRY_BUDGET_SECONDS = 3
+MIN_GEOMETRY_TIMEOUT_MS = 50
 
 
 @dataclass
@@ -108,21 +117,32 @@ def has_state(node, state):
     return bool(state_set is not None and attempt(lambda: state_set.contains(state), False))
 
 
-def screen_rect(node):
-    component = attempt(node.get_component_iface)
+class GeometryReader:
+    def __init__(self):
+        self.deadline = time.monotonic() + GEOMETRY_BUDGET_SECONDS
+
+    def read(self, fn):
+        remaining_ms = int((self.deadline - time.monotonic()) * 1000)
+        if remaining_ms < MIN_GEOMETRY_TIMEOUT_MS:
+            return None
+        Atspi.set_timeout(min(ATSPI_METHOD_TIMEOUT_MS, remaining_ms), -1)
+        try:
+            return attempt(fn)
+        finally:
+            Atspi.set_timeout(ATSPI_METHOD_TIMEOUT_MS, ATSPI_STARTUP_TIMEOUT_MS)
+
+    def rect(self, node):
+        return screen_rect(node, self.read)
+
+
+def screen_rect(node, read=attempt):
+    component = read(node.get_component_iface)
     if component is None:
         return None
-    rect = attempt(lambda: Atspi.Component.get_extents(component, Atspi.CoordType.SCREEN))
+    rect = read(lambda: Atspi.Component.get_extents(component, Atspi.CoordType.SCREEN))
     if rect is None or rect.width <= 0 or rect.height <= 0:
         return None
     return Rect(float(rect.x), float(rect.y), float(rect.width), float(rect.height))
-
-
-def relative_rect(node, window_rect):
-    rect = screen_rect(node)
-    if rect is None or window_rect is None:
-        return rect
-    return Rect(rect.x - window_rect.x, rect.y - window_rect.y, rect.width, rect.height)
 
 
 def desktop_apps():
@@ -135,8 +155,8 @@ def windows_for(app):
     result = []
     for index, child in children(app):
         role = role_of(child).lower()
-        rect = screen_rect(child)
-        if rect is not None or role in {"frame", "window", "dialog", "alert"}:
+        standard_role = role in {"frame", "window", "dialog", "alert"}
+        if standard_role or screen_rect(child) is not None:
             result.append((index, child))
     return result
 
@@ -327,9 +347,8 @@ def accessible_id(node):
     return str(attempt(node.get_accessible_id, "") or "")
 
 
-def record(node, index, path, window_rect):
+def record(node, index, path):
     role = role_of(node)
-    rect = relative_rect(node, window_rect)
     return {
         "index": index,
         "runtimeId": path,
@@ -341,15 +360,17 @@ def record(node, index, path, window_rect):
         "value": string_value(node),
         "isSelected": has_state(node, Atspi.StateType.SELECTED),
         "nativeWindowHandle": 0,
-        "frame": rect.to_json() if rect else None,
+        "frame": None,
         "actions": action_labels(node),
     }
 
 
-def render_accessibility_tree(root, window_rect, root_path, compact_browser_tabs=False):
+def render_accessibility_tree(root, root_path, compact_browser_tabs=False, geometry_nodes=None):
     records = []
     lines = []
     truncation = {"truncated": False, "maxNodes": MAX_NODES, "maxDepth": MAX_DEPTH, "maxDepthReached": False}
+    # Tab compaction shrinks records mid-walk, so len(records) would reuse retained indexes.
+    next_index = 0
 
     def text_snippets(node, limit=6, max_depth=3):
         values = []
@@ -400,12 +421,13 @@ def render_accessibility_tree(root, window_rect, root_path, compact_browser_tabs
         return role in {"panel", "filler", "unknown", "section"} and not has_text and not meaningful_actions(item["actions"]) and summary is None and child_count <= 1
 
     def walk(node, depth, path):
+        nonlocal next_index
         if len(records) >= MAX_NODES or depth > MAX_DEPTH:
             truncation["truncated"] = True
             if depth > MAX_DEPTH:
                 truncation["maxDepthReached"] = True
             return
-        item = record(node, len(records), path, window_rect)
+        item = record(node, next_index, path)
         role_key = (item["controlType"] or "").lower()
         title = item["name"] or item["automationId"] or ""
         suppressed = suppress_children(role_key, title, item["value"], None)
@@ -420,6 +442,9 @@ def render_accessibility_tree(root, window_rect, root_path, compact_browser_tabs
                 walk(child, depth, path + [child_index])
             return
         records.append(item)
+        next_index += 1
+        if geometry_nodes is not None:
+            geometry_nodes[id(item)] = node
         role_label = item["localizedControlType"] or item["controlType"]
         line = f'{item["index"]} {role_label} {sanitize_text(title)}'.rstrip()
         line += formatted_value(role_key, title, item["value"])
@@ -657,17 +682,29 @@ def make_snapshot(query, include_screenshot, window_id=None, window_index=None, 
         restore_window(app, window)
         window_index, window = choose_window(app, window_id, window_index)
     bounds = screen_rect(window)
+    geometry_nodes = {}
     records, lines, truncation = render_accessibility_tree(
         window,
-        bounds,
         [window_index],
         compact_browser_tabs=is_browser_app(query, app),
+        geometry_nodes=geometry_nodes,
     )
+    focused = focused_summary(window)
+    selection = selected_text(window)
+    app_info = app_json(app)
+    window_title = name_of(window)
     screenshot = capture_png(bounds) if include_screenshot else None
+    geometry = GeometryReader()
+    for item in records:
+        node = geometry_nodes[id(item)]
+        rect = bounds if node is window else geometry.rect(node)
+        if rect is not None and bounds is not None:
+            rect = Rect(rect.x - bounds.x, rect.y - bounds.y, rect.width, rect.height)
+        item["frame"] = rect.to_json() if rect else None
     return {
         "snapshotId": str(uuid.uuid4()),
-        "app": app_json(app),
-        "windowTitle": name_of(window),
+        "app": app_info,
+        "windowTitle": window_title,
         "windowId": None,
         "windowIndex": window_index,
         "windowBounds": bounds.to_json() if bounds else None,
@@ -679,8 +716,8 @@ def make_snapshot(query, include_screenshot, window_id=None, window_index=None, 
         "coordinateSpace": "window",
         "truncation": truncation,
         "treeLines": lines,
-        "focusedSummary": focused_summary(window),
-        "selectedText": selected_text(window),
+        "focusedSummary": focused,
+        "selectedText": selection,
         "elements": records,
     }
 
@@ -929,11 +966,14 @@ def press_key(raw):
         return
     if Gdk is None:
         raise RuntimeError("GDK is required for non-character key synthesis")
-    Atspi.generate_keyboard_event(Gdk.keyval_from_name(name), None, Atspi.KeySynthType.PRESSRELEASE)
+    Atspi.generate_keyboard_event(Gdk.keyval_from_name(name), None, Atspi.KeySynthType.SYM)
 
 
 def hotkey(raw):
     key_spec = re.sub(r"(?i)commandorcontrol|cmdorctrl", "ctrl", str(raw))
+    if "+" in key_spec:
+        # xdotool treats an upper-case letter as its shifted keysym, so ctrl+A would press ctrl+shift+a.
+        key_spec = "+".join(part.lower() if len(part) == 1 else part for part in key_spec.split("+"))
     xdotool = shutil.which("xdotool")
     if xdotool:
         subprocess.run([xdotool, "key", key_spec], check=True)
@@ -1014,10 +1054,9 @@ def write_clipboard(value):
 
 
 def set_value(node, value):
-    if node is not None and bool(attempt(node.is_editable_text, False)):
-        editable = attempt(node.get_editable_text_iface)
-        if editable is not None and attempt(lambda: Atspi.EditableText.set_text_contents(editable, str(value)), False):
-            return True
+    editable = attempt(node.get_editable_text_iface) if node is not None else None
+    if editable is not None and attempt(lambda: Atspi.EditableText.set_text_contents(editable, str(value)), False):
+        return True
     value_iface = attempt(node.get_value_iface) if node is not None else None
     if value_iface is not None:
         return bool(attempt(lambda: Atspi.Value.set_current_value(value_iface, float(value)), False))

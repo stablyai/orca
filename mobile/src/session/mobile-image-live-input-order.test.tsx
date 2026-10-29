@@ -91,6 +91,7 @@ function fixture(title = 'Terminal', imagePath = '/tmp/orca-image.png', launchAg
     connStateRef: ref('connected' as const),
     canSend: true,
     deviceTokenRef: ref('phone'),
+    ptyModesRef: ref(new Map()),
     liveInputRef,
     commandInputRef: ref(null),
     liveInputFocusTimerRef: ref(null),

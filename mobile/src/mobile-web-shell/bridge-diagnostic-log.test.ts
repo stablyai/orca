@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import { createBridgeDiagnosticReporter } from './bridge-diagnostic-log'
 
 let warned: MockInstance<typeof console.warn>
@@ -12,7 +12,6 @@ function readPart(part: unknown): string {
   return part instanceof Error ? part.message : JSON.stringify(part)
 }
 
-/** What a reader has to be able to tell apart from the line alone. */
 function lines(): string[] {
   return warned.mock.calls.map((call) => call.map(readPart).join(' '))
 }
@@ -23,6 +22,7 @@ describe('the bridge diagnostic log', () => {
     const report = createBridgeDiagnosticReporter((diagnostic) => reported.push(diagnostic.kind))
     report({ kind: 'frame-after-close' })
     report({ kind: 'frame-after-close' })
+    report({ kind: 'notify-refused', name: 'fault', why: 'ungranted' })
     report({ kind: 'notify-refused', name: 'fault', why: 'ungranted' })
     expect(reported).toEqual(['frame-after-close', 'notify-refused'])
     expect(lines()).toHaveLength(2)
@@ -36,13 +36,6 @@ describe('the bridge diagnostic log', () => {
     expect(lines()[0]).toContain('fault')
     expect(lines()[0]).toContain('before-ready')
     expect(lines()[1]).toContain('ungranted')
-  })
-
-  it('still holds one page to a line per refusal, however many frames it posts', () => {
-    const report = createBridgeDiagnosticReporter()
-    report({ kind: 'notify-refused', name: 'fault', why: 'before-ready' })
-    report({ kind: 'notify-refused', name: 'fault', why: 'before-ready' })
-    expect(warned).toHaveBeenCalledTimes(1)
   })
 
   it('says a view outlived its host only for a frame that did', () => {
@@ -78,14 +71,7 @@ describe('the bridge diagnostic log', () => {
     expect(lines()[2]).toContain('the listener threw')
   })
 
-  /**
-   * The backlog report, which is the only oracle the coalescing rule has.
-   *
-   * Nothing crosses to the page saying how much was held, and both ways a held stream dies reach it
-   * as `overflow`, because a reason its reader has never heard of is a frame it drops. So the four
-   * numbers and `ended` are the whole evidence, and without a branch of its own the report fell
-   * through to the "a view outlived its host" warn with every field discarded.
-   */
+  // Backlog metrics exist only in diagnostics; both termination causes reach the page as overflow for wire compatibility. Keep every metric and ended in the log.
   it('reports what a held terminal stream did, rather than calling it an outlived view', () => {
     const report = createBridgeDiagnosticReporter()
     report({
@@ -103,8 +89,7 @@ describe('the bridge diagnostic log', () => {
   })
 
   it('keeps one line per stream, so a second terminal is not buried by the first', () => {
-    // Keyed by kind alone, one backlog per host was reported and every other stream was silent —
-    // which is the case the report exists for, since a shell holds a stream per open terminal.
+    // Each terminal owns a stream; kind-only deduplication would hide every backlog report after the first.
     const report = createBridgeDiagnosticReporter()
     report({
       kind: 'terminal-backlog',
@@ -134,3 +119,5 @@ describe('the bridge diagnostic log', () => {
     expect(lines()[1]).toContain('stream-2')
   })
 })
+
+afterEach(() => warned.mockRestore())

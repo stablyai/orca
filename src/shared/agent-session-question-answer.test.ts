@@ -18,10 +18,21 @@ describe('agent-session grouped question answers', () => {
     { questionId: 'q2', optionIds: [], other: 'SSH host' }
   ]
 
-  it('round-trips grouped multi-select and free-text answers', () => {
+  it('round-trips grouped answers and rejects malformed wire payloads', () => {
     expect(decodeAgentSessionQuestionAnswers(encodeAgentSessionQuestionAnswers(answers))).toEqual(
       answers
     )
+    const malformed = [
+      'not-grouped',
+      'question-group:%',
+      'question-group:not-json',
+      'question-group:{}',
+      `${GROUP_ANSWER_PREFIX}${JSON.stringify([answers[0], { questionId: 'q2', optionIds: [1] }])}`,
+      `${GROUP_ANSWER_PREFIX}${JSON.stringify([{ questionId: 'q1', optionIds: [], other: 1 }])}`
+    ]
+    for (const value of malformed) {
+      expect(decodeAgentSessionQuestionAnswers(value)).toBeNull()
+    }
   })
 
   it('keeps compact answers readable by the original percent-decoding contract', () => {
@@ -48,9 +59,12 @@ describe('agent-session grouped question answers', () => {
     expect(
       decodeAgentSessionQuestionAnswers(encodeAgentSessionQuestionAnswers(unicodeAnswers))
     ).toEqual(unicodeAnswers)
+    expect(
+      decodeWithOriginalPercentDecoder(encodeAgentSessionQuestionAnswers(unicodeAnswers))
+    ).toEqual(unicodeAnswers)
   })
 
-  it("fits Claude's maximum choice group within a 512-character host response bound", () => {
+  it("keeps Claude's maximum choice group compact without losing selections", () => {
     const maximumSelections = Array.from({ length: 4 }, (_, questionIndex) => ({
       questionId: `q${questionIndex + 1}`,
       optionIds: Array.from(
@@ -59,7 +73,10 @@ describe('agent-session grouped question answers', () => {
       )
     }))
 
-    expect(encodeAgentSessionQuestionAnswers(maximumSelections).length).toBeLessThanOrEqual(512)
+    const encoded = encodeAgentSessionQuestionAnswers(maximumSelections)
+    expect(encoded.length).toBeLessThanOrEqual(512)
+    expect(decodeAgentSessionQuestionAnswers(encoded)).toEqual(maximumSelections)
+    expect(decodeWithOriginalPercentDecoder(encoded)).toEqual(maximumSelections)
   })
 
   it('validates each grouped answer against its question shape', () => {
@@ -83,6 +100,24 @@ describe('agent-session grouped question answers', () => {
     ]
 
     expect(isValidAgentSessionQuestionAnswers(questions, answers)).toBe(true)
+    expect(isValidAgentSessionQuestionAnswers(questions, answers.toReversed())).toBe(true)
+    const invalid = [
+      [],
+      [...answers, { questionId: 'q3', optionIds: [] }],
+      [answers[0]!, answers[0]!],
+      [{ ...answers[0]!, questionId: 'unknown' }, answers[1]!],
+      [{ ...answers[0]!, optionIds: [] }, answers[1]!],
+      [{ ...answers[0]!, other: 'not offered' }, answers[1]!]
+    ]
+    for (const candidate of invalid) {
+      expect(isValidAgentSessionQuestionAnswers(questions, candidate)).toBe(false)
+    }
+    expect(
+      isValidAgentSessionQuestionAnswers(
+        [{ ...questions[0]!, multiSelect: false }, questions[1]!],
+        answers
+      )
+    ).toBe(false)
     expect(
       isValidAgentSessionQuestionAnswers(questions, [
         { questionId: 'q1', optionIds: ['unknown'] },

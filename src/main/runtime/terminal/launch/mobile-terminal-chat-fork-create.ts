@@ -1,6 +1,8 @@
-import { OrcaRuntimeWithCreateMobileSessionTerminal } from './mobile-terminal-create'
-import type { MobileTerminalCreateOptions } from './mobile-terminal-renderer-create'
-import type { OwnedMobileTerminalCreateOptions } from './mobile-terminal-owned-create'
+import {
+  OrcaRuntimeWithCreateMobileSessionTerminal,
+  type MobileTerminalCreateOptions,
+  type OwnedMobileTerminalCreateOptions
+} from './mobile-terminal-create'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-types'
 import {
@@ -155,6 +157,8 @@ export abstract class OrcaRuntimeWithMobileChatForkCreate extends OrcaRuntimeWit
         opts.activate !== false,
         phoneAnchor,
         {
+          // The phone user's own fork.
+          wslUserAct: true,
           ...startup,
           identity: {
             tabId: deterministicAgentSessionUuid(`mobile-chat-fork-tab\0${seed}`),

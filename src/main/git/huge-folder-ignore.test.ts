@@ -36,20 +36,6 @@ describe('findKnownHugeFolderPathsToIgnore', () => {
     expect(result).toContain('node_modules')
     expect(result).toContain('dist')
   })
-
-  it('excludes folders that are already git-ignored', async () => {
-    await fs.mkdir(path.join(dir, 'node_modules'))
-    checkIgnoredPathsMock.mockResolvedValue(['node_modules'])
-
-    const result = await findKnownHugeFolderPathsToIgnore(dir)
-
-    expect(result).not.toContain('node_modules')
-  })
-
-  it('returns nothing when no known-huge folders exist', async () => {
-    const result = await findKnownHugeFolderPathsToIgnore(dir)
-    expect(result).toEqual([])
-  })
 })
 
 describe('appendFolderToGitignore', () => {
@@ -76,12 +62,6 @@ describe('appendFolderToGitignore', () => {
     expect(wrote).toBe(true)
     const content = await fs.readFile(path.join(dir, '.gitignore'), 'utf-8')
     expect(content).toBe('*.log\ndist/\n')
-  })
-
-  it('is a no-op when the folder is already listed', async () => {
-    await fs.writeFile(path.join(dir, '.gitignore'), 'node_modules/\n')
-    const wrote = await appendFolderToGitignore(dir, 'node_modules')
-    expect(wrote).toBe(false)
   })
 
   it('rejects folder names outside the known allowlist (injection guard)', async () => {

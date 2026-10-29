@@ -10,7 +10,7 @@ import {
 } from 'react-native'
 import type { RpcClient } from '../transport/rpc-client'
 import type { SmartWorkspaceSourceRow as SourceRow } from '../../../src/shared/new-workspace/smart-workspace-source-results'
-import type { JiraSite, JiraSiteSelection } from '../../../src/shared/jira-types'
+import type { JiraSite, JiraSiteSelection } from '../../../src/shared/jira/jira-types'
 import { isBlockingJiraUrlIntent } from '../../../src/shared/new-workspace/smart-workspace-source-results'
 import {
   MR_STATE_FILTER_OPTIONS,
@@ -28,13 +28,14 @@ import {
 import { useSmartWorkspaceSource } from '../tasks/use-smart-workspace-source'
 import type { MobileComposerSource } from '../tasks/use-mobile-composer-source'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { BottomDrawer } from './BottomDrawer'
 import { smartWorkspaceSourceDrawerStyles as styles } from './smart-workspace-source-drawer-styles'
 import { SmartSourceModeIcon } from './SmartSourceModeIcon'
 import { SmartWorkspaceSourceRow } from './SmartWorkspaceSourceRow'
 
-// Why: match MobileSearchField — native autoFocus alone often fails to raise
-// the soft keyboard when the drawer is mid-present animation.
+// Delay focus like MobileSearchField: native autoFocus may not raise keyboard during drawer animation.
 const SOURCE_INPUT_FOCUS_DELAY_MS = 120
 
 type Props = {
@@ -68,25 +69,23 @@ export function SmartWorkspaceSourceDrawer({
   onRepoChange,
   onClose
 }: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const availableModes = useMemo(() => resolveAvailableSmartModes(availability), [availability])
   const [mode, setMode] = useState<SmartNameMode>(() => resolveDefaultSmartMode(availability))
   const [mrStateFilter, setMrStateFilter] = useState<MrStateFilter>('opened')
   const inputRef = useRef<TextInput>(null)
-  // Why: read latest availability inside the open effect without making it a
-  // reactive dep (the object is recreated each render), so re-seeding happens
-  // only on open, not on every availability recompute.
+  // Read latest availability without reactive dependency so recreated object reseeds only on open.
   const availabilityRef = useRef(availability)
   availabilityRef.current = availability
 
-  // Reset to the default mode each time the drawer opens.
   useEffect(() => {
     if (visible) {
       setMode(resolveDefaultSmartMode(availabilityRef.current))
     }
   }, [visible])
 
-  // Why: focus after open interactions settle so the keyboard appears and the
-  // caret lands in the docked field (same value as the form via composer.name).
+  // Focus after opening interactions settle; docked field shares composer.name with form.
   useEffect(() => {
     if (!visible) {
       return
@@ -105,15 +104,12 @@ export function SmartWorkspaceSourceDrawer({
     }
   }, [visible])
 
-  // Snap the chosen mode back into the available set if availability changes.
   const effectiveMode = availableModes.includes(mode) ? mode : (availableModes[0] ?? 'text')
 
-  // A pasted Jira URL resolves to one issue without touching the repo, so it must
-  // stay reachable from Smart mode even when the repo is not connected.
+  // Keep pasted Jira URLs reachable in Smart mode without repo connection; resolving one issue does not touch repo.
   const jiraUrlIntent =
     availability.jiraAvailable && isBlockingJiraUrlIntent(effectiveMode, composer.name)
-  // Linear and Jira search without a repo; every other provider/branch search
-  // needs a connected repo-backed target.
+  // Only Linear/Jira search works without repo; other provider/branch searches need connected repo-backed target.
   const searchEnabled =
     visible && (effectiveMode === 'linear' || effectiveMode === 'jira' || jiraUrlIntent || sshReady)
 
@@ -206,18 +202,17 @@ export function SmartWorkspaceSourceDrawer({
       dragContentToDismiss={false}
       contentScrollable={false}
       fillAvailable
-      // Why: sit above the pinned create form so the outer content-sized sheet
-      // stays underneath and is revealed at its original height on dismiss.
+      // Layer above pinned create form so dismiss reveals outer sheet at original height.
       zIndex={1100}
     >
-      {/* Why: column with results flex:1 + dock flex-shrink:0 at the end.
-          Fill sheet height + marginBottom place this column on the keyboard
-          top; dock must stay a non-flex sibling so FlatList cannot clip it. */}
+      {/* Fill column ends at keyboard top; non-flex dock stays beside flex results so FlatList cannot clip input. */}
       <View style={styles.root}>
         <View style={styles.header}>
-          <Text style={styles.title}>Name or &apos;Create From&apos;</Text>
+          <Text style={styles.title}>
+            {t('components.smartWorkspaceSourceDrawer.title', "Name or 'Create From'")}
+          </Text>
           <Pressable onPress={onClose} hitSlop={8}>
-            <Text style={styles.done}>Done</Text>
+            <Text style={styles.done}>{t('common.done', 'Done')}</Text>
           </Pressable>
         </View>
 
@@ -225,19 +220,31 @@ export function SmartWorkspaceSourceDrawer({
           {crossRepoPrompt ? (
             <View style={styles.crossRepo}>
               <Text style={styles.crossRepoText}>
-                This item lives in {crossRepoPrompt.link.slug.owner}/
-                {crossRepoPrompt.link.slug.repo}.
+                {t(
+                  'components.smartWorkspaceSourceDrawer.crossRepoMessage',
+                  'This item lives in {{owner}}/{{repo}}.',
+                  {
+                    owner: crossRepoPrompt.link.slug.owner,
+                    repo: crossRepoPrompt.link.slug.repo
+                  }
+                )}
               </Text>
               <View style={styles.crossRepoActions}>
                 <Pressable style={styles.crossRepoDismiss} onPress={dismissCrossRepoPrompt}>
-                  <Text style={styles.crossRepoDismissText}>Cancel</Text>
+                  <Text style={styles.crossRepoDismissText}>{t('common.cancel', 'Cancel')}</Text>
                 </Pressable>
                 <Pressable
                   style={styles.crossRepoSwitch}
                   onPress={() => void handleAcceptCrossRepo()}
                 >
                   <Text style={styles.crossRepoSwitchText}>
-                    Switch to {crossRepoPrompt.matchingRepo.displayName}
+                    {t(
+                      'components.smartWorkspaceSourceDrawer.switchRepo',
+                      'Switch to {{repoName}}',
+                      {
+                        repoName: crossRepoPrompt.matchingRepo.displayName
+                      }
+                    )}
                   </Text>
                 </Pressable>
               </View>
@@ -249,10 +256,18 @@ export function SmartWorkspaceSourceDrawer({
           effectiveMode !== 'linear' &&
           effectiveMode !== 'jira' &&
           !jiraUrlIntent ? (
-            <Text style={styles.notice}>Connect the repository to search sources.</Text>
+            <Text style={styles.notice}>
+              {t(
+                'components.smartWorkspaceSourceDrawer.connectRepository',
+                'Connect the repository to search sources.'
+              )}
+            </Text>
           ) : needsGitHubRemote ? (
             <Text style={styles.notice}>
-              This SSH repo needs a GitHub remote to list issues and PRs.
+              {t(
+                'components.smartWorkspaceSourceDrawer.gitHubRemoteRequired',
+                'This SSH repo needs a GitHub remote to list issues and PRs.'
+              )}
             </Text>
           ) : error ? (
             <Text style={styles.errorNotice}>{error}</Text>
@@ -272,9 +287,17 @@ export function SmartWorkspaceSourceDrawer({
                   <ActivityIndicator size="small" color={colors.textSecondary} />
                 </View>
               ) : showEmpty ? (
-                <Text style={styles.empty}>{emptyHint || 'No results found.'}</Text>
+                <Text style={styles.empty}>
+                  {emptyHint ||
+                    t('components.smartWorkspaceSourceDrawer.noResults', 'No results found.')}
+                </Text>
               ) : rows.length === 0 && effectiveMode === 'text' ? (
-                <Text style={styles.empty}>Type a workspace name in the field below.</Text>
+                <Text style={styles.empty}>
+                  {t(
+                    'components.smartWorkspaceSourceDrawer.typeWorkspaceName',
+                    'Type a workspace name in the field below.'
+                  )}
+                </Text>
               ) : null
             }
             renderItem={({ item }) => (
@@ -327,7 +350,10 @@ export function SmartWorkspaceSourceDrawer({
             style={styles.search}
             value={composer.name}
             onChangeText={composer.setName}
-            placeholder="Type a name or search a source"
+            placeholder={t(
+              'components.smartWorkspaceSourceDrawer.searchPlaceholder',
+              'Type a name or search a source'
+            )}
             placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
             autoCorrect={false}

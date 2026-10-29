@@ -1,9 +1,9 @@
 import { formatAgentTypeLabel } from '../../shared/agent-type-label'
 import type { NotificationDispatchRequest } from '../../shared/notification-settings-types'
 
-type NotificationStatusTranslator = (key: string, fallback: string) => string
+type NotificationTranslator = (key: string, fallback: string) => string
 
-const englishNotificationStatus: NotificationStatusTranslator = (_key, fallback) => fallback
+const englishNotificationCopy: NotificationTranslator = (_key, fallback) => fallback
 
 const NOTIFICATION_AGENT_LABEL_MAX_LENGTH = 40
 const NOTIFICATION_TITLE_CONTEXT_MAX_LENGTH = 80
@@ -11,24 +11,27 @@ const NOTIFICATION_BODY_PREVIEW_MAX_LENGTH = 180
 
 export function buildNotificationOptions(
   args: NotificationDispatchRequest,
-  translate: NotificationStatusTranslator = englishNotificationStatus
+  translate: NotificationTranslator = englishNotificationCopy
 ): {
   title: string
   body: string
   silent?: boolean
-  sound?: string
 } {
   if (args.source === 'terminal-bell') {
+    const attention = translate('notifications.bell.attentionRequested', 'Attention requested')
     return {
-      title: `Bell in ${args.worktreeLabel ?? 'workspace'}`,
-      body: args.repoLabel ? `${args.repoLabel} · Attention requested` : 'Attention requested'
+      title: fillNotificationPlaceholders(
+        translate('notifications.bell.title', 'Bell in {{worktree}}'),
+        { worktree: args.worktreeLabel ?? translateWorkspace(translate) }
+      ),
+      body: args.repoLabel ? `${args.repoLabel} · ${attention}` : attention
     }
   }
 
   if (args.source === 'test') {
     return {
-      title: 'Orca notifications are on',
-      body: 'This is a test notification from Orca.'
+      title: translate('notifications.test.title', 'Orca notifications are on'),
+      body: translate('notifications.test.body', 'This is a test notification from Orca.')
     }
   }
 
@@ -37,33 +40,42 @@ export function buildNotificationOptions(
     return richOptions
   }
 
-  return buildAgentTaskCompleteFallbackNotificationOptions(args)
+  return buildAgentTaskCompleteFallbackNotificationOptions(args, translate)
+}
+
+function translateWorkspace(translate: NotificationTranslator): string {
+  return translate('notifications.workspaceFallback', 'workspace')
+}
+
+// Fill after translating: headless, pre-init and wrapped translators only map keys to templates.
+function fillNotificationPlaceholders(template: string, values: Record<string, string>): string {
+  return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (placeholder, name: string) =>
+    Object.hasOwn(values, name) ? values[name] : placeholder
+  )
 }
 
 function buildAgentTaskCompleteNotificationOptions(
   args: NotificationDispatchRequest,
-  translate: NotificationStatusTranslator
+  translate: NotificationTranslator
 ): { title: string; body: string } | null {
   if (!hasAgentNotificationSnapshot(args)) {
     return null
   }
 
   const agentLabel = formatNotificationAgentLabel(args.agentType)
-  const worktreeContext = formatNotificationWorktreeContext(args)
+  const worktreeContext = formatNotificationWorktreeContext(args, translate)
   const statusText = formatAgentNotificationStatusText(args, translate)
 
   return {
     title: `${worktreeContext} - ${agentLabel} ${statusText}`,
-    body: buildAgentTaskCompleteRichBody(args) ?? `${agentLabel} ${statusText}.`
+    body: buildAgentTaskCompleteRichBody(args, translate) ?? `${agentLabel} ${statusText}.`
   }
 }
 
-// Why (#4375): a still-working agent must never be announced as finished. Only an
-// explicit terminal state, or no state at all (the hook snapshot expired and the
-// notification itself is the completion signal), may say "finished".
+// Announce finished only for proved terminal state or an expired snapshot's completion signal (#4375).
 function formatAgentNotificationStatusText(
   args: NotificationDispatchRequest,
-  translate: NotificationStatusTranslator
+  translate: NotificationTranslator
 ): string {
   if (args.agentState === 'blocked' || args.agentState === 'waiting') {
     return translate('notifications.agentStatus.needsInput', 'needs input')
@@ -79,8 +91,7 @@ function formatAgentNotificationStatusText(
     case 'failure':
     case 'interruption':
       return translate('notifications.agentStatus.failed', 'failed')
-    // Why: a Stop the user asked for, a turn a newer request replaced, or an end Orca cannot
-    // prove, still never reads finished.
+    // User stops, supersession and unproved endings must not read as finished.
     case 'cancellation':
     case 'superseded':
     case 'unconfirmed':
@@ -91,7 +102,10 @@ function formatAgentNotificationStatusText(
   }
 }
 
-function formatNotificationWorktreeContext(args: NotificationDispatchRequest): string {
+function formatNotificationWorktreeContext(
+  args: NotificationDispatchRequest,
+  translate: NotificationTranslator
+): string {
   const worktreeLabel = normalizeNotificationText(
     args.worktreeLabel,
     NOTIFICATION_TITLE_CONTEXT_MAX_LENGTH
@@ -103,7 +117,7 @@ function formatNotificationWorktreeContext(args: NotificationDispatchRequest): s
       NOTIFICATION_TITLE_CONTEXT_MAX_LENGTH
     )
   }
-  return worktreeLabel || repoLabel || 'workspace'
+  return worktreeLabel || repoLabel || translateWorkspace(translate)
 }
 
 function hasAgentNotificationSnapshot(args: NotificationDispatchRequest): boolean {
@@ -118,7 +132,10 @@ function hasAgentNotificationSnapshot(args: NotificationDispatchRequest): boolea
   )
 }
 
-function buildAgentTaskCompleteRichBody(args: NotificationDispatchRequest): string | null {
+function buildAgentTaskCompleteRichBody(
+  args: NotificationDispatchRequest,
+  translate: NotificationTranslator
+): string | null {
   const assistantMessage = normalizeNotificationText(
     args.agentLastAssistantMessage,
     NOTIFICATION_BODY_PREVIEW_MAX_LENGTH
@@ -133,32 +150,51 @@ function buildAgentTaskCompleteRichBody(args: NotificationDispatchRequest): stri
     NOTIFICATION_BODY_PREVIEW_MAX_LENGTH
   )
   if (toolName && toolInput) {
-    return `Using ${toolName}: ${toolInput}`
+    return fillNotificationPlaceholders(
+      translate('notifications.agentTool.usingWithInput', 'Using {{tool}}: {{input}}'),
+      { tool: toolName, input: toolInput }
+    )
   }
   if (toolName) {
-    return `Using ${toolName}`
+    return fillNotificationPlaceholders(
+      translate('notifications.agentTool.using', 'Using {{tool}}'),
+      { tool: toolName }
+    )
   }
   if (toolInput) {
-    return `Tool input: ${toolInput}`
+    return fillNotificationPlaceholders(
+      translate('notifications.agentTool.input', 'Tool input: {{input}}'),
+      { input: toolInput }
+    )
   }
 
   return null
 }
 
-function buildAgentTaskCompleteFallbackNotificationOptions(args: NotificationDispatchRequest): {
+function buildAgentTaskCompleteFallbackNotificationOptions(
+  args: NotificationDispatchRequest,
+  translate: NotificationTranslator
+): {
   title: string
   body: string
 } {
   return {
-    title: `Task complete in ${args.worktreeLabel ?? 'workspace'}`,
-    body: buildAgentTaskCompleteFallbackBody(args)
+    title: fillNotificationPlaceholders(
+      translate('notifications.taskComplete.title', 'Task complete in {{worktree}}'),
+      { worktree: args.worktreeLabel ?? translateWorkspace(translate) }
+    ),
+    body: buildAgentTaskCompleteFallbackBody(args, translate)
   }
 }
 
-function buildAgentTaskCompleteFallbackBody(args: NotificationDispatchRequest): string {
+function buildAgentTaskCompleteFallbackBody(
+  args: NotificationDispatchRequest,
+  translate: NotificationTranslator
+): string {
   return args.repoLabel
     ? `${args.repoLabel}${args.terminalTitle ? ` · ${args.terminalTitle}` : ''}`
-    : (args.terminalTitle ?? 'A coding agent finished working.')
+    : (args.terminalTitle ??
+        translate('notifications.taskComplete.body', 'A coding agent finished working.'))
 }
 
 function formatNotificationAgentLabel(agentType: string | null | undefined): string {

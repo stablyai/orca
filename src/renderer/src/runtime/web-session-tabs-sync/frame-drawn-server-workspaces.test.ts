@@ -162,6 +162,102 @@ describe('frame-drawn server workspaces', () => {
     })
   })
 
+  it("adopts a staged client-hosted page this desktop created once the server's snapshot lists it (L282)", () => {
+    const store = frameDrawnStore()
+    const placement = {
+      kind: 'client' as const,
+      browserHostClientId: 'this-desktop',
+      browserHostGeneration: 1,
+      pageHostGeneration: 1
+    }
+    const staged: WebSessionTabsSyncState = {
+      ...store,
+      browserTabsByWorktree: {
+        ...store.browserTabsByWorktree,
+        [WT]: [
+          {
+            id: 'ws-1',
+            worktreeId: WT,
+            label: undefined,
+            sessionProfileId: null,
+            activePageId: 'page-1',
+            pageIds: ['page-1'],
+            url: 'https://example.com',
+            title: 'Example',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: NOW
+          }
+        ]
+      },
+      browserPagesByWorkspace: {
+        ...store.browserPagesByWorkspace,
+        'ws-1': [
+          {
+            id: 'page-1',
+            workspaceId: 'ws-1',
+            worktreeId: WT,
+            url: 'https://example.com',
+            title: 'Example',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: NOW,
+            browserRuntimeEnvironmentId: ENV
+          }
+        ]
+      },
+      remoteBrowserPageHandlesByPageId: {
+        'page-1': {
+          environmentId: ENV,
+          remotePageId: 'host-page-1',
+          staged: true,
+          stagedClientHosted: true
+        }
+      }
+    }
+    const snapshot = makeSnapshot(
+      [
+        terminalSurface({
+          hostTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          title: 'a',
+          terminal: 'terminal-1'
+        }),
+        {
+          type: 'browser' as const,
+          id: 'host-browser-1',
+          title: 'Example',
+          browserWorkspaceId: 'host-ws-1',
+          browserPageId: 'host-page-1',
+          placement,
+          url: 'https://example.com',
+          loading: false,
+          canGoBack: false,
+          canGoForward: false,
+          isActive: false
+        }
+      ],
+      { worktree: WT, snapshotVersion: 2 }
+    )
+
+    const patch = applyWebSessionTabsSnapshot(staged, snapshot, ENV, NOW)
+
+    // The handle only: the tab and its page stay this desktop's, drawn by the frames' hold.
+    expect(patch.remoteBrowserPageHandlesByPageId?.['page-1']).toEqual({
+      environmentId: ENV,
+      remotePageId: 'host-page-1',
+      placement
+    })
+    expect(Object.hasOwn(patch, 'browserTabsByWorktree')).toBe(false)
+    expect(Object.hasOwn(patch, 'browserPagesByWorkspace')).toBe(false)
+  })
+
   it('still mirrors every slice for another workspace of the same environment, batched', () => {
     const store = frameDrawnStore()
     const frameTree = store.tabsByWorktree[WT]
@@ -260,24 +356,37 @@ describe('frame-drawn server workspaces', () => {
     ])
   })
 
-  it('keeps the id-mapping and intent ledgers running for a frame-drawn workspace', () => {
+  // L240: the frames name a frame-drawn workspace's tabs, so the mirror's ledgers stay for old servers.
+  it.each([
+    { name: 'keeps none of the mirror’s id or intent ledgers for', drawn: true },
+    {
+      name: 'keeps the mirror’s id and intent ledgers for a server without frames, unlike',
+      drawn: false
+    }
+  ])('$name a frame-drawn workspace', ({ drawn }) => {
     const store = frameDrawnStore()
+    if (!drawn) {
+      setFrameDrawnServerWorkspaces(ENV, new Set())
+    }
     clearHostSessionTabIdMappings(ENV, WT)
     const owner = { environmentId: ENV }
     recordWebSessionCloseIntent(owner, WT, 'host-tab-gone', NOW)
     recordWebSessionFocusIntent(owner, WT, 'host-tab-1', LEAF_ID)
 
-    // Nothing but layout changed, so the store is untouched.
-    expect(applyWebSessionTabsSnapshot(store, shell('b', 2), ENV, NOW)).toBe(store)
+    const patch = applyWebSessionTabsSnapshot(store, shell('b', 2), ENV, NOW)
+    if (drawn) {
+      // Nothing but layout changed, so the store is untouched.
+      expect(patch).toBe(store)
+    }
     expect(
       resolveHostSessionTabIdForWebSessionTab(store, {
         environmentId: ENV,
         worktreeId: WT,
         tabId: MIRRORED_TAB_ID
       })
-    ).toBe('host-tab-1')
-    expect(isWebSessionCloseIntentPending(owner, WT, 'host-tab-gone', NOW)).toBe(false)
-    expect(peekWebSessionFocusIntent(owner, WT)).toBeNull()
+    ).toBe(drawn ? null : 'host-tab-1')
+    expect(isWebSessionCloseIntentPending(owner, WT, 'host-tab-gone', NOW)).toBe(drawn)
+    expect(peekWebSessionFocusIntent(owner, WT) !== null).toBe(drawn)
   })
 
   it('changes nothing with the switch off', () => {

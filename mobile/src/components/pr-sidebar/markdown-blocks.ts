@@ -1,11 +1,8 @@
+import { translate } from '../../i18n/mobile-i18n'
 import { createMarkdownInlineMatcher } from '../markdown-inline-matcher'
 import { splitTableRow } from '../rich-markdown/markdown-table-rows'
 
-// Tiny, dependency-free markdown model for PR comment bodies. We render GitHub
-// markdown without a third-party RN markdown library (the previous dependency hung
-// the JS thread when a comment list mounted). Scope is deliberately small — the
-// common comment elements — and parsing is pure + total: anything it can't classify
-// falls through as paragraph text, so it can never throw on unexpected input.
+// Use small pure/total PR Markdown parser: old third-party RN renderer hung JS thread. Unknown/unbalanced content stays paragraph text.
 
 export type InlineToken =
   | { kind: 'text'; text: string }
@@ -31,7 +28,6 @@ export type MarkdownBlock =
 
 const HEADING = /^(#{1,6})\s+(.*)$/
 const FENCE = /^```/
-// Captures the fence info string (language) on the opening fence, e.g. ```mermaid.
 const FENCE_OPEN = /^```\s*([^\s`]*)/
 const QUOTE = /^>\s?(.*)$/
 const HR = /^(?:---+|\*\*\*+|___+)\s*$/
@@ -41,9 +37,7 @@ const ORDERED = /^\s*\d+[.)]\s+(.*)$/
 const HTML_BLOCK = /<(details|blockquote)\b[^>]*>([\s\S]*?)<\/\1>/i
 const SUMMARY = /<summary\b[^>]*>([\s\S]*?)<\/summary>/i
 
-// Removes residual HTML tags from rendered text so stray <b>/<kbd>/<sub> etc. don't
-// show literally. Conservative: only matches `<tag ...>` / `</tag>` shapes, so a bare
-// "a < b" in prose is left alone.
+// Strip tag-shaped HTML only; bare a < b prose stays literal.
 export function stripHtmlTags(text: string): string {
   const end = text.lastIndexOf('>') + 1
   if (end === 0) {
@@ -61,9 +55,7 @@ export function parseMarkdownBlocks(content: string): MarkdownBlock[] {
   return parseSegment(cleaned)
 }
 
-// Splits a segment at top-level <details>/<blockquote> regions (preserving order),
-// emitting structured blocks for them and line-parsing the text in between. Recurses
-// for nested details bodies. Non-greedy match keeps it total on unbalanced input.
+// Split top-level details/blockquote regions in order; recurse nested details and keep unmatched input total via non-greedy parse.
 function parseSegment(text: string): MarkdownBlock[] {
   const blocks: MarkdownBlock[] = []
   let rest = text
@@ -75,9 +67,16 @@ function parseSegment(text: string): MarkdownBlock[] {
     }
     if (m[1].toLowerCase() === 'details') {
       const sm = SUMMARY.exec(m[2])
-      const summary = sm ? stripHtmlTags(sm[1]).trim() : 'Details'
+      const summary = sm ? stripHtmlTags(sm[1]).trim() : ''
       const body = m[2].replace(SUMMARY, '')
-      blocks.push({ kind: 'details', summary: summary || 'Details', body: parseSegment(body) })
+      blocks.push({
+        kind: 'details',
+        // Parsed blocks can outlive the active language.
+        get summary() {
+          return summary || translate('pullRequest.markdownBlocks.details', 'Details')
+        },
+        body: parseSegment(body)
+      })
     } else {
       blocks.push({ kind: 'quote', text: stripHtmlTags(m[2]).trim() })
     }
@@ -115,13 +114,12 @@ function parseLines(content: string): MarkdownBlock[] {
         code.push(lines[i])
         i += 1
       }
-      i += 1 // consume closing fence (or EOF)
+      i += 1
       blocks.push({ kind: 'code', text: code.join('\n'), lang })
       continue
     }
 
-    // GFM pipe table: a header row immediately followed by a delimiter row.
-    // Requires the delimiter row so plain prose with a stray `|` isn't captured.
+    // Require table delimiter row so stray prose pipe does not create table.
     if (line.includes('|') && i + 1 < lines.length && isTableDelimiter(lines[i + 1])) {
       flushParagraph()
       const headers = splitTableRow(line)
@@ -215,14 +213,12 @@ function parseAlignRow(line: string): CellAlign[] {
   })
 }
 
-// Inline emphasis/code/link tokenizer. Walks the string once, longest-match first,
-// emitting plain-text runs between matches. Unbalanced markers stay literal text.
+// Tokenize inline emphasis/code/links once, longest match first; preserve plain runs and unbalanced markers.
 const INLINE = /(`[^`]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*]+\*)|(_[^_]+_)/g
 
 export function parseInline(text: string): InlineToken[] {
   const tokens: InlineToken[] = []
-  // Strip residual inline HTML tags (<b>, <kbd>, <sub>, …) so they don't render
-  // literally; emphasis/code/links below are markdown, not HTML, so this is safe.
+  // Strip residual inline HTML before Markdown tokenization so tags do not display literally.
   const plain = stripHtmlTags(text)
   const matcher = createMarkdownInlineMatcher(plain, INLINE)
   let cursor = 0

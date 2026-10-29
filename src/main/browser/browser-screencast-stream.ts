@@ -19,7 +19,6 @@ import type {
   BrowserScreencastViewport
 } from './browser-screencast-stream-types'
 
-// Why: long enough for a slow first paint, short enough that a frameless viewer is told soon.
 const NO_FRAME_TIMEOUT_MS = 10_000
 
 export async function startBrowserScreencast(
@@ -43,13 +42,8 @@ export async function startBrowserScreencast(
 
   let closed = false
   let stopping = false
-  // The dialog this stream reported and has not seen closed. Only this session may answer it, so
-  // it is settled before the stream goes away rather than carried to one that cannot.
   let dialogOpen = false
-  // The one answer in flight for that dialog, and which dialog it belongs to. Chromium takes a
-  // single `Page.handleJavaScriptDialog` per dialog: a second one is refused, or worse settles the
-  // next dialog unseen if the page has already raised it. A double tap on a slow link is exactly
-  // that, so duplicate callers get this promise instead of a second command.
+  // Reuse the in-flight answer; a duplicate command could settle the next dialog unseen.
   let dialogSettlement: Promise<boolean> | null = null
   let dialogGeneration = 0
   let resolveDone!: () => void
@@ -61,8 +55,7 @@ export async function startBrowserScreencast(
   const isClosed = (): boolean => closed
   const isStopping = (): boolean => stopping
 
-  // Why: `options` carries what is emulated; the client's own request is kept apart so the guest
-  // view limit can shrink it and later give the size back when the guest grows.
+  // Preserve the client request so the viewport can grow back after the guest view limit shrinks it.
   const embedderSizedGuest = isEmbedderSizedScreencastGuest(webContents)
   let requestedViewport: BrowserScreencastViewport = {
     viewportWidth: options.viewportWidth,
@@ -71,7 +64,6 @@ export async function startBrowserScreencast(
     mobile: options.mobile
   }
   let guestViewSize: BrowserScreencastGuestViewSize | null = null
-  // Bumped when the emulated size changes; caught up once a device-metrics write at it lands.
   let emulationGeneration = 0
   let appliedEmulationGeneration = 0
   const applyEffectiveViewport = (): boolean => {
@@ -98,8 +90,7 @@ export async function startBrowserScreencast(
     applyDeviceMetricsOverride: () => {
       const generation = emulationGeneration
       const applied = deviceMetrics.apply()
-      // Why also on failure: a refused write must not hold every live frame back for good.
-      // Why not awaited here: the capture behind it keeps the exact timing it had.
+      // Advance even on failure so a rejected metrics write cannot suppress live frames forever.
       const markApplied = (): void => {
         appliedEmulationGeneration = Math.max(appliedEmulationGeneration, generation)
       }
@@ -128,19 +119,16 @@ export async function startBrowserScreencast(
           void reemulate().catch(() => {})
         }
       }
-      // Why until applied: a queued re-emulation can wait behind a slow snapshot, and every frame
-      // until the fitted metrics land is a crop of the old layout that passes the new size check.
+      // Reject old-layout crops until queued viewport metrics have landed.
       return appliedEmulationGeneration < emulationGeneration
     },
     setDialogOpen: (open: boolean) => {
       dialogOpen = open
-      // A new dialog is a new answer, and a closed one leaves nothing to answer.
       dialogGeneration += 1
       dialogSettlement = null
     }
   })
 
-  // Re-applies the emulated viewport and sends a frame at it, queued behind earlier updates.
   const reemulate = (): Promise<void> => {
     pendingUpdate = pendingUpdate
       .catch(() => {})
@@ -151,8 +139,7 @@ export async function startBrowserScreencast(
         snapshotCapture.bumpGeneration()
         snapshotCapture.clearNavigationCaptureTimer()
         framePacer.clearPending(true)
-        // Why: initialOnly skips every stream that ever emitted a frame, which would
-        // leave the old device metrics applied and the new subscriber frameless.
+        // initialOnly would skip metrics updates once this stream has emitted a frame.
         await snapshotCapture.emitSnapshotFrame(false)
       })
     return pendingUpdate
@@ -184,7 +171,7 @@ export async function startBrowserScreencast(
   }
 
   const handleDetach = (): void => {
-    // Why: finish first so an owner that stops the stream on this error finds it already closed.
+    // Close before notifying owners that may call stop in response.
     finish()
     options.onError?.('Browser debugger detached while streaming.')
   }
@@ -197,7 +184,7 @@ export async function startBrowserScreencast(
     await deviceMetrics.apply()
     await startScreencast()
     pendingUpdate = snapshotCapture.emitSnapshotFrame(true)
-    // Why: a page whose embedder stopped compositing never yields a frame; the owner ends on this.
+    // Hidden embedders may stop compositing without producing a frame.
     const noFrameTimer = setTimeout(() => {
       if (!closed && !stopping && framePacer.getSeq() === 0) {
         options.onError?.('Browser stream timed out.')
@@ -230,8 +217,7 @@ export async function startBrowserScreencast(
       })
         .then(() => true)
         .catch((error: unknown) => {
-          // Only this dialog's own slot: by the time a failure lands the page may have raised the
-          // next one and armed its answer, and clearing that would let a second command through.
+          // A failed answer must not clear a newer dialog's in-flight answer.
           if (dialogGeneration === generation) {
             dialogSettlement = null
           }
@@ -255,8 +241,7 @@ export async function startBrowserScreencast(
             return
           }
           Object.assign(options, budget)
-          // Why: the pacer reads minFrameIntervalMs live off options, but Chromium only
-          // picks up new frame caps when the screencast is restarted with them.
+          // Chromium needs a restart for frame caps; the pacer reads its interval live.
           await startScreencast()
         })
       return pendingUpdate
@@ -272,18 +257,11 @@ export async function startBrowserScreencast(
       try {
         void (async () => {
           await pendingUpdate.catch(() => {})
-          // Why: only this CDP session may answer the dialog it reported, and a session that did
-          // not see it cannot even enable the Page domain while it is up — both measured on
-          // Chromium 1217, 2026-09-20. Leaving one outstanding would block the page for good,
-          // because the stream that replaces this one hangs on its own start. Dismissing is the
-          // conservative answer for every dialog type, and the automation path has taken it since
-          // `cdp-debugger-events.ts`.
+          // Dismiss before releasing this CDP session; a replacement may block while the dialog is open.
           if (dialogOpen) {
             dialogOpen = false
             const pending = dialogSettlement
             dialogSettlement = null
-            // An answer already on its way settles it; a second command here would be the
-            // duplicate this session refuses to send anywhere else.
             await (
               pending ?? sendDebuggerCommand(dbg, 'Page.handleJavaScriptDialog', { accept: false })
             ).catch(() => {})
