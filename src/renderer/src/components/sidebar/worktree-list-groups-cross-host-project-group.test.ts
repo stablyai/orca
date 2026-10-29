@@ -7,11 +7,13 @@ import {
   localWorktree,
   PAIRED_HOST_ORDER,
   pairedGroup,
+  pairedHostId,
   pairedRepo,
   pairedWorktree,
   planRows,
   THIS_ORCA_ORDER
 } from './worktree-list-groups-cross-host-project-group.test-fixture'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 
 function headerKeys(args: Parameters<typeof planRows>[0]): string[] {
@@ -136,6 +138,32 @@ describe('a project grouped on one of its hosts', () => {
       'project:github:stablyai/orca@1'
     ])
     expect(shortcutOrder).toEqual(rendered)
+  })
+
+  it("keeps this Orca's group when the paired host also lists a same-id copy of it", () => {
+    const groupedLocal: Repo = { ...localRepo, projectGroupId: localGroup.id, projectGroupOrder: 0 }
+    const pairedCopy: ProjectGroup = { ...localGroup, executionHostId: pairedHostId }
+
+    expect(
+      headerKeys({
+        repoOrder: PAIRED_HOST_ORDER,
+        local: groupedLocal,
+        groups: [pairedGroup, localGroup, pairedCopy]
+      })
+    ).toEqual([
+      'project-group:group-a@0',
+      'project-group:group-local@0',
+      'project:github:stablyai/orca@1'
+    ])
+  })
+
+  it("places the project by the paired row when this Orca's row only inherited its group id", () => {
+    // The window copies an earlier copy's group onto a fetched row that names none.
+    const inheritedLocal: Repo = { ...localRepo, projectGroupId: pairedGroup.id }
+    const rows = planRows({ repoOrder: THIS_ORCA_ORDER, local: inheritedLocal }).render(new Set())
+    const header = rows.find((row) => row.type === 'header' && row.key === `project:${project.id}`)
+
+    expect(header?.type === 'header' ? header.projectGroupRepo?.id : undefined).toBe(pairedRepo.id)
   })
 
   it('drags the project with the group it is drawn in, as the row that placed it', () => {

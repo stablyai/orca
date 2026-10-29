@@ -25,6 +25,7 @@ import type { ProjectSectionModel } from '../project-section-grouping'
 import {
   appendProjectGroupSections,
   getProjectGroupOccurrencePaths,
+  getProjectGroupCatalogHostIds,
   getProjectSectionGroupRepo,
   getProjectSectionMemberRepoIds
 } from './project-group-sections'
@@ -121,6 +122,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
   }
 
   const projectGroupPaths = getProjectGroupOccurrencePaths(projectGroups)
+  const groupCatalogHostIds = getProjectGroupCatalogHostIds(projectGroups)
   const sectionMemberRepoIds =
     groupBy === 'repo' && projectGroups.length > 0
       ? getProjectSectionMemberRepoIds(repoMap, projectIndex)
@@ -167,7 +169,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
                 sectionMemberRepoIds.get(key) ?? [],
                 repoMap,
                 repoOrder,
-                projectGroupPaths
+                groupCatalogHostIds
               )?.projectGroupId
             : undefined
         const revealPath = sectionGroupId ? projectGroupPaths.get(sectionGroupId) : undefined

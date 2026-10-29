@@ -3,7 +3,11 @@ import {
   compareFolderWorkspacesForDisplay,
   type RenderableFolderWorkspace
 } from './folder-workspace-lanes'
-import { getRepoExecutionHostId, parseRoutableExecutionHostId } from '../execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  parseRoutableExecutionHostId
+} from '../execution-host'
 import type { ProjectGroup } from '../project-group-types'
 import type { Repo } from '../repo-types'
 import type { ProjectOrderBy } from '../ui-chrome-types'
@@ -39,33 +43,58 @@ export function getProjectSectionMemberRepoIds(
   return members
 }
 
+type CatalogEntry = Pick<ProjectGroup, 'connectionId' | 'executionHostId'>
+
+/** The catalog that stores a row or group: local and direct-SSH entries share this Orca's own. */
+function getCatalogHostId(entry: CatalogEntry): string | null {
+  const host = parseRoutableExecutionHostId(getRepoExecutionHostId(entry))
+  return host ? (host.kind === 'runtime' ? host.id : LOCAL_EXECUTION_HOST_ID) : null
+}
+
+/** The catalogs holding each group id; same-id copies can sit on several hosts (#30045). */
+export function getProjectGroupCatalogHostIds(
+  projectGroups: readonly Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'>[]
+): Map<string, Set<string>> {
+  const catalogs = new Map<string, Set<string>>()
+  for (const group of projectGroups) {
+    const catalogHostId = getCatalogHostId(group)
+    if (catalogHostId) {
+      catalogs.set(group.id, (catalogs.get(group.id) ?? new Set()).add(catalogHostId))
+    }
+  }
+  return catalogs
+}
+
 /**
- * The member row that places a section in a Project Group: a grouped row from this Orca's own
- * catalog first, else the first grouped row in manual order. A project set up on several hosts is
- * one section whose anchor may be any host's row, so reading only the anchor drew a project outside
- * the group it was moved into, and ranking alone let another host's group override this Orca's;
- * reading visible rows only let pins and placeholders move it.
+ * The member row that places a section in a Project Group: a row in a group of its own host's
+ * catalog, this Orca's catalog first, else the first such row in manual order. A project set up on
+ * several hosts is one section whose anchor may be any host's row, so reading only the anchor drew a
+ * project outside the group it was moved into, and ranking alone let another host's group override
+ * this Orca's; reading visible rows only let pins and placeholders move it.
  */
 export function getProjectSectionGroupRepo(
   section: Pick<WorktreeGroupEntry, 'repo'>,
   memberRepoIds: readonly string[],
   repoMap: ReadonlyMap<string, Repo>,
   repoOrder: ReadonlyMap<string, number> | undefined,
-  knownGroupIds: { has: (groupId: string) => boolean }
+  groupCatalogHostIds: ReadonlyMap<string, ReadonlySet<string>>
 ): Repo | undefined {
-  const isGrouped = (repo: Repo | undefined): repo is Repo =>
-    Boolean(repo?.projectGroupId && knownGroupIds.has(repo.projectGroupId))
   let grouped: Repo | undefined
   let groupedHostRank = Number.POSITIVE_INFINITY
   let groupedRank = Number.POSITIVE_INFINITY
   for (const repoId of memberRepoIds) {
     const repo = repoMap.get(repoId)
-    if (!isGrouped(repo)) {
+    const catalogHostId = repo ? getCatalogHostId(repo) : null
+    // Why: a fetched row can carry another host's group id (applyInheritedProjectGroups);
+    // only a copy of that group in the row's own catalog holds it.
+    if (
+      !repo?.projectGroupId ||
+      !catalogHostId ||
+      !groupCatalogHostIds.get(repo.projectGroupId)?.has(catalogHostId)
+    ) {
       continue
     }
-    // Why: groups are a local affordance; local and direct-SSH rows join this Orca's own groups.
-    const hostRank =
-      parseRoutableExecutionHostId(getRepoExecutionHostId(repo))?.kind === 'runtime' ? 1 : 0
+    const hostRank = catalogHostId === LOCAL_EXECUTION_HOST_ID ? 0 : 1
     const rank = repoOrder?.get(repoId) ?? Number.POSITIVE_INFINITY
     if (hostRank < groupedHostRank || (hostRank === groupedHostRank && rank < groupedRank)) {
       grouped = repo
@@ -91,6 +120,7 @@ export function appendProjectGroupSections(
   const { result, collapsedGroups } = ctx
 
   const projectGroupsById = new Map(projectGroups.map((group) => [group.id, group]))
+  const groupCatalogHostIds = getProjectGroupCatalogHostIds(projectGroups)
   const groupByProjectGroupId = new Map<string | null, OrderedGroupEntry[]>()
   const groupRepoByKey = new Map<string, Repo | undefined>()
   for (const entry of orderedGroups) {
@@ -99,7 +129,7 @@ export function appendProjectGroupSections(
       args.sectionMemberRepoIds.get(entry[0]) ?? [],
       ctx.repoMap,
       repoOrder,
-      projectGroupsById
+      groupCatalogHostIds
     )
     groupRepoByKey.set(entry[0], repo)
     const projectGroupId = repo?.projectGroupId ?? null
@@ -228,10 +258,7 @@ export function getProjectGroupOccurrencePaths(projectGroups: readonly ProjectGr
     let parent = current ? paths.get(current.id) : undefined
     for (let index = pending.length - 1; index >= 0; index -= 1) {
       const entry = pending[index]
-      const path: OccurrenceSectionPath = {
-        key: getProjectGroupHeaderKey(entry.id),
-        parent
-      }
+      const path: OccurrenceSectionPath = { key: getProjectGroupHeaderKey(entry.id), parent }
       paths.set(entry.id, path)
       parent = path
     }
