@@ -1,8 +1,10 @@
-import { useState } from 'react'
-import { View, Text, Pressable, ScrollView, Switch } from 'react-native'
+import { Fragment, useState } from 'react'
+import { View, Text, Pressable, ScrollView } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Check, ChevronLeft } from 'lucide-react-native'
+import { MobileSwitch } from '../components/MobileSwitch'
+import { voiceSettingsStyles as styles } from '../settings/voice-settings-styles'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type {
@@ -16,7 +18,7 @@ import { setAutoReadPaused, useAutoReadPaused } from './auto-read-pause'
 import { useAutoReadRepliesPreference } from './auto-read-preference'
 import { useBackgroundReadingPreference } from './background-reading'
 import { QuickSettingsTileRow } from './quick-settings-tile-row'
-import { readAloudStyles as styles } from './read-aloud-settings-styles'
+import { readAloudStyles } from './read-aloud-settings-styles'
 import {
   ReadAloudVoiceGroup,
   ReadAloudVoicePickers,
@@ -28,66 +30,101 @@ import { useHeadphonesOnly, useLinkReading } from './reading-preferences'
 import { playChimeSample } from './reply-speaker'
 import { useSpeechOptions } from './speech-options'
 
-const READ_SCOPES: { scope: ReadScope; label: string; sublabel: string }[] = [
+type Option<T extends string> = { value: T; label: string; sublabel: string }
+
+const READ_SCOPES: Option<ReadScope>[] = [
   {
-    scope: 'all',
+    value: 'all',
     label: 'Every message',
     sublabel: 'Also what the agent writes while it is still working'
   },
   {
-    scope: 'all-on-screen',
+    value: 'all-on-screen',
     label: 'Every message on screen, final replies off screen',
     sublabel: 'Everything while Orca is open; only the turn-ending answer with the screen off'
   },
   {
-    scope: 'replies',
+    value: 'replies',
     label: 'Final replies only',
     sublabel: 'Only the answer that ends a turn, as in notifications'
   }
 ]
 
-const PROJECT_NAME_MODES: { mode: ProjectNameMode; label: string; sublabel: string }[] = [
+const PROJECT_NAME_MODES: Option<ProjectNameMode>[] = [
   {
-    mode: 'on-change',
+    value: 'on-change',
     label: 'When the project changes',
     sublabel: 'Before a message from another project, or after two quiet minutes'
   },
   {
-    mode: 'every',
+    value: 'every',
     label: 'Before every message',
     sublabel: 'Even when several come from one agent'
   },
-  { mode: 'off', label: 'Off', sublabel: 'Only the message' }
+  { value: 'off', label: 'Off', sublabel: 'Only the message' }
 ]
 
-const CHIME_MODES: { mode: ChimeMode; label: string; sublabel: string }[] = [
+const CHIME_MODES: Option<ChimeMode>[] = [
   {
-    mode: 'every',
+    value: 'every',
     label: 'Before every message',
     sublabel: 'Also marks where one message ends and the next begins'
   },
   {
-    mode: 'on-change',
+    value: 'on-change',
     label: 'When the project changes',
     sublabel: 'Same rule as the project name: another project, or after two quiet minutes'
   },
-  { mode: 'off', label: 'Off', sublabel: 'No sound' }
+  { value: 'off', label: 'Off', sublabel: 'No sound' }
 ]
 
-const LINK_READINGS: { mode: LinkReading; label: string; sublabel: string }[] = [
+const LINK_READINGS: Option<LinkReading>[] = [
   {
-    mode: 'word-and-text',
+    value: 'word-and-text',
     label: 'Say “link”, then its text',
     sublabel: '“link WHO report”; a bare address is just “link”'
   },
   {
-    mode: 'word-text-site',
+    value: 'word-text-site',
     label: 'Say “link”, its text and the site',
     sublabel: '“link WHO report, who.int”'
   },
-  { mode: 'text', label: 'Only its text', sublabel: '“WHO report”; a bare address is “link”' },
-  { mode: 'off', label: 'Skip links', sublabel: 'Neither the text nor the address' }
+  { value: 'text', label: 'Only its text', sublabel: '“WHO report”; a bare address is “link”' },
+  { value: 'off', label: 'Skip links', sublabel: 'Neither the text nor the address' }
 ]
+
+function OptionRows<T extends string>({
+  options,
+  selected,
+  onSelect
+}: {
+  options: readonly Option<T>[]
+  selected: T
+  onSelect: (value: T) => void
+}) {
+  useMobileColorScheme()
+  return (
+    <View style={[styles.section, styles.sectionTopGap]} accessibilityRole="radiogroup">
+      {options.map((option, index) => (
+        <Fragment key={option.value}>
+          {index > 0 ? <View style={styles.separator} /> : null}
+          <Pressable
+            accessibilityRole="radio"
+            accessibilityState={{ checked: option.value === selected }}
+            style={styles.row}
+            onPress={() => onSelect(option.value)}
+          >
+            <View style={styles.rowContent}>
+              <Text style={styles.rowLabel}>{option.label}</Text>
+              <Text style={styles.rowSublabel}>{option.sublabel}</Text>
+            </View>
+            {option.value === selected ? <Check size={18} color={colors.textPrimary} /> : null}
+          </Pressable>
+        </Fragment>
+      ))}
+    </View>
+  )
+}
 
 export default function ReadAloudSettingsScreen() {
   useMobileColorScheme()
@@ -124,40 +161,21 @@ export default function ReadAloudSettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.groupHeading}>READ BUTTON</Text>
-        <Text style={styles.groupDescription}>
+        <Text style={readAloudStyles.groupDescription}>
           Messages are read with the speed and voice set below; code blocks and tables are skipped,
           and a Stop button appears at the top while one is being read.
         </Text>
 
         <ReadAloudVoiceGroup state={speechOptions} onOpenPicker={setPicker} />
 
-        <Text style={[styles.groupHeading, styles.groupGap]}>LINKS</Text>
-        <Text style={styles.groupDescription}>
+        <Text style={[styles.groupHeading, readAloudStyles.groupGap]}>LINKS</Text>
+        <Text style={readAloudStyles.groupDescription}>
           How a link in a message is read, by the Read button and auto-read alike.
         </Text>
-        <View style={[styles.section, styles.sectionTopGap]}>
-          {LINK_READINGS.map((option, index) => {
-            const selected = option.mode === linkReading
-            return (
-              <Pressable
-                key={option.mode}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: selected }}
-                style={index === 0 ? styles.row : [styles.row, styles.rowDivider]}
-                onPress={() => setLinkReading(option.mode)}
-              >
-                <View style={styles.rowContent}>
-                  <Text style={styles.rowLabel}>{option.label}</Text>
-                  <Text style={styles.rowSublabel}>{option.sublabel}</Text>
-                </View>
-                {selected ? <Check size={18} color={colors.textPrimary} /> : null}
-              </Pressable>
-            )
-          })}
-        </View>
+        <OptionRows options={LINK_READINGS} selected={linkReading} onSelect={setLinkReading} />
 
-        <Text style={[styles.groupHeading, styles.groupGap]}>CONTROLS</Text>
-        <Text style={styles.groupDescription}>
+        <Text style={[styles.groupHeading, readAloudStyles.groupGap]}>CONTROLS</Text>
+        <Text style={readAloudStyles.groupDescription}>
           While a message is read, the buttons of headphones and of a car's steering wheel, and the
           reading notification, pause it and go to the next or previous message (Previous starts the
           message again; pressed twice, the one before it). Afterwards the notification's Play reads
@@ -165,8 +183,8 @@ export default function ReadAloudSettingsScreen() {
           end.
         </Text>
 
-        <Text style={[styles.groupHeading, styles.groupGap]}>AUTO-READ</Text>
-        <Text style={styles.groupDescription}>
+        <Text style={[styles.groupHeading, readAloudStyles.groupGap]}>AUTO-READ</Text>
+        <Text style={readAloudStyles.groupDescription}>
           New messages from every connected agent are read as they arrive, on any screen.
         </Text>
         <View style={[styles.section, styles.sectionTopGap]}>
@@ -175,15 +193,14 @@ export default function ReadAloudSettingsScreen() {
               <Text style={styles.rowLabel}>Auto-read new messages</Text>
               <Text style={styles.rowSublabel}>{autoRead ? 'On' : 'Off'}</Text>
             </View>
-            <Switch
+            <MobileSwitch
               accessibilityLabel="Auto-read new messages"
               value={autoRead}
               onValueChange={setAutoRead}
-              trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
-              thumbColor={colors.textPrimary}
             />
           </View>
-          <View style={[styles.row, styles.rowDivider]}>
+          <View style={styles.separator} />
+          <View style={styles.row}>
             <View style={styles.rowContent}>
               <Text style={styles.rowLabel}>Pause auto-read</Text>
               <Text style={styles.rowSublabel}>
@@ -192,35 +209,35 @@ export default function ReadAloudSettingsScreen() {
                   : 'New messages wait instead of being read. Also in the notification and on the tile; restarting Orca resumes'}
               </Text>
             </View>
-            <Switch
+            <MobileSwitch
               accessibilityLabel="Pause auto-read"
               value={autoReadPaused}
               onValueChange={setAutoReadPaused}
-              trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
-              thumbColor={colors.textPrimary}
             />
           </View>
           <QuickSettingsTileRow />
           {speechOptions.available ? (
-            <View style={[styles.row, styles.rowDivider]}>
-              <View style={styles.rowContent}>
-                <Text style={styles.rowLabel}>Keep reading with the screen off</Text>
-                <Text style={styles.rowSublabel}>
-                  {backgroundReading
-                    ? 'On — while auto-read is on, a notification keeps Orca awake (uses more battery)'
-                    : 'Off — auto-read stops when Orca leaves the screen'}
-                </Text>
+            <>
+              <View style={styles.separator} />
+              <View style={styles.row}>
+                <View style={styles.rowContent}>
+                  <Text style={styles.rowLabel}>Keep reading with the screen off</Text>
+                  <Text style={styles.rowSublabel}>
+                    {backgroundReading
+                      ? 'On — while auto-read is on, a notification keeps Orca awake (uses more battery)'
+                      : 'Off — auto-read stops when Orca leaves the screen'}
+                  </Text>
+                </View>
+                <MobileSwitch
+                  accessibilityLabel="Keep reading with the screen off"
+                  value={backgroundReading}
+                  onValueChange={setBackgroundReading}
+                />
               </View>
-              <Switch
-                accessibilityLabel="Keep reading with the screen off"
-                value={backgroundReading}
-                onValueChange={setBackgroundReading}
-                trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
-                thumbColor={colors.textPrimary}
-              />
-            </View>
+            </>
           ) : null}
-          <View style={[styles.row, styles.rowDivider]}>
+          <View style={styles.separator} />
+          <View style={styles.row}>
             <View style={styles.rowContent}>
               <Text style={styles.rowLabel}>Say when an agent waits for you</Text>
               <Text style={styles.rowSublabel}>
@@ -229,111 +246,61 @@ export default function ReadAloudSettingsScreen() {
                   : 'Off — a waiting agent stays quiet'}
               </Text>
             </View>
-            <Switch
+            <MobileSwitch
               accessibilityLabel="Say when an agent waits for you"
               value={announceWaits === 'on'}
               onValueChange={(on) => setAnnounceWaits(on ? 'on' : 'off')}
-              trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
-              thumbColor={colors.textPrimary}
             />
           </View>
           {speechOptions.available ? (
-            <View style={[styles.row, styles.rowDivider]}>
-              <View style={styles.rowContent}>
-                <Text style={styles.rowLabel}>Only with headphones or a car</Text>
-                <Text style={styles.rowSublabel}>
-                  {headphonesOnly === 'on'
-                    ? 'On — through the phone’s own speaker auto-read stays quiet; unplugging pauses it'
-                    : 'Off — also through the phone’s speaker'}
-                </Text>
+            <>
+              <View style={styles.separator} />
+              <View style={styles.row}>
+                <View style={styles.rowContent}>
+                  <Text style={styles.rowLabel}>Only with headphones or a car</Text>
+                  <Text style={styles.rowSublabel}>
+                    {headphonesOnly === 'on'
+                      ? 'On — through the phone’s own speaker auto-read stays quiet; unplugging pauses it'
+                      : 'Off — also through the phone’s speaker'}
+                  </Text>
+                </View>
+                <MobileSwitch
+                  accessibilityLabel="Auto-read only with headphones or a car"
+                  value={headphonesOnly === 'on'}
+                  onValueChange={(on) => setHeadphonesOnly(on ? 'on' : 'off')}
+                />
               </View>
-              <Switch
-                accessibilityLabel="Auto-read only with headphones or a car"
-                value={headphonesOnly === 'on'}
-                onValueChange={(on) => setHeadphonesOnly(on ? 'on' : 'off')}
-                trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
-                thumbColor={colors.textPrimary}
-              />
-            </View>
+            </>
           ) : null}
         </View>
 
-        <Text style={[styles.groupHeading, styles.groupGap]}>WHAT TO READ</Text>
-        <View style={[styles.section, styles.sectionTopGap]}>
-          {READ_SCOPES.map((option, index) => {
-            const selected = option.scope === readScope
-            return (
-              <Pressable
-                key={option.scope}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: selected }}
-                style={index === 0 ? styles.row : [styles.row, styles.rowDivider]}
-                onPress={() => setReadScope(option.scope)}
-              >
-                <View style={styles.rowContent}>
-                  <Text style={styles.rowLabel}>{option.label}</Text>
-                  <Text style={styles.rowSublabel}>{option.sublabel}</Text>
-                </View>
-                {selected ? <Check size={18} color={colors.textPrimary} /> : null}
-              </Pressable>
-            )
-          })}
-        </View>
+        <Text style={[styles.groupHeading, readAloudStyles.groupGap]}>WHAT TO READ</Text>
+        <OptionRows options={READ_SCOPES} selected={readScope} onSelect={setReadScope} />
 
-        <Text style={[styles.groupHeading, styles.groupGap]}>PROJECT NAME</Text>
-        <Text style={styles.groupDescription}>
+        <Text style={[styles.groupHeading, readAloudStyles.groupGap]}>PROJECT NAME</Text>
+        <Text style={readAloudStyles.groupDescription}>
           Auto-read says the project first, so you know which agent is talking.
         </Text>
-        <View style={[styles.section, styles.sectionTopGap]}>
-          {PROJECT_NAME_MODES.map((option, index) => {
-            const selected = option.mode === projectNameMode
-            return (
-              <Pressable
-                key={option.mode}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: selected }}
-                style={index === 0 ? styles.row : [styles.row, styles.rowDivider]}
-                onPress={() => setProjectNameMode(option.mode)}
-              >
-                <View style={styles.rowContent}>
-                  <Text style={styles.rowLabel}>{option.label}</Text>
-                  <Text style={styles.rowSublabel}>{option.sublabel}</Text>
-                </View>
-                {selected ? <Check size={18} color={colors.textPrimary} /> : null}
-              </Pressable>
-            )
-          })}
-        </View>
+        <OptionRows
+          options={PROJECT_NAME_MODES}
+          selected={projectNameMode}
+          onSelect={setProjectNameMode}
+        />
 
-        <Text style={[styles.groupHeading, styles.groupGap]}>SOUND BEFORE A MESSAGE</Text>
-        <Text style={styles.groupDescription}>
+        <Text style={[styles.groupHeading, readAloudStyles.groupGap]}>SOUND BEFORE A MESSAGE</Text>
+        <Text style={readAloudStyles.groupDescription}>
           A short chime before auto-read talks, with the project name or instead of it.
         </Text>
-        <View style={[styles.section, styles.sectionTopGap]}>
-          {CHIME_MODES.map((option, index) => {
-            const selected = option.mode === chimeMode
-            return (
-              <Pressable
-                key={option.mode}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: selected }}
-                style={index === 0 ? styles.row : [styles.row, styles.rowDivider]}
-                onPress={() => {
-                  setChimeMode(option.mode)
-                  if (option.mode !== 'off') {
-                    playChimeSample()
-                  }
-                }}
-              >
-                <View style={styles.rowContent}>
-                  <Text style={styles.rowLabel}>{option.label}</Text>
-                  <Text style={styles.rowSublabel}>{option.sublabel}</Text>
-                </View>
-                {selected ? <Check size={18} color={colors.textPrimary} /> : null}
-              </Pressable>
-            )
-          })}
-        </View>
+        <OptionRows
+          options={CHIME_MODES}
+          selected={chimeMode}
+          onSelect={(mode) => {
+            setChimeMode(mode)
+            if (mode !== 'off') {
+              playChimeSample()
+            }
+          }}
+        />
       </ScrollView>
 
       <ReadAloudVoicePickers

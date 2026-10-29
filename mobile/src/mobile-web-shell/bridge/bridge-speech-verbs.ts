@@ -1,19 +1,15 @@
 import { z } from 'zod'
+import { BRIDGE_MAX_MESSAGE_BYTES } from './bridge-caps'
 
-// Why: well above the desktop's 8000-character reply cap and well below the bridge frame bound.
-export const SPEECH_MAX_TEXT_CHARS = 200_000
+// JSON can spend 6 bytes on one character (\u0001), so a full request stays under the frame cap.
+export const SPEECH_MAX_MARKDOWN_CHARS = Math.floor(BRIDGE_MAX_MESSAGE_BYTES / 8)
 
-// Why: one verb with an action, since each verb takes one of the session route's few grants; the
-// shell turns the markdown into speech itself, so page and shell never disagree on what is heard.
-export const speechControlParamsSchema = z.discriminatedUnion('action', [
-  z.strictObject({
-    action: z.literal('speak'),
-    id: z.string().min(1).max(512),
-    markdown: z.string().min(1).max(SPEECH_MAX_TEXT_CHARS)
-  }),
-  z.strictObject({ action: z.literal('stop') })
-])
+// One verb with an action: each verb takes one of the session route's few grants.
+// The shell turns the markdown into speech, so page and shell never disagree on what is heard.
+export const speechControlParamsSchema = z.strictObject({
+  action: z.literal('speak'),
+  id: z.string().min(1).max(512),
+  markdown: z.string().min(1).max(SPEECH_MAX_MARKDOWN_CHARS)
+})
 
 export const speechControlResultSchema = z.strictObject({ accepted: z.boolean() })
-
-export type SpeechControlParams = z.infer<typeof speechControlParamsSchema>

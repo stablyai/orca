@@ -42,8 +42,6 @@ export const UNVALIDATED_RPC_REQUEST_PORT_OWNERS: readonly UnvalidatedRpcRequest
 
 /** Call sites awaiting migration to a typed operation. Grouped by the feature area that owns them. */
 export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcRequestPortEntry[] = [
-  // Auto-read polls worktree.ps and reads only the agent rows it recognises.
-  { file: 'src/speech/use-auto-read-replies.ts', references: 1 },
   // Accounts recording needs useFocusEffect/ScrollView substitutes and an accounts.subscribe stream scenario.
   { file: 'src/accounts/MobileAccountsScreen.tsx', references: 2 },
 

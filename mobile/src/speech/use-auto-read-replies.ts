@@ -1,20 +1,19 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { AppState } from 'react-native'
-import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
-import { isRecord } from '../../../src/shared/agent-status-child-work-value-guards'
+import { mainAgentState } from '../../../src/shared/main-agent-status'
 import { withoutNativeChatVisualDirectiveLines } from '../../../src/shared/native-chat/native-chat-visual-directive'
 import { useRpcClientContext } from '../transport/client-context'
-import type { RpcClient } from '../transport/rpc-client'
 import {
   findNewWaits,
   useAnnounceWaits,
   waitAnnouncement,
   type WaitBaseline
 } from './agent-wait-announcement'
+import { agentPanes, readAgentRows, type SpokenAgentRow } from './auto-read-agent-rows'
 import { useAutoReadRepliesPreference } from './auto-read-preference'
 import { useBackgroundReadingPreference, useBackgroundReadingService } from './background-reading'
 import { backgroundReadingActive } from './background-reading-state'
-import { createChatMessageFeeds, type AgentPane } from './chat-message-feeds'
+import { createChatMessageFeeds } from './chat-message-feeds'
 import {
   chimeBeforeMessage,
   projectNameIntro,
@@ -29,37 +28,36 @@ import { logSpeechEvent } from './speech-diagnostics'
 // Why: on screen, the workspace list's worktree.ps cadence; off screen, slower to spare battery.
 const FOREGROUND_POLL_MS = 3_000
 const BACKGROUND_POLL_MS = 15_000
+// Why: request timeouts are JS timers, which pause off screen, so a poll stuck this long is replaced.
+const STUCK_POLL_MS = 60_000
 
 export type ReplyBaseline = ReadonlyMap<string, string>
 
-export type NewReply = { paneKey: string; message: string }
+/** `endedAt` is when the reply's turn ended, by the host's clock. */
+export type NewReply = { paneKey: string; message: string; endedAt: number }
 
-// Why: a host's first look only records its panes, so enabling auto-read or a host connecting never
-// reads old replies; later, a new pane is a new agent, even if its turn ended between two polls.
-// A reply is its text plus when its turn ended, so the same answer in a later turn is read again.
-// Subagent replies are steps of the parent's turn, not answers to the user.
+// Why: a host's first look only records its panes, so old replies are never read; a later new pane is
+// a new agent. A reply is keyed by its turn's end too, so a later turn's same answer is read again.
 export function findNewReplies(
   baseline: ReplyBaseline,
-  agents: readonly RuntimeWorktreeAgentRow[],
+  agents: readonly SpokenAgentRow[],
   hostSeenBefore = false
 ): { baseline: ReplyBaseline; newReplies: NewReply[] } {
   const next = new Map(baseline)
   const newReplies: NewReply[] = []
   for (const agent of agents) {
+    // Why: subagent replies are steps of the parent's turn, not answers to the user.
     if (agent.parentPaneKey) {
       continue
     }
     // Why: a leftover background task keeps the row `working` after the turn ends; and only `done`,
     // since mid-turn `lastAssistantMessage` can hold tool output rather than a reply.
-    const turnState = agent.mainAgent?.state ?? agent.state
     const finished =
-      turnState === 'done' && agent.lastAssistantMessage ? agent.lastAssistantMessage : null
+      mainAgentState(agent) === 'done' && agent.lastAssistantMessage
+        ? agent.lastAssistantMessage
+        : null
     const endedAt = agent.mainAgent?.stateStartedAt ?? agent.stateStartedAt
-    const key =
-      finished === null
-        ? ''
-        : `${endedAt}
-${finished}`
+    const key = finished === null ? '' : `${endedAt}\n${finished}`
     const seen = next.get(agent.paneKey)
     if (seen === undefined && !hostSeenBefore) {
       next.set(agent.paneKey, key)
@@ -67,83 +65,12 @@ ${finished}`
     }
     if (finished !== null && key !== seen) {
       next.set(agent.paneKey, key)
-      newReplies.push({ paneKey: agent.paneKey, message: finished })
+      newReplies.push({ paneKey: agent.paneKey, message: finished, endedAt })
     } else if (seen === undefined) {
       next.set(agent.paneKey, key)
     }
   }
   return { baseline: next, newReplies }
-}
-
-export type AutoReadAgentRow = RuntimeWorktreeAgentRow & {
-  rawPaneKey: string
-  worktreeId: string | null
-  /** Repo or folder-workspace name, said before a message. */
-  project: string | null
-}
-
-function worktreeProjectName(worktree: Record<string, unknown>): string | null {
-  const name =
-    typeof worktree.repo === 'string' && worktree.repo ? worktree.repo : worktree.displayName
-  return typeof name === 'string' && name ? name : null
-}
-
-// Why: pane keys are only unique within one host, so they get the host id as a prefix.
-export function agentRowsFromWorktreePs(hostId: string, result: unknown): AutoReadAgentRow[] {
-  const worktrees = isRecord(result) ? result.worktrees : undefined
-  if (!Array.isArray(worktrees)) {
-    return []
-  }
-  const rows: AutoReadAgentRow[] = []
-  for (const worktree of worktrees) {
-    if (!isRecord(worktree) || !Array.isArray(worktree.agents)) {
-      continue
-    }
-    const { worktreeId } = worktree
-    const project = worktreeProjectName(worktree)
-    for (const entry of worktree.agents) {
-      if (!isRecord(entry) || typeof entry.paneKey !== 'string') {
-        continue
-      }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host builds worktree.ps rows from this type; paneKey, the field the reader keys on, is checked above.
-      const agent = entry as RuntimeWorktreeAgentRow
-      rows.push({
-        ...agent,
-        paneKey: `${hostId}:${agent.paneKey}`,
-        parentPaneKey: agent.parentPaneKey ? `${hostId}:${agent.parentPaneKey}` : null,
-        rawPaneKey: agent.paneKey,
-        worktreeId: typeof worktreeId === 'string' ? worktreeId : null,
-        project
-      })
-    }
-  }
-  return rows
-}
-
-function agentPanes(rows: readonly AutoReadAgentRow[]): AgentPane[] {
-  return rows.flatMap((row) => {
-    if (row.parentPaneKey || !row.worktreeId) {
-      return []
-    }
-    const working = (row.mainAgent?.state ?? row.state) === 'working'
-    const turnStartedAt = working ? (row.mainAgent?.stateStartedAt ?? row.stateStartedAt) : null
-    return [
-      {
-        paneKey: row.paneKey,
-        rawPaneKey: row.rawPaneKey,
-        worktreeId: row.worktreeId,
-        turnStartedAt
-      }
-    ]
-  })
-}
-
-async function readAgentRows(hostId: string, client: RpcClient): Promise<AutoReadAgentRow[]> {
-  const response = await client.sendRequest('worktree.ps', {})
-  if (!response.ok) {
-    throw new Error(`worktree.ps refused: ${response.error.code}`)
-  }
-  return agentRowsFromWorktreePs(hostId, response.result)
 }
 
 // Why: read inside the poll effect, so a changed choice applies without restarting it.
@@ -178,7 +105,9 @@ export function useAutoReadReplies(): void {
     baselineRef.current = new Map()
     const hostsSeen = new Set<string>()
     let cancelled = false
-    let inFlight = false
+    // Why: a poll that replaced a stuck one makes the stuck one's late results stale.
+    let generation = 0
+    let inFlightSince: number | null = null
     let lastPollAt = 0
     let projectByPane: ReadonlyMap<string, string | null> = new Map()
     let lastRead: LastReadMessage | null = null
@@ -212,20 +141,27 @@ export function useAutoReadReplies(): void {
       if (!onScreen && !backgroundReadingActive()) {
         return
       }
-      // Why: the interval and the service ticks both land here; one read per window is enough.
+      // Why: the interval and the service ticks both land here; half an interval dedupes them
+      // without skipping a tick that comes a little early.
       const interval = onScreen ? FOREGROUND_POLL_MS : BACKGROUND_POLL_MS
-      if (inFlight || now - lastPollAt < interval - 500) {
+      const busy = inFlightSince !== null && now - inFlightSince < STUCK_POLL_MS
+      if (busy || now - lastPollAt < interval / 2) {
         return
       }
-      inFlight = true
+      if (inFlightSince !== null) {
+        logSpeechEvent('check stuck, starting a new one')
+      }
+      const run = ++generation
+      inFlightSince = now
       lastPollAt = now
       try {
         const known = rpc.getAllClients()
+        feeds.keepHosts(new Set(known.map(({ hostId }) => hostId)))
         const connected = known.filter(({ client }) => client.getState() === 'connected')
         const rows = await Promise.all(
           connected.map(({ hostId, client }) => readAgentRows(hostId, client).catch(() => null))
         )
-        if (cancelled) {
+        if (cancelled || run !== generation) {
           return
         }
         // Why: a failed host is skipped, not taken as agentless, so its panes keep their baseline.
@@ -246,17 +182,24 @@ export function useAutoReadReplies(): void {
           hostsSeen.add(hostId)
           newReplies.push(...found.newReplies)
         })
+        const feedsReading = readsEveryMessage()
+        for (const reply of feeds.overdue(feedsReading)) {
+          speakAutoRead(reply.id, reply.paneKey, reply.text)
+        }
         for (const reply of newReplies) {
           const message = withoutNativeChatVisualDirectiveLines(reply.message)
-          // Why: the feed already reads this pane's messages, the final one included. While
-          // auto-read is paused they still go to the reader, which keeps them waiting.
-          if (
-            feeds.heard(reply.paneKey, message) ||
-            (readsEveryMessage() && feeds.covers(reply.paneKey))
-          ) {
+          // Why: one id per turn, so a paused reader keeps a pane's earlier reply waiting too.
+          const id = `${reply.paneKey}@${reply.endedAt}`
+          if (feeds.heard(reply.paneKey, message)) {
             continue
           }
-          speakAutoRead(reply.paneKey, reply.paneKey, message)
+          // Why: the pane's feed reads the final message too (into the queue while auto-read is
+          // paused); held, so it is still read should the feed miss it.
+          if (feedsReading && feeds.covers(reply.paneKey)) {
+            feeds.awaitReply({ id, paneKey: reply.paneKey, text: message })
+            continue
+          }
+          speakAutoRead(id, reply.paneKey, message)
         }
         const waits = findNewWaits(waitBaseline, agents)
         waitBaseline = waits.baseline
@@ -287,7 +230,9 @@ export function useAutoReadReplies(): void {
       } catch (error) {
         logSpeechEvent(`check failed: ${error instanceof Error ? error.message : String(error)}`)
       } finally {
-        inFlight = false
+        if (run === generation) {
+          inFlightSince = null
+        }
       }
     }
 

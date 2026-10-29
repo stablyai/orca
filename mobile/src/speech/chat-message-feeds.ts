@@ -1,14 +1,9 @@
 import { z } from 'zod'
-import {
-  isNativeChatSupportedAgent,
-  nativeChatRequiresLocalTranscript
-} from '../../../src/shared/native-chat-agent-support'
 import { buildNativeChatSubscriptionId } from '../../../src/shared/native-chat/native-chat-stream-unsubscribe'
 import { withoutNativeChatVisualDirectiveLines } from '../../../src/shared/native-chat/native-chat-visual-directive'
-import { parsePaneKey } from '../../../src/shared/stable-pane-id'
-import { sessionTabsListRead } from '../session/mobile-session-read-operations'
 import { randomV4Uuid } from '../platform/random-v4-uuid'
 import type { RpcClient } from '../transport/rpc-client'
+import { chatTargetForPane, readWorktreeTabs, type ChatTarget, type Tab } from './chat-feed-target'
 import { logSpeechEvent } from './speech-diagnostics'
 
 // Why: `worktree.ps` only carries a turn's final message, so mid-turn ones come from each pane's
@@ -23,28 +18,10 @@ export type AgentPane = {
   turnStartedAt: number | null
 }
 
-type ChatTarget = { agent: string; sessionId: string; transcriptPath: string | null }
-
-const tabSchema = z.looseObject({
-  type: z.string(),
-  id: z.string(),
-  parentTabId: z.string().nullish(),
-  leafId: z.string().nullish(),
-  launchAgent: z.string().nullish(),
-  agentStatus: z
-    .looseObject({
-      agentType: z.string().nullish(),
-      providerSession: z
-        .looseObject({ id: z.string().nullish(), transcriptPath: z.string().nullish() })
-        .nullish()
-    })
-    .nullish()
-})
-type Tab = z.infer<typeof tabSchema>
-
 const frameSchema = z.looseObject({
   type: z.string().optional(),
   pending: z.boolean().optional(),
+  error: z.string().optional(),
   messages: z
     .array(
       z.looseObject({
@@ -58,49 +35,6 @@ const frameSchema = z.looseObject({
     .optional()
 })
 type FrameMessage = NonNullable<z.infer<typeof frameSchema>['messages']>[number]
-
-function tabsOf(result: unknown): Tab[] {
-  const tabs = z.looseObject({ tabs: z.array(z.unknown()) }).safeParse(result)
-  if (!tabs.success) {
-    return []
-  }
-  return tabs.data.tabs.flatMap((tab) => {
-    const parsed = tabSchema.safeParse(tab)
-    return parsed.success ? [parsed.data] : []
-  })
-}
-
-/** The transcript a terminal pane's chat reads, by the rules of `resolveMobileNativeChat`. */
-export function chatTargetForPane(tabs: readonly Tab[], rawPaneKey: string): ChatTarget | null {
-  const pane = parsePaneKey(rawPaneKey)
-  if (!pane) {
-    return null
-  }
-  const tab = tabs.find(
-    (candidate) =>
-      candidate.type === 'terminal' &&
-      (candidate.parentTabId ?? candidate.id) === pane.tabId &&
-      candidate.leafId === pane.leafId
-  )
-  if (!tab) {
-    return null
-  }
-  const liveAgent = tab.agentStatus?.agentType ?? null
-  const agent = liveAgent ?? tab.launchAgent ?? null
-  // Why: agents without a host transcript reader are left to final replies.
-  if (!agent || !isNativeChatSupportedAgent(agent) || nativeChatRequiresLocalTranscript(agent)) {
-    return null
-  }
-  const sessionId = tab.agentStatus?.providerSession?.id
-  if (!sessionId) {
-    return null
-  }
-  return {
-    agent,
-    sessionId,
-    transcriptPath: tab.agentStatus?.providerSession?.transcriptPath ?? null
-  }
-}
 
 export function assistantText(message: FrameMessage): string | null {
   if (message.role !== 'assistant') {
@@ -123,9 +57,12 @@ const MAX_REPLAYED = 3
 const UNRESOLVED_RETRY_MS = 10_000
 const RESOLVED_RECHECK_MS = 60_000
 const MAX_REMEMBERED = 20
+// Why: a final reply the feed has not read by then is read from `worktree.ps` instead.
+const FEED_GRACE_POLLS = 2
 
 type Feed = {
   hostId: string
+  client: RpcClient
   target: ChatTarget
   resolvedAt: number
   close: () => void
@@ -135,12 +72,20 @@ type Feed = {
   turnStartedAt: number | null
 }
 
+export type AwaitedReply = { id: string; paneKey: string; text: string }
+
 export type ChatMessageFeeds = {
   sync(hostId: string, client: RpcClient, panes: readonly AgentPane[], now: number): Promise<void>
   /** Whether this pane's messages are reaching the reader through a feed. */
   covers(paneKey: string): boolean
   /** Whether this reply was already spoken from the feed. */
   heard(paneKey: string, text: string): boolean
+  /** Holds a final reply that this pane's feed should read. */
+  awaitReply(reply: AwaitedReply): void
+  /** Held replies the feed has not read within the grace, marked heard so it never reads them. */
+  overdue(feedsReading: boolean): AwaitedReply[]
+  /** Closes the feeds of hosts that are no longer known. */
+  keepHosts(hostIds: ReadonlySet<string>): void
   closeAll(): void
 }
 
@@ -151,13 +96,21 @@ export function createChatMessageFeeds(
   const feeds = new Map<string, Feed>()
   const lastAttempt = new Map<string, number>()
   const spoken = new Map<string, string[]>()
+  const awaited = new Map<string, AwaitedReply & { polls: number }>()
+
+  const remember = (paneKey: string, text: string) => {
+    const keys = [sameMessageKey(text), ...(spoken.get(paneKey) ?? [])]
+    spoken.set(paneKey, keys.slice(0, MAX_REMEMBERED))
+  }
+  const heard = (paneKey: string, text: string) =>
+    (spoken.get(paneKey) ?? []).includes(sameMessageKey(text))
 
   const announce = (paneKey: string, messages: readonly FrameMessage[]) => {
     for (const message of messages) {
       const text = assistantText(message)
-      if (text && speak(paneKey, message.id, text)) {
-        const heardKeys = [sameMessageKey(text), ...(spoken.get(paneKey) ?? [])]
-        spoken.set(paneKey, heardKeys.slice(0, MAX_REMEMBERED))
+      // Why: a reopened feed replays what an earlier feed or the final-reply check already read.
+      if (text && !heard(paneKey, text) && speak(paneKey, message.id, text)) {
+        remember(paneKey, text)
       }
     }
   }
@@ -181,6 +134,10 @@ export function createChatMessageFeeds(
     if (frame.type === 'error' || frame.type === 'end') {
       logSpeechEvent(`chat feed ${frame.type}: ${paneKey}`)
       drop(paneKey, feed)
+      return
+    }
+    // Why: an unreadable transcript is no baseline; the snapshot that replaces it is.
+    if (frame.error) {
       return
     }
     if (frame.type === 'snapshot' && frame.pending) {
@@ -223,6 +180,7 @@ export function createChatMessageFeeds(
   ) => {
     const feed: Feed = {
       hostId,
+      client,
       target,
       resolvedAt: now,
       close: () => undefined,
@@ -255,34 +213,42 @@ export function createChatMessageFeeds(
     async sync(hostId, client, panes, now) {
       const present = new Set(panes.map((pane) => pane.paneKey))
       for (const [paneKey, feed] of feeds) {
-        if (feed.hostId === hostId && !present.has(paneKey)) {
+        if (feed.hostId !== hostId) {
+          continue
+        }
+        // Why: a replaced host client ended this feed's subscription, so it reopens on the new one.
+        if (feed.client !== client) {
+          lastAttempt.delete(paneKey)
+        }
+        if (!present.has(paneKey) || feed.client !== client) {
           drop(paneKey, feed)
         }
       }
       const due = panes.filter((pane) => {
         const feed = feeds.get(pane.paneKey)
-        return feed
-          ? now - feed.resolvedAt >= RESOLVED_RECHECK_MS
-          : now - (lastAttempt.get(pane.paneKey) ?? 0) >= UNRESOLVED_RETRY_MS
+        return (
+          now - (lastAttempt.get(pane.paneKey) ?? 0) >= UNRESOLVED_RETRY_MS &&
+          (!feed || now - feed.resolvedAt >= RESOLVED_RECHECK_MS)
+        )
       })
       for (const worktreeId of new Set(due.map((pane) => pane.worktreeId))) {
+        const worktreePanes = due.filter((candidate) => candidate.worktreeId === worktreeId)
+        for (const pane of worktreePanes) {
+          lastAttempt.set(pane.paneKey, now)
+        }
         let tabs: Tab[]
         try {
-          const response = await sessionTabsListRead.request(client, {
-            worktree: `id:${worktreeId}`
-          })
-          tabs = tabsOf(sessionTabsListRead.interpret(response))
+          tabs = await readWorktreeTabs(client, worktreeId)
         } catch {
           continue
         }
-        for (const pane of due.filter((candidate) => candidate.worktreeId === worktreeId)) {
-          lastAttempt.set(pane.paneKey, now)
+        for (const pane of worktreePanes) {
           const target = chatTargetForPane(tabs, pane.rawPaneKey)
           const feed = feeds.get(pane.paneKey)
           if (!target) {
             continue
           }
-          if (feed && feed.target.sessionId === target.sessionId) {
+          if (feed && feed.client === client && feed.target.sessionId === target.sessionId) {
             feed.resolvedAt = now
             continue
           }
@@ -296,8 +262,38 @@ export function createChatMessageFeeds(
     covers(paneKey) {
       return feeds.get(paneKey)?.baselined === true
     },
-    heard(paneKey, text) {
-      return (spoken.get(paneKey) ?? []).includes(sameMessageKey(text))
+    heard,
+    awaitReply(reply) {
+      awaited.set(reply.id, { ...reply, polls: 0 })
+    },
+    overdue(feedsReading) {
+      const due: AwaitedReply[] = []
+      for (const [id, reply] of awaited) {
+        reply.polls += 1
+        const feed = feeds.get(reply.paneKey)
+        if (heard(reply.paneKey, reply.text)) {
+          awaited.delete(id)
+          continue
+        }
+        if (feedsReading && feed?.baselined && reply.polls < FEED_GRACE_POLLS) {
+          continue
+        }
+        awaited.delete(id)
+        remember(reply.paneKey, reply.text)
+        if (feed) {
+          // Why: a feed that missed a reply may follow a session the pane has left; recheck it.
+          feed.resolvedAt = Number.NEGATIVE_INFINITY
+        }
+        due.push({ id, paneKey: reply.paneKey, text: reply.text })
+      }
+      return due
+    },
+    keepHosts(hostIds) {
+      for (const [paneKey, feed] of feeds) {
+        if (!hostIds.has(feed.hostId)) {
+          drop(paneKey, feed)
+        }
+      }
     },
     closeAll() {
       for (const [paneKey, feed] of feeds) {

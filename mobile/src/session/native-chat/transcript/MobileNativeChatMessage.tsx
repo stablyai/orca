@@ -342,8 +342,13 @@ function MobileNativeChatMessageImpl({
                 accessibilityLabel="Copy message"
               />
             ) : null}
-            {message.role === 'assistant' && copyText.length > 0 && growingBlock === undefined ? (
-              <MobileReplyReadButton id={message.id} text={copyText} />
+            {/* Disabled, not absent, while streaming, so the time stays put when it ends. */}
+            {message.role === 'assistant' && copyText.length > 0 ? (
+              <MobileReplyReadButton
+                id={message.id}
+                text={copyText}
+                disabled={growingBlock !== undefined}
+              />
             ) : null}
             <MobileNativeChatMessageTime timestamp={message.timestamp} fontScale={fontScale} />
           </View>

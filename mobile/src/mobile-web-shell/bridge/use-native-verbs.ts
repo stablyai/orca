@@ -24,6 +24,7 @@ import {
   type BridgeNativeVerb,
   type BridgePdfOpenParams
 } from './bridge-native-verbs'
+import { speechControlResultSchema } from './bridge-speech-verbs'
 
 // Use ordinary request frames/caps, served only on-device. Refuse ungranted verbs before posting and parse results because the installed shell can differ from this page build.
 export type NativeVerbs = {
@@ -47,6 +48,8 @@ export type NativeVerbs = {
   canOpenPdf: boolean
   openPdf: (params: BridgePdfOpenParams) => Promise<void>
   cancelPdf: () => Promise<void>
+  canSpeak: boolean
+  speak: (id: string, markdown: string) => Promise<boolean>
 }
 
 // Expose stable reason codes, including local ungranted and frame refusals. Unknown newer-shell codes floor to unreported so caller switches remain exhaustive.
@@ -163,7 +166,16 @@ export function useNativeVerbs(): NativeVerbs {
       },
       cancelPdf: async () => {
         await call('native.pdf.view', { action: 'cancel' }, pdfViewResultSchema)
-      }
+      },
+      canSpeak: has('native.speech.control'),
+      speak: async (id, markdown) =>
+        (
+          await call(
+            'native.speech.control',
+            { action: 'speak', id, markdown },
+            speechControlResultSchema
+          )
+        ).accepted
     }
   }, [client])
 }

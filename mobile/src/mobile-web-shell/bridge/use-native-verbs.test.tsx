@@ -93,6 +93,22 @@ describe('a page calling a native verb', () => {
     expect(pair.rpc.requests).toEqual([])
   })
 
+  it('hands a reply to the shell to read aloud and hears whether it took it', async () => {
+    const serveNativeVerb = vi.fn(async () => ({ accepted: true }))
+    const pair = createFakeBridgePortPair({ serveNativeVerb })
+    const verbs = await mount(pair)
+    expect(verbs.canSpeak).toBe(true)
+    const spoken = verbs.speak('reply-1', '**Done.**')
+    await pair.flush()
+    await expect(spoken).resolves.toBe(true)
+    expect(serveNativeVerb).toHaveBeenCalledWith('native.speech.control', {
+      action: 'speak',
+      id: 'reply-1',
+      markdown: '**Done.**'
+    })
+    expect(pair.rpc.requests).toEqual([])
+  })
+
   it('sends the verb as an ordinary request, which is why it settles like one', async () => {
     const pair = createFakeBridgePortPair()
     const verbs = await mount(pair)
@@ -123,8 +139,10 @@ describe('a shell that granted no native verbs', () => {
       throw new Error('nothing mounted')
     }
     expect(verbs.granted).toBe(false)
+    expect(verbs.canSpeak).toBe(false)
     const before = page.sent.length
     await expect(verbs.readClipboardText()).rejects.toThrow(/did not grant/)
+    await expect(verbs.speak('reply-1', 'Done.')).rejects.toThrow(/did not grant/)
     // Inspect the wire to distinguish local refusal from an otherwise identical rejected round trip.
     expect(page.sent).toHaveLength(before)
   })

@@ -3,6 +3,8 @@ import { logSpeechEvent } from './speech-diagnostics'
 import { playChime, speakUtterance, type UtteranceCallbacks } from './tts-engine'
 
 const RETRIES_PER_PIECE = 1
+// The settings sample playing beside the reader; it gives way as soon as the reader plays.
+let aside: object | null = null
 
 /**
  * One piece of a message (`index` of `count`), spoken from character `from`. `owns` says whether
@@ -17,8 +19,29 @@ export type PieceRun = {
   onEnd: () => void
 }
 
-/** Plays a piece, and tries it once more when the engine drops it. */
-export function playPieceRun(run: PieceRun, attempt = 0): void {
+/** Plays a piece of the reader's, and tries it once more when the engine drops it. */
+export function playPieceRun(run: PieceRun): void {
+  aside = null
+  playAttempt(run, 0)
+}
+
+/** Plays a settings sample outside the reader, whose queue and history it leaves alone. */
+export function playAside(pieces: readonly Piece[]): void {
+  const sample = {}
+  aside = sample
+  playFrom(pieces, 0, () => aside === sample)
+}
+
+function playFrom(pieces: readonly Piece[], index: number, owns: () => boolean): void {
+  const piece = pieces[index]
+  if (piece === undefined) {
+    return
+  }
+  const onEnd = () => playFrom(pieces, index + 1, owns)
+  playAttempt({ piece, index, count: pieces.length, from: 0, owns, onEnd }, 0)
+}
+
+function playAttempt(run: PieceRun, attempt: number): void {
   const { piece, index, count, from, owns, onEnd } = run
   const position = `${index + 1}/${count}`
   const handlers: UtteranceCallbacks = {
@@ -39,7 +62,7 @@ export function playPieceRun(run: PieceRun, attempt = 0): void {
         return
       }
       if (attempt < RETRIES_PER_PIECE) {
-        playPieceRun(run, attempt + 1)
+        playAttempt(run, attempt + 1)
       } else {
         onEnd()
       }

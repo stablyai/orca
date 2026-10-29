@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useSyncExternalStore } from 'react'
+import { useCallback, useEffect } from 'react'
 import { AppState } from 'react-native'
 import {
+  BACKGROUND_READING_KEY,
   DEFAULT_BACKGROUND_READING,
-  loadBackgroundReading,
-  saveBackgroundReading
+  type StoredFlag
 } from '../storage/speech-preferences'
 import { isAutoReadPaused, setAutoReadPaused } from './auto-read-pause'
 import { setBackgroundReadingActive } from './background-reading-state'
 import { logSpeechEvent } from './speech-diagnostics'
+import { createStoredChoice } from './stored-choice'
 import { voiceNativeModule } from './voice-native-module'
 
 // Why: matches the auto-reader's background poll interval.
@@ -15,43 +16,25 @@ const TICK_MS = 15_000
 
 const background = voiceNativeModule
 
-let preferred = DEFAULT_BACKGROUND_READING
-let preferenceLoad: Promise<void> | null = null
-let preferenceChanged = false
-const preferenceListeners = new Set<() => void>()
+const useBackgroundReadingChoice = createStoredChoice<StoredFlag>(
+  BACKGROUND_READING_KEY,
+  ['true', 'false'],
+  DEFAULT_BACKGROUND_READING
+)
 
-function emitPreference(): void {
-  for (const listener of preferenceListeners) {
-    listener()
-  }
-}
+// Why: isRunning() stays false until the service has started, which a stop must not wait for.
+let startRequested = false
 
 export function useBackgroundReadingPreference(): {
   backgroundReading: boolean
   setBackgroundReading: (next: boolean) => void
 } {
-  useEffect(() => {
-    preferenceLoad ??= loadBackgroundReading().then((stored) => {
-      if (!preferenceChanged && stored !== preferred) {
-        preferred = stored
-        emitPreference()
-      }
-    })
-  }, [])
-  const backgroundReading = useSyncExternalStore(
-    (listener) => {
-      preferenceListeners.add(listener)
-      return () => preferenceListeners.delete(listener)
-    },
-    () => preferred
+  const { value, setValue } = useBackgroundReadingChoice()
+  const setBackgroundReading = useCallback(
+    (next: boolean) => setValue(next ? 'true' : 'false'),
+    [setValue]
   )
-  const setBackgroundReading = useCallback((next: boolean) => {
-    preferenceChanged = true
-    preferred = next
-    emitPreference()
-    void saveBackgroundReading(next).catch(() => undefined)
-  }, [])
-  return { backgroundReading, setBackgroundReading }
+  return { backgroundReading: value === 'true', setBackgroundReading }
 }
 
 // Why: JS timers pause in the background, so a native foreground service's ticks drive polling; the
@@ -84,9 +67,10 @@ export function useBackgroundReadingService(wanted: boolean, onTick: () => void)
       // Why: the notification shows this process's pause, never one a previous run left behind.
       native.setAutoReadPaused(isAutoReadPaused())
       if (!wanted) {
-        if (native.isRunning()) {
+        if (startRequested || native.isRunning()) {
           native.stop()
         }
+        startRequested = false
         setBackgroundReadingActive(false)
         return
       }
@@ -99,6 +83,7 @@ export function useBackgroundReadingService(wanted: boolean, onTick: () => void)
         return
       }
       const started = native.start('Orca', 'Reading agent replies aloud', TICK_MS)
+      startRequested = started
       setBackgroundReadingActive(started)
       if (!started) {
         logSpeechEvent('background service refused by Android')

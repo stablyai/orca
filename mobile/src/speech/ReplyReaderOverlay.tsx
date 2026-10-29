@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pause, Play, Square } from 'lucide-react-native'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useReaderControls } from './reader-controls'
@@ -68,10 +68,10 @@ const styles = themedStyleSheet(() => ({
     borderRadius: 999,
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.textMuted
+    borderColor: colors.borderSubtle
   },
   label: {
-    fontSize: 13,
+    fontSize: typography.metaSize,
     fontWeight: '600',
     color: colors.textPrimary
   }

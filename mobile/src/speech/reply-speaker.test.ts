@@ -31,6 +31,7 @@ const {
   expireHolds,
   nextMessage,
   pauseReading,
+  playChimeSample,
   playReading,
   previousMessage,
   repeatLast,
@@ -38,6 +39,7 @@ const {
   setAutoPlay,
   setAutoReadNeedsHeadphones,
   speakReply,
+  speakSample,
   stopSpeaking
 } = await import('./reply-speaker')
 
@@ -246,6 +248,43 @@ describe('reading controls', () => {
     finishPiece()
     expect(last().text).toBe('Waiting.')
   })
+
+  it('reads a waiting message once when the Read button gets to it first', () => {
+    speakReply('pane#1', 'Auto.', 'queue')
+    speakReply('pane#2', 'Waiting.', 'queue', { chime: true, name: 'Mobile App' })
+    speakReply('2', 'Waiting.', 'interrupt')
+    expect(last().text).toBe('Waiting.')
+    finishPiece()
+    expect(lastState()).toBe('idle')
+    expect(spoken.map(({ text }) => text)).toEqual(['Auto.', 'Waiting.'])
+  })
+})
+
+describe('settings samples', () => {
+  it('pauses the reading for a sample and leaves it paused where it was, queue and all', () => {
+    speakReply('long', reply, 'queue')
+    speakReply('waiting', 'Waiting.', 'queue')
+    finishPiece()
+    const second = last().text
+    spokenOffset.mockReturnValue(16)
+    speakSample('Sample.')
+    spokenOffset.mockReturnValue(0)
+    expect(last().text).toBe('Sample.')
+    const before = spoken.length
+    finishPiece()
+    expect(spoken).toHaveLength(before)
+    expect(native.setReaderState.mock.calls.at(-1)?.[2]).toBe('Paused · 1 more waiting')
+    playReading('test')
+    expect(last().text).toBe(second.slice(16))
+  })
+
+  it('ignores a sample once the reader plays again', () => {
+    playChimeSample()
+    const sample = last().handlers
+    speakReply('auto', 'Auto.', 'queue')
+    sample.onError?.({ message: 'the chime could not play' })
+    expect(spoken.map(({ text }) => text)).toEqual(['(chime)', 'Auto.'])
+  })
 })
 
 describe('auto-read paused', () => {
@@ -284,6 +323,18 @@ describe('auto-read paused', () => {
     expect(last().text).toBe('Later.')
   })
 
+  it('lets Previous read the last message again while messages wait, not once idle', () => {
+    speakReply('read', 'First.', 'queue')
+    finishPiece()
+    setAutoPlay(false)
+    speakReply('unread', 'Second.', 'queue')
+    expect(native.setReaderState.mock.calls.at(-1)?.[4]).toBe(true)
+    previousMessage('test')
+    expect(last().text).toBe('First.')
+    stopSpeaking()
+    expect(native.setReaderState.mock.calls.at(-1)?.[4]).toBe(false)
+  })
+
   it('plays a waiting message through the speaker when asked, with headphones only on', () => {
     setAutoReadNeedsHeadphones(true)
     native.isPrivateOutput.mockReturnValue(false)
@@ -316,6 +367,20 @@ describe('interruptions', () => {
     audio.current('regained', null)
     expect(spoken).toHaveLength(before)
     expect(lastState()).toBe('idle')
+  })
+
+  it('stays paused after a call when auto-read was paused during it', () => {
+    speakReply('call', reply, 'queue')
+    finishPiece()
+    const second = last().text
+    audio.current('held', null)
+    setAutoPlay(false)
+    const before = spoken.length
+    audio.current('regained', null)
+    expect(spoken).toHaveLength(before)
+    expect(lastState()).toBe('paused')
+    setAutoPlay(true)
+    expect(last().text).toBe(second)
   })
 
   it('lets the audio go when a call starts with nothing to read', () => {

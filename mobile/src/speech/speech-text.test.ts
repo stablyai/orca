@@ -63,10 +63,36 @@ describe('toSpeechText', () => {
       const markdown = '[https://x.com/a](https://x.com/a)'
       expect(toSpeechText(markdown, placeholders, 'word-and-text')).toBe('link.')
     })
+
+    it('leaves the brackets and punctuation around a bare address', () => {
+      const read = (markdown: string) => toSpeechText(markdown, placeholders, 'word-and-text')
+      expect(read('(see https://example.com) for more.')).toBe('(see link) for more.')
+      expect(read('Open https://en.wikipedia.org/wiki/Foo_(bar), then')).toBe('Open link, then.')
+      expect(read('Read [Foo](https://en.wikipedia.org/wiki/Foo_(bar)) first.')).toBe(
+        'Read link Foo first.'
+      )
+    })
+
+    it('reads an image as its alt text, and drops one without', () => {
+      const markdown = '![Build graph](docs/graph.png)\nBefore ![](x.png) after'
+      expect(toSpeechText(markdown, placeholders, 'word-and-text')).toBe(
+        'Build graph. Before after.'
+      )
+    })
   })
 
   it('keeps inline code that is not a path', () => {
     expect(toSpeechText('Run `pnpm test` now', placeholders)).toBe('Run pnpm test now.')
+  })
+
+  it('reads only the name of a path, and keeps word pairs and commands whole', () => {
+    const read = (code: string) => toSpeechText(`See \`${code}\``, placeholders)
+    expect(read('src/foo/plan-aktualny.md:12')).toBe('See plan aktualny.')
+    expect(read('./scripts/build')).toBe('See build.')
+    expect(read('C:\\Users\\me\\notes.txt')).toBe('See notes.')
+    expect(read('and/or')).toBe('See and/or.')
+    expect(read('TCP/IP')).toBe('See TCP/IP.')
+    expect(read('GET /api/users')).toBe('See GET /api/users.')
   })
 })
 

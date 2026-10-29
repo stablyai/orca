@@ -1,11 +1,19 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   guessFromText,
+  languageSegments,
   planLanguages,
   sentenceLanguages,
   splitSentences,
   type LanguageGuess
 } from './language-segments'
+import { READER_WORDS } from './reader-words'
+
+const native = {
+  getSpeechOptions: () => ({ rate: null, voice: null, phoneRate: 1, language: 'pl-PL' }),
+  detectLanguages: (texts: string[]) => texts.map(() => ({ language: 'en', confidence: 0.95 }))
+}
+vi.mock('./voice-native-module', () => ({ voiceNativeModule: () => native }))
 
 const POLISH = 'Zbudowałem nową wersję aplikacji i wystawiłem ją na GitHubie.'
 const ENGLISH = 'The build failed because the signing key is missing from the config.'
@@ -47,6 +55,11 @@ describe('guessFromText', () => {
     expect(guessFromText('テストは成功です。')?.language).toBe('ja')
     expect(guessFromText('测试已经通过了。')?.language).toBe('zh')
     expect(guessFromText('테스트가 통과했습니다.')?.language).toBe('ko')
+  })
+
+  it('takes any kana for Japanese and any hangul for Korean, however much Han there is', () => {
+    expect(guessFromText('東京都知事選挙の結果発表。')?.language).toBe('ja')
+    expect(guessFromText('大韓民國 憲法 헌법.')?.language).toBe('ko')
   })
 
   it('says nothing when the words do not tell', () => {
@@ -112,6 +125,18 @@ describe('planLanguages', () => {
     expect(planLanguages(['E1.', 'Naprawione.'], ['en', null], 'pl')).toEqual([
       { text: 'E1.', language: 'en' },
       { text: 'Naprawione.', language: null }
+    ])
+  })
+})
+
+describe('languageSegments', () => {
+  it("reads the reader's own cue with the reading voice, even between English sentences", () => {
+    const after = 'The tests pass now and the release is ready for review.'
+    const cue = READER_WORDS.pl.code
+    expect(languageSegments(`${ENGLISH} ${cue} ${after}`)).toEqual([
+      { text: ENGLISH, language: 'en' },
+      { text: cue, language: null },
+      { text: after, language: 'en' }
     ])
   })
 })

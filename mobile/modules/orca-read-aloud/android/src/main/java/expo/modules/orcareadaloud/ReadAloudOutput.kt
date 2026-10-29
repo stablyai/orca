@@ -11,10 +11,8 @@ import android.os.Handler
 import android.os.Looper
 import androidx.core.content.ContextCompat
 
-/**
- * Whether audio goes somewhere private (headphones, a car) rather than the phone's speaker; reports
- * "noisy" (about to fall back to the speaker) and "private-output" via [ReadAloudSpeech.listener].
- */
+// Whether audio goes somewhere private (headphones, a car) rather than the speaker; reports "noisy"
+// (about to fall back to the speaker) and "private-output" via [ReadAloudSpeech.listener].
 internal object ReadAloudOutput {
   // A Bluetooth speaker counts too: there is no telling it from a car or headphones.
   private val PRIVATE_TYPES = setOf(
@@ -47,7 +45,8 @@ internal object ReadAloudOutput {
 
   private val devices = object : AudioDeviceCallback() {
     override fun onAudioDevicesAdded(added: Array<out AudioDeviceInfo>) {
-      if (added.any { it.type in PRIVATE_TYPES }) {
+      // A headset's microphone is reported here too; only where sound goes counts.
+      if (added.any { it.isSink && it.type in PRIVATE_TYPES }) {
         ReadAloudSpeech.listener?.invoke("private-output", "", null)
       }
     }

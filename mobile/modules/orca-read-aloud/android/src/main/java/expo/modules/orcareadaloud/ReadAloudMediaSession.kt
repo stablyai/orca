@@ -4,13 +4,12 @@ import android.content.Context
 import android.media.MediaMetadata
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 
-/**
- * Hands headset and steering-wheel buttons to JS via [ReadAloudControls] while something is read;
- * released when idle or long paused, so the buttons go back to the music app.
- */
+// Headset and steering-wheel buttons go to JS while something is read; released when idle or long
+// paused, so they go back to the music app.
 internal object ReadAloudMediaSession {
   private const val RELEASE_PAUSED_AFTER_MS = 10 * 60_000L
   private const val ACTIONS = PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE or
@@ -60,6 +59,13 @@ internal object ReadAloudMediaSession {
     }
     val existing = session
     val media = existing ?: MediaSession(context, "OrcaReadAloud").also {
+      // Before Android 8 a session without these flags gets no headset buttons.
+      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+        @Suppress("DEPRECATION")
+        it.setFlags(
+          MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS
+        )
+      }
       it.setCallback(callback, handler)
       session = it
     }

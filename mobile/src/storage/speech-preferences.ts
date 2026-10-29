@@ -1,41 +1,13 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
+export const AUTO_READ_REPLIES_KEY = 'orca:autoReadReplies'
+export const BACKGROUND_READING_KEY = 'orca:readAloudBackgroundReading'
 
-const AUTO_READ_REPLIES_KEY = 'orca:autoReadReplies'
-const BACKGROUND_READING_KEY = 'orca:readAloudBackgroundReading'
+/** An on/off setting, stored as text. */
+export type StoredFlag = 'true' | 'false'
 
 // Why: off by default, so replies are only spoken when the user asked for it.
-export const DEFAULT_AUTO_READ_REPLIES = false
+export const DEFAULT_AUTO_READ_REPLIES: StoredFlag = 'false'
 // Why: it only runs while auto-read is on, and reading with the phone pocketed is the point.
-export const DEFAULT_BACKGROUND_READING = true
-
-async function loadFlag(key: string, fallback: boolean): Promise<boolean> {
-  try {
-    const raw = await AsyncStorage.getItem(key)
-    return raw === null ? fallback : raw === 'true'
-  } catch {
-    return fallback
-  }
-}
-
-function saveFlag(key: string, value: boolean): Promise<void> {
-  return AsyncStorage.setItem(key, value ? 'true' : 'false')
-}
-
-export function loadAutoReadReplies(): Promise<boolean> {
-  return loadFlag(AUTO_READ_REPLIES_KEY, DEFAULT_AUTO_READ_REPLIES)
-}
-
-export function saveAutoReadReplies(enabled: boolean): Promise<void> {
-  return saveFlag(AUTO_READ_REPLIES_KEY, enabled)
-}
-
-export function loadBackgroundReading(): Promise<boolean> {
-  return loadFlag(BACKGROUND_READING_KEY, DEFAULT_BACKGROUND_READING)
-}
-
-export function saveBackgroundReading(enabled: boolean): Promise<void> {
-  return saveFlag(BACKGROUND_READING_KEY, enabled)
-}
+export const DEFAULT_BACKGROUND_READING: StoredFlag = 'true'
 
 export const READ_SCOPE_KEY = 'orca:readAloudReadScope'
 

@@ -8,7 +8,8 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 vi.mock('react-native', () => ({ AppState: { currentState: 'active' } }))
 vi.mock('../transport/client-context', () => ({ useRpcClientContext: vi.fn() }))
 
-const { agentRowsFromWorktreePs, findNewReplies } = await import('./use-auto-read-replies')
+const { findNewReplies } = await import('./use-auto-read-replies')
+const { agentRowsFromWorktreePs } = await import('./auto-read-agent-rows')
 
 function agent(overrides: Partial<RuntimeWorktreeAgentRow>): RuntimeWorktreeAgentRow {
   return {
@@ -38,7 +39,7 @@ describe('findNewReplies', () => {
   it('reads a reply that finishes after the pane was first seen', () => {
     const first = findNewReplies(new Map(), [agent({ state: 'working' })])
     const second = findNewReplies(first.baseline, [agent({ lastAssistantMessage: 'Done!' })])
-    expect(second.newReplies).toEqual([{ paneKey: 'pane-1', message: 'Done!' }])
+    expect(second.newReplies).toEqual([{ paneKey: 'pane-1', message: 'Done!', endedAt: 0 }])
   })
 
   it('reads each reply once, and again only when it changes', () => {
@@ -51,7 +52,7 @@ describe('findNewReplies', () => {
     expect(first.newReplies).toHaveLength(1)
     expect(repeat.newReplies).toEqual([])
     expect(working.newReplies).toEqual([])
-    expect(next.newReplies).toEqual([{ paneKey: 'pane-1', message: 'C' }])
+    expect(next.newReplies).toEqual([{ paneKey: 'pane-1', message: 'C', endedAt: 0 }])
   })
 
   it('reads a reply that lands while a background task keeps the row working', () => {
@@ -66,7 +67,7 @@ describe('findNewReplies', () => {
       })
     ])
     expect(first.newReplies).toEqual([])
-    expect(ended.newReplies).toEqual([{ paneKey: 'pane-1', message: 'B' }])
+    expect(ended.newReplies).toEqual([{ paneKey: 'pane-1', message: 'B', endedAt: 1 }])
   })
 
   it('never reads tool output the host shows while the main agent is still working', () => {
@@ -90,7 +91,7 @@ describe('findNewReplies', () => {
       [agent({ paneKey: 'new', lastAssistantMessage: 'Quick answer' })],
       true
     )
-    expect(newReplies).toEqual([{ paneKey: 'new', message: 'Quick answer' }])
+    expect(newReplies).toEqual([{ paneKey: 'new', message: 'Quick answer', endedAt: 0 }])
   })
 
   it('reads the same answer again when another turn ends with it', () => {
@@ -105,18 +106,35 @@ describe('findNewReplies', () => {
     ])
     expect(first.newReplies).toEqual([])
     expect(again.newReplies).toEqual([])
-    expect(nextTurn.newReplies).toEqual([{ paneKey: 'pane-1', message: 'Same' }])
+    expect(nextTurn.newReplies).toEqual([{ paneKey: 'pane-1', message: 'Same', endedAt: 2 }])
   })
 
   it('keeps panes of different hosts apart', () => {
-    const result = {
-      worktrees: [{ agents: [agent({ paneKey: 'p', parentPaneKey: 'root' })] }, { agents: null }]
-    }
-    expect(agentRowsFromWorktreePs('host-a', result)).toMatchObject([
-      { paneKey: 'host-a:p', parentPaneKey: 'host-a:root' }
+    const worktrees = [
+      { agents: [agent({ paneKey: 'p', parentPaneKey: 'root' })] },
+      { agents: null },
+      null
+    ]
+    expect(agentRowsFromWorktreePs('host-a', worktrees)).toMatchObject([
+      { paneKey: 'host-a:p', parentPaneKey: 'host-a:root', rawPaneKey: 'p' }
     ])
-    expect(agentRowsFromWorktreePs('host-a', { nope: true })).toEqual([])
-    expect(agentRowsFromWorktreePs('host-a', null)).toEqual([])
+  })
+
+  it('skips agent rows it cannot read, and a main agent it cannot read', () => {
+    const worktrees = [
+      {
+        worktreeId: 'wt',
+        agents: [
+          { paneKey: 'no-state', stateStartedAt: 0 },
+          { ...agent({ paneKey: 'future' }), state: 'thinking' },
+          { ...agent({ paneKey: 'old-host' }), mainAgent: { state: 'thinking' } }
+        ]
+      }
+    ]
+    const rows = agentRowsFromWorktreePs('host-a', worktrees)
+    expect(rows.map((row) => [row.paneKey, row.mainAgent])).toEqual([
+      ['host-a:old-host', undefined]
+    ])
   })
 
   it('skips subagent rows', () => {

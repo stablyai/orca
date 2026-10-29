@@ -1,8 +1,16 @@
 import { useSyncExternalStore } from 'react'
-import { playPieceRun } from './piece-player'
+import { playAside, playPieceRun } from './piece-player'
 import { logSpeechEvent } from './speech-diagnostics'
 import { onAudioEvent, spokenOffset, stopUtterances } from './tts-engine'
-import { previousTarget, readerStatus, remembered, type Hold, type Utterance } from './reader-model'
+import {
+  canGoPrevious,
+  previousTarget,
+  readerStatus,
+  remembered,
+  type Hold,
+  type Piece,
+  type Utterance
+} from './reader-model'
 import { replyPieces } from './reply-pieces'
 import { voiceNativeModule, type ReaderState } from './voice-native-module'
 
@@ -42,8 +50,7 @@ function emit(): void {
   const title = current?.title ?? null
   const status = readerStatus(state, hold, current, queue.length, autoPlay)
   const canRepeat = history.length > 0
-  // Greyed out when there is nowhere to go: no message before this one, none waiting after it.
-  const canPrevious = (current ? history.findIndex((kept) => kept.id === current?.id) : 0) > 0
+  const canPrevious = canGoPrevious(history, current, queue.length)
   const canNext = queue.length > 0
   const report = JSON.stringify([state, title, status, canRepeat, canPrevious, canNext])
   if (report !== reported) {
@@ -114,6 +121,10 @@ function start(utterance: Utterance, mode: 'interrupt' | 'queue'): void {
   logSpeechEvent(
     `${mode === 'interrupt' ? 'read' : 'auto-read'} ${utterance.id} (${utterance.pieces.length} pieces)`
   )
+  // The Read button also takes its reply out of the queue, where it can wait under another id.
+  queue = queue.filter(
+    (queued) => queued.id !== utterance.id && (mode === 'queue' || queued.body !== utterance.body)
+  )
   // The Read button cuts off what is being read; what waits keeps waiting.
   if (mode === 'interrupt') {
     current = null
@@ -121,7 +132,6 @@ function start(utterance: Utterance, mode: 'interrupt' | 'queue'): void {
     begin(utterance)
     return
   }
-  queue = queue.filter((queued) => queued.id !== utterance.id)
   queue.push(utterance)
   if (current === null && hold === null && autoPlay) {
     playNext()
@@ -144,30 +154,32 @@ export function speakReply(
   if (pieces.length === 0) {
     return
   }
+  const body = pieces.map((part) => (part.kind === 'text' ? part.text : '')).join(' ')
   if (intro.name) {
     pieces.unshift({ kind: 'text', text: `${intro.name}.` })
   }
   if (intro.chime) {
     pieces.unshift({ kind: 'chime' })
   }
-  start({ id, pieces, title: intro.title ?? null, auto: mode === 'queue', kept: true }, mode)
+  start({ id, pieces, title: intro.title ?? null, auto: mode === 'queue', body }, mode)
+}
+
+// A sample pauses the reading, which goes on from the word only when Play is pressed.
+function playSample(pieces: Piece[]): void {
+  if (current) {
+    pauseReading('settings sample')
+  }
+  stopUtterances()
+  playAside(pieces)
 }
 
 export function speakSample(markdown: string): void {
-  start(
-    { id: 'sample', pieces: replyPieces(markdown), title: null, auto: false, kept: false },
-    'interrupt'
-  )
+  playSample(replyPieces(markdown))
 }
 
 export function playChimeSample(): void {
-  start(
-    { id: 'chime-sample', pieces: [{ kind: 'chime' }], title: null, auto: false, kept: false },
-    'interrupt'
-  )
+  playSample([{ kind: 'chime' }])
 }
-
-// `reason` only labels the reader log, so a stop nobody pressed shows where it came from.
 
 // A call or unplug never replaces the user's own pause, which lasts until they resume.
 function holdReading(reason: Hold['reason'], label: string): void {
@@ -284,7 +296,8 @@ export function setAutoPlay(on: boolean): void {
     return
   }
   autoPlay = on
-  if (!on && current && hold === null) {
+  // Takes over a call or unplug hold, so the reading does not go on when that ends.
+  if (!on && current && hold?.reason !== 'paused') {
     holdReading('paused', 'auto-read paused')
   } else if (on && hold?.reason === 'paused') {
     resumeReading('auto-read resumed')
@@ -337,11 +350,6 @@ onAudioEvent((event, message) => {
 function subscribe(listener: () => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)
-}
-
-/** Null when idle; a paused reply still counts. */
-export function useSpeakingReplyId(): string | null {
-  return useSyncExternalStore(subscribe, () => current?.id ?? null)
 }
 
 export function useReaderState(): ReaderState {

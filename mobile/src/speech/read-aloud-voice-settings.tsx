@@ -1,9 +1,12 @@
 import { useMemo } from 'react'
-import { View, Text, Pressable, Switch } from 'react-native'
+import { View, Text, Pressable } from 'react-native'
 import { ChevronRight, Minus, Plus, type LucideIcon } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { MobileSwitch } from '../components/MobileSwitch'
 import { PickerModal } from '../components/PickerModal'
-import { readAloudStyles as styles } from './read-aloud-settings-styles'
+import { voiceSettingsStyles as styles } from '../settings/voice-settings-styles'
+import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { readAloudStyles } from './read-aloud-settings-styles'
 import { useLanguageVoices } from './reading-preferences'
 import { speakVoiceSample, useSpeechOptions } from './speech-options'
 import {
@@ -29,20 +32,15 @@ function useVoiceChoices(state: SpeechOptionsState) {
 function ValueRow({
   label,
   value,
-  divider,
   onPress
 }: {
   label: string
   value: string
-  divider: boolean
   onPress: () => void
 }) {
+  useMobileColorScheme()
   return (
-    <Pressable
-      accessibilityRole="button"
-      style={divider ? [styles.row, styles.rowDivider] : styles.row}
-      onPress={onPress}
-    >
+    <Pressable accessibilityRole="button" style={styles.row} onPress={onPress}>
       <View style={styles.rowContent}>
         <Text style={styles.rowLabel}>{label}</Text>
         <Text style={styles.rowSublabel}>{value}</Text>
@@ -63,6 +61,7 @@ function StepButton({
   disabled: boolean
   onPress: () => void
 }) {
+  useMobileColorScheme()
   return (
     <Pressable
       accessibilityRole="button"
@@ -70,7 +69,7 @@ function StepButton({
       accessibilityState={{ disabled }}
       disabled={disabled}
       hitSlop={6}
-      style={disabled ? [styles.stepButton, styles.stepButtonDisabled] : styles.stepButton}
+      style={[readAloudStyles.stepButton, disabled && styles.disabled]}
       onPress={onPress}
     >
       <Icon size={18} color={colors.textPrimary} />
@@ -79,6 +78,7 @@ function StepButton({
 }
 
 function SpeedRows({ state }: { state: SpeechOptionsState }) {
+  useMobileColorScheme()
   const { options, phoneRate, setOptions } = state
   const current = options.rate ?? phoneRate
   const step = (direction: 1 | -1) =>
@@ -104,22 +104,26 @@ function SpeedRows({ state }: { state: SpeechOptionsState }) {
         />
       </View>
       {options.rate !== null ? (
-        <Pressable
-          accessibilityRole="button"
-          style={[styles.row, styles.rowDivider]}
-          onPress={() => setOptions({ ...options, rate: null })}
-        >
-          <Text style={styles.rowLabel}>Use the phone&apos;s speed</Text>
-        </Pressable>
+        <>
+          <View style={styles.separator} />
+          <Pressable
+            accessibilityRole="button"
+            style={styles.row}
+            onPress={() => setOptions({ ...options, rate: null })}
+          >
+            <Text style={styles.rowLabel}>Use the phone&apos;s speed</Text>
+          </Pressable>
+        </>
       ) : null}
     </>
   )
 }
 
 function LanguageVoicesRow() {
+  useMobileColorScheme()
   const { value, setValue } = useLanguageVoices()
   return (
-    <View style={[styles.row, styles.rowDivider]}>
+    <View style={styles.row}>
       <View style={styles.rowContent}>
         <Text style={styles.rowLabel}>Other languages in their own voice</Text>
         <Text style={styles.rowSublabel}>
@@ -128,12 +132,10 @@ function LanguageVoicesRow() {
             : 'Off — everything is read by the voice above'}
         </Text>
       </View>
-      <Switch
+      <MobileSwitch
         accessibilityLabel="Other languages in their own voice"
         value={value === 'on'}
         onValueChange={(on) => setValue(on ? 'on' : 'off')}
-        trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
-        thumbColor={colors.textPrimary}
       />
     </View>
   )
@@ -146,40 +148,41 @@ export function ReadAloudVoiceGroup({
   state: SpeechOptionsState
   onOpenPicker: (picker: VoicePicker) => void
 }) {
+  useMobileColorScheme()
   const choices = useVoiceChoices(state)
   return (
     <>
-      <Text style={[styles.groupHeading, styles.groupGap]}>VOICE</Text>
-      <Text style={styles.groupDescription}>
+      <Text style={[styles.groupHeading, readAloudStyles.groupGap]}>VOICE</Text>
+      <Text style={readAloudStyles.groupDescription}>
         Applies to the Read button and auto-read. Every change reads a short sample.
       </Text>
       <View style={[styles.section, styles.sectionTopGap]}>
         {state.available ? (
           <>
             <SpeedRows state={state} />
+            <View style={styles.separator} />
             <ValueRow
               label="Voice"
               value={describeVoice(state.options.voice, choices)}
-              divider
               onPress={() => onOpenPicker('voice')}
             />
+            <View style={styles.separator} />
             <LanguageVoicesRow />
+            <View style={styles.separator} />
           </>
         ) : null}
-        <Pressable
-          accessibilityRole="button"
-          style={state.available ? [styles.row, styles.rowDivider] : styles.row}
-          onPress={speakVoiceSample}
-        >
+        <Pressable accessibilityRole="button" style={styles.row} onPress={speakVoiceSample}>
           <Text style={styles.rowLabel}>Test voice</Text>
         </Pressable>
         {state.available ? (
-          <ValueRow
-            label="Phone text-to-speech settings"
-            value="More voices to download, another speech engine"
-            divider
-            onPress={state.openPhoneSettings}
-          />
+          <>
+            <View style={styles.separator} />
+            <ValueRow
+              label="Phone text-to-speech settings"
+              value="More voices to download, another speech engine"
+              onPress={state.openPhoneSettings}
+            />
+          </>
         ) : null}
       </View>
     </>

@@ -5,10 +5,7 @@ import android.os.Build
 import android.view.textclassifier.TextClassificationManager
 import android.view.textclassifier.TextLanguage
 
-/**
- * On-device language detection (Android 10+, no network), so a sentence in another language can
- * be read in its own voice.
- */
+/** On-device language detection (Android 10+), so a sentence in another language gets its own voice. */
 object ReadAloudLanguage {
   /** (language tag, confidence 0–1) of the likeliest language per text; null where unknown. */
   fun detect(context: Context, texts: List<String>): List<Map<String, Any>?> {

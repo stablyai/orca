@@ -1,16 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const tabsReply: { current: { tabs: unknown[] } } = { current: { tabs: [] } }
+const tabsRequest = vi.fn(async () => ({ ok: true }))
 
 vi.mock('../session/mobile-session-read-operations', () => ({
   sessionTabsListRead: {
-    request: vi.fn(async () => ({ ok: true })),
+    request: tabsRequest,
     interpret: () => tabsReply.current
   }
 }))
 
-const { assistantText, chatTargetForPane, createChatMessageFeeds } =
-  await import('./chat-message-feeds')
+const { assistantText, createChatMessageFeeds } = await import('./chat-message-feeds')
+const { chatTargetForPane } = await import('./chat-feed-target')
 
 const claudeTab = {
   type: 'terminal',
@@ -81,6 +82,7 @@ describe('createChatMessageFeeds', () => {
 
   beforeEach(() => {
     tabsReply.current = { tabs: [claudeTab] }
+    tabsRequest.mockClear()
     spoken = []
     speaking = true
   })
@@ -143,5 +145,90 @@ describe('createChatMessageFeeds', () => {
     expect(streams.map((stream) => stream.closed)).toEqual([true, false])
     await feeds.sync('host', client, [], 300_000)
     expect(streams[1].closed).toBe(true)
+  })
+
+  it('reopens a feed on the client that replaced the one it was opened on', async () => {
+    const feeds = feedsUnderTest()
+    const first = fakeClient()
+    await feeds.sync('host', first.client, [{ ...pane, turnStartedAt: null }], 100_000)
+    first.streams[0].onFrame({ type: 'snapshot', messages: [] })
+    const second = fakeClient()
+    await feeds.sync('host', second.client, [{ ...pane, turnStartedAt: null }], 103_000)
+    expect(first.streams[0].closed).toBe(true)
+    expect(second.streams).toHaveLength(1)
+    expect(feeds.covers(pane.paneKey)).toBe(false)
+  })
+
+  it('does not read again what an earlier feed of the pane read', async () => {
+    const feeds = feedsUnderTest()
+    const { client, streams } = fakeClient()
+    await feeds.sync('host', client, [{ ...pane, turnStartedAt: 5000 }], 100_000)
+    streams[0].onFrame({ type: 'snapshot', messages: [] })
+    streams[0].onFrame({ type: 'appended', messages: [assistant('m1', 'Step one', 6000)] })
+    streams[0].onFrame({ type: 'end' })
+    await feeds.sync('host', client, [{ ...pane, turnStartedAt: 5000 }], 111_000)
+    streams[1].onFrame({
+      type: 'snapshot',
+      messages: [assistant('m1', 'Step one', 6000), assistant('m2', 'Step two', 7000)]
+    })
+    expect(spoken).toEqual(['Step one', 'Step two'])
+  })
+
+  it('takes no baseline from a snapshot of an unreadable transcript', async () => {
+    const feeds = feedsUnderTest()
+    const { client, streams } = fakeClient()
+    await feeds.sync('host', client, [{ ...pane, turnStartedAt: null }], 100_000)
+    streams[0].onFrame({ type: 'snapshot', messages: [], error: 'Transcript unavailable' })
+    expect(feeds.covers(pane.paneKey)).toBe(false)
+    streams[0].onFrame({ type: 'snapshot', messages: [assistant('old', 'Old answer')] })
+    expect(feeds.covers(pane.paneKey)).toBe(true)
+    expect(spoken).toEqual([])
+  })
+
+  it('hands back a final reply its feed never read, and rechecks that feed', async () => {
+    const feeds = feedsUnderTest()
+    const { client, streams } = fakeClient()
+    await feeds.sync('host', client, [{ ...pane, turnStartedAt: null }], 100_000)
+    streams[0].onFrame({ type: 'snapshot', messages: [] })
+    const reply = { id: 'r1', paneKey: pane.paneKey, text: 'Final answer' }
+    feeds.awaitReply(reply)
+    expect(feeds.overdue(true)).toEqual([])
+    expect(feeds.overdue(true)).toEqual([reply])
+    expect(feeds.overdue(true)).toEqual([])
+    streams[0].onFrame({ type: 'appended', messages: [assistant('m1', 'Final answer')] })
+    expect(spoken).toEqual([])
+    tabsReply.current = {
+      tabs: [{ ...claudeTab, agentStatus: { agentType: 'claude', providerSession: { id: 's2' } } }]
+    }
+    await feeds.sync('host', client, [{ ...pane, turnStartedAt: null }], 111_000)
+    expect(streams).toHaveLength(2)
+  })
+
+  it('lets go of a held reply once its feed reads it', async () => {
+    const feeds = feedsUnderTest()
+    const { client, streams } = fakeClient()
+    await feeds.sync('host', client, [{ ...pane, turnStartedAt: null }], 100_000)
+    streams[0].onFrame({ type: 'snapshot', messages: [] })
+    feeds.awaitReply({ id: 'r1', paneKey: pane.paneKey, text: 'Final answer' })
+    streams[0].onFrame({ type: 'appended', messages: [assistant('m1', 'Final answer')] })
+    expect([feeds.overdue(true), feeds.overdue(true), feeds.overdue(true)]).toEqual([[], [], []])
+    expect(spoken).toEqual(['Final answer'])
+  })
+
+  it('waits before asking again for tabs it failed to read', async () => {
+    const feeds = feedsUnderTest()
+    const { client } = fakeClient()
+    tabsRequest.mockRejectedValueOnce(new Error('offline'))
+    await feeds.sync('host', client, [{ ...pane, turnStartedAt: null }], 100_000)
+    await feeds.sync('host', client, [{ ...pane, turnStartedAt: null }], 103_000)
+    expect(tabsRequest).toHaveBeenCalledTimes(1)
+  })
+
+  it('closes the feeds of a host that is gone', async () => {
+    const feeds = feedsUnderTest()
+    const { client, streams } = fakeClient()
+    await feeds.sync('host', client, [{ ...pane, turnStartedAt: null }], 100_000)
+    feeds.keepHosts(new Set(['other-host']))
+    expect(streams[0].closed).toBe(true)
   })
 })

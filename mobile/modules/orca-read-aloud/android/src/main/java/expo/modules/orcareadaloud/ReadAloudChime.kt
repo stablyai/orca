@@ -8,10 +8,7 @@ import kotlin.math.exp
 import kotlin.math.min
 import kotlin.math.sin
 
-/**
- * The chime auto-read can play before a message, synthesized so no sound file ships: two soft
- * notes a fifth apart, quieter than the voice that follows.
- */
+/** The chime before an auto-read message: two soft notes, synthesized so no sound file ships. */
 internal object ReadAloudChime {
   private const val SAMPLE_RATE = 24_000
   private const val LENGTH_MS = 440

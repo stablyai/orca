@@ -1,10 +1,11 @@
-import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { isAskUserQuestionTool } from '../../../src/shared/agent-question-answered-intent'
+import { mainAgentState } from '../../../src/shared/main-agent-status'
 import {
   ANNOUNCE_WAITS_KEY,
   DEFAULT_ANNOUNCE_WAITS,
   type AnnounceWaits
 } from '../storage/speech-preferences'
+import type { SpokenAgentRow } from './auto-read-agent-rows'
 import { readerLanguage, readerWords } from './reader-words'
 import { createStoredChoice } from './stored-choice'
 
@@ -23,7 +24,7 @@ export type NewWait = { paneKey: string; since: number; kind: WaitKind }
 
 // Claude's PermissionRequest, Elicitation and AskUserQuestion all end in `waiting`; `blocked`
 // comes from terminal status reports and structured sessions that need attention.
-function waitKind(agent: RuntimeWorktreeAgentRow, state: string): WaitKind {
+function waitKind(agent: SpokenAgentRow, state: string): WaitKind {
   if (isAskUserQuestionTool(agent.toolName ?? undefined)) {
     return 'question'
   }
@@ -34,7 +35,7 @@ function waitKind(agent: RuntimeWorktreeAgentRow, state: string): WaitKind {
 // the main agent's state also carries a subagent's wait, so subagent rows are skipped.
 export function findNewWaits(
   baseline: WaitBaseline,
-  agents: readonly RuntimeWorktreeAgentRow[]
+  agents: readonly SpokenAgentRow[]
 ): { baseline: WaitBaseline; newWaits: NewWait[] } {
   const next = new Map(baseline)
   const newWaits: NewWait[] = []
@@ -42,7 +43,7 @@ export function findNewWaits(
     if (agent.parentPaneKey) {
       continue
     }
-    const state = agent.mainAgent?.state ?? agent.state
+    const state = mainAgentState(agent)
     const waiting = state === 'waiting' || state === 'blocked'
     const since = waiting ? (agent.mainAgent?.stateStartedAt ?? agent.stateStartedAt) : null
     const seen = next.get(agent.paneKey)

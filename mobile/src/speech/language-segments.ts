@@ -1,4 +1,4 @@
-import { voiceLanguage } from './reader-words'
+import { readerWords, voiceLanguage } from './reader-words'
 import { voiceNativeModule } from './voice-native-module'
 
 // Why: only whole sentences switch voice, as a switch mid-sentence sounds like two speakers.
@@ -42,12 +42,8 @@ export function longEnoughToGuess(sentence: string): boolean {
   return words >= MIN_WORDS || cjk >= MIN_CJK_CHARACTERS
 }
 
-// Kana before Han: Japanese is written with both.
-const SCRIPTS: [RegExp, string][] = [
-  [/[぀-ヿ]/g, 'ja'],
-  [/[가-힯]/g, 'ko'],
-  [/[㐀-䶿一-鿿]/g, 'zh']
-]
+const KANA = /[぀-ヿ]/
+const HANGUL = /[가-힯]/
 
 // Words that are common in one language and not words at all in the other.
 const POLISH_WORDS = new Set(
@@ -70,10 +66,10 @@ export function guessFromText(sentence: string): LanguageGuess | null {
   if (letters === 0) {
     return null
   }
-  for (const [script, language] of SCRIPTS) {
-    if ((sentence.match(script)?.length ?? 0) * 2 >= letters) {
-      return { language, confidence: 0.9 }
-    }
+  if ((sentence.match(CJK)?.length ?? 0) * 2 >= letters) {
+    // Japanese is often mostly Han, so any kana tells it from Chinese.
+    const language = KANA.test(sentence) ? 'ja' : HANGUL.test(sentence) ? 'ko' : 'zh'
+    return { language, confidence: 0.9 }
   }
   const words = sentence.toLowerCase().match(/\p{L}+/gu) ?? []
   let polish = 0
@@ -92,17 +88,25 @@ export function guessFromText(sentence: string): LanguageGuess | null {
   return { language: polish > english ? 'pl' : 'en', confidence: 0.9 }
 }
 
-/** The phone's confident guess unless the text clearly is `base`; null when unsure or short. */
+/**
+ * The phone's confident guess unless the text clearly is `base`; null when unsure or short.
+ * `cues`, the reader's own words, are `base`: a short one would otherwise join a foreign run.
+ */
 export function sentenceLanguages(
   sentences: string[],
   base: string,
-  phoneGuesses: (texts: string[]) => (LanguageGuess | null)[]
+  phoneGuesses: (texts: string[]) => (LanguageGuess | null)[],
+  cues: readonly string[] = []
 ): (string | null)[] {
-  const asked = sentences.filter(longEnoughToGuess)
+  const guessable = (sentence: string) => !cues.includes(sentence) && longEnoughToGuess(sentence)
+  const asked = sentences.filter(guessable)
   const answers = asked.length > 0 ? phoneGuesses(asked) : []
   let next = 0
   return sentences.map((sentence) => {
-    if (!longEnoughToGuess(sentence)) {
+    if (cues.includes(sentence)) {
+      return base
+    }
+    if (!guessable(sentence)) {
       return null
     }
     const phone = answers[next++] ?? null
@@ -159,12 +163,13 @@ export function languageSegments(text: string): LanguageSegment[] {
   if (sentences.length === 0) {
     return whole
   }
-  const languages = sentenceLanguages(sentences, base, (texts) => {
+  const { code, table } = readerWords()
+  const detect = (texts: string[]) => {
     try {
       return native.detectLanguages(texts)
     } catch {
       return []
     }
-  })
-  return planLanguages(sentences, languages, base)
+  }
+  return planLanguages(sentences, sentenceLanguages(sentences, base, detect, [code, table]), base)
 }

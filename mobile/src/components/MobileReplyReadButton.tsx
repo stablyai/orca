@@ -8,10 +8,12 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 // Why: no Stop here; the reader overlay's Stop pill ends the reading on any screen.
 export function MobileReplyReadButton({
   id,
-  text
+  text,
+  disabled = false
 }: {
   id: string
   text: string
+  disabled?: boolean
 }): React.JSX.Element | null {
   useMobileColorScheme()
   const speech = useReplySpeech()
@@ -20,10 +22,16 @@ export function MobileReplyReadButton({
   }
   return (
     <Pressable
-      style={({ pressed }) => [styles.button, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.button,
+        disabled && styles.disabled,
+        pressed && styles.pressed
+      ]}
       hitSlop={10}
       accessibilityRole="button"
       accessibilityLabel="Read reply aloud"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={() => speech.speak(id, text)}
     >
       <Volume2 size={14} color={colors.textMuted} />
@@ -39,5 +47,6 @@ const styles = themedStyleSheet(() => ({
     justifyContent: 'center',
     borderRadius: radii.button
   },
+  disabled: { opacity: 0.4 },
   pressed: { backgroundColor: colors.bgRaised }
 }))

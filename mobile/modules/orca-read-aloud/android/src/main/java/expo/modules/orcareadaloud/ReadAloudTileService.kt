@@ -9,10 +9,8 @@ import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import androidx.annotation.RequiresApi
 
-/**
- * Quick Settings tile that pauses and resumes auto-read while [ReadAloudService] runs; the pause
- * lives in JS, and the tile redraws when JS reports the new state.
- */
+// Quick Settings tile pausing auto-read while [ReadAloudService] runs; the pause lives in JS, and
+// the tile redraws when JS reports the new state.
 class ReadAloudTileService : TileService() {
   override fun onStartListening() {
     super.onStartListening()
