@@ -120,6 +120,7 @@ export function DiffSectionItem({
   useDiffCommentDecorator({
     editor: hasLineCommentAction ? modifiedEditor : null,
     monacoModelIdentity: `${modelPathBase}:modified`,
+    draftRetentionKey: modelPathBase,
     filePath: section.path,
     worktreeId: worktreeId ?? '',
     comments: inlineComments ?? (worktreeId ? diffComments : []),
