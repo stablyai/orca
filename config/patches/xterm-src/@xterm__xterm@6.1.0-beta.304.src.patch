@@ -1322,7 +1322,7 @@ index d45938515e7a9903de0da0d61716fd42e4deea0c..17d6577e388eb2e4397338093e353738
    private _ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
  
 diff --git a/src/browser/services/MouseService.ts b/src/browser/services/MouseService.ts
-index 353e0581da7a95c9473d6169cd9ec548bc3bfe30..a51645fb22b922f8fde5c10730d029e14b8912cd 100644
+index 353e0581da7a95c9473d6169cd9ec548bc3bfe30..0171e3ee8bb89e716808724a275522d378d2f271 100644
 --- a/src/browser/services/MouseService.ts
 +++ b/src/browser/services/MouseService.ts
 @@ -495,9 +495,9 @@ export class MouseService implements IMouseService {
@@ -1338,6 +1338,33 @@ index 353e0581da7a95c9473d6169cd9ec548bc3bfe30..a51645fb22b922f8fde5c10730d029e1
        return false;
      }
  
+@@ -535,7 +535,9 @@ export class MouseService implements IMouseService {
+       if (this._mouseStateService.isDefaultEncoding) {
+         this._coreService.triggerBinaryEvent(report);
+       } else {
+-        this._coreService.triggerDataEvent(report, true);
++        // A left press dismisses the selection like typing; wheel and right-click reports keep it for copy
++        const isLeftPress = e.button === CoreMouseButton.LEFT && e.action === CoreMouseAction.DOWN;
++        this._coreService.triggerDataEvent(report, true, !isLeftPress);
+       }
+     }
+ 
+diff --git a/src/browser/services/SelectionService.ts b/src/browser/services/SelectionService.ts
+index 39d8dd76b638f655f6eddf48391481c7dc835894..337b22b91a16eade36bf4eef6f5e96bb1afd0cdd 100644
+--- a/src/browser/services/SelectionService.ts
++++ b/src/browser/services/SelectionService.ts
+@@ -136,8 +136,9 @@ export class SelectionService extends Disposable implements ISelectionService {
+     // Init listeners
+     this._mouseMoveListener = event => this._handleMouseMove(event as MouseEvent);
+     this._mouseUpListener = event => this._handleMouseUp(event as MouseEvent);
+-    this._coreService.onUserInput(() => {
+-      if (this.hasSelection) {
++    this._coreService.onUserInput(isMouseReport => {
++      // Mouse reports keep a forced selection, or copy finds it cleared under a mouse-reporting app
++      if (isMouseReport !== true && this.hasSelection) {
+         this.clearSelection();
+       }
+     });
 diff --git a/src/common/InputHandler.ts b/src/common/InputHandler.ts
 index 995fe7670a10f11fb9b0b42332484b038ea6c989..3df13f60209ccd097b861d94efd481988d38400f 100644
 --- a/src/common/InputHandler.ts
@@ -1510,3 +1537,59 @@ index e3a88bfeb4bbf79214d799adec30cba8e4dc1b49..ca7ee6b45245a2ea5a2b027e192b98cd
        this.lines.maxLength = newMaxLength;
      }
  
+diff --git a/src/common/services/CoreService.ts b/src/common/services/CoreService.ts
+index b3e04ebe6f27e7941a2808f96d10fb2700f7b735..a006f61f604676690843b2c018d6ba5e974e4d6c 100644
+--- a/src/common/services/CoreService.ts
++++ b/src/common/services/CoreService.ts
+@@ -46,7 +46,7 @@ export class CoreService extends Disposable implements ICoreService {
+ 
+   private readonly _onData = this._register(new Emitter<string>());
+   public readonly onData = this._onData.event;
+-  private readonly _onUserInput = this._register(new Emitter<void>());
++  private readonly _onUserInput = this._register(new Emitter<boolean | void>());
+   public readonly onUserInput = this._onUserInput.event;
+   private readonly _onBinary = this._register(new Emitter<string>());
+   public readonly onBinary = this._onBinary.event;
+@@ -71,7 +71,7 @@ export class CoreService extends Disposable implements ICoreService {
+     this.kittyKeyboard = DEFAULT_KITTY_KEYBOARD_STATE();
+   }
+ 
+-  public triggerDataEvent(data: string, wasUserInput: boolean = false): void {
++  public triggerDataEvent(data: string, wasUserInput: boolean = false, isMouseReport: boolean = false): void {
+     // Prevents all events to pty process if stdin is disabled
+     if (this._optionsService.rawOptions.disableStdin) {
+       return;
+@@ -85,7 +85,7 @@ export class CoreService extends Disposable implements ICoreService {
+ 
+     // Fire onUserInput so listeners can react as well (eg. clear selection)
+     if (wasUserInput) {
+-      this._onUserInput.fire();
++      this._onUserInput.fire(isMouseReport);
+     }
+ 
+     // Fire onData API
+diff --git a/src/common/services/Services.ts b/src/common/services/Services.ts
+index 8f0aeeed15d38aa8ab341577520db15d13788a52..1440296ddf6e45c1c43fcaa2e566e83e728c0f7c 100644
+--- a/src/common/services/Services.ts
++++ b/src/common/services/Services.ts
+@@ -72,7 +72,8 @@ export interface ICoreService {
+   readonly kittyKeyboard: IKittyKeyboardState;
+ 
+   readonly onData: IEvent<string>;
+-  readonly onUserInput: IEvent<void>;
++  /** Fires with `true` when the input is a mouse report, which must not clear the selection. */
++  readonly onUserInput: IEvent<boolean | void>;
+   readonly onBinary: IEvent<string>;
+   readonly onRequestScrollToBottom: IEvent<void>;
+ 
+@@ -85,8 +86,9 @@ export interface ICoreService {
+    * resulting from parsing incoming data). When true this will also:
+    * - Scroll to the bottom of the buffer if option scrollOnUserInput is true.
+    * - Fire the `onUserInput` event (so selection can be cleared).
++   * @param isMouseReport Whether the data is a mouse report; forwarded to `onUserInput`.
+    */
+-  triggerDataEvent(data: string, wasUserInput?: boolean): void;
++  triggerDataEvent(data: string, wasUserInput?: boolean, isMouseReport?: boolean): void;
+ 
+   /**
+    * Triggers the onBinary event in the public API.
