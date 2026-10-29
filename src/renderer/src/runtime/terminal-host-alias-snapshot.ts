@@ -60,8 +60,9 @@ export function reconcileTerminalHostAliases(
         ? entries.map((row) => (row.id === entry.id ? updated : row))
         : [...entries, updated]
     }
-    if (mirror) {
-      terminalLayoutsByTabId[alias.id] = mirror.layout
+    const layout = mirror?.layout ?? state.terminalLayoutsByTabId[alias.id]
+    if (layout) {
+      terminalLayoutsByTabId[alias.id] = layout
     }
   }
   return { ...patch, tabsByWorktree, unifiedTabsByWorktree, terminalLayoutsByTabId }

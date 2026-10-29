@@ -301,6 +301,12 @@ describe('Loader precedence for stored data that disagrees with itself, and its 
       executionHostId: 'runtime:host',
       hostTerminalAlias: alias
     })
+    delete stored.terminalLayoutsByTabId[id]
+    const restored = saveWorkspaceLayout(load(stored))
+    expect(restored.terminalLayoutsByTabId[id]!.root).toEqual({
+      type: 'leaf',
+      leafId: alias.leafId
+    })
   })
 
   it('saves a moved editor tab an older build left naming its old workspace under its own', () => {
