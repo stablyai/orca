@@ -736,9 +736,6 @@ final class Provider {
             )
         }
         let modifiers = try KeyMap.parseModifiers(params["modifiers"]?.string)
-        // Why: agents expect a click into a target app to make the next
-        // keyboard action safe, even when the click uses an AX action path.
-        recoverWindow(snapshot.app, windowId: snapshot.windowId, windowBounds: snapshot.windowBounds)
         if let elementIndex = try optionalInteger(params, "elementIndex") {
             let record = try element(snapshot, elementIndex)
             if modifiers.isEmpty,
@@ -748,6 +745,7 @@ final class Provider {
                 return actionMetadata(path: "accessibility", actionName: actionName)
             }
             if let point = center(record.localFrame, in: snapshot.windowBounds) {
+                recoverWindow(snapshot.app, windowId: snapshot.windowId, windowBounds: snapshot.windowBounds)
                 try Input.click(
                     at: point,
                     button: button,
@@ -764,6 +762,7 @@ final class Provider {
             throw ProviderError.coded("element_not_clickable", "element \(record.index) has no clickable frame")
         }
         let point = try coordinatePoint(params: params, xKey: "x", yKey: "y", snapshot: snapshot)
+        recoverWindow(snapshot.app, windowId: snapshot.windowId, windowBounds: snapshot.windowBounds)
         try Input.click(
             at: point,
             button: button,
