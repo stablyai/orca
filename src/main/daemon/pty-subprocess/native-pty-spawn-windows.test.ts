@@ -202,6 +202,21 @@ describe('Windows shell fallback over node-pty ConPTY', () => {
     expect(nodePty.spawn).toHaveBeenCalledTimes(3)
   })
 
+  it('hands out a winpty pane unchecked, since winpty never announces an input reader', async () => {
+    // Below Windows build 18309 node-pty runs winpty, whose first output is a plain SGR reset.
+    const winpty = Object.assign(fakePane(990001, ['\x1b[0m\x1b[0K']), {
+      _agent: { _useConpty: false }
+    })
+    nodePty.spawn.mockReturnValueOnce(winpty)
+
+    const result = await spawnNativeDaemonPty(args)
+
+    expect(nodePty.spawn).toHaveBeenCalledOnce()
+    expect(winpty.kill).not.toHaveBeenCalled()
+    expect(ptyJob.terminatePtyJob).not.toHaveBeenCalled()
+    expect(result.process).toBe(winpty)
+  })
+
   it('does not respawn a shell that exited before ConPTY announced anything', async () => {
     const exited = fakePane(990001, [], 3)
     nodePty.spawn.mockReturnValueOnce(exited)
