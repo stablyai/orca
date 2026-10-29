@@ -16,7 +16,11 @@ const CLIENT_PROVENANCE = {
   hostId: 'local'
 } as const
 
-function createOnHost(showAutomation: () => unknown, params: Record<string, unknown>) {
+function createOnHost(
+  showAutomation: () => unknown,
+  params: Record<string, unknown>,
+  methods = WORKTREE_METHODS
+) {
   const createManagedWorktree = vi.fn().mockResolvedValue({ worktree: { id: 'wt-1' } })
   const fixture = {
     getRuntimeId: () => 'test-runtime',
@@ -36,7 +40,7 @@ function createOnHost(showAutomation: () => unknown, params: Record<string, unkn
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture implements every runtime method worktree.create reaches, plus the id the dispatcher stamps on replies.
   const runtime = fixture as unknown as OrcaRuntimeService
-  const response = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS }).dispatch({
+  const response = new RpcDispatcher({ runtime, methods }).dispatch({
     id: 'req-1',
     authToken: 'tok',
     method: 'worktree.create',
@@ -100,16 +104,28 @@ describe('worktree.create for another owner’s automation run', () => {
   })
 
   it('drops an oversized label and still creates the workspace', async () => {
+    // Why fresh modules: the warning is once per process, so this create must be the first to drop one.
+    vi.resetModules()
+    const { WORKTREE_METHODS: freshMethods } = await import('./worktree')
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const { response, createManagedWorktree } = createOnHost(notFound, {
-      clientAutomationProvenance: { ...CLIENT_PROVENANCE, automationNameSnapshot: 'x'.repeat(1025) }
-    })
+    const { response, createManagedWorktree } = createOnHost(
+      notFound,
+      {
+        clientAutomationProvenance: {
+          ...CLIENT_PROVENANCE,
+          automationNameSnapshot: 'x'.repeat(1025)
+        }
+      },
+      freshMethods
+    )
 
     await expect(response).resolves.toMatchObject({ ok: true })
     expect(createManagedWorktree).toHaveBeenCalledWith(
       expect.not.objectContaining({ automationProvenance: expect.anything() })
     )
-    expect(warn).toHaveBeenCalledOnce()
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('dropped a malformed client automation label')
+    )
     warn.mockRestore()
   })
 
