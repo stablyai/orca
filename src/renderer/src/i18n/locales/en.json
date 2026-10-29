@@ -5040,6 +5040,9 @@
             },
             "mainWorktree": "main worktree",
             "detached": "detached"
+          },
+          "PluginsStatusSegment": {
+            "label": "Plugins"
           }
         }
       },
@@ -18898,6 +18901,11 @@
           "cancel": "Cancel",
           "add": "Add catalog",
           "body": "A link asked to show {{value0}} from this catalog. Add catalogs only from people you trust."
+        },
+        "list": {
+          "PluginsSectionDescription": {
+            "openWith": "Open anytime with"
+          }
         }
       }
     },
@@ -22381,7 +22389,8 @@
       "terminalSplitDown": "Split terminal down",
       "terminalSwitchInputSource": "Switch input source / language (native)",
       "newAgentTab": "New {{agent}} tab",
-      "tabNewBrowserSplitRight": "New browser tab in right split"
+      "tabNewBrowserSplitRight": "New browser tab in right split",
+      "viewPlugins": "Open Plugins"
     },
     "group": {
       "global": "Global",
