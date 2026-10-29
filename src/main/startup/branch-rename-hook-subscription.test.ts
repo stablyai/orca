@@ -53,7 +53,12 @@ describe('first-work rename hook subscription', () => {
 
     expect(hooks.rename).toHaveBeenCalledTimes(1)
     expect(hooks.rename.mock.calls[0]).toEqual([
-      expect.objectContaining({ paneKey: 'pane-1', state: 'working', prompt: 'Fix the auth bug' }),
+      expect.objectContaining({
+        paneKey: 'pane-1',
+        state: 'working',
+        prompt: 'Fix the auth bug',
+        agentType: 'claude'
+      }),
       {}
     ])
   })

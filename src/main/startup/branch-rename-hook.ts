@@ -25,7 +25,12 @@ export function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
   paneKey: string
   tabId: string | undefined
   worktreeId: string | undefined
-  payload: { state: string; prompt?: string; lastAssistantMessage?: string }
+  payload: {
+    state: string
+    prompt?: string
+    lastAssistantMessage?: string
+    agentType?: string
+  }
   isReplay: boolean | undefined
 }): void {
   const store = state.store
@@ -41,7 +46,8 @@ export function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
       state: event.payload.state,
       prompt: event.payload.prompt,
       assistantMessage: event.payload.lastAssistantMessage,
-      isReplay: event.isReplay
+      isReplay: event.isReplay,
+      agentType: event.payload.agentType
     },
     firstWorkRenameDeps(store, runtime)
   )
