@@ -100,6 +100,7 @@ export class BrowserClientPageAutomationRuntime {
     if (registeredWebContentsId === null) {
       const registration: BrowserGuestRegistration = {
         browserPageId: input.browserPageId,
+        supportsAnnotations: true,
         workspaceId: '',
         worktreeId: '',
         sessionProfileId: input.browserProfileId,

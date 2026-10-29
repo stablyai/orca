@@ -31,6 +31,7 @@ export function setupGuestShortcutForwarding(args: {
   getKeybindings?: () => KeybindingOverrides | undefined
   resolveWorktreeId?: (browserTabId: string) => string | null
   resolveWorkspaceId?: (browserTabId: string) => string | null
+  supportsAnnotations?: (browserTabId: string) => boolean
 }): () => void {
   const {
     browserTabId,
@@ -40,7 +41,8 @@ export function setupGuestShortcutForwarding(args: {
     isMobileEmulatorEnabled,
     getKeybindings,
     resolveWorktreeId,
-    resolveWorkspaceId
+    resolveWorkspaceId,
+    supportsAnnotations
   } = args
   let ctrlTabSwitching = false
   const doubleTapDetector = new ModifierDoubleTapDetector()
@@ -63,6 +65,7 @@ export function setupGuestShortcutForwarding(args: {
     getKeybindings,
     resolveWorktreeId,
     resolveWorkspaceId,
+    supportsAnnotations,
     forwardBrowserPageZoom
   }
 

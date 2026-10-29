@@ -14,6 +14,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
       browserPageId,
       browserTabId: legacyBrowserTabId,
       workspaceId,
+      supportsAnnotations,
       worktreeId,
       sessionProfileId,
       webContentsId,
@@ -64,6 +65,11 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     this.tabIdByWebContentsId.set(webContentsId, browserTabId)
     if (workspaceId) {
       this.workspaceIdByPageId.set(browserTabId, workspaceId)
+    }
+    if (workspaceId || supportsAnnotations) {
+      this.annotationShortcutPageIds.add(browserTabId)
+    } else {
+      this.annotationShortcutPageIds.delete(browserTabId)
     }
     this.sessionProfileIdByPageId.set(browserTabId, sessionProfileId ?? null)
     this.rendererWebContentsIdByTabId.set(browserTabId, rendererWebContentsId)
@@ -152,6 +158,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
       this.rendererWebContentsIdByTabId.delete(browserTabId)
     }
     this.workspaceIdByPageId.delete(browserTabId)
+    this.annotationShortcutPageIds.delete(browserTabId)
     this.sessionProfileIdByPageId.delete(browserTabId)
     this.worktreeIdByTabId.delete(browserTabId)
     this.viewportOpsByTabId.delete(browserTabId)

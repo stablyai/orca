@@ -24,6 +24,7 @@ export function createBrowserClientPageGuestBinding(
       const bound = browserManager.registerGuest(
         {
           browserPageId: registration.browserPageId,
+          supportsAnnotations: true,
           sessionProfileId: browserProfileId,
           webContentsId: registration.webContentsId,
           rendererWebContentsId: registration.rendererWebContentsId
@@ -47,6 +48,7 @@ export function createBrowserClientPageGuestBinding(
       }
       const bound = browserManager.registerGuest({
         browserPageId: registration.browserPageId,
+        supportsAnnotations: true,
         sessionProfileId: browserProfileId,
         webContentsId: registration.webContentsId,
         rendererWebContentsId: registration.rendererWebContentsId

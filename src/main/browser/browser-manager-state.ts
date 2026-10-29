@@ -132,6 +132,7 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   protected readonly pageInitiatedTabBudgetByRootGuestId = new Map<number, PageInitiatedTabBudget>()
   // Capture activates by workspace ID while guests are keyed by page ID.
   protected readonly workspaceIdByPageId = new Map<string, string>()
+  protected readonly annotationShortcutPageIds = new Set<string>()
   protected readonly sessionProfileIdByPageId = new Map<string, string | null>()
   // Serialize viewport changes so rapid toggles cannot interleave CDP commands.
   protected readonly viewportOpsByTabId = new Map<string, Promise<unknown>>()

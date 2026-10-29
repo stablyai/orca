@@ -215,5 +215,28 @@ describe('browserManager grab operations', () => {
       expect(preventDefault).not.toHaveBeenCalled()
       expect(rendererSendMock).not.toHaveBeenCalled()
     })
+
+    it('forwards annotation for a client-hosted page without a local workspace', () => {
+      guestOnMock.mockClear()
+      browserManager.registerGuest({
+        browserPageId: 'tab-1',
+        supportsAnnotations: true,
+        webContentsId: GRAB_GUEST_WEB_CONTENTS_ID,
+        rendererWebContentsId: GRAB_RENDERER_WEB_CONTENTS_ID
+      })
+      rendererSendMock.mockClear()
+      expect(pressAnnotateChord()).toHaveBeenCalledTimes(1)
+      expect(rendererSendMock).toHaveBeenCalledWith('browser:grabModeToggle', 'tab-1', 'annotate')
+
+      guestOnMock.mockClear()
+      browserManager.registerGuest({
+        browserPageId: 'tab-1',
+        webContentsId: GRAB_GUEST_WEB_CONTENTS_ID,
+        rendererWebContentsId: GRAB_RENDERER_WEB_CONTENTS_ID
+      })
+      rendererSendMock.mockClear()
+      expect(pressAnnotateChord()).not.toHaveBeenCalled()
+      expect(rendererSendMock).not.toHaveBeenCalled()
+    })
   })
 })

@@ -1,9 +1,14 @@
-import { Check } from 'lucide-react'
+import { Check, MoreHorizontal } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { translate } from '@/i18n/i18n'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuShortcut
+  DropdownMenuShortcut,
+  DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import type { BrowserChromeFoldStage } from './use-browser-chrome-tool-fold'
 
@@ -26,6 +31,35 @@ export type BrowserChromeOverflowMenuProps = {
   tools: readonly BrowserChromeFoldedTool[]
   deferUntilClose: (action: () => void) => void
   onMenuCloseAutoFocus: (event: Event) => void
+}
+
+export function BrowserChromeFoldedToolsMenu(
+  props: BrowserChromeOverflowMenuProps
+): React.JSX.Element | null {
+  if (props.tools.length === 0) {
+    return null
+  }
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          ref={props.triggerRef}
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7"
+          aria-label={translate(
+            'auto.components.browser.pane.BrowserToolbarMenu.7b838540c7',
+            'Browser menu'
+          )}
+        >
+          <MoreHorizontal className="size-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" onCloseAutoFocus={props.onMenuCloseAutoFocus}>
+        <BrowserChromeFoldedMenuItems tools={props.tools} deferUntilClose={props.deferUntilClose} />
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
 }
 
 function FoldedToolContent({ tool }: { tool: BrowserChromeFoldedTool }): React.JSX.Element {

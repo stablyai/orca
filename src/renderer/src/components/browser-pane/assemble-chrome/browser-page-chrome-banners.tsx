@@ -16,7 +16,7 @@ import { preventAgentSendTargetOutsideDismiss } from '../annotate/prevent-agent-
 import type { GrabIntent } from '../describe-page/browser-page-types'
 
 export function BrowserPageChromeBanners({
-  resourceNotice,
+  resourceNotice = null,
   setResourceNotice,
   grab,
   grabIntent,
@@ -34,8 +34,8 @@ export function BrowserPageChromeBanners({
   handleClearBrowserAnnotations,
   setPendingAnnotationPayload
 }: {
-  resourceNotice: string | null
-  setResourceNotice: Dispatch<SetStateAction<string | null>>
+  resourceNotice?: string | null
+  setResourceNotice?: Dispatch<SetStateAction<string | null>>
   grab: GrabModeHook
   grabIntent: GrabIntent
   pendingAnnotationPayload: BrowserGrabPayload | null
@@ -63,7 +63,7 @@ export function BrowserPageChromeBanners({
           <span>{resourceNotice}</span>
           <button
             type="button"
-            onClick={() => setResourceNotice(null)}
+            onClick={() => setResourceNotice?.(null)}
             className="shrink-0 text-muted-foreground/60 hover:text-foreground"
             aria-label={translate('auto.components.browser.pane.BrowserPane.2fdca7df09', 'Dismiss')}
           >

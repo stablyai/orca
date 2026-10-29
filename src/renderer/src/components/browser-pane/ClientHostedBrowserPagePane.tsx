@@ -20,9 +20,11 @@ import { useClientHostedBrowserIntroTour } from './use-client-hosted-browser-int
 import { ClientHostedBrowserUnavailableNotice } from './client-hosted-browser-unavailable-notice'
 import { watchBrowserClientPageGuestLoss } from './host-guest/browser-client-page-guest-loss'
 import { useRestoredClientHostedRecoveryWindow } from './restored-client-hosted-recovery-window'
-import { useClientHostedBrowserMarkup } from './annotate/use-client-hosted-browser-markup'
+import { useClientHostedBrowserTools } from './annotate/use-client-hosted-browser-tools'
 import BrowserFind from './assemble-chrome/BrowserFind'
-import { BrowserNavigationControlRow } from './assemble-chrome/browser-navigation-control-row'
+import { BrowserChromeToolbar } from './assemble-chrome/browser-chrome-toolbar'
+import { BrowserPageChromeBanners } from './assemble-chrome/browser-page-chrome-banners'
+import { BrowserChromeFoldedToolsMenu } from './assemble-chrome/browser-chrome-folded-tools'
 import BrowserAddressBar from './assemble-chrome/BrowserAddressBar'
 import { BrowserPageContextMenu } from './assemble-chrome/browser-page-context-menu'
 import { useBrowserPageChromeFocus } from './assemble-chrome/use-browser-page-chrome-focus'
@@ -31,7 +33,7 @@ import { useBrowserPageFindShortcuts } from './assemble-chrome/use-browser-page-
 import { useWebviewGuestFocus } from './assemble-chrome/browser-page-guest-focus'
 import { RemoteRuntimeEgressIndicator } from './assemble-chrome/browser-egress-indicator'
 import { getBrowserPageZoomIndicatorState } from './host-guest/browser-page-zoom'
-import { useBrowserPageWebviewShortcuts } from './host-guest/use-browser-page-webview-shortcuts'
+import { useBrowserPageKeyboardShortcuts } from './host-guest/use-browser-page-keyboard-shortcuts'
 import { useBrowserPageZoomFeedback } from './host-guest/use-browser-page-zoom-feedback'
 import { isPageDocumentNavigationStart } from './host-guest/browser-page-webview-navigation-handlers'
 import { ClientHostedBrowserLoadFailure } from './client-hosted-browser-load-failure'
@@ -120,13 +122,6 @@ export function ClientHostedBrowserPagePane({
   // Only consume the one-time tour after placement and attachment make its controls usable.
   useClientHostedBrowserIntroTour(isActive && !attachmentError && placement !== null)
   useBrowserPageFindShortcuts({ ...shortcutOwner, setFindOpen })
-  useBrowserPageWebviewShortcuts({
-    ...shortcutOwner,
-    isActiveRef,
-    webviewRef,
-    showBrowserZoomFeedback: zoom.showBrowserZoomFeedback,
-    reloadWebviewOrRecoverGuest: reload.reloadWebviewOrRecoverGuest
-  })
 
   const navigateToUrl = useClientHostedPageUrlSubmission({
     browserTabId: browserTab.id,
@@ -285,14 +280,28 @@ export function ClientHostedBrowserPagePane({
     feedbackVisible: zoom.browserZoomFeedbackVisible
   })
 
-  const markup = useClientHostedBrowserMarkup({
+  const tools = useClientHostedBrowserTools({
     webviewRef,
+    viewportRef,
     browserPageId: browserTab.id,
+    worktreeId,
+    currentUrl: browserTab.url,
     runtimeEnvironmentId,
     placement,
     isActive,
     unavailable: Boolean(attachmentError) || restoredPageUnrecovered,
     showFailureOverlay
+  })
+  useBrowserPageKeyboardShortcuts({
+    ...shortcutOwner,
+    isActiveRef,
+    webviewRef,
+    showBrowserZoomFeedback: zoom.showBrowserZoomFeedback,
+    reloadWebviewOrRecoverGuest: reload.reloadWebviewOrRecoverGuest,
+    markupIsActive: tools.disabled || tools.markup.isActive,
+    startGrabIntent: tools.grabAnnotations.startGrabIntent,
+    handleGrabActionShortcut: tools.grabAnnotations.handleGrabActionShortcut,
+    grabIsInteractive: tools.grab.state !== 'idle' && tools.grab.state !== 'error'
   })
 
   // Unrecovered pages have no pending load that could ever clear a loading indicator.
@@ -313,7 +322,7 @@ export function ClientHostedBrowserPagePane({
         onReload={() => reload.reloadWebviewOrRecoverGuest(false)}
       />
       <div data-contextual-tour-target="client-hosted-browser-controls">
-        <BrowserNavigationControlRow
+        <BrowserChromeToolbar
           controls={{
             canGoBack: browserTab.canGoBack,
             canGoForward: browserTab.canGoForward,
@@ -346,9 +355,26 @@ export function ClientHostedBrowserPagePane({
           }
           reloadLabel={reload.reloadButtonLabel}
           reloadShowsStop={reload.reloadButtonLabelKind === 'stop'}
-        >
-          {markup.drawButton}
-        </BrowserNavigationControlRow>
+          elementTools={tools.elementTools}
+          markup={{
+            active: tools.markup.isActive,
+            disabled:
+              tools.disabled || isBlankBrowserUrl(browserTab.url) || tools.grab.state !== 'idle',
+            onToggle: () =>
+              tools.markup.isActive ? tools.markup.cancel() : void tools.markup.start(),
+            canShowDiscoveryHint: isActive
+          }}
+          viewSource={tools.viewSource}
+          openExternal={null}
+          overflowMenu={(overflow) => <BrowserChromeFoldedToolsMenu {...overflow} />}
+        />
+        <BrowserPageChromeBanners
+          {...tools.annotationSend}
+          {...tools.grabAnnotations}
+          grab={tools.grab}
+          browserAnnotationsLength={tools.annotationSend.browserAnnotations.length}
+          worktreeId={worktreeId}
+        />
       </div>
       <div className={BROWSER_DEVTOOLS_DOCK_SPLIT_CLASS_NAME}>
         <div
@@ -356,7 +382,7 @@ export function ClientHostedBrowserPagePane({
           className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-background"
           style={devToolsPageFlex === null ? undefined : { flex: devToolsPageFlex }}
         >
-          {markup.overlay}
+          {tools.overlay}
           <BrowserPageZoomIndicator
             state={browserZoomIndicatorState}
             percent={zoom.browserZoomPercent}

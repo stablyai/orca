@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
+import { makeAnnotation } from '@/store/slices/browser-annotation-test-fixture'
 import { installClientHostedPaneApi } from './client-hosted-browser-pane-test-rig'
 import { ClientHostedBrowserPagePane } from './ClientHostedBrowserPagePane'
 import type { MarkupBaseImage } from './annotate/markup-base-image'
@@ -42,7 +43,12 @@ const placement = {
 
 beforeEach(() => {
   installClientHostedPaneApi({ ui: { writeClipboardImage: mocks.clipboard } })
-  useAppStore.setState({ browserCertificateFailuresByPageId: {} })
+  useAppStore.setState({
+    browserCertificateFailuresByPageId: {},
+    browserAnnotationsByPageId: {},
+    browserAnnotationMarkerIdsByPageId: {},
+    agentSendPopoverTargetMode: null
+  })
   window.localStorage.setItem('orca.browser.markup-draw-hint-seen', 'true')
   mocks.capture.mockResolvedValue(image)
   mocks.compose.mockResolvedValue({ dataUrl: 'data:image/png;base64,Y29tcG9zaXRl' })
@@ -50,6 +56,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   cleanup()
+  document.querySelectorAll('[data-client-test-host]').forEach((host) => host.remove())
   vi.resetAllMocks()
 })
 
@@ -65,8 +72,21 @@ function renderPane(overrides: Partial<PaneProps> = {}, attaches = true) {
     getZoomLevel: () => 0,
     focus: vi.fn(),
     blur: vi.fn(),
-    getBoundingClientRect: () => ({ width: 800, height: 600 })
+    getBoundingClientRect: () => ({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 800,
+      bottom: 600,
+      width: 800,
+      height: 600
+    })
   })
+  const retainedHost = document.createElement('div')
+  retainedHost.dataset.clientTestHost = ''
+  retainedHost.append(webview)
+  document.body.append(retainedHost)
   mocks.attach.mockReturnValue(
     attaches ? { webview, detach: vi.fn(), nextMetadataRevision: () => 1 } : null
   )
@@ -254,4 +274,84 @@ describe('client-hosted screenshot markup', () => {
     pane.unmount()
     expect(pane.webview.style.display).toBe('flex')
   })
+})
+
+describe('client-hosted element tools', () => {
+  function selectElement() {
+    const payload = makeAnnotation('page-a').payload
+    payload.page.sanitizedUrl = 'https://example.internal/app'
+    window.api.browser.awaitGrabSelection = vi
+      .fn()
+      .mockResolvedValue({ kind: 'cancelled' })
+      .mockResolvedValueOnce({ kind: 'selected', payload })
+    window.api.browser.captureSelectionScreenshot = vi.fn().mockResolvedValue({ ok: false })
+    return payload
+  }
+
+  it('adds a comment above the retained guest and addresses its send to the remote workspace', async () => {
+    const pane = renderPane()
+    selectElement()
+    expect(screen.getByRole('button', { name: 'Grab page element' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Annotate page element' }))
+    const comment = await screen.findByRole('textbox', { name: 'Annotation comment' })
+    expect(pane.webview.parentElement?.contains(comment)).toBe(true)
+    fireEvent.change(comment, { target: { value: 'Fix the remote submit button' } })
+    fireEvent.click(screen.getByRole('button', { name: /^Add/ }))
+    await screen.findByText('Fix the remote submit button')
+    expect(useAppStore.getState().browserAnnotationsByPageId['page-a'][0].comment).toBe(
+      'Fix the remote submit button'
+    )
+    fireEvent.pointerDown(
+      within(pane.webview.parentElement!).getByRole('button', { name: 'Send' }),
+      {
+        button: 0,
+        ctrlKey: false
+      }
+    )
+    await waitFor(() =>
+      expect(useAppStore.getState().agentSendPopoverTargetMode).toMatchObject({
+        worktreeId: 'folder-a',
+        source: 'browser-annotations'
+      })
+    )
+  })
+
+  it('copies a picked element through the same control as a local browser', async () => {
+    renderPane()
+    selectElement()
+    fireEvent.click(screen.getByRole('button', { name: 'Grab page element' }))
+    await waitFor(() =>
+      expect(window.api.ui.writeClipboardText).toHaveBeenCalledWith(
+        expect.stringContaining('Submit')
+      )
+    )
+  })
+
+  it.each(['navigation', 'replacement', 'deactivation'] as const)(
+    'dismisses a pending comment on %s',
+    async (action) => {
+      const pane = renderPane()
+      selectElement()
+      fireEvent.click(screen.getByRole('button', { name: 'Annotate page element' }))
+      await screen.findByRole('textbox', { name: 'Annotation comment' })
+      if (action === 'navigation') {
+        fireEvent(
+          pane.webview,
+          Object.assign(new Event('did-start-navigation'), {
+            isMainFrame: true,
+            isInPlace: false,
+            url: 'https://example.internal/next'
+          })
+        )
+      } else if (action === 'replacement') {
+        pane.update({ placement: { ...placement, pageHostGeneration: 8 } })
+      } else {
+        pane.update({ isActive: false })
+      }
+      await waitFor(() =>
+        expect(screen.queryByRole('textbox', { name: 'Annotation comment' })).toBeNull()
+      )
+      expect(useAppStore.getState().browserAnnotationsByPageId['page-a']).toBeUndefined()
+    }
+  )
 })

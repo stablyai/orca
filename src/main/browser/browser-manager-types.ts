@@ -31,6 +31,7 @@ export type BrowserGuestRegistration = {
   browserPageId?: string
   browserTabId?: string
   workspaceId?: string
+  supportsAnnotations?: boolean
   worktreeId?: string
   sessionProfileId?: string | null
   webContentsId: number
