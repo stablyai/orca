@@ -16,7 +16,11 @@ vi.mock('../browser/browser-manager', async () =>
 import { createMainWindow } from './createMainWindow'
 import { ipcMain } from 'electron'
 import { resetExpectedTeardownStateForTest } from '../crash-reporting/expected-teardown-state'
-import { browserWindowMock, resetMainWindowMocks } from './createMainWindow-test-harness'
+import {
+  allWindowsMock,
+  browserWindowMock,
+  resetMainWindowMocks
+} from './createMainWindow-test-harness'
 
 describe('createMainWindow close that ends the app (win32)', () => {
   const originalPlatform = process.platform
@@ -90,13 +94,30 @@ describe('createMainWindow close that ends the app (win32)', () => {
 
   it('asks the renderer for quit semantics when the renderer-drawn X ends the app', () => {
     const ipcHandlers = captureIpcHandlers()
-    const { webContents } = setupCloseWindow()
+    const { webContents, instance } = setupCloseWindow()
+    // Electron closes a child window with its parent, so it does not keep the app running.
+    const childWindow = { isDestroyed: () => false, getParentWindow: () => instance }
+    allWindowsMock.mockReturnValue([instance, childWindow])
 
     createMainWindow(null, { getIsQuitting: () => false, getWindowCloseEndsApp: () => true })
     ipcHandlers['window:request-close']?.()
 
     expect(webContents.send).toHaveBeenCalledWith('window:close-requested', {
       isQuitting: true
+    })
+  })
+
+  it('keeps ordinary close semantics while another window outlives the main window', () => {
+    const ipcHandlers = captureIpcHandlers()
+    const { webContents, instance } = setupCloseWindow()
+    const extensionPopout = { isDestroyed: () => false, getParentWindow: () => null }
+    allWindowsMock.mockReturnValue([instance, extensionPopout])
+
+    createMainWindow(null, { getIsQuitting: () => false, getWindowCloseEndsApp: () => true })
+    ipcHandlers['window:request-close']?.()
+
+    expect(webContents.send).toHaveBeenCalledWith('window:close-requested', {
+      isQuitting: false
     })
   })
 

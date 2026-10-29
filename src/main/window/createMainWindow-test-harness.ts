@@ -11,6 +11,8 @@ export const browserWindowMock: Mock<
   (options: Electron.BrowserWindowConstructorOptions) => unknown
 > = vi.fn()
 export const openExternalMock: MainWindowSpy = vi.fn()
+/** Every open window, as `BaseWindow.getAllWindows()` reports it. */
+export const allWindowsMock: Mock<() => unknown[]> = vi.fn(() => [])
 export const attachGuestPoliciesMock: MainWindowSpy = vi.fn()
 export const attachRouteGuestMock: MainWindowSpy = vi.fn(() => false)
 export const retireRouteRendererMock: MainWindowSpy = vi.fn()
@@ -50,6 +52,7 @@ const ipcMainMock: IpcMainMock = {
 
 export type ElectronModuleMock = {
   app: typeof appMock
+  BaseWindow: { getAllWindows: typeof allWindowsMock }
   BrowserWindow: typeof browserWindowMock
   ipcMain: IpcMainMock
   Menu: { buildFromTemplate: typeof buildFromTemplateMock }
@@ -74,6 +77,7 @@ export type BrowserManagerModuleMock = {
 export function electronModuleMock(): ElectronModuleMock {
   return {
     app: appMock,
+    BaseWindow: { getAllWindows: allWindowsMock },
     BrowserWindow: browserWindowMock,
     ipcMain: ipcMainMock,
     Menu: { buildFromTemplate: buildFromTemplateMock },
@@ -111,6 +115,8 @@ export function browserManagerMock(): BrowserManagerModuleMock {
 
 export function resetMainWindowMocks(): void {
   browserWindowMock.mockReset()
+  allWindowsMock.mockReset()
+  allWindowsMock.mockReturnValue([])
   openExternalMock.mockReset()
   attachGuestPoliciesMock.mockReset()
   attachRouteGuestMock.mockReset()
