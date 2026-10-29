@@ -106,10 +106,10 @@ export class RuntimeBrowserTabCatalog {
         `Browser page ${browserPageId} was not found${scope}`
       )
     }
-    // Why the listing: the index must be the one `tab list`, `switch` and `close` use.
+    // Why the caller's scope: the index must be the one `tab list`, `switch` and `close` use there.
     const listed = this.listLogicalBrowserTabs(
-      worktreeId,
-      this.host.getRuntimeBrowserPageRegistry().listPages(worktreeId)
+      explicitWorktreeId,
+      this.host.getRuntimeBrowserPageRegistry().listPages(explicitWorktreeId)
     ).find((entry) => entry.browserPageId === browserPageId)
     return listed ?? this.enrichBrowserTabInfo(tab)
   }
