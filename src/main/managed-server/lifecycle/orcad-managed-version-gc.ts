@@ -1,7 +1,12 @@
 import type { NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
-import { orcadSlotDir, type OrcadSlotOptions } from '../../ssh/orcad-recovery-slot'
+import {
+  orcadSlotDir,
+  resolveOrcadSlotIdentity,
+  type OrcadSlotOptions
+} from '../../ssh/orcad-recovery-slot'
+import { probeActiveOrcadReadiness } from '../../ssh/orcad-active-readiness'
 import { gcOldOrcadVersions } from '../install/orcad-remote-gc'
 import { nodeRuntimeStorePins } from '../../ssh/pinned-runtime-host-target'
 
@@ -45,4 +50,38 @@ export async function pruneManagedOrcadVersions(args: ManagedOrcadPruneArgs): Pr
     console.warn('[orcad-gc] Pruning old orcad versions failed:', error)
     return false
   }
+}
+
+/** GC otherwise runs only after an activation, so each deferred release left its staged slot behind (#34149). */
+export async function pruneSupersededOrcadCandidates(
+  slot: OrcadSlotOptions,
+  serverTarget: NodeRuntimeTarget,
+  candidateVersion: string,
+  /** The incumbent's readiness when the caller already holds it. */
+  incumbentReadiness?: ServeReadiness
+): Promise<void> {
+  let readiness = incumbentReadiness
+  if (!readiness) {
+    try {
+      const active = (await readOrcadActivationRecord(slot)).active
+      if (!active) {
+        return
+      }
+      const identity = await resolveOrcadSlotIdentity(slot, active)
+      readiness = await probeActiveOrcadReadiness(
+        { ...slot, remoteInstallDir: identity.remoteDir },
+        { buildHash: identity.buildHash, fullVersion: identity.version }
+      )
+    } catch (error) {
+      // Without the incumbent's daemon version a staged tree may still be executing.
+      console.warn('[orcad-gc] Skipped pruning staged orcad versions:', error)
+      return
+    }
+  }
+  await pruneManagedOrcadVersions({
+    slot,
+    serverTarget,
+    activeVersion: candidateVersion,
+    readiness
+  })
 }
