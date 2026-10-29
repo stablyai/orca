@@ -14,6 +14,7 @@ import type {
 } from './headless-dispatch'
 import type { AutomationRunTargetResult } from './run-target-resolution'
 import type { AutomationRunWriter } from './automation-run-writer'
+import type { AutomationRunFailure } from '../../shared/automation-run-failure-copy'
 
 export type HeadlessAutomationDispatchContext = {
   automation: Automation
@@ -27,7 +28,11 @@ export type HeadlessAutomationDispatchContext = {
 }
 
 /** Record dispatch refusals as skips. */
-export class AutomationDispatchRefusedError extends Error {}
+export class AutomationDispatchRefusedError extends Error {
+  constructor(readonly failure: AutomationRunFailure) {
+    super(failure.error)
+  }
+}
 
 function describeDispatchError(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -59,7 +64,9 @@ export async function runHeadlessAutomationDispatch(
       status:
         error instanceof AutomationDispatchRefusedError ? 'skipped_unavailable' : 'dispatch_failed',
       workspaceId: automation.workspaceId,
-      error: describeDispatchError(error)
+      ...(error instanceof AutomationDispatchRefusedError
+        ? error.failure
+        : { error: describeDispatchError(error) })
     })
   }
   const launchRunTarget = {
@@ -97,7 +104,9 @@ export async function runHeadlessAutomationDispatch(
             ...launchRunTarget,
             precheckResult,
             outputSnapshot: completion.outputSnapshot ?? null,
-            error: completion.error ?? null
+            error: completion.error ?? null,
+            errorCode: completion.errorCode ?? null,
+            errorParams: completion.errorParams ?? null
           }),
         (error) =>
           ctx.markDispatchResult({

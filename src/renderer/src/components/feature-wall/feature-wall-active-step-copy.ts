@@ -3,6 +3,7 @@ import type { ReviewStep } from '../../../../shared/review-steps'
 import type { WorkbenchStep } from '../../../../shared/workbench-steps'
 import type { FeatureWallActiveStepCopy } from './FeatureWallTourPanel'
 import { translate } from '@/i18n/i18n'
+import { getLocalizedFeatureWallStepCopy } from './feature-wall-tour-localized-copy'
 
 export function tourContinueLabel(finished: boolean, doneLabel: string): string {
   return finished
@@ -19,9 +20,10 @@ export function getFeatureWallActiveStepCopy(
   if (!activeStep) {
     return null
   }
+  const copy = getLocalizedFeatureWallStepCopy(activeStep.id)
   return {
-    title: activeStep.subtitle,
-    description: activeStep.description,
+    title: copy.subtitle,
+    description: copy.description,
     optional: 'optional' in activeStep && activeStep.optional === true
   }
 }

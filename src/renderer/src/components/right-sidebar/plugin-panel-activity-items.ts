@@ -29,13 +29,18 @@ import {
 } from 'lucide-react'
 import type { ActivePluginPanel } from '@/store/plugin-panels'
 import type { ActivityBarItem } from './activity-bar-buttons'
+import {
+  canonicalPluginPanelIcon,
+  type PluginPanelIconName
+} from '../../../../shared/plugins/contributions/plugin-panel-contribution'
 
 type PluginPanelIcon = ActivityBarItem['icon']
 
-// Curate manifest icons; importing lucide's full icons map defeats tree shaking.
-const PLUGIN_PANEL_ICONS: Record<string, PluginPanelIcon> = {
+// Why: importing lucide's full `icons` map would bundle every icon and defeat
+// tree-shaking, so plugin manifests pick from this closed set (fallback: Plug).
+const PLUGIN_PANEL_ICON_COMPONENTS: Record<PluginPanelIconName, PluginPanelIcon> = {
   activity: Activity,
-  barchart3: BarChart3,
+  'bar-chart-3': BarChart3,
   bell: Bell,
   blocks: Blocks,
   book: Book,
@@ -45,7 +50,7 @@ const PLUGIN_PANEL_ICONS: Record<string, PluginPanelIcon> = {
   cloud: Cloud,
   code: Code,
   database: Database,
-  filetext: FileText,
+  'file-text': FileText,
   flag: Flag,
   folder: Folder,
   gauge: Gauge,
@@ -67,12 +72,9 @@ export function resolvePluginPanelIcon(iconName: string | undefined): PluginPane
   if (!iconName) {
     return Plug
   }
-  // Accept both lucide naming styles ('file-text' and 'FileText').
-  const normalized = iconName.replaceAll('-', '').toLowerCase()
-  // Reject inherited keys such as constructor, which would resolve to non-components and crash the sidebar.
-  return Object.hasOwn(PLUGIN_PANEL_ICONS, normalized)
-    ? (PLUGIN_PANEL_ICONS[normalized] ?? Plug)
-    : Plug
+  // Why canonicalize: hosts from before the closed list still send `FileText`-style names.
+  const known = canonicalPluginPanelIcon(iconName)
+  return known ? PLUGIN_PANEL_ICON_COMPONENTS[known] : Plug
 }
 
 export function getPluginPanelActivityItems(

@@ -15,6 +15,7 @@ type RuntimeFileCommandName =
   | 'readFileExplorerDir'
   | 'watchFileExplorer'
   | 'readFileExplorerPreview'
+  | 'readChatImagePreview'
   | 'readFileExplorerChunk'
   | 'readDocPreviewFile'
   | 'writeFileExplorerFile'
@@ -24,6 +25,7 @@ type RuntimeFileCommandName =
   | 'createFileExplorerDir'
   | 'createFileExplorerDirNoClobber'
   | 'commitFileExplorerUpload'
+  | 'replaceFileExplorerFileWithUpload'
   | 'renameFileExplorerPath'
   | 'copyFileExplorerPath'
   | 'deleteFileExplorerPath'
@@ -55,6 +57,7 @@ export function installRuntimeFileCommandSurface(
     readFileExplorerDir: commands.readFileExplorerDir.bind(commands),
     watchFileExplorer: commands.watchFileExplorer.bind(commands),
     readFileExplorerPreview: commands.readFileExplorerPreview.bind(commands),
+    readChatImagePreview: commands.readChatImagePreview.bind(commands),
     readFileExplorerChunk: commands.readFileExplorerChunk.bind(commands),
     readDocPreviewFile: commands.readDocPreviewFile.bind(commands),
     writeFileExplorerFile: commands.writeFileExplorerFile.bind(commands),
@@ -64,6 +67,7 @@ export function installRuntimeFileCommandSurface(
     createFileExplorerDir: commands.createFileExplorerDir.bind(commands),
     createFileExplorerDirNoClobber: commands.createFileExplorerDirNoClobber.bind(commands),
     commitFileExplorerUpload: commands.commitFileExplorerUpload.bind(commands),
+    replaceFileExplorerFileWithUpload: commands.replaceFileExplorerFileWithUpload.bind(commands),
     renameFileExplorerPath: commands.renameFileExplorerPath.bind(commands),
     copyFileExplorerPath: commands.copyFileExplorerPath.bind(commands),
     deleteFileExplorerPath: commands.deleteFileExplorerPath.bind(commands),

@@ -8,8 +8,10 @@ import {
   ORCAD_PROFILE_PREFLIGHT_FLAG,
   ORCAD_STARTUP_PREFLIGHT_FLAG
 } from '../../shared/orcad-profile-preflight'
+import { onNodePtyLoadFailure } from '../providers/node-pty-load-failure'
 import {
   confirmBundledOrcadStartupQualified,
+  discardBundledOrcadStartupQualification,
   forgetBundledOrcadStartupQualification,
   preflightBundledOrcadStartup,
   runOrcadProfilePreflight
@@ -97,6 +99,7 @@ function startOrcadProcess(): void {
       reserveServeStdoutForReadiness()
       void preflightBundledOrcadStartup()
         .then((qualified) => {
+          onNodePtyLoadFailure(() => void discardBundledOrcadStartupQualification())
           // Probe before deferred node-pty loading can crash this process; a slot qualified on this
           // unchanged host passed it on its last launch.
           if (runOrcadNativePreflightVerdict({ qualified }) !== 'ok') {

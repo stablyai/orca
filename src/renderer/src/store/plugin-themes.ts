@@ -1,16 +1,18 @@
 import {
   isPluginThemeRegistration,
   type PluginThemeRegistration
-} from '../../../shared/plugins/plugin-theme-artifact'
+} from '../../../shared/plugins/artifacts/plugin-theme-artifact'
 import {
   isPluginTerminalThemeRegistration,
   type PluginTerminalThemeRegistration
-} from '../../../shared/plugins/plugin-terminal-theme-artifact'
+} from '../../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
 import { useEffect } from 'react'
 import { createPluginContentListStore } from './plugin-content-list-store'
 import { refreshedTerminalPluginPalettes } from '../lib/terminal-plugin-palettes'
 import { applyPluginAppTheme, readCachedPluginAppTheme } from '../lib/document-theme'
 import { useAppStore } from './index'
+import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import { pluginAppThemeSlotUpdate } from '../../../shared/plugin-theme-settings'
 
 const appThemes = createPluginContentListStore<PluginThemeRegistration>({
   kind: 'themes',
@@ -26,6 +28,7 @@ const terminalThemes = createPluginContentListStore<PluginTerminalThemeRegistrat
 
 export const usePluginThemeStore = appThemes.useStore
 export const usePluginThemes = appThemes.useEntries
+export const usePluginTerminalThemeStore = terminalThemes.useStore
 export const usePluginTerminalThemes = terminalThemes.useEntries
 
 /** Keeps the saved snapshot of selected plugin terminal palettes current as plugins update. */
@@ -45,14 +48,15 @@ function pluginKeyOf(id: string): string {
   return id.slice('plugin:'.length, id.lastIndexOf('/'))
 }
 
-/** Keeps `theme` equal to the selected plugin theme's base while it is enabled, restores the
- *  user's earlier choice while it is not, and drops a startup paint the settings no longer back. */
+/** Moves a legacy single plugin theme into its mode's slot and drops a startup paint the
+ *  settings no longer back. */
 export function usePluginAppThemeSync(): void {
   const pluginThemes = usePluginThemes()
   const loaded = usePluginThemeStore((s) => s.loaded)
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const selected = settings?.pluginAppTheme ?? null
+  const dark = useDocumentDarkTheme()
+  const selected = (dark ? settings?.pluginAppThemeDark : settings?.pluginAppThemeLight) ?? null
   const disabled =
     !selected ||
     settings?.pluginSystemEnabled === false ||
@@ -66,14 +70,15 @@ export function usePluginAppThemeSync(): void {
     }
   }, [settings, loaded, selected, disabled])
 
+  const legacy = loaded ? pluginThemes.find((theme) => theme.id === settings?.pluginAppTheme) : null
   useEffect(() => {
-    if (!settings || !loaded || !selected) {
-      return
+    // Why wait for the theme: only it knows which slot it belongs in; `theme` already holds its base.
+    if (legacy) {
+      void updateSettings({
+        ...pluginAppThemeSlotUpdate(legacy.base, legacy.id),
+        pluginAppTheme: null,
+        themeBeforePlugin: null
+      })
     }
-    const active = pluginThemes.find((theme) => theme.id === selected)
-    const target = active ? active.base : settings.themeBeforePlugin
-    if (target && settings.theme !== target) {
-      void updateSettings({ theme: target })
-    }
-  }, [settings, loaded, selected, pluginThemes, updateSettings])
+  }, [legacy, updateSettings])
 }

@@ -109,23 +109,11 @@ export function formatSparseDirectoryPreview(directories: string[]): string {
   const preview = directories.slice(0, 4).join(', ')
   return directories.length <= 4
     ? preview
-    : directories.length - 4 === 1
-      ? translate(
-          'auto.components.sidebar.worktreeCardModel.sparsePreviewMore_one',
-          '{{preview}}, +{{count}} more',
-          {
-            preview,
-            count: directories.length - 4
-          }
-        )
-      : translate(
-          'auto.components.sidebar.worktreeCardModel.sparsePreviewMore_other',
-          '{{preview}}, +{{count}} more',
-          {
-            preview,
-            count: directories.length - 4
-          }
-        )
+    : translate(
+        'auto.components.sidebar.worktreeCardModel.sparsePreviewMore',
+        '{{preview}}, +{{count}} more',
+        { preview, count: directories.length - 4, defaultValue_one: '{{preview}}, +{{count}} more' }
+      )
 }
 
 export function isWebClient(): boolean {

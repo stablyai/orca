@@ -61,7 +61,7 @@ const {
       if (message.type === 'init' && this.emitReadyOnInit) {
         queueMicrotask(() => this.emit('message', { type: 'ready' }))
       }
-      if (message.type === 'stop' && this.emitStoppedOnStop) {
+      if ((message.type === 'stop' && this.emitStoppedOnStop) || message.type === 'discard') {
         queueMicrotask(() => this.emit('message', { type: 'stopped' }))
       }
       if (message.type === 'teardown') {
@@ -179,6 +179,21 @@ describe('SttService', () => {
     await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
     await service.stopDictation('desktop')
     await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
+
+    expect(getCreatedWorkerCount()).toBe(1)
+  })
+
+  it('frees the warm worker at once when a local dictation is discarded', async () => {
+    const service = new SttService({
+      getModelState: vi.fn().mockResolvedValue({ id: 'model-a', status: 'ready' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    } as never)
+
+    await service.startDictation('model-a', vi.fn(), undefined, 'mobile:1')
+    // Decoding the rest of the audio would hold the worker; a discard must not wait for it.
+    getLastWorker()!.emitStoppedOnStop = false
+    await service.stopDictation('mobile:1', { discard: true })
+    await service.startDictation('model-a', vi.fn(), undefined, 'mobile:2')
 
     expect(getCreatedWorkerCount()).toBe(1)
   })

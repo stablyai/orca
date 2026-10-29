@@ -36,6 +36,11 @@ export type Overrides = {
   agentWorking?: boolean
   canStop?: boolean
   ask?: Parameters<typeof MobileNativeChatView>[0]['ask']
+  askRequiresTerminal?: boolean
+  collapsedPrompt?: Parameters<typeof MobileNativeChatView>[0]['collapsedPrompt']
+  micActive?: boolean
+  micProcessing?: boolean
+  composerTray?: Parameters<typeof MobileNativeChatView>[0]['composerTray']
   question?: Parameters<typeof MobileNativeChatView>[0]['question']
   permission?: Parameters<typeof MobileNativeChatView>[0]['permission']
   sendSurfaceId?: string

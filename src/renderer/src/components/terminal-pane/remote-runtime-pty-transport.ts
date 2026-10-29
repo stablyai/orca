@@ -335,7 +335,15 @@ export function createRemoteRuntimePtyTransport(
     })
   }
 
-  const recoveryInputHold = createRemoteRuntimeRecoveryInputHold({ holdBeforeFirstConnect: true })
+  const recoveryInputHold = createRemoteRuntimeRecoveryInputHold({
+    holdBeforeFirstConnect: true,
+    // A closed pane has nobody left to tell.
+    onTypingDiscardedBeforeBind: () => {
+      if (!destroyed) {
+        opts.onTypingDiscardedBeforeBind?.()
+      }
+    }
+  })
   let isFirstConnect = true
   let heldInputRelease: {
     stream: RemoteRuntimeMultiplexedTerminal

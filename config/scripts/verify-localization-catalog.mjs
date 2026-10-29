@@ -9,6 +9,12 @@ import ts from 'typescript-api'
 import { canonicalGenericRenderings } from './locale-generic-ui-terms.mjs'
 import { LOCALIZATION_SURFACES, readLocalizationSurface } from './localization-surfaces.mjs'
 import { repairTranslatedValue } from './locale-translation-policy.mjs'
+import {
+  interpolationVariablesMatch,
+  pluralFamilyDefaults,
+  resolveLocaleSourceKey,
+  syncLocalePluralForms
+} from './locale-plural-forms.mjs'
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts'])
 const SKIP_PATH_PARTS = new Set(['.git', 'dist', 'node_modules', 'out', '__snapshots__', 'assets'])
@@ -118,16 +124,13 @@ export function collectLocalizationKeyReferences(filePath, sourceText, root = pr
         ts.isStringLiteralLike(firstArg)
       ) {
         const secondArg = node.arguments[1]
-        references.push(
-          reportAt(
-            root,
-            filePath,
-            sourceFile,
-            firstArg,
-            firstArg.text,
-            secondArg && ts.isStringLiteralLike(secondArg) ? secondArg.text : undefined
-          )
-        )
+        const fallback = secondArg && ts.isStringLiteralLike(secondArg) ? secondArg.text : undefined
+        const keys = pluralFamilyDefaults(ts, firstArg.text, fallback, node.arguments[2]) ?? [
+          [firstArg.text, fallback]
+        ]
+        for (const [key, value] of keys) {
+          references.push(reportAt(root, filePath, sourceFile, firstArg, key, value))
+        }
       }
     }
 
@@ -283,24 +286,6 @@ function setCatalogEntry(catalog, key, value) {
   cursor[parts.at(-1)] = value
 }
 
-// Locales with more CLDR plural categories than English (ru few/many) source those forms from `_other`.
-function resolveLocaleSourceKey(enEntries, localeName, key) {
-  if (enEntries.has(key)) {
-    return key
-  }
-  const plural = /^(.*)_(zero|one|two|few|many|other)$/.exec(key)
-  if (!plural || !localeName || !enEntries.has(`${plural[1]}_other`)) {
-    return undefined
-  }
-  try {
-    return new Intl.PluralRules(localeName).resolvedOptions().pluralCategories.includes(plural[2])
-      ? `${plural[1]}_other`
-      : undefined
-  } catch {
-    return undefined
-  }
-}
-
 function collectLocaleParityIssues(enCatalog, localeCatalog, localeName) {
   const enEntries = flattenCatalogEntries(enCatalog)
   const localeEntries = flattenCatalogEntries(localeCatalog)
@@ -317,7 +302,7 @@ function collectLocaleParityIssues(enCatalog, localeCatalog, localeName) {
     }
     const enVariables = collectInterpolationVariables(enEntries.get(sourceKey))
     const localeVariables = collectInterpolationVariables(localeValue)
-    if (enVariables.join('|') !== localeVariables.join('|')) {
+    if (!interpolationVariablesMatch(sourceKey, enVariables, localeVariables)) {
       interpolationMismatches.push(key)
     }
   }
@@ -657,9 +642,19 @@ export async function main(
   for (const fileName of localeFiles) {
     const localeName = fileName.replace(/\.json$/, '')
     const localeCatalogPath = path.join(localesDir, fileName)
-    const localeCatalog = await readCatalogFile(localeCatalogPath)
+    let localeCatalog = await readCatalogFile(localeCatalogPath)
     if (localeCatalog === undefined || reportDottedCatalogKeys(fileName, localeCatalog) !== 0) {
       return 1
+    }
+    if (surface.fillsPluralForms) {
+      const plural = await syncLocalePluralForms(localeCatalogPath, localeCatalog, options.fix)
+      if (!plural.ok) {
+        console.error(
+          `Run \`${surface.syncCatalogCommand}\` to copy them from each \`_other\` form.`
+        )
+        return 1
+      }
+      localeCatalog = plural.catalog
     }
     const exitCode = verifyLocaleCatalog(catalog, localeName, localeCatalog)
     if (exitCode !== 0) {

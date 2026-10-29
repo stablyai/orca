@@ -48,15 +48,12 @@ export function externalAutomationUncheckedNotice(
       { hostLabel: labels[0] }
     )
   }
-  return labels.length === 1
-    ? translate(
-        'auto.components.automations.externalScope.uncheckedHostCount_one',
-        'External automation managers on {{count}} host could not be checked.',
-        { count: labels.length }
-      )
-    : translate(
-        'auto.components.automations.externalScope.uncheckedHostCount_other',
-        'External automation managers on {{count}} hosts could not be checked.',
-        { count: labels.length }
-      )
+  return translate(
+    'auto.components.automations.externalScope.uncheckedHostCount',
+    'External automation managers on {{count}} hosts could not be checked.',
+    {
+      count: labels.length,
+      defaultValue_one: 'External automation managers on {{count}} host could not be checked.'
+    }
+  )
 }

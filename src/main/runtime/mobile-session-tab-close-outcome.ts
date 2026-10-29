@@ -22,7 +22,8 @@ export function committedMobileSessionTabClose(
   closedTabIds: readonly string[]
 ): MobileSessionTabCloseOutcome {
   selections.forgetTabs(worktreeId, closedTabIds)
-  return { closed: true } as MobileSessionTabCloseOutcome
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only this constructor brands the outcome after committed retirement.
+  return { closed: true, retirementConfirmed: true } as MobileSessionTabCloseOutcome
 }
 
 // Renderer notifications are unacknowledged and may be declined; delegated close must never tombstone.

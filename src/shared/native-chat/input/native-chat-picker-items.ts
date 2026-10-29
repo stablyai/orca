@@ -1,5 +1,5 @@
 import type { DiscoveredSkill, SkillSourceKind } from '../../skills'
-import { locatedPickerSkill, getSafeSkillName, isTokenSafe } from '../../native-chat-reported-skill'
+import { locatedPickerSkill, getSafeSkillName, isTokenSafe } from '../native-chat-reported-skill'
 import type { NativeChatSessionSkill, SlashCommandSuggestion } from './native-chat-slash-commands'
 import { stripUnsafeDisplayCharacters } from '../../skill-display-text'
 import { compareBaseSensitivityLocaleText } from '../../locale-text-collators'

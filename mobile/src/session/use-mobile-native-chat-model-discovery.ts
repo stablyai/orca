@@ -68,8 +68,11 @@ export function useMobileNativeChatModelDiscovery(args: {
     let cancelled = false
     void runRpcOperation(client, discoverModels, { worktree: `id:${worktreeId}`, agentId: agent })
       .then((discovery) => {
+        if (cancelled) {
+          return
+        }
         const models = discovery ? catalogModelsFromModelDiscovery(agent, discovery) : null
-        if (!cancelled && models !== null) {
+        if (models !== null) {
           setResult({ client, scope, models: mergeDiscoveredCatalogModels(agent, catalog, models) })
         }
       })

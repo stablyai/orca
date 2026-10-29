@@ -149,6 +149,13 @@ export async function assertAutomationCreateIdempotencySupported(
   )
 }
 
+function extraAgentArgsHostUpdateRequired(): string {
+  return translate(
+    'automations.extraAgentArgs.hostUpdateRequired',
+    EXTRA_AGENT_ARGS_HOST_UPDATE_REQUIRED
+  )
+}
+
 /** Older hosts strip the field and would run without it, so nonempty extras need the capability. */
 export async function assertExtraAgentArgsSupported(
   authority: AutomationAuthorityRef,
@@ -160,7 +167,7 @@ export async function assertExtraAgentArgsSupported(
   await assertAuthorityCapability(
     authority,
     AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY,
-    EXTRA_AGENT_ARGS_HOST_UPDATE_REQUIRED
+    extraAgentArgsHostUpdateRequired()
   )
 }
 
@@ -174,7 +181,7 @@ export async function assertEnvironmentSupportsExtraAgentArgs(
   }
   const status = await getRuntimeEnvironmentStatus(environmentId, REQUEST_TIMEOUT_MS)
   if (!status.capabilities?.includes(AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY)) {
-    throw new AutomationHostScopeUnsupportedError(EXTRA_AGENT_ARGS_HOST_UPDATE_REQUIRED)
+    throw new AutomationHostScopeUnsupportedError(extraAgentArgsHostUpdateRequired())
   }
 }
 

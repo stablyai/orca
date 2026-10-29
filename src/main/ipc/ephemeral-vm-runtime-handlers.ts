@@ -26,6 +26,10 @@ import {
   removeRuntimeOwnedSshTarget
 } from '../ephemeral-vm/runtime-ssh'
 import { getRuntimeRecipeContext } from './ephemeral-vm-recipe-context'
+import {
+  ephemeralVmFailure,
+  ephemeralVmFailureFromError
+} from '../../shared/ephemeral-vm-failure-copy'
 import { invalidateRuntimeEnvironmentTransport } from './runtime-environments/runtime-environments'
 import { retireRemovedRuntimeEnvironment } from './runtime-environments/runtime-environment-removal-cleanup'
 import { attachEphemeralVmRuntimeToWorkspace } from '../ephemeral-vm/runtime-attachment'
@@ -86,7 +90,7 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
             status: 'cleanup_failed',
             cleanupStatus: 'failed',
             cleanupLastAttemptAt: Date.now(),
-            cleanupLastError: error instanceof Error ? error.message : String(error)
+            cleanupLastError: ephemeralVmFailureFromError(error)
           })
           return removeEphemeralVmRuntimeSshTarget({
             userDataPath,
@@ -151,7 +155,7 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
       return updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, {
         status: 'cleanup_failed',
         cleanupStatus: 'failed',
-        cleanupLastError: 'Cleanup was interrupted. Retry cleanup to continue.'
+        cleanupLastError: ephemeralVmFailure('cleanupInterrupted')
       })
     }
   )

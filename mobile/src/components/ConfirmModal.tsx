@@ -1,4 +1,5 @@
 import { View, Text, Pressable } from 'react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -29,12 +30,13 @@ export function ConfirmModal({ visible, ...content }: Props) {
 export function ConfirmContent({
   title,
   message,
-  confirmLabel = 'Confirm',
-  cancelLabel = 'Cancel',
+  confirmLabel,
+  cancelLabel,
   destructive = false,
   onConfirm,
   onCancel
 }: ContentProps) {
+  const t = useMobileTranslation()
   useMobileColorScheme()
   return (
     <>
@@ -48,7 +50,7 @@ export function ConfirmContent({
             style={({ pressed }) => [styles.button, styles.cancelButton, pressed && styles.pressed]}
             onPress={onCancel}
           >
-            <Text style={styles.cancelText}>{cancelLabel}</Text>
+            <Text style={styles.cancelText}>{cancelLabel ?? t('common.cancel', 'Cancel')}</Text>
           </Pressable>
         )}
         <Pressable
@@ -63,7 +65,7 @@ export function ConfirmContent({
           }}
         >
           <Text style={destructive ? styles.destructiveText : styles.confirmText}>
-            {confirmLabel}
+            {confirmLabel ?? t('common.confirm', 'Confirm')}
           </Text>
         </Pressable>
       </View>

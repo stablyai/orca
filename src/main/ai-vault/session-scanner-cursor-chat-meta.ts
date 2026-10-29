@@ -3,6 +3,8 @@ import { basename, dirname, join } from 'node:path'
 import { wslGatedReaddir, wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { timestampIso } from './session-scanner-accumulator'
+import { scanIssueTextFromError } from './session-scan-issues'
+import type { AiVaultScanIssueText } from '../../shared/ai-vault-scan-issue-copy'
 import { extractString, normalizeTitleText, readJsonObjectIfExists } from './session-scanner-values'
 
 // Transcript paths cannot derive hashed metadata buckets; index the separate chats tree by chat ID.
@@ -31,7 +33,7 @@ const cursorChatMetaIndexCache = new Map<string, Promise<CursorChatMetaIndexEntr
 type CursorChatMetaScan = {
   index: Map<string, Promise<Map<string, string>>>
   // Chats roots this scan could not read, reported once by the scan owner.
-  refusals: Map<string, string>
+  refusals: Map<string, AiVaultScanIssueText>
   // Refused metadata reads must remain unknown rather than validate cached enrichment.
   refusedTranscripts: Set<string>
 }
@@ -64,9 +66,12 @@ export function cursorChatMetaUnavailable(transcriptPath: string): boolean {
   )
 }
 
-export function cursorChatMetaRefusals(): { chatsRoot: string; message: string }[] {
+export function cursorChatMetaRefusals(): {
+  chatsRoot: string
+  text: AiVaultScanIssueText
+}[] {
   const scan = scanScopedIndex.getStore()
-  return scan ? [...scan.refusals].map(([chatsRoot, message]) => ({ chatsRoot, message })) : []
+  return scan ? [...scan.refusals].map(([chatsRoot, text]) => ({ chatsRoot, text })) : []
 }
 
 /** Path a discovery stat can watch so a rewritten meta.json invalidates the parse cache. */
@@ -101,15 +106,15 @@ async function readCursorChatMetaIndexOrNone(chatsRoot: string): Promise<Map<str
     if (!(error instanceof WslTranscriptFsError)) {
       throw error
     }
-    recordCursorChatMetaRefusal(chatsRoot, error.message)
+    recordCursorChatMetaRefusal(chatsRoot, scanIssueTextFromError(error))
     return new Map()
   }
 }
 
-function recordCursorChatMetaRefusal(chatsRoot: string, message: string): void {
+function recordCursorChatMetaRefusal(chatsRoot: string, text: AiVaultScanIssueText): void {
   const scan = scanScopedIndex.getStore()
   if (scan && !scan.refusals.has(chatsRoot)) {
-    scan.refusals.set(chatsRoot, message)
+    scan.refusals.set(chatsRoot, text)
   }
 }
 
@@ -131,7 +136,7 @@ export async function readCursorChatMeta(
     // Discovery observed this sidecar; mark its refused read unknown instead of validating un-enriched results.
     recordCursorChatMetaRefusal(
       cursorChatsRootFromTranscriptPath(transcriptPath) ?? metaPath,
-      error.message
+      scanIssueTextFromError(error)
     )
     scanScopedIndex.getStore()?.refusedTranscripts.add(transcriptPath)
     return null

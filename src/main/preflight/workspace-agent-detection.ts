@@ -33,6 +33,7 @@ import {
   type RefreshAgentsResult
 } from './agent-detection'
 import type { InstalledAgentDetectionOptions } from './installed-agent-detection'
+import { assertWslDistroRunningForExec } from '../wsl/wsl-background-exec-gate'
 
 export type AgentDetectionHost =
   | { kind: 'local'; context?: PreflightRuntimeContext }
@@ -140,6 +141,14 @@ export async function detectAgentsOnHost(
     throw new SshHostNotServedError(host.connectionId)
   }
   return detectInstalledAgentsWithShellPathHydration(host.context, options)
+}
+
+/** Background detection in a WSL runtime refuses a stopped distro (E9); a user act for it passes. */
+export async function assertAgentDetectionHostRunning(host: AgentDetectionHost): Promise<void> {
+  const wslTarget = host.kind === 'local' ? getPreflightWslTarget(host.context) : null
+  if (wslTarget) {
+    await assertWslDistroRunningForExec(wslTarget.distro)
+  }
 }
 
 const agentRefreshListeners = new Set<() => void>()

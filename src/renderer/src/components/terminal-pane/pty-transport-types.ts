@@ -274,6 +274,8 @@ export type IpcPtyTransportOptions = {
   keepTypeAheadForNewTerminal?: (phase: 'connect' | 'bind') => boolean
   /** Re-checked when held input would flush; false drops it (startup work appeared after the hold began). */
   releasePreconnectInput?: () => boolean
+  /** Keys typed before a remote pane bound its terminal were dropped for safety, unsent. */
+  onTypingDiscardedBeforeBind?: () => void
   /** Seed a fresh transport with input handed off from a remounted deferred split. */
   preconnectInput?: readonly PtyPreconnectInputEntry[]
   /** Records newly retained input against a remount-safe deferred split handoff. */

@@ -6,6 +6,7 @@ import {
   parseExtraAgentArgs
 } from '../../../../shared/automation-extra-agent-args'
 import type { AutomationDraft } from './AutomationEditorDialog'
+import { extraAgentArgsErrorText } from './automation-extra-agent-args-error-copy'
 
 export const AUTOMATION_DEFAULT_TIME = '09:00'
 
@@ -52,7 +53,7 @@ export function getDraftExtraAgentArgsError(
     agent: draft.agentId,
     extraAgentArgs: draft.extraAgentArgs
   })
-  return parsed.ok ? null : parsed.error
+  return parsed.ok ? null : extraAgentArgsErrorText(parsed)
 }
 
 /** Reuse can't carry extras; the field offers a switch instead of flipping it silently. */

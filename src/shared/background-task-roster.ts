@@ -142,13 +142,14 @@ export function backgroundTaskStateReason(state: RunState, say: BackgroundTaskSa
   }
 }
 
-/** Translate count/state as a whole sentence so languages can agree their forms. */
+/** Translate count/state as a whole sentence so languages can agree their forms; `subject` ("2 agents") stands in for the bare count. */
 export function backgroundTaskCountedState(
-  counted: string | number,
+  count: number,
   state: RunState,
-  say: BackgroundTaskSay
+  say: BackgroundTaskSay,
+  subject?: string
 ): string {
-  const value = { value0: counted }
+  const value = { count, value0: subject ?? count }
   switch (state) {
     case 'working':
       return say('stateWorkingCount', value)

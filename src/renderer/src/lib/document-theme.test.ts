@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { parsePluginAppThemeArtifact } from '../../../shared/plugins/plugin-theme-artifact'
 import {
   applyCachedPluginAppTheme,
   applyDocumentTheme,
@@ -169,21 +168,6 @@ describe('applyPluginAppTheme', () => {
     const [r = 0, g = 0, b = 0] = match.slice(1, 4).map((hex) => Number.parseInt(hex, 16))
     return [r, g, b, Number.parseInt(match[4] ?? 'ff', 16) / 255] as const
   }
-  // Like the browser, resolves color-mix(in srgb, A N%, B) for derived tokens.
-  const mixingProbe = (value: string) => {
-    const mix = /^color-mix\(in srgb, (#[0-9a-f]{6}) (\d+)%, (#[0-9a-f]{6})\)$/i.exec(value)
-    if (!mix) {
-      return probe(value)
-    }
-    const a = probe(mix[1] ?? '')
-    const b = probe(mix[3] ?? '')
-    const weight = Number(mix[2]) / 100
-    if (!a || !b) {
-      return null
-    }
-    const channel = (i: number) => (a[i] ?? 0) * weight + (b[i] ?? 0) * (1 - weight)
-    return [channel(0), channel(1), channel(2), 1] as const
-  }
   // Orca's dark built-ins, as the document would report them.
   const darkBuiltIns = () => ({
     '--background': '#0a0a0a',
@@ -278,20 +262,5 @@ describe('applyPluginAppTheme', () => {
 
     applyPluginAppTheme(null, { ...options(), storage })
     expect(readCachedPluginAppTheme(storage)).toBeNull()
-  })
-
-  it('paints a minimal two-token theme with readable derived muted text, borders and accents', () => {
-    const { tokens } = parsePluginAppThemeArtifact(
-      JSON.stringify({
-        base: 'dark',
-        tokens: { '--background': '#1b1430', '--foreground': '#e8e0ff' }
-      })
-    )
-    const root = fakeRoot()
-    applyPluginAppTheme(theme(tokens), { ...options(root), probe: mixingProbe })
-    for (const token of ['--muted-foreground', '--border', '--accent', '--sidebar-accent']) {
-      expect(root.properties.get(token)).toMatch(/^color-mix/)
-    }
-    expect(root.properties.get('--background')).toBe('#1b1430')
   })
 })

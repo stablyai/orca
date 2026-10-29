@@ -49,30 +49,21 @@ export default function NewExternalWorktreesInboxLine({
     'Hide external worktrees permanently for {{value0}}',
     { value0: repoScopeLabel }
   )
-  const isSingular = inboxCount === 1
   // The count renders in its own badge; `count` still selects the noun's plural form.
-  const countLabel = isSingular
-    ? translate(
-        'auto.components.sidebar.NewExternalWorktreesInboxLine.hiddenWorktreesNoun_one',
-        'hidden worktree',
-        { count: inboxCount }
-      )
-    : translate(
-        'auto.components.sidebar.NewExternalWorktreesInboxLine.hiddenWorktreesNoun_other',
-        'hidden worktrees',
-        { count: inboxCount }
-      )
-  const reviewAriaLabel = isSingular
-    ? translate(
-        'auto.components.sidebar.NewExternalWorktreesInboxLine.reviewHiddenWorktrees_one',
-        'Review {{count}} hidden worktree in {{scope}}',
-        { count: inboxCount, scope: repoScopeLabel }
-      )
-    : translate(
-        'auto.components.sidebar.NewExternalWorktreesInboxLine.reviewHiddenWorktrees_other',
-        'Review {{count}} hidden worktrees in {{scope}}',
-        { count: inboxCount, scope: repoScopeLabel }
-      )
+  const countLabel = translate(
+    'auto.components.sidebar.NewExternalWorktreesInboxLine.hiddenWorktreesNoun',
+    'hidden worktrees',
+    { count: inboxCount, defaultValue_one: 'hidden worktree' }
+  )
+  const reviewAriaLabel = translate(
+    'auto.components.sidebar.NewExternalWorktreesInboxLine.reviewHiddenWorktrees',
+    'Review {{count}} hidden worktrees in {{scope}}',
+    {
+      count: inboxCount,
+      scope: repoScopeLabel,
+      defaultValue_one: 'Review {{count}} hidden worktree in {{scope}}'
+    }
+  )
 
   if (inboxCount === 0) {
     return null

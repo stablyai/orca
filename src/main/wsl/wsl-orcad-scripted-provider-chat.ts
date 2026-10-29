@@ -6,7 +6,10 @@ import type { AgentSessionSubscribeEvent } from '../../shared/agent-session-wire
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime/remote-runtime-client'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
-import type { WslScriptedProviderInstall } from './wsl-orcad-chat-provider-fixture'
+import {
+  waitForProviderReport,
+  type WslScriptedProviderInstall
+} from './wsl-orcad-chat-provider-fixture'
 import { assistantText } from './wsl-orcad-chat-assistant-text'
 import { envelope } from './wsl-orcad-chat-envelope'
 import type { ChatLane } from './wsl-orcad-structured-chat-contract'
@@ -167,8 +170,13 @@ export async function exerciseScriptedProviderChat(
       },
       { timeout: 30_000 }
     )
-    const report = await readReport()
-    expect(report.methods).toContain(provider.stopMethod)
+    const report = await waitForProviderReport(
+      lane,
+      install.reportPath,
+      ScriptedProviderReport,
+      (written) => written.methods.includes(provider.stopMethod),
+      provider.stopMethod
+    )
     expect(report.cwd).toBe(cwd)
     // The guest's own runtime ran the guest install found on its login PATH: never a /mnt/ copy.
     expect(report.execPath).toMatch(/^\/(?!mnt\/)/u)

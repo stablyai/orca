@@ -8,6 +8,7 @@ import {
 } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../platform/haptics'
+import { translate } from '../i18n/mobile-i18n'
 import { cancelMobileCommitMessage, requestMobileCommitMessage } from './mobile-commit-message-ai'
 
 type Params = {
@@ -70,7 +71,14 @@ export function useMobileCommitMessageGeneration(params: Params) {
       // Catch transport drops because callers void this handler; retain error feedback.
       if (mountedRef.current && run === runRef.current) {
         triggerError()
-        setActionError(err instanceof Error ? err.message : 'Failed to generate commit message')
+        setActionError(
+          err instanceof Error
+            ? err.message
+            : translate(
+                'sourceControl.useMobileCommitMessageGeneration.generateFailed',
+                'Failed to generate commit message'
+              )
+        )
       }
     } finally {
       if (activeRunRef.current === run) {

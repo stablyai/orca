@@ -165,6 +165,7 @@ async function performRuntimeLocalWorktreeCreate<T>(
       username,
       store,
       baseBranch: base.baseBranch,
+      remoteTrackingBase: base.remoteTrackingBase,
       localWorktreeGitOptions: worktreeGitOptions,
       hostedReviewExecutionContext: args.hostedReviewExecutionContext,
       pathClaim

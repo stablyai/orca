@@ -5,6 +5,8 @@ import type {
   HostedReviewProvider
 } from '../../../../shared/hosted-review'
 import { translate } from '@/i18n/i18n'
+import { isStackedReviewFailureReason } from '../../../../shared/stacked-hosted-review-failure-copy'
+import { stackedFailureMessage } from './stacked-review-create-failure-copy'
 import {
   localizedHostedReviewCopy,
   resolveSupportedHostedReviewCopyProvider,
@@ -78,8 +80,13 @@ function createFailureCopy(
   reason: CreateHostedReviewFailureReason,
   provider: SupportedHostedReviewCopyProvider,
   copy: LocalizedHostedReviewCopy,
-  base: string | undefined
+  base: string | undefined,
+  head?: string
 ): CreateFailureCopy | undefined {
+  if (isStackedReviewFailureReason(reason)) {
+    const text = stackedFailureMessage(reason, base, head)
+    return text === undefined ? undefined : { kind: 'message', text }
+  }
   const vars = {
     reviewLabel: copy.reviewLabel,
     shortLabel: copy.shortLabel,
@@ -250,11 +257,12 @@ function createFailureCopy(
 function failureCopyFor(
   reason: CreateHostedReviewFailureReason,
   provider: HostedReviewProvider,
-  base?: string
+  base?: string,
+  head?: string
 ): { copy: CreateFailureCopy; shortLabel: string } | null {
   const supported = resolveSupportedHostedReviewCopyProvider(provider)
   const labels = localizedHostedReviewCopy(supported)
-  const copy = createFailureCopy(reason, supported, labels, base)
+  const copy = createFailureCopy(reason, supported, labels, base, head)
   return copy ? { copy, shortLabel: labels.shortLabel } : null
 }
 
@@ -262,9 +270,10 @@ function failureCopyFor(
 export function hostedReviewCreateFailureMessage(
   reason: CreateHostedReviewFailureReason,
   provider: HostedReviewProvider,
-  base?: string
+  base?: string,
+  head?: string
 ): string | null {
-  const resolved = failureCopyFor(reason, provider, base)
+  const resolved = failureCopyFor(reason, provider, base, head)
   if (!resolved) {
     return null
   }
@@ -278,6 +287,10 @@ export function hostedReviewCreateFailureMessage(
   )
 }
 
+function failedHead(result: FailedCreateResult): string | undefined {
+  return 'head' in result ? result.head : undefined
+}
+
 // Hosts that send no reason only have the English sentence to strip.
 const ENGLISH_CREATE_FAILED_PREFIX = /^Create (?:PR|MR) failed:\s*/i
 
@@ -288,7 +301,7 @@ export function localizedCreateFailure(
 ): string {
   return (
     (result.reason
-      ? hostedReviewCreateFailureMessage(result.reason, provider, result.base)
+      ? hostedReviewCreateFailureMessage(result.reason, provider, result.base, failedHead(result))
       : null) ?? result.error
   )
 }
@@ -299,7 +312,8 @@ export function localizedCreateFailureDetail(
   provider: HostedReviewProvider
 ): string {
   return (
-    (result.reason ? failureCopyFor(result.reason, provider, result.base)?.copy.text : null) ??
-    result.error.replace(ENGLISH_CREATE_FAILED_PREFIX, '')
+    (result.reason
+      ? failureCopyFor(result.reason, provider, result.base, failedHead(result))?.copy.text
+      : null) ?? result.error.replace(ENGLISH_CREATE_FAILED_PREFIX, '')
   )
 }

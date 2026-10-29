@@ -1,4 +1,5 @@
 import { isCurrentMobileDictationStart } from './mobile-dictation-session-state'
+import { translate } from '../i18n/mobile-i18n'
 import {
   dictationSessionCancel,
   dictationSessionStart
@@ -100,7 +101,12 @@ export async function startMobileDictationDesktopSession(
   try {
     // Commit before returning so queued cancellation cannot resurrect recording after cleanup.
     if (!options.commitRecordingStart()) {
-      throw new Error('Failed to start microphone recording')
+      throw new Error(
+        translate(
+          'hooks.dictationDesktopStart.recordingFailed',
+          'Failed to start microphone recording'
+        )
+      )
     }
   } catch (err) {
     const wasCurrent = isCurrentStart(options)

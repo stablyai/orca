@@ -23,7 +23,9 @@ const paletteMeasurementFile =
 const measurementFiles = [measurementFile, paletteMeasurementFile]
 const phoneContractModules = [
   'mobile/src/session/native-chat/mobile-native-chat-stream-frame.ts',
-  'mobile/src/session/mobile-native-chat-render-data.ts'
+  'mobile/src/session/mobile-native-chat-render-data.ts',
+  'mobile/src/i18n/mobile-i18n.ts',
+  'mobile/src/i18n/locale-catalog-imports.ts'
 ].map((file) => normalizePath(resolve(file)))
 const phoneContractPattern = new RegExp(
   `^(?:${phoneContractModules.map((file) => file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?:\\?.*)?$`
@@ -86,7 +88,7 @@ const testOptions = {
   environment: 'node',
   clearMocks: false,
   ...(balancedShards ? { silent: 'passed-only' as const } : {}),
-  // Persistent transforms are CI-keyed (ci-unit-module-cache.mjs); local runs stay cold.
+  // Keyed by ci-unit-module-cache.mjs in CI and vitest-local-module-cache.mjs locally.
   fsModuleCache: Boolean(moduleCachePath),
   ...(moduleCachePath ? { fsModuleCachePath: moduleCachePath } : {}),
   env: { ORCA_VITEST_RUNTIME: 'node' },

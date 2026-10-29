@@ -324,17 +324,10 @@ export function ProviderFrameRow({
         frame?.payload.truncated ? (
           <span>
             ·{' '}
-            {frame.payload.byteLength === 1
-              ? translate('components.native-chat.providerFrame.byteCount_one', '{{count}} byte', {
-                  count: frame.payload.byteLength
-                })
-              : translate(
-                  'components.native-chat.providerFrame.byteCount_other',
-                  '{{count}} bytes',
-                  {
-                    count: frame.payload.byteLength
-                  }
-                )}
+            {translate('components.native-chat.providerFrame.byteCount', '{{count}} bytes', {
+              count: frame.payload.byteLength,
+              defaultValue_one: '{{count}} byte'
+            })}
           </span>
         ) : null
       }

@@ -10,6 +10,7 @@ import {
   type ForwardedRef
 } from 'react'
 import { View } from 'react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -21,7 +22,6 @@ import {
   mountRichMarkdownWebDocument,
   type RichMarkdownWebDocument
 } from './rich-markdown/rich-markdown-web-document-mount'
-import { RICH_MARKDOWN_URL_PROMPT_LABELS } from './rich-markdown/document-host-seams'
 import { useMobileRichMarkdownEditorController } from './use-mobile-rich-markdown-editor-controller'
 import type {
   RichMarkdownEditorApi,
@@ -50,6 +50,7 @@ function MobileRichMarkdownEditorWebInner(
   { content, editable, onChange, onOpenLink }: MobileRichMarkdownEditorComponentProps,
   ref: ForwardedRef<MobileRichMarkdownEditorHandle>
 ) {
+  const t = useMobileTranslation()
   const colorScheme = useMobileColorScheme()
   const hostRef = useRef<View>(null)
   const documentRef = useRef<RichMarkdownWebDocument | null>(null)
@@ -189,9 +190,15 @@ function MobileRichMarkdownEditorWebInner(
       <View ref={hostRef} style={styles.host} />
       <TextInputModal
         visible={urlPromptKind !== null}
-        title={urlPromptKind === null ? '' : RICH_MARKDOWN_URL_PROMPT_LABELS[urlPromptKind]}
+        title={
+          urlPromptKind === null
+            ? ''
+            : urlPromptKind === 'link'
+              ? t('components.richMarkdownEditor.linkUrl', 'Link URL')
+              : t('components.richMarkdownEditor.imageUrl', 'Image URL')
+        }
         placeholder="https://"
-        submitLabel="Insert"
+        submitLabel={t('components.richMarkdownEditor.insert', 'Insert')}
         keyboardType="url"
         onSubmit={answerUrlPrompt}
         onCancel={() => answerUrlPrompt(null)}

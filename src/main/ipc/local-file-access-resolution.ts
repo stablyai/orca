@@ -1,6 +1,6 @@
 import { dirname, isAbsolute, resolve } from 'node:path'
 import { stat } from 'node:fs/promises'
-import type { Store } from '../persistence'
+import type { RuntimeStore } from '../runtime/runtime-store-contract'
 import type { LocalFileAccess } from '../../shared/local-file-access'
 import {
   PATH_ACCESS_DENIED_MESSAGE,
@@ -26,7 +26,7 @@ const CHAT_IMAGE_TYPE_MESSAGE = 'Access denied: a chat can only show local image
 
 export async function resolveDesktopAuthorizedPath(
   targetPath: string,
-  store: Store,
+  store: RuntimeStore,
   options: ResolveAuthorizedPathOptions = {}
 ): Promise<string> {
   return resolveAuthorizedPath(targetPath, store, {
@@ -47,7 +47,7 @@ function resolveUserNamedLocalPath(targetPath: string): string {
 /** Require an existing regular user-named file; project paths retain normal canonicalization. */
 export async function resolveUserNamedRegularFile(
   targetPath: string,
-  store: Store
+  store: RuntimeStore
 ): Promise<string> {
   const filePath = await resolveLocalRequestPath(targetPath, USER_FILE_ACCESS, store, 'read')
   if (!(await stat(windowsFsPath(filePath))).isFile()) {
@@ -100,7 +100,7 @@ async function resolveDocumentResourcePath(
 }
 
 /** Chat accepts absolute images by real target type; network shares are readable only inside registered project roots. */
-async function resolveChatImagePath(targetPath: string, store: Store): Promise<string> {
+async function resolveChatImagePath(targetPath: string, store: RuntimeStore): Promise<string> {
   if (typeof targetPath !== 'string' || !isAbsolute(targetPath)) {
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)
   }
@@ -199,7 +199,7 @@ type KindRule = (targetPath: string) => Promise<string>
 function declaredKindRule(
   fileAccess: LocalFileAccess,
   operation: LocalRequestOperation,
-  store: Store
+  store: RuntimeStore
 ): KindRule | undefined {
   switch (fileAccess.kind) {
     case 'user-file':
@@ -226,7 +226,7 @@ function declaredKindRule(
 export async function resolveLocalRequestPath(
   targetPath: string,
   access: unknown,
-  store: Store,
+  store: RuntimeStore,
   operation: LocalRequestOperation
 ): Promise<string> {
   // Rename operates on link entries, not their resolved targets.
@@ -262,7 +262,7 @@ export async function resolveLocalRenamePaths(
   oldPath: string,
   newPath: string,
   access: unknown,
-  store: Store
+  store: RuntimeStore
 ): Promise<{ from: string; to: string }> {
   const fileAccess = parseLocalFileAccess(access)
   const renameAccess =
@@ -278,7 +278,7 @@ export async function resolveLocalRenamePaths(
 export function resolveLocalFileRequestPath(
   targetPath: string,
   access: unknown,
-  store: Store
+  store: RuntimeStore
 ): Promise<string> {
   return resolveLocalRequestPath(targetPath, access, store, 'read')
 }
@@ -286,7 +286,7 @@ export function resolveLocalFileRequestPath(
 export function resolveLocalWriteRequestPath(
   targetPath: string,
   access: unknown,
-  store: Store
+  store: RuntimeStore
 ): Promise<string> {
   return resolveLocalRequestPath(targetPath, access, store, 'write')
 }

@@ -261,7 +261,7 @@ export function registerCoreHandlers(
     invalidateTransport: invalidateRuntimeEnvironmentTransport
   })
   registerWslMoveWiring(store, runtime)
-  registerWslDriveProjectHandlers(store)
+  registerWslDriveProjectHandlers(store, runtime)
   registerEphemeralVmHandlers(store, pluginService)
   // Session history and terminal resume are not chats; a refused host leaves nothing to check.
   const ensureStructuredSessionOwnership = () =>

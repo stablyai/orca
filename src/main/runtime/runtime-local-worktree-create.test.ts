@@ -290,7 +290,7 @@ describe('runtime create timing', () => {
     const timing = createWorktreeCreateTimingRecorder()
 
     mocks.branchName.mockResolvedValue('main')
-    await createWorktree(pickedBranch, undefined, timing)
+    await createWorktree({ ...pickedBranch, branchIntent: undefined }, undefined, timing)
 
     expect(mocks.consume).toHaveBeenCalledWith(
       expect.objectContaining({ timing, branch: 'main', baseBranch: 'origin/main' })
@@ -308,6 +308,30 @@ describe('runtime create timing', () => {
       ])
     )
     expect(finished).toMatchObject({ executionHost: 'local', worktreeCount: 3 })
+  })
+
+  it('materializes remote reuse with tracking instead of consuming a prepared checkout', async () => {
+    mocks.branchName.mockResolvedValue('main')
+    mocks.remoteBase.mockResolvedValue({
+      remote: 'origin',
+      branch: 'main',
+      base: 'origin/main',
+      ref: 'refs/remotes/origin/main'
+    })
+    await createWorktree(pickedBranch)
+    expect(mocks.consume).not.toHaveBeenCalled()
+    expect(mocks.add).toHaveBeenCalledWith(
+      '/repo',
+      worktreePath,
+      'main',
+      'origin/main',
+      false,
+      false,
+      expect.objectContaining({ trackRemoteBranch: true })
+    )
+    expect(writtenMeta).toEqual(
+      expect.arrayContaining([expect.objectContaining({ preserveBranchOnDelete: true })])
+    )
   })
 
   it('records a sparse create as a miss without consulting the prepared checkout', async () => {

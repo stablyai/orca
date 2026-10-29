@@ -189,13 +189,10 @@ export function TaskPageLinearIssueToolbar({
           </DropdownMenuContent>
         </DropdownMenu>
         <div className="text-[11px] text-muted-foreground">
-          {pagedLinearIssues.length === 1
-            ? translate('auto.components.TaskPage.shownCount_one', '{{count}} shown', {
-                count: pagedLinearIssues.length
-              })
-            : translate('auto.components.TaskPage.shownCount_other', '{{count}} shown', {
-                count: pagedLinearIssues.length
-              })}
+          {translate('auto.components.TaskPage.shownCount', '{{count}} shown', {
+            count: pagedLinearIssues.length,
+            defaultValue_one: '{{count}} shown'
+          })}
         </div>
       </div>
     </div>

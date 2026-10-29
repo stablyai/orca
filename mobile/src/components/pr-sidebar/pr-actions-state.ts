@@ -11,6 +11,7 @@ import {
   resolveGitHubPRStackMergeDecision,
   type GitHubPRStackMergeBlocker
 } from '../../../../src/shared/github/pull-request-stack-merge'
+import { translate } from '../../i18n/mobile-i18n'
 
 // Match desktop: drafts offer Ready for review and Close, never Merge; merged PRs only unlink.
 export type PrActionAvailability = {
@@ -31,75 +32,156 @@ export function resolvePrActionAvailability(state: PRState): PrActionAvailabilit
   }
 }
 
-// English copy for desktop's merge-state kinds; the shared rule decides which one applies.
-const PR_MERGE_STATE_COPY: Record<GitHubPRMergeStateKind, { label: string; hint: string }> = {
-  merged: { label: 'Merged', hint: 'This pull request is already merged' },
-  closed: { label: 'Closed', hint: 'This pull request is closed' },
-  draft: { label: 'Draft', hint: 'This pull request is still a draft' },
-  review_required: {
-    label: 'Approval required',
-    hint: 'GitHub requires review approval before this pull request can merge'
-  },
-  changes_requested: {
-    label: 'Changes requested',
-    hint: 'GitHub reports requested changes on this pull request'
-  },
-  conflicts: { label: 'Conflicts', hint: 'GitHub reports merge conflicts' },
-  merge_queue: {
-    label: 'Merge when ready',
-    hint: 'This base branch uses GitHub merge queue'
-  },
-  merge_queue_auto_merge_on: {
-    label: 'Auto-merge on',
-    hint: 'This base branch uses GitHub merge queue'
-  },
-  merge_status_unavailable: {
-    label: 'Merge',
-    hint: 'Merge status is unavailable for this PR'
-  },
-  behind: { label: 'Behind', hint: 'Update the branch before merging' },
-  blocked: {
-    label: 'Blocked',
-    hint: 'GitHub reports this pull request is blocked'
-  },
-  mergeable_checks_failed: {
-    label: 'Checks failed',
-    hint: 'GitHub says this PR can merge, but some checks failed'
-  },
-  mergeable_checks_pending: {
-    label: 'Checks pending',
-    hint: 'GitHub says this PR can merge, but checks are still running'
-  },
-  mergeable_checks_passed: {
-    label: 'Able to merge',
-    hint: 'GitHub says this PR can merge and checks passed'
-  },
-  mergeable: { label: 'Able to merge', hint: 'GitHub says this PR can merge' },
-  checks_passed: {
-    label: 'Checks passed',
-    hint: 'Checks passed. Merge eligibility will be checked again before merging.'
-  },
-  checking: {
-    label: 'Checking',
-    hint: 'GitHub is still computing this pull request merge status'
+// Copy for desktop’s merge-state kinds; the shared rule decides which one applies.
+function prMergeStateCopy(): Record<GitHubPRMergeStateKind, { label: string; hint: string }> {
+  return {
+    merged: {
+      label: translate('pullRequest.prActionsState.mergedLabel', 'Merged'),
+      hint: translate(
+        'pullRequest.prActionsState.mergedHint',
+        'This pull request is already merged'
+      )
+    },
+    closed: {
+      label: translate('pullRequest.prActionsState.closedLabel', 'Closed'),
+      hint: translate('pullRequest.prActionsState.closedHint', 'This pull request is closed')
+    },
+    draft: {
+      label: translate('pullRequest.prActionsState.draftLabel', 'Draft'),
+      hint: translate('pullRequest.prActionsState.draftHint', 'This pull request is still a draft')
+    },
+    review_required: {
+      label: translate('pullRequest.prActionsState.reviewRequiredLabel', 'Approval required'),
+      hint: translate(
+        'pullRequest.prActionsState.reviewRequiredHint',
+        'GitHub requires review approval before this pull request can merge'
+      )
+    },
+    changes_requested: {
+      label: translate('pullRequest.prActionsState.changesRequestedLabel', 'Changes requested'),
+      hint: translate(
+        'pullRequest.prActionsState.changesRequestedHint',
+        'GitHub reports requested changes on this pull request'
+      )
+    },
+    conflicts: {
+      label: translate('pullRequest.prActionsState.conflictsLabel', 'Conflicts'),
+      hint: translate('pullRequest.prActionsState.conflictsHint', 'GitHub reports merge conflicts')
+    },
+    merge_queue: {
+      label: translate('pullRequest.prActionsState.mergeQueueLabel', 'Merge when ready'),
+      hint: translate(
+        'pullRequest.prActionsState.mergeQueueHint',
+        'This base branch uses GitHub merge queue'
+      )
+    },
+    merge_queue_auto_merge_on: {
+      label: translate('pullRequest.prActionsState.mergeQueueAutoMergeOnLabel', 'Auto-merge on'),
+      hint: translate(
+        'pullRequest.prActionsState.mergeQueueAutoMergeOnHint',
+        'This base branch uses GitHub merge queue'
+      )
+    },
+    merge_status_unavailable: {
+      label: translate('pullRequest.prActionsState.mergeStatusUnavailableLabel', 'Merge'),
+      hint: translate(
+        'pullRequest.prActionsState.mergeStatusUnavailableHint',
+        'Merge status is unavailable for this PR'
+      )
+    },
+    behind: {
+      label: translate('pullRequest.prActionsState.behindLabel', 'Behind'),
+      hint: translate('pullRequest.prActionsState.behindHint', 'Update the branch before merging')
+    },
+    blocked: {
+      label: translate('pullRequest.prActionsState.blockedLabel', 'Blocked'),
+      hint: translate(
+        'pullRequest.prActionsState.blockedHint',
+        'GitHub reports this pull request is blocked'
+      )
+    },
+    mergeable_checks_failed: {
+      label: translate('pullRequest.prActionsState.mergeableChecksFailedLabel', 'Checks failed'),
+      hint: translate(
+        'pullRequest.prActionsState.mergeableChecksFailedHint',
+        'GitHub says this PR can merge, but some checks failed'
+      )
+    },
+    mergeable_checks_pending: {
+      label: translate('pullRequest.prActionsState.mergeableChecksPendingLabel', 'Checks pending'),
+      hint: translate(
+        'pullRequest.prActionsState.mergeableChecksPendingHint',
+        'GitHub says this PR can merge, but checks are still running'
+      )
+    },
+    mergeable_checks_passed: {
+      label: translate('pullRequest.prActionsState.mergeableChecksPassedLabel', 'Able to merge'),
+      hint: translate(
+        'pullRequest.prActionsState.mergeableChecksPassedHint',
+        'GitHub says this PR can merge and checks passed'
+      )
+    },
+    mergeable: {
+      label: translate('pullRequest.prActionsState.mergeableLabel', 'Able to merge'),
+      hint: translate('pullRequest.prActionsState.mergeableHint', 'GitHub says this PR can merge')
+    },
+    checks_passed: {
+      label: translate('pullRequest.prActionsState.checksPassedLabel', 'Checks passed'),
+      hint: translate(
+        'pullRequest.prActionsState.checksPassedHint',
+        'Checks passed. Merge eligibility will be checked again before merging.'
+      )
+    },
+    checking: {
+      label: translate('pullRequest.prActionsState.checkingLabel', 'Checking'),
+      hint: translate(
+        'pullRequest.prActionsState.checkingHint',
+        'GitHub is still computing this pull request merge status'
+      )
+    }
   }
 }
 
-const STACK_BLOCKER_COPY: Record<GitHubPRStackMergeBlocker['reason'], string> = {
-  draft: 'is still a draft.',
-  closed: 'is closed.',
-  conflicts: 'has merge conflicts.',
-  changes_requested: 'has requested changes.',
-  review_required: 'still needs review approval.',
-  behind: 'must be updated.',
-  blocked: 'is blocked.'
+function stackBlockerCopy({ prNumber: number, reason }: GitHubPRStackMergeBlocker): string {
+  const copy: Record<GitHubPRStackMergeBlocker['reason'], string> = {
+    draft: translate('pullRequest.prActionsState.stackDraft', '#{{number}} is still a draft.', {
+      number
+    }),
+    closed: translate('pullRequest.prActionsState.stackClosed', '#{{number}} is closed.', {
+      number
+    }),
+    conflicts: translate(
+      'pullRequest.prActionsState.stackConflicts',
+      '#{{number}} has merge conflicts.',
+      { number }
+    ),
+    changes_requested: translate(
+      'pullRequest.prActionsState.stackChangesRequested',
+      '#{{number}} has requested changes.',
+      { number }
+    ),
+    review_required: translate(
+      'pullRequest.prActionsState.stackReviewRequired',
+      '#{{number}} still needs review approval.',
+      { number }
+    ),
+    behind: translate('pullRequest.prActionsState.stackBehind', '#{{number}} must be updated.', {
+      number
+    }),
+    blocked: translate('pullRequest.prActionsState.stackBlocked', '#{{number}} is blocked.', {
+      number
+    })
+  }
+  return copy[reason]
 }
 
 // Desktop's merge-method labels; the desktop renderer translates the same three.
-const MERGE_METHOD_LABELS: Record<GitHubPRMergeMethod, string> = {
-  merge: 'Create merge commit',
-  squash: 'Squash and merge',
-  rebase: 'Rebase and merge'
+function mergeMethodLabels(): Record<GitHubPRMergeMethod, string> {
+  return {
+    merge: translate('pullRequest.prActionsState.methodMerge', 'Create merge commit'),
+    squash: translate('pullRequest.prActionsState.methodSquash', 'Squash and merge'),
+    rebase: translate('pullRequest.prActionsState.methodRebase', 'Rebase and merge')
+  }
 }
 
 export type PrMergePresentation = {
@@ -116,13 +198,17 @@ export function presentPrMerge(
   defaultMethod: GitHubPRMergeMethod
 ): PrMergePresentation {
   const decision = resolveGitHubPRMergeState(pr)
-  const blockedCopy = PR_MERGE_STATE_COPY[decision.kind]
+  const blockedCopy = prMergeStateCopy()[decision.kind]
   if (!pr.stack) {
     return {
       enabled: decision.directMergeAvailable,
-      label: decision.directMergeAvailable ? MERGE_METHOD_LABELS[defaultMethod] : blockedCopy.label,
+      label: decision.directMergeAvailable ? mergeMethodLabels()[defaultMethod] : blockedCopy.label,
       hint: decision.directMergeAvailable ? null : blockedCopy.hint,
-      confirmMessage: `This will merge #${pr.number} into its base branch.`,
+      confirmMessage: translate(
+        'pullRequest.prActionsState.mergeConfirmMessage',
+        'This will merge #{{number}} into its base branch.',
+        { number: pr.number }
+      ),
       showAutoMerge: decision.autoMergeAction !== null
     }
   }
@@ -137,18 +223,43 @@ export function presentPrMerge(
     stackMergeQueueRequired: undefined,
     directMergeAvailable: decision.directMergeAvailable
   })
-  const stackLabel = `${usesMergeQueue ? 'Queue' : 'Merge'} through #${pr.number} · ${scope.count} ${scope.count === 1 ? 'PR' : 'PRs'}`
+  const count = scope.count
+  const stackLabel = usesMergeQueue
+    ? count === 1
+      ? translate(
+          'pullRequest.prActionsState.queueThrough_one',
+          'Queue through #{{number}} · {{count}} PR',
+          { number: pr.number, count }
+        )
+      : translate(
+          'pullRequest.prActionsState.queueThrough_other',
+          'Queue through #{{number}} · {{count}} PRs',
+          { number: pr.number, count }
+        )
+    : count === 1
+      ? translate(
+          'pullRequest.prActionsState.mergeThrough_one',
+          'Merge through #{{number}} · {{count}} PR',
+          { number: pr.number, count }
+        )
+      : translate(
+          'pullRequest.prActionsState.mergeThrough_other',
+          'Merge through #{{number}} · {{count}} PRs',
+          { number: pr.number, count }
+        )
   const stackScope = usesMergeQueue
-    ? 'GitHub will add this pull request and every pull request below it to the merge queue.'
-    : 'GitHub will merge this pull request and every pull request below it in the stack.'
+    ? translate(
+        'pullRequest.prActionsState.queueStackMessage',
+        'GitHub will add this pull request and every pull request below it to the merge queue.'
+      )
+    : translate(
+        'pullRequest.prActionsState.mergeStackMessage',
+        'GitHub will merge this pull request and every pull request below it in the stack.'
+      )
   return {
     enabled,
     label: stackLabel,
-    hint: blocker
-      ? `#${blocker.prNumber} ${STACK_BLOCKER_COPY[blocker.reason]}`
-      : enabled
-        ? null
-        : stackScope,
+    hint: blocker ? stackBlockerCopy(blocker) : enabled ? null : stackScope,
     confirmMessage: stackScope,
     showAutoMerge: false
   }

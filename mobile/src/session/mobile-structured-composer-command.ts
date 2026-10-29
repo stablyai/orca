@@ -16,6 +16,7 @@ import {
 } from '../../../src/shared/structured-conversation-command-hold'
 import { agentSessionWriteNoticeEnglish } from '../../../src/shared/agent-session-refusal-notice'
 import type { RpcClient } from '../transport/rpc-client'
+import { translate } from '../i18n/mobile-i18n'
 import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 import { requestStructuredAgentSessionMutation } from './mobile-structured-agent-session-rpc'
 import type { MobileNativeChatSendErrorReporter } from './native-chat/use-mobile-native-chat-send-error'
@@ -55,7 +56,12 @@ export async function dispatchMobileStructuredCommand(input: {
     return input.pending.current ? 'rejected' : null
   }
   if (input.hasAttachments) {
-    input.onError('Remove attachments before using a chat-session command.')
+    input.onError(
+      translate(
+        'session.structuredComposerCommand.removeAttachments',
+        'Remove attachments before using a chat-session command.'
+      )
+    )
     return 'rejected'
   }
   let unknown = false
@@ -107,7 +113,10 @@ export async function dispatchMobileStructuredCommand(input: {
           unknown = true
           return {
             accepted: false,
-            error: 'Conversation operation was not confirmed.'
+            error: translate(
+              'session.structuredComposerCommand.operationUnconfirmed',
+              'Conversation operation was not confirmed.'
+            )
           }
         }
         if (result.status !== 'accepted') {

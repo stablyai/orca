@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -11,11 +12,12 @@ export function MobileLoadErrorState({
   message: string
   onRetry?: (() => void) | null
 }) {
+  const t = useMobileTranslation()
   useMobileColorScheme()
   return (
     <View style={styles.state}>
       <Text style={styles.errorText}>{message}</Text>
-      {onRetry ? <MobileStateButton label="Retry" onPress={onRetry} /> : null}
+      {onRetry ? <MobileStateButton label={t('common.retry', 'Retry')} onPress={onRetry} /> : null}
     </View>
   )
 }

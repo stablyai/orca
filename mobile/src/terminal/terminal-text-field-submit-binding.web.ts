@@ -4,6 +4,9 @@ import { createTerminalKeyChordInput } from './terminal-key-chord-input'
 import { getTerminalLiveSpecialKeyId } from './terminal-live-input'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
 
+// Plain caret keys reach onKeyPress, which keeps them in the field while it holds text.
+const FIELD_CARET_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'Home', 'End'])
+
 // RN Web skips composing Enter keydowns; beforeinput line breaks recover those submits.
 // Submitted keydowns are cancelled, preventing duplicates; candidate acceptance emits insertCompositionText and remains untouched.
 export function bindTerminalTextFieldSubmit(
@@ -56,6 +59,7 @@ export function bindTerminalTextFieldSubmit(
       event.key === 'Enter' ||
       event.key === 'Backspace' ||
       event.key === 'Delete' ||
+      (FIELD_CARET_KEYS.has(event.key) && !event.ctrlKey && !event.altKey && !event.shiftKey) ||
       (!specialKey && !(event.key.length === 1 && (event.ctrlKey || event.altKey)))
     ) {
       return

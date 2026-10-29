@@ -9,6 +9,43 @@ import {
 import type { MobileDiffLine } from './mobile-diff-lines'
 
 describe('mobile file syntax highlighting', () => {
+  it.each(['justfile', 'Justfile', '.justfile', 'tasks.just', 'C:\\repo\\TASKS.JUST'])(
+    'highlights shell recipes in %s',
+    (filePath) => {
+      const source = '# Build recipe\nbuild:\n  echo "ready"\n'
+      const result = highlightMobileCode(source, resolveMobileSyntaxLanguage(filePath))
+      expect(result.highlighted).toBe(true)
+      expect(result.segments.map((segment) => segment.text).join('')).toBe(source)
+      expect(result.segments).toEqual(
+        expect.arrayContaining([
+          { text: '# Build recipe', kind: 'comment' },
+          { text: '"ready"', kind: 'string' }
+        ])
+      )
+    }
+  )
+
+  it.each(['terraform.tfvars', 'C:\\repo\\PROD.TFVARS', 'main.tf', 'config.hcl'])(
+    'highlights HCL assignments in %s',
+    (filePath) => {
+      const source = '# Deployment\nregion = "us-west-2"\ncount = 3\n'
+      const language = resolveMobileSyntaxLanguage(filePath)
+      const result = highlightMobileCode(source, language)
+      expect(result.highlighted).toBe(true)
+      expect(result.segments.map((segment) => segment.text).join('')).toBe(source)
+      expect(result.segments).toEqual(
+        expect.arrayContaining([
+          { text: '# Deployment', kind: 'comment' },
+          { text: 'region', kind: 'variable' },
+          { text: '"us-west-2"', kind: 'string' }
+        ])
+      )
+      const [line] = highlightMobileDiffLines([{ text: 'region = "us-west-2"' }], language)
+      expect(line?.highlighted).toBe(true)
+      expect(line?.segments).toContainEqual({ text: '"us-west-2"', kind: 'string' })
+    }
+  )
+
   it.each([
     ['.env', 'dotenv'],
     ['.env.local', 'dotenv'],
@@ -78,6 +115,13 @@ describe('mobile file syntax highlighting', () => {
     expect(resolveMobileSyntaxLanguage('worktrees/feature/build.cts')).toBe('typescript')
     expect(resolveMobileSyntaxLanguage('Dockerfile')).toBe('plaintext')
     expect(resolveMobileSyntaxLanguage('kernels/reduce.cu')).toBe('cpp')
+  })
+
+  it.each(['constructor', '__proto__'])('draws a %s fence tag as plain text', (language) => {
+    expect(highlightMobileCode('x = 1', language)).toEqual({
+      segments: [{ text: 'x = 1', kind: 'plain' }],
+      highlighted: false
+    })
   })
 
   it('emits semantic syntax segments for highlighted code', () => {

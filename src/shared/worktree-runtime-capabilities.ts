@@ -1,7 +1,15 @@
 import { WORKSPACE_ATTACHMENT_RUNTIME_CAPABILITIES } from './workspace-attachment-capabilities'
 
+export const WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY =
+  'worktree.rename-error-dismiss.v1' as const
+
 export const WORKTREE_OPEN_EXISTING_BRANCH_RUNTIME_CAPABILITY =
   'worktree.open-existing-branch.v1' as const
+// Older hosts advertised V2 while still accepting the V1 wire value.
+export const WORKTREE_OPEN_EXISTING_BRANCH_V2_RUNTIME_CAPABILITY =
+  'worktree.open-existing-branch.v2' as const
+export const WORKTREE_OPEN_EXISTING_BRANCH_V2_REQUEST_RUNTIME_CAPABILITY =
+  'worktree.open-existing-branch.v2-request.v1' as const
 
 export const PROJECT_HOST_SETUP_RUNTIME_CAPABILITY = 'project-host-setup.v1' as const
 // Why: older hosts strip `hostId` from setup update/delete and act on the first same-id twin.
@@ -34,7 +42,10 @@ export const WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY =
   'worktree.background-removal.v1' as const
 
 export const WORKTREE_RUNTIME_CAPABILITIES = [
+  WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY,
   WORKTREE_OPEN_EXISTING_BRANCH_RUNTIME_CAPABILITY,
+  WORKTREE_OPEN_EXISTING_BRANCH_V2_RUNTIME_CAPABILITY,
+  WORKTREE_OPEN_EXISTING_BRANCH_V2_REQUEST_RUNTIME_CAPABILITY,
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   PROJECT_HOST_SETUP_HOST_TARGET_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY,

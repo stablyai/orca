@@ -54,6 +54,16 @@ function restoreSections(
     const registry = useCombinedDiffSectionLoadRegistry([])
     return useCombinedDiffViewRestore({
       entrySet,
+      file: {
+        id: viewStateKey,
+        worktreeId: 'wt-1',
+        filePath: '/repo',
+        relativePath: '',
+        language: 'plaintext',
+        isDirty: false,
+        mode: 'diff',
+        diffSource: 'combined-all'
+      },
       gitStatusEntries: [],
       registry,
       setGeneration: () => {},
@@ -63,8 +73,7 @@ function restoreSections(
       },
       setSideBySide: () => {},
       succession,
-      viewStateKey,
-      worktreeId: 'wt-1'
+      viewStateKey
     })
   })
   return sections

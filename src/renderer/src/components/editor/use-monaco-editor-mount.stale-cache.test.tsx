@@ -99,6 +99,7 @@ function setupMount() {
   }
   const modelText = { value: 'B' }
   const model = {
+    uri: { toString: () => 'file:///repo/file.ts' },
     getValue: () => modelText.value,
     getEOL: () => '\n',
     pushEditOperations: vi.fn(),

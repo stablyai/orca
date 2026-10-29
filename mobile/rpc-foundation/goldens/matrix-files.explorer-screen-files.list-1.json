@@ -264,6 +264,22 @@
         }
       }
     },
+    "546e369e8e6c": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "ChevronLeft": 1,
+        "FlatList": 1,
+        "Pressable": 1,
+        "SafeAreaView": 1,
+        "Text": 2,
+        "View": 3
+      },
+      "labels": ["Back to session"],
+      "rows": ["dir:src", "file:README.md"],
+      "text": ["Files", "orca-files - Showing first 5000"]
+    },
     "59851eb4cbf7": {
       "name": "files.readDir#1",
       "ordinal": 1,
@@ -422,22 +438,6 @@
       "labels": ["Back to session"],
       "rows": [],
       "text": ["Files", "orca-files", "No files found"]
-    },
-    "b85511fb8929": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "ChevronLeft": 1,
-        "FlatList": 1,
-        "Pressable": 1,
-        "SafeAreaView": 1,
-        "Text": 2,
-        "View": 3
-      },
-      "labels": ["Back to session"],
-      "rows": ["dir:src", "file:README.md"],
-      "text": ["Files", "orca-files", " - Showing first 5000"]
     },
     "bec439845fd2": {
       "name": "files.list#1",
@@ -608,7 +608,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "b85511fb8929",
+          "state": "546e369e8e6c",
           "effects": []
         }
       },

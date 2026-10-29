@@ -20,6 +20,7 @@ import type { InlineInput } from './file-explorer-inline-input-row'
 import type { TreeNode } from './file-explorer-types'
 import { useFileDuplicate } from './useFileDuplicate'
 import { useFileExplorerKeys } from './useFileExplorerKeys'
+import type { LocalPathOpenOwner } from '@/lib/local-path-open-guard'
 
 type UseFileExplorerNodeCommandsParams = {
   activeWorktreeId: string | null
@@ -44,6 +45,7 @@ type UseFileExplorerNodeCommandsParams = {
   handleClick: (node: TreeNode, dirToggle?: DirToggleTiming) => void
   toggleDir: (worktreeId: string, dirPath: string) => void
   scrollToIndex: (index: number) => void
+  pathOwner: LocalPathOpenOwner
 }
 
 type UseFileExplorerNodeCommandsResult = {
@@ -75,7 +77,8 @@ export function useFileExplorerNodeCommands({
   refreshDir,
   handleClick,
   toggleDir,
-  scrollToIndex
+  scrollToIndex,
+  pathOwner
 }: UseFileExplorerNodeCommandsParams): UseFileExplorerNodeCommandsResult {
   const collapseDirSubtree = useAppStore((s) => s.collapseDirSubtree)
   const openModal = useAppStore((s) => s.openModal)
@@ -108,7 +111,8 @@ export function useFileExplorerNodeCommands({
     requestDelete,
     requestDeleteAll,
     scrollToIndex,
-    activeWorktreeId
+    activeWorktreeId,
+    pathOwner
   })
 
   // Delete the multi-selection only when the context-menu target belongs to it.

@@ -42,6 +42,7 @@ export const EXECUTION_HOST_METHODS = [
   'files.open',
   'files.openDiff',
   'files.read',
+  'files.readChatImage',
   'files.readChunk',
   'files.readDir',
   'files.readDocPreview',

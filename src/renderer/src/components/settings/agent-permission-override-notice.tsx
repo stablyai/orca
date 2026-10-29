@@ -100,12 +100,19 @@ export function useAgentPermissionOverrideNotice() {
         ? translate(
             'settings.agents.permissionOverridesKept',
             '{{count}} agents still use their own permission setting:',
-            { count: retained.length }
+            {
+              count: retained.length,
+              defaultValue_one: '{{count}} agent still uses their own permission setting:'
+            }
           )
         : translate(
             'settings.agents.permissionOverridesFollow',
             '{{count}} agents now follow {{mode}}',
-            { count: vanished.length, mode }
+            {
+              count: vanished.length,
+              mode,
+              defaultValue_one: '{{count}} agent now follows {{mode}}'
+            }
           ),
       {
         id,

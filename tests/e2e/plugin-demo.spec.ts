@@ -16,7 +16,9 @@ async function openPluginSettings(page: Page): Promise<void> {
     state.openSettingsTarget({ pane: 'plugins', repoId: null })
     state.openSettingsPage()
   })
-  await expect(page.locator('[data-settings-section="plugins"]')).toBeVisible()
+  const section = page.locator('[data-settings-section="plugins"]')
+  await expect(section).toBeVisible()
+  await expect(section.getByText('Alpha', { exact: true })).toBeVisible()
 }
 
 async function openDemoPanel(page: Page): Promise<void> {
@@ -107,16 +109,26 @@ test('runs hello-orca panel, command, and event behind visible consent', async (
     await openPluginSettings(orcaPage)
     await orcaPage.getByRole('tab', { name: /^Installed/ }).click()
     const row = orcaPage.locator(`[data-plugin-key="${installed.pluginKey}"]`)
-    await expect(row).toContainText('Needs review')
-    await row.getByRole('button', { name: 'Review & enable' }).click()
-    const consent = orcaPage.getByRole('dialog', { name: 'Review permissions' })
+    // Why on the page: review sits above its one button there, not in a dialog over the list.
+    await row.getByRole('button', { name: 'Review', exact: true }).click()
+    const consent = orcaPage.locator('[data-plugin-consent]')
     await expect(consent).toBeVisible()
-    await expect(consent).toContainText('Local folder')
-    await expect(consent).toContainText('full access to your files, network, and other processes')
-    await expect(consent.getByRole('button', { name: 'Keep Disabled' })).toBeFocused()
-    await consent.getByRole('button', { name: 'Enable plugin' }).click()
+    await expect(orcaPage.getByRole('article')).toContainText('Local folder')
+    await expect(consent).toContainText(
+      'Full access: runs as a normal program and can read your files, use the network and run other programs.'
+    )
+    await expect(orcaPage.getByRole('dialog')).toHaveCount(0)
+    await orcaPage
+      .getByRole('article')
+      .getByRole('button', { name: /^Enable plugin/ })
+      .click()
     await expect(consent).toBeHidden()
-    await expect(row).toContainText('Enabled')
+    await orcaPage
+      .getByRole('article')
+      .getByRole('button', { name: 'Plugins', exact: true })
+      .click()
+    await orcaPage.getByRole('tab', { name: /^Installed/ }).click()
+    await expect(row).toContainText('Installed')
 
     const commandResults = await orcaPage.evaluate(async (pluginKey) => {
       const first = await window.api.plugins.invokeCommand({
@@ -131,8 +143,8 @@ test('runs hello-orca panel, command, and event behind visible consent', async (
       })
       return { first, second }
     }, installed.pluginKey)
-    expect(commandResults.first).toEqual({ pong: true, count: 1, args: { source: 'e2e' } })
-    expect(commandResults.second).toEqual({ pong: true, count: 2, args: { source: 'e2e' } })
+    expect(commandResults.first).toBe('Pong! First ping.')
+    expect(commandResults.second).toBe('Pong! 2 pings so far.')
 
     await orcaPage.evaluate(async (sourcePath) => {
       const settings = await window.api.settings.set({ devPluginPaths: [sourcePath] })

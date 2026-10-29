@@ -1,3 +1,4 @@
+import { terminalCreateFeatureRequirement } from '../../agent-launch-feature-requirement'
 import { terminalImageViewerSupported } from '../../../terminal-image-viewer-env'
 import { TERMINAL_WORKSPACE_STOP_METHODS } from './terminal-workspace-stop-methods'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-inputs-switch'
@@ -34,6 +35,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
   }),
   defineMethod({
     name: 'terminal.create',
+    requires: terminalCreateFeatureRequirement,
     permission: 'workspace',
     params: TerminalCreateParams,
     handler: async (params, context) => {

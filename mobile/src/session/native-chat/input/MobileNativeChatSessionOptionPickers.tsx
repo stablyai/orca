@@ -21,6 +21,8 @@ import {
 import { BottomDrawer } from '../../../components/BottomDrawer'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { translate } from '../../../i18n/mobile-i18n'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import {
   isReadOnlySessionOptionValue,
   sessionOptionDispatchUnconfirmed,
@@ -31,9 +33,9 @@ import {
   nativeChatModelPillLabel,
   nativeChatOptionValuesLabel,
   nativeChatSessionOptionDisabledReason,
-  nativeChatSessionOptionLabel,
-  sayNativeChatSessionOptionEnglish as say
+  nativeChatSessionOptionLabel
 } from '../../../../../src/shared/native-chat-session-option-labels'
+import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
 import { mobileSessionOptionSummaryValue } from './mobile-native-chat-session-option-labels'
 import {
   DescriptorRows,
@@ -107,6 +109,7 @@ export function MobileNativeChatSessionOptionPickers({
   onDrawerAfterClose
 }: MobileNativeChatSessionOptionPickersProps & PresentationProps): React.JSX.Element | null {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const open = presentation?.page != null
   const wasOpen = useRef(false)
   useEffect(() => {
@@ -132,7 +135,10 @@ export function MobileNativeChatSessionOptionPickers({
     if (Platform.OS === 'ios' && showWorkingNotice) {
       // Queued announcements cannot be canceled when the picker closes or changes pages.
       AccessibilityInfo.announceForAccessibilityWithOptions(
-        'Agent is working. Model settings unlock when this turn finishes.',
+        translate(
+          'chat.sessionOptionPickers.workingAnnouncement',
+          'Agent is working. Model settings unlock when this turn finishes.'
+        ),
         { queue: false }
       )
     }
@@ -197,8 +203,20 @@ export function MobileNativeChatSessionOptionPickers({
         icon={permissionIcon}
         accessibleName={
           model
-            ? `Model, ${secondary ? `${primary} ${secondary}` : primary}${permissionColor ? ', full access' : ''}`
-            : `Permissions, ${primary}`
+            ? permissionColor
+              ? t(
+                  'chat.sessionOptionPickers.modelFullAccessLabel',
+                  'Model, {{value}}, full access',
+                  {
+                    value: secondary ? `${primary} ${secondary}` : primary
+                  }
+                )
+              : t('chat.sessionOptionPickers.modelLabel', 'Model, {{value}}', {
+                  value: secondary ? `${primary} ${secondary}` : primary
+                })
+            : t('chat.sessionOptionPickers.permissionsLabel', 'Permissions, {{value}}', {
+                value: primary
+              })
         }
         disabled={busy || (!model && permission?.settable === false)}
         onPress={() => {
@@ -215,7 +233,11 @@ export function MobileNativeChatSessionOptionPickers({
           <View style={styles.sheet}>
             <View style={styles.sheetHeader}>
               <Pressable
-                accessibilityLabel={homeView ? 'Close picker' : 'Back to models'}
+                accessibilityLabel={
+                  homeView
+                    ? t('chat.sessionOptionPickers.closePicker', 'Close picker')
+                    : t('chat.sessionOptionPickers.backToModels', 'Back to models')
+                }
                 accessibilityRole="button"
                 style={({ pressed }) => [styles.sheetNav, pressed && styles.pressed]}
                 onPress={homeView ? closePicker : () => onNavigate(home.id)}
@@ -240,15 +262,25 @@ export function MobileNativeChatSessionOptionPickers({
               <View style={styles.lockNotice} accessibilityLiveRegion="polite">
                 <LockKeyhole size={16} color={colors.textSecondary} />
                 <View style={styles.lockNoticeBody}>
-                  <Text style={styles.lockNoticeTitle}>Agent is working</Text>
+                  <Text style={styles.lockNoticeTitle}>
+                    {t('chat.sessionOptionPickers.agentWorking', 'Agent is working')}
+                  </Text>
                   <Text style={styles.lockNoticeDescription}>
-                    Model settings unlock when this turn finishes.
+                    {t(
+                      'chat.sessionOptionPickers.settingsLocked',
+                      'Model settings unlock when this turn finishes.'
+                    )}
                   </Text>
                 </View>
               </View>
             ) : null}
             {sessionOptionDispatchUnconfirmed(activeDescriptor) ? (
-              <SessionOptionCaption>Sent to the agent — not confirmed</SessionOptionCaption>
+              <SessionOptionCaption>
+                {t(
+                  'chat.sessionOptionPickers.dispatchUnconfirmed',
+                  'Sent to the agent — not confirmed'
+                )}
+              </SessionOptionCaption>
             ) : null}
             {reason ? <SessionOptionCaption>{reason}</SessionOptionCaption> : null}
             <View style={styles.group}>
@@ -307,6 +339,7 @@ function OptionRows({
   onSetOption: (descriptor: SessionOptionDescriptor, value: SessionOptionValue) => void
 }): React.JSX.Element | null {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   if (descriptors.length === 0) {
     return null
   }
@@ -332,7 +365,11 @@ function OptionRows({
         return (
           <SessionOptionSummaryRow
             key={descriptor.id}
-            label={isPermission ? 'Permissions' : nativeChatSessionOptionLabel(descriptor, say)}
+            label={
+              isPermission
+                ? t('chat.sessionOptionPickers.permissions', 'Permissions')
+                : nativeChatSessionOptionLabel(descriptor, say)
+            }
             value={value}
             valueColor={isPermission ? permissionColor : undefined}
             disabled={disabled}

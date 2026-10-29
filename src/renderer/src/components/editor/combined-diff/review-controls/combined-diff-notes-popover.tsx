@@ -86,17 +86,11 @@ export function DiffNotesPreviewPopover({
         ))}
         {remainingCount > 0 && (
           <div className="px-2 py-1 text-[11px] text-muted-foreground">
-            {remainingCount === 1
-              ? translate(
-                  'auto.components.editor.CombinedDiffViewer.moreNotesInSourceControl_one',
-                  '{{count}} more note in Source Control',
-                  { count: remainingCount }
-                )
-              : translate(
-                  'auto.components.editor.CombinedDiffViewer.moreNotesInSourceControl_other',
-                  '{{count}} more notes in Source Control',
-                  { count: remainingCount }
-                )}
+            {translate(
+              'auto.components.editor.CombinedDiffViewer.moreNotesInSourceControl',
+              '{{count}} more notes in Source Control',
+              { count: remainingCount, defaultValue_one: '{{count}} more note in Source Control' }
+            )}
           </div>
         )}
       </div>
@@ -134,17 +128,14 @@ export function ClearDiffNotesDialog({
             {translate('auto.components.editor.CombinedDiffViewer.948a5fd6c8', 'Clear Notes')}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {diffCommentCount === 1
-              ? translate(
-                  'auto.components.editor.CombinedDiffViewer.clearNotesConfirm_one',
-                  'Clear {{count}} note from this worktree?',
-                  { count: diffCommentCount }
-                )
-              : translate(
-                  'auto.components.editor.CombinedDiffViewer.clearNotesConfirm_other',
-                  'Clear {{count}} notes from this worktree?',
-                  { count: diffCommentCount }
-                )}
+            {translate(
+              'auto.components.editor.CombinedDiffViewer.clearNotesConfirm',
+              'Clear {{count}} notes from this worktree?',
+              {
+                count: diffCommentCount,
+                defaultValue_one: 'Clear {{count}} note from this worktree?'
+              }
+            )}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

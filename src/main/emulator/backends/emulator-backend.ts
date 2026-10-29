@@ -4,6 +4,7 @@ import type {
   EmulatorSessionInfo,
   EmulatorStreamCodec
 } from '../emulator-types'
+import type { EmulatorCodedMessage } from '../../../shared/emulator-failure-copy'
 
 export type { EmulatorBackendKind, EmulatorStreamCodec }
 
@@ -25,10 +26,9 @@ export type EmulatorBackendCapabilities = {
   logcat: boolean
 }
 
-export type BackendAvailability = {
+export type BackendAvailability = EmulatorCodedMessage & {
   available: boolean
   devices: EmulatorDevice[]
-  message: string
   sdkPath?: string
 }
 

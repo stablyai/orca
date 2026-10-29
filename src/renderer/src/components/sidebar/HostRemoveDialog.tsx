@@ -177,34 +177,26 @@ export function HostRemoveDialog({
             'This opens the Orca servers settings where you can remove this server.'
           )
         : hasWorkspaces
-          ? workspaceCount === 1
-            ? translate(
-                'auto.components.sidebar.HostRemoveDialog.hostKeepsWorkspaces_one',
-                'Removes {{host}} and its credentials from this computer. Its {{count}} workspace stays in Orca — remote files are not touched.',
-                { host: label, count: workspaceCount }
-              )
-            : translate(
-                'auto.components.sidebar.HostRemoveDialog.hostKeepsWorkspaces_other',
-                'Removes {{host}} and its credentials from this computer. Its {{count}} workspaces stay in Orca — remote files are not touched.',
-                { host: label, count: workspaceCount }
-              )
+          ? translate(
+              'auto.components.sidebar.HostRemoveDialog.hostKeepsWorkspaces',
+              'Removes {{host}} and its credentials from this computer. Its {{count}} workspaces stay in Orca — remote files are not touched.',
+              {
+                host: label,
+                count: workspaceCount,
+                defaultValue_one:
+                  'Removes {{host}} and its credentials from this computer. Its {{count}} workspace stays in Orca — remote files are not touched.'
+              }
+            )
           : translate(
               'auto.components.sidebar.HostRemoveDialog.5e6f7a8b9c',
               'This removes the saved SSH host and its credentials from this computer. Remote files are not deleted.'
             )
 
-  const deleteOptionLabel =
-    workspaceCount === 1
-      ? translate(
-          'auto.components.sidebar.HostRemoveDialog.alsoRemoveWorkspaces_one',
-          'Also remove this workspace from Orca',
-          { count: workspaceCount }
-        )
-      : translate(
-          'auto.components.sidebar.HostRemoveDialog.alsoRemoveWorkspaces_other',
-          'Also remove these {{count}} workspaces from Orca',
-          { count: workspaceCount }
-        )
+  const deleteOptionLabel = translate(
+    'auto.components.sidebar.HostRemoveDialog.alsoRemoveWorkspaces',
+    'Also remove these {{count}} workspaces from Orca',
+    { count: workspaceCount, defaultValue_one: 'Also remove this workspace from Orca' }
+  )
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

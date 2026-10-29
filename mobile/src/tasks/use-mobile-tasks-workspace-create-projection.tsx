@@ -1,4 +1,5 @@
 import type { ProjectMetadataLoadingModel } from './use-mobile-tasks-project-metadata-loading'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
   type BaseRefSearchResult,
   MOBILE_TUI_AGENT_AUTO_PICK_ORDER,
@@ -23,6 +24,7 @@ import {
 } from './mobile-tasks-legacy-foundation'
 
 export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLoadingModel) {
+  const t = useMobileTranslation()
   const {
     repos,
     runtimeTaskSettings,
@@ -109,7 +111,7 @@ export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLo
       workspaceSparseDraft
         ? parseSparsePresetDirectories(workspaceSparseDraft.directoriesText)
         : null,
-    [workspaceSparseDraft]
+    [t, workspaceSparseDraft]
   )
   const workspaceSparseDraftName = workspaceSparseDraft?.name.trim() ?? ''
   const workspaceSparseDraftNameCollision =
@@ -122,11 +124,13 @@ export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLo
       : null
   const workspaceSparseDraftError =
     workspaceSparseDraft && workspaceSparseDraftName.length === 0
-      ? 'Name is required.'
+      ? t('tasks.workspaceCreateProjection.nameRequired', 'Name is required.')
       : workspaceSparseDraftName.length > 80
-        ? 'Name must be 80 characters or fewer.'
+        ? t('tasks.workspaceCreateProjection.nameTooLong', 'Name must be 80 characters or fewer.')
         : workspaceSparseDraftNameCollision
-          ? `"${workspaceSparseDraftNameCollision.name}" already exists.`
+          ? t('tasks.workspaceCreateProjection.nameAlreadyExists', '"{{name}}" already exists.', {
+              name: workspaceSparseDraftNameCollision.name
+            })
           : (workspaceSparseDraftParsed?.error ?? null)
   const canSaveWorkspaceSparseDraft =
     workspaceSparseDraft !== null &&
@@ -166,11 +170,11 @@ export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLo
       {
         value: 'blank' as const,
         label: workspaceAgentLabel('blank'),
-        subtitle: 'Open a shell',
+        subtitle: t('tasks.workspaceCreateProjection.openShell', 'Open a shell'),
         renderIcon: () => <MobileAgentIcon agentId="__blank__" size={18} />
       }
     ]
-  }, [runtimeTaskSettings.disabledTuiAgents, workspaceAgent, workspaceDetectedAgentIds])
+  }, [runtimeTaskSettings.disabledTuiAgents, t, workspaceAgent, workspaceDetectedAgentIds])
   const openWorkspaceCreate = useCallback((item: ActionableTaskItem, repoIdOverride?: string) => {
     const suggestedName = taskWorkspaceSuggestedName(item)
     setWorkspaceCreateDraft({ item, ...(repoIdOverride ? { repoIdOverride } : {}) })

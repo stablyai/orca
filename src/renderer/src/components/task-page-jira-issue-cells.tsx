@@ -1,7 +1,7 @@
 import React from 'react'
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import type { JiraIssue } from '../../../shared/jira/jira-types'
 import {
@@ -137,7 +137,7 @@ export function JiraIssueCell({
             </div>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={6}>
-            {new Date(issue.updatedAt).toLocaleString()}
+            {new Date(issue.updatedAt).toLocaleString(getIntlLocale())}
           </TooltipContent>
         </Tooltip>
       )

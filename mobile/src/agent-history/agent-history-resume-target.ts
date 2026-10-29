@@ -14,6 +14,7 @@ import { normalizeExecutionHostId } from '../../../src/shared/execution-host'
 import { getFolderWorkspaceWorktreeHostId } from '../../../src/shared/folder-workspace-worktree'
 import { parseWorkspaceKey } from '../../../src/shared/workspace-scope'
 import type { Worktree } from '../worktree/workspace-list-types'
+import { translate } from '../i18n/mobile-i18n'
 import {
   canJumpToAiVaultSessionWorktree,
   resolveAiVaultSessionWorktreeInfo,
@@ -35,12 +36,21 @@ export type MobileAiVaultSessionResumeTarget =
 
 function mobileAiVaultResumeTargetBlockMessage(status: AiVaultResumeTargetStatus): string {
   if (status === 'runtime') {
-    return 'Resume from history is not available in runtime-hosted workspaces.'
+    return translate(
+      'agentHistory.resumeTarget.runtimeUnavailable',
+      'Resume from history is not available in runtime-hosted workspaces.'
+    )
   }
   if (status === 'ssh' || status === 'local') {
-    return 'This session belongs to a different host. Open a workspace on the same host to resume it.'
+    return translate(
+      'agentHistory.resumeTarget.differentHost',
+      'This session belongs to a different host. Open a workspace on the same host to resume it.'
+    )
   }
-  return 'Open a workspace before resuming a session.'
+  return translate(
+    'agentHistory.resumeTarget.openWorkspace',
+    'Open a workspace before resuming a session.'
+  )
 }
 
 /** Desktop's namespace rule from what the phone sees: the host's terminal platform already reflects the project runtime. */

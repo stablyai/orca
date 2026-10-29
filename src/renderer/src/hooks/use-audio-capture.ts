@@ -7,7 +7,7 @@ import {
   dictationMeterStatesEqual,
   toPublicDictationMeterState,
   type DictationMeterState
-} from '@/components/dictation/dictation-audio-meter'
+} from '../../../shared/dictation-audio-meter'
 
 type BufferedAudioChunk = {
   samples: Float32Array

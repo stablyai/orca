@@ -24,7 +24,7 @@ vi.mock('lucide-react-native', () => ({
 
 import { VoiceModelList } from './VoiceModelList'
 import {
-  CLOUD_MODEL_NEEDS_KEY,
+  cloudModelNeedsKey,
   type MobileSpeechModel,
   type MobileSpeechSetup
 } from '../dictation/mobile-dictation-setup'
@@ -98,7 +98,7 @@ describe('VoiceModelList cloud models', () => {
       selectedModelId: '',
       models: [cloud('openai-gpt-4o-transcribe', 'not-downloaded')]
     })
-    expect(texts).toContain(CLOUD_MODEL_NEEDS_KEY)
+    expect(texts).toContain(cloudModelNeedsKey())
     expect(pressables).toHaveLength(0)
   })
 })

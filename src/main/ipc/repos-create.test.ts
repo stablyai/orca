@@ -189,7 +189,7 @@ describe('repos:create', () => {
 
   it('rejects empty names', async () => {
     const result = await callCreate({ parentPath: '/tmp', name: '   ', kind: 'git' })
-    expect(result).toEqual({ error: 'Name cannot be empty' })
+    expect(result).toEqual({ error: 'Name cannot be empty', errorCode: 'nameEmpty' })
     expect(mkdirMock).not.toHaveBeenCalled()
   })
 
@@ -216,7 +216,7 @@ describe('repos:create', () => {
 
   it('rejects empty parent path', async () => {
     const result = await callCreate({ parentPath: '   ', name: 'project', kind: 'git' })
-    expect(result).toEqual({ error: 'Parent directory is required' })
+    expect(result).toEqual({ error: 'Parent directory is required', errorCode: 'parentRequired' })
     expect(mkdirMock).not.toHaveBeenCalled()
   })
 
@@ -320,7 +320,11 @@ describe('repos:create', () => {
 
     expect(rmMock).toHaveBeenCalledWith(tmpPath('broken'), { recursive: true, force: true })
     expect(mockStore.addRepo).not.toHaveBeenCalled()
-    expect(result).toMatchObject({ error: expect.stringContaining('Failed to initialize') })
+    expect(result).toEqual({
+      error: 'Failed to initialize git repository: git init blew up',
+      errorCode: 'gitInitFailed',
+      errorDetail: 'git init blew up'
+    })
   })
 
   it('does NOT rm a pre-existing empty directory when git init fails', async () => {
@@ -420,7 +424,7 @@ describe('repos:create', () => {
 
   it('does NOT rebuild the authorized-roots cache on a validation failure', async () => {
     const result = await callCreate({ parentPath: '/tmp', name: '   ', kind: 'git' })
-    expect(result).toEqual({ error: 'Name cannot be empty' })
+    expect(result).toEqual({ error: 'Name cannot be empty', errorCode: 'nameEmpty' })
     expect(invalidateAuthorizedRootsCacheMock).not.toHaveBeenCalled()
   })
 

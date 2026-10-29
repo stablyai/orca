@@ -7,6 +7,7 @@ import {
 } from '../../../../../src/shared/native-chat-launch-draft-resolution'
 import { normalizedUserText } from './mobile-native-chat-draft-reconcile'
 import { mobileNativeChatLaunchDraftSeeds } from './mobile-native-chat-draft-store'
+import { mobileNativeChatDraftDestination } from './mobile-native-chat-draft-inputs'
 
 export type MobileNativeChatLaunchDraftSeed = {
   text: string
@@ -63,6 +64,7 @@ export function useMobileNativeChatLaunchDraftSeed(args: {
       return
     }
     const createdAt = launchDraftCreatedAt ?? null
+    mobileNativeChatDraftDestination(draftKey)
     if (launchDraftResolved(createdAt, messages)) {
       mobileNativeChatLaunchDraftSeeds.set(draftKey, null)
       return

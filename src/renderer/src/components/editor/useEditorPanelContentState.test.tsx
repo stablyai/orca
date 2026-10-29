@@ -416,7 +416,9 @@ describe('useEditorPanelContentState', () => {
       expect.objectContaining({
         compare: expect.objectContaining({ headOid: 'head', mergeBase: 'merge-base' }),
         filePath: 'api/src/file.ts'
-      })
+      }),
+      // Showing the tab is a user act; the client drops the hint for an SSH connection.
+      { wakeWslDistro: true }
     )
   })
 

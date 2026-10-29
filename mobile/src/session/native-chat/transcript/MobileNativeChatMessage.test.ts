@@ -501,41 +501,60 @@ describe('MobileNativeChatMessage', () => {
   })
 
   // An older host refuses the read; the row keeps today's placeholder.
+  const STORED = '/home/me/.orca/agent-session-attachments/6f1c2a4e/shot.png'
+  const GENERATED = '/home/me/.codex/generated_images/shot.png'
+  const IMAGE = {
+    ok: true,
+    result: { content: PNG, isBinary: true, isImage: true, mimeType: 'image/png' }
+  } as const
+  const REFUSED = {
+    ok: false,
+    error: { code: 'method_not_found', message: 'unknown method' }
+  } as const
   it.each([
     [
-      { ok: true, result: { content: PNG, isBinary: true, isImage: true, mimeType: 'image/png' } },
+      STORED,
+      'agentSessionAttachment.read',
+      { path: STORED },
+      IMAGE,
       [`data:image/png;base64,${PNG}`]
     ],
-    [{ ok: false, error: { code: 'forbidden', message: 'not available to mobile clients' } }, []]
-  ] as const)('reads a stored image from the chat host: %j', async (reply, thumbnails) => {
-    const path = '/home/me/.orca/agent-session-attachments/6f1c2a4e/shot.png'
-    const sendRequest = vi.fn(async () => ({ id: '1', ...reply }))
-    await act(async () => {
-      renderer = create(
-        createElement(
-          MobileNativeChatRowOverlaysContext.Provider,
-          {
-            value: {
-              openImage: vi.fn(),
-              openActions: vi.fn(),
-              imageClient: stubRpcClient({ sendRequest })
-            }
-          },
-          createElement(MobileNativeChatMessage, {
-            message: userMessage([{ type: 'image-ref', path, alt: 'shot' }])
-          })
+    [STORED, 'agentSessionAttachment.read', { path: STORED }, REFUSED, []],
+    [
+      GENERATED,
+      'files.readChatImage',
+      { worktree: 'id:wt-1', path: GENERATED },
+      IMAGE,
+      [`data:image/png;base64,${PNG}`]
+    ],
+    [GENERATED, 'files.readChatImage', { worktree: 'id:wt-1', path: GENERATED }, REFUSED, []]
+  ] as const)(
+    'reads %s from the chat host with %s',
+    async (path, method, params, reply, thumbnails) => {
+      const sendRequest = vi.fn(async () => ({ id: '1', ...reply }))
+      await act(async () => {
+        renderer = create(
+          createElement(
+            MobileNativeChatRowOverlaysContext.Provider,
+            {
+              value: {
+                openImage: vi.fn(),
+                openActions: vi.fn(),
+                imageSource: { client: stubRpcClient({ sendRequest }), worktreeId: 'wt-1' }
+              }
+            },
+            createElement(MobileNativeChatMessage, {
+              message: userMessage([{ type: 'image-ref', path, alt: 'shot' }])
+            })
+          )
         )
-      )
-    })
-    expect(sendRequest).toHaveBeenCalledWith(
-      'agentSessionAttachment.read',
-      { path },
-      expect.anything()
-    )
-    expect(
-      findAllByHostType(renderer!.root, 'Image').map((image) => image.props.source.uri)
-    ).toEqual(thumbnails)
-  })
+      })
+      expect(sendRequest).toHaveBeenCalledWith(method, params, expect.anything())
+      expect(
+        findAllByHostType(renderer!.root, 'Image').map((image) => image.props.source.uri)
+      ).toEqual(thumbnails)
+    }
+  )
 
   it('draws your message as selectable Markdown in the bubble’s text colour', () => {
     const tree = render(userMessage([{ type: 'text', text: '**Fix** `src/a.ts`' }]))

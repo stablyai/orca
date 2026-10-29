@@ -6,6 +6,7 @@ import { findByHostType } from '../../../test-support/react-test-renderer-host-n
 
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
+  ScrollView: 'ScrollView',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
   Text: 'Text',
   TextInput: 'TextInput',

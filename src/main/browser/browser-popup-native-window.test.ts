@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { isNativeBrowserPopupWindow } from './native-browser-popup-windows'
 
 const { events } = await vi.hoisted(async () => {
   const { EventEmitter } = await import('node:events')
@@ -212,27 +213,50 @@ describe('native popup admission', () => {
     expect(onFirst).not.toHaveBeenCalled()
   })
 
-  it.fails.each([true, false])(
-    'KNOWN BLOCKER: an unrelated app window receives neither policy nor disposal (same session: %s)',
-    async (sameSession) => {
-      const opener = nativeWindow()
-      const unrelated = nativeWindow()
-      if (sameSession) {
-        unrelated.contents.session = opener.contents.session
-      }
-      const onCreated = vi.fn(() => unrelated.browserWindow.webContents)
-      allowNativeBrowserPopup({
-        opener: opener.browserWindow.webContents,
-        options: { show: false },
-        onCreated
-      })
-      events.emit('browser-window-created', {}, unrelated.browserWindow)
-      await Promise.resolve()
-      expect(onCreated).not.toHaveBeenCalled()
-      expect(unrelated.contents.close).not.toHaveBeenCalled()
-      expect(unrelated.window.destroy).not.toHaveBeenCalled()
-    }
-  )
+  it('ignores a different-session app window without consuming the legitimate child admission', async () => {
+    const opener = nativeWindow()
+    const unrelated = nativeWindow()
+    const child = nativeWindow()
+    child.contents.session = opener.contents.session
+    const onCreated = vi.fn(() => child.browserWindow.webContents)
+    allowNativeBrowserPopup({
+      opener: opener.browserWindow.webContents,
+      options: { show: false },
+      onCreated
+    })
+    events.emit('browser-window-created', {}, unrelated.browserWindow)
+    expect(onCreated).not.toHaveBeenCalled()
+    expect(isNativeBrowserPopupWindow(unrelated.browserWindow)).toBe(false)
+    events.emit('browser-window-created', {}, child.browserWindow)
+    await Promise.resolve()
+    opener.contents.emit('did-create-window', child.browserWindow)
+    expect(onCreated).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ nativeWindow: child.browserWindow })
+    )
+    expect(isNativeBrowserPopupWindow(child.browserWindow)).toBe(true)
+    expect(isNativeBrowserPopupWindow(unrelated.browserWindow)).toBe(false)
+    expect(unrelated.contents.close).not.toHaveBeenCalled()
+    expect(unrelated.window.destroy).not.toHaveBeenCalled()
+    expect(child.contents.close).not.toHaveBeenCalled()
+    expect(child.window.destroy).not.toHaveBeenCalled()
+  })
+
+  it.fails('KNOWN BLOCKER: an unrelated same-session app window receives neither policy nor disposal', async () => {
+    const opener = nativeWindow()
+    const unrelated = nativeWindow()
+    unrelated.contents.session = opener.contents.session
+    const onCreated = vi.fn(() => unrelated.browserWindow.webContents)
+    allowNativeBrowserPopup({
+      opener: opener.browserWindow.webContents,
+      options: { show: false },
+      onCreated
+    })
+    events.emit('browser-window-created', {}, unrelated.browserWindow)
+    await Promise.resolve()
+    expect(onCreated).not.toHaveBeenCalled()
+    expect(unrelated.contents.close).not.toHaveBeenCalled()
+    expect(unrelated.window.destroy).not.toHaveBeenCalled()
+  })
 
   it('handles duplicate did-create-window delivery idempotently for an already marked child', async () => {
     const opener = nativeWindow()

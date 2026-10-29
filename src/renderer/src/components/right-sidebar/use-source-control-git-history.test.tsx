@@ -219,7 +219,8 @@ describe('useSourceControlGitHistory stale completion', () => {
     await flush()
     expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(
       expect.objectContaining({ worktreeId: 'A', worktreePath: '/a' }),
-      { limit: 50, baseRef: 'origin/main' }
+      // Showing Commits is a user act, so it may start a stopped WSL distro.
+      { limit: 50, baseRef: 'origin/main', wakeWslDistro: true }
     )
 
     await act(async () => {
@@ -229,7 +230,8 @@ describe('useSourceControlGitHistory stale completion', () => {
     expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(2)
     expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(expect.anything(), {
       limit: 50,
-      baseRef: 'origin/dev'
+      baseRef: 'origin/dev',
+      wakeWslDistro: true
     })
   })
 

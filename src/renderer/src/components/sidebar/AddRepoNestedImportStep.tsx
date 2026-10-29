@@ -60,18 +60,15 @@ export function AddRepoNestedImportStep({
     setPendingImportMode('folder')
     onOpenAsFolder()
   }
-  const foundSentence =
-    scan.repos.length === 1
-      ? translate(
-          'auto.components.sidebar.AddRepoNestedImportStep.foundRepositories_one',
-          'Found {{count}} repository in {{path}}.',
-          { count: scan.repos.length, path: scan.selectedPath }
-        )
-      : translate(
-          'auto.components.sidebar.AddRepoNestedImportStep.foundRepositories_other',
-          'Found {{count}} repositories in {{path}}.',
-          { count: scan.repos.length, path: scan.selectedPath }
-        )
+  const foundSentence = translate(
+    'auto.components.sidebar.AddRepoNestedImportStep.foundRepositories',
+    'Found {{count}} repositories in {{path}}.',
+    {
+      count: scan.repos.length,
+      path: scan.selectedPath,
+      defaultValue_one: 'Found {{count}} repository in {{path}}.'
+    }
+  )
 
   return (
     <>

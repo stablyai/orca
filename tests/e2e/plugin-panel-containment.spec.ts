@@ -243,38 +243,24 @@ test('contains hostile panel network and navigation probes', async ({
       )
     }
 
-    const bridgeErrorCode = await frame.locator('html').evaluate(
-      () =>
-        new Promise<string>((resolve, reject) => {
-          const requestId = 'small-invalid-probe'
-          const timer = setTimeout(() => reject(new Error('host sent no bridge refusal')), 5_000)
-          const onMessage = (event: MessageEvent): void => {
-            const data = event.data
-            if (
-              event.source !== window.parent ||
-              !data ||
-              data.type !== 'orca-panel-action-result' ||
-              data.requestId !== requestId
-            ) {
-              return
-            }
-            clearTimeout(timer)
-            window.removeEventListener('message', onMessage)
-            resolve(data.errorCode ?? 'missing_error_code')
-          }
-          window.addEventListener('message', onMessage)
-          window.parent.postMessage(
-            {
-              type: 'orca-panel-action',
-              requestId,
-              action: 'invalid.hostileAction',
-              params: {}
-            },
-            '*'
-          )
-        })
-    )
-    expect(bridgeErrorCode).toBe('invalid_request')
+    const bridgeErrorCode = await frame.locator('html').evaluate(async () => {
+      const orca: unknown = 'orca' in window ? window.orca : null
+      const host: unknown = typeof orca === 'object' && orca && 'host' in orca ? orca.host : null
+      const call: unknown = typeof host === 'object' && host && 'call' in host ? host.call : null
+      if (typeof call !== 'function') {
+        return 'missing_window_orca'
+      }
+      try {
+        await call('invalid.hostileAction', {})
+        return 'unexpected_success'
+      } catch (error) {
+        const code: unknown =
+          typeof error === 'object' && error && 'code' in error ? error.code : null
+        return typeof code === 'string' ? code : 'missing_error_code'
+      }
+    })
+    // Why the host's code: the renderer checks only the shape, the host gates the method.
+    expect(bridgeErrorCode).toBe('unknown_method')
 
     expect(server.requests).toEqual([])
     expect(orcaPage.url()).toBe(appUrl)

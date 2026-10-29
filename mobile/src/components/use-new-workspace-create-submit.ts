@@ -59,6 +59,7 @@ export function useNewWorkspaceCreateSubmit(args: {
   setTrustedOrcaHooks: (trust: PersistedTrustedOrcaHooks) => void
   getWorktreeCreateCutoverSupport: () => Promise<WorktreeCreateIdempotencySupport | false>
   getAgentLaunchSupport: () => Promise<AgentLaunchSupport | false>
+  getBranchIntentSupport: (intent: 'open-existing-v2' | 'create-new') => Promise<boolean>
   transitionDrawer: (view: Exclude<NewWorktreeDrawerView, 'transition'>) => void
   setError: Dispatch<SetStateAction<string>>
   onCreated: (worktreeId: string, name: string, warning?: string) => void
@@ -172,7 +173,10 @@ export function useNewWorkspaceCreateSubmit(args: {
             note: trimmedNote,
             nameIsAutoManaged: args.composer.isNameAutoManaged,
             worktreeCreateIdempotency: args.getWorktreeCreateCutoverSupport(),
-            agentLaunchSupported: args.getAgentLaunchSupport()
+            agentLaunchSupported: args.getAgentLaunchSupport(),
+            branchIntentSupported: args.getBranchIntentSupport(
+              selection.kind === 'branch' && selection.reuse ? 'open-existing-v2' : 'create-new'
+            )
           })
         : await createBlankWorkspace({
             client,

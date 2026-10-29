@@ -256,6 +256,43 @@ describe('reconcileCodexHooks', () => {
     expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
   })
 
+  it('holds the startup lookup and reconcile until startAfter settles', async () => {
+    writeHooks({ Stop: [olderBuildStop()] })
+    const published = Promise.withResolvers<void>()
+    startCodexHooks({
+      isEnabled: () => enabled,
+      resolveLaunchHome: () => null,
+      pathReady: Promise.resolve(),
+      startAfter: published.promise
+    })
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(mocks.probeCodexVersion).not.toHaveBeenCalled()
+    expect(mocks.realHomeRuns).toBe(0)
+
+    published.resolve()
+    await _internals.settledForTesting()
+
+    expect(mocks.probeCodexVersion).toHaveBeenCalled()
+    expect(mocks.realHomeRuns).toBe(1)
+    expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
+  })
+
+  it('never makes a launch wait for startAfter', async () => {
+    writeHooks({ Stop: [olderBuildStop()] })
+    startCodexHooks({
+      isEnabled: () => enabled,
+      resolveLaunchHome: () => null,
+      pathReady: Promise.resolve(),
+      startAfter: new Promise<void>(() => {})
+    })
+
+    await reconcileCodexHooksForLaunch()
+
+    expect(mocks.realHomeRuns).toBe(1)
+    // The launch takes the startup run, so app start's conversion still happens.
+    expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
+  })
+
   it('writes nothing for a launch while hooks are off', async () => {
     enabled = false
     await start()

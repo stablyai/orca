@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useDictationCapture } from '../platform/dictation-capture'
+import { dictationSessionErrorMessage } from '../dictation/mobile-dictation-setup'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useMobileDictationMeter } from './mobile-dictation-meter'
 import { MobileDictationPendingAudioBudget } from './mobile-dictation-pending-audio-budget'
 import {
-  MobileDictationTranscriptSoFar,
+  useMobileDictationTranscriptSoFar,
   sendAcrossConnectionMove,
   subscribeMobileDictationAudioChunks
 } from './mobile-dictation-audio-chunk'
 import {
   DICTATION_FINISH_TIMEOUT_MS,
-  MOBILE_DICTATION_INPUT_CLOSED_ERROR_MESSAGE,
-  MOBILE_DICTATION_INTERRUPTED_ERROR_MESSAGE,
   createMobileDictationId,
   isCurrentMobileDictationFinish
 } from './mobile-dictation-session-state'
@@ -28,11 +29,13 @@ import type {
 export type { UseMobileDictationResult } from './mobile-dictation-session-state'
 
 export function useMobileDictation(options: UseMobileDictationOptions): UseMobileDictationResult {
+  useMobileTranslation()
   const { client, enabled, onTranscript, onError } = options
   // Both capture seams hold the screen while the microphone is open; native uses the device directly and page uses shell audio verbs.
   const capture = useDictationCapture()
   const [status, setStatus] = useState<DictationStatus>('idle')
   const [error, setError] = useState<string | null>(null)
+  const [transcriptSoFar, setTranscriptSoFar, keptTranscript] = useMobileDictationTranscriptSoFar()
   // Read from an abort that may run between a commit and its passive Effects, where state is stale.
   const statusRef = useRef<DictationStatus>('idle')
   const activeIdRef = useRef<string | null>(null)
@@ -44,7 +47,6 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
   const pendingAudioBudgetRef = useRef(new MobileDictationPendingAudioBudget())
   const acceptingChunksRef = useRef(false)
   const generationRef = useRef(0)
-  const transcriptSoFarRef = useRef(new MobileDictationTranscriptSoFar())
 
   useLayoutEffect(() => {
     // Native audio events can arrive before passive Effects flush, but refs
@@ -58,6 +60,8 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
   const applyStatus = useCallback((next: DictationStatus) => {
     statusRef.current = next
     setStatus(next)
+    // Kept through processing so the text so far stays in place until the final transcript replaces it in the same render.
+    setTranscriptSoFar((text) => (next === 'recording' || next === 'processing' ? text : ''))
   }, [])
 
   const reportError = useCallback(
@@ -93,7 +97,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       if (client && dictationId) {
         void cancelDesktopDictation(client, dictationId)
       }
-      const kept = transcriptSoFarRef.current.take(dictationId)
+      const kept = keptTranscript.take(dictationId)
       if (kept) {
         onTranscriptRef.current(kept)
       }
@@ -112,7 +116,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       pendingChunks: pendingChunksRef.current,
       pendingAudioBudget: pendingAudioBudgetRef.current,
       failActiveDictation,
-      transcriptSoFar: transcriptSoFarRef.current
+      transcriptSoFar: keptTranscript
     })
     return () => sub.remove()
   }, [capture, failActiveDictation])
@@ -148,11 +152,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     }
     if (!opened.ok) {
       applyStatus('idle')
-      throw new Error(
-        opened.reason === 'permission-denied'
-          ? 'Microphone permission denied'
-          : 'Failed to initialize microphone'
-      )
+      throw new Error(dictationSessionErrorMessage(opened.reason))
     }
 
     const dictationId = createMobileDictationId()
@@ -201,20 +201,20 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       const generation = generationRef.current + 1
       generationRef.current = generation
       applyStatus('processing')
+      const isCurrent = () =>
+        isCurrentMobileDictationFinish(
+          generationRef.current,
+          generation,
+          enabledRef.current,
+          activeIdRef.current,
+          dictationId
+        )
       try {
         // Keep shutdown inside try for finally cleanup; accept its tail chunks and snapshot pending sends only after end settles, or finish can overtake the last audio.
         await capture.end()
         acceptingChunksRef.current = false
         await Promise.allSettled(Array.from(pendingChunksRef.current))
-        if (
-          !isCurrentMobileDictationFinish(
-            generationRef.current,
-            generation,
-            enabledRef.current,
-            activeIdRef.current,
-            dictationId
-          )
-        ) {
+        if (!isCurrent()) {
           return
         }
         const finished = dictationSessionFinish.interpret(
@@ -226,15 +226,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
             )
           )
         )
-        if (
-          !isCurrentMobileDictationFinish(
-            generationRef.current,
-            generation,
-            enabledRef.current,
-            activeIdRef.current,
-            dictationId
-          )
-        ) {
+        if (!isCurrent()) {
           return
         }
         const transcript = rpcPayloadMember(finished, 'text')
@@ -255,7 +247,10 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     [applyStatus, capture, failActiveDictation]
   )
 
-  const stop = useCallback(() => finishDictation('No speech detected.'), [finishDictation])
+  const stop = useCallback(
+    () => finishDictation(dictationSessionErrorMessage('no-speech')),
+    [finishDictation]
+  )
 
   // Only the user’s own cancel (reason:null) ends silently; other interruptions call onError so the tap has a visible outcome.
   const abandonDictation = useCallback(
@@ -290,9 +285,9 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     // Finish what was already streamed; only the user's own cancel may discard it.
     const sub = capture.onInterruption(() => {
       if (statusRef.current === 'recording') {
-        void finishDictation(MOBILE_DICTATION_INTERRUPTED_ERROR_MESSAGE)
+        void finishDictation(dictationSessionErrorMessage('interrupted'))
       } else if (statusRef.current === 'starting') {
-        void abandonDictation(MOBILE_DICTATION_INTERRUPTED_ERROR_MESSAGE)
+        void abandonDictation(dictationSessionErrorMessage('interrupted'))
       }
     })
     return () => sub.remove()
@@ -300,7 +295,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
 
   useEffect(() => {
     if (!enabled) {
-      void abandonDictation(MOBILE_DICTATION_INPUT_CLOSED_ERROR_MESSAGE)
+      void abandonDictation(dictationSessionErrorMessage('input-closed'))
     }
   }, [abandonDictation, enabled])
 
@@ -322,9 +317,11 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     isStarting: status === 'starting',
     isRecording: status === 'recording',
     isProcessing: status === 'processing',
+    transcriptSoFar,
     error,
     start,
     stop,
-    cancel
+    cancel,
+    meter: useMobileDictationMeter(capture, status === 'recording')
   }
 }

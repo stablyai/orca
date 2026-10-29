@@ -29,7 +29,7 @@ import {
 } from '../../../../shared/rpc-contract/worktree-params'
 import { WORKTREE_CATALOG_METHODS } from './worktree-catalog-methods'
 import { WORKTREE_PROVISIONED_ROOT_METHOD } from './worktree-provisioned-root-method'
-import { readsWorktreeRemovalMarker } from '../worktree-removal-marker-projection'
+import { waitsForWorktreeRemoval } from '../worktree-removal-marker-projection'
 import { queueWorkspaceDelete } from '../../workspaces/workspace-lifecycle-commands'
 import { WORKTREE_SLEEP_METHOD } from './worktree-sleep-method'
 import { WORKTREE_SET_METHOD } from './worktree-set-method'
@@ -211,12 +211,11 @@ export const WORKTREE_METHODS = [
         (removal) =>
           runtime.removeManagedWorktree(params.worktree, {
             ...removal,
-            // Wait out Git deletion only for clients showing removing; older clients get acceptance and hide the row.
-            ...(readsWorktreeRemovalMarker(context) ? { waitForBackgroundRemoval: true } : {})
+            waitForBackgroundRemoval: waitsForWorktreeRemoval(context, params)
           })
       )
       return {
-        removed: true,
+        removed: result.removing !== true,
         ...result,
         ...(repoId ? { catalogVersion: getLocalWorktreeCatalogVersion(repoId) } : {})
       }

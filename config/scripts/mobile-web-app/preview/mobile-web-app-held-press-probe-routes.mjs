@@ -107,7 +107,6 @@ export default function CommandDockProbeRoute() {
     canSend: true,
     canCompose: true,
     liveInputEnabled: false,
-    focusLiveInput: noop,
     showNativeChat: false,
     dictation: IDLE,
     cancelDictation: noop,

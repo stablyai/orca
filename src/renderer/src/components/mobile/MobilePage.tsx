@@ -3,7 +3,6 @@ import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import type { Platform, StepIndex } from './MobileHero'
-import type { IosChannel } from './mobile-platform-copy'
 import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
 import { translate } from '@/i18n/i18n'
 import { useMobilePageEscape } from './use-mobile-page-escape'
@@ -28,8 +27,6 @@ export default function MobilePage(): React.JSX.Element {
   const [stepIdx, setStepIdx] = useState<StepIndex>(0)
 
   const [platform, setPlatform] = useState<Platform>('ios')
-  // Default to the daily iOS preview unless the user chooses the public release.
-  const [iosChannel, setIosChannel] = useState<IosChannel>('preview')
 
   const [pairQrDataUrl, setPairQrDataUrl] = useState<string | null>(null)
   const [pairQrSize, setPairQrSize] = useState<number | null>(null)
@@ -80,11 +77,9 @@ export default function MobilePage(): React.JSX.Element {
     showPairedDevices,
     stage
   } = useMobilePagePairedDevices({ stepIdx, setStepIdx })
-  const installQrUrl = useMobileInstallQr(stage, platform, iosChannel)
-  const { copyInstallUrl, openAndroidInstallGuide, openInstallUrl } = useMobileInstallActions(
-    platform,
-    iosChannel
-  )
+  const installQrUrl = useMobileInstallQr(stage, platform)
+  const { copyInstallUrl, openAndroidInstallGuide, openInstallUrl } =
+    useMobileInstallActions(platform)
 
   const { generatePairing } = useMobilePairingGeneration({
     connectionMode,
@@ -339,8 +334,6 @@ export default function MobilePage(): React.JSX.Element {
       handleBack={handleBack}
       handleContinue={handleContinue}
       installQrUrl={installQrUrl}
-      iosChannel={iosChannel}
-      setIosChannel={setIosChannel}
       loadNetworkInterfaces={() => void loadNetworkInterfaces()}
       networkInterfaces={networkInterfaces}
       openAndroidInstallGuide={openAndroidInstallGuide}

@@ -20,9 +20,10 @@ const buildBackgroundTaskGroups = (
   settled: AgentSessionBackgroundTask[]
 ) => buildGroups(tasks, settled, say)
 const backgroundTaskCountedState = (
-  counted: string | number,
-  state: Parameters<typeof countedState>[1]
-) => countedState(counted, state, say)
+  count: number,
+  state: Parameters<typeof countedState>[1],
+  subject?: string
+) => countedState(count, state, say, subject)
 const resolveBackgroundTaskName = (task: AgentSessionBackgroundTask) => resolveName(task, say)
 const backgroundTasksHeaderContent = (
   groups: BackgroundTaskGroup[],
@@ -218,11 +219,11 @@ describe('buildBackgroundTaskGroups', () => {
 
 describe('backgroundTaskCountedState', () => {
   it('words a count with each state as one sentence', () => {
-    expect(backgroundTaskCountedState('2 agents', 'working')).toBe('2 agents working')
-    expect(backgroundTaskCountedState('2 agents', 'monitoring')).toBe('2 agents monitoring')
-    expect(backgroundTaskCountedState('2 agents', 'waiting')).toBe('2 agents waiting')
-    expect(backgroundTaskCountedState('2 agents', 'blocked')).toBe('2 agents blocked')
-    expect(backgroundTaskCountedState('2 agents', 'done')).toBe('2 agents done')
+    expect(backgroundTaskCountedState(2, 'working', '2 agents')).toBe('2 agents working')
+    expect(backgroundTaskCountedState(2, 'monitoring', '2 agents')).toBe('2 agents monitoring')
+    expect(backgroundTaskCountedState(2, 'waiting', '2 agents')).toBe('2 agents waiting')
+    expect(backgroundTaskCountedState(2, 'blocked', '2 agents')).toBe('2 agents blocked')
+    expect(backgroundTaskCountedState(2, 'done', '2 agents')).toBe('2 agents done')
     expect(backgroundTaskCountedState(3, 'idle')).toBe('3 stopped')
     expect(backgroundTaskCountedState(3, 'unverifiable')).toBe('3 with status unavailable')
   })

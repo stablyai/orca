@@ -116,7 +116,8 @@ describe('fresh discovery pipeline', () => {
       {
         agent: 'claude',
         path: `${file}.meta`,
-        message: 'Session metadata could not be read this scan.'
+        message: 'Session metadata could not be read this scan.',
+        messageCode: 'sessionMetadataUnreadable'
       },
       { agent: 'claude', path: file, message: expect.stringMatching(/Invalid (?:time value|Date)/) }
     ])
@@ -273,7 +274,8 @@ describe('fresh discovery pipeline', () => {
       {
         agent: 'claude',
         path: `${paths[1]}.meta`,
-        message: 'Session metadata could not be read this scan.'
+        message: 'Session metadata could not be read this scan.',
+        messageCode: 'sessionMetadataUnreadable'
       }
     ])
   })

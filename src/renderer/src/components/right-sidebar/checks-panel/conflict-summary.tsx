@@ -31,17 +31,11 @@ export function ConflictingFilesSection({ pr }: { pr: ConflictReview }): React.J
   return (
     <div className="border-b border-border px-3 py-3">
       <div className="text-[11px] text-muted-foreground">
-        {commitsBehind === 1
-          ? translate(
-              'auto.components.right.sidebar.checks.panel.content.commitsBehind_one',
-              '{{count}} commit behind',
-              { count: commitsBehind }
-            )
-          : translate(
-              'auto.components.right.sidebar.checks.panel.content.commitsBehind_other',
-              '{{count}} commits behind',
-              { count: commitsBehind }
-            )}{' '}
+        {translate(
+          'auto.components.right.sidebar.checks.panel.content.commitsBehind',
+          '{{count}} commits behind',
+          { count: commitsBehind, defaultValue_one: '{{count}} commit behind' }
+        )}{' '}
         (
         {translate(
           'auto.components.right.sidebar.checks.panel.content.baseCommitLabel',

@@ -30,7 +30,7 @@ vi.mock('electron', () => ({
           fake.handlers.delete(event)
         }
       },
-      executeJavaScript: fake.images,
+      mainFrame: { executeJavaScript: fake.images },
       printToPDF: fake.print
     }
     loadFile = fake.load

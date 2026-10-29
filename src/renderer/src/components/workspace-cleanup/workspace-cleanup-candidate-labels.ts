@@ -1,5 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { WorkspaceCleanupBlocker } from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupGitState } from '../../../../shared/workspace-cleanup-filter-model'
 
 type ContextDetailKind = 'terminal' | 'editor' | 'browser' | 'diff' | 'agent'
 
@@ -79,18 +80,30 @@ export function getWorkspaceCleanupBlockerLabel(blocker: WorkspaceCleanupBlocker
   }
 }
 
-export function formatWorkspaceCleanupGitStatusLabel(label: string): string {
-  switch (label) {
-    case 'Clean':
+export function formatWorkspaceCleanupGitStatusLabel(state: WorkspaceCleanupGitState): string {
+  switch (state) {
+    case 'clean':
       return translate('auto.components.workspace.cleanup.candidateRow.cleanGit', 'Clean git')
-    case 'Dirty':
+    case 'dirty':
       return translate('auto.components.workspace.cleanup.candidateRow.dirtyGit', 'Dirty git')
-    case 'Unpushed':
+    case 'unpushed':
       return getUnpushedCommitsLabel()
-    case 'Unknown':
+    case 'unknown':
       return translate('auto.components.workspace.cleanup.candidateRow.gitUnknown', 'Git unknown')
   }
-  return translate('auto.components.workspace.cleanup.candidateRow.gitUnknown', 'Git unknown')
+}
+
+export function getWorkspaceCleanupGitChipLabel(state: WorkspaceCleanupGitState): string {
+  switch (state) {
+    case 'clean':
+      return translate('components.workspace.cleanup.candidateRow.gitChip.clean', 'Clean')
+    case 'dirty':
+      return translate('components.workspace.cleanup.candidateRow.gitChip.dirty', 'Dirty')
+    case 'unpushed':
+      return translate('components.workspace.cleanup.candidateRow.gitChip.unpushed', 'Unpushed')
+    case 'unknown':
+      return translate('components.workspace.cleanup.candidateRow.gitChip.unknown', 'Unknown')
+  }
 }
 
 export function getNoUnpushedCommitsLabel(): string {

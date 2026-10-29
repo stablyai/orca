@@ -12,6 +12,7 @@ import type { MobileComposerSource } from '../tasks/use-mobile-composer-source'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { TaskProviderLogo } from './TaskProviderLogo'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
@@ -53,6 +54,7 @@ export function SmartWorkspaceSourceField({
   onOpenDrawer
 }: Props) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const selection = composer.smartNameSelection
 
   function openDrawer(): void {
@@ -66,7 +68,10 @@ export function SmartWorkspaceSourceField({
   return (
     <View style={styles.field}>
       <Text style={styles.label}>
-        {label} <Text style={styles.labelHint}>[Optional]</Text>
+        {label}{' '}
+        <Text style={styles.labelHint}>
+          {t('components.smartWorkspaceSourceField.optional', '[Optional]')}
+        </Text>
       </Text>
       {selection ? (
         <View style={styles.pill}>
@@ -77,7 +82,10 @@ export function SmartWorkspaceSourceField({
           {selection.url ? (
             <Pressable
               accessibilityRole="link"
-              accessibilityLabel="Open selected source"
+              accessibilityLabel={t(
+                'components.smartWorkspaceSourceField.openSelectedSource',
+                'Open selected source'
+              )}
               hitSlop={6}
               onPress={() => {
                 if (selection.url) {
@@ -100,7 +108,10 @@ export function SmartWorkspaceSourceField({
           onChangeText={composer.setName}
           onFocus={openDrawer}
           editable={!disabled && interactive}
-          placeholder="Type a name or search a source"
+          placeholder={t(
+            'components.smartWorkspaceSourceField.searchPlaceholder',
+            'Type a name or search a source'
+          )}
           placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
           autoCorrect={false}

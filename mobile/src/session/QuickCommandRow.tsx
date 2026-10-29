@@ -13,6 +13,7 @@ import {
   isAgentQuickCommand
 } from '../terminal/quick-commands'
 import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 type QuickCommandRowProps = {
   command: TerminalQuickCommand
@@ -37,6 +38,7 @@ export function QuickCommandRow({
   disabled
 }: QuickCommandRowProps) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const clipboard = useClipboardWriter()
   const isAgent = isAgentQuickCommand(command)
   const body = getTerminalQuickCommandBody(command)
@@ -99,12 +101,12 @@ export function QuickCommandRow({
   const copyDisabled = disabled || !canCopy
   const copyLabel =
     copyStatus === 'copied'
-      ? 'Copied'
+      ? t('common.copied', 'Copied')
       : copyStatus === 'failed'
-        ? "Couldn't copy"
+        ? t('session.quickCommandRow.copyFailed', "Couldn't copy")
         : canCopy
-          ? `Copy ${command.label}`
-          : 'Nothing to copy'
+          ? t('session.quickCommandRow.copyCommand', 'Copy {{label}}', { label: command.label })
+          : t('session.quickCommandRow.nothingToCopy', 'Nothing to copy')
   const copyIconColor =
     copyStatus === 'copied'
       ? colors.statusGreen
@@ -119,7 +121,9 @@ export function QuickCommandRow({
         disabled={disabled}
         onPress={() => onLaunch(command)}
         accessibilityRole="button"
-        accessibilityLabel={`Run ${command.label}`}
+        accessibilityLabel={t('session.quickCommandRow.runCommand', 'Run {{label}}', {
+          label: command.label
+        })}
       >
         <View style={styles.rowIcon}>
           {isAgent ? (
@@ -160,7 +164,9 @@ export function QuickCommandRow({
         style={({ pressed }) => [styles.rowAction, pressed && !disabled && styles.pressed]}
         disabled={disabled}
         onPress={() => onEdit(command)}
-        accessibilityLabel={`Edit ${command.label}`}
+        accessibilityLabel={t('session.quickCommandRow.editCommand', 'Edit {{label}}', {
+          label: command.label
+        })}
       >
         <Pencil size={15} color={colors.textSecondary} />
       </Pressable>
@@ -168,7 +174,9 @@ export function QuickCommandRow({
         style={({ pressed }) => [styles.rowAction, pressed && !disabled && styles.pressed]}
         disabled={disabled}
         onPress={() => onDelete(command)}
-        accessibilityLabel={`Delete ${command.label}`}
+        accessibilityLabel={t('session.quickCommandRow.deleteCommand', 'Delete {{label}}', {
+          label: command.label
+        })}
       >
         <Trash2 size={15} color={colors.statusRed} />
       </Pressable>

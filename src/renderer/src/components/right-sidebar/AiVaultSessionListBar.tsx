@@ -13,41 +13,25 @@ import type { AiVaultSortMenu } from './ai-vault-sort-options'
 
 /** Left-hand label while searching: how many hits the list is showing. */
 export function aiVaultResultCountLabel(count: number): string {
-  return count === 1
-    ? translate('sessionSearch.panel.resultCount_one', '{{count}} result', {
-        count
-      })
-    : translate('sessionSearch.panel.resultCount_other', '{{count}} results', {
-        count
-      })
+  return translate('sessionSearch.panel.resultCount', '{{count}} results', {
+    count,
+    defaultValue_one: '{{count}} result'
+  })
 }
 
 /** Left-hand label while browsing: the count, and how much of the scan filters hid. */
 export function aiVaultSessionCountLabel(shown: number, loaded: number): string {
   if (shown !== loaded) {
-    return loaded === 1
-      ? translate(
-          'sessionSearch.panel.sessionsShownOfLoaded_one',
-          '{{shown}} of {{count}} session',
-          {
-            shown,
-            count: loaded
-          }
-        )
-      : translate(
-          'sessionSearch.panel.sessionsShownOfLoaded_other',
-          '{{shown}} of {{count}} sessions',
-          {
-            shown,
-            count: loaded
-          }
-        )
+    return translate(
+      'sessionSearch.panel.sessionsShownOfLoaded',
+      '{{shown}} of {{count}} sessions',
+      { shown, count: loaded, defaultValue_one: '{{shown}} of {{count}} session' }
+    )
   }
-  return shown === 1
-    ? translate('sessionSearch.panel.sessionCount_one', '{{count}} session', {
-        count: shown
-      })
-    : translate('sessionSearch.panel.sessionCount_other', '{{count}} sessions', { count: shown })
+  return translate('sessionSearch.panel.sessionCount', '{{count}} sessions', {
+    count: shown,
+    defaultValue_one: '{{count}} session'
+  })
 }
 
 /** Report the visible count and current sort together, with one sort control. */

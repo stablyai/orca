@@ -120,43 +120,28 @@ function JobCard({
   if (breakdown.succeeded.length > 0) {
     const count = breakdown.succeeded.length
     summaryParts.push(
-      count === 1
-        ? translate(
-            'auto.components.editor.CheckRunJobs.stepsSucceeded_one',
-            '{{count}} succeeded',
-            {
-              count
-            }
-          )
-        : translate(
-            'auto.components.editor.CheckRunJobs.stepsSucceeded_other',
-            '{{count}} succeeded',
-            { count }
-          )
+      translate('auto.components.editor.CheckRunJobs.stepsSucceeded', '{{count}} succeeded', {
+        count,
+        defaultValue_one: '{{count}} succeeded'
+      })
     )
   }
   if (breakdown.skipped.length > 0) {
     const count = breakdown.skipped.length
     summaryParts.push(
-      count === 1
-        ? translate('auto.components.editor.CheckRunJobs.stepsSkipped_one', '{{count}} skipped', {
-            count
-          })
-        : translate('auto.components.editor.CheckRunJobs.stepsSkipped_other', '{{count}} skipped', {
-            count
-          })
+      translate('auto.components.editor.CheckRunJobs.stepsSkipped', '{{count}} skipped', {
+        count,
+        defaultValue_one: '{{count}} skipped'
+      })
     )
   }
   if (breakdown.pending.length > 0) {
     const count = breakdown.pending.length
     summaryParts.push(
-      count === 1
-        ? translate('auto.components.editor.CheckRunJobs.stepsPending_one', '{{count}} pending', {
-            count
-          })
-        : translate('auto.components.editor.CheckRunJobs.stepsPending_other', '{{count}} pending', {
-            count
-          })
+      translate('auto.components.editor.CheckRunJobs.stepsPending', '{{count}} pending', {
+        count,
+        defaultValue_one: '{{count}} pending'
+      })
     )
   }
 
@@ -173,17 +158,15 @@ function JobCard({
         </span>
         {breakdown.failed.length > 0 && (
           <Badge variant="destructive">
-            {breakdown.total === 1
-              ? translate(
-                  'auto.components.editor.CheckRunJobs.stepsFailedOfTotal_one',
-                  '{{failed}} / {{count}} steps failed',
-                  { failed: breakdown.failed.length, count: breakdown.total }
-                )
-              : translate(
-                  'auto.components.editor.CheckRunJobs.stepsFailedOfTotal_other',
-                  '{{failed}} / {{count}} steps failed',
-                  { failed: breakdown.failed.length, count: breakdown.total }
-                )}
+            {translate(
+              'auto.components.editor.CheckRunJobs.stepsFailedOfTotal',
+              '{{failed}} / {{count}} steps failed',
+              {
+                failed: breakdown.failed.length,
+                count: breakdown.total,
+                defaultValue_one: '{{failed}} / {{count}} steps failed'
+              }
+            )}
           </Badge>
         )}
       </div>

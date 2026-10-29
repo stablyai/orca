@@ -5,7 +5,8 @@ import type { GitHubRepoExecOptions } from '../../github-api-repository'
 import {
   requestWorkItemSearch,
   workItemSearchScope,
-  WORK_ITEM_SEARCH_CACHE_MS
+  WORK_ITEM_SEARCH_CACHE_MS,
+  type WorkItemSearchType
 } from './work-item-search-batch'
 
 type PageInfo = { endCursor: string | null; hasNextPage: boolean }
@@ -27,10 +28,12 @@ export function usesGraphqlWorkItemSearch(
 
 export async function searchWorkItemCount(
   search: string,
-  options: GitHubRepoExecOptions
+  options: GitHubRepoExecOptions,
+  searchType: WorkItemSearchType = 'ISSUE'
 ): Promise<number> {
   const { value: result } = await requestWorkItemSearch<{ issueCount: number }>({
     search,
+    searchType,
     first: 1,
     selection: 'issueCount',
     options
@@ -43,11 +46,13 @@ export async function searchWorkItemCount(
 
 export async function searchWorkItemPage<T>(args: {
   search: string
+  searchType?: WorkItemSearchType
   nodeSelection: string
   limit: number
   page: number
   options: GitHubRepoExecOptions
   noCache?: boolean
+  cacheResults?: boolean
 }): Promise<T[]> {
   const { options, noCache } = args
   const environment = { ...(options.env ?? process.env) }
@@ -60,7 +65,11 @@ export async function searchWorkItemPage<T>(args: {
     throw new Error('Only the first 1000 search results are available (HTTP 422)')
   }
   const search = `${args.search} sort:created-desc`
-  const scope = JSON.stringify([workItemSearchScope(options, environment), search])
+  const scope = JSON.stringify([
+    workItemSearchScope(options, environment),
+    args.searchType ?? 'ISSUE',
+    search
+  ])
   let position = 0
   let after: string | undefined
   if (!noCache) {
@@ -87,16 +96,19 @@ export async function searchWorkItemPage<T>(args: {
       cursors.set(`${scope}:${position}`, { at, cursor: info.endCursor })
     }
   }
-  while (position < offset) {
+  while (offset - position + limit > 100) {
     const first = Math.min(100, offset - position)
     const { value: skipped, at } = await requestWorkItemSearch<SearchConnection<never>>({
       search,
+      searchType: args.searchType,
+      countSearch: args.search,
       first,
       after,
       selection: 'issueCount pageInfo { endCursor hasNextPage }',
       options,
       environment,
-      noCache
+      noCache,
+      cacheResults: args.cacheResults
     })
     if (!skipped.pageInfo || !Number.isSafeInteger(skipped.issueCount)) {
       throw new Error('GitHub search response missing pagination')
@@ -113,16 +125,19 @@ export async function searchWorkItemPage<T>(args: {
   }
   const { value: result, at } = await requestWorkItemSearch<SearchConnection<T>>({
     search,
-    first: limit,
+    searchType: args.searchType,
+    first: offset - position + limit,
+    countSearch: args.search,
     after,
     selection: `issueCount pageInfo { endCursor hasNextPage } nodes { ${args.nodeSelection} }`,
     options,
     environment,
-    noCache
+    noCache,
+    cacheResults: args.cacheResults
   })
   if (!Array.isArray(result.nodes) || !result.pageInfo) {
     throw new Error('GitHub search response missing page')
   }
-  remember(offset + result.nodes.length, result.pageInfo, at)
-  return result.nodes
+  remember(position + result.nodes.length, result.pageInfo, at)
+  return result.nodes.slice(offset - position, offset - position + limit)
 }

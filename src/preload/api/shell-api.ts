@@ -1,4 +1,5 @@
 import type { ExecutionHostId } from '../../shared/execution-host'
+import type { ShellPathExistence } from '../../shared/path-existence-batch'
 import type {
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
@@ -24,7 +25,7 @@ export type ShellApi = {
   openUrl: (url: string) => Promise<void>
   openFilePath: (path: string, ownerHostId: ExecutionHostId) => Promise<boolean>
   openFileUri: (uri: string, ownerHostId: ExecutionHostId) => Promise<void>
-  pathsExist?: (paths: string[]) => Promise<boolean[]>
+  pathsExist?: (paths: string[]) => Promise<ShellPathExistence[]>
   pathExists: (path: string) => Promise<boolean>
   pickAttachment: () => Promise<string | null>
   pickAttachments: () => Promise<string[]>

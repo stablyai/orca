@@ -35,69 +35,57 @@ type LinearProjectOverviewProps = {
 type LinearCollectionKind = 'views' | 'projects' | 'projectIssues' | 'viewIssues' | 'issues'
 
 function linearCollectionTruncatedText(kind: LinearCollectionKind, count: number): string {
-  const values = { count }
-  const one = count === 1
   switch (kind) {
     case 'views':
-      return one
-        ? translate(
-            'taskProviders.linear.truncated.views_one',
-            'Showing the first {{count}} view. Search or open Linear for the full set.',
-            values
-          )
-        : translate(
-            'taskProviders.linear.truncated.views_other',
-            'Showing the first {{count}} views. Search or open Linear for the full set.',
-            values
-          )
+      return translate(
+        'taskProviders.linear.truncated.views',
+        'Showing the first {{count}} views. Search or open Linear for the full set.',
+        {
+          count,
+          defaultValue_one:
+            'Showing the first {{count}} view. Search or open Linear for the full set.'
+        }
+      )
     case 'projects':
-      return one
-        ? translate(
-            'taskProviders.linear.truncated.projects_one',
-            'Showing the first {{count}} project. Search or open Linear for the full set.',
-            values
-          )
-        : translate(
-            'taskProviders.linear.truncated.projects_other',
-            'Showing the first {{count}} projects. Search or open Linear for the full set.',
-            values
-          )
+      return translate(
+        'taskProviders.linear.truncated.projects',
+        'Showing the first {{count}} projects. Search or open Linear for the full set.',
+        {
+          count,
+          defaultValue_one:
+            'Showing the first {{count}} project. Search or open Linear for the full set.'
+        }
+      )
     case 'projectIssues':
-      return one
-        ? translate(
-            'taskProviders.linear.truncated.projectIssues_one',
-            'Showing the first {{count}} project issue. Search or open Linear for the full set.',
-            values
-          )
-        : translate(
-            'taskProviders.linear.truncated.projectIssues_other',
-            'Showing the first {{count}} project issues. Search or open Linear for the full set.',
-            values
-          )
+      return translate(
+        'taskProviders.linear.truncated.projectIssues',
+        'Showing the first {{count}} project issues. Search or open Linear for the full set.',
+        {
+          count,
+          defaultValue_one:
+            'Showing the first {{count}} project issue. Search or open Linear for the full set.'
+        }
+      )
     case 'viewIssues':
-      return one
-        ? translate(
-            'taskProviders.linear.truncated.viewIssues_one',
-            'Showing the first {{count}} view issue. Search or open Linear for the full set.',
-            values
-          )
-        : translate(
-            'taskProviders.linear.truncated.viewIssues_other',
-            'Showing the first {{count}} view issues. Search or open Linear for the full set.',
-            values
-          )
+      return translate(
+        'taskProviders.linear.truncated.viewIssues',
+        'Showing the first {{count}} view issues. Search or open Linear for the full set.',
+        {
+          count,
+          defaultValue_one:
+            'Showing the first {{count}} view issue. Search or open Linear for the full set.'
+        }
+      )
     case 'issues':
-      return one
-        ? translate(
-            'taskProviders.linear.truncated.issues_one',
-            'Showing the first {{count}} issue. Search or open Linear for the full set.',
-            values
-          )
-        : translate(
-            'taskProviders.linear.truncated.issues_other',
-            'Showing the first {{count}} issues. Search or open Linear for the full set.',
-            values
-          )
+      return translate(
+        'taskProviders.linear.truncated.issues',
+        'Showing the first {{count}} issues. Search or open Linear for the full set.',
+        {
+          count,
+          defaultValue_one:
+            'Showing the first {{count}} issue. Search or open Linear for the full set.'
+        }
+      )
   }
 }
 

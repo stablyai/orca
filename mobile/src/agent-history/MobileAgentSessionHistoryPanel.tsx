@@ -31,6 +31,8 @@ import { buildMobileAgentHistoryResumeActionState } from './agent-history-sessio
 import { styles } from './agent-history-styles'
 import { useNow } from '../hooks/use-now'
 import { useMobileResumeOperationOwnership } from './use-mobile-resume-operation-ownership'
+import type { Translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export type MobileAgentSessionHistoryPanelProps = {
   hostId: string
@@ -39,11 +41,13 @@ export type MobileAgentSessionHistoryPanelProps = {
   origin?: string
 }
 
-const SCOPE_TABS: { scope: AiVaultScope; label: string }[] = [
-  { scope: 'workspace', label: 'Workspace' },
-  { scope: 'project', label: 'Project' },
-  { scope: 'all', label: 'All' }
-]
+function scopeTabs(t: Translate): { scope: AiVaultScope; label: string }[] {
+  return [
+    { scope: 'workspace', label: t('agentHistory.panel.workspace', 'Workspace') },
+    { scope: 'project', label: t('agentHistory.panel.project', 'Project') },
+    { scope: 'all', label: t('agentHistory.panel.all', 'All') }
+  ]
+}
 
 export function MobileAgentSessionHistoryPanel(props: MobileAgentSessionHistoryPanelProps) {
   return <MobileAgentSessionHistoryPanelContent key={props.hostId} {...props} />
@@ -56,6 +60,7 @@ function MobileAgentSessionHistoryPanelContent({
   origin = ''
 }: MobileAgentSessionHistoryPanelProps) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   // Use handoff, not useRouter: resumed session is a native route outside this single-document page.
   const router = useWorkspaceRouteHandoff()
   const sessionBelow = useSessionScreenHandlers(hostId, worktreeId)
@@ -125,6 +130,7 @@ function MobileAgentSessionHistoryPanelContent({
 
   const sessions = screenState.kind === 'ready' ? screenState.sessions : EMPTY_SESSIONS
   const issues = screenState.kind === 'ready' ? screenState.issues : EMPTY_ISSUES
+  const count = issues.length
   const sessionsById = useMemo(
     () => new Map(sessions.map((session) => [session.id, session])),
     [sessions]
@@ -138,7 +144,7 @@ function MobileAgentSessionHistoryPanelContent({
         activeWorktreePath,
         now
       }),
-    [sessions, query, scope, scopeFilterPaths, activeWorktreePath, now]
+    [sessions, query, scope, scopeFilterPaths, activeWorktreePath, now, t]
   )
 
   const resumeHost = useMemo(
@@ -161,12 +167,14 @@ function MobileAgentSessionHistoryPanelContent({
         return
       }
       if (!client || connState !== 'connected') {
-        setResumeMessage('Waiting for host...')
+        setResumeMessage(t('agentHistory.panel.waitingForHost', 'Waiting for host...'))
         triggerError()
         return
       }
       if (!session.sessionId) {
-        setResumeMessage('This session is missing a resume id.')
+        setResumeMessage(
+          t('agentHistory.panel.missingResumeId', 'This session is missing a resume id.')
+        )
         triggerError()
         return
       }
@@ -203,7 +211,9 @@ function MobileAgentSessionHistoryPanelContent({
           target.terminalPlatform
         )
         if (!platform) {
-          setResumeMessage('Unable to determine host platform.')
+          setResumeMessage(
+            t('agentHistory.panel.unknownHostPlatform', 'Unable to determine host platform.')
+          )
           triggerError()
           return
         }
@@ -234,7 +244,7 @@ function MobileAgentSessionHistoryPanelContent({
         } catch {
           return
         }
-        setResumeMessage('Agent session queued.')
+        setResumeMessage(t('agentHistory.panel.sessionQueued', 'Agent session queued.'))
         // From a session screen the same workspace is the screen below; otherwise the session takes this screen's place.
         if (origin === 'session' && target.worktreeId === worktreeId) {
           sessionBelow?.onResumedTerminal(resumed.terminal)
@@ -246,7 +256,11 @@ function MobileAgentSessionHistoryPanelContent({
         }
       } catch (err) {
         triggerError()
-        setResumeMessage(err instanceof Error ? err.message : 'Failed to resume session.')
+        setResumeMessage(
+          err instanceof Error
+            ? err.message
+            : t('agentHistory.panel.resumeFailed', 'Failed to resume session.')
+        )
       } finally {
         resumeLaunchInFlightRef.current = false
         setResumingSessionId(null)
@@ -263,7 +277,8 @@ function MobileAgentSessionHistoryPanelContent({
       router,
       worktreeId,
       worktrees,
-      claimResumeOwnership
+      claimResumeOwnership,
+      t
     ]
   )
 
@@ -276,13 +291,13 @@ function MobileAgentSessionHistoryPanelContent({
             onPress={() => router.back()}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel="Back"
+            accessibilityLabel={t('common.back', 'Back')}
           >
             <ChevronLeft size={22} color={colors.textSecondary} strokeWidth={2.2} />
           </Pressable>
           <View style={styles.titleBlock}>
             <Text style={styles.title} numberOfLines={1}>
-              Agent Session History
+              {t('agentHistory.panel.title', 'Agent Session History')}
             </Text>
             <Text style={styles.meta} numberOfLines={1}>
               {worktreeLabel}
@@ -292,7 +307,7 @@ function MobileAgentSessionHistoryPanelContent({
             style={({ pressed }) => [styles.refreshButton, pressed && styles.refreshButtonPressed]}
             onPress={() => void onRefresh()}
             hitSlop={8}
-            accessibilityLabel="Refresh agent sessions"
+            accessibilityLabel={t('agentHistory.panel.refreshSessions', 'Refresh agent sessions')}
           >
             <RefreshCw size={18} color={colors.textSecondary} strokeWidth={2.1} />
           </Pressable>
@@ -305,25 +320,32 @@ function MobileAgentSessionHistoryPanelContent({
         </View>
       ) : screenState.kind === 'unsupported' ? (
         <View style={styles.state}>
-          <Text style={styles.stateTitle}>Agent Session History Unavailable</Text>
+          <Text style={styles.stateTitle}>
+            {t('agentHistory.panel.unavailable', 'Agent Session History Unavailable')}
+          </Text>
           <Text style={styles.stateText}>
-            Update Orca on this host to browse agent session history.
+            {t(
+              'agentHistory.panel.updateHost',
+              'Update Orca on this host to browse agent session history.'
+            )}
           </Text>
         </View>
       ) : screenState.kind === 'error' ? (
         <View style={styles.state}>
-          <Text style={styles.stateTitle}>Unable to Load</Text>
+          <Text style={styles.stateTitle}>
+            {t('agentHistory.panel.loadFailed', 'Unable to Load')}
+          </Text>
           <Text style={styles.stateText}>{screenState.message}</Text>
           {retry ? (
             <Pressable style={styles.retryButton} onPress={retry}>
-              <Text style={styles.retryText}>Retry</Text>
+              <Text style={styles.retryText}>{t('common.retry', 'Retry')}</Text>
             </Pressable>
           ) : null}
         </View>
       ) : (
         <>
           <View style={styles.scopeTabs}>
-            {SCOPE_TABS.map((tab) => {
+            {scopeTabs(t).map((tab) => {
               const active = scope === tab.scope
               return (
                 <Pressable
@@ -343,7 +365,7 @@ function MobileAgentSessionHistoryPanelContent({
               style={styles.searchInput}
               value={query}
               onChangeText={setQuery}
-              placeholder="Search sessions, repo:, path:"
+              placeholder={t('agentHistory.panel.placeholder', 'Search sessions, repo:, path:')}
               placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
               autoCorrect={false}
@@ -352,7 +374,13 @@ function MobileAgentSessionHistoryPanelContent({
           {issues.length > 0 ? (
             <View style={styles.noticeBanner}>
               <Text style={styles.noticeText}>
-                {issues.length} {issues.length === 1 ? 'transcript' : 'transcripts'} skipped
+                {count === 1
+                  ? t('agentHistory.panel.skipped_one', '{{count}} transcript skipped', {
+                      count
+                    })
+                  : t('agentHistory.panel.skipped_other', '{{count}} transcripts skipped', {
+                      count
+                    })}
               </Text>
             </View>
           ) : null}
@@ -363,9 +391,13 @@ function MobileAgentSessionHistoryPanelContent({
           ) : null}
           {sections.length === 0 ? (
             <View style={styles.state}>
-              <Text style={styles.stateTitle}>No agent sessions</Text>
+              <Text style={styles.stateTitle}>
+                {t('agentHistory.panel.noSessions', 'No agent sessions')}
+              </Text>
               <Text style={styles.stateText}>
-                {query ? 'No sessions match your search.' : 'No past agent sessions in this scope.'}
+                {query
+                  ? t('agentHistory.panel.noSearchResults', 'No sessions match your search.')
+                  : t('agentHistory.panel.emptyScope', 'No past agent sessions in this scope.')}
               </Text>
             </View>
           ) : (

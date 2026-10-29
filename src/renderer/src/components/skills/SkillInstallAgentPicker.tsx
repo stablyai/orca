@@ -146,21 +146,10 @@ export function SkillInstallAgentPicker({
                 ) : (
                   <>
                     <span className="font-medium text-foreground">
-                      {chosen.length === 1
-                        ? translate(
-                            'auto.components.skills.install.agentCount_one',
-                            '{{count}} agent',
-                            {
-                              count: chosen.length
-                            }
-                          )
-                        : translate(
-                            'auto.components.skills.install.agentCount_other',
-                            '{{count}} agents',
-                            {
-                              count: chosen.length
-                            }
-                          )}
+                      {translate('auto.components.skills.install.agentCount', '{{count}} agents', {
+                        count: chosen.length,
+                        defaultValue_one: '{{count}} agent'
+                      })}
                     </span>
                     <span className="text-muted-foreground"> · {chosen.join(', ')}</span>
                   </>

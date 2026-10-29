@@ -24,7 +24,9 @@ import {
   isOnStoppedWslDistro,
   splitStoppedWslDistroRoots,
   stoppedPluginRoot,
-  unavailableSkillSource
+  stoppedRootReader,
+  unavailableSkillSource,
+  type StoppedWslRootsReadScope
 } from './skill-discovery-stopped-wsl-roots'
 import { wslDistroForPath } from '../wsl/wsl-unc-access-gate'
 import { buildRemoteRepoSkillSources } from './skill-remote-repo-sources'
@@ -234,8 +236,12 @@ export async function discoverSkills(args: {
   refresh?: boolean
   names?: string[]
   sourceKinds?: SkillSourceKind[]
-  /** False for a user act (Share): read stopped WSL distros' folders instead of reporting them unavailable. */
-  gateStoppedWslDistros?: boolean
+  /**
+   * A user act (Share) may read stopped WSL distros' folders: 'all', those on named distros, or only
+   * the roots holding these skill directories. Every other stopped root is reported unavailable, so
+   * its distro stays down.
+   */
+  readStoppedWslRootsFor?: StoppedWslRootsReadScope
 }): Promise<SkillDiscoveryResult> {
   args.signal?.throwIfAborted()
   const startedAt = Date.now()
@@ -248,10 +254,12 @@ export async function discoverSkills(args: {
     (!args.sourceKinds?.length || args.sourceKinds.includes('plugin'))
       ? args.cwd
       : undefined
-  const gateStopped = args.gateStoppedWslDistros !== false
+  const gateStopped = args.readStoppedWslRootsFor !== 'all'
+  const mayReadStopped = stoppedRootReader(args.readStoppedWslRootsFor)
   const pluginCwdStopped =
     gateStopped &&
     pluginCwd !== undefined &&
+    !mayReadStopped(pluginCwd) &&
     wslDistroForPath(pluginCwd) !== null &&
     (await isOnStoppedWslDistro(pluginCwd))
   const candidateRoots = [
@@ -266,7 +274,7 @@ export async function discoverSkills(args: {
   // Host-only root sets never await the WSL gate.
   const { readable, unavailable } =
     gateStopped && candidateRoots.some((root) => wslDistroForPath(root.path))
-      ? await splitStoppedWslDistroRoots(candidateRoots)
+      ? await splitStoppedWslDistroRoots(candidateRoots, mayReadStopped)
       : { readable: candidateRoots, unavailable: [] }
   const roots = readable.filter((root) => rootMayContainSourceKind(root, args.sourceKinds))
   args.signal?.throwIfAborted()

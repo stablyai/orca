@@ -2,8 +2,10 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronRight, FileText, Minus, Plus, Trash2 } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { STATUS_LABELS } from '../../../src/shared/git-status-labels'
-import { CONFLICT_KIND_LABELS } from '../../../src/shared/source-control-conflict-prompts'
+import type { GitConflictKind } from '../../../src/shared/git-status-types'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import type { Translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { formatMobileBranchEntryMeta } from './mobile-branch-entry-format'
 import {
   statusColor,
@@ -23,10 +25,31 @@ type RowState = Pick<
   | 'setDiscardTarget'
 >
 
-export function makeRenderFileRow(state: RowState) {
+function conflictKindLabel(kind: GitConflictKind | undefined, t: Translate): string {
+  switch (kind) {
+    case 'both_modified':
+      return t('sourceControl.fileRows.bothModified', 'Both modified')
+    case 'both_added':
+      return t('sourceControl.fileRows.bothAdded', 'Both added')
+    case 'deleted_by_us':
+      return t('sourceControl.fileRows.deletedByUs', 'Deleted by us')
+    case 'deleted_by_them':
+      return t('sourceControl.fileRows.deletedByThem', 'Deleted by them')
+    case 'added_by_us':
+      return t('sourceControl.fileRows.addedByUs', 'Added by us')
+    case 'added_by_them':
+      return t('sourceControl.fileRows.addedByThem', 'Added by them')
+    case 'both_deleted':
+      return t('sourceControl.fileRows.bothDeleted', 'Both deleted')
+    default:
+      return t('sourceControl.fileRows.unresolvedConflict', 'Unresolved conflict')
+  }
+}
+
+export function makeRenderFileRow(state: RowState, t: Translate) {
   const { busyAction, openingPath, openingBranchPath, openFile, runGitAction, setDiscardTarget } =
     state
-  return function FileRow({ item }: { item: MobileGitStatusEntryView }) {
+  return function renderFileRow({ item }: { item: MobileGitStatusEntryView }) {
     const rowBusy =
       busyAction === item.stageActionId ||
       busyAction === item.unstageActionId ||
@@ -45,7 +68,13 @@ export function makeRenderFileRow(state: RowState) {
         ]}
         onPress={() => void openFile(item)}
         disabled={rowDisabled}
-        accessibilityLabel={`Open changed file ${item.path}`}
+        accessibilityLabel={t(
+          'sourceControl.fileRows.openChangedFile',
+          'Open changed file {{path}}',
+          {
+            path: item.path
+          }
+        )}
       >
         <View style={styles.statusBadge}>
           <Text style={[styles.statusBadgeText, { color: statusColor(item.status) }]}>
@@ -66,11 +95,11 @@ export function makeRenderFileRow(state: RowState) {
           </Text>
           {item.oldPath ? (
             <Text style={styles.fileMeta} numberOfLines={1}>
-              from {item.oldPath}
+              {t('sourceControl.fileRows.renamedFrom', 'from {{path}}', { path: item.oldPath })}
             </Text>
           ) : item.conflictStatus === 'unresolved' ? (
             <Text style={styles.fileMeta} numberOfLines={1}>
-              {item.conflictKind ? CONFLICT_KIND_LABELS[item.conflictKind] : 'Unresolved conflict'}
+              {conflictKindLabel(item.conflictKind, t)}
             </Text>
           ) : null}
         </View>
@@ -88,7 +117,9 @@ export function makeRenderFileRow(state: RowState) {
               void runGitAction(item.unstageActionId, 'git.unstage', { filePath: item.path })
             }
             hitSlop={8}
-            accessibilityLabel={`Unstage ${item.path}`}
+            accessibilityLabel={t('sourceControl.fileRows.unstageFile', 'Unstage {{path}}', {
+              path: item.path
+            })}
           >
             <Minus size={16} color={colors.textSecondary} strokeWidth={2.2} />
           </Pressable>
@@ -106,7 +137,9 @@ export function makeRenderFileRow(state: RowState) {
                   void runGitAction(item.stageActionId, 'git.stage', { filePath: item.path })
                 }
                 hitSlop={8}
-                accessibilityLabel={`Stage ${item.path}`}
+                accessibilityLabel={t('sourceControl.fileRows.stageFile', 'Stage {{path}}', {
+                  path: item.path
+                })}
               >
                 <Plus size={16} color={colors.textSecondary} strokeWidth={2.2} />
               </Pressable>
@@ -121,7 +154,9 @@ export function makeRenderFileRow(state: RowState) {
                 disabled={ioBusy}
                 onPress={() => setDiscardTarget(item)}
                 hitSlop={8}
-                accessibilityLabel={`Discard ${item.path}`}
+                accessibilityLabel={t('sourceControl.fileRows.discardFile', 'Discard {{path}}', {
+                  path: item.path
+                })}
               >
                 <Trash2 size={16} color={colors.statusRed} strokeWidth={2.1} />
               </Pressable>
@@ -151,6 +186,7 @@ type BranchState = Pick<
 
 export function BranchCompareHeader({ state }: { state: BranchState }) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const {
     shouldShowBranchCompareSection,
     branchCompareSummaryText,
@@ -166,7 +202,9 @@ export function BranchCompareHeader({ state }: { state: BranchState }) {
     <View style={styles.branchCompareBlock}>
       <View style={styles.sectionHeader}>
         <View style={styles.branchSectionTitleBlock}>
-          <Text style={styles.sectionTitle}>Committed on Branch</Text>
+          <Text style={styles.sectionTitle}>
+            {t('sourceControl.fileRows.committedSection', 'Committed on Branch')}
+          </Text>
           {branchCompareSummaryText ? (
             <Text style={styles.branchSectionSubtitle} numberOfLines={1}>
               {branchCompareSummaryText}
@@ -178,7 +216,9 @@ export function BranchCompareHeader({ state }: { state: BranchState }) {
       {branchCompareState.kind === 'loading' ? (
         <View style={styles.branchStateRow}>
           <ActivityIndicator size="small" color={colors.textSecondary} />
-          <Text style={styles.branchStateText}>Loading committed changes...</Text>
+          <Text style={styles.branchStateText}>
+            {t('sourceControl.fileRows.loadingCommitted', 'Loading committed changes...')}
+          </Text>
         </View>
       ) : branchCompareState.kind === 'error' ? (
         <View style={styles.branchStateRow}>
@@ -187,7 +227,8 @@ export function BranchCompareHeader({ state }: { state: BranchState }) {
       ) : branchCompareResult && branchCompareResult.summary.status !== 'ready' ? (
         <View style={styles.branchStateRow}>
           <Text style={styles.branchStateText}>
-            {branchCompareResult.summary.errorMessage ?? 'Committed changes unavailable.'}
+            {branchCompareResult.summary.errorMessage ??
+              t('sourceControl.fileRows.committedUnavailable', 'Committed changes unavailable.')}
           </Text>
         </View>
       ) : null}
@@ -203,6 +244,7 @@ export function BranchFileRow({
   state: BranchState
 }) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const { busyAction, openBranchDiff, openingBranchPath, openingPath } = state
   const rowBusy = openingBranchPath === entry.path
   const rowDisabled =
@@ -218,7 +260,13 @@ export function BranchFileRow({
       ]}
       onPress={() => void openBranchDiff(entry)}
       disabled={rowDisabled}
-      accessibilityLabel={`Open committed change ${entry.path}`}
+      accessibilityLabel={t(
+        'sourceControl.fileRows.openCommittedChange',
+        'Open committed change {{path}}',
+        {
+          path: entry.path
+        }
+      )}
     >
       <View style={styles.statusBadge}>
         <Text style={[styles.statusBadgeText, { color: statusColor(entry.status) }]}>

@@ -235,7 +235,8 @@ export function useOnboardingFlow(
     }
     didAutoSelectRef.current = true
     // Refresh PATH on mount; pre-hydration session-cache entries can falsely report no agents.
-    void refreshDetectedAgents().then((ids) => {
+    // First-run setup is a user act: it may start the default WSL distro to find its agents.
+    void refreshDetectedAgents(undefined, { wakeWslDistro: true }).then((ids) => {
       if (selectedAgentRef.current !== null) {
         return
       }

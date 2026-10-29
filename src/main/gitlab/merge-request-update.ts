@@ -13,6 +13,7 @@ import {
 import { encodedProject } from './project-path-encoding'
 import { stripGitLabDraftTitlePrefix } from './merge-request-draft-title'
 import { withProjectRef } from './merge-request-project-resolution'
+import { codeHostFailure, classifiedFailure } from '../../shared/code-host-failure-copy'
 
 export async function updateMR(
   repoPath: string,
@@ -41,7 +42,7 @@ export async function updateMR(
       await acquire()
       try {
         if (updates.readyForReview && updates.title !== undefined) {
-          return { ok: false, error: 'Cannot update the title while marking a merge request ready' }
+          return codeHostFailure('gitlab.readyTitleConflict')
         }
 
         const endpoint = `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}`
@@ -53,7 +54,7 @@ export async function updateMR(
           )
           const currentTitle = (JSON.parse(response.stdout) as { title?: unknown }).title
           if (typeof currentTitle !== 'string') {
-            return { ok: false, error: 'Could not read the current merge request title' }
+            return codeHostFailure('gitlab.mergeRequestTitleUnreadable')
           }
           title = stripGitLabDraftTitlePrefix(currentTitle) ?? undefined
         }
@@ -61,11 +62,11 @@ export async function updateMR(
         const fields: string[] = []
         if (title !== undefined) {
           if (!title.trim()) {
-            return { ok: false, error: 'Title is required' }
+            return codeHostFailure('titleRequired')
           }
           fields.push(`title=${title.trim()}`)
         } else if (updates.title !== undefined) {
-          return { ok: false, error: 'Title is required' }
+          return codeHostFailure('titleRequired')
         }
         if (updates.body !== undefined) {
           fields.push(`description=${updates.body}`)
@@ -96,12 +97,12 @@ export async function updateMR(
         return { ok: true }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        return { ok: false, error: classifyGlabError(msg).message }
+        return classifiedFailure(classifyGlabError(msg))
       } finally {
         release()
       }
     },
-    { ok: false, error: 'Could not resolve GitLab project for this repository' },
+    codeHostFailure('gitlab.projectUnresolved'),
     localGitOptions
   )
 }

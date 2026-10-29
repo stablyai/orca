@@ -13,6 +13,7 @@ import {
   type GitHubPrMutationOutcome
 } from './github-pr-mutations'
 import { triggerError, triggerSuccess } from '../platform/haptics'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
   buildAddRootCommentParams,
   buildDeleteCommentParams,
@@ -92,9 +93,10 @@ function deleteKey(commentId: number): string {
 const ROOT_KEY = 'root'
 
 export function useMobilePrCommentActions(input: PrCommentActionsInput) {
+  const t = useMobileTranslation()
   const { client, connState, worktreeId, prNumber, prRepo, refetch } = input
   const [busyKeys, setBusyKeys] = useState<ReadonlySet<string>>(() => new Set())
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | { kind: 'actionFailed' } | null>(null)
   // Guard against overlapping fires of the same key (double-tap before refetch).
   const inFlightRef = useRef<Set<string>>(new Set())
 
@@ -137,7 +139,7 @@ export function useMobilePrCommentActions(input: PrCommentActionsInput) {
       } catch (err) {
         // Contain mutation/refetch throws as false with feedback; callers rely on the boolean contract.
         triggerError()
-        setError(err instanceof Error ? err.message : 'Comment action failed')
+        setError(err instanceof Error ? err.message : { kind: 'actionFailed' })
         return false
       } finally {
         inFlightRef.current.delete(key)
@@ -204,7 +206,10 @@ export function useMobilePrCommentActions(input: PrCommentActionsInput) {
 
   return {
     ready,
-    error,
+    error:
+      typeof error === 'string' || error === null
+        ? error
+        : t('session.usePrCommentActions.actionFailed', 'Comment action failed'),
     clearError: useCallback(() => setError(null), []),
     isReplyBusy: useCallback((commentId: number) => busyKeys.has(replyKey(commentId)), [busyKeys]),
     isResolveBusy: useCallback(

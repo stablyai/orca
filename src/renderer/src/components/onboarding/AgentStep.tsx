@@ -51,17 +51,11 @@ export function AgentStep({
   }
   const fallbackRestLabel = openState
     ? translate('auto.components.onboarding.AgentStep.hideAgents', 'Hide agents')
-    : fallbackRest.length === 1
-      ? translate(
-          'auto.components.onboarding.AgentStep.showMoreAgents_one',
-          'Show {{count}} more agent →',
-          { count: fallbackRest.length }
-        )
-      : translate(
-          'auto.components.onboarding.AgentStep.showMoreAgents_other',
-          'Show {{count}} more agents →',
-          { count: fallbackRest.length }
-        )
+    : translate(
+        'auto.components.onboarding.AgentStep.showMoreAgents',
+        'Show {{count}} more agents →',
+        { count: fallbackRest.length, defaultValue_one: 'Show {{count}} more agent →' }
+      )
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5">

@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
 import { getActiveMarkdownExportPayload } from './markdown-export-extract'
 import { translate } from '@/i18n/i18n'
+import { pdfExportErrorText } from './pdf-export-error-copy'
 
 /** Export the panel’s rendered Markdown through the PDF bridge; stale or source-only panels no-op. */
 export async function exportActiveMarkdownToPdf(options: {
@@ -37,14 +38,7 @@ export async function exportActiveMarkdownToPdf(options: {
       toast.dismiss(toastId)
       return
     }
-    toast.error(
-      result.error ??
-        translate(
-          'auto.components.editor.export.active.markdown.eda2cea3ad',
-          'Failed to export PDF'
-        ),
-      { id: toastId }
-    )
+    toast.error(pdfExportErrorText(result), { id: toastId })
   } catch (error) {
     const message =
       error instanceof Error

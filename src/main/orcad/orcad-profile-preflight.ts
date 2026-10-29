@@ -31,6 +31,8 @@ import {
 } from './orcad-bundled-runtime'
 
 let pendingQualification: { directory: string; key: string } | null = null
+// The last marker write; recording fails open, so it never rejects.
+let markerRecording: Promise<void> = Promise.resolve()
 
 /** Qualify packaged startup before touching profile indexes, data-root locks or imports. */
 export async function preflightBundledOrcadStartup(): Promise<boolean> {
@@ -58,6 +60,17 @@ export async function preflightBundledOrcadStartup(): Promise<boolean> {
   }
   pendingQualification = key ? { directory, key } : null
   return false
+}
+
+/** node-pty failed to load at spawn: the next launch must re-probe and report why. */
+export async function discardBundledOrcadStartupQualification(): Promise<void> {
+  pendingQualification = null
+  // A record still renaming its marker into place would recreate it after an earlier unlink.
+  await markerRecording
+  const directory = resolveBundledOrcadSlot()
+  if (process.platform !== 'win32' && isQualifiableOrcadSlot(directory)) {
+    await discardOrcadStartupQualification(directory)
+  }
 }
 
 /** A launch whose node-pty probe did not pass must not let the next one skip either probe. */
@@ -95,7 +108,8 @@ export async function confirmBundledOrcadStartupQualified(): Promise<void> {
   const qualified = pendingQualification
   pendingQualification = null
   if (qualified) {
-    await recordOrcadStartupQualification(qualified.directory, qualified.key)
+    markerRecording = recordOrcadStartupQualification(qualified.directory, qualified.key)
+    await markerRecording
   }
 }
 

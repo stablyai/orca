@@ -11,7 +11,9 @@ export async function serveRepositoriesOverTestSsh(
   const shim = join(shimDirectory, 'git-ssh-shim.cjs')
   await writeFile(
     shim,
-    await readFile(join(import.meta.dirname, '..', 'plugin-private-marketplace-ssh-shim.cjs'))
+    await readFile(
+      join(import.meta.dirname, '..', 'catalog', 'plugin-private-marketplace-ssh-shim.cjs')
+    )
   )
   const node = process.execPath.replaceAll('\\', '/')
   vi.stubEnv('GIT_SSH_COMMAND', `"${node}" "${shim.replaceAll('\\', '/')}"`)

@@ -6,6 +6,7 @@ import type { Repo } from '../../../shared/repo-types'
 import type { HookCheckResult } from '@/runtime/runtime-hooks-client'
 import { isRuntimeScopeForbiddenError } from '@/runtime/runtime-rpc-result'
 import { hasEffectiveSetupCommand } from './setup-script-status'
+import { translate } from '@/i18n/i18n'
 
 const SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX = 'generation-v1:'
 
@@ -199,14 +200,26 @@ export function buildImportedHookSettings(
   }
 }
 
+// Product names stay as detected; descriptive labels translate by provider.
+function candidateLabel(candidate: SetupScriptImportCandidate): string {
+  if (candidate.provider === 'codex') {
+    return translate('setupScriptPrompt.candidateLabels.codexEnvironment', 'Codex environment')
+  }
+  if (candidate.provider === 'package-manager') {
+    return translate('setupScriptPrompt.candidateLabels.packageManager', 'package manager')
+  }
+  return candidate.label
+}
+
 export function formatCandidateSource(candidate: SetupScriptImportCandidate): string {
+  const label = candidateLabel(candidate)
   const [primaryFile, ...remainingFiles] = candidate.files
   if (!primaryFile) {
-    return candidate.label
+    return label
   }
   return remainingFiles.length > 0
-    ? `${candidate.label} (${primaryFile} +${remainingFiles.length})`
-    : `${candidate.label} (${primaryFile})`
+    ? `${label} (${primaryFile} +${remainingFiles.length})`
+    : `${label} (${primaryFile})`
 }
 
 // Show matched filenames as provenance: one name, two with and, or first +N more; never substitute provider labels.

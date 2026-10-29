@@ -1,3 +1,4 @@
+import { textGenerationErrorText } from '@/lib/text-generation-error-copy'
 import React, { useMemo } from 'react'
 import { TriangleAlert } from 'lucide-react'
 import {
@@ -174,7 +175,7 @@ export function SourceControlTextGenerationDialog({
         {!resolved.ok ? (
           <p className="flex items-start gap-1.5 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
             <TriangleAlert className="mt-px size-3.5 shrink-0" />
-            {resolved.error}
+            {textGenerationErrorText(resolved)}
           </p>
         ) : null}
 

@@ -46,6 +46,7 @@ export type SkillsApi = {
   bundledExecute: (request: BundledSkillExecuteRequest) => Promise<BundledSkillInstallResult>
   prepareShare: (input: {
     skillIds: string[]
+    skillDirectories?: string[]
     bundleName: string
     target?: SkillDiscoveryTarget
     packageId?: string

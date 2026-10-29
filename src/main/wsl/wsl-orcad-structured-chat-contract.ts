@@ -28,6 +28,7 @@ import {
 import {
   installWslChatFixture,
   WslChatProviderReport,
+  waitForProviderReport,
   writeChatFixtureFile,
   type WslChatHost
 } from './wsl-orcad-chat-provider-fixture'
@@ -180,8 +181,12 @@ async function exerciseChat(
         envelope: envelope(sessionId, 'agentSession.cancel', {}, fence)
       })
     ).toMatchObject({ ok: true, value: { cancelled: true } })
-    const report = WslChatProviderReport.parse(
-      JSON.parse(await lane.guest(`cat ${quotePosixShell(reportPath)}`))
+    const report = await waitForProviderReport(
+      lane,
+      reportPath,
+      WslChatProviderReport,
+      (written) => written.controlRequests.some((entry) => entry.request.subtype === 'interrupt'),
+      'the Stop interrupt'
     )
     expect(report.cwd).toBe(cwd)
     expect(report.execPath).toMatch(/^\//u)
@@ -192,7 +197,6 @@ async function exerciseChat(
       ORCA_AGENT_SESSION_ID: sessionId,
       ORCA_STRUCTURED_SESSION: '1'
     })
-    expect(report.controlRequests.some((entry) => entry.request.subtype === 'interrupt')).toBe(true)
     expect(report.controlResponses).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -257,11 +261,16 @@ async function exerciseChat(
       },
       { timeout: 30_000 }
     )
-    const resumed = WslChatProviderReport.parse(
-      JSON.parse(await lane.guest(`cat ${quotePosixShell(reportPath)}`))
+    const resumedArgv = new RegExp(`--resume(?:=| )${providerId}`)
+    const resumed = await waitForProviderReport(
+      lane,
+      reportPath,
+      WslChatProviderReport,
+      (written) => resumedArgv.test(written.argv.join(' ')) && written.userMessages.length > 0,
+      'the resumed turn'
     )
     expect(resumed.cwd).toBe(cwd)
-    expect(resumed.argv.join(' ')).toMatch(new RegExp(`--resume(?:=| )${providerId}`))
+    expect(resumed.argv.join(' ')).toMatch(resumedArgv)
     expect(resumed.userMessages).toHaveLength(1)
     return {
       sessionId,

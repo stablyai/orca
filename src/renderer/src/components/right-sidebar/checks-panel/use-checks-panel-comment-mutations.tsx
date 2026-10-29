@@ -17,6 +17,7 @@ import { checksPanelAsyncResultKey } from '../checks-panel-async-result-key'
 import { isMutablePRConversationComment } from '../../../../../shared/github/pr-comment-mutability'
 import type { GitHubReactionContent, PRComment } from '../../../../../shared/github/comment-types'
 import { translate } from '@/i18n/i18n'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 type ChecksPanelCommentMutationsInput = Pick<
   ChecksPanelControllerState,
@@ -69,7 +70,7 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
         return result.ok ? { ok: true as const } : result
       }
       if (!result.ok) {
-        toast.error(result.error)
+        toast.error(codeHostErrorText(result))
         return result
       }
       setComments((prev) => mergePRCommentIntoList(prev, result.comment))
@@ -238,7 +239,7 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
       }
       if (!result.ok) {
         if (notifyOnFailure) {
-          toast.error(result.error)
+          toast.error(codeHostErrorText(result))
         }
         return result
       }

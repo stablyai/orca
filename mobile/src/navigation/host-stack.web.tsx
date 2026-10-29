@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { Navigator, usePathname } from 'expo-router'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -10,6 +11,7 @@ import { SideRailOnTopContext } from '../layout/side-rail'
 
 // Expo native-stack’s web view ignores animation and switches display; reuse StackRouter with a view that retains popped screens through their exit slide.
 export function HostStack({ animation }: { animation: HostStackAnimation }) {
+  useMobileTranslation()
   return (
     <Navigator>
       {HOST_STACK_SCREENS.map(({ name, title }) => (

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { lstat, readdir } from 'node:fs/promises'
 import { join, relative } from 'node:path'
-import { pluginPathSegmentError } from '../../shared/plugins/plugin-path-safety'
+import { pluginPathSegmentError } from '../../shared/plugins/installation/plugin-path-safety'
 
 // Immutable installs use sorted path/content hashes and reject symlinks to stay self-contained.
 

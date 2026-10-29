@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useForceReconnect } from '../transport/host-client-hooks'
 import { useWorkspaceClient } from '../transport/use-workspace-client'
@@ -46,6 +47,7 @@ export type MobileSourceControlStateParams = {
 }
 
 export function useMobileSourceControlState(params: MobileSourceControlStateParams) {
+  const t = useMobileTranslation()
   const {
     hostId,
     worktreeId,
@@ -123,7 +125,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   const branchCompareResult = branchCompareState.kind === 'ready' ? branchCompareState.result : null
   const branchCompareSection = useMemo(
     () => buildMobileBranchCompareSection(branchCompareResult?.entries ?? []),
-    [branchCompareResult]
+    [branchCompareResult, t]
   )
   const branchCompareSummaryText = branchCompareResult
     ? formatMobileBranchCompareSummary(branchCompareResult.summary)
@@ -162,9 +164,9 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   const upstreamKnown = upstream !== undefined
   const syncLabel =
     upstream && upstream.hasUpstream
-      ? `${upstream.ahead} ahead, ${upstream.behind} behind`
+      ? t('sourceControl.state.syncStatus', '{{ahead}} ahead, {{behind}} behind', upstream)
       : upstream && !upstream.hasUpstream
-        ? 'No upstream'
+        ? t('sourceControl.state.noUpstream', 'No upstream')
         : null
 
   const { sendGitRequest, sendCommitRequest, runGitSyncSteps } = useMobileGitRequests({

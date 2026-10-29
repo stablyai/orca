@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import { isWslDistroNotRunningRefusal } from '../../../../../../shared/wsl-distro-not-running-refusal'
 import { getConnectionId } from '@/lib/connection-context'
 import { getRuntimeGitSubmoduleStatus } from '@/runtime/runtime-git-status-client'
 import {
@@ -97,7 +98,9 @@ export function useSourceControlSubmoduleStatus(
         )
       } catch (error) {
         setSubmoduleStatusStore((prev) =>
-          prev.scope !== scopeAtStart
+          prev.scope !== scopeAtStart ||
+          // A poll refused for a stopped WSL distro keeps the children already shown.
+          (prev.byKey[expansionKey]?.status === 'loaded' && isWslDistroNotRunningRefusal(error))
             ? prev
             : {
                 ...prev,

@@ -4,6 +4,7 @@
  * Dropping it would strand a still-running server that blocks the next add's activation.
  */
 import { errorMessage } from '../../shared/error-message'
+import { wslHostServerStopReason } from '../../shared/wsl-host-failure-copy'
 import {
   removeWslHostEnvironment,
   setWslHostPendingStop
@@ -52,9 +53,12 @@ export async function removeWslHostServer(
     noteWslHostUserAction({ kind: 'removed', distro: record.distro })
     return { serverStop, removed: true }
   }
+  const { reason, reasonCode, reasonParams } = serverStop
   setWslHostPendingStop(userDataPath, record.environmentId, {
     since: Date.now(),
-    reason: serverStop.reason,
+    reason,
+    ...(reasonCode ? { reasonCode } : {}),
+    ...(reasonCode && reasonParams ? { reasonParams } : {}),
     verdict: serverStop.verdict ?? 'unverifiable'
   })
   return { serverStop: { ...serverStop, kept: true }, removed: false }
@@ -81,7 +85,7 @@ function noteServerKeptForPeers(
     return {
       stopped: false,
       verdict: serverStop.keptForOtherDesktops ? 'live' : 'unverifiable',
-      reason: `Orca couldn’t record what this Remove left running: ${errorMessage(error)}`
+      ...wslHostServerStopReason('removalUnrecorded', { detail: errorMessage(error) })
     }
   }
 }

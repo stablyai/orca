@@ -1,4 +1,5 @@
 import type { CsvIndex } from './csv-byte-index'
+import type { CsvPreviewErrorCode } from './csv-preview-error'
 
 export type CsvWorkerCommand =
   | { kind: 'init'; delimiter: string }
@@ -13,5 +14,5 @@ export type CsvWorkerValue =
 export type CsvWorkerRequest = { id: number; command: CsvWorkerCommand }
 export type CsvWorkerResponse = { id: number } & (
   | { ok: true; value: CsvWorkerValue }
-  | { ok: false; error: string }
+  | { ok: false; error: string; code?: CsvPreviewErrorCode }
 )

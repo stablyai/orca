@@ -1,4 +1,5 @@
 import { buildImageDataUri } from '../../../../../src/shared/image-data-uri'
+import { isAgentSessionAttachmentStorePath } from '../../../../../src/shared/agent-session-attachments'
 import { PrioritySemaphore } from '../../../../../src/shared/priority-semaphore'
 import { filePreviewImageSchema } from '../../../files/file-preview-reply-schema'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../../transport/rpc-operation'
@@ -22,27 +23,43 @@ const storedImageRead = bindDeferredRpcOperation(
   })
 )
 
-// Each reply can be megabytes; a burst over a slow link overflows the host's outbound queue, which drops the socket.
-const storedImageReads = new PrioritySemaphore(2)
+const hostImageRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'files.read-chat-image',
+    method: 'files.readChatImage',
+    acceptance: 'object-result-or-null',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('chat-host-image', filePreviewImageSchema)
+  })
+)
 
-// Null on any failure, including older hosts that refuse this method to phones: the row keeps its placeholder.
-export async function readStoredChatImage(
-  client: RpcClient,
+/** The chat's host and workspace: store paths read from the attachment store, other host paths under desktop's chat-image rule. */
+export type MobileNativeChatImageSource = {
+  client: RpcClient
+  worktreeId: string
+}
+
+// Each reply can be megabytes; a burst over a slow link overflows the host's outbound queue, which drops the socket.
+const hostImageReads = new PrioritySemaphore(2)
+
+// Null on any failure, including older hosts that refuse these methods to phones: the row keeps its placeholder.
+export async function readHostChatImage(
+  { client, worktreeId }: MobileNativeChatImageSource,
   path: string,
   signal: AbortSignal
 ): Promise<string | null> {
-  const release = await storedImageReads.acquire(0, signal).catch(() => null)
+  const release = await hostImageReads.acquire(0, signal).catch(() => null)
   if (!release || signal.aborted) {
     release?.()
     return null
   }
   try {
-    const reply = await storedImageRead.request(
-      client,
-      { path },
-      { timeoutMs: 15_000, budgetSpansConnect: true }
-    )
-    const image = storedImageRead.interpret(reply)
+    const options = { timeoutMs: 15_000, budgetSpansConnect: true }
+    const image = isAgentSessionAttachmentStorePath(path)
+      ? storedImageRead.interpret(await storedImageRead.request(client, { path }, options))
+      : hostImageRead.interpret(
+          await hostImageRead.request(client, { worktree: `id:${worktreeId}`, path }, options)
+        )
     return image?.isImage && image.content ? buildImageDataUri(image.mimeType, image.content) : null
   } catch {
     return null

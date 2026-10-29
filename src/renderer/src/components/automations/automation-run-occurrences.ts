@@ -19,24 +19,17 @@ export function automationRunOccurrenceLabel(run: AutomationRunOccurrences): str
   const count = run.occurrenceCount ?? 1
   // Older hosts may supply count without the jointly stamped timestamp; still show the count.
   return run.lastOccurrenceAt
-    ? count === 1
-      ? translate(
-          'auto.components.automations.runHistory.occurrencesWithLatestCount_one',
-          '{{count}} time, most recently {{date}}',
-          { count, date: formatAutomationDateTime(run.lastOccurrenceAt) }
-        )
-      : translate(
-          'auto.components.automations.runHistory.occurrencesWithLatestCount_other',
-          '{{count}} times, most recently {{date}}',
-          { count, date: formatAutomationDateTime(run.lastOccurrenceAt) }
-        )
-    : count === 1
-      ? translate('auto.components.automations.runHistory.occurrencesCount_one', '{{count}} time', {
-          count
-        })
-      : translate(
-          'auto.components.automations.runHistory.occurrencesCount_other',
-          '{{count}} times',
-          { count }
-        )
+    ? translate(
+        'auto.components.automations.runHistory.occurrencesWithLatestCount',
+        '{{count}} times, most recently {{date}}',
+        {
+          count,
+          date: formatAutomationDateTime(run.lastOccurrenceAt),
+          defaultValue_one: '{{count}} time, most recently {{date}}'
+        }
+      )
+    : translate('auto.components.automations.runHistory.occurrencesCount', '{{count}} times', {
+        count,
+        defaultValue_one: '{{count}} time'
+      })
 }

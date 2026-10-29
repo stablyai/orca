@@ -5,6 +5,7 @@ import type { PtyProcessInspectionOptions } from '../providers/pty-process-inspe
 import type { SessionInfo, TakePendingOutputResult, TerminalSnapshot } from './types'
 import type { CreateOrAttachResult } from './terminal-host-create-contract'
 import type { TerminalHostOptions } from './terminal-host-options'
+import { recordTerminalHostSessionExit } from './terminal-host-session-exit'
 import { disposeTerminalHostSessions, killLiveSessionGroupsSync } from './terminal-host-disposal'
 import { getAliveTerminalHostSession } from './terminal-host-session-access'
 import { writeSessionInput } from './session-input-path'
@@ -23,7 +24,6 @@ import { createOrAttachTerminalSession } from './terminal-host-session-create'
 import { TerminalAttachCanceledError } from './daemon-errors'
 import { waitForTerminalAttachOperation } from './terminal-attach-cancellation'
 import { randomUUID } from 'node:crypto'
-import { pruneRetiredPtyIncarnations } from '../../shared/retired-pty-incarnations'
 import { inspectTerminalHostSession } from './terminal-host-process-inspection'
 import type { TerminalHostProcessInspection } from './terminal-host-process-inspection'
 import {
@@ -41,7 +41,6 @@ export type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-hos
 export type { TerminalHostOptions } from './terminal-host-options'
 
 const DEFAULT_MAX_TOMBSTONES = 1000
-const REMOTE_FOREGROUND_TOMBSTONE_RETENTION_MS = 2_000
 
 export class TerminalHost {
   private sessions = new Map<string, Session>()
@@ -133,15 +132,12 @@ export class TerminalHost {
   }
 
   private handleSessionExit(sessionId: string, generation: string | undefined): void {
-    const session = this.sessions.get(sessionId)
-    if (session) {
-      pruneRetiredPtyIncarnations(this.retiredIncarnations)
-      this.retiredIncarnations.set(sessionId, {
-        incarnationId: session.incarnationId,
-        code: session.exitCode ?? 0,
-        expiresAt: Date.now() + REMOTE_FOREGROUND_TOMBSTONE_RETENTION_MS
-      })
-    }
+    recordTerminalHostSessionExit(
+      sessionId,
+      this.sessions.get(sessionId),
+      this.retiredIncarnations,
+      this.reportReadinessEvent
+    )
     this.agentSessionOwners.release(sessionId, generation)
     this.agentSessionGenerations.forget(sessionId, generation)
     this.reapSession(sessionId)

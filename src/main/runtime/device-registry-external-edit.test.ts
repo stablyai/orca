@@ -159,4 +159,25 @@ describe('device registry saves over an externally edited file', () => {
     expect(fileIds()).not.toContain(phone.deviceId)
     expect(registry.getDevice(phone.deviceId)).toBeNull()
   })
+
+  // Review of #35483: a parent must never be handed the token of a child the file had dropped.
+  it('returns no delegated child the save dropped because it was removed on disk', () => {
+    const { registry, desktop } = pairedRegistry()
+    const [child] = registry.upsertDelegatedMobileDevices(desktop, [
+      { phoneKey: 'phone-1', name: 'Pixel' }
+    ])
+    if (!child) {
+      throw new Error('expected a delegated child')
+    }
+
+    removeOnDisk(child.deviceId)
+    // A rename makes the plan rewrite the child row, which the merge then drops.
+    const returned = registry.upsertDelegatedMobileDevices(desktop, [
+      { phoneKey: 'phone-1', name: 'Pixel 9' }
+    ])
+
+    expect(returned).toEqual([])
+    expect(fileIds()).not.toContain(child.deviceId)
+    expect(registry.validateToken(child.token)).toBeNull()
+  })
 })

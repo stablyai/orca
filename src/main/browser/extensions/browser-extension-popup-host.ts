@@ -4,6 +4,7 @@ import {
   getChromeExtensionOrigin,
   isSameExtensionNavigation
 } from '../../../shared/browser-extension-url'
+import { allowPageUnload } from '../browser-guest-unload-policy'
 import { BrowserExtensionApiError } from './browser-extension-namespace-registry'
 import {
   BROWSER_EXTENSION_POPUP_MAX,
@@ -135,6 +136,7 @@ export function openBrowserExtensionPopup(options: BrowserExtensionPopupOptions)
   }
   current = popup
   const contents = window.webContents
+  contents.on('will-prevent-unload', allowPageUnload)
 
   // Why measure in the page: preferred-size-changed only reports while the window paints, and its
   // height never drops below the viewport, so a hidden or late-rendering popup kept its first size.

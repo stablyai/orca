@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getContextualTour } from '../../../../shared/contextual-tours'
-import { setRendererUiLanguage } from '@/i18n/i18n'
+import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 import {
   getContextualTourDisplayProgress,
   getContextualTourMeasurementAction,
@@ -12,12 +12,12 @@ import {
 
 afterEach(async () => {
   document.body.replaceChildren()
-  await setRendererUiLanguage('en')
+  await i18n.changeLanguage(await loadRendererUiLanguage('en'))
 })
 
 describe('contextual tour overlay measurement', () => {
   it('renders the automation tour copy in Korean when the UI locale is Korean', async () => {
-    await setRendererUiLanguage('ko')
+    await i18n.changeLanguage(await loadRendererUiLanguage('ko'))
     const target = document.createElement('button')
     target.setAttribute('data-contextual-tour-target', 'automations-create')
     target.getBoundingClientRect = () => new DOMRect(0, 0, 20, 20)
@@ -42,7 +42,7 @@ describe('contextual tour overlay measurement', () => {
   })
 
   it('renders the automation results step in Korean when the UI locale is Korean', async () => {
-    await setRendererUiLanguage('ko')
+    await i18n.changeLanguage(await loadRendererUiLanguage('ko'))
     const target = document.createElement('div')
     target.setAttribute('data-contextual-tour-target', 'automations-runs')
     target.getBoundingClientRect = () => new DOMRect(0, 0, 20, 20)
@@ -67,7 +67,7 @@ describe('contextual tour overlay measurement', () => {
   })
 
   it('localizes the title, shortcut body, and action label of non-automation steps', async () => {
-    await setRendererUiLanguage('ko')
+    await i18n.changeLanguage(await loadRendererUiLanguage('ko'))
     const target = document.createElement('div')
     target.setAttribute('data-contextual-tour-target', 'terminal-pane-split-target')
     target.getBoundingClientRect = () => new DOMRect(0, 0, 20, 20)
@@ -95,7 +95,7 @@ describe('contextual tour overlay measurement', () => {
   })
 
   it('keeps localized copy on its own step when a step is inserted before it', async () => {
-    await setRendererUiLanguage('ko')
+    await i18n.changeLanguage(await loadRendererUiLanguage('ko'))
     const target = document.createElement('button')
     target.setAttribute('data-contextual-tour-target', 'automations-create')
     target.getBoundingClientRect = () => new DOMRect(0, 0, 20, 20)

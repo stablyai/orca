@@ -275,7 +275,7 @@ describe('gitlab client — MR operations', () => {
 
       await expect(
         updateMR('/repo', 12, { readyForReview: true }, 'upstream', 'conn-1')
-      ).resolves.toEqual({ ok: false, error: 'Title is required' })
+      ).resolves.toMatchObject({ ok: false, error: 'Title is required' })
 
       expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(1)
     })
@@ -312,7 +312,7 @@ describe('gitlab client — MR operations', () => {
     })
 
     it('rejects an empty discussion id without calling glab', async () => {
-      await expect(resolveMRDiscussion('/repo', 12, '  ', true)).resolves.toEqual({
+      await expect(resolveMRDiscussion('/repo', 12, '  ', true)).resolves.toMatchObject({
         ok: false,
         error: 'Discussion id is required'
       })

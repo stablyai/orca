@@ -121,6 +121,7 @@ export function assertLinkedWorkItemSourceContextMatch(
 export const WorktreeSet = WorktreeSelector.extend({
   // Empty clears to branch/folder fallback; OptionalString would drop remote clears and restore the old name.
   displayName: OptionalPlainString,
+  firstAgentMessageRenameError: z.null().optional(),
   // Preserve empty comment updates instead of coercing them to absent.
   comment: OptionalPlainString,
   linkedIssue: TriStateLinkedIssue,
@@ -183,7 +184,9 @@ export const WorktreeRemove = WorktreeSelector.extend({
   allowUnverifiedPtyStop: OptionalBoolean,
   runHooks: OptionalBoolean,
   // Waive failed-hook refusal explicitly and record it; independent of force and whether hooks run (#19334).
-  allowFailedArchiveHook: OptionalBoolean
+  allowFailedArchiveHook: OptionalBoolean,
+  // Reply with Git's outcome instead of on acceptance; older hosts strip it and answer `removing: true` (#35135).
+  waitForBackgroundRemoval: OptionalBoolean
 })
 
 export const WorktreeForceDeleteBranch = WorktreeSelector.extend({

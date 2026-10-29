@@ -14,6 +14,7 @@ import Animated, {
 import { colors, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { triggerMediumImpact } from '../platform/haptics'
 import {
   type DragReorderLayout,
@@ -69,6 +70,7 @@ export function DragReorderRow({
   renderContent: (handle: ReactNode) => ReactNode
 }): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const {
     layout,
     initialPositions,
@@ -183,11 +185,14 @@ export function DragReorderRow({
         accessible
         accessibilityRole="button"
         accessibilityState={{ disabled }}
-        accessibilityLabel="Drag to reorder"
-        accessibilityHint="Use the move up and move down actions to reorder without dragging"
+        accessibilityLabel={t('components.dragReorderRow.dragToReorder', 'Drag to reorder')}
+        accessibilityHint={t(
+          'components.dragReorderRow.reorderHint',
+          'Use the move up and move down actions to reorder without dragging'
+        )}
         accessibilityActions={[
-          { name: 'moveUp', label: 'Move up' },
-          { name: 'moveDown', label: 'Move down' }
+          { name: 'moveUp', label: t('components.dragReorderRow.moveUp', 'Move up') },
+          { name: 'moveDown', label: t('components.dragReorderRow.moveDown', 'Move down') }
         ]}
         onAccessibilityAction={(event) => {
           if (disabled) {

@@ -8,7 +8,8 @@ import type { SessionSidecarObservation } from './session-sidecar-stat'
 import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { wslGatedReaddir, wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
-import { recordSessionScanIssue } from './session-scan-issues'
+import { recordSessionScanIssue, scanIssueTextFromError } from './session-scan-issues'
+import { aiVaultScanIssueText } from '../../shared/ai-vault-scan-issue-copy'
 import type { FileWithMtime, SessionFileDiscovery } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
@@ -24,7 +25,7 @@ const nativeDiscoverySlots = new PrioritySemaphore(8)
 
 type SessionFileObservation =
   | { file: Omit<FileWithMtime, 'modifiedAt'>; sidecarPath?: string }
-  | { issue: { path: string; message: string } }
+  | { issue: Omit<AiVaultScanIssue, 'agent' | 'kind' | 'executionHostId'> }
 
 async function withNativeDiscoverySlot<T>(read: () => Promise<T>): Promise<T> {
   const release = await nativeDiscoverySlots.acquire(0)
@@ -73,7 +74,7 @@ export async function discoverFiles(args: {
         recordSessionScanIssue(args.issues, {
           agent: args.agent,
           path: observation.sidecarPath ?? args.rootDir,
-          message: 'Session metadata could not be read this scan.'
+          ...aiVaultScanIssueText('sessionMetadataUnreadable')
         })
       }
       try {
@@ -187,7 +188,7 @@ export async function discoverFiles(args: {
     recordSessionScanIssue(args.issues, {
       agent: args.agent,
       path: args.rootDir,
-      message: err.message
+      ...scanIssueTextFromError(err)
     })
     return { agent: args.agent, rootDir: args.rootDir, files: [] }
   } finally {
@@ -218,7 +219,7 @@ async function observeSessionFile(
       sidecarPath
     }
   } catch (err) {
-    return { issue: { path, message: errorMessage(err) } }
+    return { issue: { path, ...scanIssueTextFromError(err) } }
   }
 }
 

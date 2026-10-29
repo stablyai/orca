@@ -18,7 +18,7 @@ import {
   mergeAiVaultListResults
 } from '../ai-vault/session-list-results'
 import type { AiVaultDeleteSessionArgs } from '../../shared/ai-vault-session-deletion'
-import { describeAiVaultScanError } from '../../shared/ai-vault-scan-error-message'
+import { classifyAiVaultScanError } from '../../shared/ai-vault-scan-error-message'
 import {
   AI_VAULT_SCOPE_PATHS_MAX_COUNT,
   isAiVaultScanCancelledError,
@@ -242,7 +242,7 @@ async function scanLocalAiVaultSessionsAsIssue(
     const result = aiVaultScanIssueResult({
       executionHostId: LOCAL_EXECUTION_HOST_ID,
       path: 'this computer',
-      message: describeAiVaultScanError(raw)
+      ...classifyAiVaultScanError(raw)
     })
     return error instanceof AiVaultLocalScanError ? { ...result, scanId: error.scanId } : result
   }

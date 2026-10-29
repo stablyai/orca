@@ -1,76 +1,36 @@
-import type { PluginThemeRegistration } from '../../shared/plugins/plugin-theme-artifact'
-import type { PluginTerminalThemeRegistration } from '../../shared/plugins/plugin-terminal-theme-artifact'
+import type { PluginHostImages } from '../../shared/plugins/images/plugin-image-url'
+import type { PluginUpdateAccessGrowth } from '../../shared/plugins/approval/plugin-update-access-growth'
+import type { PluginAutoUpdateState } from '../../shared/plugins/catalog/plugin-update-policy'
 import type {
-  PluginPanelActionOutcome,
-  PluginPanelEntry
-} from '../../shared/plugins/plugin-panel-bridge'
-import type { PluginConsentRequest } from '../../shared/plugins/plugin-consent-request'
-import type { PluginLanguagePackRegistration } from '../../shared/plugins/plugin-language-pack-artifact'
-import type { PluginChangeEvent } from '../../shared/plugins/plugin-change-event'
-import type { PluginManifest } from '../../shared/plugins/plugin-manifest'
-import type { PluginMarketplaceGitSource } from '../../shared/plugins/plugin-marketplace'
+  PluginIconThemeMetadata,
+  PluginIconThemeRegistration
+} from '../../shared/plugins/artifacts/plugin-icon-theme-artifact'
+import type { PluginThemeRegistration } from '../../shared/plugins/artifacts/plugin-theme-artifact'
+import type {
+  PluginSyntaxMetadata,
+  PluginSyntaxPayload
+} from '../../shared/plugins/artifacts/plugin-syntax-artifact'
+import type { PluginTerminalThemeRegistration } from '../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
+import type { PluginFrameEntry } from '../../shared/plugins/frames/plugin-frame-bridge'
+import type { PluginHostCallOutcome } from '../../shared/plugins/frames/plugin-protocol'
+import type { PluginConsentRequest } from '../../shared/plugins/approval/plugin-consent-request'
+import type { PluginLanguagePackRegistration } from '../../shared/plugins/artifacts/plugin-language-pack-artifact'
+import type { PluginChangeEvent } from '../../shared/plugins/events/plugin-change-event'
+import type { PluginManifest } from '../../shared/plugins/manifest/plugin-manifest'
+import type {
+  PluginCatalogGitSource,
+  PluginMarketplaceGitSource
+} from '../../shared/plugins/catalog/plugin-marketplace'
+import type { PluginCatalogRelease } from '../../shared/plugins/catalog/plugin-catalog-release'
 
-export type PluginHostPanel = {
-  id: string
-  title: string
-  /** Lucide icon name declared in the plugin manifest. */
-  icon?: string
-  tabKey: `plugin:${string}`
-}
-
-/** pending awaits consent; idle defers worker startup; errored exhausted retries or failed startup. */
-export type PluginHostStatus =
-  | 'running'
-  | 'restarting'
-  | 'idle'
-  | 'pending'
-  | 'disabled'
-  | 'errored'
-  | 'invalid'
-
-// Keep assignable from main/plugins/plugin-list-projection.ts.
-export type PluginHostListEntry = {
-  pluginKey: string
-  consentFingerprint: string | null
-  name: string
-  version: string
-  publisher: string
-  description?: string
-  status: PluginHostStatus
-  needsReconsent: boolean
-  error?: string
-  isDev: boolean
-  official: boolean
-  bundled: boolean
-  capabilities: { kind: string; description: string }[]
-  panels: PluginHostPanel[]
-  commands: {
-    id: string
-    title: string
-    context: 'global' | 'worktree'
-    handler: { type: 'built-in'; action: string } | { type: 'worker' }
-    keybindings: { key: string; when: 'global' | 'worktree' }[]
-  }[]
-  hasWorker: boolean
-  vmRecipes?: {
-    id: string
-    name: string
-    description?: string
-    commands: {
-      phase: 'create' | 'suspend' | 'resume' | 'destroy'
-      command: string
-    }[]
-  }[]
-  restarts: number
-  blockedByKillList?: { reason: string; advisoryUrl?: string }
-  source?: {
-    kind: 'local-path' | 'git' | 'marketplace' | 'bundled'
-    reference: string
-    resolvedCommit: string | null
-    contentHash: string
-    marketplace?: { reference: string; resolvedCommit: string }
-  }
-}
+export type {
+  PluginHostCustomEditor,
+  PluginHostListEntry,
+  PluginHostNewFile,
+  PluginHostPanel,
+  PluginHostStatus
+} from '../../shared/plugins/plugin-list-entry'
+import type { PluginHostListEntry } from '../../shared/plugins/plugin-list-entry'
 
 export type PluginHostLogLine = {
   ts: number
@@ -90,6 +50,9 @@ export type PluginHostInstallResult =
       contentHash: string
       consentFingerprint: string
       resolvedCommit: string | null
+      /** Set when install was asked to enable a content-only plugin: false means it is on;
+       *  true means it runs or adds instructions, so it waits for review. */
+      needsReview?: boolean
     }
   | { ok: false; error: string }
 
@@ -114,12 +77,33 @@ export type PluginMarketplaceHostListing = {
   marketplaceOwner: string
   marketplaceCommit: string
   pluginKey: string
-  source: PluginMarketplaceGitSource
+  source: PluginCatalogGitSource
   description?: string
   categories: string[]
   official: boolean
   bundled: boolean
   blockedByKillList?: { reason: string; advisoryUrl?: string }
+  /** The release record a v2 catalog vouches for; absent for v1 catalogs. */
+  release?: PluginCatalogRelease
+  /** The offered release's images, verified and cached by main; never hotlinked. */
+  images?: PluginHostImages
+  /** Release details from a v2 catalog; all absent for v1 catalogs. */
+  name?: string
+  version?: string
+  license?: string
+  repository?: string
+  homepage?: string
+  /** ISO 8601 date or date-time the release was published. */
+  updatedAt?: string
+  /** Plain-text release notes, at most 2000 characters. */
+  changelog?: string
+}
+
+export type PluginFileTypeHostSuggestion = {
+  marketplaceSourceId: string
+  pluginKey: string
+  fileType: string
+  name?: string
 }
 
 export type PluginMarketplaceHostInstallPreview = {
@@ -128,7 +112,7 @@ export type PluginMarketplaceHostInstallPreview = {
   marketplaceOwner: string
   marketplaceCommit: string
   pluginKey: string
-  source: PluginMarketplaceGitSource
+  source: PluginCatalogGitSource
   resolvedCommit: string
   contentHash: string
   consentFingerprint: string
@@ -136,6 +120,12 @@ export type PluginMarketplaceHostInstallPreview = {
   official: boolean
   bundled: boolean
   blockedByKillList?: { reason: string; advisoryUrl?: string }
+  /** The manifest's images, verified at preview. */
+  images?: PluginHostImages
+  /** For an update: what it asks for beyond the installed version. */
+  accessGrowth?: PluginUpdateAccessGrowth
+  /** For an update: the catalog now points at a different repository than the install. */
+  repositoryMoved?: true
 }
 
 export type PluginsApi = {
@@ -143,45 +133,84 @@ export type PluginsApi = {
   listLanguagePacks: () => Promise<PluginLanguagePackRegistration[]>
   listThemes: () => Promise<PluginThemeRegistration[]>
   listTerminalThemes: () => Promise<PluginTerminalThemeRegistration[]>
+  listIconThemes: () => Promise<PluginIconThemeMetadata[]>
+  /** One icon theme's images, read only once it is selected. */
+  loadIconTheme: (id: string) => Promise<PluginIconThemeRegistration | null>
+  listSyntaxes: () => Promise<PluginSyntaxMetadata[]>
+  /** One language's grammars, read only once a matching file opens. */
+  loadSyntax: (id: string) => Promise<PluginSyntaxPayload | null>
   /** Approval is bound to the current capability and trusted-worker fingerprint. */
   consent: (args: PluginConsentRequest) => Promise<PluginHostListEntry[]>
   setEnabled: (args: { pluginKey: string; enabled: boolean }) => Promise<PluginHostListEntry[]>
   /** CSP-wrapped HTML for a sandboxed iframe; null if missing or disabled. */
-  readPanelEntry: (args: { pluginKey: string; panelId: string }) => Promise<PluginPanelEntry | null>
+  readPanelEntry: (args: { pluginKey: string; panelId: string }) => Promise<PluginFrameEntry | null>
+  /** CSP-wrapped custom editor HTML and its host-call session; null if missing or disabled. */
+  readCustomEditorEntry?: (args: {
+    pluginKey: string
+    editorId: string
+  }) => Promise<PluginFrameEntry | null>
+  /** A new file's starting text (its template, or empty); null if the plugin is off or lacks it. */
+  readNewFileTemplate?: (args: { pluginKey: string; newFileId: string }) => Promise<string | null>
   invokeCommand: (args: {
     pluginKey: string
     commandId: string
     args?: unknown
   }) => Promise<unknown>
-  /** Main enforces consented capabilities before executing sandboxed panel requests. */
+  /** One frame host call; main enforces consented capabilities and the frame's surface. */
   panelAction: (args: {
     sessionToken: string
     action: string
     params?: unknown
-  }) => Promise<PluginPanelActionOutcome>
+  }) => Promise<PluginHostCallOutcome>
   install: (source: PluginHostInstallSource) => Promise<PluginHostInstallResult>
   listMarketplaces: () => Promise<PluginMarketplaceHostSourceState[]>
   addMarketplace: (source: PluginMarketplaceGitSource) => Promise<PluginMarketplaceHostSourceState>
   removeMarketplace: (args: { sourceId: string }) => Promise<PluginMarketplaceHostSourceState[]>
   refreshMarketplaces: (args?: { sourceId?: string }) => Promise<PluginMarketplaceHostSourceState[]>
   listMarketplacePlugins: () => Promise<PluginMarketplaceHostListing[]>
+  /** A catalog plugin that opens this file type, from cached catalogs only; never installs. */
+  /** `editor` for a file Orca already opens as text: only custom editors are suggested. */
+  suggestForFileType: (
+    fileType: string,
+    purpose?: 'open' | 'editor'
+  ) => Promise<PluginFileTypeHostSuggestion | null>
   previewMarketplacePlugin: (args: {
     marketplaceSourceId: string
     pluginKey: string
   }) => Promise<PluginMarketplaceHostInstallPreview>
+  /** With `enableIfData`, main also turns the plugin on when the installed manifest is
+   *  `execution: 'data'` and, if given, its fingerprint is `expectedFingerprint`; anything else
+   *  comes back `needsReview: true`. Older hosts ignore both fields. */
   installMarketplacePlugin: (
     preview: Pick<
       PluginMarketplaceHostInstallPreview,
       'marketplaceSourceId' | 'marketplaceCommit' | 'pluginKey' | 'resolvedCommit'
-    >
+    > & {
+      enableIfData?: true
+      /** The preview's consentFingerprint; with it, main approves only those exact bytes. */
+      expectedFingerprint?: string
+    }
   ) => Promise<PluginHostInstallResult>
   previewMarketplaceUpdate: (args: {
     pluginKey: string
   }) => Promise<PluginMarketplaceHostInstallPreview>
   rollbackMarketplacePlugin: (args: { pluginKey: string }) => Promise<PluginHostInstallResult>
+  /** Version a rollback would restore, or null. Read on demand so listing plugins stays I/O-free. */
+  getRollbackVersion: (args: { pluginKey: string }) => Promise<string | null>
+  /** An installed plugin's parsed manifest, read on demand; works while the plugin system is off. */
+  getInstalledManifest: (args: { pluginKey: string }) => Promise<PluginManifest | null>
   remove: (args: { pluginKey: string }) => Promise<PluginHostListEntry[]>
   getLogs: (args: { pluginKey: string }) => Promise<PluginHostLogLine[]>
   /** Re-discovers after settings edits (feature flag, dev paths). */
   refresh: () => Promise<PluginHostListEntry[]>
   onChanged: (callback: (event: PluginChangeEvent) => void) => () => void
+  /** What automatic updates last did. Older hosts reject the call; treat that as nothing. */
+  getAutoUpdateState: () => Promise<PluginAutoUpdateState>
+  /** Fires after each automatic update pass, with the plugins it just updated. */
+  onAutoUpdateChanged: (callback: (event: PluginAutoUpdateEvent) => void) => () => void
+}
+
+export type PluginAutoUpdateEvent = {
+  state: PluginAutoUpdateState
+  updated: { pluginKey: string; name: string; version: string }[]
 }

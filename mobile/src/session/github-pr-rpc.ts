@@ -18,6 +18,7 @@ import {
 import type { GitHubPrSettleableOperation } from './github-pr-mutation-outcome'
 import { githubPrRequestParams, type GitHubPrRepoSlug } from './github-pr-repo-slug'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import { translate } from '../i18n/mobile-i18n'
 
 export {
   buildGithubPrParams,
@@ -39,7 +40,9 @@ async function settleGithubPrRead<Value>(
   read: GitHubPrSettleableOperation<Value>,
   send: () => Promise<RpcResponse>
 ): Promise<GitHubPrReadOutcome<Value>> {
-  const fallback = `Request failed: ${read.operation.method}`
+  const fallback = translate('session.githubPrRpc.requestFailed', 'Request failed: {{method}}', {
+    method: read.operation.method
+  })
   let reply: RpcResponse
   try {
     reply = await send()

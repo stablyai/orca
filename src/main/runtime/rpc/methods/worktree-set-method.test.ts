@@ -5,7 +5,7 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import { WORKTREE_METHODS } from './worktree'
 
 describe('worktree.set', () => {
-  it('forwards the review-note base through worktree.set', async () => {
+  it('forwards review-note bases and rename-error clears through worktree.set', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       updateManagedWorktreeMeta: vi.fn().mockResolvedValue({ id: 'wt-1' })
@@ -29,12 +29,21 @@ describe('worktree.set', () => {
       id: 'req-1',
       authToken: 'tok',
       method: 'worktree.set',
-      params: { worktree: 'id:wt-1', diffComments: [comment], diffCommentsBase: [] }
+      params: {
+        worktree: 'id:wt-1',
+        diffComments: [comment],
+        diffCommentsBase: [],
+        firstAgentMessageRenameError: null
+      }
     })
 
     expect(runtime.updateManagedWorktreeMeta).toHaveBeenCalledWith(
       'id:wt-1',
-      expect.objectContaining({ diffComments: [comment], diffCommentsBase: [] })
+      expect.objectContaining({
+        diffComments: [comment],
+        diffCommentsBase: [],
+        firstAgentMessageRenameError: null
+      })
     )
   })
 })

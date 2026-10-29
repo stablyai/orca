@@ -1,6 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
 import type { LargeDiffRenderLimit } from './large-diff-render-limit'
+import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
 
 type LargeDiffFallbackProps = {
   filePath: string
@@ -12,10 +13,10 @@ type LargeDiffFallbackProps = {
   }
 }
 
-const numberFormatter = new Intl.NumberFormat()
+const NUMBER_OPTIONS: Intl.NumberFormatOptions = {}
 
 function formatCount(value: number): string {
-  return numberFormatter.format(value)
+  return uiNumberFormat(NUMBER_OPTIONS).format(value)
 }
 
 function formatLineCount(

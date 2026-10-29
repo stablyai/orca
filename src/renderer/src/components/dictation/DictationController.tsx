@@ -8,7 +8,7 @@ import {
   insertText,
   type DictationInsertionTarget
 } from './dictation-insertion-target'
-import { formatFinalTranscriptSegment } from './dictation-final-segments'
+import { formatFinalTranscriptSegment } from '../../../../shared/dictation-transcript-spacing'
 import { recordStoppedSession, waitForStoppedSession } from './dictation-stopped-sessions'
 import { translate } from '@/i18n/i18n'
 import { showDictationStartErrorToast } from './dictation-start-error-toast'

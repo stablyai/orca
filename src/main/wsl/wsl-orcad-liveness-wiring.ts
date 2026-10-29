@@ -71,7 +71,15 @@ export function createWslOrcadLivenessSupervisor(options: {
         await readSettledConfirmedRunningWslDistros(distro),
         wslDistroHolderKey(distro)
       ),
-    ensureHolder: (distro) => options.holder.ensureHeld(distro),
+    // Liveness is background work: the holder may re-spawn only into a distro that runs (E9).
+    ensureHolder: (distro) =>
+      options.holder.ensureHeld(distro, {
+        requireRunning: async () =>
+          confirmsRunning(
+            await readSettledConfirmedRunningWslDistros(distro),
+            wslDistroHolderKey(distro)
+          )
+      }),
     subscribePower: subscribeSystemPowerLifecycle
   })
 }
