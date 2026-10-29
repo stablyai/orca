@@ -9,6 +9,7 @@ export const PAGE_STORAGE_EXACT_KEYS = [
   /** Legacy journal access for embedded pages served by older hosts. */
   'orca:mobileStructuredSendOperations:v1',
   'orca:terminalTextScale',
+  'orca:markdownTextScale',
   'orca:terminalAutocompleteEnabled',
   'orca:terminalLinkOpenMode'
 ] as const
@@ -23,6 +24,8 @@ export const PAGE_STORAGE_KEY_PREFIXES = [
 export const PAGE_STORAGE_MAX_VALUE_CHARS = 16 * 1024
 export const PAGE_STORAGE_MAX_KEY_CHARS = 256
 export const PAGE_STORAGE_MAX_ENTRIES = 32
+// Pages from this version accept orca:markdownTextScale and live 'storage' frames.
+export const LIVE_PAGE_STORAGE_PAGE_VERSION = 2
 
 export function isPageStorageKey(key: string): boolean {
   if (key.length > PAGE_STORAGE_MAX_KEY_CHARS) {
@@ -124,7 +127,10 @@ export type PageStorageForInit = {
 
 // Omit oversized values so one large journal cannot reject all of init; report value-cap drops as unwritable to prevent empty page state overwriting native operation ids.
 // Entry-cap drops remain writable because their values fit; only missing oversized contents make replacement destructive.
-export function pageStorageEntriesForInit(held: Readonly<Record<string, string>>): {
+export function pageStorageEntriesForInit(
+  held: Readonly<Record<string, string>>,
+  pageVersion = 0
+): {
   entries: Record<string, string>
   dropped: string[]
   oversize: string[]
@@ -133,6 +139,10 @@ export function pageStorageEntriesForInit(held: Readonly<Record<string, string>>
   const dropped: string[] = []
   const oversize: string[] = []
   for (const [key, value] of Object.entries(held)) {
+    // Version 1 pages reject the entire init when storage contains this newer key.
+    if (key === 'orca:markdownTextScale' && pageVersion < LIVE_PAGE_STORAGE_PAGE_VERSION) {
+      continue
+    }
     if (value.length > PAGE_STORAGE_MAX_VALUE_CHARS) {
       dropped.push(key)
       oversize.push(key)

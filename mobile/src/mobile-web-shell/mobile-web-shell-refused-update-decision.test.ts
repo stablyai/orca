@@ -43,6 +43,7 @@ describe('an update this shell refused falls back to the generation that already
     expect(withoutRecord(step.effects)).toEqual([
       {
         kind: 'open-generation',
+        pageVersion: CACHED.compat.pageVersion,
         directory: CACHED.directory,
         buildId: CACHED.buildId,
         totalBytes: CACHED.totalBytes

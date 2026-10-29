@@ -33,6 +33,7 @@ const MAX_NESTING = 8
 export type MarkdownBlockContext = MarkdownInlineContext & {
   /** The text is still arriving: a diagram stays code until it stops. */
   growing: boolean
+  scaleListMarkers: boolean
   listText: StyleProp<TextStyle>
   /** Interactive children own their touches and must forward the row action. */
   rowLongPress?: () => void
@@ -70,7 +71,17 @@ function renderList(node: List, key: number, ctx: MarkdownBlockContext, depth: n
     <View key={key} style={styles.list}>
       {node.children.map((item, itemIndex) => (
         <View key={itemIndex} style={styles.listItem}>
-          <NativeText style={[styles.listMarker, ctx.tone.secondary]}>
+          <NativeText
+            style={
+              ctx.scaleListMarkers
+                ? [
+                    styles.listMarker,
+                    scaledMarkdownText(styles.listMarker, ctx.textScale),
+                    ctx.tone.secondary
+                  ]
+                : [styles.listMarker, ctx.tone.secondary]
+            }
+          >
             {item.checked == null
               ? node.ordered
                 ? `${(node.start ?? 1) + itemIndex}.`
@@ -230,7 +241,17 @@ function renderBlock(
     case 'footnoteDefinition':
       return (
         <View key={key} style={styles.listItem}>
-          <NativeText style={[styles.listMarker, ctx.tone.secondary]}>
+          <NativeText
+            style={
+              ctx.scaleListMarkers
+                ? [
+                    styles.listMarker,
+                    scaledMarkdownText(styles.listMarker, ctx.textScale),
+                    ctx.tone.secondary
+                  ]
+                : [styles.listMarker, ctx.tone.secondary]
+            }
+          >
             {`[${node.label ?? node.identifier}]`}
           </NativeText>
           <View style={styles.listItemBody}>

@@ -190,6 +190,7 @@ export function useMobileWebShellSession(args: {
             generationDirectory: effect.directory,
             sessionId: runtime.mintSessionId(),
             buildId: effect.buildId,
+            pageVersion: effect.pageVersion,
             totalBytes: effect.totalBytes,
             elapsedMs: runtime.now() - startedAtRef.current
           })

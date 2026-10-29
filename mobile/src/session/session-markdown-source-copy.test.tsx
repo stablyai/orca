@@ -8,6 +8,24 @@ import {
 } from './use-mobile-session-markdown-actions'
 import { MarkdownReader } from './MobileSessionMarkdownReader'
 
+vi.mock('react-native-gesture-handler', () => ({
+  GestureDetector: 'GestureDetector',
+  GestureHandlerRootView: 'GestureHandlerRootView'
+}))
+vi.mock('../markdown-text-scale/MarkdownTextSizeButton', () => ({
+  MarkdownTextSizeButton: 'MarkdownTextSizeButton'
+}))
+vi.mock('../markdown-text-scale/use-markdown-text-scale', () => ({
+  useMarkdownTextScale: () => ({
+    textScale: 1,
+    setLiveScale: vi.fn(),
+    commitTextScale: vi.fn()
+  })
+}))
+vi.mock('../markdown-text-scale/use-markdown-text-scale-pinch-gesture', () => ({
+  useMarkdownTextScalePinchGesture: () => ({})
+}))
+
 const { writeText, success, error, showToast } = vi.hoisted(() => ({
   writeText: vi.fn<(text: string) => Promise<void>>(),
   success: vi.fn(),

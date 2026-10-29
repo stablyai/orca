@@ -14,6 +14,27 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 
+vi.mock('react-native-gesture-handler', () => ({
+  GestureDetector: 'GestureDetector',
+  GestureHandlerRootView: 'GestureHandlerRootView'
+}))
+
+vi.mock('../markdown-text-scale/MarkdownTextSizeButton', () => ({
+  MarkdownTextSizeButton: 'MarkdownTextSizeButton'
+}))
+
+vi.mock('../markdown-text-scale/use-markdown-text-scale', () => ({
+  useMarkdownTextScale: () => ({
+    textScale: 1.5,
+    setLiveScale: vi.fn(),
+    commitTextScale: vi.fn()
+  })
+}))
+
+vi.mock('../markdown-text-scale/use-markdown-text-scale-pinch-gesture', () => ({
+  useMarkdownTextScalePinchGesture: () => ({})
+}))
+
 vi.mock('lucide-react-native', () => ({
   Code: 'Code',
   Pencil: 'Pencil',
@@ -184,5 +205,18 @@ describe('MobileFileMarkdownPreview', () => {
 
     await updatePreview(renderer, { ...baseProps, relativePath: 'notes/second.md', initialLine: 8 })
     expect(isSelected(renderer, 'View Markdown source')).toBe(true)
+  })
+
+  it('shows the text size button and applies the scale only in preview mode', async () => {
+    renderer = await renderPreview({
+      relativePath: 'notes/file.md',
+      content: '# Title',
+      truncated: false,
+      byteLength: 7
+    })
+    expect(findAllByHostType(renderer.root, 'MarkdownTextSizeButton')).toHaveLength(1)
+    expect(findAllByHostType(renderer.root, 'MobileMarkdown')[0]?.props.textScale).toBe(1.5)
+    await selectMode(renderer, 'View Markdown source')
+    expect(findAllByHostType(renderer.root, 'MarkdownTextSizeButton')).toHaveLength(0)
   })
 })

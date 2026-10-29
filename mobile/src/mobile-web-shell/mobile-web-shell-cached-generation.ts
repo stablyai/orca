@@ -22,6 +22,7 @@ export function openCached(
       kind: 'open-generation',
       directory: generation.directory,
       buildId: generation.buildId,
+      pageVersion: generation.compat.pageVersion,
       totalBytes: generation.totalBytes
     }
   ])

@@ -81,6 +81,7 @@ describe('the offline rule', () => {
     expect(step.effects).toEqual([
       {
         kind: 'open-generation',
+        pageVersion: CACHED.compat.pageVersion,
         directory: CACHED.directory,
         buildId: CACHED.buildId,
         totalBytes: CACHED.totalBytes
@@ -144,6 +145,7 @@ describe('the connected flow', () => {
     expect(step.effects).toEqual([
       {
         kind: 'open-generation',
+        pageVersion: CACHED.compat.pageVersion,
         directory: CACHED.directory,
         buildId: CACHED.buildId,
         totalBytes: CACHED.totalBytes
@@ -263,6 +265,7 @@ describe('a read the link cut short falls back to what is on disk', () => {
     expect(withoutRecord(step.effects)).toEqual([
       {
         kind: 'open-generation',
+        pageVersion: CACHED.compat.pageVersion,
         directory: CACHED.directory,
         buildId: CACHED.buildId,
         totalBytes: CACHED.totalBytes

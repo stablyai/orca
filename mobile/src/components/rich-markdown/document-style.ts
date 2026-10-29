@@ -2,7 +2,7 @@ import { colors, getMobileColorScheme } from '../../theme/mobile-theme'
 import { TEXT_INPUT_FONT_SIZE } from '../../platform/text-input-font-size'
 
 // Read theme at build time; native embeds sheet, page scopes it to editor host.
-// Bind size to text-input seam: native body size, web>=16px floor prevents iOS focus zoom that keyboard seam mistakes for no keyboard; one binding keeps both hosts aligned.
+// Keep the editable root at the input-size floor; zoom only its content to avoid iOS focus zoom.
 export function richMarkdownEditorStyle(): string {
   return `    :root {
       color-scheme: ${getMobileColorScheme()};
@@ -28,7 +28,7 @@ export function richMarkdownEditorStyle(): string {
       font-family: var(--font-sans);
       overscroll-behavior: contain;
     }
-    body { overflow: auto; }
+    body { overflow: auto; touch-action: pan-x pan-y; }
     #editor {
       min-height: 100vh;
       padding: 18px 16px 112px;
@@ -49,6 +49,7 @@ export function richMarkdownEditorStyle(): string {
       pointer-events: none;
     }
     #editor > :first-child { margin-top: 0; }
+    #editor > * { zoom: var(--markdown-text-scale, 1); }
     h1, h2, h3, h4, h5, h6 {
       margin: 1.5em 0 0.5em;
       font-weight: 600;
@@ -124,17 +125,24 @@ export function richMarkdownEditorStyle(): string {
       background: color-mix(in srgb, var(--foreground) 2%, transparent);
     }
     table {
-      width: 100%;
+      display: block;
+      width: max-content;
+      max-width: 100%;
+      overflow-x: auto;
       margin: 1em 0;
       border-collapse: collapse;
       font-size: 0.95em;
+      table-layout: auto;
     }
     th, td {
       padding: 8px 14px;
       border: 1px solid var(--border);
       text-align: left;
       vertical-align: top;
+      word-break: normal;
+      overflow-wrap: normal;
     }
+    th code, td code { white-space: nowrap; }
     th {
       font-weight: 600;
       background: color-mix(in srgb, var(--foreground) 4%, transparent);

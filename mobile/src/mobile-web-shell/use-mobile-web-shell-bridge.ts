@@ -12,6 +12,7 @@ import type { BridgeClearableRouteParam } from './bridge/bridge-route-update'
 import type { BridgeSafeAreaInsets } from './bridge/bridge-safe-area-insets'
 import type { BridgeHapticsKind } from './bridge/bridge-haptics-notify'
 import { createBridgeHost, type BridgeHost } from './bridge-host'
+import { subscribePageStorage } from './bridge-host-storage-subscription'
 import type { BridgeSessionBack } from './bridge-host-back'
 import type { BridgeNavigateBackOutcome } from './bridge-host-contract'
 import type { BridgeNativeVerb } from './bridge/bridge-native-verbs'
@@ -71,7 +72,7 @@ export type MobileWebShellBridgeArgs = {
   onNavigateBack: () => BridgeNavigateBackOutcome
   // Wait for host profile and storage before building the host, or its first init would mount a page against missing identity/preferences.
   snapshot: PageHostSnapshot | null
-  readStorage: () => PageStorageForInit
+  readStorage: (pageVersion?: number) => PageStorageForInit
   onStorageWrite: (key: string, value: string | null) => void
   onPageFault: (error: BridgeErrorCapture) => void
   onPageReady: () => void
@@ -114,6 +115,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       return
     }
     const latest = argsRef.current
+    const pageVersion = latest.session.kind === 'ready' ? latest.session.pageVersion : undefined
     // Read callbacks from the current committed ref; captured render closures would outlive their screen state.
     const host = createBridgeHost({
       client,
@@ -151,7 +153,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       onExternalLink: (url) => argsRef.current.onExternalLink(url),
       onHaptic: (kind) => argsRef.current.onHaptic(kind),
       serveNativeVerb: (verb, params) => argsRef.current.serveNativeVerb(verb, params),
-      readStorage: () => argsRef.current.readStorage(),
+      readStorage: () => argsRef.current.readStorage(pageVersion),
       onStorageWrite: (key, value) => argsRef.current.onStorageWrite(key, value),
       onPageFault: (error) => argsRef.current.onPageFault(error),
       onRouteParamClear: (param, value) => argsRef.current.onRouteParamClear(param, value),
@@ -172,6 +174,18 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       host.dispose()
     }
   }, [buildId, client, sessionId, snapshot])
+
+  const pageVersion = ready?.pageVersion
+  const routePathname = args.route.pathname
+  useLayoutEffect(() => {
+    const mounted = hostRef.current
+    if (mounted === null || mounted.sessionId !== sessionId) {
+      return
+    }
+    return subscribePageStorage(args.hostId, routePathname, pageVersion, (key, value) => {
+      mounted.host.publishStorage(key, value)
+    })
+  }, [args.hostId, buildId, client, pageVersion, routePathname, sessionId, snapshot])
 
   // A rebuilt host already starts from the latest scheme; this re-sends init when it changes under a live page.
   const colorScheme = args.colorScheme

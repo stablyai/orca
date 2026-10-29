@@ -77,6 +77,7 @@ export function harness(
     onNavigateBack?: () => BridgeNavigateBackOutcome
     storage?: Readonly<Record<string, string>>
     readStorage?: () => PageStorageForInit
+    onStorageWrite?: (key: string, value: string | null) => void
     onPageFault?: (error: BridgeErrorCapture) => void
     /** What the mounted route declared; everything this shell implements unless a case narrows it. */
     routeGrants?: readonly string[]
@@ -127,7 +128,10 @@ export function harness(
     host: HOST,
     readStorage:
       options.readStorage ?? (() => ({ storage: options.storage ?? {}, storageOversize: [] })),
-    onStorageWrite: (key, value) => storageWrites.push({ key, value }),
+    onStorageWrite: (key, value) => {
+      storageWrites.push({ key, value })
+      options.onStorageWrite?.(key, value)
+    },
     onPageReady: () => {
       pageReadies += 1
     },

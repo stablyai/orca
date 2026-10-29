@@ -127,6 +127,7 @@ export async function download(args: {
       generationDirectory: generationDirectoryPath(committed.directory),
       sessionId: runtime.mintSessionId(),
       buildId: committed.buildId,
+      pageVersion: committed.manifest.pageVersion,
       totalBytes: committed.manifest.totalBytes,
       elapsedMs: runtime.now() - args.startedAt
     })

@@ -19,6 +19,7 @@ type Props = {
   /** Multiplier for every text size. Defaults to 1; the chat view passes >1 so its prose reads
    *  larger than the compact base. */
   textScale?: number
+  scaleListMarkers?: boolean
   // File targets call this with relative/absolute path and optional :line(:col); omit on screens without viewer to leave paths plain.
   onOpenFile?: (pathText: string) => void
   // Enable ::orca-visual directives only in assistant native-chat prose; keep callback identity stable for memoization.
@@ -35,6 +36,7 @@ function MobileMarkdownContent({
   fallback = '',
   rangeSelectable = false,
   textScale = 1,
+  scaleListMarkers = false,
   onOpenFile,
   renderVisual,
   renderImage,
@@ -59,6 +61,7 @@ function MobileMarkdownContent({
     onOpenFile,
     tone,
     textScale,
+    scaleListMarkers,
     // Zoomed list text has read a size above the sheet's since it first scaled; kept as it was.
     listText: [
       styles.listText,
