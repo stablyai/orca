@@ -19,6 +19,7 @@ import type { ReplayingPanesRef } from './replay-guard'
 import type { TerminalLinkActionRequester } from './terminal-link-action-request'
 import type { TerminalLinkRoutingPreferenceRequester } from './terminal-url-link-hit-testing'
 import type { SessionRestoredBannerReason } from './session-restored-banner-pane-state'
+import type { DetachTerminalPaneToNewTab } from './terminal-pane-tab-detach'
 
 export type TerminalPaneStartup = Exclude<PtyPaneStartup, null>
 
@@ -117,4 +118,5 @@ export type UseTerminalPaneLifecycleDeps = {
   setPaneLayoutRevision: React.Dispatch<React.SetStateAction<number>>
   resolveExternalPaneDropTarget?: PaneExternalDropResolver
   onExternalPaneDrop?: PaneExternalDropHandler
+  detachPaneToNewTab?: DetachTerminalPaneToNewTab
 }

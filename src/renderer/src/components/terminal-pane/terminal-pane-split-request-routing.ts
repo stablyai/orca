@@ -102,6 +102,11 @@ export function queueTerminalPaneSplitRequest(detail: SplitTerminalPaneDetail): 
   acquireSplitMountLease(detail.tabId, detail.worktreeId)
 }
 
+/** Keeps a parked tab mounted for the same bounded lease, so a request routed to its pane can reach it. */
+export function leaseTerminalPaneMount(tabId: string, worktreeId: string): void {
+  acquireSplitMountLease(tabId, worktreeId)
+}
+
 export function takeQueuedTerminalPaneSplitRequests(
   tabId: string,
   worktreeId?: string
