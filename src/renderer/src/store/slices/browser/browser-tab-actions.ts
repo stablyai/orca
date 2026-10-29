@@ -23,6 +23,7 @@ import { findGroupAndWorktree } from '../tab-group-state'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { openBrowserTabThroughLayoutOwner } from './browser-tab-open-through-layout-owner'
 import { browserTabOpenView } from './browser-tab-open-view'
+import { shouldOpenBrowserBesideLiveAgent } from '@/lib/browser-open-beside-live-agent'
 
 export function createBrowserTabActions(
   set: BrowserSliceSet,
@@ -84,6 +85,22 @@ export function createBrowserTabActions(
         sessionPartition
       )
 
+      const shouldActivateBrowser = options?.activate ?? true
+      const preCreateState = get()
+      const sourceGroupIdForSplit =
+        preCreateState.activeGroupIdByWorktree[worktreeId] ??
+        preCreateState.groupsByWorktree[worktreeId]?.[0]?.id
+      // Why (#10546): decide before the open view flips activeTabType to browser.
+      const besideSplit =
+        shouldActivateBrowser &&
+        options?.targetGroupId === undefined &&
+        options?.split === undefined &&
+        sourceGroupIdForSplit &&
+        shouldOpenBrowserBesideLiveAgent(preCreateState, worktreeId)
+          ? { sourceGroupId: sourceGroupIdForSplit, splitDirection: 'right' as const }
+          : undefined
+      const placementOptions = besideSplit ? { ...options, split: besideSplit } : options
+
       const admitLinkPageMount = (): void => {
         if (
           options?.validateLinkPlacement &&
@@ -124,8 +141,8 @@ export function createBrowserTabActions(
                 : {}),
               entityId: workspaceId,
               label: browserTab.title,
-              targetGroupId: options?.targetGroupId,
-              ...(options?.split ? { split: options.split } : {}),
+              targetGroupId: placementOptions?.targetGroupId,
+              ...(placementOptions?.split ? { split: placementOptions.split } : {}),
               ...(options?.afterTabId ? { afterTabId: options.afterTabId } : {}),
               // Why no routing-host default: a substituted host would disown the wrapper from its worktree.
               ...(options?.executionHostId ? { executionHostId: options.executionHostId } : {}),
@@ -151,7 +168,7 @@ export function createBrowserTabActions(
           worktreeId,
           browserTab,
           page,
-          options,
+          options: placementOptions,
           showView: () => {
             set((s) => browserTabOpenView(s, worktreeId, browserTab, page, options))
             admitLinkPageMount()
