@@ -15,3 +15,16 @@
 | 취소      | 진행 중인 격리 시험 채팅                             | 중지 버튼                          | 해당 턴만 중지, 다른 채팅 영향 없음                           |
 
 | 서버 시험 격리 | 임시 사용자 홈과 실제 sidecar fixture | `pnpm test src/main/orcad/electron-serve-browser-process.test.ts --maxWorkers=1` | 소유권 전달 시험을 포함한 22개 통과, 실제 사용자 홈 쓰기 없음 |
+
+## PR #35699 리뷰 회귀 케이스
+
+근거: Greptile `discussion_r4408934470`, `discussion_r4408934476`, CodeRabbit `discussion_r4408965059`, `discussion_r4408965075`. 등록은 임시 사용자 홈, 화면은 격리한 로컬 서버·프로필·시험 workspace에서 실행한다. 기존 설치 앱과 개인 대화는 사용하지 않는다.
+
+| ID  | 준비 데이터                                               | 실제 입구와 입력                                            | 기대 결과                                                                |
+| --- | --------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------ |
+| R1  | POSIX `0600` FIFO 등록 경로, writer 없음                  | 해당 경로를 `ORCA_EXTERNAL_ACP_CONFIG`로 지정하고 서버 시작 | 대기 없이 등록 거절, 서버 준비 완료, 내장 에이전트 목록 유지             |
+| R2  | 기본 채팅을 광고하지만 admission에서 거절하는 시험 호스트 | 빈 원격 workspace 선택                                      | plain shell 1개 생성, agent CLI 실행 없음, 생성 완료 전 중복 초기화 없음 |
+| R3  | R2의 첫 terminal 생성 요청 실패                           | 빈 workspace 선택 후 호스트의 다음 빈 snapshot 수신         | 실패를 성공으로 고정하지 않고 다음 요청에서 shell 생성 재시도            |
+| R4  | 탐지가 보류된 빈 workspace                                | 탐지 완료 전에 terminal 또는 editor 탭 열기                 | 사용자가 연 탭만 유지, 기본 chat·shell 추가 생성 없음                    |
+| R5  | 서로 다른 시험 호스트에 같은 workspace ID                 | 탐지 중 다른 호스트의 동일 ID workspace로 전환              | 이전 bootstrap은 새 호스트에 chat·shell 생성 안 함                       |
+| R6  | 정상 등록·채팅 가능 호스트                                | 빈 workspace 선택, 이어 동일 snapshot 재전달                | 기본 채팅 1개, 불필요한 shell·중복 chat 없음                             |

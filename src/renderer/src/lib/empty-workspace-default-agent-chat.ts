@@ -16,6 +16,7 @@ import { workspaceKindForWorktreeId, worktreeLaunchWorkspace } from '@/lib/agent
 import { chosenAgentChatUnlearned, agentChoiceOpensAsChat } from '@/lib/host-chat-program'
 import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
+import type { StructuredAgentLaunchSettlement } from './structured-agent-launch-settlement'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 
 /** Share the host between wait/open; undefined means the workspace opens a shell regardless of agent inventory. */
@@ -60,8 +61,11 @@ export async function loadEmptyWorkspaceDefaultChatDetection(worktreeId: string)
 /** Open the configured default chat for an empty workspace; null or host decline seeds a shell, never an unrequested agent TUI. */
 export function openDefaultAgentChatInEmptyWorkspace(
   worktreeId: string,
-  seedShell: () => boolean
-): { primaryTabId: string | null } | null {
+  seedShell: () => boolean | Promise<boolean>
+): {
+  primaryTabId: string | null
+  structuredSettlement?: Promise<StructuredAgentLaunchSettlement>
+} | null {
   const state = useAppStore.getState()
   const target = defaultChatDetectionTarget(state, worktreeId)
   if (!target) {
@@ -93,10 +97,16 @@ export function openDefaultAgentChatInEmptyWorkspace(
     launchSource: 'unknown',
     agentSessionLaunchPlan,
     pendingActivationSpawn: true,
-    onStructuredHostDeclined: () => ({ opened: seedShell() })
+    onStructuredHostDeclined: () => {
+      const opened = seedShell()
+      return typeof opened === 'boolean' ? { opened } : opened.then((opened) => ({ opened }))
+    }
   })
   if (!result) {
     return null
   }
-  return { primaryTabId: result.surface.kind === 'host-published' ? null : result.surface.tabId }
+  return {
+    primaryTabId: result.surface.kind === 'host-published' ? null : result.surface.tabId,
+    ...(result.structuredSettlement ? { structuredSettlement: result.structuredSettlement } : {})
+  }
 }

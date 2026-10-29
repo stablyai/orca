@@ -53,7 +53,10 @@ export function readExternalAcpLaunchSpecs(
   }
   let fd: number | undefined
   try {
-    fd = openSync(registrationPath, constants.O_RDONLY | constants.O_NOFOLLOW)
+    fd = openSync(
+      registrationPath,
+      constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK
+    )
     const stat = fstatSync(fd)
     if (
       !stat.isFile() ||

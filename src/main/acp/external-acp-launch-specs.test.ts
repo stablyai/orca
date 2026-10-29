@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { chmodSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { build } from 'esbuild'
+import { runProcess } from '@orca/process-host'
 import { readExternalAcpLaunchSpecs } from './external-acp-launch-specs'
 const roots: string[] = []
 afterEach(() => roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })))
@@ -75,4 +77,28 @@ it('treats an absent default as no registration, but never falls back from an ex
     specs: []
   })
   expect(readExternalAcpLaunchSpecs(`${path}.missing`, [], path).ok).toBe(false)
+})
+
+it.skipIf(process.platform === 'win32')('rejects a FIFO without waiting for a writer', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'external-acp-fifo-'))
+  roots.push(root)
+  const fifo = join(root, 'registration.json')
+  expect((await runProcess({ program: 'mkfifo', args: [fifo], timeoutMs: 2000 })).code).toBe(0)
+  const reader = join(root, 'reader.cjs')
+  await build({
+    stdin: {
+      contents: `import { readExternalAcpLaunchSpecs } from './external-acp-launch-specs'; console.log(JSON.stringify(readExternalAcpLaunchSpecs(process.argv[2], [])))`,
+      resolveDir: __dirname
+    },
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+    outfile: reader
+  })
+  const result = await runProcess({ program: 'node', args: [reader, fifo], timeoutMs: 2000 })
+  expect(result.code).toBe(0)
+  expect(JSON.parse(result.stdout)).toEqual({
+    ok: false,
+    error: 'invalid-external-acp-registration'
+  })
 })

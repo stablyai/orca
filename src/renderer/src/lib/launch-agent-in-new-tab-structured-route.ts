@@ -27,7 +27,7 @@ export function launchStructuredAgentFromNewTab(args: {
   groupId?: string
   focusIntent?: NativeChatComposerFocusIntent
   beforeSurfaceOpen?: LaunchAgentInNewTabArgs['beforeSurfaceOpen']
-  onHostDeclined?: () => StructuredLaunchTerminal
+  onHostDeclined?: () => StructuredLaunchTerminal | Promise<StructuredLaunchTerminal>
   openTerminal: (terminalPlan: AgentSessionLaunchPlan, activate?: false) => AgentTabLaunchOutcome
 }): StructuredFromNewTab | null {
   const { plan, beforeSurfaceOpen } = args
