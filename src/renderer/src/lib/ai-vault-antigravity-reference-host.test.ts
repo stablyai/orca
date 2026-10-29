@@ -31,6 +31,10 @@ function stateFor(host: ExecutionHostId, distro?: string): State {
   return {
     activeRepoId: 'repo',
     activeWorktreeId: worktree.id,
+    detectedWorktreesByRepo: {},
+    sshConnectionStates: new Map(),
+    sshStateByEnvironment: new Map(),
+    runtimeStatusByEnvironmentId: new Map(),
     folderWorkspaces: [],
     projectGroups: [],
     settings: null,

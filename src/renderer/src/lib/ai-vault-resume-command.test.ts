@@ -1,7 +1,7 @@
+import type { AiVaultResumePlatformState } from './ai-vault-resume-platform'
 import { getDefaultSettings } from '../../../shared/constants'
 import { TEST_REPO, makeWorktree } from '../store/slices/worktrees-slice-test-fixtures'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AppState } from '@/store/types'
 import {
   getAiVaultAgentProviderSession,
   buildAiVaultResumeCopyCommandForWorktree,
@@ -25,17 +25,7 @@ afterEach(() => {
 
 type RuntimePreference = { kind: 'windows-host' } | { kind: 'wsl'; distro: string }
 
-type AiVaultResumeCommandState = Pick<
-  AppState,
-  | 'activeRepoId'
-  | 'activeWorktreeId'
-  | 'folderWorkspaces'
-  | 'projectGroups'
-  | 'projects'
-  | 'repos'
-  | 'settings'
-  | 'worktreesByRepo'
->
+type AiVaultResumeCommandState = AiVaultResumePlatformState
 
 function makeState(args: {
   worktreePath: string
@@ -47,6 +37,10 @@ function makeState(args: {
   return {
     activeRepoId: 'repo-1',
     activeWorktreeId: 'repo-1::worktree-1',
+    detectedWorktreesByRepo: {},
+    sshConnectionStates: new Map(),
+    sshStateByEnvironment: new Map(),
+    runtimeStatusByEnvironmentId: new Map(),
     folderWorkspaces: [],
     projectGroups: [],
     repos: [{ ...TEST_REPO, id: 'repo-1', path: 'C:\\Users\\alice\\repo' }],
@@ -598,8 +592,7 @@ describe('ai vault resume command runtime', () => {
         }
       })
     ).toMatchObject({
-      command:
-        "codex '-c' 'disable_paste_burst=true' '-c' 'tui.resume_cwd=current' 'resume' 'session one'",
+      command: "codex '-c' 'tui.resume_cwd=current' 'resume' 'session one'",
       cwd: '/home/alice/repo',
       envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
       providerSession: { key: 'session_id', id: 'session one' }
@@ -624,9 +617,7 @@ describe('ai vault resume command runtime', () => {
           resumeCommand: "CODEX_HOME='/root/.codex' codex resume 'session one'"
         }
       })
-    ).toBe(
-      "codex '-c' 'disable_paste_burst=true' '-c' 'tui.resume_cwd=current' 'resume' 'session one'"
-    )
+    ).toBe("codex '-c' 'tui.resume_cwd=current' 'resume' 'session one'")
   })
 
   it('copies remote real-home Codex commands with explicit environment cleanup', () => {
@@ -757,8 +748,6 @@ describe('ai vault resume command runtime', () => {
           resumeCommand: "CODEX_HOME='/root/.codex' codex resume 'session one'"
         }
       })
-    ).toBe(
-      "codex '-c' 'disable_paste_burst=true' '-c' 'tui.resume_cwd=current' 'resume' 'session one'"
-    )
+    ).toBe("codex '-c' 'tui.resume_cwd=current' 'resume' 'session one'")
   })
 })
