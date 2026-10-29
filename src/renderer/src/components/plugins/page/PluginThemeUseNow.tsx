@@ -73,17 +73,25 @@ export function PluginThemeUseNow({
       update: { pluginIconTheme: theme.id }
     })),
     ...terminals.map((stored) => {
-      // Why: installing puts a lone other-mode terminal theme in the showing slot, so it is "now".
-      const showing = terminalThemeSlot('unknown', dark)
-      const shownNow =
-        settings[showing] === stored.id && (dark || settings.terminalUseSeparateLightTheme)
-      const theme = shownNow ? { ...stored, mode: 'unknown' as const } : stored
+      // Why: light mode shows the dark slot unless it uses separate light themes.
+      const shownSlot =
+        dark || !settings.terminalUseSeparateLightTheme ? 'terminalThemeDark' : 'terminalThemeLight'
+      // Why: a theme already on screen (e.g. a lone other-mode one an install put there) is "now".
+      const shownNow = settings[shownSlot] === stored.id
+      const theme = shownNow
+        ? {
+            ...stored,
+            mode: shownSlot === 'terminalThemeDark' ? ('dark' as const) : ('light' as const)
+          }
+        : stored
       return {
         key: `terminal:${theme.id}`,
         label: theme.label,
-        mode: (terminalThemeSlot(theme.mode, dark) === 'terminalThemeDark'
-          ? 'dark'
-          : 'light') as Mode,
+        mode: shownNow
+          ? mode
+          : ((terminalThemeSlot(theme.mode, dark) === 'terminalThemeDark'
+              ? 'dark'
+              : 'light') as Mode),
         selected: isPluginTerminalThemeSelected(settings, theme, dark),
         // Why an icon: a plugin's terminal themes often share their app themes' names.
         icon: <SquareTerminal aria-hidden="true" />,

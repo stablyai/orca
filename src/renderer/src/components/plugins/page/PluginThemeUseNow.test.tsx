@@ -33,7 +33,9 @@ vi.mock('@/store/plugin-themes', () => ({
   usePluginTerminalThemes: () => state.terminal
 }))
 vi.mock('@/store/plugin-icon-themes', () => ({ usePluginIconThemes: () => state.icons }))
-vi.mock('@/lib/document-theme', () => ({ resolveDocumentTheme: () => true }))
+vi.mock('@/lib/document-theme', () => ({
+  resolveDocumentTheme: (theme: string) => theme !== 'light'
+}))
 const toast = vi.hoisted(() => ({ success: vi.fn() }))
 vi.mock('sonner', () => ({ toast }))
 
@@ -162,6 +164,29 @@ it('lists a lone terminal theme the install put in the showing slot under "Use n
   ]
   render(<PluginThemeUseNow pluginKey={pluginKey} />)
   expect(screen.queryByText('Use for light:')).toBeNull()
+  const chip = screen.getByRole('button', { name: 'Use now: Dusk Terminal' })
+  expect(chip.getAttribute('aria-pressed')).toBe('true')
+  fireEvent.click(chip)
+  expect(state.updateSettings).toHaveBeenCalledExactlyOnceWith({
+    terminalThemeDark: id,
+    terminalPluginPalettes: [{ id, colors: terminal }]
+  })
+  expect(toast.success).not.toHaveBeenCalled()
+})
+
+it('lists the dark terminal theme light mode shows with Match dark mode under "Use now"', () => {
+  const terminal = { background: '#181818', foreground: '#eeeeee', red: '#ff0000' }
+  state.settings = {
+    ...getDefaultSettings('/tmp'),
+    theme: 'light',
+    terminalUseSeparateLightTheme: false,
+    terminalThemeDark: id
+  }
+  state.terminal = [
+    { id, pluginKey, pluginName: 'Dusk', label: 'Dusk Terminal', mode: 'dark', terminal }
+  ]
+  render(<PluginThemeUseNow pluginKey={pluginKey} />)
+  expect(screen.queryByText('Use for dark:')).toBeNull()
   const chip = screen.getByRole('button', { name: 'Use now: Dusk Terminal' })
   expect(chip.getAttribute('aria-pressed')).toBe('true')
   fireEvent.click(chip)
