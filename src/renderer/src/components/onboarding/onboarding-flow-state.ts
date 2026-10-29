@@ -9,7 +9,7 @@ import type { EventProps } from '../../../../shared/telemetry-events'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OnboardingState } from '../../../../shared/onboarding-state-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import { STEPS } from './use-onboarding-flow-types'
+import { STEPS, type AgentSurface } from './use-onboarding-flow-types'
 import type { ThemeLookSettings } from './onboarding-theme-look-settings'
 
 type TaskSourcesSnapshotProps = EventProps<'onboarding_task_sources_snapshot'>
@@ -122,12 +122,25 @@ export function remapOpenOnboardingLastCompletedStep({
   return lastCompletedStep
 }
 
+/** Chat turns on the experimental Chat UI; Terminal turns it off. Unchanged choices write nothing. */
+export function agentSurfaceSettingsUpdate(
+  settings: Pick<GlobalSettings, 'experimentalNativeChat'> | null | undefined,
+  surface: AgentSurface
+): Partial<Pick<GlobalSettings, 'experimentalNativeChat'>> {
+  const chat = surface === 'chat'
+  return (settings?.experimentalNativeChat === true) === chat
+    ? {}
+    : { experimentalNativeChat: chat }
+}
+
 type SkippedOnboardingPreferenceOptions = {
   currentStepId: OnboardingStepId
   /** Look settings as the theme step found them; null before it was reached. */
   lookBeforePreview: ThemeLookSettings | null
   settingsTheme: GlobalSettings['theme'] | undefined
   selectedAgent: TuiAgent | null
+  agentSurface: AgentSurface
+  settings: Pick<GlobalSettings, 'experimentalNativeChat'> | null
   setTheme: (theme: GlobalSettings['theme']) => void
   applyTheme: (theme: GlobalSettings['theme']) => void
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void
@@ -139,6 +152,8 @@ export async function prepareSkippedOnboardingPreferences({
   lookBeforePreview,
   settingsTheme,
   selectedAgent,
+  agentSurface,
+  settings,
   setTheme,
   applyTheme,
   updateSettings,
@@ -154,9 +169,16 @@ export async function prepareSkippedOnboardingPreferences({
         await updateSettings({ ...lookBeforePreview, theme: themeToRestore })
       }
     }
-    // Why: skipping bypasses step persistence, so save the visible agent choice before closing.
-    if (currentStepId === 'agent' && selectedAgent) {
-      await updateSettings({ defaultTuiAgent: selectedAgent })
+    // Why: skipping bypasses step persistence, so save the visible agent page's choices before closing.
+    // The Chat or Terminal page alone keeps the saved setting, matching Continue there.
+    if (currentStepId === 'agent') {
+      const updates = {
+        ...agentSurfaceSettingsUpdate(settings, agentSurface),
+        ...(selectedAgent ? { defaultTuiAgent: selectedAgent } : {})
+      }
+      if (Object.keys(updates).length > 0) {
+        await updateSettings(updates)
+      }
     }
     return true
   } catch (err) {

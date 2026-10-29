@@ -9,7 +9,8 @@ import { buildAgentPickedPayload } from './agent-picked-payload'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OnboardingState } from '../../../../shared/onboarding-state-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import { STEPS } from './use-onboarding-flow-types'
+import { STEPS, stepIndexAfterCompletedStep } from './use-onboarding-flow-types'
+import { useOnboardingAgentSurface } from './use-onboarding-agent-surface'
 import { persistStep, useCloseWith, usePersistCurrentStep } from './use-onboarding-flow-persistence'
 import { resolveOnboardingSettingsHydration } from './onboarding-settings-hydration'
 import { translate } from '@/i18n/i18n'
@@ -26,7 +27,7 @@ import {
 import { useOnboardingFlowActions } from './use-onboarding-flow-actions'
 import { useOnboardingFlowTelemetry } from './use-onboarding-flow-telemetry'
 export { STEPS } from './use-onboarding-flow-types'
-export type { StepId, StepNumber } from './use-onboarding-flow-types'
+export type { AgentSurface, StepId, StepNumber } from './use-onboarding-flow-types'
 
 export function useOnboardingFlow(
   onboarding: OnboardingState,
@@ -57,7 +58,7 @@ export function useOnboardingFlow(
   )
   const remappedLastCompletedStep = remapOpenOnboardingLastCompletedStep(onboarding)
   const initialStep = resolveStepIndex(
-    Math.min(Math.max(remappedLastCompletedStep, 0), STEPS.length - 1),
+    stepIndexAfterCompletedStep(remappedLastCompletedStep),
     skipOptions,
     'forward'
   )
@@ -134,6 +135,13 @@ export function useOnboardingFlow(
     },
     []
   )
+
+  const { agentSurface, setAgentSurface, chatAgents, chatDetected } = useOnboardingAgentSurface({
+    settings,
+    selectedAgent,
+    agentInteractedRef,
+    setSelectedAgent
+  })
 
   const detectedSet = useMemo(() => new Set(detectedAgentIds ?? []), [detectedAgentIds])
   const currentStep = STEPS[stepIndex]
@@ -253,7 +261,9 @@ export function useOnboardingFlow(
 
   const persistCurrentStep = usePersistCurrentStep({
     currentStepId: currentStep.id,
+    agentSurface,
     selectedAgent,
+    agentInteractedRef,
     yoloPermissions,
     yoloPermissionsChosen,
     theme,
@@ -280,6 +290,7 @@ export function useOnboardingFlow(
     stepIndex,
     setStepIndex,
     selectedAgent,
+    agentSurface,
     themeLookBaseline,
     setTheme,
     updateSettings,
@@ -293,6 +304,10 @@ export function useOnboardingFlow(
     progressSteps,
     progressStepIndex,
     currentStep,
+    agentSurface,
+    setAgentSurface,
+    chatAgents,
+    chatDetected,
     selectedAgent,
     setSelectedAgent: setSelectedAgentInteractive,
     yoloPermissions,

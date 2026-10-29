@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { useAppStore } from '@/store'
+import { runActiveNativeChatSplit } from '@/components/native-chat/native-chat-layout-actions'
 import {
   getContextualTour,
   hasUndoneContextualTourAction,
@@ -178,6 +179,10 @@ export function ContextualTourOverlay(): JSX.Element | null {
       advanceContextualTour()
       return
     }
+    if (measurement.kind === 'regress') {
+      regressContextualTour()
+      return
+    }
     if (measurement.kind === 'wait') {
       return
     }
@@ -205,6 +210,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
     cancelContextualTour,
     emitContextualTourOutcome,
     keybindings,
+    regressContextualTour,
     sidebarOpen
   ])
 
@@ -361,6 +367,14 @@ export function ContextualTourOverlay(): JSX.Element | null {
       },
       openWorkspaceComposer: openWorkspaceCreationComposerWithTourHandoff,
       dispatchTerminalPaneSplit: requestActiveTerminalPaneSplit,
+      splitActiveChat: () => {
+        const { activeWorktreeId, activeGroupIdByWorktree } = useAppStore.getState()
+        runActiveNativeChatSplit(
+          activeWorktreeId,
+          activeWorktreeId ? (activeGroupIdByWorktree[activeWorktreeId] ?? null) : null,
+          'right'
+        )
+      },
       schedule: (callback) => {
         window.setTimeout(callback, 0)
       }

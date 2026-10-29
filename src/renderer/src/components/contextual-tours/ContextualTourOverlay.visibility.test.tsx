@@ -5,9 +5,17 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ContextualTourOverlay } from './ContextualTourOverlay'
 import { useAppStore } from '@/store'
+import { getContextualTourStepIndex } from '../../../../shared/contextual-tours'
+import { advanceAgentSessionsTourPastNewTab } from './agent-sessions-tour-new-tab'
+
+const PARALLEL_STEP_INDEX = getContextualTourStepIndex(
+  'workspace-agent-sessions',
+  'agent-sessions-parallel'
+)
 
 let container: HTMLDivElement
 let root: Root
+const initialState = useAppStore.getState()
 
 function tourTarget(name: string, top: number): { moveTo: (top: number) => void } {
   let currentTop = top
@@ -53,6 +61,7 @@ function ringsTop(): string | undefined {
 }
 
 beforeEach(async () => {
+  useAppStore.setState(initialState, true)
   vi.useFakeTimers({
     toFake: [
       'setTimeout',
@@ -78,16 +87,65 @@ afterEach(async () => {
   container.remove()
   document.querySelectorAll('[data-contextual-tour-target]').forEach((node) => node.remove())
   await setDocumentVisibility('visible')
-  useAppStore.setState({ activeContextualTourId: null, activeContextualTourStepIndex: 0 })
+  useAppStore.setState(initialState, true)
   vi.useRealTimers()
 })
 
 describe('ContextualTourOverlay full-pass interval visibility gate', () => {
+  it.each([
+    ['agent-session', 'terminal'],
+    ['terminal', 'agent-session']
+  ])('keeps the tour when the + menu changes %s to %s', async (before, after) => {
+    tourTarget('tab-create-menu', 50)
+    tourTarget('workspace-agent-terminal-tip', 150)
+    tourTarget('workspace-create-control', 300)
+    const target = document.querySelector<HTMLElement>(
+      '[data-contextual-tour-target="workspace-agent-terminal-tip"]'
+    )
+    if (!target) {
+      throw new Error('Missing workspace tour target')
+    }
+    target.dataset.activeContentType = before
+    useAppStore.setState({
+      activeContextualTourId: 'workspace-agent-sessions',
+      activeContextualTourStepIndex: 0,
+      contextualToursSeenIds: [],
+      activeModal: 'none',
+      contextualToursOnboardingVisible: false,
+      contextualToursBlockingSurfaceVisible: false,
+      activeContextualTourSuppressed: false,
+      persistedUIReady: true
+    })
+    act(() => root.render(<ContextualTourOverlay />))
+    await settle(50)
+    expect(useAppStore.getState().contextualToursSeenIds).toContain('workspace-agent-sessions')
+
+    act(() => advanceAgentSessionsTourPastNewTab())
+    await settle(50)
+    target.dataset.activeContentType = after
+    await settle(550)
+
+    const state = useAppStore.getState()
+    expect(state.activeContextualTourId).toBe('workspace-agent-sessions')
+    expect(state.activeContextualTourStepIndex).toBe(
+      getContextualTourStepIndex(
+        'workspace-agent-sessions',
+        after === 'agent-session' ? 'agent-sessions-split-chat' : 'agent-sessions-split'
+      )
+    )
+    await act(async () => {
+      await state.recordFeatureInteraction(
+        after === 'agent-session' ? 'tab-splits' : 'terminal-pane-split'
+      )
+    })
+    expect(useAppStore.getState().activeContextualTourStepIndex).toBe(PARALLEL_STEP_INDEX)
+  })
+
   it('pauses the 500ms full pass while hidden and re-measures on return', async () => {
     const target = tourTarget('workspace-create-control', 300)
     useAppStore.setState({
       activeContextualTourId: 'workspace-agent-sessions',
-      activeContextualTourStepIndex: 1,
+      activeContextualTourStepIndex: PARALLEL_STEP_INDEX,
       activeModal: 'none',
       contextualToursOnboardingVisible: false,
       contextualToursBlockingSurfaceVisible: false,

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { getContextualTour } from '../../../../shared/contextual-tours'
 import {
   getContextualTourRequestDecision,
+  getContextualTourStartStepIndex,
   getContextualTourStepProgress,
   getContextualTourOutcomeStepTotal,
   getMeasurableContextualTourTarget,
@@ -335,27 +336,35 @@ describe('contextual tour gate', () => {
     expect(getContextualTourOutcomeStepTotal([])).toBe(1)
   })
 
-  it('advances the workspace-agent-sessions tour from split to the create-worktree step', () => {
+  it('shows exactly one split step, matching the active tab kind', () => {
     const tour = getContextualTour('workspace-agent-sessions')
-    const targetExists = (): boolean => true
-    const visibleStepIndexes = getVisibleContextualTourStepIndexes(tour, targetExists)
+    const target = (id: string): string =>
+      tour.steps.find((step) => step.id === id)?.targetSelector ?? ''
+    const onChatTab = (selector: string): boolean => selector !== target('agent-sessions-split')
+    const visibleStepIndexes = getVisibleContextualTourStepIndexes(tour, onChatTab)
 
-    expect(tour.steps.map((step) => step.title)).toEqual([
-      'Split a terminal pane',
-      'Start another task in parallel'
+    expect(visibleStepIndexes.map((index) => tour.steps[index]?.id)).toEqual([
+      'agent-sessions-new-tab',
+      'agent-sessions-split-chat',
+      'agent-sessions-parallel'
     ])
-    expect(visibleStepIndexes).toEqual([0, 1])
-    expect(
-      getNextVisibleContextualTourStepIndex({
-        tour,
-        currentStepIndex: 0,
-        targetExists
-      })
-    ).toBe(1)
     expect(getContextualTourStepProgress({ visibleStepIndexes, stepIndex: 1 })).toEqual({
       current: 2,
-      total: 2
+      total: 3
     })
+  })
+
+  it('starts at the split step when the + menu is not on screen', () => {
+    const tour = getContextualTour('workspace-agent-sessions')
+    const newTabTarget = tour.steps[0]?.targetSelector
+    const chatTarget = tour.steps[1]?.targetSelector
+
+    expect(
+      getContextualTourStartStepIndex(
+        tour,
+        (selector) => selector !== newTabTarget && selector !== chatTarget
+      )
+    ).toBe(2)
   })
 
   it('hides the browser cookie step until the Import Cookies menu row is measurable', () => {

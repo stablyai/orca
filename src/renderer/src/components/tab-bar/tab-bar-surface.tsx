@@ -26,6 +26,7 @@ import { renderTabBarItems } from './tab-bar-item-surface'
 import { TabBarStaticCreateMenu } from './tab-bar-static-create-menu'
 import ClientHostedBrowserTabRows from './ClientHostedBrowserTabRows'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
+import { advanceAgentSessionsTourPastNewTab } from '@/components/contextual-tours/agent-sessions-tour-new-tab'
 
 const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
 
@@ -210,7 +211,12 @@ export function renderTabBarSurface({
       ) : null}
       <DropdownMenu
         open={newTabMenuOpen}
-        onOpenChange={setNewTabMenuOpen}
+        onOpenChange={(open) => {
+          setNewTabMenuOpen(open)
+          if (open) {
+            advanceAgentSessionsTourPastNewTab()
+          }
+        }}
         // Why: modal would disable body pointer events, making the Mobile Emulator "Hide" re-enable toast unclickable.
         modal={false}
       >
@@ -220,6 +226,7 @@ export function renderTabBarSurface({
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             title={translate('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
             aria-label={translate('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
+            data-contextual-tour-target="tab-create-menu"
           >
             <Plus className="w-3.5 h-3.5" />
           </button>
