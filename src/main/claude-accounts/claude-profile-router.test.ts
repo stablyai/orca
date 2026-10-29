@@ -170,7 +170,13 @@ describe('ClaudeProfileRouter', () => {
       const f = fixture()
       f.settings.agentStatusHooksEnabled = true
       command.path = join(f.root, 'claude')
-      vi.mocked(runProcess).mockResolvedValue({ stdout, stderr: '', code: 0, signal: null })
+      vi.mocked(runProcess).mockResolvedValue({
+        stdout,
+        stderr: '',
+        code: 0,
+        signal: null,
+        timedOut: false
+      })
       const runSetup = vi.fn(async () => ({
         outcome: 'prepared' as const,
         warnings: [],

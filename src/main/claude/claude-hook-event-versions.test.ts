@@ -139,7 +139,13 @@ describe('identified Claude version output', () => {
   ] as const)(
     'uses the identified version and hook plan for stdout=%s stderr=%s',
     async (stdout, stderr, expected, installs, retirements) => {
-      vi.mocked(runProcess).mockResolvedValue({ stdout, stderr, code: 0, signal: null })
+      vi.mocked(runProcess).mockResolvedValue({
+        stdout,
+        stderr,
+        code: 0,
+        signal: null,
+        timedOut: false
+      })
       const local = await probeClaudeCliVersion('/bin/claude')
       // Older guests send combined raw output, not canonical stored semver.
       const remote = readManagedHookDetectionResult({
@@ -163,7 +169,8 @@ describe('identified Claude version output', () => {
       stdout: '2.1.310 (Claude Code)\n',
       stderr: '',
       code: 1,
-      signal: null
+      signal: null,
+      timedOut: false
     })
     expect(await probeClaudeCliVersion('/bin/claude')).toBeNull()
   })

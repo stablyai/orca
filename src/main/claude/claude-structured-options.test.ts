@@ -82,7 +82,13 @@ describe('identified versions across native Claude consumers', () => {
   ] as const)(
     'derives launch flags, saved options and live controls from %s',
     async (stdout, fact) => {
-      vi.mocked(runProcess).mockResolvedValue({ stdout, stderr: '', code: 0, signal: null })
+      vi.mocked(runProcess).mockResolvedValue({
+        stdout,
+        stderr: '',
+        code: 0,
+        signal: null,
+        timedOut: false
+      })
       const support = createClaudeCliFlagSupport({
         probe: probeClaudeCliVersion,
         keyOf: async () => 'binary',
