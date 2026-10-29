@@ -4,6 +4,10 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import type {
+  GitBranchChangeEntry,
+  GitBranchCompareSummary
+} from '../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import SourceControl from './SourceControl'
 
@@ -77,6 +81,29 @@ function gitEntry(overrides: Partial<GitStatusEntry>): GitStatusEntry {
     added: 1,
     removed: 0,
     ...overrides
+  }
+}
+
+function branchCompareState(paths: string[]): Record<string, unknown> {
+  const entries: GitBranchChangeEntry[] = paths.map((path) => ({
+    path,
+    status: 'modified',
+    added: 1,
+    removed: 0
+  }))
+  const summary: GitBranchCompareSummary = {
+    baseRef: 'main',
+    baseOid: null,
+    compareRef: 'feature/open-file-highlight',
+    headOid: null,
+    mergeBase: null,
+    changedFiles: entries.length,
+    commitsAhead: 1,
+    status: 'ready'
+  }
+  return {
+    gitBranchChangesByWorktree: { [mocks.activeWorktree.id]: entries },
+    gitBranchCompareSummaryByWorktree: { [mocks.activeWorktree.id]: summary }
   }
 }
 
@@ -205,6 +232,12 @@ function row(path: string, area: GitStatusEntry['area']): HTMLDivElement | null 
   )
 }
 
+function branchRow(path: string): HTMLDivElement | null {
+  return container.querySelector<HTMLDivElement>(
+    `[data-testid="source-control-branch-entry"][data-source-control-path="${path}"]`
+  )
+}
+
 function isHighlighted(element: HTMLElement | null): boolean {
   if (!element) {
     return false
@@ -330,6 +363,50 @@ describe('SourceControl open-file highlight', () => {
     renderSourceControl()
 
     expect(isHighlighted(row('src/file.ts', 'unstaged'))).toBe(false)
+  })
+
+  it('highlights the Committed on Branch row whose branch diff is the active editor tab', () => {
+    resetState({
+      ...branchCompareState(['src/file.ts', 'src/other.ts']),
+      gitStatusByWorktree: {
+        [mocks.activeWorktree.id]: [gitEntry({ path: 'src/file.ts', area: 'unstaged' })]
+      },
+      openFiles: [
+        {
+          id: 'tab-1',
+          worktreeId: mocks.activeWorktree.id,
+          relativePath: 'src/file.ts',
+          diffSource: 'branch'
+        }
+      ],
+      activeFileIdByWorktree: { [mocks.activeWorktree.id]: 'tab-1' },
+      activeTabTypeByWorktree: { [mocks.activeWorktree.id]: 'editor' }
+    })
+    renderSourceControl()
+
+    expect(isHighlighted(branchRow('src/file.ts'))).toBe(true)
+    expect(isHighlighted(branchRow('src/other.ts'))).toBe(false)
+    expect(isHighlighted(row('src/file.ts', 'unstaged'))).toBe(false)
+  })
+
+  it('does not highlight Committed on Branch rows for the combined branch diff', () => {
+    resetState({
+      ...branchCompareState(['src/file.ts']),
+      openFiles: [
+        {
+          id: 'tab-1',
+          worktreeId: mocks.activeWorktree.id,
+          relativePath: 'src/file.ts',
+          diffSource: 'combined-branch'
+        }
+      ],
+      activeFileIdByWorktree: { [mocks.activeWorktree.id]: 'tab-1' },
+      activeTabTypeByWorktree: { [mocks.activeWorktree.id]: 'editor' }
+    })
+    renderSourceControl()
+
+    expect(branchRow('src/file.ts')).not.toBeNull()
+    expect(isHighlighted(branchRow('src/file.ts'))).toBe(false)
   })
 
   it('falls back to a staged-only row for an ordinary editor tab', () => {

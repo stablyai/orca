@@ -109,14 +109,19 @@ export function useSourceControlFileListing({
   })
 
   // Modifier-click opens a right split to preserve the current pane.
-  const { resolveSplitTargetGroupId, activeOpenRowKeys, handleOpenDiff, openCommittedDiff } =
-    useSourceControlRowOpening({
-      isMac,
-      activeWorktreeId,
-      worktreePath,
-      visibleSelectionEntries,
-      branchSummary
-    })
+  const {
+    resolveSplitTargetGroupId,
+    activeOpenRowKeys,
+    activeOpenBranchPath,
+    handleOpenDiff,
+    openCommittedDiff
+  } = useSourceControlRowOpening({
+    isMac,
+    activeWorktreeId,
+    worktreePath,
+    visibleSelectionEntries,
+    branchSummary
+  })
 
   const shouldOpenAsSplit = useCallback(
     (event: SourceControlRowOpenEvent) => isSourceControlSplitOpenModifier(event, isMac),
@@ -189,6 +194,7 @@ export function useSourceControlFileListing({
   )
 
   return {
+    activeOpenBranchPath,
     activeOpenRowKeys,
     bulkStagePaths,
     bulkUnstagePaths,

@@ -12,26 +12,34 @@ export function buildActiveOpenFileSignature(
   return `${diffSource ?? 'edit'}${SIGNATURE_SEPARATOR}${relativePath}`
 }
 
+function parseActiveOpenFileSignature(
+  signature: string | null
+): { diffSource: string; path: string } | null {
+  if (!signature) {
+    return null
+  }
+  const separatorIndex = signature.indexOf(SIGNATURE_SEPARATOR)
+  if (separatorIndex === -1) {
+    return null
+  }
+  const path = signature.slice(separatorIndex + SIGNATURE_SEPARATOR.length)
+  if (path.length === 0) {
+    return null
+  }
+  return { diffSource: signature.slice(0, separatorIndex), path }
+}
+
 /** Match diffs to their staging side; plain editors prefer working-tree rows with staged-only fallback. */
 export function buildActiveOpenRowKeys(
   signature: string | null,
   availableRowKeys?: ReadonlySet<string>
 ): ReadonlySet<string> {
-  if (!signature) {
+  const parsed = parseActiveOpenFileSignature(signature)
+  if (!parsed) {
     return EMPTY_OPEN_ROW_KEYS
   }
 
-  const separatorIndex = signature.indexOf(SIGNATURE_SEPARATOR)
-  if (separatorIndex === -1) {
-    return EMPTY_OPEN_ROW_KEYS
-  }
-
-  const diffSource = signature.slice(0, separatorIndex)
-  const path = signature.slice(separatorIndex + SIGNATURE_SEPARATOR.length)
-  if (path.length === 0) {
-    return EMPTY_OPEN_ROW_KEYS
-  }
-
+  const { diffSource, path } = parsed
   if (diffSource === 'staged') {
     return filterAvailableRowKeys([`staged::${path}`], availableRowKeys)
   }
@@ -50,6 +58,12 @@ export function buildActiveOpenRowKeys(
   }
 
   return EMPTY_OPEN_ROW_KEYS
+}
+
+/** Only a single-file branch diff maps to a Committed on Branch row; View all spans every row. */
+export function resolveActiveOpenBranchPath(signature: string | null): string | null {
+  const parsed = parseActiveOpenFileSignature(signature)
+  return parsed?.diffSource === 'branch' ? parsed.path : null
 }
 
 function filterAvailableRowKeys(
