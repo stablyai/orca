@@ -11,7 +11,6 @@ import {
   waitAnnouncement,
   type WaitBaseline
 } from './agent-wait-announcement'
-import { isAutoReadMuted } from './auto-read-mute'
 import { useAutoReadRepliesPreference } from './auto-read-preference'
 import { useBackgroundReadingPreference, useBackgroundReadingService } from './background-reading'
 import { backgroundReadingActive } from './background-reading-state'
@@ -199,7 +198,7 @@ export function useAutoReadReplies(): void {
       readScopeRef.current === 'all' ||
       (readScopeRef.current === 'all-on-screen' && AppState.currentState === 'active')
     const feeds = createChatMessageFeeds((paneKey, messageId, text) => {
-      if (!readsEveryMessage() || isAutoReadMuted()) {
+      if (!readsEveryMessage()) {
         return false
       }
       speakAutoRead(`${paneKey}#${messageId}`, paneKey, text)
@@ -264,9 +263,9 @@ export function useAutoReadReplies(): void {
         })
         for (const reply of newReplies) {
           const message = withoutNativeChatVisualDirectiveLines(reply.message)
-          // Why: the feed already reads this pane's messages, the final one included.
+          // Why: the feed already reads this pane's messages, the final one included. While
+          // auto-read is paused they still go to the reader, which keeps them waiting.
           if (
-            isAutoReadMuted() ||
             feeds.heard(reply.paneKey, message) ||
             (readsEveryMessage() && feeds.covers(reply.paneKey))
           ) {
@@ -276,7 +275,7 @@ export function useAutoReadReplies(): void {
         }
         const waits = findNewWaits(waitBaseline, agents)
         waitBaseline = waits.baseline
-        if (announceWaitsRef.current === 'on' && !isAutoReadMuted()) {
+        if (announceWaitsRef.current === 'on') {
           for (const wait of waits.newWaits) {
             const id = `${wait.paneKey}~wait~${wait.since}`
             speakAutoRead(id, wait.paneKey, waitAnnouncement(wait.kind))

@@ -3,9 +3,8 @@ import { useHeadphonesOnly, useLanguageVoices, useLinkReading } from './reading-
 import {
   nextMessage,
   pauseReading,
+  playReading,
   previousMessage,
-  repeatLast,
-  resumeReading,
   setAutoReadNeedsHeadphones,
   stopSpeaking
 } from './reply-speaker'
@@ -19,16 +18,13 @@ function handleControl(action: ReaderControl): void {
       pauseReading('pause button')
       return
     case 'play':
-      resumeReading('play button')
+      playReading('play button')
       return
     case 'next':
       nextMessage('next button')
       return
     case 'previous':
       previousMessage('previous button')
-      return
-    case 'repeat':
-      repeatLast('repeat button')
       return
     case 'stop':
       stopSpeaking('stop button')

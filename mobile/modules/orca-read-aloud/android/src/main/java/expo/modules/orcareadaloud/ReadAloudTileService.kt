@@ -10,7 +10,7 @@ import android.service.quicksettings.TileService
 import androidx.annotation.RequiresApi
 
 /**
- * Quick Settings tile that mutes and unmutes auto-read while [ReadAloudService] runs; the mute
+ * Quick Settings tile that pauses and resumes auto-read while [ReadAloudService] runs; the pause
  * lives in JS, and the tile redraws when JS reports the new state.
  */
 class ReadAloudTileService : TileService() {
@@ -26,26 +26,26 @@ class ReadAloudTileService : TileService() {
   }
 
   override fun onClick() {
-    if (ReadAloudService.isRunning) ReadAloudControls.toggleMute()
+    if (ReadAloudService.isRunning) ReadAloudControls.toggleAutoRead()
   }
 
   private fun redraw() {
     val tile = qsTile ?: return
     val running = ReadAloudService.isRunning
-    val muted = ReadAloudService.isMuted
+    val paused = ReadAloudService.autoReadPaused
     tile.state = when {
       !running -> Tile.STATE_UNAVAILABLE
-      muted -> Tile.STATE_INACTIVE
+      paused -> Tile.STATE_INACTIVE
       else -> Tile.STATE_ACTIVE
     }
     tile.icon = Icon.createWithResource(
       this,
-      if (running && !muted) R.drawable.orca_read_aloud_volume_up else R.drawable.orca_read_aloud_volume_off
+      if (running && !paused) R.drawable.orca_read_aloud_auto_read else R.drawable.orca_read_aloud_auto_read_off
     )
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
       tile.subtitle = when {
         !running -> "Orca is not reading"
-        muted -> "Muted"
+        paused -> "Paused"
         else -> "On"
       }
     }
@@ -76,7 +76,7 @@ class ReadAloudTileService : TileService() {
       statusBar.requestAddTileService(
         ComponentName(context, ReadAloudTileService::class.java),
         "Read aloud",
-        Icon.createWithResource(context, R.drawable.orca_read_aloud_volume_up),
+        Icon.createWithResource(context, R.drawable.orca_read_aloud_auto_read),
         context.mainExecutor
       ) { result ->
         done(

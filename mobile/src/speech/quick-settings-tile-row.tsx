@@ -35,7 +35,7 @@ export function QuickSettingsTileRow(): React.JSX.Element | null {
         <Text style={styles.rowSublabel}>
           {result
             ? RESULT_TEXT[result]
-            : 'Mute and unmute from the panel you pull down from the top, like the flashlight'}
+            : 'Pause and resume auto-read from the panel you pull down from the top, like the flashlight'}
         </Text>
       </View>
       <Plus size={18} color={colors.textSecondary} />

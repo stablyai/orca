@@ -31,9 +31,11 @@ const {
   expireHolds,
   nextMessage,
   pauseReading,
+  playReading,
   previousMessage,
   repeatLast,
   resumeReading,
+  setAutoPlay,
   setAutoReadNeedsHeadphones,
   speakReply,
   stopSpeaking
@@ -57,6 +59,7 @@ function lastState() {
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(1_000_000)
+  setAutoPlay(true)
   stopSpeaking()
   spoken.length = 0
   stopUtterances.mockClear()
@@ -230,6 +233,64 @@ describe('reading controls', () => {
     expect(lastState()).toBe('idle')
     repeatLast('test')
     expect(last().text).toBe('Read once.')
+    finishPiece()
+    playReading('test')
+    expect(spoken.map(({ text }) => text)).toEqual(['Read once.', 'Read once.', 'Read once.'])
+  })
+
+  it('keeps what waits when the Read button cuts in', () => {
+    speakReply('auto', 'Auto.', 'queue')
+    speakReply('waiting', 'Waiting.', 'queue')
+    speakReply('button', 'Button.', 'interrupt')
+    expect(last().text).toBe('Button.')
+    finishPiece()
+    expect(last().text).toBe('Waiting.')
+  })
+})
+
+describe('auto-read paused', () => {
+  it('pauses the message being read and keeps new ones waiting', () => {
+    speakReply('first', 'First.', 'queue')
+    setAutoPlay(false)
+    expect(lastState()).toBe('paused')
+    speakReply('second', 'Second.', 'queue')
+    speakReply('third', 'Third.', 'queue')
+    expect(spoken.map(({ text }) => text)).toEqual(['First.'])
+    expect(native.setReaderState.mock.calls.at(-1)?.[2]).toBe('Auto-read paused · 2 more waiting')
+  })
+
+  it('reads one message for each Play, and goes through the rest when resumed', () => {
+    speakReply('first', 'First.', 'queue')
+    setAutoPlay(false)
+    speakReply('second', 'Second.', 'queue')
+    speakReply('third', 'Third.', 'queue')
+    playReading('test')
+    expect(last().text).toBe('First.')
+    finishPiece()
+    expect(lastState()).toBe('paused')
+    expect(native.setReaderState.mock.calls.at(-1)?.[2]).toBe('Auto-read paused · 2 waiting')
+    playReading('test')
+    expect(last().text).toBe('Second.')
+    setAutoPlay(true)
+    finishPiece()
+    expect(last().text).toBe('Third.')
+  })
+
+  it('starts what waited when resumed with nothing being read', () => {
+    setAutoPlay(false)
+    speakReply('later', 'Later.', 'queue')
+    expect(spoken).toEqual([])
+    setAutoPlay(true)
+    expect(last().text).toBe('Later.')
+  })
+
+  it('plays a waiting message through the speaker when asked, with headphones only on', () => {
+    setAutoReadNeedsHeadphones(true)
+    native.isPrivateOutput.mockReturnValue(false)
+    setAutoPlay(false)
+    speakReply('waiting', 'Waiting.', 'queue')
+    nextMessage('test')
+    expect(last().text).toBe('Waiting.')
   })
 })
 

@@ -5,7 +5,7 @@ import { colors, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useReaderControls } from './reader-controls'
-import { pauseReading, resumeReading, stopSpeaking, useReaderState } from './reply-speaker'
+import { pauseReading, playReading, stopSpeaking, useReaderState } from './reply-speaker'
 import { useAutoReadReplies } from './use-auto-read-replies'
 
 // Why: mounted once above the navigator, so the pills also cover desktop-served pages the shell
@@ -27,7 +27,7 @@ export function ReplyReaderOverlay(): React.JSX.Element | null {
         accessibilityLabel={paused ? 'Resume reading' : 'Pause reading'}
         hitSlop={8}
         style={styles.pill}
-        onPress={() => (paused ? resumeReading('Resume pill') : pauseReading('Pause pill'))}
+        onPress={() => (paused ? playReading('Resume pill') : pauseReading('Pause pill'))}
       >
         {paused ? (
           <Play size={12} color={colors.textPrimary} />

@@ -14,7 +14,7 @@ export type Utterance = {
   title: string | null
   /** Queued by auto-read, which the headphones-only option can hold back. */
   auto: boolean
-  /** Goes into the history Previous and Repeat use; settings samples do not. */
+  /** Goes into the history Previous and Play use; settings samples do not. */
   kept: boolean
 }
 
@@ -35,17 +35,19 @@ export function readerStatus(
   state: ReaderState,
   hold: Hold | null,
   current: Utterance | null,
-  waiting: number
+  waiting: number,
+  autoPlay = true
 ): string | null {
   if (state === 'idle') {
     return null
   }
-  const parts = [hold ? HOLD_STATUS[hold.reason] : 'Reading']
+  const autoReadHeld = !autoPlay && (current === null || hold?.reason === 'paused')
+  const parts = [autoReadHeld ? 'Auto-read paused' : hold ? HOLD_STATUS[hold.reason] : 'Reading']
   if (current?.title) {
     parts.push(current.title)
   }
   if (waiting > 0) {
-    parts.push(`${waiting} more waiting`)
+    parts.push(current ? `${waiting} more waiting` : `${waiting} waiting`)
   }
   return parts.join(' · ')
 }

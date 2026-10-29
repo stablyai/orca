@@ -11,7 +11,7 @@
     <service
       android:name="expo.modules.orcareadaloud.ReadAloudTileService"
       android:exported="true"
-      android:icon="@drawable/orca_read_aloud_volume_up"
+      android:icon="@drawable/orca_read_aloud_auto_read"
       android:label="Read aloud"
       android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
       <intent-filter>

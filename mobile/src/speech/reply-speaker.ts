@@ -1,19 +1,12 @@
 import { useSyncExternalStore } from 'react'
-import { logSpeechEvent, recordSpeechDiagnostics } from './speech-diagnostics'
-import {
-  onAudioEvent,
-  playChime,
-  speakUtterance,
-  spokenOffset,
-  stopUtterances,
-  type UtteranceCallbacks
-} from './tts-engine'
+import { playPieceRun } from './piece-player'
+import { logSpeechEvent } from './speech-diagnostics'
+import { onAudioEvent, spokenOffset, stopUtterances } from './tts-engine'
 import { previousTarget, readerStatus, remembered, type Hold, type Utterance } from './reader-model'
 import { replyPieces } from './reply-pieces'
 import { voiceNativeModule, type ReaderState } from './voice-native-module'
 
-const RETRIES_PER_PIECE = 1
-// A longer call, dictation or unplug ends the reading instead of resuming it; Repeat still has it.
+// A longer call, dictation or unplug ends the reading instead of resuming it; Play still has it.
 export const RESUME_WITHIN_MS = 10 * 60_000
 
 export type ReplyIntro = { chime?: boolean; name?: string | null; title?: string | null }
@@ -29,13 +22,16 @@ let startedAt = 0
 let hold: Hold | null = null
 let history: Utterance[] = []
 let headphonesOnly = false
+// Off while auto-read is paused: nothing starts by itself, new messages wait for Play or Next.
+let autoPlay = true
 const listeners = new Set<() => void>()
 
 function readerState(): ReaderState {
   if (current === null && queue.length === 0) {
     return 'idle'
   }
-  return hold ? 'paused' : 'reading'
+  // Messages waiting while auto-read is paused show as paused: Play reads the next one.
+  return hold || current === null ? 'paused' : 'reading'
 }
 
 let reported = ''
@@ -44,7 +40,7 @@ function emit(): void {
   // Why: pushed synchronously, not from a render, so the notification stays current off screen.
   const state = readerState()
   const title = current?.title ?? null
-  const status = readerStatus(state, hold, current, queue.length)
+  const status = readerStatus(state, hold, current, queue.length, autoPlay)
   const canRepeat = history.length > 0
   // Greyed out when there is nowhere to go: no message before this one, none waiting after it.
   const canPrevious = (current ? history.findIndex((kept) => kept.id === current?.id) : 0) > 0
@@ -69,13 +65,14 @@ function begin(utterance: Utterance): void {
   startedAt = Date.now()
   history = remembered(history, utterance)
   emit()
-  playPiece(utterance, 0, 0)
+  playPiece(utterance, 0)
 }
 
-function playNext(): void {
+/** `byUser`: Play or Next was pressed, which reads what waits through the speaker too. */
+function playNext(byUser = false): void {
   current = null
   for (let next = queue.shift(); next; next = queue.shift()) {
-    if (next.auto && headphonesOnly && !privateOutput()) {
+    if (next.auto && !byUser && headphonesOnly && !privateOutput()) {
       logSpeechEvent(`skipped ${next.id}: no headphones`)
       continue
     }
@@ -87,59 +84,38 @@ function playNext(): void {
 
 function advance(utterance: Utterance, index: number): void {
   if (index + 1 < utterance.pieces.length) {
-    playPiece(utterance, index + 1, 0)
+    playPiece(utterance, index + 1)
   } else {
     logSpeechEvent(`finished ${utterance.id}`)
-    playNext()
+    if (autoPlay) {
+      playNext()
+    } else {
+      current = null
+      emit()
+    }
   }
 }
 
-function playPiece(utterance: Utterance, index: number, attempt: number, from = 0): void {
-  // Why: callbacks of an utterance cut off by stop() can still arrive after the next one started.
-  const owns = () => current === utterance && hold === null
+function playPiece(utterance: Utterance, index: number, from = 0): void {
   piece = index
   pieceFrom = from
-  const position = `${index + 1}/${utterance.pieces.length}`
-  const handlers: UtteranceCallbacks = {
-    onStart: () => {
-      recordSpeechDiagnostics({ lastSpokenAt: Date.now() })
-      if (index === 0 || attempt > 0) {
-        logSpeechEvent(`speaking ${position}${attempt > 0 ? ' (retry)' : ''}`)
-      }
-    },
-    onDone: () => {
-      if (owns()) {
-        advance(utterance, index)
-      }
-    },
-    onError: (error) => {
-      const message = error?.message ?? 'unknown error'
-      recordSpeechDiagnostics({ lastError: `TTS: ${message}` })
-      logSpeechEvent(`piece ${position} failed: ${message}`)
-      if (!owns()) {
-        return
-      }
-      if (attempt < RETRIES_PER_PIECE) {
-        playPiece(utterance, index, attempt + 1, from)
-      } else {
-        advance(utterance, index)
-      }
-    }
-  }
-  const next = utterance.pieces[index]
-  if (next.kind === 'chime') {
-    playChime(handlers)
-  } else {
-    speakUtterance(next.text.slice(from), handlers, next.language ?? null)
-  }
+  playPieceRun({
+    piece: utterance.pieces[index],
+    index,
+    count: utterance.pieces.length,
+    from,
+    // Why: callbacks of an utterance cut off by stop() can still arrive after the next one started.
+    owns: () => current === utterance && hold === null,
+    onEnd: () => advance(utterance, index)
+  })
 }
 
 function start(utterance: Utterance, mode: 'interrupt' | 'queue'): void {
   logSpeechEvent(
     `${mode === 'interrupt' ? 'read' : 'auto-read'} ${utterance.id} (${utterance.pieces.length} pieces)`
   )
+  // The Read button cuts off what is being read; what waits keeps waiting.
   if (mode === 'interrupt') {
-    queue = []
     current = null
     stopUtterances()
     begin(utterance)
@@ -147,7 +123,7 @@ function start(utterance: Utterance, mode: 'interrupt' | 'queue'): void {
   }
   queue = queue.filter((queued) => queued.id !== utterance.id)
   queue.push(utterance)
-  if (current === null && hold === null) {
+  if (current === null && hold === null && autoPlay) {
     playNext()
   } else {
     emit()
@@ -195,7 +171,7 @@ export function playChimeSample(): void {
 
 // A call or unplug never replaces the user's own pause, which lasts until they resume.
 function holdReading(reason: Hold['reason'], label: string): void {
-  if (readerState() === 'idle') {
+  if (current === null) {
     // Nothing to resume, so the focus kept to hear of the call's end can go now.
     if (reason === 'interrupted') {
       stopUtterances()
@@ -230,9 +206,21 @@ export function resumeReading(reason: string): void {
   hold = null
   if (current) {
     emit()
-    playPiece(current, piece, 0, resumeFrom)
+    playPiece(current, piece, resumeFrom)
   } else {
     playNext()
+  }
+}
+
+/** The middle button: ends a pause, else reads the next message waiting, else the last one again. */
+export function playReading(reason: string): void {
+  if (hold) {
+    resumeReading(reason)
+  } else if (current === null && queue.length > 0) {
+    logSpeechEvent(`play: ${reason}`)
+    playNext(true)
+  } else if (current === null) {
+    repeatLast(reason)
   }
 }
 
@@ -244,7 +232,7 @@ export function nextMessage(reason: string): void {
   hold = null
   current = null
   stopUtterances()
-  playNext()
+  playNext(true)
 }
 
 /** Like a music player's Previous; a message cut off by going back is read again after it. */
@@ -285,6 +273,25 @@ export function stopSpeaking(reason = 'stop'): void {
 
 export function setAutoReadNeedsHeadphones(on: boolean): void {
   headphonesOnly = on
+}
+
+/**
+ * Auto-read paused (off): the message being read pauses where it is and new ones wait. Resumed:
+ * the reading goes on from there and through everything that waited.
+ */
+export function setAutoPlay(on: boolean): void {
+  if (on === autoPlay) {
+    return
+  }
+  autoPlay = on
+  if (!on && current && hold === null) {
+    holdReading('paused', 'auto-read paused')
+  } else if (on && hold?.reason === 'paused') {
+    resumeReading('auto-read resumed')
+  } else if (on && current === null && hold === null && queue.length > 0) {
+    playNext()
+  }
+  emit()
 }
 
 function endHold(reason: Hold['reason'], label: string): void {

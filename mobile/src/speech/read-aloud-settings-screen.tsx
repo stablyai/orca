@@ -12,7 +12,7 @@ import type {
   ReadScope
 } from '../storage/speech-preferences'
 import { useAnnounceWaits } from './agent-wait-announcement'
-import { setAutoReadMuted, useAutoReadMuted } from './auto-read-mute'
+import { setAutoReadPaused, useAutoReadPaused } from './auto-read-pause'
 import { useAutoReadRepliesPreference } from './auto-read-preference'
 import { useBackgroundReadingPreference } from './background-reading'
 import { QuickSettingsTileRow } from './quick-settings-tile-row'
@@ -102,7 +102,7 @@ export default function ReadAloudSettingsScreen() {
   const { value: announceWaits, setValue: setAnnounceWaits } = useAnnounceWaits()
   const { value: headphonesOnly, setValue: setHeadphonesOnly } = useHeadphonesOnly()
   const { value: linkReading, setValue: setLinkReading } = useLinkReading()
-  const muted = useAutoReadMuted()
+  const autoReadPaused = useAutoReadPaused()
   const diagnostics = useSpeechDiagnostics()
   const speechOptions = useSpeechOptions()
   const [picker, setPicker] = useState<VoicePicker | null>(null)
@@ -162,9 +162,9 @@ export default function ReadAloudSettingsScreen() {
         <Text style={styles.groupDescription}>
           While a message is read, the buttons of headphones and of a car's steering wheel, and the
           reading notification, pause it and go to the next or previous message (Previous starts the
-          message again; pressed twice, the one before it). Afterwards the notification's Repeat
-          reads the last message again. A call or dictation pauses the reading, which goes on when
-          they end.
+          message again; pressed twice, the one before it). Afterwards the notification's Play reads
+          the last message again. A call or dictation pauses the reading, which goes on when they
+          end.
         </Text>
 
         <Text style={[styles.groupHeading, styles.groupGap]}>AUTO-READ</Text>
@@ -187,17 +187,17 @@ export default function ReadAloudSettingsScreen() {
           </View>
           <View style={[styles.row, styles.rowDivider]}>
             <View style={styles.rowContent}>
-              <Text style={styles.rowLabel}>Mute for now</Text>
+              <Text style={styles.rowLabel}>Pause auto-read</Text>
               <Text style={styles.rowSublabel}>
-                {muted
-                  ? 'Muted — until you unmute here, in the notification or on the tile, or restart Orca'
-                  : 'Also in the reading notification and the Quick Settings tile; a restart of Orca unmutes'}
+                {autoReadPaused
+                  ? 'Paused — new messages wait for Play. Resume here, in the notification or on the tile'
+                  : 'New messages wait instead of being read. Also in the notification and on the tile; restarting Orca resumes'}
               </Text>
             </View>
             <Switch
-              accessibilityLabel="Mute auto-read for now"
-              value={muted}
-              onValueChange={setAutoReadMuted}
+              accessibilityLabel="Pause auto-read"
+              value={autoReadPaused}
+              onValueChange={setAutoReadPaused}
               trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
               thumbColor={colors.textPrimary}
             />

@@ -5,7 +5,7 @@ import {
   loadBackgroundReading,
   saveBackgroundReading
 } from '../storage/speech-preferences'
-import { isAutoReadMuted, setAutoReadMuted } from './auto-read-mute'
+import { isAutoReadPaused, setAutoReadPaused } from './auto-read-pause'
 import { setBackgroundReadingActive } from './background-reading-state'
 import { recordSpeechDiagnostics } from './speech-diagnostics'
 import { voiceNativeModule } from './voice-native-module'
@@ -66,13 +66,13 @@ export function useBackgroundReadingService(wanted: boolean, onTick: () => void)
       recordSpeechDiagnostics({ lastTickAt: Date.now() })
       onTick()
     })
-    // Why: only mute comes through the service; reading buttons use `reader-controls.ts` instead.
-    const muteButton = native.addListener('onMuteToggle', () =>
-      setAutoReadMuted(!isAutoReadMuted())
+    // Why: only the auto-read pause comes through the service; reading buttons use `reader-controls.ts`.
+    const pauseButton = native.addListener('onAutoReadToggle', () =>
+      setAutoReadPaused(!isAutoReadPaused())
     )
     return () => {
       subscription.remove()
-      muteButton.remove()
+      pauseButton.remove()
     }
   }, [wanted, onTick])
 
@@ -85,8 +85,8 @@ export function useBackgroundReadingService(wanted: boolean, onTick: () => void)
       return
     }
     const sync = () => {
-      // Why: the notification shows this process's mute, never one a previous run left behind.
-      native.setMuted(isAutoReadMuted())
+      // Why: the notification shows this process's pause, never one a previous run left behind.
+      native.setAutoReadPaused(isAutoReadPaused())
       if (!wanted) {
         if (native.isRunning()) {
           native.stop()
