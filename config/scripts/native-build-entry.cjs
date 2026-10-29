@@ -37,13 +37,14 @@ function loadedNativeBuildDir(packageDir, moduleName, target) {
   return existsSync(entryDir) ? entryDir : join(packageDir, 'build', 'Release')
 }
 
-// Match node-pty: ConPTY from Windows build 18309, winpty earlier.
+// Desktop and orcad pass useConptyDll. The patched agent uses ConPTY from
+// Windows build 17763 on that path, so the native module name follows 17763.
 function nodePtyNativeModuleName(platform = process.platform, osRelease = release()) {
   if (platform !== 'win32') {
     return 'pty'
   }
   const match = /(\d+)\.(\d+)\.(\d+)/.exec(osRelease)
-  return match && Number.parseInt(match[3], 10) >= 18309 ? 'conpty' : 'pty'
+  return match && Number.parseInt(match[3], 10) >= 17763 ? 'conpty' : 'pty'
 }
 
 function isNativeBuildEntryName(name) {
