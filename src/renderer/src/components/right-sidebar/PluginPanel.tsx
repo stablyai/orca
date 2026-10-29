@@ -1,20 +1,15 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef } from 'react'
 import { isPluginPanelTabKey } from '../../../../shared/plugins/manifest/plugin-manifest'
 import { PLUGIN_PANEL_FRAME_NAME_PREFIX } from '../../../../shared/plugins/frames/plugin-frame-bridge'
 import { fillPluginPanelShell } from './plugin-panel-design-token-css'
 import { usePluginFrameHost } from './use-plugin-frame-host'
+import { usePluginFrameEntry } from './use-plugin-frame-entry'
 import { usePluginPanels, usePluginPanelsStore } from '@/store/plugin-panels'
 import { translate } from '@/i18n/i18n'
 
 type PluginPanelProps = {
   tabKey: string
 }
-
-type PluginPanelEntryState =
-  | { status: 'loading' }
-  | { status: 'error' }
-  | { status: 'unresponsive' }
-  | { status: 'ready'; shellHtml: string; documentRevision: number }
 
 function PluginPanelMessage({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
@@ -30,93 +25,34 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
   const panel = isPluginPanelTabKey(tabKey)
     ? (panels.find((entry) => entry.tabKey === tabKey) ?? null)
     : null
-  const [entryState, setEntryState] = useState<PluginPanelEntryState>({ status: 'loading' })
-  const [sessionToken, setSessionToken] = useState<string | null>(null)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
-
-  const pluginKey = panel?.pluginKey ?? null
-  const panelId = panel?.id ?? null
-  const panelShell = entryState.status === 'ready' ? entryState.shellHtml : null
+  const { entry, markUnresponsive } = usePluginFrameEntry(
+    'panel',
+    panel?.pluginKey ?? null,
+    panel?.id ?? null
+  )
+  const panelShell = entry.status === 'ready' ? entry.html : null
   // Why memoized: a new srcdoc reloads the frame; theme changes arrive as messages instead.
   const panelDocument = useMemo(
     () => (panelShell ? fillPluginPanelShell(panelShell) : null),
     [panelShell]
   )
-  const panelFrameKey =
-    entryState.status === 'ready' ? `${tabKey}:${entryState.documentRevision}` : null
+  const panelFrameKey = entry.status === 'ready' ? `${tabKey}:${entry.revision}` : null
   const { onFrameLoad } = usePluginFrameHost({
     surface: 'panel',
     iframeRef,
     frameKey: panelFrameKey,
-    sessionToken,
-    onUnresponsive: () => {
-      setPanelHealth(tabKey, 'error')
-      setEntryState({ status: 'unresponsive' })
-    }
+    sessionToken: entry.status === 'ready' ? entry.sessionToken : null,
+    onUnresponsive: markUnresponsive
   })
 
   useEffect(() => {
-    if (!pluginKey || !panelId) {
-      return
-    }
-    let cancelled = false
-    let currentHtml: string | null = null
-    let documentRevision = 0
-    setEntryState({ status: 'loading' })
-    setSessionToken(null)
-    const pluginsApi = window.api?.plugins
-    if (!pluginsApi) {
+    if (entry.status === 'ready') {
+      setPanelHealth(tabKey, 'healthy')
+    } else if (entry.status !== 'loading') {
       setPanelHealth(tabKey, 'error')
-      setEntryState({ status: 'error' })
-      return
     }
-    let loadGeneration = 0
-    const load = (): void => {
-      const generation = ++loadGeneration
-      pluginsApi
-        .readPanelEntry({ pluginKey, panelId })
-        .then((entry) => {
-          if (cancelled || generation !== loadGeneration) {
-            return
-          }
-          if (!entry) {
-            currentHtml = null
-            setSessionToken(null)
-            setPanelHealth(tabKey, 'error')
-            setEntryState({ status: 'error' })
-            return
-          }
-          // Rotate authority without replacing unchanged content or restarting its watchdog.
-          setSessionToken(entry.sessionToken)
-          setPanelHealth(tabKey, 'healthy')
-          if (entry.html !== currentHtml) {
-            currentHtml = entry.html
-            documentRevision += 1
-            setPanelHealth(tabKey, 'healthy')
-            setEntryState({
-              status: 'ready',
-              shellHtml: entry.html,
-              documentRevision
-            })
-          }
-        })
-        .catch(() => {
-          if (!cancelled && generation === loadGeneration) {
-            currentHtml = null
-            setSessionToken(null)
-            setPanelHealth(tabKey, 'error')
-            setEntryState({ status: 'error' })
-          }
-        })
-    }
-    load()
-    const unsubscribe = pluginsApi.onChanged ? pluginsApi.onChanged(load) : null
-    return () => {
-      cancelled = true
-      loadGeneration += 1
-      unsubscribe?.()
-    }
-  }, [panelId, pluginKey, setPanelHealth, tabKey])
+  }, [entry.status, setPanelHealth, tabKey])
 
   // Persisted tabs can outlive an uninstalled or disabled plugin.
   if (!panel) {
@@ -130,7 +66,7 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
     )
   }
 
-  if (entryState.status === 'loading') {
+  if (entry.status === 'loading') {
     return (
       <PluginPanelMessage>
         {translate('auto.components.right.sidebar.PluginPanel.loading', 'Loading plugin panel...')}
@@ -138,7 +74,7 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
     )
   }
 
-  if (entryState.status === 'unresponsive') {
+  if (entry.status === 'unresponsive') {
     return (
       <PluginPanelMessage>
         {translate(
@@ -149,7 +85,7 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
     )
   }
 
-  if (entryState.status === 'error') {
+  if (entry.status === 'error') {
     return (
       <PluginPanelMessage>
         {translate(

@@ -331,6 +331,26 @@ describe('PluginPanel', () => {
     expect(container.textContent).toContain('stopped responding and was suspended')
   })
 
+  it('stays suspended, and reported as failed, when the plugin list changes but its HTML does not', async () => {
+    readPanelEntryMock.mockResolvedValue({
+      html: '<h1>Hello plugin</h1>',
+      sessionToken: SESSION_TOKEN
+    })
+    await renderPanel('plugin:samples.my-plugin/dashboard')
+    await act(async () => watchdogCallbacks.onUnresponsive?.())
+
+    await act(async () => {
+      pluginChangedListener?.()
+      await waitForHappyDomTasks()
+    })
+
+    expect(container.textContent).toContain('stopped responding and was suspended')
+    expect(setPanelHealthMock).toHaveBeenLastCalledWith(
+      'plugin:samples.my-plugin/dashboard',
+      'error'
+    )
+  })
+
   it('keeps a watchdog error published when navigation unmounts the failed panel', async () => {
     readPanelEntryMock.mockResolvedValue({
       html: '<h1>Hello plugin</h1>',

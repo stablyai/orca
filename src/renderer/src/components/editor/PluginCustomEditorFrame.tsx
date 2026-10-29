@@ -6,6 +6,7 @@ import { PLUGIN_PANEL_FRAME_NAME_PREFIX } from '../../../../shared/plugins/frame
 import { CUSTOM_EDITOR_LARGE_DOCUMENT_BYTES } from '../../../../shared/plugins/frames/plugin-custom-editor-bridge'
 import { fillPluginPanelShell } from '../right-sidebar/plugin-panel-design-token-css'
 import { usePluginFrameHost } from '../right-sidebar/use-plugin-frame-host'
+import { usePluginFrameEntry } from '../right-sidebar/use-plugin-frame-entry'
 import { editorShortcutMatches } from './editor-shortcuts'
 import { registerEditorFrameFlush } from './editor-pending-flush'
 import {
@@ -29,12 +30,6 @@ type PluginCustomEditorFrameProps = {
   onBytesChange?: (document: CustomEditorBinaryDocument) => void
 }
 
-type EntryState =
-  | { status: 'loading' }
-  | { status: 'error' }
-  | { status: 'unresponsive' }
-  | { status: 'ready'; html: string; sessionToken: string | null; revision: number }
-
 function FrameMessage({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
     <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
@@ -55,7 +50,6 @@ export default function PluginCustomEditorFrame({
   binaryDocument,
   onBytesChange
 }: PluginCustomEditorFrameProps): React.JSX.Element {
-  const [entry, setEntry] = useState<EntryState>({ status: 'loading' })
   const [refusal, setRefusal] = useState<CustomEditorEditRefusal | null>(null)
   const [saveBlocked, setSaveBlocked] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
@@ -89,58 +83,7 @@ export default function PluginCustomEditorFrame({
   const isLarge =
     (binaryDocument?.bytes.byteLength ?? content.length) > CUSTOM_EDITOR_LARGE_DOCUMENT_BYTES
 
-  const { pluginKey, id: editorId } = editor
-  useEffect(() => {
-    let cancelled = false
-    let currentHtml: string | null = null
-    let revision = 0
-    // Why: refresh events start overlapping reads; only the newest may set the entry.
-    let latestRead = 0
-    const pluginsApi = window.api?.plugins
-    const readEntry = pluginsApi?.readCustomEditorEntry
-    if (!pluginsApi || !readEntry) {
-      setEntry({ status: 'error' })
-      return
-    }
-    setEntry({ status: 'loading' })
-    const load = (): void => {
-      const read = ++latestRead
-      readEntry({ pluginKey, editorId })
-        .then((result) => {
-          if (cancelled || read !== latestRead) {
-            return
-          }
-          if (!result) {
-            currentHtml = null
-            setEntry({ status: 'error' })
-            return
-          }
-          // Plugin list changes fire often; only new bytes remount the frame.
-          if (result.html !== currentHtml) {
-            currentHtml = result.html
-            revision += 1
-          }
-          setEntry({
-            status: 'ready',
-            html: result.html,
-            sessionToken: result.sessionToken,
-            revision
-          })
-        })
-        .catch(() => {
-          if (!cancelled && read === latestRead) {
-            currentHtml = null
-            setEntry({ status: 'error' })
-          }
-        })
-    }
-    load()
-    const unsubscribe = pluginsApi.onChanged ? pluginsApi.onChanged(load) : null
-    return () => {
-      cancelled = true
-      unsubscribe?.()
-    }
-  }, [pluginKey, editorId])
+  const { entry, markUnresponsive } = usePluginFrameEntry('editor', editor.pluginKey, editor.id)
 
   const frameKey = entry.status === 'ready' ? `${editor.key}:${entry.revision}` : null
   const entryHtml = entry.status === 'ready' ? entry.html : null
@@ -197,7 +140,7 @@ export default function PluginCustomEditorFrame({
     frameKey,
     sessionToken: entry.status === 'ready' ? entry.sessionToken : null,
     editor: host.channel,
-    onUnresponsive: () => setEntry({ status: 'unresponsive' })
+    onUnresponsive: markUnresponsive
   })
 
   useEffect(() => {
