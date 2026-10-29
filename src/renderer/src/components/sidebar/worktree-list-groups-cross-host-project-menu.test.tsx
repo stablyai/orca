@@ -10,6 +10,7 @@ import {
 } from './worktree-list/rows/repo-header-project-actions'
 import { project } from './worktree-list-groups-test-fixtures'
 import {
+  localGroup,
   localRepo,
   pairedGroup,
   pairedHostId,
@@ -87,7 +88,7 @@ function actionsFixture(): RepoHeaderProjectActions {
 
 // This Orca anchors the header on its own ungrouped row; the paired row puts it in the group.
 function renderPlannedProjectMenu(actions: RepoHeaderProjectActions): HTMLDivElement {
-  const groups = [pairedGroup, otherPairedGroup]
+  const groups = [pairedGroup, otherPairedGroup, localGroup]
   const header = planRows({ repoOrder: THIS_ORCA_ORDER, groups })
     .render(new Set())
     .find((row) => row.type === 'header' && row.key === `project:${project.id}`)
@@ -144,6 +145,15 @@ describe('the project menu of a header drawn in a group through the paired host 
       expect.objectContaining({ id: pairedRepo.id, executionHostId: pairedHostId }),
       otherPairedGroup.id
     )
+  })
+
+  it("moves this Orca's row into this Orca's group, which the paired row cannot join", () => {
+    const actions = actionsFixture()
+    const container = renderPlannedProjectMenu(actions)
+
+    act(() => menuItem(container, localGroup.name)?.click())
+
+    expect(actions.onMoveProjectToGroup).toHaveBeenCalledWith(localRepo, localGroup.id)
   })
 
   it("keeps the other project actions on this Orca's anchor row", () => {

@@ -29,6 +29,7 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { getRepositoryIconSectionId } from '@/components/settings/repository/repository-settings-targets'
 import { WslMoveProjectMenuItem } from '@/components/wsl-move/WslMoveProjectMenuItem'
+import { getProjectGroupJoinableRow } from '@/store/slices/project-group-owner-routing'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorktreeVisibilityDefaults } from '../../../../../../shared/global-settings-types'
@@ -171,7 +172,14 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
                 <DropdownMenuItem
                   key={group.id}
                   disabled={groupRepo.projectGroupId === group.id}
-                  onSelect={() => actions.onMoveProjectToGroup(groupRepo, group.id)}
+                  onSelect={() =>
+                    actions.onMoveProjectToGroup(
+                      // Why: a group lives on one host, so move whichever of the two rows can join it.
+                      getProjectGroupJoinableRow([groupRepo, repo], projectGroups, group.id) ??
+                        groupRepo,
+                      group.id
+                    )
+                  }
                 >
                   <span className="max-w-48 truncate">{group.name}</span>
                 </DropdownMenuItem>
