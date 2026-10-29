@@ -1,6 +1,13 @@
 import { z } from 'zod'
 import { OptionalBoolean, OptionalString, requiredString } from './rpc-param-primitives'
 import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../orchestration-run-pagination'
+import { ORCHESTRATION_RUN_EVENT_PAGE_LIMIT } from '../orchestration-run-events'
+
+export const RunEventsParams = z.object({
+  id: requiredString('Missing --id'),
+  limit: z.number().int().min(1).max(ORCHESTRATION_RUN_EVENT_PAGE_LIMIT).optional(),
+  cursor: z.string().min(1).max(4096).optional()
+})
 
 export const RunCreateParams = z.object({
   objective: requiredString('Missing --objective'),

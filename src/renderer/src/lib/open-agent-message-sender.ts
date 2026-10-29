@@ -2,6 +2,7 @@
 
 import { toast } from 'sonner'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
+import { parseOrcaSessionAddress } from '../../../shared/orca-session-address'
 import { agentSessionWriteNoticeText } from '@/components/native-chat/agent-session-write-notice-text'
 import type {
   OrchestrationPartyLocation,
@@ -84,16 +85,40 @@ async function openSender(
   { party }: Sender,
   host: RuntimeClientTarget
 ): Promise<void> {
-  const environmentId = host.kind === 'environment' ? host.environmentId : null
   // Mail identifies senders beyond old terminal handles; tasks carry no mail and resolve coordinators by address.
   const mail = source.orchestration?.message === 'mail-notice' ? source.orchestration.messages : []
   const messageIds = mail
     .filter((message) => message.from === party.address)
     .map((message) => message.messageId)
+  await openPartyAtHost(party, messageIds, host)
+}
+
+export async function openOrchestrationAddress(
+  address: string,
+  host: RuntimeClientTarget
+): Promise<boolean> {
+  const orcaSessionId = parseOrcaSessionAddress(address)
+  const terminalHandle =
+    orcaSessionId || address.startsWith('dispatch:') || address.startsWith('run:') ? null : address
+  try {
+    return await openPartyAtHost({ address, orcaSessionId, terminalHandle }, [], host)
+  } catch (error) {
+    console.warn('[orchestration-address] opening the agent failed', error)
+    showLookupFailure('unreachable')
+    return false
+  }
+}
+
+async function openPartyAtHost(
+  party: Sender['party'],
+  messageIds: readonly string[],
+  host: RuntimeClientTarget
+): Promise<boolean> {
+  const environmentId = host.kind === 'environment' ? host.environmentId : null
   const found = await lookUpSender(party, messageIds, host)
   if (typeof found === 'string') {
     showLookupFailure(found)
-    return
+    return false
   }
   const { location } = found
   if (!location) {
@@ -105,35 +130,36 @@ async function openSender(
       // Not found, and not proven gone: one this host does not run.
       showLookupFailure('unreachable')
     }
-    return
+    return false
   }
   if (location.kind === 'chat') {
     const session = {
       structuredSession: { workspaceId: location.worktreeId, sessionId: location.sessionId }
     }
-    await activateAiVaultStructuredSession(session, undefined, host)
-    return
+    return activateAiVaultStructuredSession(session, undefined, host)
   }
   if (location.kind !== 'terminal') {
     // A kind a newer host answers with.
     showLookupFailure('update')
-    return
+    return false
   }
-  await focusTerminal(location.handle, environmentId)
+  return focusTerminal(location.handle, environmentId)
 }
 
-async function focusTerminal(handle: string, environmentId: string | null): Promise<void> {
+async function focusTerminal(handle: string, environmentId: string | null): Promise<boolean> {
   if (focusRendererTerminalHandle(handle, environmentId)) {
-    return
+    return true
   }
   try {
     await focusRuntimeTerminalHandle(handle, environmentId)
+    return true
   } catch (error) {
     if (error instanceof RuntimeRpcCallError && TERMINAL_GONE_CODES.has(error.code)) {
       showAgentPaneUnavailable()
     } else {
       showLookupFailure(isRuntimeCompatBlockError(error) ? 'update' : 'unreachable')
     }
+    return false
   }
 }
 
