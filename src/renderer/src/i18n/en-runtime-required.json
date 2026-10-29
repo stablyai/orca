@@ -2114,7 +2114,6 @@
   },
   "settings": {
     "agents": {
-      "approveForMe": "approve for me",
       "permissionOverrideMore_one": "and {{count}} more",
       "permissionOverrideMore_other": "and {{count}} more",
       "permissionOverridesFollow_one": "{{count}} agent now follows {{mode}}",

@@ -8,7 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   agentLaunchSettingsMutationUpdates,
   projectAgentLaunchSettings,
-  type AgentLaunchSettings
+  type AgentLaunchSettings,
+  type AgentLaunchSettingsMutation
 } from '../../../../shared/agent-launch-settings'
 import { HostAgentLaunchSettings } from './HostAgentLaunchSettings'
 import * as permissionControls from './AgentPermissionChoiceControls'
@@ -247,7 +248,7 @@ describe('host launch settings form', () => {
         gemini: choice,
         goose: choice
       })
-      const requests = []
+      const requests: AgentLaunchSettingsMutation[][] = []
       for (const presentation of ['segments', 'menu']) {
         // Former secondary view, exercising the same production caller and failed-save path.
         const previous =
