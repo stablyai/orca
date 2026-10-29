@@ -16,6 +16,10 @@ describe('getDefaultSettings', () => {
   it('asks before closing terminals with running processes by default', () => {
     expect(getDefaultSettings('/tmp').skipCloseTerminalWithRunningProcessConfirm).toBe(false)
   })
+
+  it('keeps file explorer drag-move confirmation off by default', () => {
+    expect(getDefaultSettings('/tmp').confirmFileExplorerMove).toBe('never')
+  })
 })
 
 describe('getDefaultPrimarySelectionMiddleClickPaste', () => {

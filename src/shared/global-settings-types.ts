@@ -405,6 +405,11 @@ export type GlobalSettings = GlobalSettingsBase & {
   tabAutoGenerateTitle: boolean
   /** Why: pinned tabs can still be closed via keyboard/native-menu; this gates that behind a confirmation. Defaults on. */
   confirmClosePinnedTab: boolean
+  /**
+   * Opt-in confirmation before File Explorer internal drag-moves (#10263).
+   * Default `never` preserves today's silent moves; `directories` covers subtree accidents.
+   */
+  confirmFileExplorerMove: 'never' | 'directories' | 'always'
   /** Why: preview tabs reuse one slot per group, so browsing replaces the open file; off makes every open its own tab. Defaults on. */
   editorPreviewTabsEnabled: boolean
   /** When true, Orca requests local awake assertions while hook-reported agents are working. */
