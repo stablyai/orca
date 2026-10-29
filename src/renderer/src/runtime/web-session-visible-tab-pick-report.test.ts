@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
+import type {
+  RuntimeMobileSessionTabsRemovedResult,
+  RuntimeMobileSessionTabsResult
+} from '../../../shared/runtime-types'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 
 const WT = 'repo::/srv/project'
@@ -41,6 +44,7 @@ vi.mock('./web-session-tabs-sync/frame-drawn-server-workspaces', () => ({
 import { setRuntimeEnvironmentConnectionGenerationForTests } from '../store/slices/runtime-status-connection-generation'
 import {
   forgetVisibleTabPicksForEnvironment,
+  forgetVisibleTabPicksForWorktree,
   reportVisibleTabPickToHost,
   resetReportedVisibleTabPicksForTests,
   VISIBLE_TAB_PICK_SETTLE_MS
@@ -147,6 +151,29 @@ describe('reporting the tab the desktop shows to a server that remembers picks p
     mocks.listener?.(mocks.state, previous)
     vi.advanceTimersByTime(VISIBLE_TAB_PICK_SETTLE_MS)
     expect(mocks.call).toHaveBeenCalledTimes(1)
+  })
+
+  it('forgets a removed workspace and never caches its removal frame', () => {
+    mocks.state.activeWorktreeId = 'other'
+    reportVisibleTabPickToHost(ENV, frame('host-tab-2'))
+    // Removal forgets the workspace and then reports its removal frame, the store-patch order.
+    forgetVisibleTabPicksForWorktree(ENV, WT)
+    const removal: RuntimeMobileSessionTabsRemovedResult = {
+      ...frame('host-tab-2'),
+      removed: true,
+      activeGroupId: null,
+      activeTabId: null,
+      activeTabType: null,
+      tabs: []
+    }
+    reportVisibleTabPickToHost(ENV, removal)
+    expect(vi.getTimerCount()).toBe(0)
+
+    const previous = mocks.state
+    mocks.state = { ...previous, activeWorktreeId: WT }
+    mocks.listener?.(mocks.state, previous)
+    expect(vi.getTimerCount()).toBe(0)
+    expect(mocks.call).not.toHaveBeenCalled()
   })
 
   it('reports nothing for a workspace that is not on screen, or not owned by this server', () => {
