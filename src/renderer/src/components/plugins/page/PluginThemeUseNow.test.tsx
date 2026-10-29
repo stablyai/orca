@@ -24,7 +24,9 @@ const state = vi.hoisted(
   })
 )
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (value: typeof state) => unknown) => selector(state)
+  useAppStore: Object.assign((selector: (value: typeof state) => unknown) => selector(state), {
+    getState: () => state
+  })
 }))
 vi.mock('@/store/plugin-themes', () => ({
   usePluginThemes: () => state.app,
@@ -83,6 +85,24 @@ it('switches to the mode of a theme picked for the other mode, with a way back',
     'Now using Dawn',
     expect.objectContaining({ action: expect.objectContaining({ label: 'Switch back' }) })
   )
+})
+
+it('switches back only the settings the pick changed', () => {
+  state.settings = {
+    ...getDefaultSettings('/tmp'),
+    theme: 'dark',
+    pluginAppThemeLight: 'plugin:previous/light',
+    pluginIconTheme: 'plugin:previous/icons'
+  }
+  state.app = [appTheme('Dawn', 'light')]
+  render(<PluginThemeUseNow pluginKey={pluginKey} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Use for light: Dawn' }))
+  const action = toast.success.mock.calls[0]?.[1]?.action as { onClick: () => void }
+  action.onClick()
+  expect(state.updateSettings).toHaveBeenLastCalledWith({
+    pluginAppThemeLight: 'plugin:previous/light',
+    theme: 'dark'
+  })
 })
 
 it('fills the selected chip and outlines the others', () => {

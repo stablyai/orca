@@ -90,8 +90,13 @@ export function PluginThemeUseNow({
       return
     }
     // Why switch modes: a theme for the other mode would otherwise change nothing on screen.
-    const previous = themeSettingsSnapshot(settings)
-    void updateSettings({ ...chip.update, theme: chip.mode })
+    const next: Partial<GlobalSettings> = { ...chip.update, theme: chip.mode }
+    const snapshot = themeSettingsSnapshot(settings)
+    // Why only these keys: Switch back must not undo picks made while the toast is still up.
+    const previous = Object.fromEntries(
+      Object.keys(next).map((key) => [key, snapshot[key as keyof GlobalSettings]])
+    ) as Partial<GlobalSettings>
+    void updateSettings(next)
     showThemeAppliedToast(chip.label, previous)
   }
   const renderChip = (chip: Chip): React.JSX.Element => (
