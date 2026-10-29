@@ -180,6 +180,10 @@ export class PluginAutoUpdater {
     }
     // Why fail closed: without a current kill list a takedown could not stop this install.
     await refreshKillList()
+    // Why recheck: the user may have turned auto-update off while this pass awaited the network.
+    if (!this.options.isEnabled()) {
+      return null
+    }
     const outcome: PluginCatalogInstallOutcome = await installCatalogReleaseWithApproval({
       pluginKey: plugin.pluginKey,
       pluginService,

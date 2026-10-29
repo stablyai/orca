@@ -217,6 +217,16 @@ describe('plugin auto-update', () => {
     expect(offline.install).not.toHaveBeenCalled()
   })
 
+  it('installs nothing when auto-update is turned off while the pass is in flight', async () => {
+    const options: Parameters<typeof setup>[0] = { officialCatalog: true }
+    options.killListRefresh = async () => {
+      options.enabled = false
+    }
+    const { updater, install } = setup(options)
+    await updater.run()
+    expect(install).not.toHaveBeenCalled()
+  })
+
   it('installs at once from an official catalog and logs it for hosts without a UI', async () => {
     const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
     const { updater, install } = setup({ officialCatalog: true })
