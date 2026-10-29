@@ -5,8 +5,11 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { Repo } from '../../../../../../shared/repo-types'
-import type { WorktreeScanFailureKind } from '../../../../../../shared/worktree-scan-failure'
-import { isLocalToolchainFailure, resolveRepoScanFailure } from '../../repo-scan-failure'
+import {
+  isLocalToolchainFailure,
+  resolveRepoScanFailure,
+  type RepoScanFailureKind
+} from '../../repo-scan-failure'
 import {
   handleRepoHeaderActionPointerDown,
   stopRepoHeaderKeyboardToggle
@@ -33,7 +36,7 @@ export function RepoScanUnavailableIndicator({ repo }: { repo: Repo }): React.JS
     'Retry scan'
   )
   const { executionHostId, isLocalMac, kind: failureKind, reason } = failure
-  const failureMessageByKind: Partial<Record<WorktreeScanFailureKind, string>> = {
+  const failureMessageByKind: Partial<Record<RepoScanFailureKind, string>> = {
     'xcode-license': translate(
       'auto.components.sidebar.RepoScanUnavailableIndicator.xcodeLicense',
       'Apple developer tools require license acceptance before Git can run.'
@@ -45,6 +48,10 @@ export function RepoScanUnavailableIndicator({ repo }: { repo: Repo }): React.JS
     'architecture-mismatch': translate(
       'auto.components.sidebar.RepoScanUnavailableIndicator.architectureMismatch',
       'A Git-related executable could not run because its CPU architecture is incompatible with this execution host. Install Git and related tools for the host architecture.'
+    ),
+    'wsl-worktree-path': translate(
+      'auto.components.sidebar.RepoScanUnavailableIndicator.wslWorktreePath',
+      "Git can't open this repository because its core.worktree setting points to a /mnt path, usually written from WSL, that this host can't reach. Run `git config --unset core.worktree` in this repository from WSL, then retry."
     )
   }
   const failureMessage = failureMessageByKind[failureKind] ?? reason

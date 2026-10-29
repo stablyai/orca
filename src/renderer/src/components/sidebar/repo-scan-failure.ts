@@ -10,14 +10,20 @@ import {
   type WorktreeScanFailureKind
 } from '../../../../shared/worktree-scan-failure'
 
+// Renderer-only so older clients never receive a failure kind they would reject.
+export type RepoScanFailureKind = WorktreeScanFailureKind | 'wsl-worktree-path'
+
 export type RepoScanFailure = {
-  kind: WorktreeScanFailureKind
+  kind: RepoScanFailureKind
   reason: string
   executionHostId: ExecutionHostId
   isLocalMac: boolean
 }
 
 export type LocalToolchainFailureKind = 'xcode-license' | 'developer-tools'
+
+// Git for Windows aborts every command when core.worktree holds a WSL drive-mount path.
+const WSL_WORKTREE_PATH_FAILURE = /Invalid path '\/mnt(?:\/[^']*)?'/
 
 export function resolveRepoScanFailure(
   repo: Repo,
@@ -31,9 +37,10 @@ export function resolveRepoScanFailure(
     executionHostId === LOCAL_EXECUTION_HOST_ID &&
     !repo.connectionId &&
     navigator.userAgent.includes('Mac')
-  const kind =
-    detected.failureKind ??
-    (isLocalMac ? classifyWorktreeScanFailure(detected.unavailableReason) : 'unknown')
+  const kind = WSL_WORKTREE_PATH_FAILURE.test(detected.unavailableReason)
+    ? 'wsl-worktree-path'
+    : (detected.failureKind ??
+      (isLocalMac ? classifyWorktreeScanFailure(detected.unavailableReason) : 'unknown'))
   return { kind, reason: detected.unavailableReason, executionHostId, isLocalMac }
 }
 

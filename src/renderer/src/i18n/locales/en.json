@@ -7054,7 +7054,8 @@
           "xcodeLicense": "Apple developer tools require license acceptance before Git can run.",
           "developerTools": "Apple command-line developer tools are missing or unavailable.",
           "architectureMismatch": "A Git-related executable could not run because its CPU architecture is incompatible with this execution host. Install Git and related tools for the host architecture.",
-          "copyDiagnostics": "Copy diagnostics"
+          "copyDiagnostics": "Copy diagnostics",
+          "wslWorktreePath": "Git can't open this repository because its core.worktree setting points to a /mnt path, usually written from WSL, that this host can't reach. Run `git config --unset core.worktree` in this repository from WSL, then retry."
         },
         "LocalGitToolchainScanBanner": {
           "xcodeLicenseTitle": "Accept the Xcode license to use Git",
