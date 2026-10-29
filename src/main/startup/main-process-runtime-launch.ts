@@ -7,7 +7,7 @@ import {
 } from '../persistence'
 import { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 import { WS_BIND_HOST_LOOPBACK } from '../runtime/runtime-rpc/runtime-rpc-pairing-types'
-import { isBrowserSidecarProcess } from '../serve-update-handoff'
+import { isOrcadSidecarLaunch } from '../window/foreground-activation-policy'
 import { registerMobileHandlers } from '../ipc/mobile'
 import { createRuntimeEnvironmentMobileRelayHosts } from '../ipc/runtime-environments/runtime-environment-mobile-relay-hosts'
 import { getLocalPtyProvider } from '../ipc/pty/provider/registry'
@@ -103,9 +103,8 @@ function installRuntimeRpc(
     enableWebSocket: true,
     // STA-2370: desktop stays loopback until pairing; serve explicitly opts into remote access and E2E needs harness-wide bind.
     exposeNetworkByDefault: Boolean(serveOptions) || isE2E,
-    // Why: orcad reaches its browser sidecar only over the Unix socket / named pipe, so the
-    // sidecar's WS listener must never be reachable from the network.
-    ...(isBrowserSidecarProcess() ? { pinnedBindHost: WS_BIND_HOST_LOOPBACK } : {}),
+    // orcad reaches its browser sidecar only over the Unix socket / named pipe; keep its WS off the network (#31895).
+    ...(isOrcadSidecarLaunch() ? { pinnedBindHost: WS_BIND_HOST_LOOPBACK } : {}),
     ...(isE2E ? { wsPort: e2eWsPort } : {}),
     ...(devWsPort !== undefined ? { wsPort: devWsPort } : {}),
     ...(serveOptions?.wsPort !== undefined
