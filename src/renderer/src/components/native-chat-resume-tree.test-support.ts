@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { vi, type Mock } from 'vitest'
 import { useAppStore } from '../store'
 import { getDefaultSettings } from '../../../shared/constants'
@@ -72,7 +73,7 @@ export function seedTree(hosts: { parent?: ExecutionHostId; child?: ExecutionHos
   const parent = worktree('parent', { hostId: parentHost })
   const child = worktree('child', { hostId: 'child' in hosts ? hosts.child : 'local' })
   const other = worktree('other', { hostId: parentHost })
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     settings: getDefaultSettings(''),
     repos: [
       { id: 'repo-1', path: '/repo', displayName: 'orca', badgeColor: '#999999', addedAt: 1 }

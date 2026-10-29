@@ -1,5 +1,5 @@
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat/native-chat-appearance-settings'
-import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { toast } from 'sonner'
@@ -174,7 +174,7 @@ async function verifyRuntimeEnvironmentReachable(environmentId: string | null): 
   markRuntimeEnvironmentCompatible(environmentId)
 }
 
-export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> = (set, get) => ({
+export const createSettingsSlice: SessionStateCreator<AppState, SettingsSlice> = (set, get) => ({
   settings: null,
   worktreeVisibilityDefaultsByHost: {},
   worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId: null,

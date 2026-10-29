@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../../../types'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type {
@@ -14,8 +14,8 @@ import type { ProjectHostSetup } from '../../../../../../shared/project-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 
-export type WorktreeSliceGet = Parameters<StateCreator<AppState>>[1]
-export type WorktreeSliceSet = Parameters<StateCreator<AppState, [], [], WorktreeSlice>>[0]
+export type WorktreeSliceGet = Parameters<SessionStateCreator<AppState>>[1]
+export type WorktreeSliceSet = Parameters<SessionStateCreator<AppState, WorktreeSlice>>[0]
 
 export type BackgroundRuntimeRefreshOptions = {
   reuseRecentCompatibilityFailure?: boolean

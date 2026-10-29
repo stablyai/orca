@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // Stop runtime project terminals before repo.rm deletes workspace selectors; stopping afterward leaves remote shells running.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
@@ -67,7 +68,7 @@ function answerLikeRuntimeHost(args: RuntimeEnvironmentCallRequest): unknown {
 function seedRemoteProject(): ReturnType<typeof createTestStore> {
   const store = createTestStore()
   const worktree = makeWorktree({ id: 'app::/home/me/app', repoId: 'app', hostId: 'runtime:env-1' })
-  store.setState({ repos: [remoteRepo], worktreesByRepo: { app: [worktree] } })
+  setSessionTestState(store, { repos: [remoteRepo], worktreesByRepo: { app: [worktree] } })
   return store
 }
 
@@ -179,7 +180,7 @@ describe('project removal error toast', () => {
       new Error("Error invoking remote method 'repos:removeForHost': Error: Project is busy")
     )
     const store = createTestStore()
-    store.setState({ repos: [localRepo] })
+    setSessionTestState(store, { repos: [localRepo] })
 
     await store.getState().removeProject('app', { hostId: 'local', errorFeedback: 'toast' })
 

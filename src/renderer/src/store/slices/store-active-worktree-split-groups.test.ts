@@ -1,3 +1,4 @@
+import { editSessionSource } from '../session-source-edits'
 import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import {
@@ -420,7 +421,9 @@ describe('setActiveWorktree', () => {
     })
 
     const state = store.getState()
-    const patch = buildOrphanTerminalCleanupPatch(state, wt, new Set())
+    const edit = editSessionSource(state)
+    const ordinary = buildOrphanTerminalCleanupPatch(edit, wt, new Set())
+    const patch = edit.view(ordinary)
     const referenceKeys = [
       'tabsByWorktree',
       'ptyIdsByTabId',

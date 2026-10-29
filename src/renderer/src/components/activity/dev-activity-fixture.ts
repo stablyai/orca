@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { useAppStore } from '@/store'
 import type { Repo } from '../../../../shared/repo-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -76,7 +77,7 @@ export function seedDevActivityFixture(): void {
     fixtureTab('dev-fixture-tab-3', 'Add keyboard shortcut', 2)
   ]
 
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     repos: [repo],
     activeRepoId: repo.id,
     worktreesByRepo: { [repo.id]: [worktree] },

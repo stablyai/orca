@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -170,7 +171,7 @@ async function openInstall(name = 'private-skill'): Promise<void> {
 }
 
 beforeEach(() => {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     runtimeEnvironments: [],
     sshConnectionStates: new Map(),
     sshTargetLabels: new Map(),

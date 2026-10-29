@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import { emitNativeChatToggled } from '@/lib/native-chat-telemetry'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
 import type { AppState } from '../../types'
@@ -40,16 +41,13 @@ export function createTabsLabelActions(
 > {
   function setTabViewModeHere(tabId: string, mode: 'terminal' | 'chat'): void {
     set((state) => {
-      const tabPatch = patchTab(state.unifiedTabsByWorktree, tabId, { viewMode: mode })
-      const rowPatch = patchTerminalTabRow(state.tabsByWorktree, tabId, { viewMode: mode })
-      if (!tabPatch && !rowPatch.tabsByWorktree) {
-        return state
+      const edit = editSessionSource(state)
+      const tabPatch = patchTab(edit, tabId, { viewMode: mode })
+      const rowPatch = patchTerminalTabRow(edit, tabId, { viewMode: mode })
+      if (!tabPatch && !rowPatch) {
+        return undefined
       }
-      return {
-        ...tabPatch,
-        // Recovery reads terminal rows; mirror viewMode there to match host sync.
-        ...rowPatch
-      }
+      return edit.finish()
     })
     mirrorTabViewModeToHost(get(), tabId, mode)
   }
@@ -72,7 +70,7 @@ export function createTabsLabelActions(
     set((state) => {
       const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
       if (!found) {
-        return state
+        return undefined
       }
       // Why: viewMode defaults to 'terminal' for legacy/missing, so the first toggle flips to 'chat'.
       const fromMode: 'terminal' | 'chat' = to
@@ -83,10 +81,10 @@ export function createTabsLabelActions(
       const nextMode = oppositeViewMode(fromMode)
       const agent = launchAgentOf(state, found.worktreeId, found.tab.entityId)
       toggled = { from: fromMode, to: nextMode, agent }
-      return {
-        ...patchTab(state.unifiedTabsByWorktree, tabId, { viewMode: nextMode }),
-        ...patchTerminalTabRow(state.tabsByWorktree, tabId, { viewMode: nextMode })
-      }
+      const edit = editSessionSource(state)
+      patchTab(edit, tabId, { viewMode: nextMode })
+      patchTerminalTabRow(edit, tabId, { viewMode: nextMode })
+      return edit.finish()
     })
     // Why: emit after the state write so the event reflects the committed mode.
     const committed = toggled as {
@@ -173,26 +171,28 @@ export function createTabsLabelActions(
             ? reorderProjectedTabOrder(group.tabOrder, tabIds, opts.projectedMoveTabId)
             : dedupeTabOrder(tabIds)
           if (nextTabOrder === group.tabOrder) {
-            return state
+            return undefined
           }
           reordered = true
           changes.push({ worktreeId, from: group.tabOrder, to: nextTabOrder })
           const orderMap = new Map(nextTabOrder.map((id, index) => [id, index]))
-          return {
-            groupsByWorktree: {
-              ...state.groupsByWorktree,
-              [worktreeId]: updateGroup(groups, { ...group, tabOrder: nextTabOrder })
-            },
-            unifiedTabsByWorktree: {
-              ...state.unifiedTabsByWorktree,
-              [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => {
+          return editSessionSource(state)
+            .set(
+              'groupsByWorktree',
+              worktreeId,
+              updateGroup(groups, { ...group, tabOrder: nextTabOrder })
+            )
+            .set(
+              'unifiedTabsByWorktree',
+              worktreeId,
+              (state.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => {
                 const sortOrder = orderMap.get(tab.id)
                 return sortOrder === undefined ? tab : { ...tab, sortOrder }
               })
-            }
-          }
+            )
+            .finish({})
         }
-        return state
+        return undefined
       })
       // Switch point: main takes the window's new order unless the caller already asked it.
       if (ORCA_LAYOUT_OWNER_IS_MAIN && !opts?.layoutOwnerHandled) {
@@ -206,7 +206,10 @@ export function createTabsLabelActions(
     },
 
     setTabLabel: (tabId, label) => {
-      set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { label }) ?? state)
+      set((state) => {
+        const edit = editSessionSource(state)
+        return patchTab(edit, tabId, { label }) ? edit.finish() : undefined
+      })
     },
 
     setTabViewMode: (tabId, mode) => {
@@ -226,7 +229,10 @@ export function createTabsLabelActions(
 
     setTabCustomLabel: (tabId, label, opts) => {
       const exists = get().getTab(tabId) !== null
-      set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { customLabel: label }) ?? state)
+      set((state) => {
+        const edit = editSessionSource(state)
+        return patchTab(edit, tabId, { customLabel: label }) ? edit.finish() : undefined
+      })
       if (exists && opts?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }
@@ -234,7 +240,10 @@ export function createTabsLabelActions(
 
     setUnifiedTabColor: (tabId, color, opts) => {
       const exists = get().getTab(tabId) !== null
-      set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { color }) ?? state)
+      set((state) => {
+        const edit = editSessionSource(state)
+        return patchTab(edit, tabId, { color }) ? edit.finish() : undefined
+      })
       if (exists && opts?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }
@@ -246,7 +255,7 @@ export function createTabsLabelActions(
       set((state) => {
         const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
         if (!found) {
-          return state
+          return undefined
         }
         const { tab, worktreeId } = found
         // Switch point: main makes a pinned preview permanent; its frame clears the flag.
@@ -260,23 +269,15 @@ export function createTabsLabelActions(
         const groups = state.groupsByWorktree[worktreeId] ?? []
         const group = groups.find((candidate) => candidate.id === tab.groupId)
         if (!group) {
-          return {
-            unifiedTabsByWorktree: { ...state.unifiedTabsByWorktree, [worktreeId]: tabs }
-          }
+          return editSessionSource(state).set('unifiedTabsByWorktree', worktreeId, tabs).finish({})
         }
         const tabOrder = partitionPinnedTabOrder(group.tabOrder, tabs, tabId)
-        return {
-          unifiedTabsByWorktree: {
-            ...state.unifiedTabsByWorktree,
-            [worktreeId]: applyTabOrderSortValues(tabs, tabOrder)
-          },
-          // Reconciliation derives pin from terminal rows; mirror it there or host echoes unpin during the round trip.
-          ...patchTerminalTabRow(state.tabsByWorktree, tabId, { isPinned: true }),
-          groupsByWorktree: {
-            ...state.groupsByWorktree,
-            [worktreeId]: updateGroup(groups, { ...group, tabOrder })
-          }
-        }
+        const edit = editSessionSource(state)
+          .set('unifiedTabsByWorktree', worktreeId, applyTabOrderSortValues(tabs, tabOrder))
+          .set('groupsByWorktree', worktreeId, updateGroup(groups, { ...group, tabOrder }))
+
+        patchTerminalTabRow(edit, tabId, { isPinned: true })
+        return edit.finish()
       })
       mirrorTabPinnedToHost(get(), tabId, true)
       if (ORCA_LAYOUT_OWNER_IS_MAIN && before?.isPreview) {
@@ -292,7 +293,7 @@ export function createTabsLabelActions(
       set((state) => {
         const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
         if (!found) {
-          return state
+          return undefined
         }
         const { tab, worktreeId } = found
         const tabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
@@ -301,22 +302,15 @@ export function createTabsLabelActions(
         const groups = state.groupsByWorktree[worktreeId] ?? []
         const group = groups.find((candidate) => candidate.id === tab.groupId)
         if (!group) {
-          return {
-            unifiedTabsByWorktree: { ...state.unifiedTabsByWorktree, [worktreeId]: tabs }
-          }
+          return editSessionSource(state).set('unifiedTabsByWorktree', worktreeId, tabs).finish({})
         }
         const tabOrder = partitionPinnedTabOrder(group.tabOrder, tabs, tabId)
-        return {
-          unifiedTabsByWorktree: {
-            ...state.unifiedTabsByWorktree,
-            [worktreeId]: applyTabOrderSortValues(tabs, tabOrder)
-          },
-          ...patchTerminalTabRow(state.tabsByWorktree, tabId, { isPinned: false }),
-          groupsByWorktree: {
-            ...state.groupsByWorktree,
-            [worktreeId]: updateGroup(groups, { ...group, tabOrder })
-          }
-        }
+        const edit = editSessionSource(state)
+          .set('unifiedTabsByWorktree', worktreeId, applyTabOrderSortValues(tabs, tabOrder))
+          .set('groupsByWorktree', worktreeId, updateGroup(groups, { ...group, tabOrder }))
+
+        patchTerminalTabRow(edit, tabId, { isPinned: false })
+        return edit.finish()
       })
       mirrorTabPinnedToHost(get(), tabId, false)
       if (exists && opts?.recordInteraction !== false) {

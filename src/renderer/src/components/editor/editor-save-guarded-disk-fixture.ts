@@ -52,7 +52,7 @@ export function stubGuardedDisk(
 }
 
 export function openGuardedFile(
-  store: StoreApi<AppState>,
+  store: Pick<StoreApi<AppState>, 'getState'>,
   options: { baseline?: string; draft: string; filePath?: string; language?: string }
 ): string {
   const filePath = options.filePath ?? GUARDED_PATH

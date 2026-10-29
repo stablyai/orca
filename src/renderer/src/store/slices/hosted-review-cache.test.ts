@@ -1,3 +1,4 @@
+import { withSessionSourceTestWrites } from '@/lib/test-support/session-source-test-store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
@@ -36,11 +37,24 @@ function makeStore(settings: AppState['settings'] = null) {
       | 'settings'
       | 'repos'
     >
-  >()((...args) => ({
-    settings,
-    repos: [{ id: 'repo-1', path: '/repo', connectionId: null } as AppState['repos'][number]],
-    ...createHostedReviewSlice(...(args as Parameters<typeof createHostedReviewSlice>))
-  }))
+  >()(
+    withSessionSourceTestWrites<
+      Pick<
+        AppState,
+        | 'hostedReviewCache'
+        | 'fetchHostedReviewForBranch'
+        | 'getHostedReviewCreationEligibility'
+        | 'createHostedReview'
+        | 'settings'
+        | 'repos'
+      >
+    >((...args) => ({
+      settings,
+      repos: [{ id: 'repo-1', path: '/repo', connectionId: null } as AppState['repos'][number]],
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test stub supplies only the API members exercised by this scenario.
+      ...createHostedReviewSlice(...(args as unknown as Parameters<typeof createHostedReviewSlice>))
+    }))
+  )
 }
 
 const review: HostedReviewInfo = {

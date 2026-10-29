@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -20,7 +21,7 @@ const forward: PortForwardEntry = {
 const remapped: PortForwardEntry = { ...forward, id: 'fwd-2', localPort: 13000, label: 'remapped' }
 
 function renderSection(status: 'connected' | 'disconnected', forwards: PortForwardEntry[]) {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     portForwardsByConnection: { box: forwards },
     sshConnectionStates: new Map([
       ['box', { targetId: 'box', status, error: null, reconnectAttempt: 0 }]
@@ -35,7 +36,7 @@ function renderSection(status: 'connected' | 'disconnected', forwards: PortForwa
 
 afterEach(() => {
   cleanup()
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
 })
 
 describe('SSH forwards for a managed server workspace', () => {

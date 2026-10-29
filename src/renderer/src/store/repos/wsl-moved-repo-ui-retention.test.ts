@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { Repo } from '../../../../shared/repo-types'
@@ -129,7 +130,7 @@ describe('catalog prune with a moved project', () => {
       agentsFilterRepoIds: ['moved-repo', 'stale-repo']
     })
     const withMove = createUIStore()
-    withMove.setState({ repos: [localRepo], wslMovedProjects: [moved] })
+    setSessionTestState(withMove, { repos: [localRepo], wslMovedProjects: [moved] })
     withMove.getState().hydratePersistedUI(ui)
     expect(withMove.getState().filterRepoIds).toEqual(['moved-repo'])
     expect(withMove.getState().agentsFilterRepoIds).toEqual(['moved-repo'])
@@ -137,7 +138,7 @@ describe('catalog prune with a moved project', () => {
     expect(withMove.getState().setupScriptPromptDismissedRepoIds).toEqual([hostDismissal])
 
     const without = createUIStore()
-    without.setState({ repos: [localRepo] })
+    setSessionTestState(without, { repos: [localRepo] })
     without.getState().hydratePersistedUI(ui)
     expect(without.getState().filterRepoIds).toEqual([])
     expect(without.getState().agentsFilterRepoIds).toEqual([])

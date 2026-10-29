@@ -1,11 +1,11 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { hydrateOwnerWorktreeVisibilityDefaults } from './worktree-visibility-owner-settings'
 
-export type SettingsStateSetter = Parameters<StateCreator<AppState, [], []>>[0]
-type SettingsStateGetter = Parameters<StateCreator<AppState, [], []>>[1]
+export type SettingsStateSetter = Parameters<SessionStateCreator<AppState>>[0]
+type SettingsStateGetter = Parameters<SessionStateCreator<AppState>>[1]
 const completedOwnerVisibilityDefaultsHydration = Promise.resolve()
 const ownerVisibilityDefaultsHydrationByStore = new WeakMap<SettingsStateGetter, Promise<void>>()
 let settingsPublicationGeneration = 0

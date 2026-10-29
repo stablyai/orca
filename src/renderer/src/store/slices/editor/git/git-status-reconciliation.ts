@@ -130,10 +130,23 @@ export function reconcileOpenFilesForStatus(
   nextEntries: GitStatusEntry[],
   statusIsComplete: boolean
 ): OpenFile[] {
-  let entriesByPath: Map<string, GitStatusEntry> | undefined
   let changed = false
-
+  const reduce = createStatusFileReconciler(worktreeId, nextEntries, statusIsComplete)
   const nextOpenFiles = openFiles.flatMap((file) => {
+    const next = reduce(file)
+    changed ||= next.length !== 1 || next[0] !== file
+    return next
+  })
+  return changed ? nextOpenFiles : openFiles
+}
+
+export function createStatusFileReconciler(
+  worktreeId: string,
+  nextEntries: GitStatusEntry[],
+  statusIsComplete: boolean
+): (file: OpenFile) => OpenFile[] {
+  let entriesByPath: Map<string, GitStatusEntry> | undefined
+  return (file) => {
     if (file.worktreeId !== worktreeId) {
       return [file]
     }
@@ -156,7 +169,6 @@ export function reconcileOpenFilesForStatus(
     }
 
     if (!entry || !entry.conflictKind || !entry.conflictStatus || !entry.conflictStatusSource) {
-      changed = true
       return file.conflict.kind === 'conflict-placeholder' ? [] : [{ ...file, conflict: undefined }]
     }
 
@@ -176,9 +188,6 @@ export function reconcileOpenFilesForStatus(
       return [file]
     }
 
-    changed = true
     return [{ ...file, conflict: nextConflict }]
-  })
-
-  return changed ? nextOpenFiles : openFiles
+  }
 }

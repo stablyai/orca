@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { useAppStore } from '@/store'
@@ -38,7 +39,7 @@ const SESSION_ID = '01a006a6-1d07-70a1-bad5-f9110d5845c0'
 
 function seedAgentStatus(entry: Partial<AgentStatusEntry> | null): void {
   const paneKey = makePaneKey(TAB_ID, LEAF_ID)
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     agentStatusByPaneKey: entry
       ? {
           [paneKey]: {
@@ -124,7 +125,7 @@ describe('buildPaneAccountRestartStartup for Codex', () => {
 
   it('uses the persisted record when the live status entry is gone', () => {
     seedAgentStatus(null)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       sleepingAgentSessionsByPaneKey: {
         [makePaneKey(TAB_ID, LEAF_ID)]: {
           paneKey: makePaneKey(TAB_ID, LEAF_ID),
@@ -186,7 +187,7 @@ describe('buildPaneAccountRestartStartup for Codex', () => {
   })
   it('does not resume another agent’s sleeping session when Codex has no session yet', () => {
     seedAgentStatus({ agentType: 'codex' })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       sleepingAgentSessionsByPaneKey: {
         [makePaneKey(TAB_ID, LEAF_ID)]: {
           paneKey: makePaneKey(TAB_ID, LEAF_ID),
@@ -210,7 +211,7 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
   beforeEach(() => {
     seedAgentStatus(null)
     projectRuntimeContext = undefined
-    useAppStore.setState({ tabsByWorktree: {}, worktreesByRepo: {} })
+    setSessionTestState(useAppStore, { tabsByWorktree: {}, worktreesByRepo: {} })
   })
 
   it('resumes the pane’s Claude session with the launch marks the spawn needs', () => {
@@ -284,7 +285,7 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
       state: 'done',
       providerSession: { key: 'session_id', id: SESSION_ID, cwd: '/repo/pkg' }
     })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       tabsByWorktree: {
         [WORKTREE_ID]: [
           makeTerminalTab({ id: TAB_ID, worktreeId: WORKTREE_ID, startupCwd: '/repo' })
@@ -303,7 +304,7 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
       state: 'done',
       providerSession: { key: 'session_id', id: SESSION_ID, cwd: '/repo/pkg' }
     })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { [WORKTREE_ID]: [makeTerminalTab({ id: TAB_ID, worktreeId: WORKTREE_ID })] },
       worktreesByRepo: { r1: [makeWorktree({ id: WORKTREE_ID, repoId: 'r1', path: '/repo' })] }
     })
@@ -324,7 +325,7 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
         state: 'done',
         providerSession: { key: 'session_id', id: SESSION_ID, cwd: '/recorded/session' }
       })
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         repos: [
           TEST_REPO,
           { ...TEST_REPO, executionHostId: 'runtime:remote-host', connectionId: 'selected-ssh' }
@@ -363,7 +364,7 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
         })
       )
     } finally {
-      useAppStore.setState(original)
+      setSessionTestState(useAppStore, original)
     }
   })
 

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { createEditorStore } from './editor-autosave-controller-test-fixture'
@@ -83,7 +84,7 @@ it.each(['close', 'reload'] as const)(
       )
       if (ending === 'close') {
         // The minimal store lacks the layout state closeFile requires.
-        store.setState({ openFiles: [], editorBuffers: {}, editorDrafts: {} })
+        setSessionTestState(store, { openFiles: [], editorBuffers: {}, editorDrafts: {} })
       } else {
         store.getState().markFileDirty(GUARDED_PATH, false)
       }

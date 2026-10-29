@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { ProgramStatusFacet } from '../../../shared/program-status/facet'
@@ -73,7 +74,7 @@ function hostSnapshot(
 
 function applyHostSnapshot(store: TestStore, snapshot: RuntimeMobileSessionTabsResult): void {
   const state = store.getState()
-  store.setState(applyFreshWebSessionTabsSnapshot(state, snapshot, ENV, Date.now()))
+  setSessionTestState(store, applyFreshWebSessionTabsSnapshot(state, snapshot, ENV, Date.now()))
 }
 
 /** The renderer's OSC pipeline claims the pane and writes a byte-derived row without a facet. */

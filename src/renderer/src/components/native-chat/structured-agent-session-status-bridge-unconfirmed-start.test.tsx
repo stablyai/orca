@@ -1,3 +1,5 @@
+import type { SessionSourceSet } from '@/store/session-source-edits'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 // Lost create replies remain unmarked and recheck on reconnect; only confirmed failures earn failure marks.
@@ -13,7 +15,7 @@ import type { AppState } from '@/store/types'
 
 type TestStore = {
   getState: () => AppState
-  setState: (state: Partial<AppState>) => void
+  setState: SessionSourceSet<AppState>
 }
 
 const mocks = vi.hoisted(() => {
@@ -264,7 +266,7 @@ describe('a chat whose start was never confirmed', () => {
     mocks.restoreIntent.mockImplementation((args: { sessionId: string }) =>
       launchIntent(args.sessionId)
     )
-    store().setState({
+    setSessionTestState(store(), {
       agentStatusByPaneKey: {},
       acknowledgedAgentsByPaneKey: {},
       retainedAgentsByPaneKey: {},

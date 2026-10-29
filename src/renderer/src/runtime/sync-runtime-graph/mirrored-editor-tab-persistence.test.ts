@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { parseWorkspaceSessionSalvaging } from '../../../../shared/workspace-session-salvage'
 import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../../shared/runtime-types'
@@ -38,7 +39,7 @@ it('does not republish a mirrored editor after persistence and hydration', () =>
   const applied = { ...state, ...applyWebSessionTabsSnapshot(state, snapshot, ENV, NOW) }
   const persisted = buildEditorSessionData(applied.openFiles, {}, {}, {}, {})
   const restored = createTestStore()
-  restored.setState({
+  setSessionTestState(restored, {
     repos: [{ id: 'repo', path: '/repo', displayName: 'Repo', badgeColor: '', addedAt: 0 }],
     worktreesByRepo: { repo: [makeWorktree({ id: WT, repoId: 'repo', path: '/worktree' })] },
     activeWorktreeId: WT
@@ -72,7 +73,10 @@ it('does not republish a mirrored editor after persistence and hydration', () =>
   )
   expect(restored.getState().openFiles[0]).toHaveProperty('mirroredFromRuntimeSession', true)
 
-  restored.setState(applyWebSessionTabsSnapshot(restored.getState(), snapshot, ENV, NOW + 1))
+  setSessionTestState(
+    restored,
+    applyWebSessionTabsSnapshot(restored.getState(), snapshot, ENV, NOW + 1)
+  )
   expect(buildMobileSessionTabSnapshots(restored.getState(), false).flatMap((s) => s.tabs)).toEqual(
     []
   )

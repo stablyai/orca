@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../../types'
 import { flushMicrotasks } from './agent-status-test-harness'
@@ -20,7 +21,8 @@ export function registerAgentStatusPrRefreshHandoffTests(): void {
     store: ReturnType<typeof createTestStore>,
     worktreeCardProperties: AppState['worktreeCardProperties']
   ): void {
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This repos, groupBy, rightSidebarOpen fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       repos: [
         {
           id: 'repo-1',
@@ -88,7 +90,8 @@ export function registerAgentStatusPrRefreshHandoffTests(): void {
       const enqueuePRRefresh = stubGitHubPRRefreshApi()
       const store = createTestStore()
       seedAgentPRRefreshFixture(store, ['pr'])
-      store.setState({ tabsByWorktree: { 'wt-1': [] } } as Partial<AppState>)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This tabsByWorktree fixture intentionally supplies only the state members exercised by this scenario.
+      setSessionTestState(store, { tabsByWorktree: { 'wt-1': [] } } as Partial<AppState>)
       const paneKey = 'tab-worker:11111111-1111-4111-8111-111111111111'
 
       store

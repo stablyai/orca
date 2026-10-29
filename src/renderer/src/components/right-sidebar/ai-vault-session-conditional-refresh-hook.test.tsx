@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -176,7 +177,7 @@ beforeEach(() => {
   pendingRenders.length = 0
   resume.mockReset()
   resetAiVaultForcedRescanThrottleForTest()
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   list.mockReset().mockResolvedValue(first)
   Object.defineProperty(window, 'api', {
     configurable: true,
@@ -198,7 +199,7 @@ afterEach(() => {
   root = null
   latest = null
   document.body.replaceChildren()
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   vi.useRealTimers()
 })
 

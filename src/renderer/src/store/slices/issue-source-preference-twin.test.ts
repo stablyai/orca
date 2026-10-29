@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
 import type { Repo } from '../../../../shared/repo-types'
@@ -53,7 +54,7 @@ beforeEach(() => {
 describe('issue-source preference on a repo id with a row on two hosts', () => {
   it('saves the SSH twin’s preference on its own row, leaving the local twin alone', async () => {
     const store = createTestStore()
-    store.setState({ repos: [localTwin, sshTwin] })
+    setSessionTestState(store, { repos: [localTwin, sshTwin] })
 
     await store.getState().setIssueSourcePreference('twin', sshTwin.path, 'upstream', 'ssh:server')
 
@@ -76,7 +77,7 @@ describe('issue-source preference on a repo id with a row on two hosts', () => {
       _meta: { runtimeId: 'runtime-remote' }
     })
     const store = createTestStore()
-    store.setState({ repos: [localTwin, runtimeTwin] })
+    setSessionTestState(store, { repos: [localTwin, runtimeTwin] })
 
     await store
       .getState()

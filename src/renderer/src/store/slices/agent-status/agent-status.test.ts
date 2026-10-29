@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status-freshness'
@@ -350,7 +351,7 @@ afterEach(() => {
     it('closeTab drops completed worktree-attributed orphan rows', () => {
       vi.useFakeTimers()
       const store = createTestStore()
-      store.setState({
+      setSessionTestState(store, {
         tabsByWorktree: {
           'wt-1': [
             makeTab({ id: 'tab-closed', worktreeId: 'wt-1' }),
@@ -434,7 +435,7 @@ afterEach(() => {
           structuredAgentSessionTabId('missing-chat'),
           'missing-chat'
         )
-        store.setState({
+        setSessionTestState(store, {
           tabsByWorktree: {
             [worktreeId]: [
               makeTab({ id: 'tab-closed', worktreeId }),

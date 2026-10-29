@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, cleanup, render } from '@testing-library/react'
 import { createRef, type KeyboardEvent } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -323,7 +324,7 @@ describe('Session History keyboard selection', () => {
   it('Enter replaces the chat: an idle one at once, a busy one only after Replace', async () => {
     const workspaceId = 'repo-1::/repo'
     const store = useAppStore.getState
-    useAppStore.setState(useAppStore.getInitialState(), true)
+    setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
     useAppStore.setState({ activeWorktreeId: workspaceId })
     for (const id of ['old', 'other']) {
       store().createUnifiedTab(workspaceId, 'agent-session', {
@@ -395,7 +396,7 @@ describe('Session History keyboard selection', () => {
 
   it('follows the chat the host says holds the row: this one, another open one, or a closed one', async () => {
     const workspaceId = 'repo-1::/repo'
-    useAppStore.setState(useAppStore.getInitialState(), true)
+    setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
     useAppStore.setState({ activeWorktreeId: workspaceId })
     for (const id of ['old', 'other']) {
       useAppStore.getState().createUnifiedTab(workspaceId, 'agent-session', {

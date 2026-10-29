@@ -68,8 +68,21 @@ export function removeWorktreeVisitEntriesForTargets(
   timestamps: Readonly<Record<string, number>>,
   targets: readonly WorktreeVisitOwner[]
 ): Record<string, number> {
-  let changed = false
-  const next: Record<string, number> = {}
+  const keys = worktreeVisitKeysForTargets(timestamps, targets)
+  if (keys.length === 0) {
+    return timestamps
+  }
+  const next = { ...timestamps }
+  for (const key of keys) {
+    delete next[key]
+  }
+  return next
+}
+
+export function worktreeVisitKeysForTargets(
+  timestamps: Readonly<Record<string, number>>,
+  targets: readonly WorktreeVisitOwner[]
+): string[] {
   const qualified = new Set<string>()
   const legacyIds = new Set<string>()
   for (const target of targets) {
@@ -79,16 +92,9 @@ export function removeWorktreeVisitEntriesForTargets(
       legacyIds.add(target.id)
     }
   }
-  for (const [key, timestamp] of Object.entries(timestamps)) {
-    const rawId = getWorktreeIdFromVisitKey(key)
-    const remove = qualified.has(key) || legacyIds.has(rawId)
-    if (remove) {
-      changed = true
-      continue
-    }
-    next[key] = timestamp
-  }
-  return changed ? next : (timestamps as Record<string, number>)
+  return Object.keys(timestamps).filter(
+    (key) => qualified.has(key) || legacyIds.has(getWorktreeIdFromVisitKey(key))
+  )
 }
 
 /**

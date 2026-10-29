@@ -1,12 +1,15 @@
+import { SessionUnitReader } from '../../../shared/session-unit-reader'
+import { sessionPublication } from '../loading-store/session-publication'
+import { runSessionOperation } from '../loading-store/session-operation'
 import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  normalizeExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import {
-  removeWorkspaceSessionOwners,
-  withoutWslMoveFrozenOwners
-} from '../restoring-sessions/session-owner-removal'
+import { withoutWslMoveFrozenOwners } from '../restoring-sessions/session-owner-removal'
 import {
   getExecutionHostIdFromWorktreeHostIdentity,
   getWorktreeIdFromHostIdentity,
@@ -58,29 +61,19 @@ export function pruneWorktreeStateForRepo(
       }
     }
   }
-  // Pane-keyed evidence can own workspaces with no metadata/visit rows; collect it to avoid permanent orphans.
-  const collectScannedRecordOwners = (session: WorkspaceSessionState | undefined): void => {
-    collectPrefixedKeys(Object.keys(session?.lastVisitedAtByWorktreeId ?? {}))
-    collectPrefixedKeys(
-      Object.values(session?.sleepingAgentSessionsByPaneKey ?? {}).map(
-        (record) => record.worktreeId
-      )
-    )
-    collectPrefixedKeys(
-      Object.values(session?.terminalSurfaceTombstonesByPaneKey ?? {}).map(
-        (tombstone) => tombstone.worktreeId
-      )
-    )
-    collectPrefixedKeys(
-      Object.values(session?.closedTerminalTabTombstonesByTabId ?? {}).map(
-        (record) => record.worktreeId
-      )
-    )
-  }
   collectPrefixedKeys(Object.keys(state.worktreeMeta))
-  collectScannedRecordOwners(state.workspaceSession)
-  for (const session of Object.values(state.workspaceSessionsByHostId ?? {})) {
-    collectScannedRecordOwners(session)
+  const publication = sessionPublication(state)
+  for (const key of [
+    LOCAL_EXECUTION_HOST_ID,
+    ...Object.keys(state.workspaceSessionsByHostId ?? {})
+  ]) {
+    const partitionHostId = normalizeExecutionHostId(key)
+    if (!partitionHostId) {
+      continue
+    }
+    const { root, index } = publication.partition(partitionHostId)
+    const reader = new SessionUnitReader(root, index)
+    collectPrefixedKeys(reader.affectedOwners(reader.selectReferences([{ kind: 'repo', id }])))
   }
 
   for (const key of Object.keys(state.worktreeMeta)) {
@@ -100,21 +93,23 @@ export function pruneWorktreeStateForRepo(
   const pruneLegacyLocalSession = hostId === null || hostId === LOCAL_EXECUTION_HOST_ID
   const pruneAllHostPartitions = hostId === null
   if (pruneLegacyLocalSession) {
-    state.workspaceSession = removeWorkspaceSessionOwners(
-      state.workspaceSession,
-      withoutWslMoveFrozenOwners(ownerKeysToPrune)
-    )!
+    const kept = withoutWslMoveFrozenOwners(ownerKeysToPrune)
+    runSessionOperation(state, LOCAL_EXECUTION_HOST_ID, {
+      type: 'removeOwners',
+      owners: [...kept],
+      advanceRevision: false
+    })
   }
-  if (state.workspaceSessionsByHostId) {
-    for (const [partitionHostId, session] of Object.entries(state.workspaceSessionsByHostId)) {
-      if (!pruneAllHostPartitions && partitionHostId !== hostId) {
-        continue
-      }
-      const pruned = removeWorkspaceSessionOwners(session, ownerKeysToPrune)
-      if (pruned) {
-        state.workspaceSessionsByHostId[partitionHostId] = pruned
-      }
+  for (const key of Object.keys(state.workspaceSessionsByHostId ?? {})) {
+    const partitionHostId = normalizeExecutionHostId(key)
+    if (!partitionHostId || (!pruneAllHostPartitions && partitionHostId !== hostId)) {
+      continue
     }
+    runSessionOperation(state, partitionHostId, {
+      type: 'removeOwners',
+      owners: [...ownerKeysToPrune],
+      advanceRevision: false
+    })
   }
   for (const [childId, lineage] of Object.entries(state.worktreeLineageById)) {
     if (belongsToHost(childId) || belongsToHost(lineage.parentWorktreeId)) {

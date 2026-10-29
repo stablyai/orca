@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { StrictMode } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -221,7 +222,7 @@ function browserWorkspace(): BrowserWorkspace {
 
 /** The optimistic handle a staged tab carries: a page id the host has not published yet. */
 function stageHandle(): void {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     remoteBrowserPageHandlesByPageId: {
       [PAGE_ID]: { environmentId: ENVIRONMENT_ID, remotePageId: 'remote-page-a', staged: true }
     }
@@ -230,7 +231,7 @@ function stageHandle(): void {
 
 /** The optimistic handle for a page this client already expects to host itself. */
 function stageClientHostedHandle(): void {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     remoteBrowserPageHandlesByPageId: {
       [PAGE_ID]: {
         environmentId: ENVIRONMENT_ID,
@@ -244,7 +245,7 @@ function stageClientHostedHandle(): void {
 
 /** Restored client-hosted pages have a real host ID but no placement until host recovery. */
 function restoreClientHostedHandle(): void {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     remoteBrowserPageHandlesByPageId: {
       [PAGE_ID]: {
         environmentId: ENVIRONMENT_ID,
@@ -258,7 +259,7 @@ function restoreClientHostedHandle(): void {
 
 /** The host snapshot arriving: the staged flag drops and the page lands on this desktop. */
 function adoptOntoClient(pageHostGeneration = CLIENT_PLACEMENT.pageHostGeneration): void {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     remoteBrowserPageHandlesByPageId: {
       [PAGE_ID]: {
         environmentId: ENVIRONMENT_ID,
@@ -271,7 +272,7 @@ function adoptOntoClient(pageHostGeneration = CLIENT_PLACEMENT.pageHostGeneratio
 
 /** The same snapshot for a headless host: the page stays streamed, so the pane never swaps. */
 function adoptOntoServer(): void {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     remoteBrowserPageHandlesByPageId: {
       [PAGE_ID]: { environmentId: ENVIRONMENT_ID, remotePageId: 'remote-page-a' }
     }
@@ -352,7 +353,7 @@ describe.each([
     installClientHostedPaneApi({
       ui: { onFocusBrowserAddressBar: () => () => {}, onShowBrowserHistory: () => () => {} }
     })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       browserPagesByWorkspace: { [WORKSPACE_ID]: [browserPage()] },
       browserUrlHistory: [
         {

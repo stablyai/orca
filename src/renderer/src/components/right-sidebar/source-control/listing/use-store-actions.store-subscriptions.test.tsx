@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, useState, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -38,7 +39,7 @@ function listenerCount(): number {
 
 afterEach(() => {
   unmount()
-  useAppStore.setState(originalState, true)
+  setSessionTestState(useAppStore, originalState, true)
 })
 
 const ACTION_KEYS = Object.keys(originalState).filter(

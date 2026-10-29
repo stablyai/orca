@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type { ExecutionHostId } from '../../../shared/execution-host'
@@ -144,7 +145,7 @@ describe('the window drawn from layout frames', () => {
     const session = localDesktopSession()
     const { store, sync, layouts, frames } = await bootWithFrames('local', session)
     sync.start()
-    store.setState({
+    setSessionTestState(store, {
       tabsByWorktree: {
         ...store.getState().tabsByWorktree,
         [GIT_KEY]: store.getState().tabsByWorktree[GIT_KEY]!.map((tab) =>
@@ -288,7 +289,7 @@ describe('the window drawn from layout frames', () => {
     stream.onFrame!(frames.records(GIT_KEY, structuredClone(layouts[GIT_KEY]!)))
     stream.onStatus!({ state: 'lost' })
     const drawn = { type: 'leaf' as const, leafId: 'drawn-by-the-window' }
-    store.setState({
+    setSessionTestState(store, {
       terminalLayoutsByTabId: {
         ...store.getState().terminalLayoutsByTabId,
         'tab-shell': { ...store.getState().terminalLayoutsByTabId['tab-shell']!, root: drawn }
@@ -310,7 +311,7 @@ describe('the window drawn from layout frames', () => {
     expect(layoutFramesFlowing()).toBe(false)
     // Drawn while no frame came; main's snapshot does not have it.
     const drawn = { type: 'leaf' as const, leafId: 'drawn-by-the-window' }
-    store.setState({
+    setSessionTestState(store, {
       terminalLayoutsByTabId: {
         ...store.getState().terminalLayoutsByTabId,
         'tab-shell': { ...store.getState().terminalLayoutsByTabId['tab-shell']!, root: drawn }

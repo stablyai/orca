@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { useAppStore, type AppState } from '@/store'
@@ -546,7 +547,7 @@ describe('runKillAllTerminalSurfaces', () => {
     const tabs = Array.from({ length: 100 }, (_, index) => terminal(`tab-${index}`, 'wt'))
     const ptyIdsByTabId = Object.fromEntries(tabs.map((tab, index) => [tab.id, [`pty-${index}`]]))
     const previousState = useAppStore.getState()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       activeWorktreeId: null,
       repos: [],
       worktreesByRepo: {
@@ -595,7 +596,7 @@ describe('runKillAllTerminalSurfaces', () => {
     } finally {
       vi.unstubAllGlobals()
       unsubscribe()
-      useAppStore.setState(previousState, true)
+      setSessionTestState(useAppStore, previousState, true)
     }
   })
 })

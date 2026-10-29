@@ -1,6 +1,7 @@
+import { editSessionSource } from '@/store/session-source-edits'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import { assertWorkspaceAttachmentWriteCapability } from '../../runtime/runtime-workspace-attachment-capabilities'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
-import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
@@ -18,8 +19,7 @@ import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace
 } from '@/lib/folder-workspace-runtime-owner'
-import { FolderWorkspaceUpdateCoordinator } from '../slices/folder-workspace-update-coordinator'
-import type { FolderWorkspaceUpdates, RepoSlice } from '../repos/repo-state'
+import type { RepoSlice } from '../repos/repo-state'
 import { adoptFromEndpoint } from '../adopt-from-endpoint'
 import { holdCreatedSidebarWorkspace } from '@/lib/sidebar-pending-layer'
 import {
@@ -37,33 +37,23 @@ import {
   deleteWorkspaceChatDrafts
 } from '../slices/worktrees/teardown/removed-worktree-chat-drafts'
 
-export type FolderWorkspaceUpdateField = keyof FolderWorkspaceUpdates
-
-export type FolderWorkspaceUpdateCoordinatorInstance =
-  FolderWorkspaceUpdateCoordinator<FolderWorkspaceUpdateField>
-
-export type RepoSliceGet = Parameters<StateCreator<AppState>>[1]
-
-export const folderWorkspaceUpdateCoordinators = new WeakMap<
-  RepoSliceGet,
-  FolderWorkspaceUpdateCoordinatorInstance
->()
-
-export function getFolderWorkspaceUpdateCoordinator(
-  get: RepoSliceGet
-): FolderWorkspaceUpdateCoordinatorInstance {
-  const existing = folderWorkspaceUpdateCoordinators.get(get)
-  if (existing) {
-    return existing
-  }
-  const created = new FolderWorkspaceUpdateCoordinator<FolderWorkspaceUpdateField>()
-  folderWorkspaceUpdateCoordinators.set(get, created)
-  return created
-}
+import {
+  getFolderWorkspaceUpdateCoordinator,
+  type FolderWorkspaceUpdateField
+} from './folder-workspace-update-owner'
+export type {
+  FolderWorkspaceUpdateField,
+  FolderWorkspaceUpdateCoordinatorInstance,
+  RepoSliceGet
+} from './folder-workspace-update-owner'
+export {
+  folderWorkspaceUpdateCoordinators,
+  getFolderWorkspaceUpdateCoordinator
+} from './folder-workspace-update-owner'
 
 export function createFolderWorkspaceMutationActions(
-  set: Parameters<StateCreator<AppState>>[0],
-  get: Parameters<StateCreator<AppState>>[1]
+  set: Parameters<SessionStateCreator<AppState>>[0],
+  get: Parameters<SessionStateCreator<AppState>>[1]
 ): Pick<RepoSlice, 'createFolderWorkspace' | 'updateFolderWorkspace' | 'deleteFolderWorkspace'> {
   return {
     createFolderWorkspace: async (args, options) => {
@@ -99,10 +89,12 @@ export function createFolderWorkspaceMutationActions(
           row: workspace,
           resolveOwnHostId: (row) => getFolderWorkspaceHostId(row, projectGroups)
         })
-        set((s) => ({
-          folderWorkspaces: [ownedWorkspace, ...s.folderWorkspaces],
-          folderWorkspacePathStatuses: {}
-        }))
+        set((s) =>
+          editSessionSource(s)
+            .sequence('folderWorkspaces')
+            .prepend(ownedWorkspace)
+            .finish({ folderWorkspacePathStatuses: {} })
+        )
         holdCreatedSidebarWorkspace({ folderWorkspace: ownedWorkspace })
         return ownedWorkspace
       } catch (err) {
@@ -214,19 +206,23 @@ export function createFolderWorkspaceMutationActions(
         const latestFields = folderWorkspaceUpdates.latestFields(updateIdentity, updateTicket)
         const catalogChanged = folderWorkspaceUpdates.catalogChanged(updateIdentity, updateTicket)
         if (latestFields.length > 0) {
-          set((s) => ({
-            folderWorkspaces: s.folderWorkspaces.map((workspace) =>
-              workspace.id === folderWorkspaceId &&
-              getFolderWorkspaceHostId(workspace, s.projectGroups) === ownerHostId
-                ? mergeFolderWorkspaceUpdateResponse(workspace, updated, latestFields, {
-                    rejectOlderResponse: catalogChanged
-                  })
-                : workspace
-            ),
-            ...(folderWorkspaceUpdateInvalidatesPathStatus(latestFields)
-              ? { folderWorkspacePathStatuses: {} }
-              : {})
-          }))
+          set((s) =>
+            editSessionSource(s)
+              .sequence('folderWorkspaces')
+              .map((workspace) =>
+                workspace.id === folderWorkspaceId &&
+                getFolderWorkspaceHostId(workspace, s.projectGroups) === ownerHostId
+                  ? mergeFolderWorkspaceUpdateResponse(workspace, updated, latestFields, {
+                      rejectOlderResponse: catalogChanged
+                    })
+                  : workspace
+              )
+              .finish(
+                folderWorkspaceUpdateInvalidatesPathStatus(latestFields)
+                  ? { folderWorkspacePathStatuses: {} }
+                  : {}
+              )
+          )
         }
         return true
       } catch (err) {
@@ -282,14 +278,16 @@ export function createFolderWorkspaceMutationActions(
         if (!deleted) {
           return false
         }
-        set((s) => ({
-          folderWorkspaces: s.folderWorkspaces.filter(
-            (workspace) =>
-              workspace.id !== folderWorkspaceId ||
-              getFolderWorkspaceHostId(workspace, s.projectGroups) !== ownerHostId
-          ),
-          folderWorkspacePathStatuses: {}
-        }))
+        set((s) =>
+          editSessionSource(s)
+            .sequence('folderWorkspaces')
+            .filter(
+              (workspace) =>
+                workspace.id !== folderWorkspaceId ||
+                getFolderWorkspaceHostId(workspace, s.projectGroups) !== ownerHostId
+            )
+            .finish({ folderWorkspacePathStatuses: {} })
+        )
         if (!get().folderWorkspaces.some((workspace) => workspace.id === folderWorkspaceId)) {
           // Folder/worktree browser registry keys coincide; retire Chromium guests before renderer cleanup.
           await Promise.resolve(get().shutdownWorktreeBrowsers(workspaceKey))

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { toast } from 'sonner'
 import { createTerminalTabAppearanceActions } from './terminal-tab-appearance'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -183,11 +184,12 @@ describe('renaming a structured chat tab', () => {
     store.getState().setTabCustomTitle(STRUCTURED_TAB_ID, 'Updated local name')
     await vi.waitFor(() => expect(hostSavesNames).toHaveBeenCalledTimes(2))
     store.getState().setUnifiedTabColor(STRUCTURED_TAB_ID, 'red')
-    store.setState({
+    setSessionTestState(store, {
       unifiedTabsByWorktree: {
-        [WORKTREE]: store
-          .getState()
-          .unifiedTabsByWorktree[WORKTREE]!.map((tab) => ({ ...tab, executionHostId: 'local' }))
+        [WORKTREE]: store.getState().unifiedTabsByWorktree[WORKTREE]!.map((tab) => ({
+          ...tab,
+          executionHostId: 'local' as const
+        }))
       }
     })
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
@@ -235,7 +237,7 @@ describe('renaming a structured chat tab', () => {
       const store = storeWithStructuredTab()
       const folder = makeFolderWorkspace({ id: 'twin' })
       const tab = { ...structuredTab(), worktreeId: folder.id }
-      store.setState({
+      setSessionTestState(store, {
         unifiedTabsByWorktree: { [folder.id]: [tab] },
         activeWorktreeId: folder.id,
         activeWorkspaceExecutionHostId: 'runtime:b',
@@ -334,7 +336,7 @@ describe('renaming a structured chat tab', () => {
         )
       )
       const replacement = { ...current(), customLabel: 'Replacement' }
-      store.setState({ unifiedTabsByWorktree: { [folder.id]: [replacement] } })
+      setSessionTestState(store, { unifiedTabsByWorktree: { [folder.id]: [replacement] } })
       complete()
       await layoutApplyTestTransport.settle()
       expect(current()).toBe(replacement)
@@ -351,7 +353,7 @@ describe('renaming a structured chat tab', () => {
       actions.setTabCustomTitle(tab.id, 'Repointed')
       await vi.waitFor(() => expect(hostSavesNames).toHaveBeenCalledTimes(8))
       const repointed = { ...current(), entityId: 'another-session', createdAt: 2 }
-      store.setState({ unifiedTabsByWorktree: { [folder.id]: [repointed] } })
+      setSessionTestState(store, { unifiedTabsByWorktree: { [folder.id]: [repointed] } })
       answer(true)
       await layoutApplyTestTransport.settle()
       expect(hostRename).toHaveBeenCalledTimes(7)

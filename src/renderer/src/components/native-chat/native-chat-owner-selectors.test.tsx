@@ -1,3 +1,5 @@
+import { withSessionSourceWrites } from '@/store/session-source-write-boundary'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -21,17 +23,19 @@ vi.mock('@/store', async () => {
   const { create } = await import('zustand')
   const { getDefaultSettings } = await import('../../../../shared/constants')
   return {
-    useAppStore: create<ContextState>(() => ({
-      settings: getDefaultSettings('/home/test'),
-      repos: [],
-      projectGroups: [],
-      folderWorkspaces: [],
-      worktreesByRepo: {},
-      tabsByWorktree: {},
-      unifiedTabsByWorktree: {},
-      detectedWorktreesByRepo: {},
-      floatingWorkspacePath: null
-    }))
+    useAppStore: create<ContextState>()(
+      withSessionSourceWrites<ContextState>(() => ({
+        settings: getDefaultSettings('/home/test'),
+        repos: [],
+        projectGroups: [],
+        folderWorkspaces: [],
+        worktreesByRepo: {},
+        tabsByWorktree: {},
+        unifiedTabsByWorktree: {},
+        detectedWorktreesByRepo: {},
+        floatingWorkspacePath: null
+      }))
+    )
   }
 })
 
@@ -121,7 +125,7 @@ describe('native chat ownership selectors', () => {
       unifiedTabsByWorktree: { 'chat-owner': [counted(structured('chat'))] },
       worktreesByRepo: { repo: [worktree('chat-owner')] }
     })
-    useAppStore.setState(state)
+    setSessionTestState(useAppStore, state)
     const { result } = renderHook(() => ({
       owner: useNativeChatTabOwnerWorktreeId(id),
       context: useNativeChatFileLinkContext(id)
@@ -145,7 +149,7 @@ describe('native chat ownership selectors', () => {
         repo: ['first', 'second', 'returned'].map((owner) => worktree(owner, `/${owner}`))
       }
     })
-    useAppStore.setState(state)
+    setSessionTestState(useAppStore, state)
     const { result, rerender, unmount } = renderHook(
       ({ id }) => ({
         owner: useNativeChatTabOwnerWorktreeId(id),
@@ -156,11 +160,13 @@ describe('native chat ownership selectors', () => {
     expect(result.current.context?.worktreePath).toBe('/first')
     rerender({ id: 'two' })
     expect(result.current.context?.worktreePath).toBe('/second')
-    act(() => useAppStore.setState({ unifiedTabsByWorktree: { first: [structured('two')] } }))
+    act(() =>
+      setSessionTestState(useAppStore, { unifiedTabsByWorktree: { first: [structured('two')] } })
+    )
     expect(result.current.owner).toBe('first')
-    act(() => useAppStore.setState({ unifiedTabsByWorktree: {} }))
+    act(() => setSessionTestState(useAppStore, { unifiedTabsByWorktree: {} }))
     expect(result.current).toEqual({ owner: null, context: null })
-    act(() => useAppStore.setState({ tabsByWorktree: { returned: [terminal('two')] } }))
+    act(() => setSessionTestState(useAppStore, { tabsByWorktree: { returned: [terminal('two')] } }))
     expect(result.current.context?.worktreePath).toBe('/returned')
     unmount()
     const reopened = renderHook(() => useNativeChatTabOwnerWorktreeId('two'))
@@ -211,7 +217,7 @@ describe('native chat ownership selectors', () => {
       runtimeEnvironmentId: 'owning-runtime',
       sourceTabId: 'chat'
     })
-    useAppStore.setState(current)
+    setSessionTestState(useAppStore, current)
     expect(select(initial)?.worktreePath).toBe('/before')
   })
 

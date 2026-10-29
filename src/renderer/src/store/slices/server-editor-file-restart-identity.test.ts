@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type { RuntimeMobileSessionFileTab } from '../../../../shared/runtime-types'
@@ -37,7 +38,7 @@ const FILE_PATH = '/srv/shared/notes.ts'
 
 function prepareStore() {
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     repos: [{ id: 'repo-1', path: '/srv/a', displayName: 'Repo', badgeColor: '#000', addedAt: 0 }],
     worktreesByRepo: {
       'repo-1': [

@@ -3,8 +3,5 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session-st
 export function buildLastVisitedAtByWorktreeId(snapshot: {
   lastVisitedAtByWorktreeId: WorkspaceSessionState['lastVisitedAtByWorktreeId']
 }): WorkspaceSessionState['lastVisitedAtByWorktreeId'] {
-  return snapshot.lastVisitedAtByWorktreeId &&
-    Object.keys(snapshot.lastVisitedAtByWorktreeId).length > 0
-    ? snapshot.lastVisitedAtByWorktreeId
-    : undefined
+  return snapshot.lastVisitedAtByWorktreeId ?? {}
 }

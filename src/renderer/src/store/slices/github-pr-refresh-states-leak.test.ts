@@ -1,3 +1,5 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
+import { withSessionSourceTestWrites } from '@/lib/test-support/session-source-test-store'
 /** Cap PR refresh statuses across ephemeral host/repo/branch keys. Evict settled error/skipped entries first to preserve visible in-flight/queued/paused pills, then enforce hard bound on active entries only as last resort. */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { create } from 'zustand'
@@ -50,11 +52,13 @@ globalThis.window = { api: mockApi }
 
 function createTestStore() {
   return create<AppState>()(
-    (...a) =>
-      ({
-        ...createGitHubSlice(...a),
-        ...createHostedReviewSlice(...a)
-      }) as AppState
+    withSessionSourceTestWrites(
+      (...a) =>
+        ({
+          ...createGitHubSlice(...a),
+          ...createHostedReviewSlice(...a)
+        }) as AppState
+    )
   )
 }
 
@@ -180,7 +184,8 @@ describe('prRefreshStates stays bounded (leak regression)', () => {
     vi.setSystemTime(1_000_000)
     try {
       const store = createTestStore()
-      store.setState({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+      setSessionTestState(store, {
         prRefreshStates: {
           stale: { status: 'queued', reason: 'visible', updatedAt: 1_000_000 - 121_000 },
           settled: { status: 'error', reason: 'visible', updatedAt: 1, message: 'boom' }

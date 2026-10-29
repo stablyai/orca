@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import {
@@ -25,7 +26,7 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     resetCodexStalePaneSweepForTests()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       tabsByWorktree: {
         wt1: [
           {
@@ -98,7 +99,7 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
   })
 
   it('coalesces a burst of startup binds into one sweep', async () => {
-    useAppStore.setState({ ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-2'] } })
+    setSessionTestState(useAppStore, { ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-2'] } })
     vi.mocked(window.api.codexAccounts.listStalePanes).mockResolvedValue([STALE_PANE])
 
     notifyCodexPaneBoundForStaleSweep('pty-1')
@@ -112,7 +113,7 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
 
   it('still coalesces a burst whose binds land milliseconds apart', async () => {
     // Staggered startup binds must still batch registry reads rather than make one round trip per pane.
-    useAppStore.setState({ ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-2'] } })
+    setSessionTestState(useAppStore, { ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-2'] } })
     vi.mocked(window.api.codexAccounts.listStalePanes).mockResolvedValue([STALE_PANE])
 
     notifyCodexPaneBoundForStaleSweep('pty-1')
@@ -180,7 +181,7 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
 
   it('spends a pane its full retry ladder even when another pane binds later', async () => {
     // A new pane’s short delay must not consume another pane’s later retry before its reattach settles.
-    useAppStore.setState({ ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-2'] } })
+    setSessionTestState(useAppStore, { ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-2'] } })
     vi.mocked(window.api.pty.inspectProcess).mockRejectedValue(new Error('terminal_gone'))
 
     notifyCodexPaneBoundForStaleSweep('pty-1')
@@ -195,7 +196,7 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
   })
 
   it('does not park a fresh bind behind a pending retry wait', async () => {
-    useAppStore.setState({ ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-2'] } })
+    setSessionTestState(useAppStore, { ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-2'] } })
     vi.mocked(window.api.pty.inspectProcess).mockRejectedValue(new Error('terminal_gone'))
 
     notifyCodexPaneBoundForStaleSweep('pty-1')
@@ -228,7 +229,7 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
 
   it('still fires a pane waiting on a later rung when an earlier sweep throws', async () => {
     // A failed sweep must re-arm the timer for untouched panes waiting on later rungs.
-    useAppStore.setState({ ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-2'] } })
+    setSessionTestState(useAppStore, { ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-2'] } })
     vi.mocked(window.api.pty.inspectProcess).mockRejectedValueOnce(new Error('terminal_gone'))
     // Bind the rejection to pty-2, independent of flush order.
     vi.mocked(window.api.codexAccounts.listStalePanes).mockImplementation(async ({ ptyIds }) => {
@@ -301,7 +302,7 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
   })
 
   it('never marks a plain shell pane, so its input is never blocked', async () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       tabsByWorktree: {
         wt1: [
           {
@@ -352,14 +353,14 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
   })
 
   it('retries a PTY the store has not yet listed against its tab', async () => {
-    useAppStore.setState({ ptyIdsByTabId: {} })
+    setSessionTestState(useAppStore, { ptyIdsByTabId: {} })
     vi.mocked(window.api.codexAccounts.listStalePanes).mockResolvedValue([STALE_PANE])
 
     notifyCodexPaneBoundForStaleSweep('pty-1')
     await vi.advanceTimersByTimeAsync(300)
     expect(window.api.pty.inspectProcess).not.toHaveBeenCalled()
 
-    useAppStore.setState({ ptyIdsByTabId: { 'tab-1': ['pty-1'] } })
+    setSessionTestState(useAppStore, { ptyIdsByTabId: { 'tab-1': ['pty-1'] } })
     await vi.advanceTimersByTimeAsync(1500)
 
     expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
@@ -374,7 +375,7 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
   it.each(['remote:env-1@@term-1', 'remote:term-1', 'ssh:my-box@@pty-7'])(
     'never queues %s, so no rung spends an RPC on it',
     async (ptyId) => {
-      useAppStore.setState({ ptyIdsByTabId: { 'tab-1': [ptyId] } })
+      setSessionTestState(useAppStore, { ptyIdsByTabId: { 'tab-1': [ptyId] } })
       vi.mocked(window.api.codexAccounts.listStalePanes).mockResolvedValue([
         { ptyId, launchAccountId: 'account-a', activeAccountId: 'account-b' }
       ])
@@ -393,7 +394,9 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
   )
 
   it('still sweeps the local panes bound alongside a remote one', async () => {
-    useAppStore.setState({ ptyIdsByTabId: { 'tab-1': ['pty-1', 'remote:env-1@@term-1'] } })
+    setSessionTestState(useAppStore, {
+      ptyIdsByTabId: { 'tab-1': ['pty-1', 'remote:env-1@@term-1'] }
+    })
     vi.mocked(window.api.codexAccounts.listStalePanes).mockResolvedValue([STALE_PANE])
 
     notifyCodexPaneBoundForStaleSweep('remote:env-1@@term-1')

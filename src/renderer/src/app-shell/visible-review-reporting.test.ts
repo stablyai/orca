@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import {
   createTestStore,
@@ -14,7 +15,7 @@ import {
 
 function state() {
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     repos: [
       { id: 'repo-1', path: '/repo', displayName: 'repo', badgeColor: '', addedAt: 1, kind: 'git' }
     ],
@@ -48,7 +49,7 @@ describe('review surface visibility union', () => {
   })
   it('excludes archived and bare workspace cards', () => {
     const store = state()
-    store.setState({
+    setSessionTestState(store, {
       rightSidebarOpen: false,
       visibleReviewCardWorktreeIds: ['bare', 'archived'],
       worktreesByRepo: {
@@ -117,7 +118,7 @@ describe('review report selector work', () => {
     const store = state()
     const select = createVisibleReviewReportIdentitySelector()
     const initial = select(store.getState())
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {
         'repo-1': [makePRRefreshWorktree({ id: 'selected', head: 'new-head' })]
       }
@@ -146,7 +147,9 @@ describe('selected foreground refresh admission', () => {
     store.setState({ prCache: { [key]: { data: makePR(), fetchedAt: Date.now() } } })
     refreshForegroundVisibleReview(store.getState())
     expect(enqueue).not.toHaveBeenCalled()
-    store.setState({ worktreesByRepo: { 'repo-1': [{ ...candidate, linkedGitLabMR: 8 }] } })
+    setSessionTestState(store, {
+      worktreesByRepo: { 'repo-1': [{ ...candidate, linkedGitLabMR: 8 }] }
+    })
     refreshForegroundVisibleReview(store.getState())
     expect(enqueue).not.toHaveBeenCalled()
   })

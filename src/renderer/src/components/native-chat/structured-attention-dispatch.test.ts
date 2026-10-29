@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // Use real unread/acknowledgment reducers so broken wiring cannot pass on mocked sink call counts.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -81,7 +82,7 @@ function seed(overrides?: {
   floatingPanelOpen?: boolean
 }): void {
   const workspaceId = overrides?.workspaceId ?? WORKSPACE
-  store.setState({
+  setSessionTestState(store, {
     repos: [TEST_REPO],
     worktreesByRepo: { repo1: [makeWorktree({ id: WORKSPACE, repoId: 'repo1' })] },
     folderWorkspaces: overrides?.folderWorkspaces ?? [],

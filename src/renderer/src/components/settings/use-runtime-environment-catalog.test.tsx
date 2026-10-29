@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
@@ -27,7 +28,7 @@ const environment: PublicKnownRuntimeEnvironment = {
 }
 
 beforeEach(() => {
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   list.mockReset().mockResolvedValue([])
   getStatus.mockClear()
   Object.defineProperty(window, 'api', {
@@ -39,7 +40,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   cleanup()
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   if (previousApi) {
     Object.defineProperty(window, 'api', previousApi)
   } else {

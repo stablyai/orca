@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
@@ -38,7 +39,7 @@ const WORKTREE = 'repo1::/path/wt'
 
 function stateWith(tabIds: string[] = [], activeWorktreeId = WORKTREE): AppState {
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     activeWorktreeId,
     tabsByWorktree: { [WORKTREE]: tabIds.map((id) => makeTab({ id, worktreeId: WORKTREE })) }
   })

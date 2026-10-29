@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type * as AgentStatusModule from '@/lib/agent-status'
@@ -66,7 +67,7 @@ describe('TabsSlice', () => {
     })
 
     it('hydrates from unified format', () => {
-      store.setState({
+      setSessionTestState(store, {
         worktreesByRepo: {
           repo1: [
             {
@@ -141,7 +142,7 @@ describe('TabsSlice', () => {
     })
 
     it('deduplicates persisted tab order during unified hydration', () => {
-      store.setState({
+      setSessionTestState(store, {
         worktreesByRepo: {
           repo1: [
             {
@@ -219,7 +220,7 @@ describe('TabsSlice', () => {
     })
 
     it('filters out invalid worktree IDs during hydration', () => {
-      store.setState({ worktreesByRepo: {} })
+      setSessionTestState(store, { worktreesByRepo: {} })
 
       store.getState().hydrateTabsSession({
         activeRepoId: null,
@@ -267,7 +268,7 @@ describe('TabsSlice', () => {
         })
       ]
       const siblingGroups = [siblingGroup]
-      store.setState({
+      setSessionTestState(store, {
         worktreesByRepo: {
           repo1: [makeWorktree({ id: WT, repoId: 'repo1' })],
           repo2: [makeWorktree({ id: siblingWorktreeId, repoId: 'repo2' })]
@@ -351,7 +352,7 @@ describe('TabsSlice', () => {
       ]
       const siblingGroups = [siblingGroup]
       const siblingLayout = { type: 'leaf' as const, groupId: siblingGroup.id }
-      store.setState({
+      setSessionTestState(store, {
         worktreesByRepo: {
           repo1: [makeWorktree({ id: WT, repoId: 'repo1' })],
           repo2: [makeWorktree({ id: siblingWorktreeId, repoId: 'repo2' })]

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
 
 const admit = vi.hoisted(() => vi.fn())
@@ -23,7 +24,7 @@ registerWorktreeActivationReset()
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
-  useAppStore.setState(initial, true)
+  setSessionTestState(useAppStore, initial, true)
 })
 
 // Clicking the still-empty workspace while its chat waits on this machine used to seed

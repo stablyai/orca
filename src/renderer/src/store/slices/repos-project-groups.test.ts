@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
@@ -207,7 +208,7 @@ describe('project group store routing', () => {
       executionHostId: 'runtime:env-1'
     }
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'wrong-env' } as never,
       projectGroups: [folderGroup]
     })
@@ -386,7 +387,7 @@ describe('project group store routing', () => {
       reason: 'missing'
     })
     const store = createTestStore()
-    store.setState({ projectGroups: [folderGroup] })
+    setSessionTestState(store, { projectGroups: [folderGroup] })
 
     await expect(
       store
@@ -424,13 +425,13 @@ describe('project group store routing', () => {
         })
     )
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       projectGroups: [{ ...projectGroup, parentPath: '/workspace/old-platform' }]
     })
     const request = { scope: 'project-group' as const, projectGroupId: projectGroup.id }
     const statusPromise = store.getState().fetchFolderWorkspacePathStatus(request, LOCAL_OWNER)
 
-    store.setState({
+    setSessionTestState(store, {
       projectGroups: [{ ...projectGroup, parentPath: '/workspace/new-platform' }]
     })
     resolveStatus({ path: '/workspace/old-platform', exists: true })
@@ -449,14 +450,14 @@ describe('project group store routing', () => {
         })
     )
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       projectGroups: [{ ...projectGroup, parentPath: '/workspace/platform' }],
       repos: [{ ...remoteRepo, id: 'local-repo', path: '/workspace/platform/api' }]
     })
     const request = { scope: 'project-group' as const, projectGroupId: projectGroup.id }
     const statusPromise = store.getState().fetchFolderWorkspacePathStatus(request, LOCAL_OWNER)
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         {
           ...remoteRepo,
@@ -477,7 +478,7 @@ describe('project group store routing', () => {
     vi.useFakeTimers()
     try {
       const store = createTestStore()
-      store.setState({
+      setSessionTestState(store, {
         projectGroups: [{ ...projectGroup, parentPath: '/workspace/platform' }]
       })
       const request = { scope: 'project-group' as const, projectGroupId: projectGroup.id }
@@ -498,7 +499,7 @@ describe('project group store routing', () => {
 
   it('treats current-state mismatched folder path cache entries as unknown', async () => {
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       projectGroups: [
         { ...projectGroup, parentPath: '/workspace/platform', connectionId: 'ssh-1' }
       ],
@@ -512,7 +513,7 @@ describe('project group store routing', () => {
       exists: true
     })
 
-    store.setState({
+    setSessionTestState(store, {
       sshConnectionStates: new Map([['ssh-1', makeSshConnectionState('disconnected')]])
     })
 
@@ -528,7 +529,7 @@ describe('project group store routing', () => {
         })
     )
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       projectGroups: [
         { ...projectGroup, parentPath: '/workspace/platform', connectionId: 'ssh-1' }
       ],
@@ -539,7 +540,7 @@ describe('project group store routing', () => {
       .getState()
       .fetchFolderWorkspacePathStatus(request, LOCAL_OWNER)
 
-    store.setState({
+    setSessionTestState(store, {
       sshConnectionStates: new Map([['ssh-1', makeSshConnectionState('disconnected')]])
     })
     const disconnectedStatusPromise = store
@@ -582,7 +583,7 @@ describe('project group store routing', () => {
     const workspaceKey = folderWorkspaceKey(folderWorkspace.id)
     folderWorkspacesDelete.mockResolvedValue(true)
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       folderWorkspaces: [folderWorkspace],
       activeWorktreeId: workspaceKey,
       activeWorkspaceKey: workspaceKey,
@@ -846,7 +847,7 @@ describe('project group store routing', () => {
     const movedRepo = { ...remoteRepo, projectGroupId: projectGroup.id, projectGroupOrder: 3 }
     projectGroupsMoveProject.mockResolvedValue(movedRepo)
     const store = createTestStore()
-    store.setState({ repos: [remoteRepo], projectGroups: [projectGroup] })
+    setSessionTestState(store, { repos: [remoteRepo], projectGroups: [projectGroup] })
 
     await expect(store.getState().moveProjectToGroup(remoteRepo, projectGroup.id, 3)).resolves.toBe(
       true

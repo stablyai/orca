@@ -288,7 +288,7 @@ describe('Store', () => {
     expect(ref ? store.readTerminalScrollbackSnapshot(ref) : null).toBe('maybe-remote-scrollback')
   })
 
-  it('deletes terminal scrollback snapshot files when refs leave the workspace session', async () => {
+  it('deletes terminal scrollback only after the removing session is durable', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'remote-repo', connectionId: 'ssh-target-1' }))
     const session = makeSessionWithTerminalBuffers()
@@ -316,15 +316,18 @@ describe('Store', () => {
       terminalLayoutsByTabId: {}
     })
 
-    expect(existsSync(join(testState.dir, 'terminal-scrollback', `${ref}.bin`))).toBe(false)
+    expect(existsSync(join(testState.dir, 'terminal-scrollback', `${ref}.bin`))).toBe(true)
     const stillPublished = readPersistedState(dataFile())
     expect(
       stillPublished.workspaceSession.terminalLayoutsByTabId['remote-tab']
         ?.scrollbackRefsByLeafId?.[TEST_LEAF_2]
     ).toBe(ref)
+    await store.flushPendingOrThrowAsync()
+    expect(existsSync(join(testState.dir, 'terminal-scrollback', `${ref}.bin`))).toBe(false)
+    expect(readPersistedState(dataFile()).workspaceSession.terminalLayoutsByTabId).toEqual({})
   })
 
-  it('leaves durable state pointing at deleted scrollback when the replacement write fails', async () => {
+  it('retains scrollback referenced by durable state when the replacement write fails', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'remote-repo', connectionId: 'ssh-target-1' }))
     const session = makeSessionWithTerminalBuffers()
@@ -367,7 +370,7 @@ describe('Store', () => {
         terminalLayoutsByTabId: {}
       })
 
-      expect(existsSync(snapshotPath)).toBe(false)
+      expect(existsSync(snapshotPath)).toBe(true)
       expect(store.getWorkspaceSession().terminalLayoutsByTabId).toEqual({})
       await expect(store.flushPendingOrThrowAsync()).rejects.toBe(writeError)
     } finally {
@@ -375,6 +378,7 @@ describe('Store', () => {
       errors.mockRestore()
     }
 
+    expect(existsSync(snapshotPath)).toBe(true)
     expect(readPersistedStateJson(dataFile())).toBe(durableBeforeRemoval)
     const stillPublished = JSON.parse(durableBeforeRemoval) as {
       workspaceSession: {

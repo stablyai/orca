@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
@@ -34,10 +35,10 @@ const document = {
 }
 
 beforeEach(() => {
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   mocks.list.mockReset().mockResolvedValue([document])
   mocks.toastError.mockClear()
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     worktreesByRepo: {
       'repo-1': [makeWorktree({ id: worktreeId, repoId: 'repo-1', path: '/remote/repo' })]
     }
@@ -45,7 +46,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   cleanup()
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
 })
 
 function render(file: OpenFile) {
@@ -55,7 +56,7 @@ function render(file: OpenFile) {
 }
 
 it('waits for the retained editor to take its managed workspace owner before listing', async () => {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     repos: [
       {
         id: 'repo-1',
@@ -98,7 +99,7 @@ it('waits for missing ownership and resumes when the SSH catalog lands without a
   const { result } = render(file)
   expect(mocks.list).not.toHaveBeenCalled()
   act(() =>
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [
         {
           id: 'repo-1',
@@ -132,7 +133,7 @@ it('uses an explicit server owner even before its desktop repository catalog is 
 })
 
 it('waits for ownership migration in a non-git folder workspace too', async () => {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     worktreesByRepo: {},
     projectGroups: [
       {

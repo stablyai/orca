@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab, TabGroup } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
@@ -66,7 +67,8 @@ function makeGroup(overrides: Partial<TabGroup> = {}): TabGroup {
 }
 
 function seedStore(overrides: Partial<AppState> = {}): void {
-  useAppStore.setState(
+  setSessionTestState(
+    useAppStore,
     {
       ...initialAppState,
       worktreesByRepo: { 'repo-1': [makeWorktree()] },

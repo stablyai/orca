@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -38,7 +39,7 @@ async function render(): Promise<HTMLDivElement> {
 describe('RepoScanUnavailableIndicator', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   afterEach(async () => {
@@ -46,7 +47,7 @@ describe('RepoScanUnavailableIndicator', () => {
       await act(async () => root.unmount())
     }
     document.body.innerHTML = ''
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   it('renders nothing for an authoritative listing', async () => {

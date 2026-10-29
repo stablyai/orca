@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
 import type { EditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
@@ -78,7 +79,7 @@ describe('editor save queue: shared records', () => {
     vi.useFakeTimers()
     disk = stubEditorWindowWithDisk(createFakeEditorDisk({ [PATH]: 'disk' }))
     store = createEditorStore()
-    store.setState({ worktreesByRepo: WORKTREES })
+    setSessionTestState(store, { worktreesByRepo: WORKTREES })
     queue = createEditorSaveQueue(store)
   })
 
@@ -92,7 +93,7 @@ describe('editor save queue: shared records', () => {
 
   it("a save queued on a detached record keeps that record's discard epoch after a rejoin", async () => {
     // Divergent restored drafts keep w2 detached from w1’s record.
-    store.setState({
+    setSessionTestState(store, {
       openFiles: [tab('w1', { isDirty: true }), tab('w2', { worktreeId: 'wt-2', isDirty: true })],
       editorDrafts: { w1: 'mine', w2: 'theirs' }
     })
@@ -129,10 +130,12 @@ describe('editor save queue: shared records', () => {
 
   describe('a read-only sibling joining a dirty record', () => {
     it('mirrors the edits, and autosave writes once through the writable view', async () => {
-      store.setState({ openFiles: [tab('w1')] })
+      setSessionTestState(store, { openFiles: [tab('w1')] })
       type('w1', 'edits')
       // Listed first, so a per-tab pick would choose it.
-      store.setState((s) => ({ openFiles: [tab('log', { readOnly: true }), ...s.openFiles] }))
+      setSessionTestState(store, (s) => ({
+        openFiles: [tab('log', { readOnly: true }), ...s.openFiles]
+      }))
       queue.syncAutoSave()
 
       expect(recordOf('log')).toBe(recordOf('w1'))
@@ -146,9 +149,11 @@ describe('editor save queue: shared records', () => {
     })
 
     it('never autosaves a record whose only view left is read-only', async () => {
-      store.setState({ openFiles: [tab('w1'), tab('log', { readOnly: true })] })
+      setSessionTestState(store, { openFiles: [tab('w1'), tab('log', { readOnly: true })] })
       type('w1', 'edits')
-      store.setState((s) => ({ openFiles: s.openFiles.filter((file) => file.id !== 'w1') }))
+      setSessionTestState(store, (s) => ({
+        openFiles: s.openFiles.filter((file) => file.id !== 'w1')
+      }))
       queue.syncAutoSave()
       await vi.advanceTimersByTimeAsync(DELAY_MS * 3)
 
@@ -180,7 +185,7 @@ describe('editor save queue: shared records', () => {
     }
 
     it('writes each record once, whichever workspace holds its views', async () => {
-      store.setState({
+      setSessionTestState(store, {
         openFiles: [
           tab('w1'),
           tab('w2', { worktreeId: 'wt-2' }),
@@ -200,7 +205,7 @@ describe('editor save queue: shared records', () => {
     })
 
     it('writes through the writable view when a read-only view of the record is listed first', async () => {
-      store.setState({ openFiles: [tab('log', { readOnly: true }), tab('w1')] })
+      setSessionTestState(store, { openFiles: [tab('log', { readOnly: true }), tab('w1')] })
       type('w1', 'edits')
 
       expect(await restart()).toEqual({ resolved: true })
@@ -210,7 +215,7 @@ describe('editor save queue: shared records', () => {
 
   describe('the reconnect writer', () => {
     it('autosave writes through the view on the current connection', async () => {
-      store.setState({
+      setSessionTestState(store, {
         openFiles: [tab('old', { operationProvenance: STALE_PROVENANCE }), tab('new')]
       })
       expect(recordOf('old')).toBe(recordOf('new'))
@@ -224,7 +229,9 @@ describe('editor save queue: shared records', () => {
 
     it('a record left with only a stale-connection view skips autosave quietly', async () => {
       const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
-      store.setState({ openFiles: [tab('old', { operationProvenance: STALE_PROVENANCE })] })
+      setSessionTestState(store, {
+        openFiles: [tab('old', { operationProvenance: STALE_PROVENANCE })]
+      })
       type('old', 'edits')
       await vi.advanceTimersByTimeAsync(DELAY_MS)
       expect(await queue.queueSave(view('old'), 'edits', 'autosave')).toBe('failed')
@@ -235,7 +242,9 @@ describe('editor save queue: shared records', () => {
       expect(view('old').externalMutation).toBeUndefined()
       expect(store.getState().editorDrafts.old).toBe('edits')
 
-      store.setState((s) => ({ openFiles: [...s.openFiles, tab('new', { worktreeId: 'wt-2' })] }))
+      setSessionTestState(store, (s) => ({
+        openFiles: [...s.openFiles, tab('new', { worktreeId: 'wt-2' })]
+      }))
       queue.syncAutoSave()
       await vi.advanceTimersByTimeAsync(DELAY_MS)
       expect(writes()).toEqual(['edits'])
@@ -246,7 +255,7 @@ describe('editor save queue: shared records', () => {
   describe('re-keys carry the record', () => {
     it('a rename carries a conflict onto the clean record at the new path', async () => {
       disk.files.set('/repo/old.ts', 'disk')
-      store.setState({
+      setSessionTestState(store, {
         openFiles: [tab('old', { filePath: '/repo/old.ts', relativePath: 'old.ts' }), tab('w2')]
       })
       type('old', 'edits')
@@ -284,7 +293,7 @@ describe('editor save queue: shared records', () => {
     it('a stale baseline carried by a rename is refused and bannered on every view', async () => {
       disk.files.set('/repo/old.ts', 'disk')
       disk.files.set(PATH, 'someone else')
-      store.setState({
+      setSessionTestState(store, {
         openFiles: [
           tab('old', { filePath: '/repo/old.ts', relativePath: 'old.ts' }),
           tab('w2', { lastKnownDiskSignature: getDiskBaselineSignature('someone else') })
@@ -311,15 +320,15 @@ describe('editor save queue: shared records', () => {
     })
 
     it('owner resolution re-keys a record by route inputs alone, keeping its conflict', async () => {
-      store.setState({ worktreesByRepo: {} })
-      store.setState({ openFiles: [tab('w1'), tab('w2', { worktreeId: 'wt-2' })] })
+      setSessionTestState(store, { worktreesByRepo: {} })
+      setSessionTestState(store, { openFiles: [tab('w1'), tab('w2', { worktreeId: 'wt-2' })] })
       // Unresolved owners never share.
       expect(recordOf('w1')).not.toBe(recordOf('w2'))
       type('w1', 'edits')
       store.getState().setExternalMutation('w1', 'changed')
       const openFilesBefore = store.getState().openFiles
 
-      store.setState({ worktreesByRepo: WORKTREES })
+      setSessionTestState(store, { worktreesByRepo: WORKTREES })
       queue.syncAutoSave()
 
       const state = store.getState()

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { notePresence, setPresenceGated } from './agent-auto-ack-presence'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
@@ -18,7 +19,7 @@ const GROUP = 'group-1'
 
 function floatingStore() {
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     settings: { ...getDefaultSettings('/home/test'), floatingTerminalEnabled: true },
     floatingWorkspacePanelOpen: true,
     activeView: 'activity',
@@ -46,7 +47,7 @@ describe('visible agent acknowledgement target', () => {
         groupId: GROUP,
         contentType
       })
-      store.setState({
+      setSessionTestState(store, {
         unifiedTabsByWorktree: {
           [FLOATING]: [...store.getState().unifiedTabsByWorktree[FLOATING], content]
         },
@@ -63,7 +64,7 @@ describe('visible agent acknowledgement target', () => {
 
   it('does not acknowledge a terminal in another group when the focused split is empty', () => {
     const store = floatingStore()
-    store.setState({
+    setSessionTestState(store, {
       activeGroupIdByWorktree: { [FLOATING]: 'empty-group' },
       groupsByWorktree: {
         [FLOATING]: [

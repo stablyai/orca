@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -61,7 +62,7 @@ function getCheckbox(): HTMLButtonElement {
 
 describe('PinnedTabCloseDialog', () => {
   beforeEach(() => {
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   afterEach(async () => {
@@ -71,7 +72,7 @@ describe('PinnedTabCloseDialog', () => {
       }
     })
     document.body.innerHTML = ''
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   it('confirms without changing the preference by default', async () => {

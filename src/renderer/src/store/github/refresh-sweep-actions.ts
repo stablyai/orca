@@ -1,4 +1,5 @@
-import type { StateCreator } from 'zustand'
+import type { OrdinarySourcePartial } from '../session-source-edits'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -10,8 +11,8 @@ import { settingsForGitHubRepoOwner } from './work-item-routing'
 import { selectWorktreesByRepo } from '../workspace-record-selectors'
 
 export const createRefreshSweepActions = (
-  set: Parameters<StateCreator<AppState>>[0],
-  get: Parameters<StateCreator<AppState>>[1]
+  set: Parameters<SessionStateCreator<AppState>>[0],
+  get: Parameters<SessionStateCreator<AppState>>[1]
 ): Pick<GitHubSlice, 'refreshAllGitHub' | 'refreshGitHubForWorktree'> => ({
   refreshAllGitHub: () => {
     // Clear comments cache; evict stale entries to bound long-session growth across repos/branches.
@@ -33,7 +34,7 @@ export const createRefreshSweepActions = (
         next.workItemsCache === s.workItemsCache &&
         next.projectViewCache === s.projectViewCache &&
         next.prRefreshStates === s.prRefreshStates
-        ? s
+        ? undefined
         : next
     })
 
@@ -115,7 +116,7 @@ export const createRefreshSweepActions = (
       : ''
 
     set((s) => {
-      const updates: Partial<AppState> = {}
+      const updates: OrdinarySourcePartial<AppState> = {}
       if (s.prCache[prKey]) {
         updates.prCache = { ...s.prCache, [prKey]: { ...s.prCache[prKey], fetchedAt: 0 } }
       }

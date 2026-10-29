@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act } from 'react'
 import { flushSync } from 'react-dom'
 import { createRoot, type Root } from 'react-dom/client'
@@ -178,7 +179,8 @@ async function flushEffects(): Promise<void> {
 }
 
 async function renderPalette(overrides: Partial<AppState>): Promise<void> {
-  useAppStore.setState({
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+  setSessionTestState(useAppStore, {
     activeModal: 'worktree-palette',
     activeWorktreeId: null,
     repos: [makeRepo()],
@@ -234,7 +236,7 @@ describe('WorktreeJumpPalette Linear URL intent', () => {
     requestCommandDialogClose = null
     lookupCmdJGitHubUrlWorkItem.mockReset()
     lookupCmdJGitHubUrlWorkItem.mockResolvedValue(null)
-    useAppStore.setState(initialAppState, true)
+    setSessionTestState(useAppStore, initialAppState, true)
     testContainer = document.createElement('div')
     document.body.appendChild(testContainer)
     testRoot = createRoot(testContainer)
@@ -246,7 +248,7 @@ describe('WorktreeJumpPalette Linear URL intent', () => {
     })
     vi.useRealTimers()
     document.body.replaceChildren()
-    useAppStore.setState(initialAppState, true)
+    setSessionTestState(useAppStore, initialAppState, true)
   })
 
   it('delays loading feedback before replacing the pending row with an issue preview', async () => {

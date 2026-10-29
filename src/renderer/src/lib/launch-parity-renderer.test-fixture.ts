@@ -1,3 +1,4 @@
+import type * as SourceFixture from './test-support/session-source-fixture'
 // Load each renderer client OS against a real one-workspace store; suites own their vi.mock declarations.
 import { vi } from 'vitest'
 import type * as StoreHelpersNamespace from '@/store/slices/store-test-helpers'
@@ -39,10 +40,19 @@ export function launchStoreModuleMock(holder: LaunchStoreHolder): Record<string,
 }
 
 /** Load a fresh graph per OS because CLIENT_PLATFORM and renderer platform cache import-time user-agent answers. */
-export function perClientLoader<T>(
-  load: () => Promise<T>
-): (client: LaunchClient) => Promise<T & { createStore: StoreHelpers['createTestStore'] }> {
-  const cache = new Map<LaunchClient, T & { createStore: StoreHelpers['createTestStore'] }>()
+export function perClientLoader<T>(load: () => Promise<T>): (client: LaunchClient) => Promise<
+  T & {
+    createStore: StoreHelpers['createTestStore']
+    setSessionTestState: typeof SourceFixture.setSessionTestState
+  }
+> {
+  const cache = new Map<
+    LaunchClient,
+    T & {
+      createStore: StoreHelpers['createTestStore']
+      setSessionTestState: typeof SourceFixture.setSessionTestState
+    }
+  >()
   return async (client) => {
     vi.stubGlobal('navigator', { userAgent: USER_AGENT[client] })
     const cached = cache.get(client)
@@ -54,7 +64,12 @@ export function perClientLoader<T>(
     const capabilities: typeof CapabilitiesNamespace =
       await import('@/runtime/local-runtime-capabilities')
     capabilities.setLocalRuntimeCapabilitiesForTests([])
-    const loaded = { ...(await load()), createStore: helpers.createTestStore }
+    const sourceFixture = await import('./test-support/session-source-fixture')
+    const loaded = {
+      ...(await load()),
+      createStore: helpers.createTestStore,
+      setSessionTestState: sourceFixture.setSessionTestState
+    }
     cache.set(client, loaded)
     return loaded
   }

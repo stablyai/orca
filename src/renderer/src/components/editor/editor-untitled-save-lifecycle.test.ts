@@ -1,4 +1,4 @@
-import type { StoreApi } from 'zustand/vanilla'
+import type { SessionTestStore } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store'
 import { ORCA_EDITOR_SAVE_AND_CLOSE_EVENT } from './editor-autosave'
@@ -14,9 +14,11 @@ import { discardEditorFileChangesAndClose } from './discard-editor-file-changes'
 import { __clearSelfWriteRegistryForTests } from './editor-self-write-registry'
 import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
 
-const storeHolder = vi.hoisted((): { store: StoreApi<AppState> | null } => ({ store: null }))
+const storeHolder = vi.hoisted((): { store: SessionTestStore<AppState> | null } => ({
+  store: null
+}))
 
-function requireStore(): StoreApi<AppState> {
+function requireStore(): SessionTestStore<AppState> {
   if (!storeHolder.store) {
     throw new Error('test store not initialised')
   }
@@ -28,16 +30,16 @@ vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: vi.fn() }))
 
 const FILE_ID = '/repo/untitled.md'
 
-function typeInto(store: StoreApi<AppState>, content: string): void {
+function typeInto(store: SessionTestStore<AppState>, content: string): void {
   store.getState().setEditorDraft(FILE_ID, content)
   store.getState().markFileDirty(FILE_ID, true)
 }
 
-function loadFromDisk(store: StoreApi<AppState>, content: string): void {
+function loadFromDisk(store: SessionTestStore<AppState>, content: string): void {
   store.getState().setLastKnownDiskSignature(FILE_ID, getDiskBaselineSignature(content))
 }
 
-function isReopenable(store: StoreApi<AppState>): boolean {
+function isReopenable(store: SessionTestStore<AppState>): boolean {
   return (store.getState().recentlyClosedEditorTabsByWorktree['wt-1'] ?? []).some(
     (tab) => tab.filePath === FILE_ID
   )
@@ -45,7 +47,7 @@ function isReopenable(store: StoreApi<AppState>): boolean {
 
 describe('untitled note save lifecycle', () => {
   let disk: FakeEditorDisk
-  let store: StoreApi<AppState>
+  let store: SessionTestStore<AppState>
 
   beforeEach(() => {
     // Why: the window stub binds setTimeout, so fake timers must be installed first for autosave to be drivable.

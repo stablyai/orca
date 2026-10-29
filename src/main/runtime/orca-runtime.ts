@@ -231,8 +231,8 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     ...this.paneFactSources()
   })
 
-  protected markPaneLiveTitlesDirty(): void {
-    this.workspaceLayoutStream.markLiveTitlesDirty()
+  protected markPaneLiveTitlesDirty(ptyId?: string, paneKey?: string): void {
+    this.workspaceLayoutStream.markLiveTitlesDirty(ptyId, paneKey)
   }
 
   /** Read-only layout stream; layout.subscribe is not advertised yet. */

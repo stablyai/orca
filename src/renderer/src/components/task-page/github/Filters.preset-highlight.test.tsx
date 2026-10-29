@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
@@ -42,7 +43,8 @@ const viewer = vi.fn<typeof window.api.gh.viewer>()
 
 beforeEach(() => {
   viewer.mockReset().mockResolvedValue({ login: 'octocat', email: null })
-  useAppStore.setState(
+  setSessionTestState(
+    useAppStore,
     { ...initialStore, settings: null, persistedUIReady: false, repos: [], taskPageData: {} },
     true
   )
@@ -53,7 +55,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   cleanup()
-  useAppStore.setState(initialStore, true)
+  setSessionTestState(useAppStore, initialStore, true)
   if (initialApiDescriptor) {
     Object.defineProperty(window, 'api', initialApiDescriptor)
   } else {
@@ -165,7 +167,7 @@ describe('GitHub Tasks preset highlight follows the applied query', () => {
     async (preset) => {
       const savedQuery = 'is:pr is:open author:@me label:bug'
       const prefetchWorkItems = vi.fn()
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         repos: [
           {
             id: 'repo',
@@ -188,7 +190,7 @@ describe('GitHub Tasks preset highlight follows the applied query', () => {
         restoredQuery,
         { sourceContext: null }
       )
-      useAppStore.setState({ repos: [] })
+      setSessionTestState(useAppStore, { repos: [] })
       await renderFilters()
       await act(async () => {
         useAppStore.setState({ persistedUIReady: true })

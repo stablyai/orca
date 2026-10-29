@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import {
@@ -91,7 +92,8 @@ function makeFolderWorkspace(id: string, projectGroupId: string): FolderWorkspac
 
 /** Clear the published order so the closed-sidebar fallback must recompute it from store fields. */
 function seedStore(worktrees: Worktree[], overrides: Partial<AppState> = {}): void {
-  useAppStore.setState(
+  setSessionTestState(
+    useAppStore,
     {
       ...initialState,
       repos: [makeRepo()],
@@ -113,7 +115,7 @@ describe('closed-sidebar Cmd+1-9 ordering (#9497)', () => {
   afterEach(() => {
     setVisibleWorktreeIds(null)
     setVisibleWorktreeShortcutTargets(null)
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   it('hoists the repo main worktree first, matching the rendered sidebar', () => {

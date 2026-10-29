@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { installActiveWorktreeRemovalSuccessor } from '@/lib/active-worktree-removal-successor'
@@ -99,7 +100,7 @@ describe('deleting the active workspace', () => {
     layoutMain = await drawTabsFromMain(store)
     const tabId = store.getState().createBrowserTab(active.id, 'https://example.com')
     await layoutMain.settle()
-    store.setState({ worktreesByRepo: { repo1: [sibling] } })
+    setSessionTestState(store, { worktreesByRepo: { repo1: [sibling] } })
     store.getState().closeBrowserTab(tabId.id)
     await layoutMain.settle()
     await Promise.resolve()
@@ -110,7 +111,7 @@ describe('deleting the active workspace', () => {
   it('keeps a failed host removal selected and allows a later ordinary removal to hand off', async () => {
     const store = setup()
     forgetLocal.mockImplementationOnce(async () => {
-      store.setState({ worktreesByRepo: { ...store.getState().worktreesByRepo } })
+      setSessionTestState(store, { worktreesByRepo: { ...store.getState().worktreesByRepo } })
       throw new Error('host unavailable')
     })
     removeForHost.mockRejectedValueOnce(new Error('host unavailable'))
@@ -133,7 +134,7 @@ describe('deleting the active workspace', () => {
   it('keeps paired-host retirement on Landing while ordinary disappearance on another host still repairs', async () => {
     const store = setup()
     const retired = { ...active, runtimeOwnerEnvironmentId: 'retired' }
-    store.setState({ worktreesByRepo: { repo1: [retired, sibling, main] } })
+    setSessionTestState(store, { worktreesByRepo: { repo1: [retired, sibling, main] } })
     store.getState().purgeStaleRuntimeHostState(['retired'])
     await Promise.resolve()
     expect(activateAndRevealWorktree).not.toHaveBeenCalled()

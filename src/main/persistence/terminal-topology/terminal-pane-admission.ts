@@ -1,37 +1,77 @@
+import { closedIds, takenIds } from './layout-command-id-conflicts'
+import type { SessionPatchDomain } from '../../../shared/workspace-layout/workspace-layout-record-patch'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type {
+  LayoutApplyOutcome,
+  LayoutCommand,
+  LayoutEffects,
+  CommandOf,
+  LayoutContext,
+  LayoutRefusalCode
+} from '../../../shared/workspace-layout/workspace-layout-command-types'
+import type { LoadedWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-load-types'
+
+import { type PartitionEditorViews, editorViewsOfModel } from '../loading-store/layout-editor-views'
+import {
+  commandSessionReferences,
+  loadLayoutOperation,
+  writeLayoutOperation
+} from './layout-operation-selection'
+export {
+  type SessionReferenceRequest,
+  commandSessionReferences,
+  loadLayoutOperation
+} from './layout-operation-selection'
+import { SessionUnitIndex } from '../../../shared/session-unit-index'
+import { SessionUnitReader } from '../../../shared/session-unit-reader'
+
+// Persist runtime pane membership before spawning through the same layout model used by client commands.
+
+// Persist runtime pane membership before spawning through the same layout model used by client commands.
+
+// Persist runtime pane membership before spawning through the same layout model used by client commands.
+
+// Persist runtime pane membership before spawning through the same layout model used by client commands.
+
+// Persist runtime pane membership before spawning through the same layout model used by client commands.
+
+// Persist runtime pane membership before spawning through the same layout model used by client commands.
+
+// Persist runtime pane membership before spawning through the same layout model used by client commands.
+
+// Persist runtime pane membership before spawning through the same layout model used by client commands.
+
+// Persist runtime pane membership before spawning through the same layout model used by client commands.
+
+// Persist runtime pane membership before spawning through the same layout model used by client commands.
+
+// Persist runtime pane membership before spawning through the same layout model used by client commands.
+
+// Persist runtime pane membership before spawning through the same layout model used by client commands.
+
+// Persist runtime pane membership before spawning through the same layout model used by client commands.
+
+// Persist runtime pane membership before spawning through the same layout model used by client commands.
+
+// Persist runtime pane membership before spawning through the same layout model used by client commands.
+
+// Persist runtime pane membership before spawning through the same layout model used by client commands.
+
+// Persist runtime pane membership before spawning through the same layout model used by client commands.
+
 // Persist runtime pane membership before spawning through the same layout model used by client commands.
 
 import { randomUUID } from 'node:crypto'
-import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import {
-  leafIdsOf,
-  locatePane
-} from '../../../shared/workspace-layout/workspace-layout-command-steps'
-import type {
-  CommandOf,
-  LayoutApplyOutcome,
-  LayoutCommand,
-  LayoutContext,
-  LayoutEffects,
-  LayoutRefusalCode
-} from '../../../shared/workspace-layout/workspace-layout-command-types'
+
+import { locatePane } from '../../../shared/workspace-layout/workspace-layout-command-steps'
+
 import { applyLayoutCommand } from '../../../shared/workspace-layout/workspace-layout-commands'
-import { loadWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-load'
-import type { LoadedWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-load-types'
-import { nameBasedLoadContext } from '../../../shared/workspace-layout/workspace-layout-minted-ids'
-import {
-  paneKeyOf,
-  type WorkspaceLayoutModel
-} from '../../../shared/workspace-layout/workspace-layout-model'
+
+import { paneKeyOf } from '../../../shared/workspace-layout/workspace-layout-model'
 import { saveWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-save'
-import { patchStoredSession } from '../../../shared/workspace-layout/workspace-layout-record-patch'
-import {
-  followRemoteSessionAfterPaneClose,
-  followRemoteSessionAfterPaneDetach
-} from './pane-remote-session-follow'
-import { pruneClosedTerminalTabTombstones } from '../../../shared/closed-terminal-tab-tombstones'
+
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { editorViewsOfModel, type PartitionEditorViews } from '../loading-store/layout-editor-views'
 
 export type TerminalPaneAdmission =
   | (CommandOf<'createTerminalTab'> & { tabId: string; leafId: string })
@@ -44,7 +84,9 @@ export type TerminalPaneAdmissionOutcome = 'admitted' | 'exists' | LayoutRefusal
 export type PaneLayoutChange<T> = {
   value: T
   session: WorkspaceSessionState | null
+  prepared?: SessionUnitReader
   views?: PartitionEditorViews
+  changedOwners?: ReadonlySet<string>
   /** Run after persistence; never expose effects in replies. */
   effects?: LayoutEffects
 }
@@ -52,111 +94,18 @@ export type PaneLayoutChange<T> = {
 /** Runtime facts unavailable from stored layout. */
 export type LayoutLiveContext = Pick<LayoutContext, 'isBindingLive' | 'retiresBinding'>
 
-export function admitPaneToSession(
-  hostId: ExecutionHostId,
-  session: WorkspaceSessionState,
-  admission: TerminalPaneAdmission
-): PaneLayoutChange<TerminalPaneAdmissionOutcome> {
-  const leafId = admission.type === 'createTerminalTab' ? admission.leafId : admission.newLeafId
-  const loaded = loadWorkspaceLayout(hostId, session, nameBasedLoadContext())
-  const workspace = loaded.layout.workspaces[admission.workspace]
-  if (workspace && locatePane(workspace, paneKeyOf(admission.tabId, leafId))) {
-    return { value: 'exists', session: null }
-  }
-  const change = applyToSession(loaded, admission, false, {}, touchedRecordsWrite(session, loaded))
-  return { ...change, value: change.value.ok ? 'admitted' : change.value.code }
-}
-
-export function withdrawPaneFromSession(
-  hostId: ExecutionHostId,
-  session: WorkspaceSessionState,
-  pane: CommandOf<'closePane'>
-): PaneLayoutChange<LayoutRefusalCode | null> {
-  const loaded = loadWorkspaceLayout(hostId, session, nameBasedLoadContext())
-  const change = applyToSession(loaded, pane, false, {}, touchedRecordsWrite(session, loaded))
-  return { ...change, value: change.value.ok ? null : change.value.code }
-}
-
-/** Main-owned layouts patch changed records; window-owned builds rewrite the partition. */
-function touchedRecordsWrite(
-  session: WorkspaceSessionState,
-  loaded: LoadedWorkspaceLayout
-): ((after: WorkspaceSessionState) => WorkspaceSessionState | null) | undefined {
-  return ORCA_LAYOUT_OWNER_IS_MAIN ? (after) => touchedRecords(session, loaded, after) : undefined
-}
-
-function touchedRecords(
-  session: WorkspaceSessionState,
-  loaded: LoadedWorkspaceLayout,
-  after: WorkspaceSessionState
-): WorkspaceSessionState | null {
-  const patched = patchStoredSession(session, saveWorkspaceLayout(loaded), after)
-  return patched === session ? null : patched
-}
-
-/** Mint IDs in main and rewrite only changed records, preserving unnormalized untouched rows. */
-export function applyCommandToSession(
-  hostId: ExecutionHostId,
-  session: WorkspaceSessionState,
-  command: LayoutCommand,
-  /** In-memory views absent from saved sessions. */
-  views?: PartitionEditorViews,
-  live: LayoutLiveContext = {}
-): PaneLayoutChange<LayoutApplyOutcome> {
-  const context = views
-    ? { ...nameBasedLoadContext(), editorViewsOf: (key: string) => views[key] }
-    : nameBasedLoadContext()
-  const loaded = loadWorkspaceLayout(hostId, session, context)
-  const taken = takenIds(loaded.layout, command)
-  if (taken) {
-    return { value: taken, session: null }
-  }
-  return applyToSession(loaded, command, views !== undefined, live, (after) => {
-    const patched = touchedRecords(session, loaded, after)
-    return patched
-      ? followRemoteSessionAfterPaneDetach(
-          command,
-          followRemoteSessionAfterPaneClose(command, session, prunedOnRecord(command, patched))
-        )
-      : null
-  })
-}
-
-/** Apply renames on one partition load; return each refused rename and code. */
-export function applyRenamesToSession(
-  hostId: ExecutionHostId,
-  session: WorkspaceSessionState,
-  renames: readonly CommandOf<'renameTab'>[]
-): PaneLayoutChange<{ rename: CommandOf<'renameTab'>; code: LayoutRefusalCode }[]> {
-  const loaded = loadWorkspaceLayout(hostId, session, nameBasedLoadContext())
-  let layout = loaded.layout
-  const refused: { rename: CommandOf<'renameTab'>; code: LayoutRefusalCode }[] = []
-  for (const rename of renames) {
-    const applied = applyLayoutCommand(layout, rename, RENAME_CONTEXT)
-    if (applied.ok) {
-      layout = applied.model
-    } else {
-      refused.push({ rename, code: applied.code })
-    }
-  }
-  return {
-    value: refused,
-    session:
-      layout === loaded.layout
-        ? null
-        : touchedRecords(session, loaded, saveWorkspaceLayout({ ...loaded, layout }))
-  }
-}
-
 const RENAME_CONTEXT = { mintId: randomUUID, mintLeafId: randomUUID, now: Date.now }
 
 /** Central admission prevents any create path from resurrecting a closed tab. */
 function applyToSession(
+  reader: SessionUnitReader,
   loaded: LoadedWorkspaceLayout,
   command: LayoutCommand,
   keepsViews: boolean,
   live: LayoutLiveContext,
-  write: (after: WorkspaceSessionState) => WorkspaceSessionState | null = (after) => after
+  domain: SessionPatchDomain,
+  incremental: boolean,
+  admission = false
 ): PaneLayoutChange<LayoutApplyOutcome> {
   const closed = closedIds(loaded.layout, command)
   if (closed) {
@@ -169,117 +118,142 @@ function applyToSession(
     now: Date.now,
     droppedLeafReason: 'live-edit'
   })
-  return applied.ok
-    ? {
-        value: { ok: true, result: applied.result },
-        session: write(saveWorkspaceLayout({ ...loaded, layout: applied.model })),
-        effects: applied.effects,
-        ...(keepsViews ? { views: editorViewsOfModel(applied.model) } : {})
-      }
-    : { value: { ok: false, code: applied.code }, session: null }
-}
-
-function prunedOnRecord(
-  command: LayoutCommand,
-  session: WorkspaceSessionState
-): WorkspaceSessionState {
-  return command.type === 'closeTabs' && command.recordClose
-    ? {
-        ...session,
-        closedTerminalTabTombstonesByTabId: pruneClosedTerminalTabTombstones(
-          session.closedTerminalTabTombstonesByTabId,
-          Date.now()
-        )
-      }
-    : session
-}
-
-function closedIds(
-  layout: WorkspaceLayoutModel,
-  command: LayoutCommand
-): LayoutApplyOutcome | null {
-  if (command.type === 'createTerminalTab') {
-    return command.tabId ? closedCreate(layout, command.tabId) : null
+  if (!applied.ok) {
+    return { value: { ok: false, code: applied.code }, session: null }
   }
-  if (command.type === 'applyDefaultTabs') {
-    for (const tab of command.tabs) {
-      const closed = closedCreate(layout, tab.tabId)
-      if (closed) {
-        return closed
-      }
-    }
+  const after = saveWorkspaceLayout({ ...loaded, layout: applied.model })
+  // Window-owned admission retains its existing full-save boundary.
+  if (!incremental && !ORCA_LAYOUT_OWNER_IS_MAIN && admission) {
+    return { value: { ok: true, result: applied.result }, session: after, effects: applied.effects }
   }
-  return null
+  const session = writeLayoutOperation(reader, loaded, after, domain, command)
+  return {
+    value: { ok: true, result: applied.result },
+    session,
+    effects: applied.effects,
+    ...(incremental && session ? { prepared: reader } : {}),
+    ...(keepsViews ? { views: editorViewsOfModel(applied.model) } : {})
+  }
 }
 
 /** Runtime creates may target existing client tabs; only client IDs need collision checks. */
-function takenIds(layout: WorkspaceLayoutModel, command: LayoutCommand): LayoutApplyOutcome | null {
-  if (command.type === 'createTerminalTab') {
-    return takenTabId(layout, command)
-  }
-  if (command.type === 'splitPane') {
-    return takenLeafId(layout, command)
-  }
-  return command.type === 'applyDefaultTabs' ? takenDefaultTabId(layout, command) : null
-}
 
 /** Repeated client creates are no-ops on their existing pane; IDs held by another tab refuse. */
-function takenTabId(
-  layout: WorkspaceLayoutModel,
-  command: CommandOf<'createTerminalTab'>
-): LayoutApplyOutcome | null {
-  const { workspace: key, tabId, leafId } = command
-  if (!tabId) {
-    return null
-  }
-  const workspace = layout.workspaces[key]
-  const paneKey = leafId ? paneKeyOf(tabId, leafId) : null
-  if (workspace && paneKey && locatePane(workspace, paneKey)) {
-    return { ok: true, result: { tabId, leafId, paneKey } }
-  }
-  const holds = Object.values(layout.workspaces).some((entry) =>
-    entry.tabs.some((tab) => tab.id === tabId || tab.entityId === tabId)
-  )
-  return holds ? { ok: false, code: 'tab_exists' } : null
-}
 
 /** Closed tab IDs cannot be reused; pane creates may still lift closed-pane fences. */
-function closedCreate(layout: WorkspaceLayoutModel, tabId: string): LayoutApplyOutcome | null {
-  if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
-    return null
-  }
-  const closed = Object.values(layout.workspaces).some((entry) => entry.closedTerminalTabs?.[tabId])
-  return closed ? { ok: false, code: 'tab_closed' } : null
-}
 
 /** Refuse all default tabs if any proposed ID is already taken. */
-function takenDefaultTabId(
-  layout: WorkspaceLayoutModel,
-  command: CommandOf<'applyDefaultTabs'>
-): LayoutApplyOutcome | null {
-  const ids = new Set(command.tabs.map((tab) => tab.tabId))
-  const holds = Object.values(layout.workspaces).some((entry) =>
-    entry.tabs.some((tab) => ids.has(tab.id) || ids.has(tab.entityId))
-  )
-  return holds ? { ok: false, code: 'tab_exists' } : null
-}
 
 /** Repeated splits are no-ops on their existing pane; cross-tab leaf IDs refuse. */
-function takenLeafId(
-  layout: WorkspaceLayoutModel,
-  command: CommandOf<'splitPane'>
-): LayoutApplyOutcome | null {
-  const { workspace: key, tabId, newLeafId } = command
-  const workspace = layout.workspaces[key]
-  if (!newLeafId || !workspace) {
-    return null
-  }
-  const paneKey = paneKeyOf(tabId, newLeafId)
-  if (locatePane(workspace, paneKey)) {
-    return { ok: true, result: { leafId: newLeafId, paneKey } }
-  }
-  const held = workspace.tabs.some(
-    (tab) => tab.kind === 'terminal' && leafIdsOf(tab).includes(newLeafId)
+
+export function admitPaneToSession(
+  hostId: ExecutionHostId,
+  source: WorkspaceSessionState | SessionUnitReader,
+  admission: TerminalPaneAdmission
+): PaneLayoutChange<TerminalPaneAdmissionOutcome> {
+  const incremental = source instanceof SessionUnitReader
+  const reader = incremental ? source : new SessionUnitReader(source, new SessionUnitIndex(source))
+  const { loaded, owners, domain } = loadLayoutOperation(
+    hostId,
+    reader,
+    commandSessionReferences(admission),
+    undefined,
+    !incremental
   )
-  return held ? { ok: false, code: 'pane_in_other_tab' } : null
+  const leaf = admission.type === 'createTerminalTab' ? admission.leafId : admission.newLeafId
+  if (
+    loaded.layout.workspaces[admission.workspace] &&
+    locatePane(loaded.layout.workspaces[admission.workspace], paneKeyOf(admission.tabId, leaf))
+  ) {
+    return { value: 'exists', session: null }
+  }
+  const change = applyToSession(reader, loaded, admission, false, {}, domain, incremental, true)
+  return {
+    ...change,
+    value: change.value.ok ? 'admitted' : change.value.code,
+    ...(incremental ? { changedOwners: owners } : {})
+  }
+}
+
+export function withdrawPaneFromSession(
+  hostId: ExecutionHostId,
+  source: WorkspaceSessionState | SessionUnitReader,
+  command: CommandOf<'closePane'>
+): PaneLayoutChange<LayoutRefusalCode | null> {
+  const incremental = source instanceof SessionUnitReader
+  const reader = incremental ? source : new SessionUnitReader(source, new SessionUnitIndex(source))
+  const { loaded, owners, domain } = loadLayoutOperation(
+    hostId,
+    reader,
+    commandSessionReferences(command),
+    undefined,
+    !incremental
+  )
+  const change = applyToSession(reader, loaded, command, false, {}, domain, incremental, true)
+  return {
+    ...change,
+    value: change.value.ok ? null : change.value.code,
+    ...(incremental ? { changedOwners: owners } : {})
+  }
+}
+
+export function applyCommandToSession(
+  hostId: ExecutionHostId,
+  source: WorkspaceSessionState | SessionUnitReader,
+  command: LayoutCommand,
+  views?: PartitionEditorViews,
+  live: LayoutLiveContext = {}
+): PaneLayoutChange<LayoutApplyOutcome> {
+  const incremental = source instanceof SessionUnitReader
+  const reader = incremental ? source : new SessionUnitReader(source, new SessionUnitIndex(source))
+  const { loaded, owners, domain } = loadLayoutOperation(
+    hostId,
+    reader,
+    commandSessionReferences(command),
+    views,
+    !incremental
+  )
+  const taken = takenIds(loaded.layout, command)
+  if (taken) {
+    return { value: taken, session: null, ...(incremental ? { changedOwners: owners } : {}) }
+  }
+  return {
+    ...applyToSession(reader, loaded, command, views !== undefined, live, domain, incremental),
+    ...(incremental ? { changedOwners: owners } : {})
+  }
+}
+
+export function applyRenamesToSession(
+  hostId: ExecutionHostId,
+  source: WorkspaceSessionState | SessionUnitReader,
+  renames: readonly CommandOf<'renameTab'>[]
+): PaneLayoutChange<{ rename: CommandOf<'renameTab'>; code: LayoutRefusalCode }[]> {
+  const incremental = source instanceof SessionUnitReader
+  const reader = incremental ? source : new SessionUnitReader(source, new SessionUnitIndex(source))
+  const { loaded, owners, domain } = loadLayoutOperation(
+    hostId,
+    reader,
+    renames.flatMap(commandSessionReferences),
+    undefined,
+    !incremental
+  )
+  let layout = loaded.layout
+  const refused: { rename: CommandOf<'renameTab'>; code: LayoutRefusalCode }[] = []
+  for (const rename of renames) {
+    const applied = applyLayoutCommand(layout, rename, RENAME_CONTEXT)
+    if (applied.ok) {
+      layout = applied.model
+    } else {
+      refused.push({ rename, code: applied.code })
+    }
+  }
+  return {
+    value: refused,
+    ...(incremental && layout !== loaded.layout ? { prepared: reader } : {}),
+    session:
+      layout === loaded.layout
+        ? null
+        : writeLayoutOperation(reader, loaded, saveWorkspaceLayout({ ...loaded, layout }), domain),
+    ...(incremental ? { changedOwners: owners } : {})
+  }
 }

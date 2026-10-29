@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // Reopen terminal/browser/editor snapshots in true cross-type MRU order via Cmd/Ctrl+Shift+T.
 import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
@@ -436,7 +437,7 @@ describe('reopenClosedTab cross-type MRU', () => {
     // A layout-owner build draws the browser tab from main's frames.
     const main = await drawTabsFromMain(store)
 
-    store.setState({ openFiles: [makeOpenFile({ id: '/repo/a.ts', worktreeId: WT })] })
+    setSessionTestState(store, { openFiles: [makeOpenFile({ id: '/repo/a.ts', worktreeId: WT })] })
     store.getState().closeFile('/repo/a.ts')
     const terminal = store
       .getState()

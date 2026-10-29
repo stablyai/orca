@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import { haveSameDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -20,7 +20,7 @@ import {
 } from './local-detected-agent-store-state'
 import { readLocalAgentInventoryOutcome } from './local-agent-inventory-outcome'
 
-type LocalDetectedAgentStateCreator = StateCreator<AppState, [], [], LocalDetectedAgentState>
+type LocalDetectedAgentStateCreator = SessionStateCreator<AppState, LocalDetectedAgentState>
 
 export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (set, get, store) => {
   let nativeInventoryRequested = false

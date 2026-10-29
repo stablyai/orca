@@ -1,4 +1,5 @@
-import type { StateCreator } from 'zustand'
+import { editSessionSource } from '../../../session-source-edits'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import { appliedWorktreeCatalogVersionPatch } from './worktree-catalog-version-state'
 import type { AppState } from '../../../types'
 import type { WorktreeSlice } from '../../worktree-helpers'
@@ -137,7 +138,7 @@ export function preserveConcurrentDisplayName<T extends Worktree>(
 }
 
 export function mergeFetchedWorktrees(
-  _set: Parameters<StateCreator<AppState, [], [], WorktreeSlice>>[0],
+  _set: Parameters<SessionStateCreator<AppState, WorktreeSlice>>[0],
   get: () => AppState,
   args: FencedWorktreeMergeArgs
 ): WorktreeListingMergeOutcome {
@@ -170,7 +171,7 @@ export function mergeFetchedWorktrees(
     )
     if (refusal) {
       decision.outcome = refusal
-      return s
+      return undefined
     }
     decision.outcome = 'applied'
     const matchOptions = worktreeHostMatchOptions(s, args.repoId, args.hostId)
@@ -216,7 +217,7 @@ export function mergeFetchedWorktrees(
     const keepCurrent = worktrees.length === 0 || !!args.refresh.result.wslDistroStopped
     if (!args.refresh.result.authoritative && keepCurrent && currentForHost.length > 0) {
       return areDetectedWorktreeResultsEqual(s.detectedWorktreesByRepo[args.repoId], mergedDetected)
-        ? s
+        ? undefined
         : {
             detectedWorktreesByRepo: {
               ...s.detectedWorktreesByRepo,
@@ -260,21 +261,19 @@ export function mergeFetchedWorktrees(
       removedIds.length === 0 &&
       Object.keys(versionPatch).length === 0
     ) {
-      return s
+      return undefined
     }
-    return {
+    const edit = editSessionSource(s)
+    if (worktreesChanged) {
+      edit.set('worktreesByRepo', args.repoId, mergedWorktrees)
+    }
+    return edit.finish({
       ...versionPatch,
       ...(worktreesChanged
-        ? {
-            worktreesByRepo: {
-              ...s.worktreesByRepo,
-              [args.repoId]: mergedWorktrees
-            },
-            // Why: an order save re-reads as a sortOrder-only change; re-sorting on it would schedule the next save (#27268).
-            ...(worktreesDifferOnlyInSortOrder(s.worktreesByRepo[args.repoId], mergedWorktrees)
-              ? { sortOrderEpoch: s.sortOrderEpoch + 1 }
-              : { sortEpoch: s.sortEpoch + 1 })
-          }
+        ? // An order save must not schedule the next order save (#27268).
+          worktreesDifferOnlyInSortOrder(s.worktreesByRepo[args.repoId], mergedWorktrees)
+          ? { sortOrderEpoch: s.sortOrderEpoch + 1 }
+          : { sortEpoch: s.sortEpoch + 1 }
         : {}),
       ...(detectedChanged
         ? {
@@ -286,12 +285,12 @@ export function mergeFetchedWorktrees(
         : {}),
       ...(removedIds.length > 0
         ? buildWorktreePurgeState(
-            s,
+            edit,
             removedIds.map((id) => hostWorktreeTarget({ id, hostId: args.hostId })),
             changedPaneKeys
           )
         : {})
-    }
+    })
   })
   if (decision.outcome === 'applied') {
     // Why: applied outside the updater so a repeated updater call cannot double-apply the removal memory.

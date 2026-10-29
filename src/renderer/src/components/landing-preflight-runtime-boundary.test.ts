@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -35,7 +36,7 @@ beforeEach(() => {
   setDocumentVisibility('visible')
   refresh.mockClear()
   invalidate.mockClear()
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
   useAppStore.setState({ refreshPreflightStatus: refresh, invalidatePreflightStatus: invalidate })
 })
 
@@ -43,7 +44,7 @@ afterEach(() => {
   cleanup()
   setDocumentVisibility('visible')
   vi.useRealTimers()
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
 })
 
 describe('landing preflight runtime boundary', () => {
@@ -116,7 +117,7 @@ describe('landing preflight runtime boundary', () => {
   })
 
   it('stops the 30s preflight poll while hidden and lets the reveal refresh instead', () => {
-    useAppStore.setState({ repos: [githubRepo], preflightStatus: status() })
+    setSessionTestState(useAppStore, { repos: [githubRepo], preflightStatus: status() })
     const view = renderHook(() => useLandingPreflightRuntime())
     refresh.mockClear()
 
@@ -137,7 +138,7 @@ describe('landing preflight runtime boundary', () => {
   })
 
   it('keeps one active interval and removes listeners and polling on cleanup', () => {
-    useAppStore.setState({ repos: [githubRepo], preflightStatus: status() })
+    setSessionTestState(useAppStore, { repos: [githubRepo], preflightStatus: status() })
     const addEventListener = vi.spyOn(document, 'addEventListener')
     const removeEventListener = vi.spyOn(document, 'removeEventListener')
     const addWindowListener = vi.spyOn(window, 'addEventListener')
@@ -146,7 +147,7 @@ describe('landing preflight runtime boundary', () => {
 
     expect(vi.getTimerCount()).toBe(1)
     act(() => {
-      useAppStore.setState({ repos: [...useAppStore.getState().repos] })
+      setSessionTestState(useAppStore, { repos: [...useAppStore.getState().repos] })
     })
     expect(vi.getTimerCount()).toBe(1)
     act(() => vi.advanceTimersByTime(30_000))

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
@@ -304,7 +305,7 @@ describe('fetchReposForAllHosts', () => {
     const liveRepo = directSshRepo('ssh-new')
     reposList.mockResolvedValue([liveRepo])
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [staleRepo],
       pendingSshRepoReadoptions: [repoReadoption]
     })
@@ -319,7 +320,7 @@ describe('fetchReposForAllHosts', () => {
     const liveRepo = directSshRepo('ssh-new')
     reposList.mockResolvedValue([liveRepo])
     const store = createTestStore()
-    store.setState({ repos: [staleRepo] })
+    setSessionTestState(store, { repos: [staleRepo] })
 
     await store.getState().fetchReposForAllHosts({ remoteHosts: 'skip' })
 
@@ -343,13 +344,13 @@ describe('fetchReposForAllHosts', () => {
       }
     })
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [staleRepo],
       pendingSshRepoReadoptions: [repoReadoption]
     })
 
     const load = store.getState().fetchRuntimeEnvironmentRepos('env-1')
-    store.setState({ repos: [staleRepo, liveRepo] })
+    setSessionTestState(store, { repos: [staleRepo, liveRepo] })
     resolveRepoList({
       id: 'rpc-repo-list',
       ok: true,

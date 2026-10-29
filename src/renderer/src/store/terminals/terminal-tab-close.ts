@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { sweepRetiredTerminalTabState } from '../slices/retired-terminal-tab-state-sweep'
 import {
@@ -60,15 +61,17 @@ export function createTerminalTabCloseActions(
       }
       settleAttentionRemovedBy(set, get, () =>
         set((s) => {
+          const sourceEdit = editSessionSource(s)
+
           // Reuse one iterable for all per-tab omissions in this close.
           const closingTabIds = [tabId]
           const omitByTabId = <T>(record: Record<string, T>): Record<string, T> =>
             omitRecordKeys(record, closingTabIds)
-          const next = { ...s.tabsByWorktree }
+
           let closedTab: TerminalTab | null = null
           let closedWorktreeId: string | null = null
-          for (const wId of Object.keys(next)) {
-            const before = next[wId]
+          for (const wId of Object.keys(sourceEdit.read('tabsByWorktree'))) {
+            const before = sourceEdit.read('tabsByWorktree')[wId]
             const closing = before.find((t) => t.id === tabId)
             if (closing) {
               closingWorktreeId = wId
@@ -88,7 +91,7 @@ export function createTerminalTabCloseActions(
             }
             const after = before.filter((t) => t.id !== tabId)
             if (after.length !== before.length) {
-              next[wId] = after
+              sourceEdit.set('tabsByWorktree', wId, after)
             }
           }
           // Session-only tombstone fences synchronous SSH pulls before main acknowledges close; retire once merge moves to main.
@@ -123,12 +126,12 @@ export function createTerminalTabCloseActions(
               : null
           const nextExpanded = omitByTabId(s.expandedPaneByTabId)
           const nextCanExpand = omitByTabId(s.canExpandPaneByTabId)
-          const nextLayouts = omitByTabId(s.terminalLayoutsByTabId)
-          const nextLocalOnlyScrollback = omitByTabId(s.localOnlyScrollbackByTabId)
-          const nextPtyIdsByTabId = omitByTabId(s.ptyIdsByTabId)
-          const nextLastKnownRelay = omitByTabId(s.lastKnownRelayPtyIdByTabId)
-          const nextDeferredSshSessionIdsByTabId = omitByTabId(s.deferredSshSessionIdsByTabId)
-          const nextPendingReconnectPtyIdByTabId = omitByTabId(s.pendingReconnectPtyIdByTabId)
+          sourceEdit.remove('terminalLayoutsByTabId', tabId)
+          sourceEdit.remove('localOnlyScrollbackByTabId', tabId)
+          sourceEdit.remove('ptyIdsByTabId', tabId)
+          sourceEdit.remove('lastKnownRelayPtyIdByTabId', tabId)
+          sourceEdit.remove('deferredSshSessionIdsByTabId', tabId)
+          sourceEdit.remove('pendingReconnectPtyIdByTabId', tabId)
           const nextRuntimePaneTitlesByTabId = omitByTabId(s.runtimePaneTitlesByTabId)
           const nextUnverifiedPtyLossTabIds = omitUnverifiedPtyLossTabIds(
             s.unverifiedPtyLossTabIds,
@@ -140,9 +143,9 @@ export function createTerminalTabCloseActions(
             s.lastTerminalInputAtByPaneKey,
             tabId
           )
-          const nextSleepingAgentSessionsByPaneKey = retiresSession
-            ? removeSleepingAgentSessionsForTab(s.sleepingAgentSessionsByPaneKey, tabId)
-            : s.sleepingAgentSessionsByPaneKey
+          if (retiresSession) {
+            removeSleepingAgentSessionsForTab(sourceEdit, tabId)
+          }
           const nextPendingStartupByTabId = omitByTabId(s.pendingStartupByTabId)
           const nextAutomaticAgentResumeClaimsByTabId = omitByTabId(
             s.automaticAgentResumeClaimsByTabId
@@ -154,15 +157,10 @@ export function createTerminalTabCloseActions(
           // Why: cache timer keys are `${tabId}:${leafId}` composites; remove all entries for the closing tab.
           const nextCacheTimer = removePaneKeysByTabPrefix(s.cacheTimerByKey, tabId)
           // Why: keep activeTabIdByWorktree in sync when closing a background-worktree tab, else the stale remembered tab falls back to tabs[0] on switch.
-          let nextActiveTabIdByWorktree = s.activeTabIdByWorktree
-          for (const [wId, tabs] of Object.entries(next)) {
-            if (nextActiveTabIdByWorktree[wId] !== tabId) {
-              continue
+          for (const [wId, tabs] of Object.entries(sourceEdit.read('tabsByWorktree'))) {
+            if (sourceEdit.entry('activeTabIdByWorktree', wId) === tabId) {
+              sourceEdit.set('activeTabIdByWorktree', wId, tabs[0]?.id ?? null)
             }
-            if (nextActiveTabIdByWorktree === s.activeTabIdByWorktree) {
-              nextActiveTabIdByWorktree = { ...s.activeTabIdByWorktree }
-            }
-            nextActiveTabIdByWorktree[wId] = tabs[0]?.id ?? null
           }
           // Why: keep tabBarOrderByWorktree in sync so stale terminal IDs don't linger and shift positions on later tab operations.
           let nextTabBarOrderByWorktree: Record<string, string[]> = s.tabBarOrderByWorktree
@@ -195,20 +193,11 @@ export function createTerminalTabCloseActions(
               delete nextColdRestores[closingId]
             }
           }
-          return {
-            tabsByWorktree: next,
+          return sourceEdit.finish({
             activeTabId: s.activeTabId === tabId ? null : s.activeTabId,
-            activeTabIdByWorktree: nextActiveTabIdByWorktree,
-            ptyIdsByTabId: nextPtyIdsByTabId,
-            lastKnownRelayPtyIdByTabId: nextLastKnownRelay,
-            deferredSshSessionIdsByTabId: nextDeferredSshSessionIdsByTabId,
-            pendingReconnectPtyIdByTabId: nextPendingReconnectPtyIdByTabId,
             runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId,
             ...(nextUnverifiedPtyLossTabIds !== s.unverifiedPtyLossTabIds
               ? { unverifiedPtyLossTabIds: nextUnverifiedPtyLossTabIds }
-              : {}),
-            ...(nextSleepingAgentSessionsByPaneKey !== s.sleepingAgentSessionsByPaneKey
-              ? { sleepingAgentSessionsByPaneKey: nextSleepingAgentSessionsByPaneKey }
               : {}),
             ...(nextClosedTombstones !== s.closedTerminalTabTombstonesByTabId
               ? { closedTerminalTabTombstonesByTabId: nextClosedTombstones }
@@ -217,8 +206,6 @@ export function createTerminalTabCloseActions(
             lastTerminalInputAtByPaneKey: nextLastTerminalInputAtByPaneKey,
             expandedPaneByTabId: nextExpanded,
             canExpandPaneByTabId: nextCanExpand,
-            terminalLayoutsByTabId: nextLayouts,
-            localOnlyScrollbackByTabId: nextLocalOnlyScrollback,
             pendingStartupByTabId: nextPendingStartupByTabId,
             automaticAgentResumeClaimsByTabId: nextAutomaticAgentResumeClaimsByTabId,
             nativeChatLaunchPromptByTabId: nextNativeChatLaunchPromptByTabId,
@@ -243,7 +230,7 @@ export function createTerminalTabCloseActions(
                   )
                 }
               : {})
-          }
+          })
         })
       )
       if (intentReason && closingWorktreeId && opts?.remoteCloseOwnedByHost !== true) {

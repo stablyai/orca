@@ -1,3 +1,4 @@
+import { withSessionSourceTestWrites } from '@/lib/test-support/session-source-test-store'
 /** Bound PR refresh sequences by MAX_CACHE_ENTRIES across ephemeral host/repo/branch keys; move touched keys to tail so cap evicts idle sequences. */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { create } from 'zustand'
@@ -29,11 +30,13 @@ globalThis.window = { api: mockApi }
 
 function createTestStore() {
   return create<AppState>()(
-    (...a) =>
-      ({
-        ...createGitHubSlice(...a),
-        ...createHostedReviewSlice(...a)
-      }) as AppState
+    withSessionSourceTestWrites(
+      (...a) =>
+        ({
+          ...createGitHubSlice(...a),
+          ...createHostedReviewSlice(...a)
+        }) as AppState
+    )
   )
 }
 

@@ -1,4 +1,5 @@
-import type { StateCreator } from 'zustand'
+import { editSessionSource } from '@/store/session-source-edits'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -31,8 +32,8 @@ import { readWslHostWindowsDriveRefusal } from '../../../../shared/wsl-host-wind
 import { showWslHostWindowsDriveRefusal } from '@/lib/wsl-host-windows-drive-refusal-toast'
 
 export function createRepoAddActions(
-  set: Parameters<StateCreator<AppState>>[0],
-  get: Parameters<StateCreator<AppState>>[1]
+  set: Parameters<SessionStateCreator<AppState>>[0],
+  get: Parameters<SessionStateCreator<AppState>>[1]
 ): Pick<RepoSlice, 'addRepoPath' | 'addRepo' | 'addNonGitFolder'> {
   return {
     addRepoPath: async (path, kind = 'git', options) => {
@@ -114,19 +115,19 @@ export function createRepoAddActions(
         }
         set((s) => {
           if (s.repos.some((r) => getRepoHostIdentity(r) === repoIdentity)) {
-            return s
+            return undefined
           }
-          const nextRepos = [...s.repos, repo]
+          const sourceEdit = editSessionSource(s).sequence('repos').append(repo)
+          const nextRepos = sourceEdit.read('repos')
           const hostId = getRepoExecutionHostId(repo)
-          return {
-            repos: nextRepos,
+          return sourceEdit.finish({
             ...mergeProjectCompatibilityForHostRepoChange({
               previous: { projects: s.projects, projectHostSetups: s.projectHostSetups },
               nextRepos,
               hostId
             }),
             folderWorkspacePathStatuses: {}
-          }
+          })
         })
         if (alreadyAdded) {
           toast.info(translate('auto.store.slices.repos.a8e4b3af5b', 'Project already added'), {

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { editor } from 'monaco-editor'
 import type { OpenFile } from '@/store/slices/editor'
@@ -41,10 +42,10 @@ function startTracking(
 describe('Monaco cursor-line ownership lifetime', () => {
   it('releases positions after 250 distinct owned editor tabs close', () => {
     const store = createEditorStore()
-    store.setState({ unifiedTabsByWorktree: {} })
+    setSessionTestState(store, { unifiedTabsByWorktree: {} })
     for (let index = 0; index < 250; index += 1) {
       const file = makeFile(`editor:wt-1:local:file-${index}`, `/repo/file-${index}.ts`)
-      store.setState({ openFiles: [file] })
+      setSessionTestState(store, { openFiles: [file] })
       const tracking = startTracking(store, file, index + 1)
       tracking.cursorPositionSub.dispose()
       tracking.scrollStateSub.dispose()
@@ -62,7 +63,7 @@ describe('Monaco cursor-line ownership lifetime', () => {
       ...makeFile('editor:wt-1:remote-a:file.ts', '/repo/file.ts'),
       runtimeEnvironmentId: 'remote-a'
     }
-    store.setState({ openFiles: [local, remote], unifiedTabsByWorktree: {} })
+    setSessionTestState(store, { openFiles: [local, remote], unifiedTabsByWorktree: {} })
     const localTracking = startTracking(store, local, 12)
     const remoteTracking = startTracking(store, remote, 35)
 

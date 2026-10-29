@@ -30,19 +30,23 @@ export type AgentStatusTabPrefixDropState = Pick<
   | 'unifiedTabsByWorktree'
 >
 
+type AgentStatusTabPrefixDropPatch = Partial<
+  Omit<AgentStatusTabPrefixDropState, 'tabsByWorktree' | 'unifiedTabsByWorktree'>
+>
+
 /** Share pure tab-prefix sweep between local drop and paired patches. Pass retiredAliasPaneKeys in because registry retirement is a side effect, outside reduction. */
 export function buildAgentStatusTabPrefixDropPatch(
   s: AgentStatusTabPrefixDropState,
   tabIdPrefix: string,
   retiredAliasPaneKeys: readonly string[],
   opts?: DropAgentStatusByTabPrefixOptions & { paneKeys?: ReadonlySet<string> }
-): { patch: Partial<AgentStatusTabPrefixDropState>; hadLive: boolean; removedPaneKeys: string[] } {
+): { patch: AgentStatusTabPrefixDropPatch; hadLive: boolean; removedPaneKeys: string[] } {
   const prefix = `${tabIdPrefix}:`
   const matchesPane = (key: string): boolean =>
     key.startsWith(prefix) && (!opts?.paneKeys || opts.paneKeys.has(key))
   let hadLive = false
   const removedPaneKeys: string[] = []
-  const buildPatch = (): Partial<AgentStatusTabPrefixDropState> => {
+  const buildPatch = (): AgentStatusTabPrefixDropPatch => {
     const completedOrphanKeys = opts?.paneKeys
       ? []
       : findCompletedOrphanPaneKeysForTabClose(s, opts?.worktreeId, prefix)

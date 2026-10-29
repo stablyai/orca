@@ -1,4 +1,5 @@
-import type { StateCreator } from 'zustand'
+import { replaceSessionSourceFields } from '@/store/session-source-write-boundary'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
 import { getManualRepoOrder } from '../../../../shared/manual-repo-order'
@@ -8,11 +9,11 @@ import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { RepoSlice } from './repo-state'
 
 export function createRepoOrderingActions(
-  set: Parameters<StateCreator<AppState>>[0],
-  get: Parameters<StateCreator<AppState>>[1]
+  set: Parameters<SessionStateCreator<AppState>>[0],
+  get: Parameters<SessionStateCreator<AppState>>[1]
 ): Pick<RepoSlice, 'setActiveRepo' | 'reorderRepos'> {
   return {
-    setActiveRepo: (projectId) => set({ activeRepoId: projectId }),
+    setActiveRepo: (projectId) => set((_sourceState) => ({ activeRepoId: projectId })),
 
     reorderRepos: async (orderedIds) => {
       // Optimistically apply the new order for instant sidebar update; resync only if main rejects (racing add/remove).
@@ -42,11 +43,16 @@ export function createRepoOrderingActions(
         return
       }
       const manualRepoOrder = getManualRepoOrder(next)
-      set({
-        repos: next,
-        manualRepoOrder,
-        folderWorkspacePathStatuses: {}
-      })
+      set(
+        replaceSessionSourceFields(
+          {
+            repos: next,
+            manualRepoOrder,
+            folderWorkspacePathStatuses: {}
+          },
+          'order'
+        )
+      )
       try {
         // Why: each host persists only its own repos and rejects non-permutations; dispatch one per-host permutation per owner.
         const groups = splitRepoReorderByHost(orderedIds, next, get().settings)

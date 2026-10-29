@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // Keep text, disk baseline and conflict state synchronized across workspaces sharing one Monaco model.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -40,7 +41,7 @@ vi.mock('@/runtime/runtime-file-read-client', async (importOriginal) => ({
 function openSharedTabs(disk: string) {
   const store = createEditorStore()
   storeRef.current = store
-  store.setState({
+  setSessionTestState(store, {
     worktreesByRepo: {
       'repo-1': [
         makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }),
@@ -245,7 +246,7 @@ describe('two tabs sharing one model', () => {
     const disk = stubGuardedDisk({ [md]: 'A' }, () => (released ? Promise.resolve() : held))
     const store = createEditorStore()
     storeRef.current = store
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {
         'repo-1': [
           makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }),

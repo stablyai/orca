@@ -1,4 +1,5 @@
-import type { StateCreator } from 'zustand'
+import { replaceSessionSourceFields } from '@/store/session-source-write-boundary'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -27,8 +28,8 @@ import {
 } from './wsl-moved-repo-ui-retention'
 
 export function createRuntimeRepoCatalogActions(
-  set: Parameters<StateCreator<AppState>>[0],
-  get: Parameters<StateCreator<AppState>>[1]
+  set: Parameters<SessionStateCreator<AppState>>[0],
+  get: Parameters<SessionStateCreator<AppState>>[1]
 ): Pick<RepoSlice, 'fetchRuntimeEnvironmentRepos'> {
   return {
     fetchRuntimeEnvironmentRepos: async (environmentId) => {
@@ -48,11 +49,11 @@ export function createRuntimeRepoCatalogActions(
         let finalizedHostRepos: Repo[] = []
         set((s) => {
           if (!isHostCatalogFenceCurrent(get, fence)) {
-            return s
+            return undefined
           }
           // Why: skip merging a runtime env removed while this Connect-flow fetch was in flight, so purged repos aren't re-added (#8881).
           if (isRemovedRuntimeHostId(catalog.hostId, s.removedRuntimeEnvironmentIds)) {
-            return s
+            return undefined
           }
           const result = mergeFetchedRepoCatalog(catalog, s.repos)
           const reconciliation = reconcileSupersededSshRepos(result.repos, s)
@@ -75,57 +76,60 @@ export function createRuntimeRepoCatalogActions(
           finalizedHostRepos = finalizedRepos.filter(
             (repo) => getRepoExecutionHostId(repo) === result.hostId
           )
-          return {
-            repos: finalizedRepos,
-            ...(visibilityDefaults === undefined
-              ? {}
-              : {
-                  worktreeVisibilityDefaultsByHost: {
-                    ...s.worktreeVisibilityDefaultsByHost,
-                    [targetHostId]: visibilityDefaults
-                  }
-                }),
-            ...(visibilityDefaults !== undefined && s.settings
-              ? s.settings.activeRuntimeEnvironmentId === environmentId
-                ? visibilityDefaults
-                  ? {
-                      settings: {
-                        ...s.settings,
-                        worktreeVisibilityDefaults: visibilityDefaults
-                      },
-                      worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId: environmentId,
-                      worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId:
-                        visibilitySnapshot.sourceDefaultsSupported ? environmentId : null
+          return replaceSessionSourceFields(
+            {
+              repos: finalizedRepos,
+              ...(visibilityDefaults === undefined
+                ? {}
+                : {
+                    worktreeVisibilityDefaultsByHost: {
+                      ...s.worktreeVisibilityDefaultsByHost,
+                      [targetHostId]: visibilityDefaults
                     }
-                  : {
-                      settings: Object.fromEntries(
-                        Object.entries(s.settings).filter(
-                          ([key]) => key !== 'worktreeVisibilityDefaults'
-                        )
-                      ) as GlobalSettings,
-                      worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId: null,
-                      worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId: null
-                    }
-                : {}
-              : {}),
-            pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
-            ...reconcileFetchedCatalogWorktreeState(s, catalog, finalizedRepos),
-            ...mergedProjectCompatibility,
-            activeRepoId:
-              s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
-            filterRepoIds: retainValidFilterRepoIds(
-              s.filterRepoIds,
-              withWslMovedRepoIds(validRepoIds, s.wslMovedProjects)
-            ),
-            setupScriptPromptDismissedRepoIds: withWslMovedSetupScriptDismissals(
-              s.setupScriptPromptDismissedRepoIds,
-              filterSetupScriptPromptDismissalsToValidRepos(
-                s.setupScriptPromptDismissedRepoIds,
-                validRepoHostIdentities
+                  }),
+              ...(visibilityDefaults !== undefined && s.settings
+                ? s.settings.activeRuntimeEnvironmentId === environmentId
+                  ? visibilityDefaults
+                    ? {
+                        settings: {
+                          ...s.settings,
+                          worktreeVisibilityDefaults: visibilityDefaults
+                        },
+                        worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId: environmentId,
+                        worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId:
+                          visibilitySnapshot.sourceDefaultsSupported ? environmentId : null
+                      }
+                    : {
+                        settings: Object.fromEntries(
+                          Object.entries(s.settings).filter(
+                            ([key]) => key !== 'worktreeVisibilityDefaults'
+                          )
+                        ) as GlobalSettings,
+                        worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId: null,
+                        worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId: null
+                      }
+                  : {}
+                : {}),
+              pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
+              ...reconcileFetchedCatalogWorktreeState(s, catalog, finalizedRepos),
+              ...mergedProjectCompatibility,
+              activeRepoId:
+                s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
+              filterRepoIds: retainValidFilterRepoIds(
+                s.filterRepoIds,
+                withWslMovedRepoIds(validRepoIds, s.wslMovedProjects)
               ),
-              s.wslMovedProjects
-            )
-          }
+              setupScriptPromptDismissedRepoIds: withWslMovedSetupScriptDismissals(
+                s.setupScriptPromptDismissedRepoIds,
+                filterSetupScriptPromptDismissalsToValidRepos(
+                  s.setupScriptPromptDismissedRepoIds,
+                  validRepoHostIdentities
+                ),
+                s.wslMovedProjects
+              )
+            },
+            'catalog'
+          )
         })
         scheduleSafeAutoForkSync(finalizedHostRepos)
         return finalizedHostRepos

@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -256,7 +257,8 @@ async function flushEffects(): Promise<void> {
 }
 
 async function renderPalette(overrides: Partial<AppState>): Promise<void> {
-  useAppStore.setState({
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+  setSessionTestState(useAppStore, {
     activeModal: 'worktree-palette',
     activeWorktreeId: null,
     repos: [makeRepo()],
@@ -336,7 +338,7 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     setCommandQuery = null
-    useAppStore.setState(initialAppState, true)
+    setSessionTestState(useAppStore, initialAppState, true)
     testContainer = document.createElement('div')
     document.body.appendChild(testContainer)
     testRoot = createRoot(testContainer)
@@ -347,7 +349,7 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
       testRoot.unmount()
     })
     document.body.replaceChildren()
-    useAppStore.setState(initialAppState, true)
+    setSessionTestState(useAppStore, initialAppState, true)
   })
 
   it('keeps every interleaved row under its own section header', async () => {

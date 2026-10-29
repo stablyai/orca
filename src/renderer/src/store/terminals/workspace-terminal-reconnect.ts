@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { buildByIdIndex, buildWorktreeByIdIndex } from '../slices/worktree-by-id-index'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
@@ -13,27 +14,28 @@ export function createWorkspaceTerminalReconnectActions(
       if (signal?.aborted) {
         return
       }
+      const sourceState = get()
+      const edit = editSessionSource(sourceState)
       const {
         pendingReconnectWorktreeIds,
         pendingReconnectTabByWorktree,
         pendingReconnectPtyIdByTabId,
         terminalLayoutsByTabId,
-        tabsByWorktree,
-        ptyIdsByTabId
-      } = get()
+        tabsByWorktree
+      } = sourceState
       const ids = pendingReconnectWorktreeIds ?? []
       if (ids.length === 0) {
-        set({
-          workspaceSessionReady: true,
-          pendingReconnectWorktreeIds: [],
-          pendingReconnectTabByWorktree: {},
-          pendingReconnectPtyIdByTabId: {}
-        })
+        edit.removeKeys('pendingReconnectPtyIdByTabId', Object.keys(pendingReconnectPtyIdByTabId))
+        set(
+          edit.finish({
+            workspaceSessionReady: true,
+            pendingReconnectWorktreeIds: [],
+            pendingReconnectTabByWorktree: {}
+          })
+        )
         return
       }
       // Why: defer daemon attachment for real dimensions; eager 80×24 flushes garble output.
-      let reconnectedTabsByWorktree: Record<string, TerminalTab[]> | null = null
-      let reconnectedPtyIdsByTabId: Record<string, string[]> | null = null
       // No writes/awaits in the loop, so one store-snapshot index serves every iteration.
       const worktreeById = buildWorktreeByIdIndex(selectWorktreesByRepo(get()))
       const repoById = buildByIdIndex(get().repos)
@@ -64,23 +66,23 @@ export function createWorkspaceTerminalReconnectActions(
               : []
           if (allPtyIds.length > 0) {
             // Why: hide-sleeping reads ptyIdsByTabId for liveness; restored daemon sessions run before their pane remounts, so advertise them.
-            reconnectedPtyIdsByTabId ??= { ...ptyIdsByTabId }
-            reconnectedPtyIdsByTabId[tabId] = allPtyIds
+            edit.set('ptyIdsByTabId', tabId, allPtyIds)
           }
           if (tabLevelPtyId) {
-            reconnectedTabsByWorktree ??= { ...tabsByWorktree }
-            const nextTabs = reconnectedTabsByWorktree[worktreeId]
+            const nextTabs = edit.entry('tabsByWorktree', worktreeId)
             if (!nextTabs) {
               continue
             }
-            reconnectedTabsByWorktree[worktreeId] = nextTabs.map((t) =>
-              t.id === tabId ? { ...t, ptyId: tabLevelPtyId } : t
+            edit.set(
+              'tabsByWorktree',
+              worktreeId,
+              nextTabs.map((t) => (t.id === tabId ? { ...t, ptyId: tabLevelPtyId } : t))
             )
           }
         }
       }
       // Why: keep deferred SSH session IDs for post-cleanup reconnect.
-      const deferredSshSessionIdsByTabId: Record<string, string> = {}
+      const retainedDeferred = new Set<string>()
       for (const worktreeId of ids) {
         const worktree = worktreeById.get(worktreeId)
         // Cold-start SSH listings are absent; derive repo ID from the composite worktree ID to retain deferred sessions.
@@ -102,23 +104,28 @@ export function createWorkspaceTerminalReconnectActions(
         for (const tab of tabs) {
           const sessionId = pendingReconnectPtyIdByTabId[tab.id]
           if (sessionId) {
-            deferredSshSessionIdsByTabId[tab.id] = sessionId
+            retainedDeferred.add(tab.id)
+            edit.set('deferredSshSessionIdsByTabId', tab.id, sessionId)
           }
         }
       }
       if (signal?.aborted) {
         return
       }
-      set({
-        // Only each row's ptyId changes, a field the frame merge leaves to the window.
-        ...(reconnectedTabsByWorktree ? { tabsByWorktree: reconnectedTabsByWorktree } : {}),
-        ...(reconnectedPtyIdsByTabId ? { ptyIdsByTabId: reconnectedPtyIdsByTabId } : {}),
-        workspaceSessionReady: true,
-        pendingReconnectWorktreeIds: [],
-        pendingReconnectTabByWorktree: {},
-        pendingReconnectPtyIdByTabId: {},
-        deferredSshSessionIdsByTabId
-      })
+      edit.removeKeys(
+        'deferredSshSessionIdsByTabId',
+        Object.keys(sourceState.deferredSshSessionIdsByTabId).filter(
+          (id) => !retainedDeferred.has(id)
+        )
+      )
+      edit.removeKeys('pendingReconnectPtyIdByTabId', Object.keys(pendingReconnectPtyIdByTabId))
+      set(
+        edit.finish({
+          workspaceSessionReady: true,
+          pendingReconnectWorktreeIds: [],
+          pendingReconnectTabByWorktree: {}
+        })
+      )
     }
   }
 }

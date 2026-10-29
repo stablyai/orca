@@ -1,5 +1,6 @@
 // Derive shutdown reconnect facts from main-owned layout, terminal records and SSH connections, matching window capture rules without depending on window saves.
 
+import { readSessionUnit, type SessionUnitView } from '../../../../shared/session-unit-reader'
 import { isPaneSleepRecord } from '../../../../shared/agent-session-resume'
 import { isOwnedSshTargetId } from '../../../../shared/execution-host'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
@@ -13,6 +14,7 @@ export type ShutdownReconnectFacts = Pick<
 >
 
 export type ReconnectFactSources = {
+  factOwner?: object
   /** A terminal of this machine main's records show running. */
   isLiveLocalPty: (ptyId: string) => boolean
   /** Proven exited (a recorded exit); a lost relay is unverifiable, not exited. */
@@ -23,14 +25,19 @@ export type ReconnectFactSources = {
 }
 
 /** Every terminal a tab's panes name, in tree order, then its tab-level id. */
-function tabPtyIds(session: WorkspaceSessionState, tabId: string, tabPtyId: string | null) {
-  const layout = session.terminalLayoutsByTabId[tabId]
+export function tabReconnectPtys(
+  session: WorkspaceSessionState | SessionUnitView,
+  tabId: string,
+  tabPtyId: string | null
+) {
+  const layout = readSessionUnit(session, 'terminalLayoutsByTabId', tabId)
   const byLeaf = layout?.ptyIdsByLeafId ?? {}
   const leafIds = collectLayoutLeafIdsInOrder(layout?.root ?? null)
-  const records = session.sleepingAgentSessionsByPaneKey ?? {}
   // A running agent's live or quit resume record is not a sleep.
   const slept = (leafId: string | undefined): boolean => {
-    const record = leafId ? records[`${tabId}:${leafId}`] : undefined
+    const record = leafId
+      ? readSessionUnit(session, 'sleepingAgentSessionsByPaneKey', `${tabId}:${leafId}`)
+      : undefined
     return record !== undefined && isPaneSleepRecord(record)
   }
   const panes = leafIds.flatMap((leafId) => {
@@ -54,7 +61,7 @@ function relaySessionIdsByTabId(
   for (const tabs of Object.values(session.tabsByWorktree)) {
     for (const tab of tabs) {
       // A slept pane keeps its relay id as a wake hint; only an awake one reconnects.
-      const relay = tabPtyIds(session, tab.id, tab.ptyId).find(
+      const relay = tabReconnectPtys(session, tab.id, tab.ptyId).find(
         (pane) =>
           !pane.sleeping && parseAppSshPtyId(pane.ptyId) && !sources.isKnownExited(pane.ptyId)
       )
@@ -76,7 +83,9 @@ export function deriveShutdownReconnectFacts(
       tabs.some(
         (tab) =>
           Boolean(relays[tab.id]) ||
-          tabPtyIds(session, tab.id, tab.ptyId).some((pane) => sources.isLiveLocalPty(pane.ptyId))
+          tabReconnectPtys(session, tab.id, tab.ptyId).some((pane) =>
+            sources.isLiveLocalPty(pane.ptyId)
+          )
       )
     )
     .map(([worktreeId]) => worktreeId)
@@ -97,9 +106,22 @@ export function deriveShutdownReconnectFacts(
  * Connected targets, and the targets a surviving relay session names unless the user left them
  * offline. A runtime-owned target belongs to the runtime layer and is never redialed.
  */
-function activeConnectionIds(
+export function activeConnectionIds(
   sources: ReconnectFactSources,
   relaySessionIds: readonly string[]
+): string[] | undefined {
+  return activeConnectionIdsFromTargets(
+    sources,
+    relaySessionIds.flatMap((id) => {
+      const target = parseAppSshPtyId(id)?.connectionId
+      return target ? [target] : []
+    })
+  )
+}
+
+export function activeConnectionIdsFromTargets(
+  sources: ReconnectFactSources,
+  relayTargetIds: readonly string[]
 ): string[] | undefined {
   const targetIds = new Set<string>()
   for (const [targetId, status] of sources.sshStatusByTargetId) {
@@ -107,8 +129,7 @@ function activeConnectionIds(
       targetIds.add(targetId)
     }
   }
-  for (const sessionId of relaySessionIds) {
-    const targetId = parseAppSshPtyId(sessionId)?.connectionId
+  for (const targetId of relayTargetIds) {
     const status = targetId ? sources.sshStatusByTargetId.get(targetId) : undefined
     if (
       targetId &&

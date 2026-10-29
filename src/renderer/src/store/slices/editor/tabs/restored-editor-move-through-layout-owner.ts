@@ -1,3 +1,4 @@
+import { editSessionSource, type SessionSourceEdit } from '../../../session-source-edits'
 // Restore reownership proposes IDs to main (same-workspace reownership is rename); move frames atomically rekey content (F42).
 
 import type { Tab } from '../../../../../../shared/tab-types'
@@ -102,7 +103,7 @@ export function reparentRestoredEditorThroughLayoutOwner(
   today: () => void
 ): RestoredEditorOwnerResult | null {
   const state = get()
-  const destination = resolveRestoredEditorOwnerDestination(state, args)
+  const destination = resolveRestoredEditorOwnerDestination(editSessionSource(state), args)
   const to = args.targetWorktreeId
   if (!destination.ok || runtimeEnvironmentIdUnlessTwin(state, to)) {
     return null
@@ -120,24 +121,29 @@ export function reparentRestoredEditorThroughLayoutOwner(
     return null
   }
   const groupId = restoredEditorTargetGroupId(state, to)
-  const transitionOf = (s: AppState) => {
+  const transitionOf = (edit: SessionSourceEdit<AppState>, s: AppState) => {
     let ok = false
-    const next = buildRestoredEditorOwnerTransition(args, (result) => (ok = result.ok), groupId)(s)
+    const next = buildRestoredEditorOwnerTransition(
+      args,
+      (result) => (ok = result.ok),
+      groupId
+    )(s, edit)
     return ok ? next : null
   }
-  const planned = transitionOf(state)
+  const plannedEdit = editSessionSource(state)
+  const planned = transitionOf(plannedEdit, state)
   if (!planned) {
     return null
   }
   const renamedFile = (id: string): OpenFile | undefined =>
-    planned.patch.openFiles?.find((file) => file.id === id && file.worktreeId === to)
+    plannedEdit.read('openFiles').find((file) => file.id === id && file.worktreeId === to)
   const command = moveCommand(args, source, moves, groupId, renamedFile, newFileId)
   const rekeys = tabRekeysOf(state, to, groupId, moves)
   const expected = expectContentRekey(
     {
       shows: (cache) => framesShowTabRekeys(cache, from, to, rekeys),
       // Re-checked against the store the frame finds; a move gone stale rekeys nothing.
-      patch: (s) => transitionOf(s)?.patch ?? {}
+      patch: (edit, s) => transitionOf(edit, s)?.patch ?? {}
     },
     [...migrations.keys(), ...migrations.values()]
   )

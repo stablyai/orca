@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createTestStore,
@@ -126,7 +127,7 @@ describe('remote worktree event lineage refresh', () => {
     for (const row of rows) {
       ;(worktreesByRepo[row.repoId] ??= []).push(row)
     }
-    store.setState({ worktreesByRepo, sortEpoch: 3 })
+    setSessionTestState(store, { worktreesByRepo, sortEpoch: 3 })
     const { worktreeChangeRefreshQueue: queue } = createWorktreeEventRuntime(unsubs, () => false)
     const now = 1_800_000_000_000
     const events = Object.entries(worktreesByRepo).map(([repoId, repoRows]) => ({
@@ -195,7 +196,7 @@ describe('remote worktree event lineage refresh', () => {
 
   it('preserves rename activation and authoritative deletion cleanup', async () => {
     const deleted = makeWorktree({ id: 'repo-delete::/gone', repoId: 'repo-delete' })
-    store.setState({
+    setSessionTestState(store, {
       activeWorktreeId: 'repo-rename::/old',
       activeWorkspaceExecutionHostId: 'runtime:env-1',
       migrateWorktreeIdentity: vi.fn((oldId: string, newId: string) => {
@@ -311,7 +312,7 @@ function createActualActionFixture() {
     }
     return { id: 'rpc', ok: true, result, _meta: { runtimeId: 'remote-runtime' } }
   })
-  store.setState({
+  setSessionTestState(store, {
     settings: null,
     repos: [{ ...TEST_REPO, id: 'repo', executionHostId: 'runtime:env-1' }],
     worktreesByRepo: { repo: [worktree] },
@@ -378,7 +379,7 @@ describe('order-only refresh with actual store actions', () => {
   it('refetches when a published row was never loaded here', async () => {
     const h = createActualActionFixture()
     await h.warm()
-    store.setState({ worktreesByRepo: {} })
+    setSessionTestState(store, { worktreesByRepo: {} })
     h.setOrder(42)
     h.queue.enqueue({
       repoId: 'repo',
@@ -436,7 +437,7 @@ describe('order-only refresh with actual store actions', () => {
   it('leaves a same-id row owned by another host untouched', async () => {
     const h = createActualActionFixture()
     const local = makeWorktree({ id: h.worktree.id, repoId: 'repo', hostId: 'local', sortOrder: 5 })
-    store.setState({ worktreesByRepo: { repo: [h.worktree, local] } })
+    setSessionTestState(store, { worktreesByRepo: { repo: [h.worktree, local] } })
     h.queue.enqueue({
       repoId: 'repo',
       executionHostId: 'runtime:env-1',

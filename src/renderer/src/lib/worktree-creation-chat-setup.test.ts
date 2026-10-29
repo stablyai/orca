@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { executeWorktreeCreation } from './worktree-creation-flow-execute'
@@ -24,7 +25,7 @@ const initialState = useAppStore.getState()
 registerWorktreeActivationReset()
 afterEach(() => {
   vi.restoreAllMocks()
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
 })
 
 describe('native chat creation completed in the background', () => {

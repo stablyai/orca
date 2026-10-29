@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { getDefaultUIState } from '../../../../shared/constants'
@@ -46,7 +47,7 @@ function seedContentRecords(
   target: ReturnType<typeof createTestStore>,
   ids: { terminalId: string; browserId?: string; fileId: string }
 ): void {
-  target.setState({
+  setSessionTestState(target, {
     tabsByWorktree: { [WT]: [makeTab({ id: ids.terminalId, worktreeId: WT })] },
     terminalLayoutsByTabId: { [ids.terminalId]: makeLayout() },
     browserTabsByWorktree: ids.browserId
@@ -107,7 +108,7 @@ describe('TabsSlice', () => {
     })
 
     it("stamps an SSH worktree's own host when activation passed none", () => {
-      store.setState({
+      setSessionTestState(store, {
         repos: [
           { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
         ],
@@ -276,7 +277,7 @@ describe('TabsSlice', () => {
         worktreeId: WT,
         groupId
       })
-      store.setState({
+      setSessionTestState(store, {
         openFiles: [file],
         unifiedTabsByWorktree: { [WT]: [tab] },
         groupsByWorktree: {
@@ -329,7 +330,7 @@ describe('TabsSlice', () => {
         worktreeId: WT,
         groupId
       })
-      store.setState({
+      setSessionTestState(store, {
         openFiles: [file],
         unifiedTabsByWorktree: { [WT]: [tab] },
         groupsByWorktree: {
@@ -373,7 +374,7 @@ describe('TabsSlice', () => {
         language: 'typescript',
         worktreeId: WT
       })
-      store.setState({
+      setSessionTestState(store, {
         openFiles: [file],
         unifiedTabsByWorktree: { [WT]: [] },
         groupsByWorktree: { [WT]: [] },
@@ -421,7 +422,7 @@ describe('TabsSlice', () => {
     it('falls back to neighbor selection when the MRU stack has no prior tab', () => {
       // Build state manually (no prior activations) — mirrors a freshly-hydrated session with only an active tab known.
       const groupId = 'mru-fallback-group'
-      store.setState({
+      setSessionTestState(store, {
         unifiedTabsByWorktree: {
           [WT]: [
             {

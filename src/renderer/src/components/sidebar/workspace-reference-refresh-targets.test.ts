@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
@@ -24,7 +25,7 @@ const update = () => getWorkspaceReferenceRefreshTargets(useAppStore.getState())
 beforeEach(() => {
   vi.useFakeTimers()
   vi.clearAllMocks()
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     settings: null,
     repos: [referenceRepo],
     worktreesByRepo: { repo: [workspace] },
@@ -64,7 +65,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 it('leaves the detached primary review to its visible target while retaining sibling reviews', () => {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     worktreesByRepo: {
       repo: [
         {
@@ -82,7 +83,7 @@ it('leaves the detached primary review to its visible target while retaining sib
 })
 
 it('pauses disconnected SSH owners and only admits the owning reconnect', () => {
-  useAppStore.setState({ repos: [{ ...referenceRepo, connectionId: 'ssh-a' }] })
+  setSessionTestState(useAppStore, { repos: [{ ...referenceRepo, connectionId: 'ssh-a' }] })
   expect(update()).toEqual([])
   for (const [targetId, status, count] of [
     ['other', 'connected', 0],
@@ -96,7 +97,7 @@ it('pauses disconnected SSH owners and only admits the owning reconnect', () => 
   }
 })
 it('shares one scheduler timer and removes queued work when the workspace leaves the viewport', async () => {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     worktreesByRepo: {
       repo: [
         {
@@ -132,7 +133,7 @@ it('uses the known branch provider for sparse enterprise references', () => {
     }
   }
   const key = getHostedReviewCacheKey(repo.path, workspace.branch, null, repo.id, null, null, true)
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     repos: [repo],
     worktreesByRepo: {
       repo: [{ ...workspace, linkedItems: [{ provider: 'github', type: 'pr', number: 42 }] }]
@@ -150,7 +151,7 @@ it('retains both explicit owners when equal visible workspace IDs exist on two h
     executionHostId: 'ssh:remote' as const,
     connectionId: 'remote'
   }
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     repos: [referenceRepo, remoteRepo],
     worktreesByRepo: {
       local: [{ ...workspace, hostId: 'local' }],
@@ -175,7 +176,7 @@ it('retains both explicit owners when equal visible workspace IDs exist on two h
 })
 
 it('admits attached reviews on visible external detected worktrees', () => {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     worktreesByRepo: {},
     detectedWorktreesByRepo: {
       repo: makeDetectedResult('repo', [workspace])

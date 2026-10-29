@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   HostQualifiedDetectedWorktreeResult,
@@ -155,7 +156,7 @@ describe('SSH repo host reconciliation', () => {
     projectsList.mockResolvedValue([project])
     setupsList.mockResolvedValue([directSshSetup('ssh-new')])
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [staleRepo],
       projectHostSetups: [directSshSetup('ssh-old')],
       worktreesByRepo: {
@@ -190,7 +191,7 @@ describe('SSH repo host reconciliation', () => {
     projectsList.mockResolvedValue([project])
     setupsList.mockResolvedValue([directSshSetup('ssh-new')])
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [directSshRepo('ssh-old')],
       projectHostSetups: [directSshSetup('ssh-old'), runtimeSetup]
     })
@@ -229,7 +230,10 @@ describe('SSH repo host reconciliation', () => {
       })
       .mockResolvedValueOnce([directSshSetup('ssh-new')])
     const store = createTestStore()
-    store.setState({ repos: [staleRepo], projectHostSetups: [directSshSetup('ssh-old')] })
+    setSessionTestState(store, {
+      repos: [staleRepo],
+      projectHostSetups: [directSshSetup('ssh-old')]
+    })
     store.getState().recordSshRepoReadoptions([readoption])
 
     const olderFetch = store.getState().fetchReposForAllHosts({ remoteHosts: 'skip' })
@@ -259,7 +263,7 @@ describe('SSH repo host reconciliation', () => {
     projectsList.mockResolvedValue([project])
     setupsList.mockResolvedValue([directSshSetup('ssh-new')])
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [directSshRepo('ssh-old')],
       sshConnectionStates: new Map([['ssh-old', connectedSshState(oldAuthority)]]),
       worktreesByRepo: { [repoId]: [staleWorktree] },
@@ -286,7 +290,7 @@ describe('SSH repo host reconciliation', () => {
     store.getState().recordSshRepoReadoptions([readoption])
     await store.getState().fetchReposForAllHosts({ remoteHosts: 'skip' })
     const newAuthority = directSshAuthority('ssh-new')
-    store.setState({
+    setSessionTestState(store, {
       sshConnectionStates: new Map([['ssh-new', connectedSshState(newAuthority)]])
     })
     resolveOldWorktrees(qualifiedWorktreeResult(providerRequest, staleWorktree))
@@ -318,7 +322,7 @@ describe('SSH repo host reconciliation', () => {
       return oldWorktrees
     })
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [directSshRepo('ssh-old')],
       sshConnectionStates: new Map([['ssh-old', connectedSshState(oldAuthority)]])
     })
@@ -331,7 +335,7 @@ describe('SSH repo host reconciliation', () => {
       executionHostId: 'ssh:ssh-old',
       expectedAuthority: oldAuthority
     })
-    store.setState({ repos: [], worktreesByRepo: {}, detectedWorktreesByRepo: {} })
+    setSessionTestState(store, { repos: [], worktreesByRepo: {}, detectedWorktreesByRepo: {} })
     resolveOldWorktrees(qualifiedWorktreeResult(providerRequest, staleWorktree))
     await expect(staleFetch).resolves.toBe(false)
 
@@ -360,14 +364,15 @@ describe('SSH repo host reconciliation', () => {
       return oldWorktrees
     })
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [directSshRepo('ssh-old')],
       sshConnectionStates: new Map([['ssh-old', connectedSshState(oldAuthority)]])
     })
 
     const staleFetch = store.getState().fetchWorktrees(repoId)
     await vi.waitFor(() => expect(worktreesListDetected).toHaveBeenCalledOnce())
-    store.setState({ repos: [owner as Repo] })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the Repo] fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, { repos: [owner as Repo] })
     resolveOldWorktrees(qualifiedWorktreeResult(providerRequest, staleWorktree))
     await expect(staleFetch).resolves.toBe(false)
 
@@ -387,7 +392,10 @@ describe('SSH repo host reconciliation', () => {
     projectsList.mockResolvedValue([project])
     setupsList.mockResolvedValue([directSshSetup('ssh-old')])
     const store = createTestStore()
-    store.setState({ repos: [localRepo, oldRepo], projectHostSetups: [directSshSetup('ssh-old')] })
+    setSessionTestState(store, {
+      repos: [localRepo, oldRepo],
+      projectHostSetups: [directSshSetup('ssh-old')]
+    })
 
     await store.getState().fetchReposForAllHosts({ remoteHosts: 'skip' })
 

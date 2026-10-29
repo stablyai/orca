@@ -126,7 +126,7 @@ export const createRuntimeStatusSlice: (
         !statusesChanged &&
         !removedChanged
       ) {
-        return s
+        return undefined
       }
       return {
         runtimeEnvironments: catalogUnchanged ? s.runtimeEnvironments : reconciled,
@@ -243,7 +243,7 @@ export const createRuntimeStatusSlice: (
           : s.runtimeEnvironments
       const environmentsChanged = runtimeEnvironments !== s.runtimeEnvironments
       if (statusUnchanged && !environmentsChanged) {
-        return s
+        return undefined
       }
       return {
         runtimeStatusByEnvironmentId: statusUnchanged
@@ -269,7 +269,7 @@ export const createRuntimeStatusSlice: (
     set((s) => {
       runtimeStatusConnectionGeneration.advanceRuntimeEnvironmentConnectionGeneration(environmentId)
       if (!s.runtimeStatusByEnvironmentId.has(environmentId)) {
-        return s
+        return undefined
       }
       const next = new Map(s.runtimeStatusByEnvironmentId)
       next.delete(environmentId)
@@ -293,7 +293,7 @@ export const createRuntimeStatusSlice: (
           changed = true
         }
       }
-      return changed ? { runtimeStatusByEnvironmentId: next } : s
+      return changed ? { runtimeStatusByEnvironmentId: next } : undefined
     })
   },
 

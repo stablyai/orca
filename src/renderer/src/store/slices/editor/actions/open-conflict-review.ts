@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import { joinPath } from '@/lib/path'
@@ -32,6 +33,7 @@ export function createOpenConflictReview(
       let openedConflictFile = true
       let conflictFileId = absolutePath
       set((s) => {
+        const edit = editSessionSource(s)
         const conflict = toOpenConflictMetadata(entry)
         const runtimeEnvironmentId = conflictFileRuntimeOwner(s, worktreeId)
         // Why: a server's file is open under its owned id; looking up the bare path would open a second copy.
@@ -54,69 +56,68 @@ export function createOpenConflictReview(
 
         if (!conflict) {
           openedConflictFile = false
-          return s
+          return undefined
         }
 
-        const nextOpenFiles = existing
-          ? s.openFiles.map((f) =>
-              f.id === fileId
+        if (existing) {
+          edit.sequence('openFiles').map((f) =>
+            f.id === fileId
+              ? {
+                  ...f,
+                  mode: 'edit' as const,
+                  language,
+                  relativePath: entry.path,
+                  filePath: absolutePath,
+                  conflict,
+                  diffSource: undefined,
+                  skippedConflicts: undefined,
+                  conflictReview: undefined
+                }
+              : f.id === reviewFileId && f.conflictReview
                 ? {
                     ...f,
-                    mode: 'edit' as const,
-                    language,
-                    relativePath: entry.path,
-                    filePath: absolutePath,
-                    conflict,
-                    diffSource: undefined,
-                    skippedConflicts: undefined,
-                    conflictReview: undefined
+                    conflictReview: {
+                      ...f.conflictReview,
+                      selectedFileId: fileId
+                    }
                   }
-                : f.id === reviewFileId && f.conflictReview
-                  ? {
-                      ...f,
-                      conflictReview: {
-                        ...f.conflictReview,
-                        selectedFileId: fileId
-                      }
-                    }
-                  : f
-            )
-          : [
-              ...s.openFiles.map((f) =>
-                f.id === reviewFileId && f.conflictReview
-                  ? {
-                      ...f,
-                      conflictReview: {
-                        ...f.conflictReview,
-                        selectedFileId: fileId
-                      }
-                    }
-                  : f
-              ),
-              {
-                id: fileId,
-                filePath: absolutePath,
-                relativePath: entry.path,
-                worktreeId,
-                language,
-                isDirty: false,
-                mode: 'edit' as const,
-                conflict,
-                ...(runtimeEnvironmentId ? { runtimeEnvironmentId } : {})
-              }
-            ]
+                : f
+          )
+        } else {
+          edit.sequence('openFiles').map((f) =>
+            f.id === reviewFileId && f.conflictReview
+              ? {
+                  ...f,
+                  conflictReview: {
+                    ...f.conflictReview,
+                    selectedFileId: fileId
+                  }
+                }
+              : f
+          )
+          edit.sequence('openFiles').append({
+            id: fileId,
+            filePath: absolutePath,
+            relativePath: entry.path,
+            worktreeId,
+            language,
+            isDirty: false,
+            mode: 'edit' as const,
+            conflict,
+            ...(runtimeEnvironmentId ? { runtimeEnvironmentId } : {})
+          })
+        }
+        edit.set('activeFileIdByWorktree', worktreeId, reviewFileId)
+        edit.set('activeTabTypeByWorktree', worktreeId, 'editor')
 
-        return {
-          openFiles: nextOpenFiles,
+        return edit.finish({
           activeFileId: reviewFileId,
           activeTabType: 'editor',
-          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: reviewFileId },
-          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' },
           trackedConflictPathsByWorktree:
             nextTracked === s.trackedConflictPathsByWorktree[worktreeId]
               ? s.trackedConflictPathsByWorktree
               : { ...s.trackedConflictPathsByWorktree, [worktreeId]: nextTracked }
-        }
+        })
       })
 
       // Why: no conflict metadata means no OpenFile was added, so a workspace tab would point at nothing.
@@ -142,6 +143,8 @@ export function createOpenConflictReview(
     openConflictReview: (worktreeId, worktreePath, entries, source) => {
       const id = `${worktreeId}::conflict-review`
       set((s) => {
+        const sourceEdit = editSessionSource(s)
+
         const conflictReview: ConflictReviewState = {
           source,
           snapshotTimestamp: Date.now(),
@@ -150,26 +153,23 @@ export function createOpenConflictReview(
         const existing = s.openFiles.find((f) => f.id === id)
 
         if (existing) {
-          return {
-            openFiles: s.openFiles.map((f) =>
-              f.id === id
-                ? {
-                    ...f,
-                    mode: 'conflict-review' as const,
-                    relativePath: 'Conflict Review',
-                    filePath: worktreePath,
-                    language: 'plaintext',
-                    conflictReview,
-                    conflict: undefined,
-                    skippedConflicts: undefined
-                  }
-                : f
-            ),
-            activeFileId: id,
-            activeTabType: 'editor',
-            activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-            activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
-          }
+          sourceEdit.sequence('openFiles').map((f) =>
+            f.id === id
+              ? {
+                  ...f,
+                  mode: 'conflict-review' as const,
+                  relativePath: 'Conflict Review',
+                  filePath: worktreePath,
+                  language: 'plaintext',
+                  conflictReview,
+                  conflict: undefined,
+                  skippedConflicts: undefined
+                }
+              : f
+          )
+          sourceEdit.set('activeFileIdByWorktree', worktreeId, id)
+          sourceEdit.set('activeTabTypeByWorktree', worktreeId, 'editor')
+          return sourceEdit.finish({ activeFileId: id, activeTabType: 'editor' })
         }
 
         const newFile: OpenFile = {
@@ -183,13 +183,10 @@ export function createOpenConflictReview(
           conflictReview
         }
 
-        return {
-          openFiles: [...s.openFiles, newFile],
-          activeFileId: id,
-          activeTabType: 'editor',
-          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
-        }
+        sourceEdit.sequence('openFiles').append(newFile)
+        sourceEdit.set('activeFileIdByWorktree', worktreeId, id)
+        sourceEdit.set('activeTabTypeByWorktree', worktreeId, 'editor')
+        return sourceEdit.finish({ activeFileId: id, activeTabType: 'editor' })
       })
       void openWorkspaceEditorItem(get(), id, worktreeId, 'Conflict Review', 'conflict-review')
     }

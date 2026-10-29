@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it } from 'vitest'
 import { createTestStore, makeTab, seedStore } from './store-test-helpers'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -403,7 +404,7 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/ter
 
     it('sweeps every tab of a worktree on wholesale teardown', () => {
       const store = createTestStore()
-      store.setState({
+      setSessionTestState(store, {
         tabsByWorktree: {
           'wt-1': [terminalTab('tab-1', 'wt-1'), terminalTab('tab-2', 'wt-1')],
           'wt-2': [terminalTab('tab-3', 'wt-2')]

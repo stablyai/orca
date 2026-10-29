@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
@@ -42,7 +43,7 @@ async function pasteWithKeyboard(platform?: NodeJS.Platform): Promise<unknown> {
 
 describe('createTerminalPanePasteExecution.pasteFromClipboard', () => {
   beforeEach(() => {
-    useAppStore.setState(useAppStore.getInitialState(), true)
+    setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
     mocks.pasteTerminalClipboard.mockReset().mockResolvedValue({ status: 'pasted', kind: 'text' })
     vi.stubGlobal('api', { ui: { saveClipboardImageAsTempFile: vi.fn() } })
   })

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PRCheckRunDetails } from '../../../../shared/github/check-types'
 import zh from '../../i18n/locales/zh.json'
@@ -546,7 +547,7 @@ it.each([false, true])(
   async (remote) => {
     const loader = createLoader('store', remote ? 'rpc' : 'ipc')
     loader.ctx.sourceContext = null
-    loader.store.setState({
+    setSessionTestState(loader.store, {
       repos: [
         {
           id: 'caller-repo',

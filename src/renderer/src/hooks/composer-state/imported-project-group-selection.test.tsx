@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -20,7 +21,7 @@ const group: ProjectGroup = {
 }
 afterEach(() => {
   cleanup()
-  useAppStore.setState(originalState, true)
+  setSessionTestState(useAppStore, originalState, true)
 })
 
 describe('imported group composer selection', () => {
@@ -32,7 +33,7 @@ describe('imported group composer selection', () => {
       path: '/imported/app',
       projectGroupId: group.id
     }
-    act(() => useAppStore.setState({ projectGroups: [group], repos: [importedRepo] }))
+    act(() => setSessionTestState(useAppStore, { projectGroups: [group], repos: [importedRepo] }))
     let selected = false
     act(() => {
       selected = result.current.selectAddedProjectGroup(group.id)
@@ -54,7 +55,7 @@ describe('imported group composer selection', () => {
     'declines missing, non-folder or unreachable groups without changing selection (%j)',
     (unavailable) => {
       const { result } = renderHook(() => useReviewBaseSelectionFixture(pr))
-      act(() => useAppStore.setState({ projectGroups: [unavailable] }))
+      act(() => setSessionTestState(useAppStore, { projectGroups: [unavailable] }))
       let selected = true
       act(() => {
         selected = result.current.selectAddedProjectGroup(group.id)

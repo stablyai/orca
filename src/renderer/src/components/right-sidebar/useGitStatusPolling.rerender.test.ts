@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act, createElement } from 'react'
@@ -76,8 +77,9 @@ describe('useGitStatusPolling rerender stability', () => {
     vi.useFakeTimers()
     refreshMock.mockReset().mockResolvedValue(undefined)
 
-    useAppStore.setState(initialAppState, true)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, initialAppState, true)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       activeWorktreeId: WORKTREE_ID,
       worktreesByRepo: {
         [REPO_ID]: [worktree],
@@ -98,7 +100,7 @@ describe('useGitStatusPolling rerender stability', () => {
       act(() => root.unmount())
     })
     document.body.replaceChildren()
-    useAppStore.setState(initialAppState, true)
+    setSessionTestState(useAppStore, initialAppState, true)
     vi.useRealTimers()
   })
 
@@ -112,7 +114,7 @@ describe('useGitStatusPolling rerender stability', () => {
 
     // Change openFiles while scheduler debounce is pending; the scheduler must survive.
     await act(async () => {
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         openFiles: [makeOpenFile({ id: `${WORKTREE_PATH}/a.ts`, worktreeId: WORKTREE_ID })]
       })
     })
@@ -226,7 +228,8 @@ describe('useGitStatusPolling rerender stability', () => {
   })
 
   it('refreshes immediately when an SSH execution host reconnects', async () => {
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       repos: [{ ...repo, connectionId: 'ssh-1' }],
       sshConnectionStates: new Map([
         ['ssh-1', { targetId: 'ssh-1', status: 'disconnected', error: null, reconnectAttempt: 0 }]
@@ -237,7 +240,8 @@ describe('useGitStatusPolling rerender stability', () => {
     expect(refreshMock).not.toHaveBeenCalled()
 
     await act(async () => {
-      useAppStore.setState({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+      setSessionTestState(useAppStore, {
         sshConnectionStates: new Map([
           ['ssh-1', { status: 'connected', error: null, reconnectAttempt: 0 }]
         ])
@@ -267,7 +271,7 @@ describe('useGitStatusPolling rerender stability', () => {
 
     // Host flapping rebuilds the scheduler; retain pacing or sustained signals can run Git at the bare debounce floor.
     await act(async () => {
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         worktreesByRepo: {
           [REPO_ID]: [{ ...worktree, hostId: 'runtime:env-2' }],
           [REPO_ID2]: [worktree2]
@@ -276,7 +280,7 @@ describe('useGitStatusPolling rerender stability', () => {
     })
     await flushMicrotasks()
     await act(async () => {
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         worktreesByRepo: {
           [REPO_ID]: [worktree],
           [REPO_ID2]: [worktree2]
@@ -309,7 +313,7 @@ describe('useGitStatusPolling rerender stability', () => {
     expect(refreshMock).toHaveBeenCalledTimes(1)
 
     await act(async () => {
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         worktreesByRepo: {
           [REPO_ID]: [{ ...worktree, hostId: 'runtime:env-2' }],
           [REPO_ID2]: [worktree2]

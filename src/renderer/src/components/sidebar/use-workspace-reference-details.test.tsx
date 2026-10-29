@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -58,7 +59,7 @@ beforeEach(() => {
   })
   Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
   read.mockResolvedValue(null)
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     settings: null,
     repos: [referenceRepo],
     worktreesByRepo: { repo: [workspace] },
@@ -109,10 +110,10 @@ it.each(['not-visible', 'hidden', 'sleeping', 'archived', 'bare', 'unready', 'we
       Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' })
     }
     if (condition === 'sleeping') {
-      useAppStore.setState({ browserTabsByWorktree: {} })
+      setSessionTestState(useAppStore, { browserTabsByWorktree: {} })
     }
     if (condition === 'archived' || condition === 'bare') {
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         worktreesByRepo: {
           repo: [
             { ...workspace, isArchived: condition === 'archived', isBare: condition === 'bare' }
@@ -220,7 +221,7 @@ it('bounds native reads and cancels queued hover demand without adding a negativ
 it.each(['hide', 'unmount'])('stops queued scheduler work on %s', async (action) => {
   const finish: (() => void)[] = []
   read.mockImplementation(() => new Promise((resolve) => finish.push(() => resolve(null))))
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     worktreesByRepo: {
       repo: [{ ...workspace, linkedItems: [20, 21, 22, 23, 24].map(referenceAttachment) }]
     }

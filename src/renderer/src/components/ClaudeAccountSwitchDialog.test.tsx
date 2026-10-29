@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act, cleanup, render, screen } from '@testing-library/react'
@@ -59,7 +60,7 @@ describe('ClaudeAccountSwitchDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     resetClaudeAccountSwitchSessionsForTests()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       updateSettings,
       pendingPaneAccountRestarts: {},
       terminalLayoutsByTabId: Object.fromEntries(

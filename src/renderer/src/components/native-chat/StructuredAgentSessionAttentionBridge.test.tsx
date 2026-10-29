@@ -1,3 +1,5 @@
+import type { SessionSourceSet } from '@/store/session-source-edits'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 // Exercise the real attention path from completion stream to indicators/OS delivery; mock only transport and preload.
@@ -20,7 +22,7 @@ import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
 
 type TestStore = {
   getState: () => AppState
-  setState: (state: Partial<AppState>) => void
+  setState: SessionSourceSet<AppState>
 }
 type BridgeMocks = {
   store: TestStore | null
@@ -43,6 +45,12 @@ const mocks = vi.hoisted<BridgeMocks>(() => ({
   supportsCapability: vi.fn(),
   unsubscribe: vi.fn()
 }))
+
+function setMockState(partial: Partial<AppState>): void {
+  if (mocks.store) {
+    setSessionTestState(mocks.store, partial)
+  }
+}
 
 vi.mock('@/store', async () => {
   const { createTestStore } = await import('@/store/slices/store-test-helpers')
@@ -206,7 +214,7 @@ describe('StructuredAgentSessionAttentionBridge', () => {
       }
     )
     mocks.supportsCapability.mockResolvedValue(true)
-    mocks.store?.setState({
+    setMockState({
       repos: [TEST_REPO],
       worktreesByRepo: { repo1: [makeWorktree({ id: WORKSPACE, repoId: 'repo1' })] },
       unifiedTabsByWorktree: { [WORKSPACE]: [chatTab()] },
@@ -254,7 +262,9 @@ describe('StructuredAgentSessionAttentionBridge', () => {
           paneKey: structuredAgentSessionPaneKey(id, sessionId)
         }
       })
-      store.setState({ unifiedTabsByWorktree: { [WORKSPACE]: rows.map((row) => row.tab) } })
+      setSessionTestState(store, {
+        unifiedTabsByWorktree: { [WORKSPACE]: rows.map((row) => row.tab) }
+      })
       let comparisons = 0
       const stopCounting = subscribeAgentSubjectReads((reads) => {
         for (const read of reads) {
@@ -547,7 +557,9 @@ describe('StructuredAgentSessionAttentionBridge', () => {
 
   it('shares one host stream across tabs and routes each completion to its own tab', async () => {
     const secondTab = chatTab({ id: 'chat-tab-2', entityId: 'session-2' })
-    mocks.store?.setState({ unifiedTabsByWorktree: { [WORKSPACE]: [chatTab(), secondTab] } })
+    setMockState({
+      unifiedTabsByWorktree: { [WORKSPACE]: [chatTab(), secondTab] }
+    })
     render(<StructuredAgentSessionAttentionBridge />)
     await waitFor(() => expect(mocks.subscribeCompletions).toHaveBeenCalledOnce())
 
@@ -570,7 +582,7 @@ describe('StructuredAgentSessionAttentionBridge', () => {
       hostId: 'runtime:env-1',
       runtimeOwnerEnvironmentId: 'env-1'
     })
-    store.setState({
+    setSessionTestState(store, {
       activeWorktreeId: WORKSPACE,
       activeWorkspaceExecutionHostId: 'runtime:env-1',
       worktreesByRepo: { repo1: [remoteWorktree] },
@@ -588,7 +600,8 @@ describe('StructuredAgentSessionAttentionBridge', () => {
         }
       ]
     })
-    store.setState(
+    setSessionTestState(
+      store,
       applyWebSessionTabsSnapshot(
         store.getState(),
         {
@@ -621,7 +634,7 @@ describe('StructuredAgentSessionAttentionBridge', () => {
     const { executionHostId, ...legacyTab } = publishedTab
     expect(executionHostId).toBe('runtime:env-1')
     const tab = makeUnifiedTab(legacyTab)
-    store.setState({ unifiedTabsByWorktree: { [WORKSPACE]: [tab] } })
+    setSessionTestState(store, { unifiedTabsByWorktree: { [WORKSPACE]: [tab] } })
     expect(tab.contentType).toBe('agent-session')
     expect(tab.executionHostId).toBeUndefined()
     render(<StructuredAgentSessionAttentionBridge />)
@@ -632,7 +645,7 @@ describe('StructuredAgentSessionAttentionBridge', () => {
     })
 
     await act(async () =>
-      store.setState({
+      setSessionTestState(store, {
         worktreesByRepo: {
           repo1: [remoteWorktree, makeWorktree({ id: WORKSPACE, repoId: 'repo1', hostId: 'local' })]
         },
@@ -676,7 +689,7 @@ describe('StructuredAgentSessionAttentionBridge', () => {
         hostId: 'runtime:env-1',
         runtimeOwnerEnvironmentId: 'env-1'
       })
-      store.setState({
+      setSessionTestState(store, {
         activeWorktreeId: WORKSPACE,
         activeWorkspaceExecutionHostId: 'runtime:env-1',
         worktreesByRepo: { repo1: [remoteWorktree] },
@@ -694,7 +707,8 @@ describe('StructuredAgentSessionAttentionBridge', () => {
           }
         ]
       })
-      store.setState(
+      setSessionTestState(
+        store,
         applyWebSessionTabsSnapshot(
           store.getState(),
           {
@@ -734,7 +748,7 @@ describe('StructuredAgentSessionAttentionBridge', () => {
       })
 
       await act(async () =>
-        store.setState({
+        setSessionTestState(store, {
           ...activeAfterCollision,
           worktreesByRepo: {
             repo1: [
@@ -765,7 +779,7 @@ describe('StructuredAgentSessionAttentionBridge', () => {
   )
 
   it('keeps a local chat on this machine when a paired workspace with its id is selected', async () => {
-    mocks.store?.setState({
+    setMockState({
       unifiedTabsByWorktree: { [WORKSPACE]: [chatTab({ executionHostId: 'local' })] }
     })
     render(<StructuredAgentSessionAttentionBridge />)
@@ -773,7 +787,7 @@ describe('StructuredAgentSessionAttentionBridge', () => {
     expect(mocks.subscribeCompletions.mock.calls[0]?.[0]).toEqual({ kind: 'local' })
 
     await act(async () =>
-      mocks.store?.setState({
+      setMockState({
         activeWorktreeId: WORKSPACE,
         activeWorkspaceExecutionHostId: 'runtime:env-1',
         worktreesByRepo: {
@@ -799,7 +813,7 @@ describe('StructuredAgentSessionAttentionBridge', () => {
     await waitFor(() => expect(mocks.subscribeCompletions).toHaveBeenCalledOnce())
     expect(mocks.subscribeCompletions.mock.calls[0]?.[0]).toEqual({ kind: 'local' })
     await act(async () =>
-      mocks.store?.setState({
+      setMockState({
         worktreesByRepo: {
           repo1: [
             makeWorktree({ id: WORKSPACE, repoId: 'repo1', hostId: 'local' }),
@@ -811,7 +825,7 @@ describe('StructuredAgentSessionAttentionBridge', () => {
     expect(mocks.unsubscribe).toHaveBeenCalledOnce()
 
     await act(async () =>
-      mocks.store?.setState({
+      setMockState({
         unifiedTabsByWorktree: { [WORKSPACE]: [chatTab({ executionHostId: 'local' })] }
       })
     )
@@ -824,7 +838,7 @@ describe('StructuredAgentSessionAttentionBridge', () => {
 
   it('does not subscribe a remote host that lacks the capability', async () => {
     mocks.supportsCapability.mockResolvedValue(false)
-    mocks.store?.setState({
+    setMockState({
       worktreesByRepo: {
         repo1: [makeWorktree({ id: WORKSPACE, repoId: 'repo1', hostId: 'runtime:env-1' })]
       }
@@ -843,7 +857,7 @@ describe('StructuredAgentSessionAttentionBridge', () => {
     render(<StructuredAgentSessionAttentionBridge />)
     await waitFor(() => expect(mocks.subscribeCompletions).toHaveBeenCalledOnce())
 
-    act(() => mocks.store?.setState({ unifiedTabsByWorktree: { [WORKSPACE]: [] } }))
+    act(() => setMockState({ unifiedTabsByWorktree: { [WORKSPACE]: [] } }))
 
     await waitFor(() => expect(mocks.unsubscribe).toHaveBeenCalledOnce())
   })

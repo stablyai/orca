@@ -6,6 +6,17 @@ import * as bindingUpdate from './pty-binding-session-update'
 import * as ownerInvariants from '../../../shared/workspace-layout/terminal-owner-invariants'
 import { ProfileStateWriterError } from '../profile-state/profile-state-writer-errors'
 import { fixture } from './profile-state-delayed-authority-fixture'
+import { writePtyBinding } from './pty-binding-persistence'
+
+function freezeSnapshot<T>(value: T): T {
+  if (value && typeof value === 'object' && !Object.isFrozen(value)) {
+    Object.freeze(value)
+    for (const child of Object.values(value)) {
+      freezeSnapshot(child)
+    }
+  }
+  return value
+}
 
 const hosts = ['local', 'ssh:matching-host', 'runtime:matching-host'] as const
 const binding = {
@@ -20,7 +31,7 @@ export function registerPtyBindingMatchingDurabilityTests(): void {
   describe('matching bindings that need durability', () => {
     describe.each(hosts)('%s', (hostId) => {
       it.each([false, true])(
-        'captures getter edits with settings-only dirty intent (full checkpoint=%s)',
+        'captures published binding edits with scoped dirty intent (full checkpoint=%s)',
         async (fullCheckpoint) => {
           const { store, authority, readState } = await fixture()
           for (const host of hosts) {
@@ -33,11 +44,14 @@ export function registerPtyBindingMatchingDurabilityTests(): void {
             ptyId: 'sibling-folder-pty'
           }
           await store.persistPtyBinding(sibling, hostId)
-          const session = store.getWorkspaceSession(hostId)
-          session.tabsByWorktree[binding.worktreeId][0].ptyId = 'getter-pty'
-          session.terminalLayoutsByTabId[binding.tabId].ptyIdsByLeafId = {
-            [binding.leafId]: 'getter-pty'
-          }
+          const session = freezeSnapshot(store.getWorkspaceSession(hostId))
+          writePtyBinding(
+            store,
+            { ...binding, ptyId: 'published-pty' },
+            hostId,
+            binding.worktreeId,
+            `${binding.tabId}:${binding.leafId}`
+          )
           store.updateSettings({ theme: 'dark' })
           if (fullCheckpoint) {
             store['runtime'].dirtyProfileStateDomains = null
@@ -50,7 +64,7 @@ export function registerPtyBindingMatchingDurabilityTests(): void {
           const gate = authority.pause()
           let acknowledged = false
           const pending = store
-            .persistPtyBinding({ ...binding, ptyId: 'getter-pty' }, hostId)
+            .persistPtyBinding({ ...binding, ptyId: 'published-pty' }, hostId)
             .then((result) => {
               acknowledged = true
               return result
@@ -78,10 +92,11 @@ export function registerPtyBindingMatchingDurabilityTests(): void {
             const persisted =
               host === 'local' ? saved.workspaceSession : saved.workspaceSessionsByHostId[host]
             expect(persisted.terminalLayoutsByTabId[binding.tabId].ptyIdsByLeafId).toEqual({
-              [binding.leafId]: host === hostId ? 'getter-pty' : binding.ptyId
+              [binding.leafId]: host === hostId ? 'published-pty' : binding.ptyId
             })
           }
           expect(session.tabsByWorktree[sibling.worktreeId][0].ptyId).toBe(sibling.ptyId)
+          expect(session.tabsByWorktree[binding.worktreeId][0].ptyId).toBe(binding.ptyId)
         }
       )
     })
@@ -107,13 +122,31 @@ export function registerPtyBindingMatchingDurabilityTests(): void {
         const gate = authority.pause()
         const rejected = expect(store.persistPtyBinding(binding)).rejects.toThrow('disk refused')
         await gate.started.promise
-        const session = store.getWorkspaceSession()
-        session.tabsByWorktree[binding.worktreeId][0].ptyId = 'successor-pty'
-        session.tabsByWorktree[binding.worktreeId][0].customTitle = 'later title'
-        session.terminalLayoutsByTabId[binding.tabId].ptyIdsByLeafId = {
-          [binding.leafId]: 'successor-pty'
+        const session = freezeSnapshot(store.getWorkspaceSession())
+        try {
+          writePtyBinding(
+            store,
+            { ...binding, ptyId: 'successor-pty' },
+            'local',
+            binding.worktreeId,
+            `${binding.tabId}:${binding.leafId}`
+          )
+          const successor = store.getWorkspaceSession()
+          store.patchWorkspaceSession({
+            mapDeltas: {
+              tabsByWorktree: {
+                set: {
+                  [binding.worktreeId]: successor.tabsByWorktree[binding.worktreeId].map((tab) => ({
+                    ...tab,
+                    customTitle: 'later title'
+                  }))
+                }
+              }
+            }
+          })
+        } finally {
+          gate.finish.reject(new ProfileStateWriterError('test-write', 'disk refused', outcome))
         }
-        gate.finish.reject(new ProfileStateWriterError('test-write', 'disk refused', outcome))
         await rejected
 
         const initialHostId = ORCA_LAYOUT_OWNER_IS_MAIN ? 'local' : null
@@ -121,20 +154,30 @@ export function registerPtyBindingMatchingDurabilityTests(): void {
           outcome === 'known-failure'
             ? [
                 { hostId: initialHostId, ptyId: binding.ptyId },
+                { hostId: 'local', ptyId: 'successor-pty' },
                 { hostId: null, ptyId: 'successor-pty' }
               ]
-            : [{ hostId: initialHostId, ptyId: binding.ptyId }]
+            : [
+                { hostId: initialHostId, ptyId: binding.ptyId },
+                { hostId: 'local', ptyId: 'successor-pty' }
+              ]
         )
-        expect(store.getWorkspaceSession()).toBe(session)
-        expect(session.tabsByWorktree[binding.worktreeId][0]).toMatchObject({
+        expect(store.getWorkspaceSession().tabsByWorktree[binding.worktreeId][0]).toMatchObject({
           ptyId: 'successor-pty',
           customTitle: 'later title'
         })
+        expect(session.tabsByWorktree[binding.worktreeId][0].ptyId).toBe(binding.ptyId)
+        expect(session.tabsByWorktree[binding.worktreeId][0].customTitle).not.toBe('later title')
         expect(clone).not.toHaveBeenCalled()
         expect(readState().settings.theme).not.toBe('dark')
         expect(store['runtime'].dirtyProfileStateDomains).toEqual(
           new Set(['settings', 'workspaceSession'])
         )
+        await store.flushPendingOrThrowAsync()
+        expect(readState().workspaceSession.tabsByWorktree[binding.worktreeId][0]).toMatchObject({
+          ptyId: 'successor-pty',
+          customTitle: 'later title'
+        })
       }
     )
 

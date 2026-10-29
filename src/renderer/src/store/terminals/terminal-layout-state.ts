@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { terminalLayoutEqual } from '../../../../shared/terminal-layout-equality'
@@ -9,7 +10,7 @@ import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './termin
 import {
   resolvePrimaryLayoutPtyId,
   uniquePtyIds,
-  withTerminalTabPtyId
+  setTerminalTabPtyId
 } from './terminal-pty-identities'
 import { transferNormalizedTerminalLayoutPtyOwnership } from './workspace-terminal-hydration-patch'
 import { recordChatPaneInLayoutOwner } from './terminal-chat-pane-layout-owner'
@@ -33,44 +34,41 @@ export function createTerminalLayoutActions(
         const current = s.localOnlyScrollbackByTabId ?? {}
         if (!buffersByLeafId || Object.keys(buffersByLeafId).length === 0) {
           if (!(tabId in current)) {
-            return s
+            return undefined
           }
-          const next = { ...current }
-          delete next[tabId]
-          return { localOnlyScrollbackByTabId: next }
+          return editSessionSource(s).remove('localOnlyScrollbackByTabId', tabId).finish()
         }
-        return { localOnlyScrollbackByTabId: { ...current, [tabId]: buffersByLeafId } }
+        return editSessionSource(s)
+          .set('localOnlyScrollbackByTabId', tabId, buffersByLeafId)
+          .finish()
       })
     },
     replaceTerminalLayoutPanePtyId: (tabId, leafId, ptyId) => {
       set((s) => {
         const layout = s.terminalLayoutsByTabId[tabId]
         if (!layout || layout.ptyIdsByLeafId?.[leafId] === ptyId) {
-          return s
+          return undefined
         }
-        return {
-          terminalLayoutsByTabId: {
-            ...s.terminalLayoutsByTabId,
-            [tabId]: {
-              ...layout,
-              ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [leafId]: ptyId }
-            }
-          }
-        }
+        return editSessionSource(s)
+          .set('terminalLayoutsByTabId', tabId, {
+            ...layout,
+            ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [leafId]: ptyId }
+          })
+          .finish({})
       })
     },
     // Why: pane mount/unmount re-asserts the same booleans; bailing like setTabLayout keeps map subscribers asleep.
     setTabPaneExpanded: (tabId, expanded) => {
       set((s) =>
         s.expandedPaneByTabId[tabId] === expanded
-          ? s
+          ? undefined
           : { expandedPaneByTabId: { ...s.expandedPaneByTabId, [tabId]: expanded } }
       )
     },
     setTabCanExpandPane: (tabId, canExpand) => {
       set((s) =>
         s.canExpandPaneByTabId[tabId] === canExpand
-          ? s
+          ? undefined
           : { canExpandPaneByTabId: { ...s.canExpandPaneByTabId, [tabId]: canExpand } }
       )
     },
@@ -80,11 +78,9 @@ export function createTerminalLayoutActions(
       set((s) => {
         if (!layout) {
           if (!(tabId in s.terminalLayoutsByTabId)) {
-            return s
+            return undefined
           }
-          const next = { ...s.terminalLayoutsByTabId }
-          delete next[tabId]
-          return { terminalLayoutsByTabId: next }
+          return editSessionSource(s).remove('terminalLayoutsByTabId', tabId).finish()
         }
         const normalized = normalizeTerminalLayoutPtyOwnership(layout)
         // Resolved before the bailout: normalization can transfer pane ownership even when the stored snapshot is untouched.
@@ -97,11 +93,11 @@ export function createTerminalLayoutActions(
         // Why: pane-title churn re-persists structurally identical snapshots; bailing keeps every pane selector asleep.
         const existing = s.terminalLayoutsByTabId[tabId]
         if (existing && terminalLayoutEqual(existing, normalized.snapshot)) {
-          return s
+          return undefined
         }
-        return {
-          terminalLayoutsByTabId: { ...s.terminalLayoutsByTabId, [tabId]: normalized.snapshot }
-        }
+        return editSessionSource(s)
+          .set('terminalLayoutsByTabId', tabId, normalized.snapshot)
+          .finish({})
       })
       transferNormalizedTerminalLayoutPtyOwnership(get(), tabId, ownershipTransfers)
       // Switch point: the chat pane the window picks reaches main as a command, not by its save.
@@ -119,6 +115,7 @@ export function createTerminalLayoutActions(
       const sourcePaneKey = makePaneKey(sourceTabId, detachedLeafId)
       const targetPaneKey = makePaneKey(targetTabId, detachedLeafId)
       set((s) => {
+        const edit = editSessionSource(s)
         const layoutSourcePtyIds = uniquePtyIds(Object.values(sourceLayout.ptyIdsByLeafId ?? {}))
         const existingSourcePtyIds = (s.ptyIdsByTabId[sourceTabId] ?? []).filter(
           (ptyId) => ptyId !== detachedPtyId
@@ -127,39 +124,28 @@ export function createTerminalLayoutActions(
           layoutSourcePtyIds.length > 0 ? layoutSourcePtyIds : existingSourcePtyIds
         const sourcePrimaryPtyId =
           resolvePrimaryLayoutPtyId(sourceLayout) ?? sourcePtyIds[0] ?? null
-        const nextPtyIdsByTabId = {
-          ...s.ptyIdsByTabId,
-          [sourceTabId]: sourcePtyIds
-        }
+        edit.set('ptyIdsByTabId', sourceTabId, sourcePtyIds)
         if (detachedPtyId) {
-          nextPtyIdsByTabId[targetTabId] = uniquePtyIds([
-            ...(nextPtyIdsByTabId[targetTabId] ?? []),
-            detachedPtyId
-          ])
+          edit.set(
+            'ptyIdsByTabId',
+            targetTabId,
+            uniquePtyIds([...(edit.read('ptyIdsByTabId')[targetTabId] ?? []), detachedPtyId])
+          )
         }
-        const nextLastKnownRelayPtyIdByTabId = { ...s.lastKnownRelayPtyIdByTabId }
         if (sourcePrimaryPtyId) {
-          nextLastKnownRelayPtyIdByTabId[sourceTabId] = sourcePrimaryPtyId
+          edit.set('lastKnownRelayPtyIdByTabId', sourceTabId, sourcePrimaryPtyId)
         } else {
-          delete nextLastKnownRelayPtyIdByTabId[sourceTabId]
+          edit.remove('lastKnownRelayPtyIdByTabId', sourceTabId)
         }
         if (detachedPtyId) {
-          nextLastKnownRelayPtyIdByTabId[targetTabId] = detachedPtyId
+          edit.set('lastKnownRelayPtyIdByTabId', targetTabId, detachedPtyId)
         }
         // Why: pane-to-tab detach moves a live PTY without spawning or exiting, so transfer identity without activity bumps.
-        const sourceTabsByWorktree = withTerminalTabPtyId(
-          s.tabsByWorktree,
-          sourceTabId,
-          sourcePrimaryPtyId
-        )
-        const nextTabsByWorktree = detachedPtyId
-          ? withTerminalTabPtyId(sourceTabsByWorktree, targetTabId, detachedPtyId)
-          : sourceTabsByWorktree
-        return {
-          ptyIdsByTabId: nextPtyIdsByTabId,
-          lastKnownRelayPtyIdByTabId: nextLastKnownRelayPtyIdByTabId,
-          ...(nextTabsByWorktree !== s.tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {})
+        setTerminalTabPtyId(edit, sourceTabId, sourcePrimaryPtyId)
+        if (detachedPtyId) {
+          setTerminalTabPtyId(edit, targetTabId, detachedPtyId)
         }
+        return edit.finish()
       })
       // Why: detach keeps the process and its pane key alive, so move resume/status authority to the new surface before the source closes.
       get().transferAgentPaneAuthority({

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 /** @vitest-environment happy-dom */
 import { act, useMemo } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -105,7 +106,7 @@ function measureRepairPasses(): number {
 
 describe('active-terminal repair effect cannot drive a React #185 update loop', () => {
   it('settles when the repaired tab is owned by the active worktree', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       activeWorktreeId: 'wt-active',
       activeTabType: 'terminal',
       activeTabId: 'stale-tab',
@@ -119,7 +120,7 @@ describe('active-terminal repair effect cannot drive a React #185 update loop', 
 
   it('settles when another worktree reuses the tab id and is scanned first', () => {
     // First-match ownership once skipped activeTabId while reallocating its map, retriggering repair indefinitely.
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       activeWorktreeId: 'wt-active',
       activeTabType: 'terminal',
       activeTabId: 'stale-tab',
@@ -146,7 +147,7 @@ describe('active-terminal repair effect cannot drive a React #185 update loop', 
     )
     const activeTab = unifiedTerminalTab('t1', 't1', 'wt-active', 'g-active')
     const previousActiveTab = unifiedTerminalTab('u-previous', 't2', 'wt-active', 'g-active')
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       activeWorktreeId: 'wt-active',
       activeTabId: 't2',
       activeTabIdByWorktree: { 'wt-active': 't2' },
@@ -185,7 +186,7 @@ describe('active-terminal repair effect cannot drive a React #185 update loop', 
   it('keeps unified-only terminal activation as a fallback', () => {
     const targetTab = unifiedTerminalTab('u-target', 't1', 'wt-active', 'g-active')
     const previousTab = unifiedTerminalTab('u-previous', 't2', 'wt-active', 'g-active')
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       activeWorktreeId: 'wt-active',
       activeTabId: null,
       activeTabIdByWorktree: {},
@@ -209,7 +210,7 @@ describe('active-terminal repair effect cannot drive a React #185 update loop', 
 
   it('does not reallocate activeTabIdByWorktree when the tab is already active', () => {
     // Both repair and parked watcher sync depend on map identity; redundant activation must preserve it.
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       activeWorktreeId: 'wt-active',
       activeTabType: 'terminal',
       activeTabId: 't1',
@@ -228,7 +229,7 @@ describe('active-terminal repair effect cannot drive a React #185 update loop', 
   })
 
   it('keeps bell attribution off a background worktree tab', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       activeWorktreeId: 'wt-active',
       activeTabType: 'terminal',
       activeTabId: 'visible-tab',
@@ -247,7 +248,7 @@ describe('active-terminal repair effect cannot drive a React #185 update loop', 
   })
 
   it('records activation for a falsy-but-valid worktree id', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       activeWorktreeId: '',
       activeTabId: null,
       activeTabIdByWorktree: {},
@@ -262,7 +263,7 @@ describe('active-terminal repair effect cannot drive a React #185 update loop', 
   })
 
   it('repairs a falsy-but-valid active worktree id through the production hook', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       activeWorktreeId: '',
       activeTabType: 'terminal',
       activeTabId: 'stale-tab',
@@ -275,7 +276,7 @@ describe('active-terminal repair effect cannot drive a React #185 update loop', 
   })
 
   it('does not read inherited unified tabs for a prototype-named owner', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       activeWorktreeId: 'toString',
       activeTabId: null,
       activeTabIdByWorktree: {},
@@ -289,7 +290,7 @@ describe('active-terminal repair effect cannot drive a React #185 update loop', 
   it('activates own unified tabs for a prototype-named owner', () => {
     const target = unifiedTerminalTab('t1', 't1', 'toString', 'g-target')
     const previous = unifiedTerminalTab('t2', 't2', 'toString', 'g-target')
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       activeWorktreeId: 'toString',
       activeTabId: 't2',
       activeTabIdByWorktree: { toString: 't2' },
@@ -307,7 +308,7 @@ describe('active-terminal repair effect cannot drive a React #185 update loop', 
   })
 
   it('does not activate a tab with no owner when no worktree is active', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       activeWorktreeId: null,
       activeTabId: null,
       activeTabIdByWorktree: {},

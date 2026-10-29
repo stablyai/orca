@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import type { GetProjectViewTableResult } from '../../../../shared/github/project-result-types'
@@ -20,8 +20,8 @@ import {
 import { createProjectFieldActions } from './project-field-mutations'
 
 export const createProjectActions = (
-  set: Parameters<StateCreator<AppState>>[0],
-  get: Parameters<StateCreator<AppState>>[1]
+  set: Parameters<SessionStateCreator<AppState>>[0],
+  get: Parameters<SessionStateCreator<AppState>>[1]
 ): Pick<
   GitHubSlice,
   'fetchProjectViewTable' | 'updateProjectFieldValue' | 'clearProjectFieldValue'

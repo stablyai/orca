@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act } from 'react'
@@ -44,8 +45,9 @@ const FILE_PATH = '/repo-a/pkg/a.md'
 const SERVER_REPO = 'repo-s::/root/repo'
 
 function seedNestedLocalWorkspaces(): void {
-  useAppStore.setState(useAppStore.getInitialState(), true)
-  useAppStore.setState(
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
+  setSessionTestState(
+    useAppStore,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial catalog with only the fields the owner route reads, as restored-editor-owner-save-lifecycle.test.ts uses.
     {
       activeWorktreeId: REPO,
@@ -107,8 +109,8 @@ function layoutCommands(): unknown[] {
 
 /** Simulate unstamped relay-era tabs whose workspace has moved to a managed server. */
 function seedServerWorkspace(): void {
-  useAppStore.setState(useAppStore.getInitialState(), true)
-  useAppStore.setState({
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, {
     activeWorktreeId: SERVER_REPO,
     repos: [
       {

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -31,7 +32,7 @@ const WORKTREE_ID = 'repo::/srv/worktree'
 describe.each(['paired-detected', 'legacy-ssh'] as const)('%s file catalog', (owner) => {
   function seedWorkspace(): void {
     const worktree = worktreeFixture(WORKTREE_ID, '/srv/worktree')
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       activeWorktreeId: WORKTREE_ID,
       activeWorkspaceExecutionHostId: 'ssh:box',
       repos: [
@@ -89,7 +90,7 @@ describe.each(['paired-detected', 'legacy-ssh'] as const)('%s file catalog', (ow
 })
 
 it('refuses to list when the catalog has conflicting execution hosts', async () => {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     activeWorktreeId: WORKTREE_ID,
     activeWorkspaceExecutionHostId: 'ssh:box',
     worktreesByRepo: {

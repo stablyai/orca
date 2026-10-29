@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 /**
  * Callers that used to read a twin's owner as "no paired server", and so acted on this app's copy,
  * now refuse it; one host's row still routes to that host.
@@ -59,7 +60,7 @@ function bind(fixture: HostTwinFixture): HostTwinFixture {
 function runtimeOnly(): HostTwinFixture {
   const fixture = bind(createHostTwinFixture('local+runtime'))
   const state = fixture.store.getState()
-  fixture.store.setState({
+  setSessionTestState(fixture.store, {
     repos: state.repos.filter((repo) => repo.executionHostId === RUNTIME_HOST),
     worktreesByRepo: {
       [fixture.projectId]: [
@@ -77,7 +78,7 @@ function runtimeOnly(): HostTwinFixture {
 
 function runtimeOnlyFolder(): HostTwinFixture {
   const fixture = bind(createHostTwinFixture('folder local+ssh'))
-  fixture.store.setState({
+  setSessionTestState(fixture.store, {
     projectGroups: [],
     folderWorkspaces: [
       makeFolderWorkspace({
@@ -130,7 +131,7 @@ describe('chat skill discovery', () => {
     fixture: HostTwinFixture
   ): ReturnType<typeof resolveNativeChatSkillDiscoveryContext> {
     const { store, workspaceKey, local } = fixture
-    store.setState({
+    setSessionTestState(store, {
       tabsByWorktree: {
         [workspaceKey]: [
           { ...store.getState().tabsByWorktree[workspaceKey][0], startupCwd: '/work/twin' }
@@ -238,7 +239,7 @@ describe('a new structured chat', () => {
     const { store, workspaceKey, projectId } = bind(createHostTwinFixture('folder local+ssh'))
     store.setState({ activeWorktreeId: workspaceKey, activeWorkspaceExecutionHostId: 'local' })
     expect(resolveStructuredAgentSessionOwner(store.getState(), workspaceKey)).toBe('local')
-    store.setState({
+    setSessionTestState(store, {
       activeWorktreeId: null,
       activeWorkspaceExecutionHostId: null,
       projectGroups: [],
@@ -250,7 +251,7 @@ describe('a new structured chat', () => {
   it('starts a lone unstamped worktree on this computer', () => {
     const fixture = bind(createHostTwinFixture('local+ssh'))
     const { store, workspaceKey, projectId } = fixture
-    store.setState({
+    setSessionTestState(store, {
       repos: store.getState().repos.filter((repo) => !repo.connectionId),
       worktreesByRepo: {
         [projectId]: [makeWorktree({ id: workspaceKey, repoId: projectId, path: '/work/twin' })]
@@ -278,7 +279,7 @@ describe('only this app owns the workspace', () => {
     const fixture = bind(createHostTwinFixture('local+runtime'))
     const { store, workspaceKey, projectId } = fixture
     const state = store.getState()
-    store.setState({
+    setSessionTestState(store, {
       repos: state.repos.filter((repo) => repo.executionHostId === 'local'),
       worktreesByRepo: {
         [projectId]: state.worktreesByRepo[projectId].filter((row) => row.hostId === 'local')

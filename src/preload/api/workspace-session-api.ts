@@ -1,3 +1,4 @@
+import type { SessionPatchAck } from '../../shared/session-change-set'
 import type { IssueInfo, PRInfo } from '../../shared/github/pull-request-types'
 import type {
   WorkspaceSessionPatch,
@@ -8,12 +9,19 @@ import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-c
 
 export type WorkspaceSessionApi = {
   session: {
+    supportsMapDeltas?: true
+    getWithGeneration?: (
+      hostId?: ExecutionHostId
+    ) => Promise<{ session: WorkspaceSessionState; partitionGeneration: string }>
     // Omitted hostId selects the local persistence partition.
     get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
     /** Read persisted partitions at boot; the host catalog may omit some. */
     listHostIds: () => Promise<ExecutionHostId[]>
     set: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => Promise<void>
-    patch: (args: WorkspaceSessionPatch, hostId?: ExecutionHostId) => Promise<void>
+    patch: (
+      args: WorkspaceSessionPatch,
+      hostId?: ExecutionHostId
+    ) => Promise<SessionPatchAck | void>
     /** Commits a terminal tab or split-pane close into main's membership. */
     closeTerminalSurface: (args: {
       worktreeId: string

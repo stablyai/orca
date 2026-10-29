@@ -2,6 +2,8 @@ import { useEffect } from 'react'
 import { useAppStore } from '../store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { createSessionWriteSubscriber } from '../lib/session-write-subscriber'
+import { createSessionUnitSubscriber } from '../lib/session-unit-subscriber'
+import { SessionUnitWriter } from '../lib/session-unit-writer'
 import { buildActiveViewUnloadPatch } from '../lib/active-view-persist'
 import {
   isIntentionalAppRestartInProgress,
@@ -45,6 +47,13 @@ export function useAppSessionPersistence(): void {
 
   // Subscribe outside React: disk persistence needs no renders on tab/file/browser changes.
   useEffect(() => {
+    if (window.api.session.supportsMapDeltas) {
+      return createSessionUnitSubscriber({
+        store: useAppStore,
+        writer: new SessionUnitWriter(window.api.session),
+        onPersistError: (error) => console.warn('[session] Session patch failed:', error)
+      })
+    }
     return createSessionWriteSubscriber({
       store: useAppStore,
       onPersistError: (error) => console.warn('[session] Session patch failed:', error),

@@ -1,6 +1,6 @@
+import type { SessionTestStore } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
-import type { StoreApi } from 'zustand/vanilla'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store'
 import {
@@ -15,9 +15,11 @@ import {
   type TerminalEditorCloseDialogActionsInput
 } from '../use-terminal-editor-close-dialog-actions'
 
-const storeHolder = vi.hoisted((): { store: StoreApi<AppState> | null } => ({ store: null }))
+const storeHolder = vi.hoisted((): { store: SessionTestStore<AppState> | null } => ({
+  store: null
+}))
 
-function requireStore(): StoreApi<AppState> {
+function requireStore(): SessionTestStore<AppState> {
   if (!storeHolder.store) {
     throw new Error('test store not initialised')
   }
@@ -53,7 +55,7 @@ function mainWindowDialogController(fileId: string): TerminalEditorCloseDialogAc
 
 describe("Don't Save in the unsaved-changes dialogs on a never-saved untitled note", () => {
   let disk: FakeEditorDisk
-  let store: StoreApi<AppState>
+  let store: SessionTestStore<AppState>
 
   beforeEach(() => {
     disk = createFakeEditorDisk({ [FILE_ID]: '' })

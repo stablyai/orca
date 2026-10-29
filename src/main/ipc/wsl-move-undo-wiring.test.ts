@@ -74,6 +74,7 @@ describe("undo's return of focus", () => {
       patchWorkspaceSession: vi.fn((patch: Partial<WorkspaceSessionState>, hostId?: string) => {
         expect(hostId).toBe(LOCAL_EXECUTION_HOST_ID)
         session = { ...session, ...patch }
+        return { applied: true, partitionGeneration: 'test:0' } as const
       })
     }
     createWslMoveUndoPorts(store, '/user-data').refocusHere?.(move)

@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
@@ -8,7 +9,7 @@ import { useBrowserPageWebviewPartition } from './use-browser-page-webview-parti
 const initialState = useAppStore.getState()
 afterEach(() => {
   cleanup()
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
 })
 
 const profile = (id: string, scope: BrowserSessionProfile['scope']): BrowserSessionProfile => ({

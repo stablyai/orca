@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/snapshot-api'
@@ -52,7 +53,7 @@ function seedPairedWorkspace(paired = true): string {
     automaticAgentResumeClaimsByTabId: {},
     agentStatusByPaneKey: {}
   }
-  useAppStore.setState(seed)
+  setSessionTestState(useAppStore, seed)
   markHostSessionMirrorHydrated(ENV_ID)
   return worktree.id
 }
@@ -73,7 +74,7 @@ function makeRecord(worktreeId: string, tabId: string): SleepingAgentSessionReco
 }
 
 function seedRecord(record: SleepingAgentSessionRecord): void {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     sleepingAgentSessionsByPaneKey: {
       ...useAppStore.getState().sleepingAgentSessionsByPaneKey,
       [record.paneKey]: record
@@ -95,7 +96,8 @@ function applyHostTabs(worktreeId: string, hostTabIds: readonly string[], versio
     })),
     { worktree: worktreeId, snapshotVersion: version }
   )
-  useAppStore.setState(
+  setSessionTestState(
+    useAppStore,
     applyWebSessionTabsSnapshot(useAppStore.getState(), snapshot, ENV_ID, Date.now())
   )
 }
@@ -110,20 +112,20 @@ function expectNoAutomaticResume(worktreeId: string): void {
 
 describe('a tab closed on another paired client', () => {
   beforeEach(() => {
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
     resetWebSessionTabsSyncTestState()
     resetHostSessionMirrorHydrationForTests()
   })
 
   afterEach(() => {
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
     resetWebSessionTabsSyncTestState()
     resetHostSessionMirrorHydrationForTests()
   })
 
   it('is not resumed from a record keyed by the tab id this client created it under', () => {
     const worktreeId = seedPairedWorkspace()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       tabsByWorktree: {
         [worktreeId]: [
           {

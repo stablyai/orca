@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import { GRAB_BUDGET, type BrowserPageAnnotation } from '../../../../shared/browser-grab-types'
@@ -40,7 +41,7 @@ const mockApi = createBrowserMockApi(runtimeEnvironmentTransportCall)
 globalThis.window = { api: mockApi }
 
 function seedUnifiedBrowserTab(store: BrowserTestStore, entityId: string, label: string): void {
-  store.setState({
+  setSessionTestState(store, {
     unifiedTabsByWorktree: {
       'wt-1': [
         {
@@ -507,7 +508,7 @@ describe('createBrowserSlice annotations', () => {
     if (!pageId) {
       throw new Error('Expected a new browser page')
     }
-    store.setState((state) => ({
+    setSessionTestState(store, (state) => ({
       browserTabsByWorktree: {
         ...state.browserTabsByWorktree,
         'wt-1': (state.browserTabsByWorktree['wt-1'] ?? []).map((workspace) =>
@@ -716,7 +717,11 @@ describe('createBrowserSlice annotations', () => {
 describe('createBrowserSlice floating tabs', () => {
   it('tracks new floating browser tabs without changing the main browser surface', async () => {
     const { store, main } = await createTestStoreDrawnFromMain()
-    store.setState({ activeWorktreeId: 'wt-1', activeTabType: 'terminal' } as Partial<AppState>)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This activeWorktreeId, activeTabType fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
+      activeWorktreeId: 'wt-1',
+      activeTabType: 'terminal'
+    } as Partial<AppState>)
     const mainTab = store.getState().createBrowserTab('wt-1', 'https://example.com')
     await main.settle()
     const activeTabTypeBeforeFloating = store.getState().activeTabType

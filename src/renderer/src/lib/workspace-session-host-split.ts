@@ -40,7 +40,7 @@ export type HostIdByWorktreeId = (worktreeId: string) => ExecutionHostId
  *    the only routing available once the tab or pane it describes is gone. */
 type SplitContext = {
   hostIdByWorktreeId: HostIdByWorktreeId
-  worktreeIdByTabId: Map<string, string>
+  worktreeIdByTabId: ReadonlyMap<string, string>
   worktreeIdByFileId: Map<string, string>
 }
 
@@ -130,7 +130,7 @@ export function splitWorkspaceSessionByHost(
   state: WorkspaceSessionState,
   hostIdByWorktreeId: HostIdByWorktreeId,
   options: {
-    worktreeIdByTabId?: Map<string, string>
+    worktreeIdByTabId?: ReadonlyMap<string, string>
     /** Hosts whose rows this write speaks for in full: a field it carries replaces theirs even when
      *  none of their workspaces has an entry left, or main's fieldwise patch keeps the stale rows (#23914). */
     emptyContainerHostIds?: readonly ExecutionHostId[]

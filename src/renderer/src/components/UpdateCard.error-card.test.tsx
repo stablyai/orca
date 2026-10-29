@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, cleanup, fireEvent, render, screen, type RenderResult } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -55,7 +56,7 @@ function mockReducedMotion(matches: boolean): void {
 }
 
 beforeEach(() => {
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
   openUrl.mockReset().mockResolvedValue(undefined)
   download.mockReset().mockResolvedValue(undefined)
   check.mockReset().mockResolvedValue(undefined)
@@ -92,7 +93,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
 })
 
 describe('UpdateCard staged install recovery', () => {

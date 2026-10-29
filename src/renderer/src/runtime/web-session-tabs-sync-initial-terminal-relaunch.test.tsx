@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act, cleanup, renderHook } from '@testing-library/react'
@@ -188,7 +189,8 @@ function seedRemoteMirrorState(connectionGeneration: number): void {
     publicRuntimeEnvironment({ id: ENV, createdAt: 100, pairingRevision: REVISION })
   ]
   replaceRuntimeEnvironmentRevisions(runtimeEnvironments)
-  useAppStore.setState(
+  setSessionTestState(
+    useAppStore,
     {
       ...initialState,
       activeWorktreeId: WORKTREE,
@@ -220,7 +222,7 @@ describe('useWebSessionTabsSync initial-terminal bootstrap across an effect re-r
 
   afterEach(() => {
     cleanup()
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
     replaceRuntimeEnvironmentRevisions([])
     resetWebSessionTabsSnapshotFreshnessForTests()
     resetWebRuntimeInitialTerminalBootstrapForTests()
@@ -363,12 +365,12 @@ describe('activating a host-owned workspace before the host has answered', () =>
     resetWebRuntimeInitialTerminalBootstrapForTests()
     resetWebRuntimeWakeTerminalRespawnForTests()
     seedRemoteMirrorState(1)
-    useAppStore.setState({ worktreesByRepo: { 'repo-a': [makeWorktree()] } })
+    setSessionTestState(useAppStore, { worktreesByRepo: { 'repo-a': [makeWorktree()] } })
   })
 
   afterEach(() => {
     cleanup()
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
     replaceRuntimeEnvironmentRevisions([])
     resetWebSessionTabsSnapshotFreshnessForTests()
     resetWebRuntimeInitialTerminalBootstrapForTests()

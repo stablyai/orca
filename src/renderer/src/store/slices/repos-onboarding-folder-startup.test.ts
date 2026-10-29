@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { getDefaultOnboardingState } from '../../../../shared/onboarding-defaults'
@@ -117,7 +118,7 @@ it.each(['paired-linux', 'local-bash', 'withheld', 'structured-withheld'] as con
     const store = createTestStore()
     const hostId = target === 'local-bash' ? 'local' : 'runtime:box'
     const worktree = makeWorktree({ id: 'repo::/folder', repoId: 'repo', path: '/folder', hostId })
-    store.setState({
+    setSessionTestState(store, {
       repos: [{ id: 'repo', path: '/folder', displayName: 'Folder', badgeColor: '', addedAt: 1 }],
       worktreesByRepo: { repo: [worktree] },
       settings: {

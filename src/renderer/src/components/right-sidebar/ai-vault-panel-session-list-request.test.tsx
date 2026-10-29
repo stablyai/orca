@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { cleanup, render, screen, fireEvent } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -49,8 +50,8 @@ const WORKTREE_ID = 'repo-1::/repo/wt'
 
 beforeEach(() => {
   panelRequests.length = 0
-  useAppStore.setState(useAppStore.getInitialState(), true)
-  useAppStore.setState({
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, {
     activeRepoId: 'repo-1',
     activeWorktreeId: WORKTREE_ID,
     repos: [makeRepo()],

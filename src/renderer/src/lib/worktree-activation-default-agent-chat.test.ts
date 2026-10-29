@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { activateAndRevealFolderWorkspace, activateAndRevealWorktree } from './worktree-activation'
@@ -57,7 +58,7 @@ afterEach(() => {
   vi.restoreAllMocks()
   releaseEmptyWorkspaceDefaultSurface(makeWorktree().id)
   releaseEmptyWorkspaceDefaultSurface(FOLDER_KEY)
-  useAppStore.setState(initialAppStoreState, true)
+  setSessionTestState(useAppStore, initialAppStoreState, true)
 })
 
 /** Electron exposes the PTY inventory, so an empty workspace is seeded by the gated reseed. */
@@ -67,7 +68,8 @@ function useElectronActivationGate(): ReturnType<typeof vi.spyOn> {
 }
 
 function seedEmptyFolderWorkspace(): void {
-  useAppStore.setState({
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+  setSessionTestState(useAppStore, {
     folderWorkspaces: [
       {
         id: FOLDER_ID,

@@ -55,7 +55,8 @@ async function runAutomation(c: AutomationLaunchCase) {
   const modules = await load(c.client)
   const store = modules.createStore()
   holder.store = store
-  store.setState(
+  modules.setSessionTestState(
+    store,
     launchWorkspaceState(c.workspace, { ...getDefaultSettings('/home/alice'), ...c.settings })
   )
   const spawn = vi.fn(async (_request: Record<string, unknown>) => ({ id: 'pty-1' }))

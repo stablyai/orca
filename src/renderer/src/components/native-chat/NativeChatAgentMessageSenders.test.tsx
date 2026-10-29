@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, render, screen } from '@testing-library/react'
@@ -105,12 +106,12 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
 })
 
 describe('the name a sender is shown under', () => {
   it('keeps the host-recorded CLI name even while a different pane title is visible', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { [WORKTREE]: [terminalTab({ customTitle: 'Parser worker' })] },
       agentStatusByPaneKey: { [`${TAB}:${LEAF}`]: agentRow(HANDLE) }
     })
@@ -120,13 +121,13 @@ describe('the name a sender is shown under', () => {
   })
 
   it('keeps the recorded CLI name after the terminal is renamed', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { [WORKTREE]: [terminalTab({ customTitle: 'Old name' })] },
       agentStatusByPaneKey: { [`${TAB}:${LEAF}`]: agentRow(HANDLE) }
     })
     renderSenders(source({}), true)
     act(() => {
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         tabsByWorktree: { [WORKTREE]: [terminalTab({ customTitle: 'New name' })] }
       })
     })
@@ -136,7 +137,7 @@ describe('the name a sender is shown under', () => {
 
   it("is the chat's tab name for a chat sender open here, as its tab shows it", () => {
     conversationNames.set(SESSION, 'Port the parser')
-    useAppStore.setState({ unifiedTabsByWorktree: { [WORKTREE]: [chatTab()] } })
+    setSessionTestState(useAppStore, { unifiedTabsByWorktree: { [WORKTREE]: [chatTab()] } })
     renderSenders(
       source({
         address: `orca_session_id:${SESSION}`,
@@ -148,7 +149,7 @@ describe('the name a sender is shown under', () => {
   })
 
   it('keeps the recorded name for a chat sender whose tab has no name of its own', () => {
-    useAppStore.setState({ unifiedTabsByWorktree: { [WORKTREE]: [chatTab()] } })
+    setSessionTestState(useAppStore, { unifiedTabsByWorktree: { [WORKTREE]: [chatTab()] } })
     renderSenders(
       source(
         { address: `orca_session_id:${SESSION}`, terminalHandle: null, orcaSessionId: SESSION },
@@ -159,7 +160,7 @@ describe('the name a sender is shown under', () => {
   })
 
   it('keeps the recorded name when its agent row has no name of its own', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { [WORKTREE]: [terminalTab({ title: 'Claude Code' })] },
       agentStatusByPaneKey: { [`${TAB}:${LEAF}`]: agentRow(HANDLE) }
     })
@@ -173,7 +174,7 @@ describe('the name a sender is shown under', () => {
   })
 
   it('keeps the recorded name for a sender on another host, whatever runs here', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { [WORKTREE]: [terminalTab({ customTitle: 'Local agent' })] },
       agentStatusByPaneKey: { [`${TAB}:${LEAF}`]: agentRow(HANDLE) }
     })

@@ -1,3 +1,4 @@
+import { editSessionSource } from '../../session-source-edits'
 import { structuredLaunchSlotIds } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getActiveExecutionHostIdForWorktree } from '@/lib/unified-tab-host-ownership'
@@ -34,18 +35,11 @@ export function createTabsCreateActions(
       let created!: Tab
       set((current) => {
         init?.validatePlacement?.(current)
-        const state =
-          init?.split && splitGroupId
-            ? {
-                ...current,
-                ...insertSplitGroup(
-                  current,
-                  worktreeId,
-                  init.split,
-                  emptySplitGroup(worktreeId, splitGroupId)
-                )
-              }
-            : current
+        const edit = editSessionSource(current)
+        if (init?.split && splitGroupId) {
+          insertSplitGroup(edit, worktreeId, init.split, emptySplitGroup(worktreeId, splitGroupId))
+        }
+        const state = edit.view()
         const existingTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
         const placement = resolveUnifiedTabCreatePlacement({
           groups: state.groupsByWorktree[worktreeId] ?? [],
@@ -60,12 +54,7 @@ export function createTabsCreateActions(
               ...(selectFolderWorkspaces(state) ?? []).map(folderWorkspaceToWorktree)
             ].filter((worktree) => worktree.id === worktreeId)
         })
-        const { group, groupsByWorktree, activeGroupIdByWorktree } = ensureGroup(
-          state.groupsByWorktree,
-          state.activeGroupIdByWorktree,
-          worktreeId,
-          placement.groupId
-        )
+        const group = ensureGroup(edit, worktreeId, placement.groupId)
 
         let nextTabs = existingTabs
         let nextOrder = dedupeTabOrder(group.tabOrder)
@@ -134,26 +123,23 @@ export function createTabsCreateActions(
         const nextRecent = shouldActivate
           ? pushRecentTabId(sanitizedRecent, created.id)
           : sanitizedRecent
-        return {
-          unifiedTabsByWorktree: {
-            ...state.unifiedTabsByWorktree,
-            [worktreeId]: [...nextTabs, created]
-          },
-          groupsByWorktree: {
-            ...groupsByWorktree,
-            [worktreeId]: updateGroup(groupsByWorktree[worktreeId] ?? [], {
-              ...group,
-              activeTabId: nextActiveTabId,
-              tabOrder: nextOrder,
-              recentTabIds: nextRecent
-            })
-          },
-          activeGroupIdByWorktree,
-          layoutByWorktree: {
-            ...state.layoutByWorktree,
-            [worktreeId]: state.layoutByWorktree[worktreeId] ?? { type: 'leaf', groupId: group.id }
-          }
-        }
+        edit.set('unifiedTabsByWorktree', worktreeId, [...nextTabs, created])
+        edit.set(
+          'groupsByWorktree',
+          worktreeId,
+          updateGroup(edit.entry('groupsByWorktree', worktreeId) ?? [], {
+            ...group,
+            activeTabId: nextActiveTabId,
+            tabOrder: nextOrder,
+            recentTabIds: nextRecent
+          })
+        )
+        edit.set(
+          'layoutByWorktree',
+          worktreeId,
+          edit.entry('layoutByWorktree', worktreeId) ?? { type: 'leaf', groupId: group.id }
+        )
+        return edit.finish()
       })
       if (init?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
@@ -176,7 +162,7 @@ export function createTabsCreateActions(
           target.sourceGroupId
         )
         if (!sourceGroup) {
-          return state
+          return undefined
         }
         const existingTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
         const shouldActivate = init?.activate ?? true
@@ -215,35 +201,15 @@ export function createTabsCreateActions(
           recentTabIds: shouldActivate ? [id] : []
         }
         created = createdTab
-        const nextUnifiedTabsByWorktree = {
-          ...state.unifiedTabsByWorktree,
-          [worktreeId]: [...existingTabs, createdTab]
-        }
-        const {
-          groupsByWorktree: nextGroupsByWorktree,
-          layoutByWorktree: nextLayoutByWorktree,
-          activeGroupIdByWorktree: nextActiveGroupIdByWorktree
-        } = insertSplitGroup(state, worktreeId, { ...target, activate: shouldActivate }, newGroup)
+        const edit = editSessionSource(state)
+        edit.set('unifiedTabsByWorktree', worktreeId, [...existingTabs, createdTab])
+        insertSplitGroup(edit, worktreeId, { ...target, activate: shouldActivate }, newGroup)
         moved = true
-        return {
-          unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
-          groupsByWorktree: nextGroupsByWorktree,
-          layoutByWorktree: nextLayoutByWorktree,
-          activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
-          ...(shouldActivate && state.activeWorktreeId === worktreeId
-            ? buildActiveSurfacePatch(
-                {
-                  ...state,
-                  unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
-                  groupsByWorktree: nextGroupsByWorktree,
-                  layoutByWorktree: nextLayoutByWorktree,
-                  activeGroupIdByWorktree: nextActiveGroupIdByWorktree
-                },
-                worktreeId,
-                newGroupId
-              )
-            : {})
-        }
+        return edit.finish(
+          shouldActivate && state.activeWorktreeId === worktreeId
+            ? buildActiveSurfacePatch(edit, worktreeId, newGroupId)
+            : {}
+        )
       })
       if (created && init?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')

@@ -1,3 +1,4 @@
+import type { SessionTestStore } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 // Exercise the real desktop writer/UI slice and persistence merge with queued IPC broadcasts; model Expo mobile mapping locally. Disjoint edits must survive stale mirrors and converge (STA-5781).
 import { StrictMode, act, createElement } from 'react'
@@ -68,7 +69,7 @@ type Authority = ReturnType<typeof createAuthority>
 
 describe('workspace view preferences: cross-client persistence (STA-5781)', () => {
   let authority: Authority
-  let store: StoreApi<AppState>
+  let store: SessionTestStore<AppState>
   let root: Root
   let container: HTMLDivElement
   let pendingBroadcasts: PersistedUIState[]

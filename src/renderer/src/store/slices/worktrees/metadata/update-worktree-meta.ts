@@ -180,7 +180,7 @@ export function createUpdateWorktreeMeta(
         shouldApplyUpdate &&
         !shouldApplyUpdate(findKnownWorktreeById(s, worktreeId, executionHostId))
       ) {
-        return s
+        return undefined
       }
       didApply = true
       return buildWorktreeMetaStateUpdate(s, {

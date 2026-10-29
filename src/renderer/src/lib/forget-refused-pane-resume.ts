@@ -57,7 +57,7 @@ export function forgetRefusedPaneResume(
       live.stateStartedAt !== identity.stateStartedAt ||
       !namesRefusedResume(refused, { ...live, agent: live.agentType })
     ) {
-      return current
+      return undefined
     }
     const next = { ...current.agentStatusByPaneKey }
     changedPaneKeys.add(paneKey)

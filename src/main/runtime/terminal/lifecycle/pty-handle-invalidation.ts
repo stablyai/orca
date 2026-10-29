@@ -1,3 +1,4 @@
+import { invalidateShutdownReconnectPty } from '../recovery/shutdown-reconnect-fact-index'
 import { OrcaRuntimeWithResolveKnownWorkspaceFileTarget } from '../../workspaces/known-workspace-file-target'
 import type { PtyIncarnationId } from '../../../../shared/pty-incarnation'
 import { getPtyExecutionHost } from '../../../../shared/terminal-execution-host'
@@ -183,6 +184,7 @@ export abstract class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRunt
         pty.incarnationId = incarnationId
       }
       pty.connected = true
+      invalidateShutdownReconnectPty(this, pty.ptyId)
       pty.disconnectedAt = null
     }
     for (const leaf of this.getLeavesForPty(ptyId)) {

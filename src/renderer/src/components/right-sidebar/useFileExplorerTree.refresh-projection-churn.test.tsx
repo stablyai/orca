@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
@@ -92,7 +93,7 @@ function findFileExplorerRow(node: unknown): ReactElementLike {
 describe('file explorer directory refresh churn', () => {
   beforeEach(() => {
     readDirectoryMock.mockReset().mockResolvedValue(listing())
-    useAppStore.setState(initialAppState, true)
+    setSessionTestState(useAppStore, initialAppState, true)
     useAppStore.setState({
       settings: { activeRuntimeEnvironmentId: null } as AppState['settings']
     })
@@ -100,7 +101,7 @@ describe('file explorer directory refresh churn', () => {
 
   afterEach(() => {
     cleanup()
-    useAppStore.setState(initialAppState, true)
+    setSessionTestState(useAppStore, initialAppState, true)
   })
 
   it('rebuilds the visible row projection once per touched-directory refresh', async () => {

@@ -1,3 +1,6 @@
+import { withSessionSourceWrites } from '@/store/session-source-write-boundary'
+import { editSessionSource } from '../../../session-source-edits'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createStore } from 'zustand'
 import { useAppStore } from '@/store'
@@ -67,7 +70,7 @@ const SHARED: EditorBufferViewIndex = {
 
 describe('editor buffer view index', () => {
   beforeEach(() => {
-    useAppStore.setState(useAppStore.getInitialState(), true)
+    setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
   })
 
   it('maps each tab to its own record through open, rekey and close', async () => {
@@ -117,7 +120,7 @@ describe('editor buffer view index', () => {
 
   it('writes a buffer field to one tab only, as before', () => {
     const files = [tab('a'), tab('b')]
-    const state = {
+    const state: EditorBufferState = {
       openFiles: files,
       editorBuffers: {
         a: editorBufferRecordFromFile(files[0]),
@@ -126,7 +129,9 @@ describe('editor buffer view index', () => {
       ...buildEditorBufferViewIndex(files, (file) => file.id)
     }
 
-    const next = writeEditorBuffer(state, 'a', { isDirty: true }, { isPreview: false })
+    const edit = editSessionSource(state)
+    const ordinary = writeEditorBuffer(edit, 'a', { isDirty: true }, { isPreview: false })
+    const next = edit.view(ordinary)
 
     expect(next.openFiles[0]).toMatchObject({ isDirty: true, isPreview: false })
     expect(next.openFiles[1]).toBe(files[1])
@@ -135,7 +140,7 @@ describe('editor buffer view index', () => {
 
   it('writes a record and every view mirror once views share it', () => {
     const files = [tab('a'), tab('b'), tab('c')]
-    const state = {
+    const state: EditorBufferState = {
       openFiles: files,
       editorBuffers: {
         rec: editorBufferRecordFromFile(files[0]),
@@ -144,7 +149,9 @@ describe('editor buffer view index', () => {
       ...SHARED
     }
 
-    const next = writeEditorBuffer(state, 'b', { isDirty: true }, { isPreview: false })
+    const edit = editSessionSource(state)
+    const ordinary = writeEditorBuffer(edit, 'b', { isDirty: true }, { isPreview: false })
+    const next = edit.view(ordinary)
 
     expect(next.editorBuffers.rec?.isDirty).toBe(true)
     expect(next.openFiles.map((file) => file.isDirty)).toEqual([true, true, false])
@@ -153,12 +160,14 @@ describe('editor buffer view index', () => {
   })
 
   it('writes and clears drafts through every view of the record', () => {
-    const store = createStore<EditorBufferState>()(() => ({
-      openFiles: [tab('a'), tab('b'), tab('c'), tab('ro', { readOnly: true })],
-      editorBuffers: {},
-      editorDrafts: {},
-      ...SHARED
-    }))
+    const store = createStore<EditorBufferState>()(
+      withSessionSourceWrites<EditorBufferState>(() => ({
+        openFiles: [tab('a'), tab('b'), tab('c'), tab('ro', { readOnly: true })],
+        editorBuffers: {},
+        editorDrafts: {},
+        ...SHARED
+      }))
+    )
     const drafts = createEditorDraftState(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the draft actions read and write only openFiles, editorDrafts and the view index.
       store.setState as unknown as EditorSet,
@@ -217,8 +226,10 @@ describe('editor buffer invariant', () => {
       withEditorBufferRecords<EditorBufferState>(() => ({ ...valid, editorDrafts: {} }), true)
     )
 
-    store.setState({ editorDrafts: { a: 'y', b: 'y' } })
-    expect(() => store.setState({ editorDrafts: { a: 'y', b: 'z' } })).toThrow(/draft of b/)
+    setSessionTestState(store, { editorDrafts: { a: 'y', b: 'y' } })
+    expect(() => setSessionTestState(store, { editorDrafts: { a: 'y', b: 'z' } })).toThrow(
+      /draft of b/
+    )
     expect(store.getState().editorDrafts).toEqual({ a: 'y', b: 'y' })
   })
 

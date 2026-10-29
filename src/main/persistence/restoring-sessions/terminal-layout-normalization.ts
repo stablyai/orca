@@ -112,7 +112,47 @@ export function preserveMissingLeafRecordEntries(
   return Object.keys(next).length > 0 ? next : undefined
 }
 
+const certifiedLayouts = new WeakMap<
+  TerminalLayoutSnapshot,
+  {
+    absent?: LayoutLeafNormalization
+    preferred: WeakMap<TerminalLayoutSnapshot, LayoutLeafNormalization>
+  }
+>()
+
 export function normalizeTerminalLayoutSnapshotForPersistence(
+  snapshot: TerminalLayoutSnapshot,
+  preferredLayout?: TerminalLayoutSnapshot
+): LayoutLeafNormalization {
+  const certificate = certifiedLayouts.get(snapshot)
+  const cached = preferredLayout ? certificate?.preferred.get(preferredLayout) : certificate?.absent
+  if (cached) {
+    return cached
+  }
+  const result = normalizeTerminalLayout(snapshot, preferredLayout)
+  const output = result.snapshot
+  const identity: LayoutLeafNormalization = {
+    snapshot: output,
+    changed: false,
+    leafIdByInputLeafId: new Map(collectLayoutLeafIdsInOrder(output.root).map((id) => [id, id]))
+  }
+  const next = certifiedLayouts.get(output) ?? {
+    preferred: new WeakMap<TerminalLayoutSnapshot, LayoutLeafNormalization>()
+  }
+  // Only completed immutable output is certified; arbitrary inputs always run intrinsic normalization.
+  next.preferred.set(output, identity)
+  if (output === snapshot) {
+    if (preferredLayout) {
+      next.preferred.set(preferredLayout, identity)
+    } else {
+      next.absent = identity
+    }
+  }
+  certifiedLayouts.set(output, next)
+  return result
+}
+
+function normalizeTerminalLayout(
   snapshot: TerminalLayoutSnapshot,
   preferredLayout?: TerminalLayoutSnapshot
 ): LayoutLeafNormalization {

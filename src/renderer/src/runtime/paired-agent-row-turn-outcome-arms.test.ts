@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // Unparsed mirrored rows can carry newer verdict arms. Preserve them and legacy done fallback while known arms render their mark; exercise real mirror/store/sidebar builder.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
@@ -85,7 +86,10 @@ function mirroredRows(outcome: string) {
     activeWorktreeId: WT
   })
   const state = store.getState()
-  store.setState(applyFreshWebSessionTabsSnapshot(state, hostSnapshot(outcome), ENV, T0))
+  setSessionTestState(
+    store,
+    applyFreshWebSessionTabsSnapshot(state, hostSnapshot(outcome), ENV, T0)
+  )
   const next = store.getState()
   const tabs = next.tabsByWorktree[WT] ?? []
   return buildWorktreeAgentRows({

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // Resolve seeding by the create’s host when repo/path has a twin; desktop must not duplicate the paired server’s default tabs (ledger L277).
 import { describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
@@ -52,7 +53,7 @@ function repo(executionHostId?: ExecutionHostId): Repo {
 /** The server's create result merged the real way, then the background create's seeding. */
 function createOnServer(opts: { twin: boolean; passHost: boolean }) {
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     repos: opts.twin ? [repo(), repo(SERVER)] : [repo(SERVER)],
     worktreesByRepo: opts.twin
       ? { [REPO_ID]: [makeWorktree({ id: WT, repoId: REPO_ID, path: PATH, hostId: 'local' })] }

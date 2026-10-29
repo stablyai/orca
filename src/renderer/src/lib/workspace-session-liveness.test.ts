@@ -92,7 +92,7 @@ describe('workspace session live PTY persistence', () => {
     )
 
     expect(payload.activeWorktreeIdsOnShutdown).toEqual([])
-    expect(payload.remoteSessionIdsByTabId).toBeUndefined()
+    expect(payload.remoteSessionIdsByTabId).toEqual({})
   })
 
   it('reconnects a persisted SSH PTY when shutdown observes a transient relay drop', () => {

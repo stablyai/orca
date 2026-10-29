@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import React, { act } from 'react'
@@ -68,7 +69,7 @@ function connectedSshState(targetId: string) {
 }
 
 beforeEach(() => {
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -79,7 +80,7 @@ afterEach(() => {
     root.unmount()
   })
   container.remove()
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
 })
 
 function renderSection(repo: Repo, selectedProjectSetupId?: string): void {
@@ -133,7 +134,7 @@ describe('RepositoryHostSetupsSection', () => {
       path: '/home/alice/orca',
       connectionId: 'openclaw 2'
     })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [localRepo, remoteRepo],
       projects: [makeProject({ id: 'github:stablyai/orca' })],
       projectHostSetups: [
@@ -176,7 +177,7 @@ describe('RepositoryHostSetupsSection', () => {
       path: '/home/alice/orca',
       connectionId: 'openclaw 2'
     })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [localRepo, remoteRepo],
       projects: [makeProject({ id: 'github:stablyai/orca' })],
       projectHostSetups: [
@@ -228,7 +229,7 @@ describe('RepositoryHostSetupsSection', () => {
       path: '/srv/orca',
       executionHostId: 'runtime:hub'
     })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [remoteRepo],
       projects: [makeProject({ id: 'github:stablyai/orca', sourceRepoIds: ['remote-repo'] })],
       projectHostSetups: [
@@ -328,7 +329,7 @@ describe('RepositoryHostSetupsSection', () => {
       path: '/srv/orca',
       executionHostId: 'runtime:hub'
     })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [remoteRepo],
       projects: [makeProject({ id: 'github:stablyai/orca', sourceRepoIds: ['remote-repo'] })],
       projectHostSetups: [
@@ -369,7 +370,7 @@ describe('RepositoryHostSetupsSection', () => {
       displayName: 'Orca',
       path: '/Users/alice/orca'
     })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [localRepo],
       projects: [makeProject({ id: 'github:stablyai/orca' })],
       projectHostSetups: [
@@ -440,7 +441,7 @@ describe('RepositoryHostSetupsSection', () => {
       displayName: 'Orca',
       path: '/Users/alice/orca'
     })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [localRepo],
       projects: [makeProject({ id: 'github:stablyai/orca' })],
       projectHostSetups: [
@@ -517,7 +518,7 @@ describe('RepositoryHostSetupsSection', () => {
       displayName: 'Orca',
       path: '/Users/alice/orca'
     })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [localRepo],
       projects: [makeProject({ id: 'github:stablyai/orca' })],
       projectHostSetups: [
@@ -580,7 +581,7 @@ describe('RepositoryHostSetupsSection', () => {
       displayName: 'Orca',
       path: '/Users/alice/orca'
     })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [localRepo],
       projects: [makeProject({ id: 'github:stablyai/orca' })],
       projectHostSetups: [
@@ -631,7 +632,7 @@ describe('RepositoryHostSetupsSection', () => {
       displayName: 'Orca',
       path: '/Users/alice/orca'
     })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [localRepo],
       projects: [makeProject({ id: 'github:stablyai/orca' })],
       projectHostSetups: [
@@ -700,7 +701,7 @@ describe('RepositoryHostSetupsSection', () => {
       displayName: 'Orca',
       path: '/Users/alice/orca'
     })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [localRepo],
       projects: [makeProject({ id: 'github:stablyai/orca' })],
       projectHostSetups: [
@@ -774,7 +775,7 @@ describe('RepositoryHostSetupsSection', () => {
       displayName: 'Orca',
       path: '/Users/alice/orca'
     })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [localRepo],
       projects: [makeProject({ id: 'github:stablyai/orca' })],
       projectHostSetups: [

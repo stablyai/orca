@@ -8,48 +8,52 @@ export type EnvironmentCloseIntentList<T extends { closedAt: number }> = {
   maxAgeMs: number
 }
 
-/** Appends closes not already held, dropping the oldest past the cap. Returns null if unchanged. */
+export type EnvironmentCloseIntentEdit<T> = {
+  read(environmentId: string): T[] | undefined
+  set(environmentId: string, intents: T[]): void
+  remove(environmentId: string): void
+}
+
+/** Appends closes not already held, dropping the oldest past the cap. */
 export function appendEnvironmentCloseIntents<T extends { closedAt: number }>(
   list: EnvironmentCloseIntentList<T>,
-  current: Record<string, T[]>,
+  edit: EnvironmentCloseIntentEdit<T>,
   additions: readonly { environmentId: string; intent: T }[]
-): Record<string, T[]> | null {
-  const next = { ...current }
+): boolean {
   let changed = false
   for (const { environmentId, intent } of additions) {
-    const existing = next[environmentId] ?? []
+    const existing = edit.read(environmentId) ?? []
     const key = list.keyOf(intent)
     if (existing.some((held) => list.keyOf(held) === key)) {
       continue
     }
-    next[environmentId] = [...existing, intent].slice(-list.maxPerEnvironment)
+    edit.set(environmentId, [...existing, intent].slice(-list.maxPerEnvironment))
     changed = true
   }
-  return changed ? next : null
+  return changed
 }
 
-/** Drops the named closes plus anything older than the give-up bound. Returns null if unchanged. */
+/** Drops the named closes plus anything older than the give-up bound. */
 export function removeEnvironmentCloseIntents<T extends { closedAt: number }>(
   list: EnvironmentCloseIntentList<T>,
-  current: Record<string, T[]>,
+  edit: EnvironmentCloseIntentEdit<T>,
   args: { environmentId: string; keys: readonly string[]; now: number }
-): Record<string, T[]> | null {
-  const existing = current[args.environmentId]
+): boolean {
+  const existing = edit.read(args.environmentId)
   if (!existing) {
-    return null
+    return false
   }
   const cleared = new Set(args.keys)
   const remaining = existing.filter(
     (intent) => !cleared.has(list.keyOf(intent)) && args.now - intent.closedAt <= list.maxAgeMs
   )
   if (remaining.length === existing.length) {
-    return null
+    return false
   }
-  const next = { ...current }
   if (remaining.length === 0) {
-    delete next[args.environmentId]
+    edit.remove(args.environmentId)
   } else {
-    next[args.environmentId] = remaining
+    edit.set(args.environmentId, remaining)
   }
-  return next
+  return true
 }

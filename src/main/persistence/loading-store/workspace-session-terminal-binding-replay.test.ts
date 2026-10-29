@@ -56,9 +56,14 @@ describe('workspace session terminal binding replay', () => {
     const prior = session('runtime-pty')
     const incoming = session(null)
 
-    preserveMissingWorkspaceSessionTerminalBindings(incoming, prior, bindingRecovery as never)
+    const result = preserveMissingWorkspaceSessionTerminalBindings(
+      incoming,
+      prior,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The binding-recovery stub implements the queried liveness and layout methods; production supplies the full store.
+      bindingRecovery as never
+    )
 
-    expect(incoming.tabsByWorktree.worktree[0]!.ptyId).toBe('runtime-pty')
+    expect(result.tabsByWorktree.worktree[0]!.ptyId).toBe('runtime-pty')
 
     const unavailable = session(null)
     preserveMissingWorkspaceSessionTerminalBindings(unavailable, prior, {
@@ -85,9 +90,14 @@ describe('workspace session terminal binding replay', () => {
       ptyIdsByLeafId: {}
     }
 
-    preserveMissingWorkspaceSessionTerminalBindings(incoming, prior, bindingRecovery as never)
+    const result = preserveMissingWorkspaceSessionTerminalBindings(
+      incoming,
+      prior,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The binding-recovery stub implements the queried liveness and layout methods; production supplies the full store.
+      bindingRecovery as never
+    )
 
-    expect(incoming.tabsByWorktree.worktree[0]!.ptyId).toBeNull()
+    expect(result.tabsByWorktree.worktree[0]!.ptyId).toBeNull()
   })
 
   it('fails closed when one tab id is duplicated across worktrees', () => {
@@ -118,11 +128,16 @@ describe('workspace session terminal binding replay', () => {
       }
     }
 
-    preserveMissingWorkspaceSessionTerminalBindings(incoming, prior, bindingRecovery as never)
+    const result = preserveMissingWorkspaceSessionTerminalBindings(
+      incoming,
+      prior,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The binding-recovery stub implements the queried liveness and layout methods; production supplies the full store.
+      bindingRecovery as never
+    )
 
-    expect(incoming.tabsByWorktree[WORKTREE_A]![0]!.ptyId).toBeNull()
-    expect(incoming.tabsByWorktree[WORKTREE_B]![0]!.ptyId).toBeNull()
-    expect(incoming.terminalLayoutsByTabId['duplicate-tab']?.ptyIdsByLeafId).toEqual({})
+    expect(result.tabsByWorktree[WORKTREE_A]![0]!.ptyId).toBeNull()
+    expect(result.tabsByWorktree[WORKTREE_B]![0]!.ptyId).toBeNull()
+    expect(result.terminalLayoutsByTabId['duplicate-tab']?.ptyIdsByLeafId).toEqual({})
   })
 
   it('still replays bindings for distinct tab ids in separate worktrees', () => {
@@ -165,14 +180,19 @@ describe('workspace session terminal binding replay', () => {
       }
     }
 
-    preserveMissingWorkspaceSessionTerminalBindings(incoming, prior, bindingRecovery as never)
+    const result = preserveMissingWorkspaceSessionTerminalBindings(
+      incoming,
+      prior,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The binding-recovery stub implements the queried liveness and layout methods; production supplies the full store.
+      bindingRecovery as never
+    )
 
-    expect(incoming.tabsByWorktree[WORKTREE_A]![0]!.ptyId).toBe('pty-a')
-    expect(incoming.tabsByWorktree[WORKTREE_B]![0]!.ptyId).toBe('pty-b')
-    expect(incoming.terminalLayoutsByTabId['tab-a']?.ptyIdsByLeafId).toEqual({
+    expect(result.tabsByWorktree[WORKTREE_A]![0]!.ptyId).toBe('pty-a')
+    expect(result.tabsByWorktree[WORKTREE_B]![0]!.ptyId).toBe('pty-b')
+    expect(result.terminalLayoutsByTabId['tab-a']?.ptyIdsByLeafId).toEqual({
       [LEAF_ONE]: 'pty-a'
     })
-    expect(incoming.terminalLayoutsByTabId['tab-b']?.ptyIdsByLeafId).toEqual({
+    expect(result.terminalLayoutsByTabId['tab-b']?.ptyIdsByLeafId).toEqual({
       [LEAF_TWO]: 'pty-b'
     })
   })
@@ -191,9 +211,14 @@ describe('workspace session terminal binding replay', () => {
       [WORKTREE_A]: [terminalTab(WORKTREE_A, 'duplicate-tab', null)]
     }
 
-    preserveMissingWorkspaceSessionTerminalBindings(incoming, prior, bindingRecovery as never)
+    const result = preserveMissingWorkspaceSessionTerminalBindings(
+      incoming,
+      prior,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The binding-recovery stub implements the queried liveness and layout methods; production supplies the full store.
+      bindingRecovery as never
+    )
 
-    expect(incoming.tabsByWorktree[WORKTREE_A]![0]!.ptyId).toBeNull()
+    expect(result.tabsByWorktree[WORKTREE_A]![0]!.ptyId).toBeNull()
   })
 
   it('indexes prior tabs once when replaying a large workspace snapshot', () => {
@@ -210,9 +235,14 @@ describe('workspace session terminal binding replay', () => {
     incoming.tabsByWorktree.worktree = Array.from({ length: 1000 }, (_, i) =>
       terminalTab('worktree', `tab-${i}`, null)
     )
-    preserveMissingWorkspaceSessionTerminalBindings(incoming, prior, bindingRecovery as never)
+    const result = preserveMissingWorkspaceSessionTerminalBindings(
+      incoming,
+      prior,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The binding-recovery stub implements the queried liveness and layout methods; production supplies the full store.
+      bindingRecovery as never
+    )
     expect(reads).toBeLessThan(10_000)
-    expect(incoming.tabsByWorktree.worktree.map((tab) => tab.ptyId)).toEqual(
+    expect(result.tabsByWorktree.worktree.map((tab) => tab.ptyId)).toEqual(
       Array.from({ length: 1000 }, (_, i) => `pty-${i}`)
     )
   })

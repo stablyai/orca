@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
@@ -53,12 +54,12 @@ function makeGroup(parentPath: string): ProjectGroup {
 
 describe('getCombinedDiffSectionConnectionId', () => {
   afterEach(() => {
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   it('routes a section to its SSH child repo in a mixed folder workspace (#6688)', () => {
     const workspaceKey = folderWorkspaceKey('folder-workspace-1')
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [makeFolderWorkspace('/home/neil/platform')],
       projectGroups: [makeGroup('/home/neil/platform')],
       repos: [
@@ -88,7 +89,7 @@ describe('getCombinedDiffSectionConnectionId', () => {
   it('composes Windows section paths with the workspace root separator', () => {
     const workspaceKey = folderWorkspaceKey('folder-workspace-1')
     // Mix local and SSH repos so whole-workspace resolution stays ambiguous and must fall through to the Windows section path.
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [makeFolderWorkspace('C:\\Users\\neil\\platform')],
       projectGroups: [makeGroup('C:\\Users\\neil\\platform')],
       repos: [

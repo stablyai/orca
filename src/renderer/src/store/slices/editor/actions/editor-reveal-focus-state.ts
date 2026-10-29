@@ -17,7 +17,9 @@ export function createEditorRevealFocusState(
     pendingEditorFocusRequest: null,
     consumeEditorFocusRequest: (token) =>
       set((s) =>
-        s.pendingEditorFocusRequest?.token === token ? { pendingEditorFocusRequest: null } : s
+        s.pendingEditorFocusRequest?.token === token
+          ? { pendingEditorFocusRequest: null }
+          : undefined
       )
   }
 }

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
@@ -50,11 +51,11 @@ function makeWorktree(overrides: Partial<Worktree> & { id: string; repoId: strin
 
 describe('getConnectionId', () => {
   afterEach(() => {
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   it('resolves SSH targets from composite worktree IDs before worktree discovery completes', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [
         makeRepo({
           id: 'repo-ssh',
@@ -68,7 +69,7 @@ describe('getConnectionId', () => {
   })
 
   it('returns null for known local repos without a discovered worktree', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [makeRepo({ id: 'repo-local' })],
       worktreesByRepo: {}
     })
@@ -77,7 +78,7 @@ describe('getConnectionId', () => {
   })
 
   it('returns undefined when neither the worktree nor repo is known', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [],
       worktreesByRepo: {}
     })
@@ -86,7 +87,7 @@ describe('getConnectionId', () => {
   })
 
   it('resolves SSH targets for folder workspaces from repos in the folder scope', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [
         {
           id: 'folder-workspace-1',
@@ -133,7 +134,7 @@ describe('getConnectionId', () => {
   })
 
   it('resolves SSH targets for repo-less folder workspaces from persisted scope provenance', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [
         {
           id: 'folder-workspace-1',
@@ -175,7 +176,7 @@ describe('getConnectionId', () => {
   })
 
   it('returns undefined when persisted folder workspace provenance conflicts with child repos', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [
         {
           id: 'folder-workspace-1',
@@ -225,7 +226,7 @@ describe('getConnectionId', () => {
 
   it('returns undefined for folder workspaces with mixed local and SSH repos', () => {
     const workspaceKey = folderWorkspaceKey('folder-workspace-1')
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [
         {
           id: 'folder-workspace-1',
@@ -283,7 +284,7 @@ describe('getConnectionId', () => {
 
   it('resolves folder workspace combined diff sections by child repo path', () => {
     const workspaceKey = folderWorkspaceKey('folder-workspace-1')
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [makeFolderWorkspace()],
       projectGroups: [
         {
@@ -322,7 +323,7 @@ describe('getConnectionId', () => {
   })
 
   it('keeps explicit folder workspace provenance isolated from unrelated same-path SSH repos', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [
         {
           id: 'folder-workspace-1',
@@ -390,11 +391,11 @@ describe('getConnectionId', () => {
   })
 
   it('reports a worktree owner as unresolved until its backing repo hydrates (#6648)', () => {
-    useAppStore.setState({ repos: [], worktreesByRepo: {} })
+    setSessionTestState(useAppStore, { repos: [], worktreesByRepo: {} })
     // SSH repo not yet in the store -> owner unknown, must not read locally.
     expect(isWorktreeConnectionResolved('repo-ssh::/home/neil/repo')).toBe(false)
 
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [makeRepo({ id: 'repo-ssh', connectionId: 'ssh-1' })],
       worktreesByRepo: {}
     })
@@ -402,14 +403,14 @@ describe('getConnectionId', () => {
   })
 
   it('treats null worktrees and folder workspaces as resolved owners', () => {
-    useAppStore.setState({ repos: [], worktreesByRepo: {} })
+    setSessionTestState(useAppStore, { repos: [], worktreesByRepo: {} })
     expect(isWorktreeConnectionResolved(null)).toBe(true)
     // Folder workspaces resolve per-file via getConnectionIdForFile.
     expect(isWorktreeConnectionResolved(folderWorkspaceKey('folder-workspace-1'))).toBe(true)
   })
 
   it('treats the floating workspace as a resolved local owner (#6831)', () => {
-    useAppStore.setState({ repos: [], worktreesByRepo: {} })
+    setSessionTestState(useAppStore, { repos: [], worktreesByRepo: {} })
 
     expect(getConnectionId(FLOATING_TERMINAL_WORKTREE_ID)).toBeNull()
     expect(getConnectionIdForFile(FLOATING_TERMINAL_WORKTREE_ID, '/tmp/orca/note.md')).toBeNull()
@@ -418,7 +419,7 @@ describe('getConnectionId', () => {
 
   it('keeps normalized same-path folder repo ambiguity when resolving files', () => {
     const workspaceKey = folderWorkspaceKey('folder-workspace-1')
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [
         {
           id: 'folder-workspace-1',

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -127,7 +128,8 @@ function seed(duplicate = false, terminal = false): void {
   mocks.queuedCards = [
     { messageId: 'queued', position: 1, text: 'Agent mail', state: 'waiting', hold: 'turn', from }
   ]
-  useAppStore.setState(
+  setSessionTestState(
+    useAppStore,
     {
       ...initial,
       activeWorktreeId: WORKSPACE,
@@ -244,7 +246,7 @@ afterEach(() => {
   cleanup()
   resetStructuredAgentSessionStatusFeedsForTests()
   clearRuntimeCompatibilityCacheForTests()
-  useAppStore.setState(initial, true)
+  setSessionTestState(useAppStore, initial, true)
   if (previousApi) {
     Object.defineProperty(window, 'api', previousApi)
   } else {
@@ -264,7 +266,7 @@ it.each([false, true])(
     })
     expect(screen.getAllByRole('button', { name: 'Remote rename' })).toHaveLength(2)
     act(() =>
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         unifiedTabsByWorktree: {
           [WORKSPACE]: useAppStore
             .getState()
@@ -311,7 +313,7 @@ it('keeps older-host direct-root names and both clicks on the stamped host when 
   seed()
   transport.unsupported = true
   transport.olderLookup = true
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     unifiedTabsByWorktree: {
       [WORKSPACE]: [
         useAppStore.getState().unifiedTabsByWorktree[WORKSPACE]![0]!,

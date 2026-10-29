@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import '@testing-library/jest-dom/vitest'
 import type { ComponentProps } from 'react'
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
@@ -69,7 +70,7 @@ afterEach(async () => {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
   })
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   vi.restoreAllMocks()
 })
 

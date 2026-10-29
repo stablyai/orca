@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 // Every retained tab multiplies synchronous Zustand listener visits; cap subscriptions and fold stable actions/duplicate reads (renderer-agent-status-performance.md).
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -67,7 +68,7 @@ function PaneProbe({ tabId }: { tabId: string }): null {
 
 afterEach(() => {
   unmount()
-  useAppStore.setState(originalState, true)
+  setSessionTestState(useAppStore, originalState, true)
 })
 
 describe('TerminalPane store subscription budget', () => {

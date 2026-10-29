@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import type { Repo } from '../../../../../shared/repo-types'
@@ -13,7 +14,7 @@ const WORKTREE_ID = 'repo-1::/srv/repo'
 const FILE_PATH = '/srv/repo/reports/latency.html'
 
 function seed(repo: Partial<Repo>, worktree: Partial<Worktree>): void {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     repos: [{ ...makeRepo(), path: '/srv/repo', ...repo }],
     worktreesByRepo: {
       'repo-1': [makeWorktree(WORKTREE_ID, 'repo', { path: '/srv/repo', ...worktree })]

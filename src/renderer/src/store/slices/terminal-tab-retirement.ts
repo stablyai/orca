@@ -1,8 +1,8 @@
+import type { SessionSourceEdit } from '../session-source-edits'
 import {
   isRemoteRuntimePtyId,
   parseRemoteRuntimePtyId
 } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import type { AppState } from '../types'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
 import {
@@ -263,18 +263,14 @@ export function buildTerminalTabRetirementPlans(
 }
 
 export function removeSleepingAgentSessionsForTab(
-  records: Record<string, SleepingAgentSessionRecord>,
+  edit: SessionSourceEdit<Pick<AppState, 'sleepingAgentSessionsByPaneKey'>>,
   tabId: string
-): Record<string, SleepingAgentSessionRecord> {
-  let next = records
+): void {
+  const records = edit.read('sleepingAgentSessionsByPaneKey')
   for (const [paneKey, record] of Object.entries(records)) {
     if (!paneKey.startsWith(`${tabId}:`) && record.tabId !== tabId) {
       continue
     }
-    if (next === records) {
-      next = { ...records }
-    }
-    delete next[paneKey]
+    edit.remove('sleepingAgentSessionsByPaneKey', paneKey)
   }
-  return next
 }

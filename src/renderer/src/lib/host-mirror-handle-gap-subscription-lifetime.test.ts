@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status'
@@ -25,7 +26,7 @@ let subscribeCalls: number
 function publishPaneAndPark(environmentId: string, tabId: string): void {
   const state = useAppStore.getState()
   const published = state.tabsByWorktree[WORKTREE_ID] ?? []
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     ptyIdsByTabId: {},
     tabsByWorktree: {
       [WORKTREE_ID]: [
@@ -48,7 +49,7 @@ function publishPaneAndPark(environmentId: string, tabId: string): void {
 
 /** Lands the pane's handle, which is what both releases a waiter and retires a verdict. */
 function landHandle(tabId: string): void {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     ptyIdsByTabId: { ...useAppStore.getState().ptyIdsByTabId, [tabId]: [`pty-${tabId}`] }
   })
 }
@@ -75,7 +76,7 @@ describe('host-mirror handle-gap store subscription lifetime', () => {
     vi.restoreAllMocks()
     resetHostMirrorHandleGapWaitsForTests()
     clearRuntimeEnvironmentConnectionGenerationsForTests()
-    useAppStore.setState(initialAppStoreState, true)
+    setSessionTestState(useAppStore, initialAppStoreState, true)
     vi.useRealTimers()
   })
 

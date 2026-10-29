@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import type { EditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
@@ -28,7 +29,7 @@ const tab = (operationProvenance?: EditorFileOperationProvenance) => ({
 
 describe('isOpenFileOnMoveOwner', () => {
   beforeEach(() => {
-    useAppStore.setState(useAppStore.getInitialState(), true)
+    setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
   })
 
   it('never moves a direct-SSH tab for a rename on this app, and moves it for its own host', () => {
@@ -93,7 +94,7 @@ describe('isOpenFileOnMoveOwner', () => {
   })
 
   it('moves a tab from another workspace only when that workspace is on the renaming host', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [
         { ...TEST_REPO, id: 'repo-ssh', connectionId: 'box' },
         { ...TEST_REPO, id: 'repo-local' }

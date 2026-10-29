@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { Tab } from '../../../../shared/tab-types'
 import type { AppState } from '../../store/types'
@@ -38,7 +39,8 @@ function seedLineage(store: ReturnType<typeof createTestStore>): {
     ]
     paneKeys.push(makePaneKey(tabId, LEAF_ID))
   }
-  store.setState({
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This repos, worktreesByRepo, tabsByWorktree fixture intentionally supplies only the state members exercised by this scenario.
+  setSessionTestState(store, {
     repos: [TEST_REPO],
     worktreesByRepo: {
       [TEST_REPO.id]: Array.from({ length: WORKTREE_COUNT }, (_, index) =>
@@ -67,7 +69,8 @@ describe('agent-status pane routing index memoization', () => {
       expect(resolvePaneKeyFromRoutingIndex(index, paneKeys[commit % paneKeys.length]).exists).toBe(
         true
       )
-      store.setState({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This agentStatusByPaneKey, agentStatusEpoch fixture intentionally supplies only the state members exercised by this scenario.
+      setSessionTestState(store, {
         agentStatusByPaneKey: { ...store.getState().agentStatusByPaneKey },
         agentStatusEpoch: commit
       } as Partial<AppState>)
@@ -87,7 +90,8 @@ describe('agent-status pane routing index memoization', () => {
     createAgentStatusPaneRoutingIndex(store.getState())
     resetAgentStatusPaneRoutingIndexCounters()
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This tabsByWorktree fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       tabsByWorktree: { ...store.getState().tabsByWorktree }
     } as Partial<AppState>)
     createAgentStatusPaneRoutingIndex(store.getState())
@@ -101,7 +105,8 @@ describe('agent-status pane routing index memoization', () => {
     createAgentStatusPaneRoutingIndex(store.getState())
     resetAgentStatusPaneRoutingIndexCounters()
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This terminalLayoutsByTabId fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       terminalLayoutsByTabId: { 'tab-0': makeLayout() }
     } as Partial<AppState>)
     createAgentStatusPaneRoutingIndex(store.getState())
@@ -149,7 +154,8 @@ describe('agent-status leading-edge and batched pane resolution', () => {
         })
       ]
     }
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This repos, worktreesByRepo, tabsByWorktree fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       repos: [TEST_REPO],
       worktreesByRepo: {
         [TEST_REPO.id]: [

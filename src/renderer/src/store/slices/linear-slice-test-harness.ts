@@ -1,3 +1,4 @@
+import { withSessionSourceTestWrites } from '@/lib/test-support/session-source-test-store'
 import { create } from 'zustand'
 import type { AppState } from '../types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
@@ -6,11 +7,13 @@ import { createLinearSlice } from './linear'
 
 export function createTestStore() {
   return create<AppState>()(
-    (...a) =>
-      ({
-        settings: null,
-        ...createLinearSlice(...a)
-      }) as AppState
+    withSessionSourceTestWrites(
+      (...a) =>
+        ({
+          settings: null,
+          ...createLinearSlice(...a)
+        }) as AppState
+    )
   )
 }
 

@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import { resolveActiveTabOwnerWorktreeId } from '../slices/active-tab-owner-worktree'
 import { getTerminalTabOwnerWorktreeId } from '../slices/terminal-tab-owner-index'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
@@ -25,9 +26,7 @@ export function createTerminalTabNavigationActions(
           ...tabIds.map((id) => tabMap.get(id)!).filter(Boolean),
           ...missingTabs
         ].map((tab, i) => ({ ...tab, sortOrder: i }))
-        return {
-          tabsByWorktree: { ...s.tabsByWorktree, [worktreeId]: reordered }
-        }
+        return editSessionSource(s).set('tabsByWorktree', worktreeId, reordered).finish({})
       })
     },
     setTabBarOrder: (worktreeId, order) => {
@@ -46,10 +45,9 @@ export function createTerminalTabNavigationActions(
           ...terminalIdsInOrder.map((id) => tabMap.get(id)!).filter(Boolean),
           ...missingTabs
         ].map((tab, i) => ({ ...tab, sortOrder: i }))
-        return {
-          tabBarOrderByWorktree: newTabBarOrder,
-          tabsByWorktree: { ...s.tabsByWorktree, [worktreeId]: updatedTabs }
-        }
+        return editSessionSource(s)
+          .set('tabsByWorktree', worktreeId, updatedTabs)
+          .finish({ tabBarOrderByWorktree: newTabBarOrder })
       })
     },
     setActiveTab: (tabId) => {
@@ -62,14 +60,11 @@ export function createTerminalTabNavigationActions(
         )
         const isActiveWorktreeTab =
           tabOwnerWorktreeId !== null && ownsGlobalSelection(s, tabOwnerWorktreeId)
-        return {
-          activeTabId: isActiveWorktreeTab ? tabId : s.activeTabId,
-          // Preserve map identity on redundant activation; duplicate tab IDs can prevent convergence and retrigger Terminal’s repair effect into React #185.
-          activeTabIdByWorktree:
-            tabOwnerWorktreeId !== null && s.activeTabIdByWorktree[tabOwnerWorktreeId] !== tabId
-              ? { ...s.activeTabIdByWorktree, [tabOwnerWorktreeId]: tabId }
-              : s.activeTabIdByWorktree
+        const edit = editSessionSource(s)
+        if (tabOwnerWorktreeId !== null) {
+          edit.set('activeTabIdByWorktree', tabOwnerWorktreeId, tabId)
         }
+        return edit.finish(isActiveWorktreeTab ? { activeTabId: tabId } : {})
       })
       const state = get()
       const ownerUnifiedTabs =
@@ -95,12 +90,7 @@ export function createTerminalTabNavigationActions(
     getTerminalTabOwnerWorktreeId: (tabId) =>
       getTerminalTabOwnerWorktreeId(get().tabsByWorktree, tabId),
     setActiveTabForWorktree: (worktreeId, tabId) => {
-      set((s) => ({
-        activeTabIdByWorktree: {
-          ...s.activeTabIdByWorktree,
-          [worktreeId]: tabId
-        }
-      }))
+      set((s) => editSessionSource(s).set('activeTabIdByWorktree', worktreeId, tabId).finish({}))
     }
   }
 }

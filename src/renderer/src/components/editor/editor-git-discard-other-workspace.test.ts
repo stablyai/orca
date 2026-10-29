@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // Git discard holds autosave across all workspace views of the same physical file until Git settles.
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { notifyEditorExternalFileChange, requestEditorSaveQuiesce } from './editor-autosave'
@@ -22,7 +23,7 @@ afterEach(() => {
 function setup(openIn: string[]) {
   const disk = stubEditorWindowWithDisk(createFakeEditorDisk({ '/repo/a.ts': 'saved change' }))
   const store = createEditorStore()
-  store.setState({
+  setSessionTestState(store, {
     worktreesByRepo: {
       'repo-1': [
         makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }),

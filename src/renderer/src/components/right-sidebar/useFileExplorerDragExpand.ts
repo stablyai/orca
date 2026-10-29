@@ -36,7 +36,7 @@ export function useFileExplorerDragExpand({
       useAppStore.setState((state) => {
         const current = state.expandedDirs[activeWorktreeId] ?? new Set<string>()
         if (current.has(dirPath)) {
-          return state
+          return undefined
         }
         const next = new Set(current)
         next.add(dirPath)

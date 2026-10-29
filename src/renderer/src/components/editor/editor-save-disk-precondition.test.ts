@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { requestEditorFileSave } from './editor-autosave'
 import { attachEditorAutosaveController } from './editor-autosave-controller'
@@ -327,7 +328,7 @@ describe('editor saves guarded by the disk precondition', () => {
     })
     const disk = stubGuardedDisk({ [PATH]: 'A' }, () => (released ? Promise.resolve() : held))
     const store = createEditorStore()
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {
         'repo-1': [
           makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }),
@@ -376,7 +377,7 @@ describe('editor saves guarded by the disk precondition', () => {
     const disk = stubGuardedDisk({ [PATH]: 'B' })
     const store = createEditorStore()
     storeRef.current = store
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {
         'repo-1': [
           makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }),
@@ -444,7 +445,7 @@ describe('editor saves guarded by the disk precondition', () => {
     const md = '/repo/notes.md'
     const disk = stubGuardedDisk({ [md]: 'original' })
     const store = createEditorStore()
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {
         'repo-1': [
           makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }),
@@ -573,7 +574,7 @@ describe('editor saves through a remote host without the guarded write (client c
         api: { fs: { writeFile: vi.fn() }, runtimeEnvironments: { call: runtimeCall } }
       })
       const store = createEditorStore()
-      store.setState({
+      setSessionTestState(store, {
         worktreesByRepo: {
           'repo-1': [makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/remote/repo' })]
         }

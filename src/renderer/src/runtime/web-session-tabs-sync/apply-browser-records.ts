@@ -4,7 +4,7 @@ import {
   optionalRuntimeBrowserPlacementsEqual,
   sameBrowserPages
 } from './state-equality-tabs'
-import { writableWebSessionTabsRecord } from './state-equality-core'
+import { setWebSessionTabsRecordEntry } from './state-equality-core'
 import { markWebSessionBrowserPlacementAdopted } from '../web-session-browser-placement'
 
 type BrowserRecordContext = ReturnType<typeof applyTerminalRecordUpdates>
@@ -39,37 +39,41 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
         !nextBrowserWorkspaceIds.has(removedWorkspaceId) &&
         nextBrowserPagesByWorkspace[removedWorkspaceId]
       ) {
-        nextBrowserPagesByWorkspace =
-          nextBrowserPagesByWorkspace === state.browserPagesByWorkspace
-            ? writableWebSessionTabsRecord(state, 'browserPagesByWorkspace', batchContext)
-            : nextBrowserPagesByWorkspace
-        delete nextBrowserPagesByWorkspace[removedWorkspaceId]
+        nextBrowserPagesByWorkspace = setWebSessionTabsRecordEntry(
+          state,
+          'browserPagesByWorkspace',
+          removedWorkspaceId,
+          undefined,
+          batchContext,
+          true,
+          nextBrowserPagesByWorkspace
+        )
       }
       for (const page of pages) {
         if (nextBrowserPageIds.has(page.id)) {
           continue
         }
         if (nextBrowserCertificateFailuresByPageId[page.id]) {
-          nextBrowserCertificateFailuresByPageId =
-            nextBrowserCertificateFailuresByPageId === state.browserCertificateFailuresByPageId
-              ? writableWebSessionTabsRecord(
-                  state,
-                  'browserCertificateFailuresByPageId',
-                  batchContext
-                )
-              : nextBrowserCertificateFailuresByPageId
-          delete nextBrowserCertificateFailuresByPageId[page.id]
+          nextBrowserCertificateFailuresByPageId = setWebSessionTabsRecordEntry(
+            state,
+            'browserCertificateFailuresByPageId',
+            page.id,
+            undefined,
+            batchContext,
+            true,
+            nextBrowserCertificateFailuresByPageId
+          )
         }
         if (nextRemoteBrowserPageHandlesByPageId[page.id]) {
-          nextRemoteBrowserPageHandlesByPageId =
-            nextRemoteBrowserPageHandlesByPageId === state.remoteBrowserPageHandlesByPageId
-              ? writableWebSessionTabsRecord(
-                  state,
-                  'remoteBrowserPageHandlesByPageId',
-                  batchContext
-                )
-              : nextRemoteBrowserPageHandlesByPageId
-          delete nextRemoteBrowserPageHandlesByPageId[page.id]
+          nextRemoteBrowserPageHandlesByPageId = setWebSessionTabsRecordEntry(
+            state,
+            'remoteBrowserPageHandlesByPageId',
+            page.id,
+            undefined,
+            batchContext,
+            true,
+            nextRemoteBrowserPageHandlesByPageId
+          )
         }
       }
     }
@@ -84,11 +88,15 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
   } of mirroredBrowserTabs) {
     const current = nextBrowserPagesByWorkspace[page.workspaceId] ?? []
     if (!sameBrowserPages(current, [page])) {
-      nextBrowserPagesByWorkspace =
-        nextBrowserPagesByWorkspace === state.browserPagesByWorkspace
-          ? writableWebSessionTabsRecord(state, 'browserPagesByWorkspace', batchContext)
-          : nextBrowserPagesByWorkspace
-      nextBrowserPagesByWorkspace[page.workspaceId] = [page]
+      nextBrowserPagesByWorkspace = setWebSessionTabsRecordEntry(
+        state,
+        'browserPagesByWorkspace',
+        page.workspaceId,
+        [page],
+        batchContext,
+        false,
+        nextBrowserPagesByWorkspace
+      )
     }
     const currentHandle = nextRemoteBrowserPageHandlesByPageId[page.id]
     if (
@@ -101,16 +109,20 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
       currentHandle.restoredFromSession === true ||
       !optionalRuntimeBrowserPlacementsEqual(currentHandle.placement, placement)
     ) {
-      nextRemoteBrowserPageHandlesByPageId =
-        nextRemoteBrowserPageHandlesByPageId === state.remoteBrowserPageHandlesByPageId
-          ? writableWebSessionTabsRecord(state, 'remoteBrowserPageHandlesByPageId', batchContext)
-          : nextRemoteBrowserPageHandlesByPageId
-      nextRemoteBrowserPageHandlesByPageId[page.id] = {
-        environmentId,
-        remotePageId,
-        ...(browserProfileId ? { browserProfileId } : {}),
-        ...(placement ? { placement } : {})
-      }
+      nextRemoteBrowserPageHandlesByPageId = setWebSessionTabsRecordEntry(
+        state,
+        'remoteBrowserPageHandlesByPageId',
+        page.id,
+        {
+          environmentId,
+          remotePageId,
+          ...(browserProfileId ? { browserProfileId } : {}),
+          ...(placement ? { placement } : {})
+        },
+        batchContext,
+        false,
+        nextRemoteBrowserPageHandlesByPageId
+      )
     }
     markWebSessionBrowserPlacementAdopted({ environmentId, worktreeId, remotePageId })
     if (
@@ -120,15 +132,15 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
         certificateFailure
       )
     ) {
-      nextBrowserCertificateFailuresByPageId =
-        nextBrowserCertificateFailuresByPageId === state.browserCertificateFailuresByPageId
-          ? writableWebSessionTabsRecord(state, 'browserCertificateFailuresByPageId', batchContext)
-          : nextBrowserCertificateFailuresByPageId
-      if (certificateFailure) {
-        nextBrowserCertificateFailuresByPageId[page.id] = certificateFailure
-      } else {
-        delete nextBrowserCertificateFailuresByPageId[page.id]
-      }
+      nextBrowserCertificateFailuresByPageId = setWebSessionTabsRecordEntry(
+        state,
+        'browserCertificateFailuresByPageId',
+        page.id,
+        certificateFailure ?? undefined,
+        batchContext,
+        !certificateFailure,
+        nextBrowserCertificateFailuresByPageId
+      )
     }
   }
 

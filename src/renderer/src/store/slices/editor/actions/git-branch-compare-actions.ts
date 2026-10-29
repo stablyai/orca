@@ -46,7 +46,7 @@ export function createGitBranchCompareActions(
     setGitBranchCompareResult: (worktreeId, requestKey, result) =>
       set((s) => {
         if (s.gitBranchCompareRequestKeyByWorktree[worktreeId] !== requestKey) {
-          return s
+          return undefined
         }
         const statusHead = getKnownGitHead(s.gitStatusHeadByWorktree[worktreeId])
         const requestStatusHead = s.gitBranchCompareRequestStatusHeadByWorktree[worktreeId]
@@ -57,7 +57,7 @@ export function createGitBranchCompareActions(
           requestStatusHead !== statusHead &&
           !branchCompareMatchesStatusHead(result.summary, statusHead)
         ) {
-          return s
+          return undefined
         }
         const prevEntries = s.gitBranchChangesByWorktree[worktreeId]
         const prevSummary = s.gitBranchCompareSummaryByWorktree[worktreeId]
@@ -77,7 +77,7 @@ export function createGitBranchCompareActions(
           prevSummary.headOid === result.summary.headOid &&
           prevSummary.changedFiles === result.summary.changedFiles
         if (entriesUnchanged && summaryUnchanged) {
-          return s
+          return undefined
         }
         return {
           gitBranchChangesByWorktree: entriesUnchanged
@@ -97,7 +97,7 @@ export function createGitBranchCompareActions(
           s.gitBranchCompareRequestKeyByWorktree[worktreeId] === undefined &&
           s.gitBranchCompareRequestStatusHeadByWorktree[worktreeId] === undefined
         ) {
-          return s
+          return undefined
         }
         const nextSummary = { ...s.gitBranchCompareSummaryByWorktree }
         const nextChanges = { ...s.gitBranchChangesByWorktree }

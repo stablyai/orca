@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
@@ -52,7 +53,7 @@ it.each(providers)(
       })
     )
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [repo],
       settings: null,
       worktreesByRepo: { [repo.id]: workspaces },
@@ -88,7 +89,7 @@ it.each(['runtime:owner-server', 'ssh:owner-server'] as const)(
     }
     const workspace = makePRRefreshWorktree({ branch: '', linkedGitLabMR: 8 })
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [repo],
       settings: createGlobalSettingsFixture({ activeRuntimeEnvironmentId: 'other-server' }),
       worktreesByRepo: { [repo.id]: [workspace] },

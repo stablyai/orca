@@ -3,6 +3,7 @@ import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { findRenamableUnifiedTab } from './renamable-unified-tab'
 import { captureStructuredChatRename } from '@/runtime/structured-chat-rename-action'
+import { editSessionSource } from '../session-source-edits'
 
 export function createTerminalTabAppearanceActions(
   set: TerminalStoreSet,
@@ -16,12 +17,18 @@ export function createTerminalTabAppearanceActions(
         renameHostTerminalTab(state, tabId, title)
       )
       set((s) => {
-        const next = { ...s.tabsByWorktree }
-        for (const wId of Object.keys(next)) {
-          next[wId] = next[wId].map((t) => (t.id === tabId ? { ...t, customTitle: title } : t))
+        const edit = editSessionSource(s)
+        for (const [wId, tabs] of Object.entries(s.tabsByWorktree)) {
+          if (tabs.some((tab) => tab.id === tabId)) {
+            edit.set(
+              'tabsByWorktree',
+              wId,
+              tabs.map((t) => (t.id === tabId ? { ...t, customTitle: title } : t))
+            )
+          }
         }
         scheduleRuntimeGraphSync()
-        return { tabsByWorktree: next }
+        return edit.finish()
       })
       const item = findRenamableUnifiedTab(get().unifiedTabsByWorktree, tabId)
       if (item?.contentType === 'agent-session') {
@@ -44,11 +51,17 @@ export function createTerminalTabAppearanceActions(
     },
     setTabColor: (tabId, color, opts) => {
       set((s) => {
-        const next = { ...s.tabsByWorktree }
-        for (const wId of Object.keys(next)) {
-          next[wId] = next[wId].map((t) => (t.id === tabId ? { ...t, color } : t))
+        const edit = editSessionSource(s)
+        for (const [wId, tabs] of Object.entries(s.tabsByWorktree)) {
+          if (tabs.some((tab) => tab.id === tabId)) {
+            edit.set(
+              'tabsByWorktree',
+              wId,
+              tabs.map((t) => (t.id === tabId ? { ...t, color } : t))
+            )
+          }
         }
-        return { tabsByWorktree: next }
+        return edit.finish()
       })
       const item = findRenamableUnifiedTab(get().unifiedTabsByWorktree, tabId)
       if (item) {

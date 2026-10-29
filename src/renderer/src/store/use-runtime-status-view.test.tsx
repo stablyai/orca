@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, StrictMode, useLayoutEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import { expect, it } from 'vitest'
@@ -81,7 +82,7 @@ it('shares one root subscription, rebinds host scopes, and releases Strict Mode 
   } finally {
     act(() => root.unmount())
     expect(readStoreListenerCount()).toBe(baseline)
-    useAppStore.setState(original, true)
+    setSessionTestState(useAppStore, original, true)
   }
 })
 
@@ -111,6 +112,6 @@ it('observes a commit between render and subscription without waiting for anothe
     expect(container.textContent).toBe('true')
   } finally {
     act(() => root.unmount())
-    useAppStore.setState(original, true)
+    setSessionTestState(useAppStore, original, true)
   }
 })

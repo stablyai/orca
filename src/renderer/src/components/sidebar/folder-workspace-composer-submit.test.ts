@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -338,7 +339,7 @@ describe('submitFolderWorkspaceCreate', () => {
       connectionId: 'ssh-1',
       parentPath: '/home/alice/platform'
     }
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       sshConnectionStates: new Map([
         [
           'ssh-1',
@@ -603,7 +604,7 @@ describe('submitFolderWorkspaceCreate', () => {
       connectionId: 'ssh-windows',
       parentPath: 'C:\\Users\\alice\\platform'
     }
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       sshConnectionStates: new Map([
         [
           'ssh-windows',

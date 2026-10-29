@@ -1,3 +1,4 @@
+import { withSessionSourceWrites } from '@/store/session-source-write-boundary'
 import { vi } from 'vitest'
 import { createStore } from 'zustand/vanilla'
 import type { OpenFile } from '@/store/slices/editor'
@@ -69,7 +70,7 @@ export function readingFile(details = readingDetails()): OpenFile {
 }
 export function readingFixture(scope = 'pane') {
   const file = readingFile()
-  const store = createStore(() => ({ openFiles: [file], unrelated: 0 }))
+  const store = createStore(withSessionSourceWrites(() => ({ openFiles: [file], unrelated: 0 })))
   const owner = createCheckDetailsReadingOwner(store, file.id, scope, 'context')
   const identity = checkJobIdentities(file.checkRunDetails?.details?.jobs ?? [])[0].identity
   const text = file.checkRunDetails?.details?.jobs[0].logTail ?? ''

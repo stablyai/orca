@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
@@ -59,7 +60,7 @@ async function settled(): Promise<void> {
 /** A store showing one worktree, its tabs drawn from main once the switch is on. */
 async function createStoreWithWorktree(): Promise<ReturnType<typeof createTestStore>> {
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     repos: [{ id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }],
     worktreesByRepo: {
       repo1: [makeWorktree({ id: WORKTREE_ID, repoId: 'repo1', path: '/path/wt1' })]
@@ -365,7 +366,7 @@ describe('convertBrowserPage placement and activation', () => {
     const tab = store.getState().createBrowserTab(WORKTREE_ID, 'https://remote.example/')
     await settled()
     const pageId = store.getState().browserPagesByWorkspace[tab.id]?.[0]?.id ?? ''
-    store.setState((s) => ({
+    setSessionTestState(store, (s) => ({
       remoteBrowserPageHandlesByPageId: {
         ...s.remoteBrowserPageHandlesByPageId,
         [pageId]: { environmentId: 'env-1', remotePageId: 'remote-page-1' } as never

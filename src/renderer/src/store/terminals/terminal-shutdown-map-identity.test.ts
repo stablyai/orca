@@ -1,3 +1,4 @@
+import { applySessionTestUpdate } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it } from 'vitest'
 import type { AppState } from '../types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -56,11 +57,9 @@ function commit(state: AppState, exitGuardPtyIds: readonly string[] = []): AppSt
     get: (() => current) as never,
     keepIdentifiers: true,
     retainedCompletionEvidence: [],
-    set: ((update: unknown) => {
-      const patch =
-        typeof update === 'function' ? (update as (s: AppState) => object)(current) : update
-      current = { ...current, ...(patch as object) }
-    }) as never,
+    set: (update) => {
+      current = applySessionTestUpdate(current, update)
+    },
     shutdownReason: 'manual-sleep',
     sleepingAgentSessionRecords: {},
     tabs: [tab],

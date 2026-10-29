@@ -1,3 +1,4 @@
+import { copySessionRecord } from '../../../shared/session-record-edit'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 
@@ -26,24 +27,28 @@ function remapPaneKeys<T extends number>(
   values: Record<string, T> | undefined,
   leafIdByInputLeafIdByTabId: PaneLeafRemap
 ): { values: Record<string, T> | undefined; changed: boolean } {
-  // Classify first to avoid rebuilding large unchanged maps on every session write.
-  if (
-    !values ||
-    !Object.keys(values).some(
-      (paneKey) => resolveRemappedPaneKey(paneKey, leafIdByInputLeafIdByTabId) !== null
-    )
-  ) {
+  if (!values) {
     return { values, changed: false }
   }
-
-  const next: Record<string, T> = {}
-  for (const [paneKey, value] of Object.entries(values)) {
-    // Promoted UUID keys retain the largest value on collision.
-    const target = resolveRemappedPaneKey(paneKey, leafIdByInputLeafIdByTabId) ?? paneKey
-    const existing = next[target]
-    next[target] = existing === undefined ? value : (Math.max(existing, value) as T)
+  let next = values
+  for (const [tabId, remaps] of leafIdByInputLeafIdByTabId) {
+    for (const input of remaps.keys()) {
+      const paneKey = `${tabId}:${input}`
+      const target = resolveRemappedPaneKey(paneKey, leafIdByInputLeafIdByTabId)
+      if (!target || !Object.hasOwn(values, paneKey)) {
+        continue
+      }
+      if (next === values) {
+        next = copySessionRecord(values)
+      }
+      const value = values[paneKey]
+      const existing = next[target]
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the generic values are numeric pane timestamps; Math.max preserves that value type.
+      next[target] = (existing === undefined ? value : Math.max(existing, value)) as T
+      delete next[paneKey]
+    }
   }
-  return { values: next, changed: true }
+  return { values: next, changed: next !== values }
 }
 
 export function remapAcknowledgedAgentPaneKeys(

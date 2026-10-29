@@ -1,3 +1,4 @@
+import { withSessionSourceTestWrites } from '@/lib/test-support/session-source-test-store'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
@@ -51,11 +52,13 @@ vi.mock('@/runtime/runtime-jira-client', () => ({
 
 function createTestStore() {
   return create<AppState>()(
-    (...a) =>
-      ({
-        settings: null,
-        ...createJiraSlice(...a)
-      }) as AppState
+    withSessionSourceTestWrites(
+      (...a) =>
+        ({
+          settings: null,
+          ...createJiraSlice(...a)
+        }) as AppState
+    )
   )
 }
 

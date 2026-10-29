@@ -1,6 +1,8 @@
+import type { SessionSourceSet } from '@/store/session-source-edits'
 // A paired server for the server layout frame tests: its session.tabs snapshots, its layout in the
 // server's own ids, its status entry, and the layout streams the desktop opens to it.
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
 import type { RuntimeMobileSessionTabsResult, RuntimeStatus } from '../../../shared/runtime-types'
 import {
@@ -148,7 +150,7 @@ export function runtimeEnvironment(
 
 type MirrorStore = {
   getState: () => AppState
-  setState: (patch: Partial<AppState>) => void
+  setState: SessionSourceSet<AppState>
 }
 
 /** Applies one session.tabs snapshot the way the mirror commits it. */
@@ -157,7 +159,8 @@ export function mirrorSnapshot(
   environmentId: string,
   snapshot: RuntimeMobileSessionTabsResult
 ): void {
-  store.setState(
+  setSessionTestState(
+    store,
     applyWebSessionTabsSnapshotWithContext(store.getState(), snapshot, environmentId, NOW)
   )
 }

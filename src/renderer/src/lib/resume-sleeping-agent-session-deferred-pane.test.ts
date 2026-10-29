@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { makePaneKey } from '../../../shared/stable-pane-id'
@@ -13,7 +14,7 @@ const RESUME = { key: 'session_id', id: 'sess-deferred' } as const
 
 afterEach(() => {
   clearPaneSpawnDeferral(PANE_KEY)
-  useAppStore.setState(initialAppStoreState, true)
+  setSessionTestState(useAppStore, initialAppStoreState, true)
 })
 
 function deferredPaneState(): Partial<AppState> {
@@ -67,7 +68,7 @@ function deferredPaneState(): Partial<AppState> {
 
 describe('wake sweep and a pane whose restore the host deferred', () => {
   it('neither launches nor clears the record the deferred pane will resume', () => {
-    useAppStore.setState(deferredPaneState())
+    setSessionTestState(useAppStore, deferredPaneState())
     setPaneSpawnDeferral(PANE_KEY, { reason: 'live_cap', resume: () => {} })
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)

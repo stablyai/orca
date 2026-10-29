@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -93,7 +94,7 @@ describe('tab-strip close of a client-dirty mirrored file after a host republish
     closeWebRuntimeSessionTabMock.mockClear()
     closeRequests.length = 0
     window.addEventListener(ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT, onCloseRequest)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       ...initialState,
       activeWorktreeId: WT,
       openFiles: [clientDirtyMirroredNotes],
@@ -104,7 +105,7 @@ describe('tab-strip close of a client-dirty mirrored file after a host republish
 
   afterEach(() => {
     window.removeEventListener(ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT, onCloseRequest)
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   it('routes the close to the unsaved-changes prompt instead of discarding the draft', () => {
@@ -115,7 +116,7 @@ describe('tab-strip close of a client-dirty mirrored file after a host republish
       ENV,
       NOW
     )
-    useAppStore.setState(patch)
+    setSessionTestState(useAppStore, patch)
 
     createWorkspaceTabCloseCommands({ worktreeId: WT, groupTabs: [notesUnifiedTab] }).closeItem(
       notesUnifiedTab.id

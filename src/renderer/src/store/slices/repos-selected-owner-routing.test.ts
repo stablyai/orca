@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
@@ -106,7 +107,7 @@ describe('selected Add Project owner routing', () => {
       _meta: { runtimeId: 'runtime-remote' }
     }))
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       projectGroups: [localGroup],
       folderWorkspaces: [localFolder]
     })
@@ -165,7 +166,7 @@ describe('selected Add Project owner routing', () => {
           }
     )
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-ambient' } as never,
       projectGroups: [localGroup],
       folderWorkspaces: [localFolder]
@@ -341,7 +342,7 @@ describe('selected Add Project owner routing', () => {
     })
     await oldGroupsRequest
 
-    store.setState({
+    setSessionTestState(store, {
       projectGroups: [{ ...newGroup, executionHostId: 'runtime:env-1' }]
     })
     const oldFoldersRequest = store
@@ -421,7 +422,7 @@ describe('selected Add Project owner routing', () => {
       createdAt: 1,
       updatedAt: 1
     }
-    store.setState({ projectGroups: [newGroup], folderWorkspaces: [newFolder] })
+    setSessionTestState(store, { projectGroups: [newGroup], folderWorkspaces: [newFolder] })
     resolveOldGroup({
       id: 'rpc-before-reconnect',
       ok: true,
@@ -487,7 +488,7 @@ describe('selected Add Project owner routing', () => {
     projectGroupsList.mockResolvedValue([])
     folderWorkspacesList.mockResolvedValue([])
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       projectGroups: [sshGroup, runtimeGroup],
       folderWorkspaces: [sshFolder, runtimeFolder]
     })

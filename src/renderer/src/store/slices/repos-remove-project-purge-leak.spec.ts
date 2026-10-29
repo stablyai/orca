@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 /** Project removal must invoke canonical worktree purge like single removal; partial hand-deletion leaves dozens of editor/layout/git/browser maps. Removed repos never run fetchWorktrees again, so no background sweep can reclaim them. */
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -39,7 +40,7 @@ export function registerReposRemoveProjectPurgeLeakTests(): void {
   const W2 = 'repo-2::/r2/wt1'
 
   function seedTwoProjects(store: ReturnType<typeof createTestStore>): void {
-    store.setState({
+    setSessionTestState(store, {
       repos: [repo1, repo2],
       worktreesByRepo: {
         [repo1.id]: [makeWorktree({ id: W1, repoId: repo1.id, path: '/r1/wt1' })],

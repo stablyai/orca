@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import React, { createRef, type ReactNode } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -152,7 +153,7 @@ function enter(): void {
 describe('workspace reference URL resolution and recovery', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
     useAppStore.setState({
       fetchWorkItems: vi.fn(async () => []),
       getCachedWorkItems: vi.fn(() => []),

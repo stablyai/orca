@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
 import { isTerminalTabPresent } from './terminal-tab-retirement'
@@ -92,7 +93,7 @@ describe('isTerminalTabPresent as the recovery existence check', () => {
   it('stays true when the tab is missing from the unified tab index', () => {
     const store = createTestStore()
     const tabId = seedWorktreeWithTab(store)
-    store.setState({ unifiedTabsByWorktree: {} })
+    setSessionTestState(store, { unifiedTabsByWorktree: {} })
 
     expect(store.getState().getTab(tabId)).toBeNull()
     expect(isTerminalTabPresent(store.getState(), tabId)).toBe(true)
@@ -101,7 +102,7 @@ describe('isTerminalTabPresent as the recovery existence check', () => {
   it('answers false once the tab leaves the remount index', () => {
     const store = createTestStore()
     const tabId = seedWorktreeWithTab(store)
-    store.setState({ tabsByWorktree: { [WORKTREE_ID]: [] } })
+    setSessionTestState(store, { tabsByWorktree: { [WORKTREE_ID]: [] } })
 
     expect(isTerminalTabPresent(store.getState(), tabId)).toBe(false)
     expect(store.getState().remountTerminalTabForRecovery(tabId).remounted).toBe(false)

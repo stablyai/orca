@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import type { WorktreeMetaBatchUpdate, WorktreeSlice } from '../../worktree-helpers'
 import { runtimeTargetForWorktreeOwner } from '../listing/worktree-owner-target'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
@@ -57,15 +58,10 @@ export function createUpdateWorktreesMeta(
     }
 
     set((s) => {
-      let nextWorktrees = s.worktreesByRepo
+      const edit = editSessionSource(s)
       let nextDetectedWorktrees = s.detectedWorktreesByRepo
       for (const entry of gitWorktreeUpdates) {
-        nextWorktrees = applyWorktreeUpdates(
-          nextWorktrees,
-          entry.worktreeId,
-          entry.updates,
-          entry.executionHostId
-        )
+        applyWorktreeUpdates(edit, entry.worktreeId, entry.updates, entry.executionHostId)
         nextDetectedWorktrees = applyDetectedWorktreeUpdates(
           nextDetectedWorktrees,
           entry.worktreeId,
@@ -73,17 +69,16 @@ export function createUpdateWorktreesMeta(
           entry.executionHostId
         )
       }
+      const nextWorktrees = edit.read('worktreesByRepo')
       return nextWorktrees === s.worktreesByRepo &&
         nextDetectedWorktrees === s.detectedWorktreesByRepo
-        ? s
-        : {
-            ...(nextWorktrees !== s.worktreesByRepo
-              ? { worktreesByRepo: nextWorktrees, sortEpoch: s.sortEpoch + 1 }
-              : {}),
+        ? undefined
+        : edit.finish({
+            ...(nextWorktrees !== s.worktreesByRepo ? { sortEpoch: s.sortEpoch + 1 } : {}),
             ...(nextDetectedWorktrees !== s.detectedWorktreesByRepo
               ? { detectedWorktreesByRepo: nextDetectedWorktrees }
               : {})
-          }
+          })
     })
 
     await Promise.all([

@@ -1,3 +1,5 @@
+import type { SessionSourceEdit, OrdinarySourcePartial } from '../../../session-source-edits'
+import type { WorktreePurgeDoomedIds } from './worktree-purge-doomed-ids'
 import type { AppState } from '../../../types'
 import { removeTabsAttention } from '../../workspace-attention/subject-attention-transitions'
 import type { createWorktreePurgeOmitters } from './worktree-purge-omitters'
@@ -5,19 +7,18 @@ import type { createWorktreePurgeOmitters } from './worktree-purge-omitters'
 type WorktreePurgeOmitters = ReturnType<typeof createWorktreePurgeOmitters>
 
 /** The paneKey-keyed sleeping maps after the caller's own omission policy. */
-export type WorktreePurgeSleepingMaps = Pick<
-  AppState,
-  'sleepingAgentSessionsByPaneKey' | 'agentLaunchConfigByPaneKey'
->
+export type WorktreePurgeSleepingMaps = Pick<AppState, 'agentLaunchConfigByPaneKey'>
 
 /** Tab-, PTY-, pane-, page- and file-keyed state of purged surfaces; never a worktree-keyed bucket. */
 export function buildWorktreePurgeSurfacePatch(
-  s: AppState,
+  edit: SessionSourceEdit<AppState>,
   omitters: WorktreePurgeOmitters,
-  doomedTabIds: ReadonlySet<string>,
+  doomed: WorktreePurgeDoomedIds,
   sleeping: WorktreePurgeSleepingMaps,
   changedPaneKeys?: Set<string>
-): Partial<AppState> {
+): OrdinarySourcePartial<AppState> {
+  const s = edit.view()
+  const { doomedTabIds } = doomed
   const {
     omitByTabId,
     omitByPtyId,
@@ -26,9 +27,16 @@ export function buildWorktreePurgeSurfacePatch(
     omitByPageId,
     omitByFileId
   } = omitters
+  edit.removeKeys('localOnlyScrollbackByTabId', doomedTabIds)
+  edit.removeKeys('lastKnownRelayPtyIdByTabId', doomedTabIds)
+  edit.removeKeys('pendingReconnectPtyIdByTabId', doomedTabIds)
+  edit.removeKeys('deferredSshSessionIdsByTabId', doomedTabIds)
+  edit.removeKeys('browserPagesByWorkspace', doomed.doomedBrowserWorkspaceIds)
+  edit.removeKeys('remoteBrowserPageHandlesByPageId', doomed.doomedPageIds)
+  edit.removeKeys('editorDrafts', doomed.removedFileIds)
+  edit.removeKeys('markdownFrontmatterVisible', doomed.removedFileIds)
   const nextAgentStatusByPaneKey = omitByPaneKeyTabPrefix(s.agentStatusByPaneKey, changedPaneKeys)
   return {
-    localOnlyScrollbackByTabId: omitByTabId(s.localOnlyScrollbackByTabId),
     runtimePaneTitlesByTabId: omitByTabId(s.runtimePaneTitlesByTabId),
     automaticAgentResumeClaimsByTabId: omitByTabId(s.automaticAgentResumeClaimsByTabId),
     nativeChatLaunchPromptByTabId: omitByTabId(s.nativeChatLaunchPromptByTabId),
@@ -37,11 +45,8 @@ export function buildWorktreePurgeSurfacePatch(
     expandedPaneByTabId: omitByTabId(s.expandedPaneByTabId),
     canExpandPaneByTabId: omitByTabId(s.canExpandPaneByTabId),
     // Bulk/reconcile/project/hydration purges skip single-removal teardown and must evict terminal caches here.
-    lastKnownRelayPtyIdByTabId: omitByTabId(s.lastKnownRelayPtyIdByTabId),
     // Reconnect maps prove orphan-sweep liveness; clear them or recreated IDs inherit phantom sessions.
-    pendingReconnectPtyIdByTabId: omitByTabId(s.pendingReconnectPtyIdByTabId),
     unverifiedPtyLossTabIds: omitByTabId(s.unverifiedPtyLossTabIds),
-    deferredSshSessionIdsByTabId: omitByTabId(s.deferredSshSessionIdsByTabId),
     pendingInitialCwdByTabId: omitByTabId(s.pendingInitialCwdByTabId),
     pendingIssueCommandSplitByTabId: omitByTabId(s.pendingIssueCommandSplitByTabId),
     pendingStartupByTabId: omitByTabId(s.pendingStartupByTabId),
@@ -59,13 +64,10 @@ export function buildWorktreePurgeSurfacePatch(
     activityClearedAtByPaneKey: omitByPaneKeyTabPrefix(s.activityClearedAtByPaneKey),
     manuallyUnreadTurnsByPaneKey: omitByPaneKeyTabPrefix(s.manuallyUnreadTurnsByPaneKey),
     paneForegroundAgentByPaneKey: omitByPaneKeyTabPrefix(s.paneForegroundAgentByPaneKey),
-    sleepingAgentSessionsByPaneKey: sleeping.sleepingAgentSessionsByPaneKey,
     ...removeTabsAttention(s, doomedTabIds),
     lastTerminalInputAtByPaneKey: omitByPaneKeyTabPrefix(s.lastTerminalInputAtByPaneKey),
-    browserPagesByWorkspace: omitByBrowserWorkspaceId(s.browserPagesByWorkspace),
     browserAnnotationsByPageId: omitByPageId(s.browserAnnotationsByPageId),
     browserAnnotationMarkerIdsByPageId: omitByPageId(s.browserAnnotationMarkerIdsByPageId),
-    remoteBrowserPageHandlesByPageId: omitByPageId(s.remoteBrowserPageHandlesByPageId),
     pendingAddressBarFocusByPageId: omitByPageId(s.pendingAddressBarFocusByPageId),
     // createBrowserTab writes both the workspace id and the page id into this map.
     pendingAddressBarFocusByTabId: omitByPageId(
@@ -74,10 +76,8 @@ export function buildWorktreePurgeSurfacePatch(
     recentlyClosedBrowserPagesByWorkspace: omitByBrowserWorkspaceId(
       s.recentlyClosedBrowserPagesByWorkspace
     ),
-    editorDrafts: omitByFileId(s.editorDrafts),
     markdownViewMode: omitByFileId(s.markdownViewMode),
     markdownRichModeSizeOverride: omitByFileId(s.markdownRichModeSizeOverride),
-    markdownFrontmatterVisible: omitByFileId(s.markdownFrontmatterVisible),
     editorCursorLine: omitByFileId(s.editorCursorLine),
     editorViewMode: omitByFileId(s.editorViewMode)
   }

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { StrictMode, createElement } from 'react'
@@ -18,7 +19,7 @@ const repoMap = new Map([[repo.id, repo]])
 
 // Why a settled bump: the store's add/remove baseline is the row count at the last sortEpoch change.
 function seed(worktrees: Worktree[], sortBy: SortBy): void {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     sortBy,
     sortEpoch: 1,
     settledSortEpoch: 1,
@@ -31,7 +32,7 @@ function bumpSortEpoch(): void {
 }
 
 function replaceWorktrees(worktrees: Worktree[]): void {
-  useAppStore.setState((s) => ({
+  setSessionTestState(useAppStore, (s) => ({
     worktreesByRepo: { [repo.id]: worktrees },
     sortEpoch: s.sortEpoch + 1
   }))
@@ -39,7 +40,7 @@ function replaceWorktrees(worktrees: Worktree[]): void {
 
 // Same shape as another client's order save landing here: sortOrder changes, sortEpoch does not.
 function publishSortOrders(sortOrderById: Record<string, number>): void {
-  useAppStore.setState((s) => ({
+  setSessionTestState(useAppStore, (s) => ({
     worktreesByRepo: {
       [repo.id]: (s.worktreesByRepo[repo.id] ?? []).map((worktree) => ({
         ...worktree,
@@ -89,13 +90,13 @@ function renderSortOrderOutsideAct(sortBy: SortBy) {
 
 describe('useSidebarWorktreeSortOrder', () => {
   beforeEach(() => {
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   afterEach(() => {
     cleanup()
     vi.useRealTimers()
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   it('renders once per sortEpoch bump in Manual (no hook-initiated re-render)', () => {
@@ -285,7 +286,7 @@ describe('useSidebarWorktreeSortOrder', () => {
     const before = result.current
     // Same shape as a stale-host purge that drops/changes rows without bumping sortEpoch.
     act(() =>
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         worktreesByRepo: {
           [repo.id]: [
             makeWorktree('a', 'A', { lastActivityAt: 2_000 }),
@@ -346,7 +347,7 @@ describe('useSidebarWorktreeSortOrder', () => {
         [makeWorktree('a', 'A', { sortOrder: 2 }), makeWorktree('b', 'B', { sortOrder: 1 })],
         'smart'
       )
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         tabsByWorktree: { a: [makeTerminalTab({ id: 'tab-a', worktreeId: 'a' })] },
         ptyIdsByTabId: { 'tab-a': ['pty-a'] }
       })
@@ -368,12 +369,12 @@ describe('useSidebarWorktreeSortOrder', () => {
         [makeWorktree('a', 'A', { sortOrder: 2 }), makeWorktree('b', 'B', { sortOrder: 1 })],
         'smart'
       )
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         tabsByWorktree: { a: [makeTerminalTab({ id: 'tab-a', worktreeId: 'a' })] },
         ptyIdsByTabId: { 'tab-a': ['pty-a'] }
       })
       const latched = renderSortOrder()
-      act(() => useAppStore.setState({ ptyIdsByTabId: {} }))
+      act(() => setSessionTestState(useAppStore, { ptyIdsByTabId: {} }))
       const before = latched.result.current
       act(() => publishSortOrders({ a: 1, b: 2 }))
       expect(latched.result.current).toBe(before)

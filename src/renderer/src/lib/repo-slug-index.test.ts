@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
@@ -23,7 +24,11 @@ function makeRepo(overrides: Partial<Repo> & { id: string }): Repo {
 const initialState = useAppStore.getInitialState()
 
 function setRepos(repos: Repo[]): void {
-  useAppStore.setState({ ...initialState, repos, settings: initialState.settings }, true)
+  setSessionTestState(
+    useAppStore,
+    { ...initialState, repos, settings: initialState.settings },
+    true
+  )
 }
 
 beforeEach(() => {

@@ -1,7 +1,8 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
+import type { SessionTestStore } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import type { StoreApi } from 'zustand'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import type { OpenFile } from '@/store/slices/editor'
@@ -10,7 +11,7 @@ import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { getRuntimeGitRemoteFileUrl } from '@/runtime/runtime-git-working-tree-client'
 import { MonacoGutterContextMenu } from './MonacoGutterContextMenu'
 
-const storeRef = vi.hoisted((): { current?: StoreApi<AppState> } => ({}))
+const storeRef = vi.hoisted((): { current?: SessionTestStore<AppState> } => ({}))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => storeRef.current?.getState() } }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 vi.mock('@/runtime/runtime-git-working-tree-client', () => ({
@@ -48,7 +49,7 @@ function openMenu(fileId: string): void {
 beforeEach(() => {
   const store = createEditorTabsStore()
   storeRef.current = store
-  store.setState({
+  setSessionTestState(store, {
     openFiles: [
       file('host-a-file', 'host-a-worktree', 'host-a'),
       file('host-b-file', 'host-b-worktree', 'host-b')

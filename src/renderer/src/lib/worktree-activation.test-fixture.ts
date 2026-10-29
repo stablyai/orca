@@ -1,5 +1,6 @@
-import { afterEach, vi } from 'vitest'
-import type { Mock } from 'vitest'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
+import { afterEach, vi, type Mock } from 'vitest'
+
 import { getDefaultSettings } from '../../../shared/constants'
 import { resetHookCommandDelayedDeliveryForTests } from './hook-command-delayed-delivery'
 import { useAppStore } from '@/store'
@@ -31,7 +32,8 @@ export function registerWorktreeActivationReset(): void {
     }))
     setLegacySetupScriptLaunchMode(null)
     resetHookCommandDelayedDeliveryForTests()
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       tabsByWorktree: initialTabsByWorktree,
       worktreesByRepo: initialWorktreesByRepo,
       getKnownWorktreeById: initialGetKnownWorktreeById,

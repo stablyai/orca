@@ -2,6 +2,9 @@ import { ipcRenderer } from 'electron'
 import type { PreloadApi } from '../api-types'
 
 export const sessionApi = {
+  supportsMapDeltas: true,
+  getWithGeneration: (hostId) =>
+    ipcRenderer.invoke('session:get', hostId, { includeGeneration: true }),
   get: (hostId) => ipcRenderer.invoke('session:get', hostId),
   listHostIds: () => ipcRenderer.invoke('session:list-host-ids'),
   set: (args, hostId) => ipcRenderer.invoke('session:set', args, hostId),

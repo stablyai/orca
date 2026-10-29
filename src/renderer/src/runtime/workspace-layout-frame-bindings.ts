@@ -2,12 +2,13 @@
 
 import { resolvePtyBoundActiveLeafId } from '@/components/terminal-pane/terminal-layout-leaf-ids'
 import type { AppState } from '@/store/types'
+import type { SessionSourceEdit } from '@/store/session-source-edits'
 import { layoutContainsLeafId } from '../../../shared/workspace-layout/terminal-pane-tree'
 import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-published'
 import { isDrawnTabHeld } from './layout-owner-drawn-tab-holds'
 import { isTabPaneTreeHeld } from './layout-owner-pane-intents'
 
-type TerminalLayouts = AppState['terminalLayoutsByTabId']
+type TerminalEdit = SessionSourceEdit<Pick<AppState, 'terminalLayoutsByTabId'>>
 
 function sharesATerminal(layout: PublishedWorkspaceLayout): boolean {
   const ptyIds = layout.tabs.flatMap((tab) =>
@@ -18,15 +19,15 @@ function sharesATerminal(layout: PublishedWorkspaceLayout): boolean {
 
 /** Keep held tabs and return original layouts on no-op. Return null for missing/different pane trees or duplicate terminal bindings that require restore to release one. */
 export function terminalLayoutsWithFrameBindings(
-  layouts: TerminalLayouts,
+  edit: TerminalEdit,
   workspace: string,
   frame: PublishedWorkspaceLayout,
   rebound: ReadonlySet<string>
-): TerminalLayouts | null {
+): boolean {
   if (sharesATerminal(frame)) {
-    return null
+    return false
   }
-  let next = layouts
+  const changed: [string, AppState['terminalLayoutsByTabId'][string]][] = []
   for (const tab of frame.tabs) {
     const panes = tab.terminal?.panes
     if (
@@ -38,7 +39,7 @@ export function terminalLayoutsWithFrameBindings(
     ) {
       continue
     }
-    const current = layouts[tab.entityId]
+    const current = edit.entry('terminalLayoutsByTabId', tab.entityId)
     const bound = current?.ptyIdsByLeafId ?? {}
     if (panes.every((pane) => bound[pane.leafId] === pane.ptyId)) {
       continue
@@ -49,7 +50,7 @@ export function terminalLayoutsWithFrameBindings(
       panes.some((pane) => !layoutContainsLeafId(current.root, pane.leafId)) ||
       Object.keys(bound).some((leafId) => !leafIds.has(leafId))
     ) {
-      return null
+      return false
     }
     const ptyIdsByLeafId = Object.fromEntries(
       panes.flatMap((pane) => (pane.ptyId ? [[pane.leafId, pane.ptyId]] : []))
@@ -59,7 +60,10 @@ export function terminalLayoutsWithFrameBindings(
       activeLeafId: current.activeLeafId,
       ptyIdsByLeafId
     })
-    next = { ...next, [tab.entityId]: { ...current, ptyIdsByLeafId, activeLeafId } }
+    changed.push([tab.entityId, { ...current, ptyIdsByLeafId, activeLeafId }])
   }
-  return next
+  for (const [id, layout] of changed) {
+    edit.set('terminalLayoutsByTabId', id, layout)
+  }
+  return true
 }

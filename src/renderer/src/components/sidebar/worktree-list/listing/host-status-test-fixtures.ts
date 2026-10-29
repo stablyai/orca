@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import type { useVisibleSidebarWorktrees } from './use-visible-worktrees'
 import type { useSidebarSectionRows } from './use-section-rows'
 import { makeRepo, makeWorktree } from '../../../worktree-jump-palette-test-fixtures'
@@ -160,7 +161,7 @@ export function sidebarCorpus(repoCount: number, hostCount: number) {
     )
   )
   const repoMap = new Map(repos.map((repo) => [repo.id, repo]))
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     repos,
     runtimeEnvironments: [...environments, environment('B')],
     runtimeStatusByEnvironmentId: new Map(),

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   getWorkspaceAttachments,
@@ -22,7 +23,7 @@ describe('workspace attachment collections', () => {
   it('retains earlier reviews locally while persisting a compatible scalar mutation', async () => {
     const store = createTestStore()
     const wt = makeWorktree({ id: 'repo1::/work', repoId: 'repo1', linkedPR: 42 })
-    store.setState({ worktreesByRepo: { repo1: [wt] } })
+    setSessionTestState(store, { worktreesByRepo: { repo1: [wt] } })
     await store.getState().updateWorktreeMeta(wt.id, { linkedGitLabMR: 7 })
     const saved = store.getState().worktreesByRepo.repo1[0]
     expect(saved.linkedPR).toBeNull()
@@ -56,7 +57,7 @@ describe('workspace attachment collections', () => {
       linkedPR: 2,
       linkedItems: [...base, peer]
     })
-    store.setState({ worktreesByRepo: { repo1: [wt] } })
+    setSessionTestState(store, { worktreesByRepo: { repo1: [wt] } })
     await store
       .getState()
       .updateWorktreeMeta(wt.id, { linkedItemsBase: base, linkedItems: [base[1]] })
@@ -82,7 +83,7 @@ describe('workspace attachment collections', () => {
         { provider: 'github', type: 'issue', number: 9 }
       ]
     })
-    store.setState({ worktreesByRepo: { repo1: [wt] } })
+    setSessionTestState(store, { worktreesByRepo: { repo1: [wt] } })
     await store.getState().updateWorktreeMeta(wt.id, {
       linkedItems: wt.linkedItems?.filter((item) => item.number !== 43)
     })
@@ -97,7 +98,7 @@ describe('workspace attachment collections', () => {
     const store = createTestStore()
     const folder = makeFolderWorkspace()
     const updateFolderWorkspace = vi.fn().mockResolvedValue(true)
-    store.setState({ folderWorkspaces: [folder], updateFolderWorkspace })
+    setSessionTestState(store, { folderWorkspaces: [folder], updateFolderWorkspace })
     const linkedItems = [
       { provider: 'linear', type: 'issue', number: 0, identifier: 'ENG-42' }
     ] as const

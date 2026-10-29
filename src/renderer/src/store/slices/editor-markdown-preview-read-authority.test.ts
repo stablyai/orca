@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { createEditorStore } from './editor-slice-test-harness'
 import type { OpenFile } from './editor'
@@ -30,7 +31,7 @@ function grantedSourceTab(grantId: string): OpenFile {
 describe('markdown preview read authority (#31034)', () => {
   it('reads a terminal-opened host file with its source tab grant', () => {
     const store = createEditorStore()
-    store.setState({ openFiles: [grantedSourceTab('grant-1')] })
+    setSessionTestState(store, { openFiles: [grantedSourceTab('grant-1')] })
 
     store.getState().openMarkdownPreview(PREVIEW_INPUT, { sourceFileId: 'brief-source' })
 
@@ -45,10 +46,10 @@ describe('markdown preview read authority (#31034)', () => {
 
   it('moves an open preview to the source tab fresh grant', () => {
     const store = createEditorStore()
-    store.setState({ openFiles: [grantedSourceTab('grant-1')] })
+    setSessionTestState(store, { openFiles: [grantedSourceTab('grant-1')] })
     store.getState().openMarkdownPreview(PREVIEW_INPUT, { sourceFileId: 'brief-source' })
 
-    store.setState({
+    setSessionTestState(store, {
       openFiles: [
         grantedSourceTab('grant-2'),
         ...store.getState().openFiles.filter((file) => file.id !== 'brief-source')
@@ -66,7 +67,7 @@ describe('markdown preview read authority (#31034)', () => {
 
   it('keeps a client-local file preview on this computer in an SSH workspace', () => {
     const store = createEditorStore()
-    store.setState({
+    setSessionTestState(store, {
       openFiles: [
         {
           id: 'local-notes',
@@ -105,9 +106,9 @@ describe('markdown preview read authority (#31034)', () => {
 
   it('keeps the grant when a preview is retargeted after its source tab closed', () => {
     const store = createEditorStore()
-    store.setState({ openFiles: [grantedSourceTab('grant-1')] })
+    setSessionTestState(store, { openFiles: [grantedSourceTab('grant-1')] })
     store.getState().openMarkdownPreview(PREVIEW_INPUT, { sourceFileId: 'brief-source' })
-    store.setState({
+    setSessionTestState(store, {
       openFiles: store.getState().openFiles.filter((file) => file.id !== 'brief-source')
     })
 

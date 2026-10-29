@@ -1,3 +1,4 @@
+import { withSessionSourceTestWrites } from '@/lib/test-support/session-source-test-store'
 import { describe, expect, it } from 'vitest'
 import { create } from 'zustand'
 import {
@@ -55,9 +56,11 @@ function runningRecord(overrides: Partial<PullRequestGenerationRecord> = {}) {
 }
 
 function createPullRequestGenerationTestStore() {
-  return create<PullRequestGenerationSlice>()((...args) =>
-    createPullRequestGenerationSlice(
-      ...(args as unknown as Parameters<typeof createPullRequestGenerationSlice>)
+  return create<PullRequestGenerationSlice>()(
+    withSessionSourceTestWrites((...args) =>
+      createPullRequestGenerationSlice(
+        ...(args as unknown as Parameters<typeof createPullRequestGenerationSlice>)
+      )
     )
   )
 }

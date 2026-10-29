@@ -1,3 +1,5 @@
+import type { SessionSourceEdit } from '../session-source-edits'
+import type { AppState } from '../types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -40,16 +42,16 @@ export function withoutErasedRequiredWorktreeFields(
 }
 
 export function applyWorktreeUpdates(
-  worktreesByRepo: Record<string, Worktree[]>,
+  edit: SessionSourceEdit<Pick<AppState, 'worktreesByRepo'>>,
   worktreeId: string,
   rawUpdates: Partial<WorktreeMeta>,
   executionHostId?: ExecutionHostId
-): Record<string, Worktree[]> {
+): void {
   const updates = withoutErasedRequiredWorktreeFields(rawUpdates)
   const repoId = getRepoIdFromWorktreeId(worktreeId)
-  const worktrees = worktreesByRepo[repoId]
+  const worktrees = edit.entry('worktreesByRepo', repoId)
   if (!worktrees) {
-    return worktreesByRepo
+    return
   }
 
   let changed = false
@@ -72,8 +74,8 @@ export function applyWorktreeUpdates(
     return next
   })
   if (!changed) {
-    return worktreesByRepo
+    return
   }
 
-  return { ...worktreesByRepo, [repoId]: nextWorktrees }
+  edit.set('worktreesByRepo', repoId, nextWorktrees)
 }

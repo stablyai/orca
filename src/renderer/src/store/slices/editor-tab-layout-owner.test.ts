@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // Layout-owner editor opens/closes/promotions draw only from main frames; switch-off cases draw locally without main.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
@@ -38,7 +39,7 @@ let g1: string
 
 /** One terminal tab, so main holds the workspace and its group from the start. */
 function seedWorkspace(target: ReturnType<typeof createTestStore>, worktreeId: string): void {
-  target.setState((state) => ({
+  setSessionTestState(target, (state) => ({
     tabsByWorktree: {
       ...state.tabsByWorktree,
       [worktreeId]: [makeTab({ id: 'term', worktreeId })]
@@ -426,7 +427,7 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('editor tabs drawn from main’s frame
   })
 
   it('draws nothing itself and sends nothing when a paired server owns the workspace', async () => {
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {
         repo1: [
           makeWorktree({

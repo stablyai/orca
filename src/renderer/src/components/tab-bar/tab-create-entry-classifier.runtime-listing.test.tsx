@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 // Exercise classifier state from the real listing hook; hand-built states cannot catch mismatches at that boundary.
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -62,7 +63,7 @@ function seedLocalWorkspace(): void {
     repos: [],
     worktreesByRepo: {}
   }
-  useAppStore.setState(seeded)
+  setSessionTestState(useAppStore, seeded)
 }
 
 function HookProbe({
@@ -110,7 +111,7 @@ function latestState(states: RuntimeFileListState[]): RuntimeFileListState {
 }
 
 beforeEach(() => {
-  useAppStore.setState(initialAppState, true)
+  setSessionTestState(useAppStore, initialAppState, true)
   listRuntimeFilesMock.mockReset().mockResolvedValue(['packages/app/package.json', 'src/main.ts'])
   cancelRuntimeFileListMock.mockReset()
   searchRuntimeFilePathsMock.mockReset().mockResolvedValue({ files: [], truncated: false })
@@ -124,7 +125,7 @@ afterEach(async () => {
     })
   }
   roots.length = 0
-  useAppStore.setState(initialAppState, true)
+  setSessionTestState(useAppStore, initialAppState, true)
 })
 
 describe('tab entry options over the real runtime listing', () => {

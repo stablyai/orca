@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { setPresenceGated } from '@/hooks/agent-auto-ack-presence'
 import { createStructuredAttentionSurface } from './structured-attention-surface'
@@ -18,7 +19,7 @@ type TestStore = ReturnType<typeof createTestStore>
 
 function seedChatTab(overrides?: { sessionId?: string; activeTabId?: string | null }): TestStore {
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     unifiedTabsByWorktree: {
       [WORKSPACE]: [
         makeUnifiedTab({

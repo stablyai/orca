@@ -8,11 +8,16 @@ vi.mock('../components/terminal/terminal-provider-snapshot-capability', () => ({
 }))
 vi.mock('../store', async () => {
   const { create } = await import('zustand')
-  const useAppStore = create(() => ({
-    startupWorktreeRefreshCompleted: false,
-    terminalStartupRestorationReady: false,
-    workspaceSessionReady: false
-  }))
+  const { withSessionSourceTestWrites } =
+    await import('../lib/test-support/session-source-test-store')
+  const useAppStore = create(
+    withSessionSourceTestWrites(() => ({
+      pendingReconnectPtyIdByTabId: {},
+      startupWorktreeRefreshCompleted: false,
+      terminalStartupRestorationReady: false,
+      workspaceSessionReady: false
+    }))
+  )
   return { useAppStore }
 })
 

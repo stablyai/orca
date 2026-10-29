@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
@@ -110,7 +111,8 @@ describe('useWebSessionTabsSync under an unverifiable host probe', () => {
       publicRuntimeEnvironment({ id: ENV_A, createdAt: 100, pairingRevision: REVISION_A })
     ]
     replaceRuntimeEnvironmentRevisions(runtimeEnvironments)
-    useAppStore.setState(
+    setSessionTestState(
+      useAppStore,
       {
         ...initialState,
         activeWorktreeId: WORKTREE,
@@ -134,7 +136,7 @@ describe('useWebSessionTabsSync under an unverifiable host probe', () => {
 
   afterEach(() => {
     cleanup()
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
     replaceRuntimeEnvironmentRevisions([])
     resetWebSessionTabsSnapshotFreshnessForTests()
     clearRuntimeEnvironmentConnectionGenerationsForTests()

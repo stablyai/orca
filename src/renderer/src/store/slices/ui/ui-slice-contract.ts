@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../../types'
 import type { UISliceCore } from './ui-slice-contract-core'
 import type { UISliceContextual } from './ui-slice-contract-contextual'
@@ -31,6 +31,6 @@ export type UISlice = UISliceCore &
   UISliceSurfaces &
   UISlicePersistence
 
-type UISliceStateCreator = StateCreator<AppState, [], [], UISlice>
+type UISliceStateCreator = SessionStateCreator<AppState, UISlice>
 export type UISliceSet = Parameters<UISliceStateCreator>[0]
 export type UISliceGet = Parameters<UISliceStateCreator>[1]

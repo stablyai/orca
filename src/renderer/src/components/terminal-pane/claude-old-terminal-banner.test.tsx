@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act } from 'react'
@@ -58,7 +59,7 @@ const FLOATING_TAB = {
 }
 
 function setState(settings: Partial<GlobalSettings>, agent: 'claude' | 'codex' = 'claude'): void {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     settings: { ...getDefaultSettings('/home/me'), ...settings },
     paneForegroundAgentByPaneKey: { [PANE_KEY]: { agent, shellForeground: false } },
     // A floating terminal runs on the host.
@@ -86,7 +87,7 @@ function button(label: string): HTMLButtonElement {
 
 beforeEach(() => {
   vi.stubGlobal('ResizeObserver', ResizeObserverStub)
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
   ptyId = `pty-${(nextPtyId += 1)}`
   paneElement = document.createElement('div')
   document.body.appendChild(paneElement)
@@ -102,7 +103,7 @@ afterEach(() => {
   act(() => root.unmount())
   paneElement.remove()
   vi.unstubAllGlobals()
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
 })
 
 describe('ClaudeOldTerminalBanner', () => {
@@ -122,7 +123,7 @@ describe('ClaudeOldTerminalBanner', () => {
   it('opens a new terminal beside the tab from the banner', async () => {
     const openNewTerminalTabInActiveWorkspace = vi.fn(() => Promise.resolve())
     setState(SELECTED)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       unifiedTabsByWorktree: {
         'wt-1': [
           {
@@ -170,7 +171,7 @@ describe('ClaudeOldTerminalBanner', () => {
     await renderBanner()
     // A pane whose tab is unknown has no runtime to judge it by.
     setState(SELECTED)
-    useAppStore.setState({ unifiedTabsByWorktree: {} })
+    setSessionTestState(useAppStore, { unifiedTabsByWorktree: {} })
     await renderBanner()
     expect(openedBeforeClaudeAccounts).not.toHaveBeenCalled()
     expect(paneElement.textContent).toBe('')

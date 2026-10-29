@@ -1,3 +1,4 @@
+import type { SessionSourceSet } from '@/store/session-source-edits'
 // Main starts window-drawn tabs under their IDs after recording them; panes wait (D1b-1). Inputs main cannot carry retain window spawn (L252).
 
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
@@ -13,7 +14,7 @@ type TabStartup = AppState['pendingStartupByTabId'][string]
 
 type StartStore = {
   getState: () => AppState
-  setState: (patch: Partial<AppState>) => void
+  setState: SessionSourceSet<AppState>
   subscribe: (listener: (state: AppState) => void) => () => void
 }
 

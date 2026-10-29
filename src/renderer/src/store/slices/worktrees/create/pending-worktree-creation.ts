@@ -24,14 +24,14 @@ export function createUpdatePendingWorktreeCreation(
     set((s) => {
       const entry = s.pendingWorktreeCreations[creationId]
       if (!entry) {
-        return s
+        return undefined
       }
       // Why: the main process re-emits the same phase; skip no-op writes so the strip and panel don't re-render.
       const hasChange = (Object.keys(patch) as (keyof typeof patch)[]).some(
         (key) => patch[key] !== entry[key]
       )
       if (!hasChange) {
-        return s
+        return undefined
       }
       return {
         pendingWorktreeCreations: {
@@ -52,7 +52,7 @@ export function createRemovePendingWorktreeCreation(
     set((s) => {
       const entry = s.pendingWorktreeCreations[creationId]
       if (!entry) {
-        return s
+        return undefined
       }
       removedEntry = entry
       const { [creationId]: _removed, ...rest } = s.pendingWorktreeCreations
@@ -95,7 +95,7 @@ export function createSetActivePendingWorktreeCreation(
   return (creationId) => {
     set((s) => {
       if (creationId !== null && !s.pendingWorktreeCreations[creationId]) {
-        return s
+        return undefined
       }
       return { activePendingCreationId: creationId }
     })

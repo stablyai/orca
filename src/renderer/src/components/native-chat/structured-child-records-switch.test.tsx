@@ -1,3 +1,5 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
+import type { SessionSourceSet } from '@/store/session-source-edits'
 // @vitest-environment happy-dom
 
 // Verify sidebar/status and chat/channel child views agree through parent transport loss and stale rows.
@@ -23,8 +25,8 @@ import type { AppState } from '@/store/types'
 import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
 
 type TestStore = {
-  getState: () => AppState
-  setState: (state: Partial<AppState> & { testRuntimeOwner?: string | null }) => void
+  getState: () => AppState & { testRuntimeOwner?: string | null }
+  setState: SessionSourceSet<AppState & { testRuntimeOwner?: string | null }>
 }
 
 const mocks = vi.hoisted(() => {
@@ -41,6 +43,12 @@ const mocks = vi.hoisted(() => {
     unsubscribe: vi.fn()
   }
 })
+
+function seedMockState(partial: Partial<AppState & { testRuntimeOwner?: string | null }>): void {
+  if (mocks.holder.store) {
+    setSessionTestState(mocks.holder.store, partial)
+  }
+}
 
 vi.mock('@/store', async () => {
   const { createTestStore } = await import('@/store/slices/store-test-helpers')
@@ -201,7 +209,7 @@ describe('the switch: both surfaces read the host child records', () => {
     vi.clearAllMocks()
     resetStructuredAgentSessionStatusFeedsForTests()
     mocks.subscribeStatus.mockResolvedValue({ unsubscribe: mocks.unsubscribe })
-    mocks.holder.store?.setState({
+    seedMockState({
       agentStatusByPaneKey: {},
       testRuntimeOwner: null,
       unifiedTabsByWorktree: { 'wt-1': [tab] }

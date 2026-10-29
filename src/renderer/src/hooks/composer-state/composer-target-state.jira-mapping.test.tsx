@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act, cleanup, renderHook } from '@testing-library/react'
@@ -57,7 +58,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
-  useAppStore.setState(originalState, true)
+  setSessionTestState(useAppStore, originalState, true)
   if (originalApi) {
     Object.defineProperty(window, 'api', originalApi)
   } else {
@@ -81,7 +82,7 @@ describe('composer mapped Jira creation ownership', () => {
       }
       const repos = [currentRepo, mappedRepo]
       const projection = projectHostSetupProjectionFromRepos(repos)
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         settings: null,
         repos,
         projects: [...projection.projects],
@@ -177,7 +178,7 @@ function renderUnavailableMappedComposer(
     ...getRepoWorkspaceCreationTargetHint(mappedRepo, projection.setups),
     ...(options.includeSetupHint === false ? { projectHostSetupId: null } : {})
   }
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     settings: null,
     repos,
     projects: [...projection.projects],

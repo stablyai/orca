@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act, cleanup, renderHook } from '@testing-library/react'
@@ -197,7 +198,8 @@ function seedRemoteMirrorState(): void {
     publicRuntimeEnvironment({ id: ENV_B, createdAt: 200, pairingRevision: REVISION_B })
   ]
   replaceRuntimeEnvironmentRevisions(runtimeEnvironments)
-  useAppStore.setState(
+  setSessionTestState(
+    useAppStore,
     {
       ...initialState,
       activeWorktreeId: WORKTREE,
@@ -243,7 +245,7 @@ describe('useWebSessionTabsSync window visibility', () => {
 
   afterEach(() => {
     cleanup()
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
     replaceRuntimeEnvironmentRevisions([])
     resetWebSessionTabsSnapshotFreshnessForTests()
     clearRuntimeEnvironmentConnectionGenerationsForTests()
@@ -322,7 +324,7 @@ describe('useWebSessionTabsSync window visibility', () => {
     expect(mocks.recoverSnapshot).not.toHaveBeenCalled()
     expect(useAppStore.getState().browserTabsByWorktree).toBe(browserTabsByWorktree)
 
-    act(() => useAppStore.setState({ browserTabsByWorktree: {} }))
+    act(() => setSessionTestState(useAppStore, { browserTabsByWorktree: {} }))
     await publish(
       findSubscription('session.tabs.subscribeAll', ENV_A, 1),
       { type: 'snapshots', snapshots: [snapshot] },
@@ -343,7 +345,7 @@ describe('useWebSessionTabsSync window visibility', () => {
     })
     mocks.recoverSnapshot.mockClear()
     acceptReplayedWebSessionTabsSnapshot(ENV_A, WORKTREE)
-    act(() => useAppStore.setState({ browserTabsByWorktree: {} }))
+    act(() => setSessionTestState(useAppStore, { browserTabsByWorktree: {} }))
 
     await parkAndReveal()
     await publish(findSubscription('session.tabs.subscribeAll', ENV_A, 1), {

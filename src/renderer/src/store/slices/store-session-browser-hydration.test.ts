@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type { BrowserPage } from '../../../../shared/browser-workspace-types'
@@ -33,7 +34,7 @@ describe('hydrateBrowserSession', () => {
     const store = createTestStore()
     const validWt = 'repo1::/path/wt1'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -82,7 +83,7 @@ describe('hydrateBrowserSession', () => {
     (_name, repoHost, hostId) => {
       const store = createTestStore()
       const validWt = 'repo1::/path/wt1'
-      store.setState({
+      setSessionTestState(store, {
         repos: [
           {
             id: 'repo1',
@@ -128,7 +129,7 @@ describe('hydrateBrowserSession', () => {
   ])("still gives a paired server's tabless browser record a tab (%s)", (_name, sshTarget) => {
     const store = createTestStore()
     const serverWt = 'repo1::/srv/wt1'
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         {
           id: 'repo1',
@@ -173,7 +174,7 @@ describe('hydrateBrowserSession', () => {
     const store = createTestStore()
     const validWt = 'repo1::/path/wt1'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -223,7 +224,7 @@ describe('hydrateBrowserSession', () => {
       allowWindowClose: true
     }
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -286,7 +287,7 @@ describe('hydrateBrowserSession', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -321,7 +322,7 @@ describe('hydrateBrowserSession', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -354,7 +355,7 @@ describe('hydrateBrowserSession', () => {
     const validWt = 'repo1::/path/wt1'
     const invalidWt = 'repo1::/path/gone'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -394,7 +395,7 @@ describe('hydrateBrowserSession', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -435,7 +436,7 @@ describe('hydrateBrowserSession remote page handle seeding', () => {
 
   function createHydratedStore(page: Partial<BrowserPage> & { id: string }) {
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],

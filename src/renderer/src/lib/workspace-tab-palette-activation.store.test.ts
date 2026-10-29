@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { afterEach, expect, it, vi } from 'vitest'
@@ -10,7 +11,7 @@ vi.mock('./worktree-activation', () => ({ activateAndRevealWorkspace: () => true
 import { activateWorkspaceTabPaletteResult } from './workspace-tab-palette-activation'
 
 const initialState = useAppStore.getInitialState()
-afterEach(() => useAppStore.setState(initialState, true))
+afterEach(() => setSessionTestState(useAppStore, initialState, true))
 
 it('keeps the selected diff active when an editor for the same file shares its group', () => {
   const worktree: Worktree = {
@@ -44,7 +45,8 @@ it('keeps the selected diff active when an editor for the same file shares its g
     sortOrder: 0,
     createdAt: 0
   }
-  useAppStore.setState(
+  setSessionTestState(
+    useAppStore,
     {
       ...initialState,
       worktreesByRepo: { repo: [worktree] },
@@ -122,7 +124,8 @@ it('refuses a hostless tab for a remote target whose worktree ID also exists loc
     sortOrder: 0,
     createdAt: 0
   }
-  useAppStore.setState(
+  setSessionTestState(
+    useAppStore,
     {
       ...initialState,
       worktreesByRepo: COLLIDING_WORKTREES,
@@ -168,7 +171,8 @@ it('refuses a hostless backing file for a remote target whose worktree ID also e
     sortOrder: 0,
     createdAt: 0
   }
-  useAppStore.setState(
+  setSessionTestState(
+    useAppStore,
     {
       ...initialState,
       worktreesByRepo: COLLIDING_WORKTREES,

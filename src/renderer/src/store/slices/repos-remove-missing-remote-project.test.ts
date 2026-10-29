@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 /** Treat only repo_not_found as already removed and purge client ghost rows (#11994). Other failures retain rows; toasts remain opt-in for single-project callers while bulk/background aggregate errors. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
@@ -59,7 +60,7 @@ function answerRepoRmWith(code: string): void {
 
 function seedRemoteProjects(repos: readonly Repo[]): ReturnType<typeof createTestStore> {
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
     repos: [...repos]
   })

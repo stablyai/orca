@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import type * as ReactModule from 'react'
 import type * as StoreModule from '@/store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -120,7 +121,7 @@ describe('useTerminalPaneGlobalEffects', () => {
   })
 
   function seedActiveLeafPty(tabId: string, activeLeafId: string, ptyId: string): void {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       terminalLayoutsByTabId: {
         [tabId]: {
           root: null,

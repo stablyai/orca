@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import {
@@ -93,32 +94,44 @@ export function createRecentlyClosedEditorTabs(
       // `recorded`: the store the reopen records are read from; `kept`: files a close left open.
       const cleanUp = (recorded: AppState | null, kept: ReadonlySet<string>): void => {
         set((s) => {
+          const edit = editSessionSource(s)
           const records = recorded ?? s
           if (!activeWorktreeId) {
             const keptOnly = <T>(record: Record<string, T>): Record<string, T> =>
               Object.fromEntries(Object.entries(record).filter(([id]) => kept.has(id)))
-            return {
-              openFiles: s.openFiles.filter((f) => kept.has(f.id)),
-              editorDrafts: keptOnly(s.editorDrafts),
+            edit.sequence('openFiles').filter((f) => kept.has(f.id))
+            for (const key of Object.keys(s.editorDrafts)) {
+              if (!kept.has(key)) {
+                edit.remove('editorDrafts', key)
+              }
+            }
+            for (const key of Object.keys(s.markdownFrontmatterVisible)) {
+              if (!kept.has(key)) {
+                edit.remove('markdownFrontmatterVisible', key)
+              }
+            }
+            return edit.finish({
               editorCursorLine: keptOnly(s.editorCursorLine),
               activeFileId: null,
               activeTabType: 'terminal',
               markdownViewMode: keptOnly(s.markdownViewMode),
               markdownRichModeSizeOverride: keptOnly(s.markdownRichModeSizeOverride),
               editorViewMode: keptOnly(s.editorViewMode),
-              markdownFrontmatterVisible: keptOnly(s.markdownFrontmatterVisible),
               markdownTableOfContentsVisible: keptOnly(s.markdownTableOfContentsVisible),
               pendingEditorReveal: null,
               pendingEditorFocusRequest: null
+            })
+          }
+          edit
+            .sequence('openFiles')
+            .filter((f) => f.worktreeId !== activeWorktreeId || kept.has(f.id))
+          const newFiles = edit.read('openFiles')
+          const remainingFileIds = new Set(newFiles.map((f) => f.id))
+          for (const key of Object.keys(s.editorDrafts)) {
+            if (!remainingFileIds.has(key)) {
+              edit.remove('editorDrafts', key)
             }
           }
-          const newFiles = s.openFiles.filter(
-            (f) => f.worktreeId !== activeWorktreeId || kept.has(f.id)
-          )
-          const remainingFileIds = new Set(newFiles.map((f) => f.id))
-          const newEditorDrafts = Object.fromEntries(
-            Object.entries(s.editorDrafts).filter(([fileId]) => remainingFileIds.has(fileId))
-          )
           const newMarkdownViewMode = Object.fromEntries(
             Object.entries(s.markdownViewMode).filter(([fileId]) => remainingFileIds.has(fileId))
           )
@@ -130,11 +143,11 @@ export function createRecentlyClosedEditorTabs(
           const newEditorViewMode = Object.fromEntries(
             Object.entries(s.editorViewMode).filter(([fileId]) => remainingFileIds.has(fileId))
           )
-          const newMarkdownFrontmatterVisible = Object.fromEntries(
-            Object.entries(s.markdownFrontmatterVisible).filter(([fileId]) =>
-              remainingFileIds.has(fileId)
-            )
-          )
+          for (const key of Object.keys(s.markdownFrontmatterVisible)) {
+            if (!remainingFileIds.has(key)) {
+              edit.remove('markdownFrontmatterVisible', key)
+            }
+          }
           const newMarkdownTableOfContentsVisible = Object.fromEntries(
             Object.entries(s.markdownTableOfContentsVisible).filter(([fileId]) =>
               remainingFileIds.has(fileId)
@@ -143,13 +156,14 @@ export function createRecentlyClosedEditorTabs(
           const newEditorCursorLine = Object.fromEntries(
             Object.entries(s.editorCursorLine).filter(([fileId]) => remainingFileIds.has(fileId))
           )
-          const newActiveFileIdByWorktree = { ...s.activeFileIdByWorktree }
-          delete newActiveFileIdByWorktree[activeWorktreeId]
-          const newActiveTabTypeByWorktree = { ...s.activeTabTypeByWorktree }
+          edit.remove('activeFileIdByWorktree', activeWorktreeId)
           const browserTabsForWorktree = s.browserTabsByWorktree[activeWorktreeId] ?? []
           const terminalTabsForWorktree = s.tabsByWorktree[activeWorktreeId] ?? []
-          newActiveTabTypeByWorktree[activeWorktreeId] =
+          edit.set(
+            'activeTabTypeByWorktree',
+            activeWorktreeId,
             browserTabsForWorktree.length > 0 ? 'browser' : 'terminal'
+          )
           // Why: mirrored tabs use host tab ids in tab order while local entries use file ids; remove both shapes.
           const closedFileIds = new Set(
             s.openFiles.filter((f) => f.worktreeId === activeWorktreeId).map((f) => f.id)
@@ -196,9 +210,7 @@ export function createRecentlyClosedEditorTabs(
             capturedCloseCount += 1
           }
 
-          return {
-            openFiles: newFiles,
-            editorDrafts: newEditorDrafts,
+          return edit.finish({
             editorCursorLine: newEditorCursorLine,
             activeFileId: null,
             // Why: closing every editor can leave no renderable surface; clear the active worktree so the renderer shows the landing page, not a blank workspace.
@@ -214,10 +226,7 @@ export function createRecentlyClosedEditorTabs(
             markdownViewMode: newMarkdownViewMode,
             markdownRichModeSizeOverride: newMarkdownRichModeSizeOverride,
             editorViewMode: newEditorViewMode,
-            markdownFrontmatterVisible: newMarkdownFrontmatterVisible,
             markdownTableOfContentsVisible: newMarkdownTableOfContentsVisible,
-            activeFileIdByWorktree: newActiveFileIdByWorktree,
-            activeTabTypeByWorktree: newActiveTabTypeByWorktree,
             tabBarOrderByWorktree: nextTabBarOrderByWorktree,
             // Why: clear the one-shot search reveal; keeping it after closing all editors would make a later reopen jump to an old match.
             pendingEditorReveal: null,
@@ -235,7 +244,7 @@ export function createRecentlyClosedEditorTabs(
               'editor',
               capturedCloseCount
             )
-          }
+          })
         })
         if (typeof window !== 'undefined') {
           for (const f of untitledToDelete) {

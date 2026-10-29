@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
@@ -188,7 +189,8 @@ describe('session-tabs streams across worktree switches on one host', () => {
       publicRuntimeEnvironment({ id: ENV, createdAt: 100, pairingRevision: REVISION })
     ]
     replaceRuntimeEnvironmentRevisions(runtimeEnvironments)
-    useAppStore.setState(
+    setSessionTestState(
+      useAppStore,
       {
         ...initialState,
         settings: {
@@ -206,7 +208,7 @@ describe('session-tabs streams across worktree switches on one host', () => {
 
   afterEach(() => {
     cleanup()
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
     replaceRuntimeEnvironmentRevisions([])
     resetWebSessionTabsSnapshotFreshnessForTests()
     resetWebRuntimeInitialTerminalBootstrapForTests()

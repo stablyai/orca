@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
@@ -33,7 +34,7 @@ function storeWithTwoServersPublishing(hostKeys: [string, string]) {
     preferredEndpointId: `ws-${id}`,
     hostKeyFingerprint
   })
-  store.setState({
+  setSessionTestState(store, {
     runtimeEnvironments: [
       environment('hub-a', 'Studio', hostKeys[0]),
       environment('hub-b', 'Studio relay', hostKeys[1])

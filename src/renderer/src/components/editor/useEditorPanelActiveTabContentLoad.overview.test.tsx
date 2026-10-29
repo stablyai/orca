@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -34,8 +35,8 @@ function openView(worktreeId: string): OpenFile {
 }
 
 beforeEach(() => {
-  useAppStore.setState(useAppStore.getInitialState(), true)
-  useAppStore.setState({
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, {
     worktreesByRepo: {
       'repo-1': [
         makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }),

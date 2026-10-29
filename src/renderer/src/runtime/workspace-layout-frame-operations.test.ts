@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // Draw main operations from records frames using store view without session read-back; apply checker requires full-build parity (E2a).
 
 import { NO_HELD_TABS } from '@/store/workspace-layout-frame-held-tabs'
@@ -155,7 +156,7 @@ describe('a frame over view state the save trims', () => {
       (store) => {
         const file = store.getState().openFiles.find((open) => open.worktreeId === GIT_KEY)!
         const diff = { ...file, id: `${file.id}::diff`, mode: 'diff' as const }
-        store.setState({
+        setSessionTestState(store, {
           openFiles: [...store.getState().openFiles, diff],
           activeFileIdByWorktree: {
             ...store.getState().activeFileIdByWorktree,
@@ -171,7 +172,7 @@ describe('a frame over view state the save trims', () => {
     [
       'a group whose shown tab is gone',
       (store) =>
-        store.setState({
+        setSessionTestState(store, {
           groupsByWorktree: {
             [GIT_KEY]: groupsOf(store).map((group, index) =>
               index === 0 ? { ...group, activeTabId: 'gone' } : group
@@ -182,7 +183,7 @@ describe('a frame over view state the save trims', () => {
     [
       'an empty group, active',
       (store) =>
-        store.setState({
+        setSessionTestState(store, {
           groupsByWorktree: {
             [GIT_KEY]: [
               ...groupsOf(store),
@@ -195,7 +196,7 @@ describe('a frame over view state the save trims', () => {
     [
       'a group id twice, where the Loader keeps the first',
       (store) =>
-        store.setState({
+        setSessionTestState(store, {
           groupsByWorktree: {
             [GIT_KEY]: [...groupsOf(store), { ...groupsOf(store)[0]!, activeTabId: 'tab-shell' }]
           }

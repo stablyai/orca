@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -9,13 +10,13 @@ import { OnboardingLanguageLoading } from './OnboardingLanguageLoading'
 
 afterEach(() => {
   cleanup()
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
   vi.unstubAllGlobals()
 })
 
 it('releases settings recovery while remote owner hydration is still pending', async () => {
   await i18n.changeLanguage('en')
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
   markRuntimeEnvironmentCompatible('language-retry-owner')
   let finishOwnerRead: (value: unknown) => void = () => {}
   const ownerRead = new Promise((resolve) => {

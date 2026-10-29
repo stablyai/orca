@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, createContext, useContext, type ReactNode } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -81,7 +82,7 @@ function openDialog(
   modal: Record<string, unknown> = {}
 ): Worktree {
   const item = worktree(overrides)
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     repos: [
       {
         id: 'repo',
@@ -134,7 +135,7 @@ async function save(): Promise<void> {
 
 describe('workspace linked work editor', () => {
   beforeEach(() => {
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
     useAppStore.setState({
       fetchWorkItems: vi.fn(async () => []),
       getCachedWorkItems: vi.fn(() => []),
@@ -170,7 +171,7 @@ describe('workspace linked work editor', () => {
   it('adds a pasted URL according to its provider and type', async () => {
     openDialog()
     act(() =>
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         repos: [
           {
             id: 'repo',
@@ -237,7 +238,7 @@ describe('workspace linked work editor', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: 'Unlink PR #1' }))
     act(() =>
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         worktreesByRepo: {
           repo: [
             {
@@ -262,7 +263,7 @@ describe('workspace linked work editor', () => {
     const original = openDialog({ linkedIssue: 1 })
     fireEvent.click(screen.getByRole('button', { name: 'Unlink Issue #1' }))
     act(() =>
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         worktreesByRepo: {
           repo: [
             {
@@ -317,7 +318,7 @@ describe('workspace linked work editor', () => {
       createdAt: 1,
       updatedAt: 1
     }
-    useAppStore.setState({ folderWorkspaces: [folder] })
+    setSessionTestState(useAppStore, { folderWorkspaces: [folder] })
     openDialog({}, { worktreeId: folderWorkspaceKey(folder.id), repoId: undefined })
     await add('STA-5', 'Linear task')
     await save()
@@ -581,7 +582,7 @@ describe('workspace linked work editor', () => {
     })
     await add('https://github.com/acme/orca/issues/3')
     act(() =>
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         worktreesByRepo: {
           repo: [
             original,
@@ -617,7 +618,7 @@ describe('workspace linked work editor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(updateWorktreeMeta).toHaveBeenCalledOnce()
     act(() =>
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         worktreesByRepo: {
           repo: [original, { ...original, hostId: 'ssh:other', comment: 'Remote draft' }]
         },

@@ -17,7 +17,8 @@ export type PtyBindingPath = 'durable_match' | 'durability_only' | 'mutation'
 export type PtyBindingSpanOutcome = 'fast_lane' | 'flushed' | 'refused' | 'threw'
 
 /** Tracing-only origin separates reattach hit rates from fresh spawns, which always flush. */
-export type PtyBindingOrigin = 'reattach' | 'spawn' | 'relay_reattach' | 'split' | 'unknown'
+import type { PtyBindingOrigin } from './pty-binding-args'
+export type { PtyBindingOrigin } from './pty-binding-args'
 
 export type PtySpawnCommitOrigin = Extract<PtyBindingOrigin, 'reattach' | 'spawn' | 'split'>
 

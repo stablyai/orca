@@ -1,3 +1,5 @@
+import { sessionTestEdit, setSessionTestState } from '@/lib/test-support/session-source-fixture'
+
 import { afterEach, describe, expect, it } from 'vitest'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -65,16 +67,16 @@ describe('removed workspace diff memory', () => {
     const renamed = 'repo::/workspace/renamed'
     const store = createTestStore()
     const sections = readCombinedDiffViewMemory(key)?.view?.sections
-    store.setState(buildWorktreeRenameState(store.getState(), removed, renamed))
+    setSessionTestState(store, buildWorktreeRenameState(store.getState(), removed, renamed))
     expect(readCombinedDiffViewMemory(key)).toMatchObject({
       worktreeId: renamed,
       scrollTop: 42,
       scrollAnchor: { key: 'source', offset: 0 }
     })
     expect(readCombinedDiffViewMemory(key)?.view?.sections).toBe(sections)
-    buildWorktreePurgeState(store.getState(), [removed])
+    sessionTestEdit(store.getState(), (edit) => buildWorktreePurgeState(edit, [removed]))
     expect(readCombinedDiffViewMemory(key)).toBeDefined()
-    buildWorktreePurgeState(store.getState(), [renamed])
+    sessionTestEdit(store.getState(), (edit) => buildWorktreePurgeState(edit, [renamed]))
     expect(readCombinedDiffViewMemory(key)).toBeUndefined()
     expect(readCombinedDiffViewMemory(keptKey)).toBeDefined()
   })
@@ -87,7 +89,10 @@ describe('removed workspace diff memory', () => {
       const overlappingKey = seedDiff(`${removed}::all-diffs::nested-directory`)
       const store = createTestStore()
       if (path === 'listing') {
-        store.setState(buildWorktreePurgeState(store.getState(), [removed]))
+        setSessionTestState(
+          store,
+          sessionTestEdit(store.getState(), (edit) => buildWorktreePurgeState(edit, [removed]))
+        )
       } else {
         applyRemoveWorktreeSuccessState(store.setState, removed, new Set())
       }
@@ -122,7 +127,7 @@ describe('removed workspace diff memory', () => {
   it('keeps cached views when a different host still owns the same workspace id', () => {
     const key = seedDiff(removed)
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {
         repo: [
           makeWorktree({ id: removed, repoId: 'repo', hostId: 'local' }),
@@ -130,9 +135,9 @@ describe('removed workspace diff memory', () => {
         ]
       }
     })
-    buildWorktreePurgeState(store.getState(), [
-      hostWorktreeTarget({ id: removed, hostId: 'runtime:remote' })
-    ])
+    sessionTestEdit(store.getState(), (edit) =>
+      buildWorktreePurgeState(edit, [hostWorktreeTarget({ id: removed, hostId: 'runtime:remote' })])
+    )
     expect(readCombinedDiffViewMemory(key)?.scrollTop).toBe(42)
   })
 
@@ -140,7 +145,7 @@ describe('removed workspace diff memory', () => {
     const workspaceId = folderWorkspaceKey('folder-1')
     const key = seedDiff(workspaceId)
     const store = createTestStore()
-    buildWorktreePurgeState(store.getState(), [workspaceId])
+    sessionTestEdit(store.getState(), (edit) => buildWorktreePurgeState(edit, [workspaceId]))
     expect(readCombinedDiffViewMemory(key)).toBeUndefined()
   })
 })

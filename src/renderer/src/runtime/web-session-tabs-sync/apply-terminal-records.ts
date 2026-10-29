@@ -1,6 +1,6 @@
 import { terminalLayoutEqual } from '../../../../shared/terminal-layout-equality'
 import type { prepareWebSessionTabsSnapshotGroups } from './apply-preparation-groups'
-import { sameStringArray, writableWebSessionTabsRecord } from './state-equality-core'
+import { sameStringArray, setWebSessionTabsRecordEntry } from './state-equality-core'
 
 type TerminalRecordContext = ReturnType<typeof prepareWebSessionTabsSnapshotGroups>
 
@@ -19,20 +19,28 @@ export function applyTerminalRecordUpdates(context: TerminalRecordContext) {
     if (!nextPtyIdsByTabId[removedId]) {
       continue
     }
-    nextPtyIdsByTabId =
-      nextPtyIdsByTabId === state.ptyIdsByTabId
-        ? writableWebSessionTabsRecord(state, 'ptyIdsByTabId', batchContext)
-        : nextPtyIdsByTabId
-    delete nextPtyIdsByTabId[removedId]
+    nextPtyIdsByTabId = setWebSessionTabsRecordEntry(
+      state,
+      'ptyIdsByTabId',
+      removedId,
+      undefined,
+      batchContext,
+      true,
+      nextPtyIdsByTabId
+    )
   }
   for (const { tab, ptyIds } of mirroredTerminalTabs) {
     if (ptyIds.length === 0) {
       if (nextPtyIdsByTabId[tab.id]) {
-        nextPtyIdsByTabId =
-          nextPtyIdsByTabId === state.ptyIdsByTabId
-            ? writableWebSessionTabsRecord(state, 'ptyIdsByTabId', batchContext)
-            : nextPtyIdsByTabId
-        delete nextPtyIdsByTabId[tab.id]
+        nextPtyIdsByTabId = setWebSessionTabsRecordEntry(
+          state,
+          'ptyIdsByTabId',
+          tab.id,
+          undefined,
+          batchContext,
+          true,
+          nextPtyIdsByTabId
+        )
       }
       continue
     }
@@ -40,11 +48,15 @@ export function applyTerminalRecordUpdates(context: TerminalRecordContext) {
     if (sameStringArray(current, ptyIds)) {
       continue
     }
-    nextPtyIdsByTabId =
-      nextPtyIdsByTabId === state.ptyIdsByTabId
-        ? writableWebSessionTabsRecord(state, 'ptyIdsByTabId', batchContext)
-        : nextPtyIdsByTabId
-    nextPtyIdsByTabId[tab.id] = ptyIds
+    nextPtyIdsByTabId = setWebSessionTabsRecordEntry(
+      state,
+      'ptyIdsByTabId',
+      tab.id,
+      ptyIds,
+      batchContext,
+      false,
+      nextPtyIdsByTabId
+    )
   }
 
   let nextTerminalLayoutsByTabId = state.terminalLayoutsByTabId
@@ -52,21 +64,29 @@ export function applyTerminalRecordUpdates(context: TerminalRecordContext) {
     if (!nextTerminalLayoutsByTabId[removedId]) {
       continue
     }
-    nextTerminalLayoutsByTabId =
-      nextTerminalLayoutsByTabId === state.terminalLayoutsByTabId
-        ? writableWebSessionTabsRecord(state, 'terminalLayoutsByTabId', batchContext)
-        : nextTerminalLayoutsByTabId
-    delete nextTerminalLayoutsByTabId[removedId]
+    nextTerminalLayoutsByTabId = setWebSessionTabsRecordEntry(
+      state,
+      'terminalLayoutsByTabId',
+      removedId,
+      undefined,
+      batchContext,
+      true,
+      nextTerminalLayoutsByTabId
+    )
   }
   for (const { tab, layout } of mirroredTerminalTabs) {
     if (terminalLayoutEqual(nextTerminalLayoutsByTabId[tab.id], layout)) {
       continue
     }
-    nextTerminalLayoutsByTabId =
-      nextTerminalLayoutsByTabId === state.terminalLayoutsByTabId
-        ? writableWebSessionTabsRecord(state, 'terminalLayoutsByTabId', batchContext)
-        : nextTerminalLayoutsByTabId
-    nextTerminalLayoutsByTabId[tab.id] = layout
+    nextTerminalLayoutsByTabId = setWebSessionTabsRecordEntry(
+      state,
+      'terminalLayoutsByTabId',
+      tab.id,
+      layout,
+      batchContext,
+      false,
+      nextTerminalLayoutsByTabId
+    )
   }
 
   // Local-only home retires with tabs but host frames never rewrite live entries; keeping it outside layout preserves this ownership.
@@ -75,11 +95,15 @@ export function applyTerminalRecordUpdates(context: TerminalRecordContext) {
     if (!nextLocalOnlyScrollbackByTabId?.[removedId]) {
       continue
     }
-    nextLocalOnlyScrollbackByTabId =
-      nextLocalOnlyScrollbackByTabId === state.localOnlyScrollbackByTabId
-        ? writableWebSessionTabsRecord(state, 'localOnlyScrollbackByTabId', batchContext)
-        : nextLocalOnlyScrollbackByTabId
-    delete nextLocalOnlyScrollbackByTabId[removedId]
+    nextLocalOnlyScrollbackByTabId = setWebSessionTabsRecordEntry(
+      state,
+      'localOnlyScrollbackByTabId',
+      removedId,
+      undefined,
+      batchContext,
+      true,
+      nextLocalOnlyScrollbackByTabId
+    )
   }
 
   let nextUnreadTerminalTabs = state.unreadTerminalTabs
@@ -87,11 +111,15 @@ export function applyTerminalRecordUpdates(context: TerminalRecordContext) {
     if (!nextUnreadTerminalTabs[removedId]) {
       continue
     }
-    nextUnreadTerminalTabs =
-      nextUnreadTerminalTabs === state.unreadTerminalTabs
-        ? writableWebSessionTabsRecord(state, 'unreadTerminalTabs', batchContext)
-        : nextUnreadTerminalTabs
-    delete nextUnreadTerminalTabs[removedId]
+    nextUnreadTerminalTabs = setWebSessionTabsRecordEntry(
+      state,
+      'unreadTerminalTabs',
+      removedId,
+      undefined,
+      batchContext,
+      true,
+      nextUnreadTerminalTabs
+    )
   }
 
   const pendingStartupByTabId = state.pendingStartupByTabId ?? {}
@@ -100,18 +128,26 @@ export function applyTerminalRecordUpdates(context: TerminalRecordContext) {
   let nextAutomaticAgentResumeClaimsByTabId = automaticAgentResumeClaimsByTabId
   for (const removedId of exactProvisionalHandoffs) {
     if (nextPendingStartupByTabId[removedId]) {
-      nextPendingStartupByTabId =
-        nextPendingStartupByTabId === pendingStartupByTabId
-          ? writableWebSessionTabsRecord(state, 'pendingStartupByTabId', batchContext)
-          : nextPendingStartupByTabId
-      delete nextPendingStartupByTabId[removedId]
+      nextPendingStartupByTabId = setWebSessionTabsRecordEntry(
+        state,
+        'pendingStartupByTabId',
+        removedId,
+        undefined,
+        batchContext,
+        true,
+        nextPendingStartupByTabId
+      )
     }
     if (nextAutomaticAgentResumeClaimsByTabId[removedId]) {
-      nextAutomaticAgentResumeClaimsByTabId =
-        nextAutomaticAgentResumeClaimsByTabId === automaticAgentResumeClaimsByTabId
-          ? writableWebSessionTabsRecord(state, 'automaticAgentResumeClaimsByTabId', batchContext)
-          : nextAutomaticAgentResumeClaimsByTabId
-      delete nextAutomaticAgentResumeClaimsByTabId[removedId]
+      nextAutomaticAgentResumeClaimsByTabId = setWebSessionTabsRecordEntry(
+        state,
+        'automaticAgentResumeClaimsByTabId',
+        removedId,
+        undefined,
+        batchContext,
+        true,
+        nextAutomaticAgentResumeClaimsByTabId
+      )
     }
   }
 

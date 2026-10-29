@@ -8,7 +8,10 @@ import { diffStoredSession, stableJson } from './workspace-layout-load-report'
 import { nameBasedLoadContext } from './workspace-layout-minted-ids'
 import type { WorkspaceLayoutModel } from './workspace-layout-model'
 import { WORKSPACE_LAYOUT_PROFILES } from './workspace-layout-profile.test-fixture'
-import { patchStoredSession } from './workspace-layout-record-patch'
+import { patchStoredSession, patchSessionUnits } from './workspace-layout-record-patch'
+import { SessionUnitReader } from '../session-unit-reader'
+import { SessionUnitIndex } from '../session-unit-index'
+import { getDefaultWorkspaceSession } from '../constants'
 import { saveWorkspaceLayout } from './workspace-layout-save'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
 
@@ -418,5 +421,59 @@ describe('patchStoredSession', () => {
 
     expect(patched.terminalLayoutsByTabId[row.id]).toEqual(after.terminalLayoutsByTabId[row.id])
     expect(patched.terminalLayoutsByTabId[row.id]?.ptyIdsByLeafId?.[leafId!]).toBe(row.ptyId)
+  })
+})
+
+describe('record-patch optional field presence', () => {
+  it('omits a field when the complete command save removes its last incarnation', () => {
+    const incarnations = Object.freeze({ 'tab:leaf': 'incarnation' })
+    const stored = Object.freeze({
+      ...getDefaultWorkspaceSession(),
+      terminalPtyIncarnationsByPaneKey: incarnations
+    })
+    const after = getDefaultWorkspaceSession()
+    delete after.terminalPtyIncarnationsByPaneKey
+    const result = patchStoredSession(stored, stored, after)
+    expect(Object.hasOwn(result, 'terminalPtyIncarnationsByPaneKey')).toBe(false)
+    expect(stored.terminalPtyIncarnationsByPaneKey).toBe(incarnations)
+  })
+
+  it('keeps an explicit empty field when the complete command save carries it', () => {
+    const stored = {
+      ...getDefaultWorkspaceSession(),
+      terminalPtyIncarnationsByPaneKey: { 'tab:leaf': 'incarnation' }
+    }
+    const result = patchStoredSession(stored, stored, {
+      ...getDefaultWorkspaceSession(),
+      terminalPtyIncarnationsByPaneKey: {}
+    })
+    expect(Object.hasOwn(result, 'terminalPtyIncarnationsByPaneKey')).toBe(true)
+    expect(result.terminalPtyIncarnationsByPaneKey).toEqual({})
+  })
+
+  it('keeps an unselected incarnation when selected serialization omits its last entry', () => {
+    const incarnations = Object.freeze({
+      'selected:leaf': 'selected',
+      'unrelated:leaf': 'unrelated'
+    })
+    const stored = Object.freeze({
+      ...getDefaultWorkspaceSession(),
+      terminalPtyIncarnationsByPaneKey: incarnations
+    })
+    const reader = new SessionUnitReader(stored, new SessionUnitIndex(stored))
+    const before = {
+      ...getDefaultWorkspaceSession(),
+      terminalPtyIncarnationsByPaneKey: { 'selected:leaf': 'selected' }
+    }
+    const after = getDefaultWorkspaceSession()
+    delete after.terminalPtyIncarnationsByPaneKey
+    patchSessionUnits(reader, before, after, {
+      kind: 'selected',
+      fields: new Map([['terminalPtyIncarnationsByPaneKey', new Set(['selected:leaf'])]])
+    })
+    expect(reader.snapshot().terminalPtyIncarnationsByPaneKey).toEqual({
+      'unrelated:leaf': 'unrelated'
+    })
+    expect(stored.terminalPtyIncarnationsByPaneKey).toBe(incarnations)
   })
 })

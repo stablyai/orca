@@ -1,6 +1,11 @@
-import { hasClosedTerminalTabRecord } from '../../shared/closed-terminal-tab-tombstones'
+import { SessionUnitReader } from '../../shared/session-unit-reader'
+import { SessionUnitIndex } from '../../shared/session-unit-index'
 import {
-  closeTerminalTabInWorkspaceSession,
+  hasClosedTerminalTabRecord,
+  pruneClosedTerminalTabTombstones
+} from '../../shared/closed-terminal-tab-tombstones'
+import {
+  reduceTerminalTabClose,
   workspaceSessionListsTerminalTab
 } from '../../shared/workspace-session-terminal-tab-close'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
@@ -10,25 +15,42 @@ export function dropClosedTerminalTabs(
   session: WorkspaceSessionState,
   now = Date.now()
 ): WorkspaceSessionState {
-  const records = session.closedTerminalTabTombstonesByTabId
-  if (!records) {
-    return session
-  }
-  // Empty host slices may omit terminal maps.
-  const withMaps = {
-    ...session,
-    tabsByWorktree: session.tabsByWorktree ?? {},
-    terminalLayoutsByTabId: session.terminalLayoutsByTabId ?? {}
-  }
-  let next: WorkspaceSessionState = withMaps
-  for (const [tabId, { worktreeId }] of Object.entries(records)) {
+  const reader = new SessionUnitReader(session, new SessionUnitIndex(session))
+  reduceClosedTerminalTabFence(
+    reader,
+    Object.keys(session.closedTerminalTabTombstonesByTabId ?? {}),
+    now
+  )
+  return reader.snapshot()
+}
+
+export function reduceClosedTerminalTabFence(
+  reader: SessionUnitReader,
+  tabIds: Iterable<string>,
+  now = Date.now()
+): void {
+  for (const tabId of tabIds) {
+    const record = reader.unit('closedTerminalTabTombstonesByTabId', tabId).value
     if (
-      hasClosedTerminalTabRecord(records, tabId, undefined, now) &&
-      workspaceSessionListsTerminalTab(next, worktreeId, tabId)
+      record &&
+      hasClosedTerminalTabRecord({ [tabId]: record }, tabId, undefined, now) &&
+      workspaceSessionListsTerminalTab(reader, record.worktreeId, tabId)
     ) {
-      next = closeTerminalTabInWorkspaceSession(next, worktreeId, tabId, { force: true }).session
+      reduceTerminalTabClose(reader, record.worktreeId, tabId, { force: true })
     }
   }
-  // Keep sparse slices sparse when no tabs were dropped.
-  return next === withMaps ? session : next
+}
+
+/** A recorded close owns pruning the complete host field, including an empty result. */
+export function reduceClosedTerminalTabPruning(reader: SessionUnitReader, now: number): void {
+  reader.replace('closedTerminalTabTombstonesByTabId', {
+    present: true,
+    value: pruneClosedTerminalTabTombstones(
+      reader.map(
+        'closedTerminalTabTombstonesByTabId',
+        reader.keys('closedTerminalTabTombstonesByTabId')
+      ),
+      now
+    )
+  })
 }

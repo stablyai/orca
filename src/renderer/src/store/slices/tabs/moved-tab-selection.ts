@@ -1,3 +1,9 @@
+import {
+  editSessionSource,
+  type SessionSourceSet,
+  type SessionSourceEdit,
+  type OrdinarySourcePartial
+} from '../../session-source-edits'
 // Select moved tabs with the frame showing the move (L120); a later reply may already be superseded by another drag.
 
 import type { AppState } from '../../types'
@@ -22,35 +28,35 @@ export function tabSelectionKey(state: SelectionState, worktreeId: string): stri
 
 /** `state` with the moved tab selected, as the window's own move selects it; unchanged when
  *  `state` does not show the tab out of its old group. */
-function movedTabSelectionPatch(state: AppState, intent: MovedTabSelection): Partial<AppState> {
+function movedTabSelectionPatch(
+  edit: SessionSourceEdit<AppState>,
+  intent: MovedTabSelection
+): OrdinarySourcePartial<AppState> | undefined {
+  const state = edit.view()
   const { worktreeId } = intent
   const tab = state.unifiedTabsByWorktree[worktreeId]?.find((entry) => entry.id === intent.tabId)
   if (!tab || tab.groupId === intent.fromGroupId) {
-    return {}
+    return undefined
   }
   // The preview kept, no focus time recorded.
-  const selected = tabActivationPatch(
-    state,
+  tabActivationPatch(
+    edit,
     tab,
     worktreeId,
     { preservePreview: true, recordFocus: false },
     endsPreviewHere(state, worktreeId)
   )
-  return {
-    ...selected,
-    // As focusing a group does: only the active workspace's surface follows.
-    ...(state.activeWorktreeId === worktreeId
-      ? buildActiveSurfacePatch({ ...state, ...selected }, worktreeId, tab.groupId)
-      : {})
-  }
+  return state.activeWorktreeId === worktreeId
+    ? buildActiveSurfacePatch(edit, worktreeId, tab.groupId)
+    : {}
 }
 
 /** `patch` plus the selection of each moved tab it shows out of its old group, and those moves. */
 export function withMovedTabSelections(
   before: AppState,
-  patch: Partial<AppState>
-): { patch: Partial<AppState>; taken: MovedTabSelection[] } {
-  let next: Partial<AppState> = patch
+  edit: SessionSourceEdit<AppState>
+): { patch: OrdinarySourcePartial<AppState>; taken: MovedTabSelection[] } {
+  let next: OrdinarySourcePartial<AppState> = {}
   const taken: MovedTabSelection[] = []
   for (const intent of pendingMovedTabSelections()) {
     if (intent.selection === null) {
@@ -61,8 +67,8 @@ export function withMovedTabSelections(
       dropMovedTabSelection(intent)
       continue
     }
-    const selected = movedTabSelectionPatch({ ...before, ...next }, intent)
-    if (Object.keys(selected).length > 0) {
+    const selected = movedTabSelectionPatch(edit, intent)
+    if (selected) {
       dropMovedTabSelection(intent)
       taken.push(intent)
       next = { ...next, ...selected }
@@ -76,21 +82,23 @@ export function withMovedTabsSelected(
   state: AppState,
   taken: readonly MovedTabSelection[]
 ): AppState {
-  return taken.reduce<AppState>(
-    (next, intent) => ({ ...next, ...movedTabSelectionPatch(next, intent) }),
-    state
-  )
+  const edit = editSessionSource(state)
+  let patch: OrdinarySourcePartial<AppState> = {}
+  for (const intent of taken) {
+    patch = { ...patch, ...movedTabSelectionPatch(edit, intent) }
+  }
+  return edit.view(patch)
 }
 
 /** Writes a frame's patch, with the selection of each moved tab it shows; returns those moves. */
 export function showFramePatch(
-  store: { getState: () => AppState; setState: (patch: Partial<AppState>) => void },
-  patch: Partial<AppState>
+  store: { getState: () => AppState; setState: SessionSourceSet<AppState> },
+  edit: SessionSourceEdit<AppState>,
+  patch: OrdinarySourcePartial<AppState> = {}
 ): MovedTabSelection[] {
-  if (Object.keys(patch).length === 0) {
-    return []
+  const shown = withMovedTabSelections(store.getState(), edit)
+  if (edit.changed || Object.keys(patch).length || Object.keys(shown.patch).length) {
+    store.setState(edit.finish({ ...patch, ...shown.patch }))
   }
-  const shown = withMovedTabSelections(store.getState(), patch)
-  store.setState(shown.patch)
   return shown.taken
 }

@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -64,7 +65,7 @@ async function renderProbe(
 
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
-  useAppStore.setState(initialAppState, true)
+  setSessionTestState(useAppStore, initialAppState, true)
   latestHookResult = null
   detectRemoteAgents.mockReset().mockResolvedValue([])
   detectLocalAgents
@@ -145,7 +146,8 @@ describe('Floating Workspace authority', () => {
     const activeResult: { current: UseDetectedAgentsResult | null } = { current: null }
     const floatingResult: { current: UseDetectedAgentsResult | null } = { current: null }
     useAppStore.getState().clearLocalDetectedAgents()
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       activeRepoId: 'repo-wsl',
       activeWorktreeId: 'worktree-wsl',
       projects: [

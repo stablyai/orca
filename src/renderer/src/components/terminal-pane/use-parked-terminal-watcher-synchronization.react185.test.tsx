@@ -1,3 +1,5 @@
+import { withSessionSourceWrites } from '@/store/session-source-write-boundary'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 /** @vitest-environment happy-dom */
 import { act, StrictMode, useEffect } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -23,11 +25,13 @@ const harness = vi.hoisted(() => ({
 
 vi.mock('../../store', async () => {
   const { create } = await import('zustand')
-  const useAppStore = create(() => ({
-    ptyIdsByTabId: {} as Record<string, string[]>,
-    runtimePaneTitlesByTabId: {} as Record<string, Record<number, string>>,
-    terminalLayoutsByTabId: {} as Record<string, TerminalLayoutSnapshot>
-  }))
+  const useAppStore = create(
+    withSessionSourceWrites(() => ({
+      ptyIdsByTabId: {} as Record<string, string[]>,
+      runtimePaneTitlesByTabId: {} as Record<string, Record<number, string>>,
+      terminalLayoutsByTabId: {} as Record<string, TerminalLayoutSnapshot>
+    }))
+  )
   return { useAppStore }
 })
 
@@ -136,7 +140,7 @@ describe('parked terminal watcher synchronization', () => {
     harness.disposeCalls = 0
     harness.reconciliationPtyReads = 0
     harness.watchedPtyIds.clear()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       ptyIdsByTabId: { [TAB_ID]: [FIRST_PTY_ID, OLD_SECOND_PTY_ID] },
       runtimePaneTitlesByTabId: { [TAB_ID]: { 1: 'active', 2: 'split' } },
       terminalLayoutsByTabId: { [TAB_ID]: splitLayout(OLD_SECOND_PTY_ID) }
@@ -176,7 +180,7 @@ describe('parked terminal watcher synchronization', () => {
     expect(harness.watchedPtyIds).toContain(OLD_SECOND_PTY_ID)
 
     act(() => {
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         ptyIdsByTabId: { [TAB_ID]: [FIRST_PTY_ID, NEW_SECOND_PTY_ID] },
         terminalLayoutsByTabId: { [TAB_ID]: splitLayout(NEW_SECOND_PTY_ID) }
       })
@@ -193,7 +197,7 @@ describe('parked terminal watcher synchronization', () => {
     expect(harness.syncCalls).toBe(2)
 
     act(() => {
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         terminalLayoutsByTabId: {
           [TAB_ID]: { ...splitLayout(NEW_SECOND_PTY_ID), activeLeafId: SECOND_LEAF_ID }
         }
@@ -222,7 +226,7 @@ describe('parked terminal watcher synchronization', () => {
         return Reflect.get(target, property, receiver)
       }
     })
-    useAppStore.setState({ ptyIdsByTabId })
+    setSessionTestState(useAppStore, { ptyIdsByTabId })
     root = createRoot(container)
     act(() => {
       root?.render(
@@ -295,7 +299,7 @@ describe('parked terminal watcher synchronization key semantics', () => {
     harness.syncCalls = 0
     harness.disposeCalls = 0
     harness.watchedPtyIds.clear()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       ptyIdsByTabId: { [TAB_ID]: [FIRST_PTY_ID, OLD_SECOND_PTY_ID] },
       runtimePaneTitlesByTabId: { [TAB_ID]: { 1: 'active', 2: 'split' } },
       terminalLayoutsByTabId: { [TAB_ID]: splitLayout(OLD_SECOND_PTY_ID) }
@@ -325,11 +329,14 @@ describe('parked terminal watcher synchronization key semantics', () => {
 
   // Every reconciliation input must invalidate the key or parked panes can remain stranded.
   it.each([
-    ['pty ids', () => useAppStore.setState({ ptyIdsByTabId: { [TAB_ID]: [FIRST_PTY_ID] } })],
+    [
+      'pty ids',
+      () => setSessionTestState(useAppStore, { ptyIdsByTabId: { [TAB_ID]: [FIRST_PTY_ID] } })
+    ],
     [
       'layout root shape',
       () =>
-        useAppStore.setState({
+        setSessionTestState(useAppStore, {
           terminalLayoutsByTabId: {
             [TAB_ID]: {
               ...splitLayout(OLD_SECOND_PTY_ID),
@@ -346,7 +353,7 @@ describe('parked terminal watcher synchronization key semantics', () => {
     [
       'layout active leaf',
       () =>
-        useAppStore.setState({
+        setSessionTestState(useAppStore, {
           terminalLayoutsByTabId: {
             [TAB_ID]: { ...splitLayout(OLD_SECOND_PTY_ID), activeLeafId: SECOND_LEAF_ID }
           }
@@ -355,7 +362,7 @@ describe('parked terminal watcher synchronization key semantics', () => {
     [
       'layout leaf pty ids',
       () =>
-        useAppStore.setState({
+        setSessionTestState(useAppStore, {
           terminalLayoutsByTabId: { [TAB_ID]: splitLayout(NEW_SECOND_PTY_ID) }
         })
     ],

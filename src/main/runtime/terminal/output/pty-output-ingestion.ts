@@ -1,3 +1,4 @@
+import { invalidateShutdownReconnectPty } from '../recovery/shutdown-reconnect-fact-index'
 import type { ProcessedAgentStatusChunk } from '../../../../shared/agent-status-osc'
 import type {
   RuntimePtyWorktreeRecord,
@@ -131,6 +132,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     let ptyNormalized: ReturnType<typeof normalizeTerminalChunk> | null = null
     if (pty) {
       pty.connected = true
+      invalidateShutdownReconnectPty(this, pty.ptyId)
       pty.disconnectedAt = null
       pty.lastOutputAt = at
       const normalized = normalizeTerminalChunk(data, pty.tailPendingAnsi)

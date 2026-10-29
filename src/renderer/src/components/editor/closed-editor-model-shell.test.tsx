@@ -1,6 +1,7 @@
+import type { SessionTestStore } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import React from 'react'
-import { useStore, type StoreApi } from 'zustand'
+import { useStore } from 'zustand'
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -14,7 +15,7 @@ import {
   resetModelLifetimeFixtures
 } from './editor-model-lifetime-fixture'
 
-const fixture = vi.hoisted((): { store: StoreApi<AppState> | null } => ({ store: null }))
+const fixture = vi.hoisted((): { store: SessionTestStore<AppState> | null } => ({ store: null }))
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => {
@@ -23,7 +24,7 @@ vi.mock('@/store', () => ({
       }
       return fixture.store.getState()
     },
-    subscribe: (...args: Parameters<StoreApi<AppState>['subscribe']>) => {
+    subscribe: (...args: Parameters<SessionTestStore<AppState>['subscribe']>) => {
       if (!fixture.store) {
         throw new Error('Missing fixture store')
       }

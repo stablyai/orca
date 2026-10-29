@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import {
@@ -35,7 +36,7 @@ let dispose: (() => void) | null = null
 
 function setup(state: Partial<AppState> = {}): ReturnType<typeof createTestStore> {
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     worktreesByRepo: { repo1: [active, recent, older, main] },
     activeWorktreeId: active.id,
     activeWorkspaceExecutionHostId: 'local',
@@ -156,7 +157,7 @@ describe('active worktree removal successor', () => {
   it('hands off when the row drops before its selection is cleared', async () => {
     const store = setup()
     // Startup merges a listing without purging, and the prune clears the pointer later.
-    store.setState({ worktreesByRepo: { repo1: [recent, older, main] } })
+    setSessionTestState(store, { worktreesByRepo: { repo1: [recent, older, main] } })
     await Promise.resolve()
     expect(activateAndRevealWorktree).not.toHaveBeenCalled()
 
@@ -171,7 +172,7 @@ describe('active worktree removal successor', () => {
     const renamed = row('/renamed')
     // A rename moves the pointer to the new id before the listing swaps the rows.
     store.setState({ activeWorktreeId: renamed.id })
-    store.setState({ worktreesByRepo: { repo1: [renamed, recent, older, main] } })
+    setSessionTestState(store, { worktreesByRepo: { repo1: [renamed, recent, older, main] } })
     await Promise.resolve()
 
     expect(store.getState().activeWorktreeId).toBe(renamed.id)
@@ -185,7 +186,7 @@ describe('active worktree removal successor', () => {
     await refreshWithout(store, [recent, older, main])
     expect(activateAndRevealWorktree).not.toHaveBeenCalled()
 
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: { repo1: [active, recent, older, main] },
       activeWorktreeId: active.id,
       activeWorkspaceExecutionHostId: 'local',

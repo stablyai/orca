@@ -196,6 +196,7 @@ describe('WSL move desktop rewrite registry coverage', () => {
       getWorkspaceSession: () => ({ ...getDefaultWorkspaceSession(), ...movedSession() }),
       patchWorkspaceSession: (patch) => {
         Object.keys(patch).forEach((key) => written.add(`session.${key}`))
+        return { applied: true, partitionGeneration: 'test:0' }
       },
       setWorkspaceSession: vi.fn(),
       flushPendingOrThrowAsync: vi.fn()

@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import { isEditorTabContentType } from '../tabs/editor-tab-content-type'
@@ -16,14 +17,6 @@ import {
 } from '../buffers/editor-buffer-record'
 import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
 import { editorBufferSiblingViewIds } from '../buffers/editor-buffer-views'
-
-function withoutKeys<T>(record: Record<string, T>, keys: readonly string[]): Record<string, T> {
-  const next = { ...record }
-  for (const key of keys) {
-    delete next[key]
-  }
-  return next
-}
 
 export function createOpenFileMutations(
   set: EditorSet,
@@ -48,12 +41,11 @@ export function createOpenFileMutations(
         const worktreeId = file?.worktreeId
         // Floating/background activation stays workspace-local or violates agent-auto-ack’s global-selection invariant.
         const scopeWorktreeId = targetWorktreeId ?? worktreeId ?? s.activeWorktreeId
-        return {
-          ...(scopeWorktreeId === s.activeWorktreeId ? { activeFileId: fileId } : {}),
-          activeFileIdByWorktree: worktreeId
-            ? { ...s.activeFileIdByWorktree, [worktreeId]: fileId }
-            : s.activeFileIdByWorktree
+        const edit = editSessionSource(s)
+        if (worktreeId) {
+          edit.set('activeFileIdByWorktree', worktreeId, fileId)
         }
+        return edit.finish(scopeWorktreeId === s.activeWorktreeId ? { activeFileId: fileId } : {})
       })
       const state = get()
       const worktreeId =
@@ -83,14 +75,14 @@ export function createOpenFileMutations(
         // Per-keystroke openFiles rebuilds caused typing lag; preserve no-op identity.
         const file = s.openFiles.find((f) => f.id === fileId)
         if (!file) {
-          return s
+          return undefined
         }
         // Why: read-only tabs can never become dirty; hard no-op any stray change/save callback that reached here.
         if (
           (file.readOnly === true || file.csvPreviewOnly === true) &&
           (dirty || opts?.written !== true)
         ) {
-          return s
+          return undefined
         }
         const buffer = editorBufferOf(s, file)
         const needsPreviewClear = dirty && file.isPreview
@@ -107,40 +99,38 @@ export function createOpenFileMutations(
           !needsPreviewClear &&
           !dropDraft
         ) {
-          return s
+          return undefined
         }
         if (ORCA_LAYOUT_OWNER_IS_MAIN && needsPreviewClear) {
           promoted.push(...previewEditorTabsOf(s.unifiedTabsByWorktree, fileId))
         }
-        return {
-          ...writeEditorBuffer(
-            s,
-            fileId,
-            { isDirty: dirty },
-            needsPreviewClear ? { isPreview: undefined } : undefined
-          ),
-          // Why every view: views of one record share one draft.
-          ...(dropDraft
-            ? { editorDrafts: withoutKeys(s.editorDrafts, editorBufferSiblingViewIds(s, fileId)) }
-            : {}),
-          ...(needsPreviewClear
-            ? {
-                unifiedTabsByWorktree: Object.fromEntries(
-                  Object.entries(s.unifiedTabsByWorktree ?? {}).map(([worktreeId, tabs]) => [
-                    worktreeId,
-                    tabs.map((tab) =>
-                      tab.entityId === fileId &&
-                      isEditorTabContentType(tab.contentType) &&
-                      // Switch point: main's frame ends a preview main owns.
-                      endsPreviewHere(s, worktreeId)
-                        ? withPreviewEnded(tab)
-                        : tab
-                    )
-                  ])
-                )
-              }
-            : {})
+        const edit = editSessionSource(s)
+        const bufferPatch = writeEditorBuffer(
+          edit,
+          fileId,
+          { isDirty: dirty },
+          needsPreviewClear ? { isPreview: undefined } : undefined
+        )
+        if (dropDraft) {
+          for (const id of editorBufferSiblingViewIds(s, fileId)) {
+            edit.remove('editorDrafts', id)
+          }
         }
+        if (needsPreviewClear) {
+          for (const [worktreeId, tabs] of Object.entries(s.unifiedTabsByWorktree ?? {})) {
+            const next = tabs.map((tab) =>
+              tab.entityId === fileId &&
+              isEditorTabContentType(tab.contentType) &&
+              endsPreviewHere(s, worktreeId)
+                ? withPreviewEnded(tab)
+                : tab
+            )
+            if (next.some((tab, index) => tab !== tabs[index])) {
+              edit.set('unifiedTabsByWorktree', worktreeId, next)
+            }
+          }
+        }
+        return edit.finish(bufferPatch)
       })
       // Switch point: main makes the edited preview tabs permanent.
       if (ORCA_LAYOUT_OWNER_IS_MAIN && promoted.length > 0) {
@@ -149,36 +139,53 @@ export function createOpenFileMutations(
     },
 
     setExternalMutation: (fileId, mutation) =>
-      set((s) => updateEditorBuffer(s, fileId, { externalMutation: mutation ?? undefined })),
+      set((s) => {
+        const edit = editSessionSource(s)
+        const patch = updateEditorBuffer(edit, fileId, { externalMutation: mutation ?? undefined })
+        return patch ? edit.finish(patch) : undefined
+      }),
 
     setLastKnownDiskSignature: (fileId, signature) =>
-      set((s) => updateEditorBuffer(s, fileId, { lastKnownDiskSignature: signature })),
+      set((s) => {
+        const edit = editSessionSource(s)
+        const patch = updateEditorBuffer(edit, fileId, { lastKnownDiskSignature: signature })
+        return patch ? edit.finish(patch) : undefined
+      }),
 
     // Why: never touches readOnly, which also guards transcripts and keeps dirty drafts out of sessions.
     setTerminalArtifactGrant: (fileId, grantId) =>
-      set((s) => ({
-        openFiles: s.openFiles.map((f) =>
-          f.id === fileId && f.terminalArtifactGrantId !== grantId
-            ? { ...f, terminalArtifactGrantId: grantId }
-            : f
-        )
-      })),
+      set((s) => {
+        const sourceEdit = editSessionSource(s)
+        sourceEdit
+          .sequence('openFiles')
+          .map((f) =>
+            f.id === fileId && f.terminalArtifactGrantId !== grantId
+              ? { ...f, terminalArtifactGrantId: grantId }
+              : f
+          )
+        return sourceEdit.finish({})
+      }),
 
     clearSelfMoveEcho: (fileId) =>
       set((s) => {
+        const sourceEdit = editSessionSource(s)
+
         const file = s.openFiles.find((f) => f.id === fileId)
         if (!file?.pendingSelfMoveEcho) {
-          return s
+          return undefined
         }
-        return {
-          openFiles: s.openFiles.map((f) =>
-            f.id === fileId ? { ...f, pendingSelfMoveEcho: undefined } : f
-          )
-        }
+        sourceEdit
+          .sequence('openFiles')
+          .map((f) => (f.id === fileId ? { ...f, pendingSelfMoveEcho: undefined } : f))
+        return sourceEdit.finish({})
       }),
     clearUntitled: (fileId) =>
-      set((s) => ({
-        openFiles: s.openFiles.map((f) => (f.id === fileId ? { ...f, isUntitled: undefined } : f))
-      }))
+      set((s) => {
+        const sourceEdit = editSessionSource(s)
+        sourceEdit
+          .sequence('openFiles')
+          .map((f) => (f.id === fileId ? { ...f, isUntitled: undefined } : f))
+        return sourceEdit.finish({})
+      })
   }
 }

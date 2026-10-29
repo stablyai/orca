@@ -199,7 +199,7 @@ export function useFileDeletion({
             )
 
             if (nextExpanded.size === currentExpanded.size) {
-              return state
+              return undefined
             }
 
             return {

@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import type { WslHostStatus } from '../../../../shared/wsl-host-types'
 import { persistedUIValuesEqual } from '../../../../shared/persisted-ui-equality'
@@ -17,7 +17,7 @@ export type WslHostsSlice = {
   setWslHostsAcceptNewWork: (accepts: boolean) => void
 }
 
-export const createWslHostsSlice: StateCreator<AppState, [], [], WslHostsSlice> = (set) => ({
+export const createWslHostsSlice: SessionStateCreator<AppState, WslHostsSlice> = (set) => ({
   wslHostStatuses: {},
   wslHostServerFiles: 'unknown',
   setWslHostServerFiles: (present) => set({ wslHostServerFiles: present ? 'present' : 'missing' }),
@@ -29,7 +29,7 @@ export const createWslHostsSlice: StateCreator<AppState, [], [], WslHostsSlice> 
     set((state) => {
       const current = state.wslHostStatuses[status.environmentId]
       if (persistedUIValuesEqual(current, status)) {
-        return state
+        return undefined
       }
       return { wslHostStatuses: { ...state.wslHostStatuses, [status.environmentId]: status } }
     })

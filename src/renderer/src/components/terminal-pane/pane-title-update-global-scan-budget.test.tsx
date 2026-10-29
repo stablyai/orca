@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 /** STA-7552: count selector reads at live-profile scale; Zustand invokes every selector on set, even when useShallow suppresses rendering. Global scans must stay absent. */
 import React, { act } from 'react'
@@ -264,7 +265,7 @@ function MountedWorkspaceProbe({ worktreeId }: { worktreeId: string }): null {
 }
 
 function mountAtCaptureScale(): void {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     tabsByWorktree,
     sleepingAgentSessionsByPaneKey: buildSleepingRecords(),
     agentStatusByPaneKey: buildAgentStatuses(),
@@ -334,7 +335,7 @@ afterEach(() => {
   root = null
   container?.remove()
   container = null
-  useAppStore.setState(originalState, true)
+  setSessionTestState(useAppStore, originalState, true)
   vi.restoreAllMocks()
 })
 
@@ -344,7 +345,7 @@ describe('one pane title update at live-capture scale', () => {
     reads.sleepingRecords = 0
 
     act(() => {
-      useAppStore.setState({ sleepingAgentSessionsByPaneKey: buildSleepingRecords() })
+      setSessionTestState(useAppStore, { sleepingAgentSessionsByPaneKey: buildSleepingRecords() })
     })
 
     // Why: correctness floor — a real inventory change must still be observed.
@@ -427,7 +428,7 @@ function mountChatConsumers(
     act(() => root?.unmount())
   }
   container?.remove()
-  useAppStore.setState(originalState, true)
+  setSessionTestState(useAppStore, originalState, true)
   const sleptAtByPaneKey: Record<string, number | null> = {}
   const entries = worktreeIds.map((worktreeId, workspaceIndex) => {
     const tabs: Tab[] = []
@@ -459,7 +460,7 @@ function mountChatConsumers(
     }
     return [worktreeId, tabs] as const
   })
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     tabsByWorktree: {},
     browserTabsByWorktree: {},
     agentStatusByPaneKey: {},
@@ -571,7 +572,7 @@ describe.each<ChatStatusConsumer>(['sidebar', 'parent picker', 'palette'])(
         expect(chatStatusLabels()).toEqual(['done'])
       }
       act(() =>
-        useAppStore.setState({
+        setSessionTestState(useAppStore, {
           unifiedTabsByWorktree: {},
           agentStatusByPaneKey: {},
           agentStatusEpoch: 3

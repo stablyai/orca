@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // Main migrates sessions before window handles rename; its next save must agree with identityRenamed, never carry the rekey alone. Only compiled-off local first-work-folder-rename emits this event; paired events omit rename.
 import { describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
@@ -91,7 +92,7 @@ function layoutModelOf(session: WorkspaceSessionState) {
 
 function hydratedWindow(session: WorkspaceSessionState) {
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     repos: [{ id: REPO, path: '/path', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }],
     worktreesByRepo: {
       [REPO]: [OLD, OTHER].map((id) =>
@@ -126,7 +127,7 @@ describe('worktree identity rename: window and main agree on the layout', () => 
 
     // Window: the rename event re-keys its slices; the worktree list then catches up.
     store.getState().migrateWorktreeIdentity(OLD, NEW)
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {
         [REPO]: [NEW, OTHER].map((id) =>
           makeWorktree({ id, repoId: REPO, path: id.slice(`${REPO}::`.length) })

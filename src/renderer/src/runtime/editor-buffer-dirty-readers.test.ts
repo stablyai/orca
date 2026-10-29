@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../store'
 import type { AppState } from '../store/types'
@@ -14,7 +15,7 @@ vi.mock('@/lib/connection-context', () => ({
 const FILE_ID = '/repo/README.md'
 
 function resetEditorState(): void {
-  useAppStore.setState({ openFiles: [], editorDrafts: {} })
+  setSessionTestState(useAppStore, { openFiles: [], editorDrafts: {} })
   const tab: Tab = {
     id: 'tab-md',
     entityId: FILE_ID,
@@ -27,7 +28,7 @@ function resetEditorState(): void {
     sortOrder: 0,
     createdAt: 0
   }
-  useAppStore.setState({ unifiedTabsByWorktree: { 'wt-1': [tab] } })
+  setSessionTestState(useAppStore, { unifiedTabsByWorktree: { 'wt-1': [tab] } })
 }
 
 function openMarkdownFile(): void {

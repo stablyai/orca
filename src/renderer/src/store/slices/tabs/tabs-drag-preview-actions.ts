@@ -1,12 +1,18 @@
+import {
+  editSessionSource,
+  type SessionSourceEdit,
+  type OrdinarySourcePartial
+} from '@/store/session-source-edits'
 import type { AppState } from '../../types'
 import type { TabsSlice, TabsSliceSet } from './tabs-slice-contract'
 
 function previewActiveSurfacePatch(
-  state: AppState,
+  edit: SessionSourceEdit<AppState>,
   worktreeId: string,
   groupId: string,
   tabId: string | null
-): Partial<AppState> {
+): OrdinarySourcePartial<AppState> {
+  const state = edit.view()
   if (state.activeWorktreeId !== worktreeId || !tabId) {
     return {}
   }
@@ -17,13 +23,6 @@ function previewActiveSurfacePatch(
     return {}
   }
 
-  const nextActiveTabTypeByWorktree = (
-    tabType: AppState['activeTabType']
-  ): AppState['activeTabTypeByWorktree'] => ({
-    ...state.activeTabTypeByWorktree,
-    [worktreeId]: tabType
-  })
-
   if (unifiedTab.contentType === 'terminal') {
     if (
       state.activeTabType === 'terminal' &&
@@ -33,14 +32,11 @@ function previewActiveSurfacePatch(
     ) {
       return {}
     }
+    edit.set('activeTabIdByWorktree', worktreeId, unifiedTab.entityId)
+    edit.set('activeTabTypeByWorktree', worktreeId, 'terminal')
     return {
       activeTabId: unifiedTab.entityId,
-      activeTabType: 'terminal',
-      activeTabIdByWorktree: {
-        ...state.activeTabIdByWorktree,
-        [worktreeId]: unifiedTab.entityId
-      },
-      activeTabTypeByWorktree: nextActiveTabTypeByWorktree('terminal')
+      activeTabType: 'terminal'
     }
   }
   if (unifiedTab.contentType === 'browser') {
@@ -52,14 +48,11 @@ function previewActiveSurfacePatch(
     ) {
       return {}
     }
+    edit.set('activeBrowserTabIdByWorktree', worktreeId, unifiedTab.entityId)
+    edit.set('activeTabTypeByWorktree', worktreeId, 'browser')
     return {
       activeBrowserTabId: unifiedTab.entityId,
-      activeTabType: 'browser',
-      activeBrowserTabIdByWorktree: {
-        ...state.activeBrowserTabIdByWorktree,
-        [worktreeId]: unifiedTab.entityId
-      },
-      activeTabTypeByWorktree: nextActiveTabTypeByWorktree('browser')
+      activeTabType: 'browser'
     }
   }
   if (unifiedTab.contentType === 'simulator') {
@@ -69,10 +62,8 @@ function previewActiveSurfacePatch(
     ) {
       return {}
     }
-    return {
-      activeTabType: 'simulator',
-      activeTabTypeByWorktree: nextActiveTabTypeByWorktree('simulator')
-    }
+    edit.set('activeTabTypeByWorktree', worktreeId, 'simulator')
+    return { activeTabType: 'simulator' }
   }
   if (
     state.activeTabType === 'editor' &&
@@ -82,14 +73,11 @@ function previewActiveSurfacePatch(
   ) {
     return {}
   }
+  edit.set('activeFileIdByWorktree', worktreeId, unifiedTab.entityId)
+  edit.set('activeTabTypeByWorktree', worktreeId, 'editor')
   return {
     activeFileId: unifiedTab.entityId,
-    activeTabType: 'editor',
-    activeFileIdByWorktree: {
-      ...state.activeFileIdByWorktree,
-      [worktreeId]: unifiedTab.entityId
-    },
-    activeTabTypeByWorktree: nextActiveTabTypeByWorktree('editor')
+    activeTabType: 'editor'
   }
 }
 
@@ -101,37 +89,35 @@ export function createTabsDragPreviewActions(
 > {
   return {
     previewDragActiveTab: ({ worktreeId, groupId, tabId, activeGroupId }) => {
-      set((state): Partial<AppState> => {
+      set((state) => {
         const groups = state.groupsByWorktree[worktreeId] ?? []
         const targetGroup = groups.find((group) => group.id === groupId)
         const groupUnchanged = targetGroup?.activeTabId === tabId
         const focusUnchanged = (state.activeGroupIdByWorktree[worktreeId] ?? null) === activeGroupId
-        const surfacePatch = previewActiveSurfacePatch(state, worktreeId, groupId, tabId)
+        const edit = editSessionSource(state)
+        const surfacePatch = previewActiveSurfacePatch(edit, worktreeId, groupId, tabId)
         if (groupUnchanged && focusUnchanged) {
-          return Object.keys(surfacePatch).length > 0 ? surfacePatch : state
+          return edit.changed || Object.keys(surfacePatch).length > 0
+            ? edit.finish(surfacePatch)
+            : undefined
         }
 
-        const next: Partial<AppState> = { ...surfacePatch }
         if (!groupUnchanged) {
-          next.groupsByWorktree = {
-            ...state.groupsByWorktree,
-            [worktreeId]: groups.map((group) =>
-              group.id === groupId ? { ...group, activeTabId: tabId } : group
-            )
-          }
+          edit.set(
+            'groupsByWorktree',
+            worktreeId,
+            groups.map((group) => (group.id === groupId ? { ...group, activeTabId: tabId } : group))
+          )
         }
         if (!focusUnchanged) {
-          next.activeGroupIdByWorktree = {
-            ...state.activeGroupIdByWorktree,
-            [worktreeId]: activeGroupId
-          }
+          edit.set('activeGroupIdByWorktree', worktreeId, activeGroupId)
         }
-        return next
+        return edit.finish(surfacePatch)
       })
     },
 
     restoreDragActivationSnapshot: (worktreeId, snapshot) => {
-      set((state): Partial<AppState> => {
+      set((state) => {
         const groups = state.groupsByWorktree[worktreeId] ?? []
         const groupsUnchanged = groups.every(
           (group) => (snapshot.activeTabIdByGroup[group.id] ?? null) === group.activeTabId
@@ -139,43 +125,37 @@ export function createTabsDragPreviewActions(
         const focusUnchanged =
           (state.activeGroupIdByWorktree[worktreeId] ?? null) === snapshot.activeGroupId
 
-        const next: Partial<AppState> = {}
+        const edit = editSessionSource(state)
+        let surfacePatch: OrdinarySourcePartial<AppState> = {}
         if (!groupsUnchanged) {
-          next.groupsByWorktree = {
-            ...state.groupsByWorktree,
-            [worktreeId]: groups.map((group) => ({
+          edit.set(
+            'groupsByWorktree',
+            worktreeId,
+            groups.map((group) => ({
               ...group,
               activeTabId: snapshot.activeTabIdByGroup[group.id] ?? null
             }))
-          }
+          )
         }
         if (!focusUnchanged) {
           if (snapshot.activeGroupId === null) {
-            const nextActiveGroupIdByWorktree = { ...state.activeGroupIdByWorktree }
-            delete nextActiveGroupIdByWorktree[worktreeId]
-            next.activeGroupIdByWorktree = nextActiveGroupIdByWorktree
+            edit.remove('activeGroupIdByWorktree', worktreeId)
           } else {
-            next.activeGroupIdByWorktree = {
-              ...state.activeGroupIdByWorktree,
-              [worktreeId]: snapshot.activeGroupId
-            }
+            edit.set('activeGroupIdByWorktree', worktreeId, snapshot.activeGroupId)
           }
         }
 
         const restoredGroupId = snapshot.activeGroupId
         if (restoredGroupId) {
           const restoredTabId = snapshot.activeTabIdByGroup[restoredGroupId] ?? null
-          Object.assign(
-            next,
-            previewActiveSurfacePatch(state, worktreeId, restoredGroupId, restoredTabId)
-          )
+          surfacePatch = previewActiveSurfacePatch(edit, worktreeId, restoredGroupId, restoredTabId)
         }
 
-        if (Object.keys(next).length === 0) {
-          return state
+        if (!edit.changed && Object.keys(surfacePatch).length === 0) {
+          return undefined
         }
 
-        return next
+        return edit.finish(surfacePatch)
       })
     },
 
@@ -187,20 +167,21 @@ export function createTabsDragPreviewActions(
         return
       }
 
-      set((state): Partial<AppState> => {
+      set((state) => {
         const groups = state.groupsByWorktree[worktreeId] ?? []
         const sourceGroup = groups.find((group) => group.id === sourceGroupId)
         if (!sourceGroup || sourceGroup.activeTabId === preDragActiveTabId) {
-          return state
+          return undefined
         }
-        return {
-          groupsByWorktree: {
-            ...state.groupsByWorktree,
-            [worktreeId]: groups.map((group) =>
+        return editSessionSource(state)
+          .set(
+            'groupsByWorktree',
+            worktreeId,
+            groups.map((group) =>
               group.id === sourceGroupId ? { ...group, activeTabId: preDragActiveTabId } : group
             )
-          }
-        }
+          )
+          .finish({})
       })
     }
   }

@@ -89,7 +89,8 @@ async function openTab(c: WindowLaunchCase) {
   Object.assign(window.api.platform, { get: () => ({ platform: c.client, osRelease: '10' }) })
   const store = modules.createStore()
   holder.store = store
-  store.setState(
+  modules.setSessionTestState(
+    store,
     launchWorkspaceState(c.workspace, { ...getDefaultSettings('/home/alice'), ...c.settings })
   )
   const worktreeId = launchWorkspaceId(c.workspace)

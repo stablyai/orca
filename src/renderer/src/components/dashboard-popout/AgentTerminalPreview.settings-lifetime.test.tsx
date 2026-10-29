@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ITerminalOptions } from '@xterm/xterm'
@@ -127,7 +128,7 @@ beforeEach(() => {
       }
     }
   })
-  useAppStore.setState({ ...initial, settings }, true)
+  setSessionTestState(useAppStore, { ...initial, settings }, true)
 })
 
 afterEach(() => {
@@ -136,7 +137,7 @@ afterEach(() => {
     expect(instance.dispose).toHaveBeenCalledOnce()
   }
   expect(offData).toHaveBeenCalledTimes(onData.mock.calls.length)
-  useAppStore.setState(initial, true)
+  setSessionTestState(useAppStore, initial, true)
   if (originalApi) {
     Object.defineProperty(window, 'api', originalApi)
   } else {

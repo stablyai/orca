@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -29,7 +30,7 @@ function seedTwins(extra: Worktree[] = []): { local: Worktree; ssh: Worktree; dr
   const local = makeWorktree(TWIN_ID, 'app', { repoId: REPO_ID, hostId: 'local' })
   const ssh = makeWorktree(TWIN_ID, 'app', { repoId: REPO_ID, hostId: SSH })
   const other = makeWorktree(OTHER_ID, 'other', { repoId: REPO_ID, hostId: 'local' })
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     sortBy: 'manual',
     worktreesByRepo: { [REPO_ID]: [local, other, ssh, ...extra] },
     updateWorktreesMeta
@@ -72,12 +73,12 @@ const copyOf = (row: Worktree) => [{ id: row.id, hostId: row.hostId }]
 
 describe('a sidebar drop on one card of a twin', () => {
   beforeEach(() => {
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
     updateWorktreesMeta.mockClear()
   })
   afterEach(() => {
     cleanup()
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   it('writes the status to the dragged copy, not the twin the id-keyed map kept', async () => {
@@ -139,7 +140,7 @@ describe('a sidebar drop on one card of a twin', () => {
     const folder = makeFolderWorkspace({ id: 'folder-unranked' })
     const a = makeWorktree(`${REPO_ID}::/a`, 'a', { repoId: REPO_ID, hostId: 'local' })
     const b = makeWorktree(`${REPO_ID}::/b`, 'b', { repoId: REPO_ID, hostId: 'local' })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       sortBy: 'manual',
       worktreesByRepo: { [REPO_ID]: [a, b] },
       folderWorkspaces: [folder],
@@ -182,7 +183,7 @@ describe('a sidebar drop on one card of a twin', () => {
       sortOrder: 1
     })
     const aOnSsh = { ...a, hostId: SSH }
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       sortBy: 'manual',
       worktreesByRepo: { [REPO_ID]: [b, a, aOnSsh] },
       updateWorktreesMeta
@@ -214,7 +215,7 @@ describe('a sidebar drop on one card of a twin', () => {
     const folder = makeFolderWorkspace({ id: 'folder-selected', executionHostId: 'local' })
     const a = makeWorktree(`${REPO_ID}::/a`, 'a', { repoId: REPO_ID, hostId: 'local' })
     const b = makeWorktree(`${REPO_ID}::/b`, 'b', { repoId: REPO_ID, hostId: 'local' })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       sortBy: 'manual',
       worktreesByRepo: { [REPO_ID]: [a, b] },
       folderWorkspaces: [folder],
@@ -238,7 +239,7 @@ describe('a sidebar drop on one card of a twin', () => {
 
   it('refuses a dragged copy that left its host mid-drag rather than writing its twin', async () => {
     const { dragged } = seedTwins()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       worktreesByRepo: {
         [REPO_ID]: useAppStore.getState().worktreesByRepo[REPO_ID]!.filter((w) => w !== dragged)
       }
@@ -295,7 +296,7 @@ describe('a sidebar drop on one card of a twin', () => {
     seedTwins()
     const kept = getWorktreeMapFromState(useAppStore.getState()).get(TWIN_ID)
     // The kept twin already sits in the target lane; the dragged copy does not.
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       sortBy: 'smart',
       worktreesByRepo: {
         [REPO_ID]: useAppStore

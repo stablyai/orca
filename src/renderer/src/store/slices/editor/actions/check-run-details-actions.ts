@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import { translate } from '@/i18n/i18n'
@@ -43,6 +44,8 @@ export function createCheckRunDetailsActions(
         | { previous: OpenCheckRunDetailsState | undefined; next: OpenCheckRunDetailsState }
         | undefined
       set((s) => {
+        const sourceEdit = editSessionSource(s)
+
         const existing = s.openFiles.find((f) => f.id === id)
         if (existing) {
           const existingDetails = existing.checkRunDetails
@@ -57,23 +60,20 @@ export function createCheckRunDetailsActions(
               next: checkRunDetails
             }
           }
-          return {
-            openFiles: s.openFiles.map((f) =>
-              f.id === id
-                ? {
-                    ...f,
-                    mode: 'check-details' as const,
-                    relativePath: label,
-                    language: 'plaintext',
-                    checkRunDetails: incomingIsStale ? existingDetails : checkRunDetails
-                  }
-                : f
-            ),
-            activeFileId: id,
-            activeTabType: 'editor',
-            activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-            activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
-          }
+          sourceEdit.sequence('openFiles').map((f) =>
+            f.id === id
+              ? {
+                  ...f,
+                  mode: 'check-details' as const,
+                  relativePath: label,
+                  language: 'plaintext',
+                  checkRunDetails: incomingIsStale ? existingDetails : checkRunDetails
+                }
+              : f
+          )
+          sourceEdit.set('activeFileIdByWorktree', worktreeId, id)
+          sourceEdit.set('activeTabTypeByWorktree', worktreeId, 'editor')
+          return sourceEdit.finish({ activeFileId: id, activeTabType: 'editor' })
         }
 
         accepted = { previous: undefined, next: checkRunDetails }
@@ -88,13 +88,10 @@ export function createCheckRunDetailsActions(
           checkRunDetails
         }
 
-        return {
-          openFiles: [...s.openFiles, newFile],
-          activeFileId: id,
-          activeTabType: 'editor',
-          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
-        }
+        sourceEdit.sequence('openFiles').append(newFile)
+        sourceEdit.set('activeFileIdByWorktree', worktreeId, id)
+        sourceEdit.set('activeTabTypeByWorktree', worktreeId, 'editor')
+        return sourceEdit.finish({ activeFileId: id, activeTabType: 'editor' })
       })
       if (accepted) {
         const { previous, next } = accepted
@@ -113,20 +110,22 @@ export function createCheckRunDetailsActions(
         | { previous: OpenCheckRunDetailsState; next: OpenCheckRunDetailsState }
         | undefined
       set((s) => {
+        const sourceEdit = editSessionSource(s)
+
         const existing = s.openFiles.find((f) => f.id === id)
         if (existing?.mode !== 'check-details' || !existing.checkRunDetails) {
-          return s
+          return undefined
         }
         const current = existing.checkRunDetails
         if (current.contextKey !== contextKey) {
-          return s
+          return undefined
         }
         if (
           state.requestId !== undefined &&
           current.requestId !== undefined &&
           state.requestId < current.requestId
         ) {
-          return s
+          return undefined
         }
         // Async sidebar project lookup must not clear a previously known MR ref.
         const githubRepository = state.githubRepository ?? current.githubRepository ?? null
@@ -152,14 +151,13 @@ export function createCheckRunDetailsActions(
           isSameGitHubRepository(current.githubRepository ?? null, githubRepository) &&
           isSameGitLabProjectRef(current.gitlabProjectRef ?? null, gitlabProjectRef)
         ) {
-          return s
+          return undefined
         }
         accepted = { previous: current, next: nextCheckRunDetails }
-        return {
-          openFiles: s.openFiles.map((f) =>
-            f.id === id ? { ...f, checkRunDetails: nextCheckRunDetails } : f
-          )
-        }
+        sourceEdit
+          .sequence('openFiles')
+          .map((f) => (f.id === id ? { ...f, checkRunDetails: nextCheckRunDetails } : f))
+        return sourceEdit.finish({})
       })
       if (accepted) {
         const { previous, next } = accepted

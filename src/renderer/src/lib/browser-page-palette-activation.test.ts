@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -124,7 +125,8 @@ function makeGroup(overrides: Partial<TabGroup> = {}): TabGroup {
 }
 
 function seedStore(overrides: Partial<AppState> = {}): void {
-  useAppStore.setState(
+  setSessionTestState(
+    useAppStore,
     {
       ...initialAppState,
       worktreesByRepo: { 'repo-1': [makeWorktree()] },
@@ -264,7 +266,7 @@ describe('activateBrowserPagePaletteResult', () => {
     })
     // Capture the focus target before activation deletes the original page.
     mocks.activateAndRevealWorkspace.mockImplementation(() => {
-      useAppStore.setState({ browserPagesByWorkspace: {} })
+      setSessionTestState(useAppStore, { browserPagesByWorkspace: {} })
       return true
     })
 

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import {
   createTestStore,
   makeTabGroup,
@@ -70,7 +71,7 @@ export function seedBrowserLinkTestStore(store: BrowserLinkTestStore): void {
       }
     }
   })
-  store.setState((state) => ({
+  setSessionTestState(store, (state) => ({
     tabsByWorktree: {
       [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.map((tab) => ({
         id: tab.entityId,

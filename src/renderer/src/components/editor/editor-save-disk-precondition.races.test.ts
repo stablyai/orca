@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ORCA_EDITOR_FILE_CACHE_STALE_EVENT,
@@ -133,7 +134,7 @@ describe('guarded editor saves under races', () => {
   it("drops a clean sibling's stale cache on a write, so a remount loads the written text", async () => {
     const disk = stubGuardedDisk({ [GUARDED_PATH]: 'A' })
     const store = createEditorStore()
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {
         'repo-1': [
           makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }),
@@ -196,7 +197,7 @@ describe('guarded editor saves under races', () => {
   function openSharedModelTabs(disk: string) {
     const store = createEditorStore()
     storeRef.current = store
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {
         'repo-1': [
           makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }),

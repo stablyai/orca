@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
@@ -62,7 +63,7 @@ function terminalCreateCalls() {
 /** Main's frame draws the pane bound to the terminal it started. */
 function drawBinding(store: ReturnType<typeof createTestStore>, ptyId: string) {
   const layout = store.getState().terminalLayoutsByTabId[TAB]!
-  store.setState({
+  setSessionTestState(store, {
     terminalLayoutsByTabId: {
       ...store.getState().terminalLayoutsByTabId,
       [TAB]: { ...layout, ptyIdsByLeafId: { [LEAF]: ptyId } }
@@ -208,7 +209,7 @@ describe("a new tab's first terminal, started by main in a layout-owner build", 
     })
     await settle()
     const { [TAB]: _closed, ...layouts } = store.getState().terminalLayoutsByTabId
-    store.setState({ terminalLayoutsByTabId: layouts })
+    setSessionTestState(store, { terminalLayoutsByTabId: layouts })
 
     mocks.create!.reject(new Error('host_not_owned'))
     await settle()

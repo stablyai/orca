@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -62,7 +63,7 @@ function createHostModels(filePath = FILE_PATH) {
     const model = modelLifetimeTextModel(modelKey, initial)
     return { file: ownedFile, model, modelKey, initial }
   })
-  fixture.store.setState({ openFiles: owners.map((owner) => owner.file) })
+  setSessionTestState(fixture.store, { openFiles: owners.map((owner) => owner.file) })
   return { ...fixture, owners }
 }
 
@@ -185,7 +186,7 @@ describe('same-path models on different execution hosts', () => {
       }
       await Promise.resolve()
       expect(closed.every((owner) => owner.model.isDisposed())).toBe(true)
-      store.setState({
+      setSessionTestState(store, {
         openFiles: [...store.getState().openFiles, ...closed.map((owner) => owner.file)]
       })
       const reopened = closed.map((owner) => modelLifetimeTextModel(owner.modelKey, owner.saved))
@@ -235,7 +236,7 @@ describe('same-path models on different execution hosts', () => {
     expect(toEditorModelUri(FILE_PATH, getEditorModelOwnerKey(sharedLocal, store.getState()))).toBe(
       local.modelKey
     )
-    store.setState({ openFiles: [...store.getState().openFiles, sharedLocal] })
+    setSessionTestState(store, { openFiles: [...store.getState().openFiles, sharedLocal] })
     attach()
     edit(local.model, 'shared local edit')
     store.getState().closeFile(local.file.id)
@@ -262,7 +263,7 @@ describe('same-path models on different execution hosts', () => {
     const detach = attachModelLifetimeView(local.model)
     edit(runtime.model, 'runtime independent edit')
     attach()
-    store.setState({
+    setSessionTestState(store, {
       openFiles: store
         .getState()
         .openFiles.map((opened) =>
@@ -293,12 +294,14 @@ describe('same-path models on different execution hosts', () => {
     const local = owners[0]!
     const ssh = owners[1]!
     const legacyFile = { ...local.file, operationProvenance: undefined }
-    store.setState({ openFiles: [legacyFile, ...owners.slice(1).map((owner) => owner.file)] })
+    setSessionTestState(store, {
+      openFiles: [legacyFile, ...owners.slice(1).map((owner) => owner.file)]
+    })
     expect(getEditorModelOwnerKey(legacyFile, store.getState())).toBe('')
     const openFiles = store.getState().openFiles
     const detach = attachModelLifetimeView(local.model)
     attach()
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: Object.fromEntries(
         Object.entries(store.getState().worktreesByRepo).map(([repoId, worktrees]) => [
           repoId,
@@ -323,10 +326,15 @@ describe('same-path models on different execution hosts', () => {
     const { owners, store, attach } = createHostModels()
     const local = owners[0]!
     const legacyFile = { ...local.file, operationProvenance: undefined }
-    store.setState({ openFiles: [legacyFile, ...owners.slice(1).map((owner) => owner.file)] })
+    setSessionTestState(store, {
+      openFiles: [legacyFile, ...owners.slice(1).map((owner) => owner.file)]
+    })
     expect(getEditorModelOwnerKey(legacyFile, store.getState())).toBe('')
     attach()
-    store.setState({ openFiles: owners.slice(1).map((owner) => owner.file), worktreesByRepo: {} })
+    setSessionTestState(store, {
+      openFiles: owners.slice(1).map((owner) => owner.file),
+      worktreesByRepo: {}
+    })
     await Promise.resolve()
     expect(local.model.isDisposed()).toBe(true)
     for (const owner of owners.slice(1)) {

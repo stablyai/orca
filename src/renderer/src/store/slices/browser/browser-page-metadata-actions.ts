@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import { GRAB_BUDGET } from '../../../../../shared/browser-grab-types'
 import type {
   BrowserSlice,
@@ -29,27 +30,24 @@ export function createBrowserPageMetadataActions(
 > {
   return {
     setRemoteBrowserPageHandle: (pageId, handle) => {
-      set((s) => ({
-        remoteBrowserPageHandlesByPageId: {
-          ...s.remoteBrowserPageHandlesByPageId,
-          [pageId]: handle
-        }
-      }))
+      set((s) =>
+        editSessionSource(s).set('remoteBrowserPageHandlesByPageId', pageId, handle).finish({})
+      )
     },
 
     removeRemoteBrowserPageHandle: (pageId, remotePageId) => {
       let removedHandle: RemoteBrowserPageHandle | null = null
       set((s) => {
+        const sourceEdit = editSessionSource(s)
+
         const current = s.remoteBrowserPageHandlesByPageId[pageId]
         if (!current || (remotePageId && current.remotePageId !== remotePageId)) {
-          return s
+          return undefined
         }
         removedHandle = current
-        const nextRemoteBrowserPageHandlesByPageId = {
-          ...s.remoteBrowserPageHandlesByPageId
-        }
-        delete nextRemoteBrowserPageHandlesByPageId[pageId]
-        return { remoteBrowserPageHandlesByPageId: nextRemoteBrowserPageHandlesByPageId }
+
+        sourceEdit.remove('remoteBrowserPageHandlesByPageId', pageId)
+        return sourceEdit.finish({})
       })
       return removedHandle
     },
@@ -59,21 +57,18 @@ export function createBrowserPageMetadataActions(
       set((s) => {
         const page = findPage(s.browserPagesByWorkspace, pageId)
         if (!page) {
-          return s
+          return undefined
         }
         const workspace = findWorkspace(s.browserTabsByWorktree, page.workspaceId)
         if (!workspace) {
-          return s
+          return undefined
         }
         const nextPages = (s.browserPagesByWorkspace[workspace.id] ?? []).map((entry) =>
           entry.id === pageId ? { ...entry, viewportPresetId } : entry
         )
-        return {
-          browserPagesByWorkspace: {
-            ...s.browserPagesByWorkspace,
-            [workspace.id]: nextPages
-          }
-        }
+        return editSessionSource(s)
+          .set('browserPagesByWorkspace', workspace.id, nextPages)
+          .finish({})
       }),
 
     addBrowserPageAnnotation: (annotation) =>
@@ -101,7 +96,7 @@ export function createBrowserPageMetadataActions(
         const existing = s.browserAnnotationsByPageId[pageId] ?? []
         const target = existing.find((annotation) => annotation.id === annotationId)
         if (!target) {
-          return s
+          return undefined
         }
         const updated = sanitizeBrowserPageAnnotation({ ...target, ...patch })
         return {
@@ -119,7 +114,7 @@ export function createBrowserPageMetadataActions(
         const existing = s.browserAnnotationsByPageId[pageId] ?? []
         const next = existing.filter((annotation) => annotation.id !== annotationId)
         if (next.length === existing.length) {
-          return s
+          return undefined
         }
         const nextByPageId = { ...s.browserAnnotationsByPageId }
         if (next.length > 0) {
@@ -145,7 +140,7 @@ export function createBrowserPageMetadataActions(
           notes === s.browserAnnotationsByPageId &&
           markers === s.browserAnnotationMarkerIdsByPageId
         ) {
-          return s
+          return undefined
         }
         return { browserAnnotationsByPageId: notes, browserAnnotationMarkerIdsByPageId: markers }
       }),
@@ -154,7 +149,7 @@ export function createBrowserPageMetadataActions(
       set((s) => {
         const markers = omitRecordKeys(s.browserAnnotationMarkerIdsByPageId, [pageId])
         return markers === s.browserAnnotationMarkerIdsByPageId
-          ? s
+          ? undefined
           : { browserAnnotationMarkerIdsByPageId: markers }
       }),
 
@@ -165,7 +160,7 @@ export function createBrowserPageMetadataActions(
         const delivered = new Set(deliveredAnnotations)
         const remaining = existing.filter((note) => !delivered.has(note))
         if (remaining.length === existing.length) {
-          return s
+          return undefined
         }
         const nextByPageId = { ...s.browserAnnotationsByPageId }
         if (remaining.length > 0) {

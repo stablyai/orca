@@ -1,3 +1,4 @@
+import { setSessionTestState } from '../../src/renderer/src/lib/test-support/session-source-fixture'
 import { describe, expect, it } from 'vitest'
 import { createAgentStatusExtensionHarness } from '../../src/main/pi/agent-status-extension-test-harness'
 import { normalizeHookPayload } from '../../src/shared/agent-hook-listener'
@@ -14,7 +15,9 @@ const CHILD_SESSION = '33333333-3333-4333-8333-333333333333'
 
 async function rootWithActiveChild(): Promise<ReturnType<typeof createTestStore>> {
   const store = createTestStore()
-  store.setState({ tabsByWorktree: { 'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })] } })
+  setSessionTestState(store, {
+    tabsByWorktree: { 'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })] }
+  })
   const listener = createHookListenerState()
   const harness = createAgentStatusExtensionHarness({
     kind: 'omp',

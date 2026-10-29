@@ -1,3 +1,4 @@
+import { editSessionSource } from '../session-source-edits'
 import { describe, expect, it } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -477,9 +478,12 @@ describe('sleeping agent retirement', () => {
       'tab-2:leaf-2': sibling
     }
 
-    const next = removeSleepingAgentSessionsForTab(records, 'tab-1')
+    const edit = editSessionSource({ sleepingAgentSessionsByPaneKey: records })
+    removeSleepingAgentSessionsForTab(edit, 'tab-1')
+    const next = edit.read('sleepingAgentSessionsByPaneKey')
     expect(next).toEqual({ 'tab-2:leaf-2': sibling })
     expect(next['tab-2:leaf-2']).toBe(sibling)
-    expect(removeSleepingAgentSessionsForTab(next, 'missing-tab')).toBe(next)
+    removeSleepingAgentSessionsForTab(edit, 'missing-tab')
+    expect(edit.read('sleepingAgentSessionsByPaneKey')).toBe(next)
   })
 })

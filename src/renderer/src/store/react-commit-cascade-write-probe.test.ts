@@ -1,5 +1,7 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
+import { withSessionSourceWrites } from '@/store/session-source-write-boundary'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { create, type StoreApi, type UseBoundStore } from 'zustand'
+import { create } from 'zustand'
 import { withReactCommitCascadeWriteProbe } from './react-commit-cascade-write-probe'
 import { withEditorBufferRecords } from './editor-buffer-record-lifecycle'
 import type { EditorBufferRecords } from './slices/editor/buffers/editor-buffer-record'
@@ -22,9 +24,11 @@ vi.mock('@/lib/react-commit-cascade-store-write-samples', () => ({
 
 type ProbedState = { ticks: number; label?: string }
 
-function createProbedStore(): UseBoundStore<StoreApi<ProbedState>> {
+function createProbedStore() {
   return create<ProbedState>()(
-    withReactCommitCascadeWriteProbe<ProbedState>(() => ({ ticks: 0, label: 'initial' }))
+    withSessionSourceWrites<ProbedState>(
+      withReactCommitCascadeWriteProbe<ProbedState>(() => ({ ticks: 0, label: 'initial' }))
+    )
   )
 }
 
@@ -63,7 +67,7 @@ describe('withReactCommitCascadeWriteProbe', () => {
     const useProbedStore = createProbedStore()
     probe.armed = true
 
-    useProbedStore.setState({ ticks: 2 }, true)
+    setSessionTestState(useProbedStore, { ticks: 2 }, true)
 
     expect(useProbedStore.getState()).toEqual({ ticks: 2 })
   })

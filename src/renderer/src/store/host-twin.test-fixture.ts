@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 /** Seed same-ID repo/folder twins on two hosts with live/dormant shells, dirty drafts and sleeping agents. Raw-ID buckets are shared; host-twin-state-projection.test-fixture.ts attributes survivors. */
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
@@ -154,7 +155,7 @@ export function createHostTwinFixture(kind: HostTwinKind): HostTwinFixture {
       contentType
     })
 
-  store.setState({
+  setSessionTestState(store, {
     ...(isFolder
       ? {
           projectGroups: [projectGroupRow('local'), projectGroupRow(remoteHostId)],

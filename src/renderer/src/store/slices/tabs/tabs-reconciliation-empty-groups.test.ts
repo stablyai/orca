@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { createTestStore, makeTab } from '../store-test-helpers'
 import { createTabsSliceMockApi } from '../tabs-slice-test-harness'
@@ -26,7 +27,7 @@ function seedSource(
 ): void {
   store.getState().createUnifiedTab(workspaceId, source, { id: 'source', entityId: 'source' })
   if (source === 'terminal') {
-    store.setState({
+    setSessionTestState(store, {
       tabsByWorktree: {
         [workspaceId]: [makeTab({ id: 'source', worktreeId: workspaceId, ptyId: 'pty-1' })]
       },

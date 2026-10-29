@@ -1,5 +1,5 @@
 import { structuralValuesEqualIgnoringUndefined } from '../../../../../shared/structural-value-equality'
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../../types'
 import type {
   AgentStatusBatchTransaction,
@@ -10,11 +10,16 @@ import type {
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { GeneratedTabTitleUpdate } from '../terminal-tab-title-batch'
 import { createFreshnessScheduler } from './agent-status-freshness-scheduler'
+import {
+  editSessionSource,
+  unwrapSessionSourceWrite,
+  composeSessionSourceWrites,
+  type SessionSourcePartial
+} from '../../session-source-edits'
 
 export type AgentStatusStateUpdate =
-  | AppState
-  | Partial<AppState>
-  | ((state: AppState, changedPaneKeys: Set<string>) => AppState | Partial<AppState>)
+  | SessionSourcePartial<AppState>
+  | ((state: AppState, changedPaneKeys: Set<string>) => SessionSourcePartial<AppState> | undefined)
 
 export type AgentStatusRuntime = {
   get: () => AppState
@@ -31,8 +36,8 @@ export type AgentStatusRuntime = {
 }
 
 export function createAgentStatusRuntime(
-  storeSet: Parameters<StateCreator<AppState>>[0],
-  storeGet: Parameters<StateCreator<AppState>>[1],
+  storeSet: Parameters<SessionStateCreator<AppState>>[0],
+  storeGet: Parameters<SessionStateCreator<AppState>>[1],
   getActions: () => Pick<
     AgentStatusSlice,
     'setAgentStatus' | 'recordAgentProviderSession' | 'setAgentProgramStatus'
@@ -75,7 +80,7 @@ export function createAgentStatusRuntime(
     }
   }
   const commit = (
-    patch: AppState | Partial<AppState>,
+    patch: SessionSourcePartial<AppState>,
     before: AppState,
     paneKeys: ReadonlySet<string>
   ): void => {
@@ -84,7 +89,8 @@ export function createAgentStatusRuntime(
       return
     }
     const changes: AgentStatusChange[] = []
-    const rows = patch.agentStatusByPaneKey ?? before.agentStatusByPaneKey
+    const rows =
+      unwrapSessionSourceWrite(patch).partial.agentStatusByPaneKey ?? before.agentStatusByPaneKey
     for (const paneKey of paneKeys) {
       const previous = before.agentStatusByPaneKey[paneKey]
       const current = rows[paneKey]
@@ -106,7 +112,7 @@ export function createAgentStatusRuntime(
     }
   }
   let batchedAgentStatusState: AppState | null = null
-  let batchedAgentStatusTouchedKeys: Set<keyof AppState> | null = null
+  let batchedSourceWrites: SessionSourcePartial<AppState>[] | null = null
   // Staged in-place mutations cannot signal changes by identity; count every accepted write.
   let batchedAgentStatusRevision = 0
   let batchedAgentStatusEffects: (() => void)[] | null = null
@@ -120,22 +126,18 @@ export function createAgentStatusRuntime(
     const before = staged ?? storeGet()
     const paneKeys = batchedPaneKeys ?? new Set<string>()
     const nextState = typeof update === 'function' ? update(before, paneKeys) : update
+    if (nextState === undefined) {
+      return
+    }
     if (staged === null) {
       commit(nextState, before, paneKeys)
       return
     }
-    if (Object.is(nextState, staged)) {
-      return
-    }
     batchedAgentStatusRevision += 1
-    const touched = batchedAgentStatusTouchedKeys
-    if (touched) {
-      for (const key of Object.keys(nextState)) {
-        touched.add(key as keyof AppState)
-      }
-    }
-    // The staged object is private until commit, so fold into it instead of cloning AppState per update.
-    Object.assign(staged, nextState)
+    const { partial } = unwrapSessionSourceWrite(nextState)
+    batchedSourceWrites?.push(nextState)
+    // The staged root is private until commit; prior published values remain immutable.
+    Object.assign(staged, partial)
   }
 
   const runAfterCommit = (effect: () => void): void => {
@@ -209,12 +211,11 @@ export function createAgentStatusRuntime(
       return operation(batchTransaction)
     }
     const initialState = storeGet()
-    const touchedKeys = new Set<keyof AppState>()
     const paneKeys = new Set<string>()
     batchedPaneKeys = paneKeys
     const revisionAtStart = batchedAgentStatusRevision
     batchedAgentStatusState = { ...initialState }
-    batchedAgentStatusTouchedKeys = touchedKeys
+    batchedSourceWrites = []
     batchedAgentStatusEffects = []
     batchedGeneratedTabTitleUpdates = []
     try {
@@ -224,18 +225,19 @@ export function createAgentStatusRuntime(
       const generatedTabTitleUpdates = batchedGeneratedTabTitleUpdates
       const freshnessRequested = batchedAgentStatusFreshnessRequested
       const hasStagedWrites = batchedAgentStatusRevision !== revisionAtStart
+      const sourceWrites = batchedSourceWrites
       batchedPaneKeys = null
       batchedAgentStatusState = null
-      batchedAgentStatusTouchedKeys = null
+      batchedSourceWrites = null
       batchedAgentStatusEffects = null
       batchedGeneratedTabTitleUpdates = null
       batchedAgentStatusFreshnessRequested = false
       if (hasStagedWrites) {
-        commit(
-          buildAgentStatusBatchPatch(initialState, nextState, touchedKeys),
-          initialState,
-          paneKeys
-        )
+        const patch = composeSessionSourceWrites(sourceWrites, true, {
+          before: initialState,
+          after: nextState
+        })
+        commit(patch, initialState, paneKeys)
       }
       if (generatedTabTitleUpdates.length > 0) {
         storeGet().setGeneratedTabTitlesFromAgentPrompts(generatedTabTitleUpdates)
@@ -250,7 +252,7 @@ export function createAgentStatusRuntime(
     } finally {
       batchedPaneKeys = null
       batchedAgentStatusState = null
-      batchedAgentStatusTouchedKeys = null
+      batchedSourceWrites = null
       batchedAgentStatusEffects = null
       batchedGeneratedTabTitleUpdates = null
       batchedAgentStatusFreshnessRequested = false
@@ -275,19 +277,18 @@ export function createAgentStatusRuntime(
     }
     const uniquePaneKeys = new Set(paneKeys)
     set((s) => {
-      let nextSleeping = s.sleepingAgentSessionsByPaneKey
+      const edit = editSessionSource(s)
+      let changed = false
       for (const paneKey of uniquePaneKeys) {
-        if (paneKey in nextSleeping) {
-          if (nextSleeping === s.sleepingAgentSessionsByPaneKey) {
-            nextSleeping = { ...nextSleeping }
-          }
-          delete nextSleeping[paneKey]
+        if (paneKey in s.sleepingAgentSessionsByPaneKey) {
+          edit.remove('sleepingAgentSessionsByPaneKey', paneKey)
+          changed = true
         }
       }
-      if (nextSleeping === s.sleepingAgentSessionsByPaneKey) {
-        return s
+      if (!changed) {
+        return undefined
       }
-      return { sleepingAgentSessionsByPaneKey: nextSleeping }
+      return edit.finish()
     })
   }
 
@@ -302,19 +303,4 @@ export function createAgentStatusRuntime(
     transactAgentStatuses,
     clearSleepingAgentSessionsByPaneKey
   }
-}
-
-function buildAgentStatusBatchPatch(
-  initialState: AppState,
-  nextState: AppState,
-  touchedKeys: ReadonlySet<keyof AppState>
-): Partial<AppState> {
-  const patch: Record<string, unknown> = {}
-  // Untouched slices cannot differ, so the patch stays proportional to what the fold actually wrote.
-  for (const key of touchedKeys) {
-    if (!Object.is(nextState[key], initialState[key])) {
-      patch[key as string] = nextState[key]
-    }
-  }
-  return patch as Partial<AppState>
 }

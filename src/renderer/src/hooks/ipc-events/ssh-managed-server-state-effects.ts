@@ -1,3 +1,5 @@
+import { replaceSessionSourceFields } from '@/store/session-source-write-boundary'
+import { editSessionSource } from '@/store/session-source-edits'
 import type {
   SshConnectionState,
   SshManagedServerLinkedProject
@@ -121,10 +123,9 @@ async function loadManagedServerCatalogs(targetId: string, load: CatalogLoad): P
   const isCurrent = (): boolean => catalogLoadByTarget.get(targetId) === load
   // Pin existing desktop pages before the catalogs change their workspace owner.
   useAppStore.setState((state) => {
-    const browserPagesByWorkspace = preserveConvertedSshBrowserPages(state, targetId)
-    return browserPagesByWorkspace === state.browserPagesByWorkspace
-      ? state
-      : { browserPagesByWorkspace }
+    const edit = editSessionSource(state)
+    preserveConvertedSshBrowserPages(state, targetId, edit)
+    return edit.changed ? edit.finish() : undefined
   })
   const store = useAppStore.getState()
   // Conversion must refresh the server catalog too because host badges read its names.
@@ -172,12 +173,16 @@ async function loadManagedServerCatalogs(targetId: string, load: CatalogLoad): P
       toSshExecutionHostId(targetId),
       toRuntimeExecutionHostId(environmentId)
     )
-    return {
-      ...withoutConvertedSshHostRows(state, targetId),
-      ...(lastVisitedAtByWorktreeId === state.lastVisitedAtByWorktreeId
-        ? {}
-        : { lastVisitedAtByWorktreeId })
-    }
+    // Migration replaces the source host catalog and rekeys its saved workspace identities together.
+    return replaceSessionSourceFields(
+      {
+        ...withoutConvertedSshHostRows(state, targetId),
+        ...(lastVisitedAtByWorktreeId === state.lastVisitedAtByWorktreeId
+          ? {}
+          : { lastVisitedAtByWorktreeId })
+      },
+      'catalog'
+    )
   })
   rehomeActiveWorkspaceWhenKnown(targetId, environmentId, linkedRepoIds, isCurrent)
 }

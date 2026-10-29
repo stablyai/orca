@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -45,20 +46,20 @@ describe('main sleeping retention against the window, on one fake clock', () => 
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(5_000_000)
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
   afterEach(() => {
     cleanup()
     vi.useRealTimers()
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   it('keeps and releases the same sleeping rows', async () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       worktreesByRepo: { [repo.id]: [makeWorktree('a', 'A'), makeWorktree('b', 'B')] }
     })
     act(() =>
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         showSleepingWorkspaces: false,
         tabsByWorktree: { a: [makeTerminalTab({ id: 'tab-a', worktreeId: 'a' })] },
         ptyIdsByTabId: { 'tab-a': ['pty-a'] }
@@ -81,7 +82,7 @@ describe('main sleeping retention against the window, on one fake clock', () => 
     const mainRetained = (): string[] =>
       (owner.snapshot().retention?.retainedIds ?? []).map(getWorktreeIdFromHostIdentity)
 
-    act(() => useAppStore.setState({ ptyIdsByTabId: {} }))
+    act(() => setSessionTestState(useAppStore, { ptyIdsByTabId: {} }))
     owner.noteActivityChange()
     expect([...(window.result.current ?? [])]).toEqual(['a'])
     expect(mainRetained()).toEqual(['a'])

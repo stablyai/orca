@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { prCommentsCacheSuffix } from '../github/cache-identity'
 import { mergePRCommentIntoList } from '../github/pr-comment-cache'
@@ -69,7 +70,8 @@ describe('createGitHubSlice.fetchPRComments', () => {
     const repoPath = '/repo'
     const repoId = 'repo-id'
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This settings, repos fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
       repos: [
         {
@@ -113,7 +115,8 @@ describe('createGitHubSlice.fetchPRComments', () => {
     const repoPath = '/repo'
     const repoId = 'repo-id'
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This settings, repos fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
       repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }]
     } as unknown as Partial<AppState>)
@@ -155,7 +158,8 @@ describe('createGitHubSlice.fetchPRComments', () => {
     const repoPath = '/repo'
     const repoId = 'caller-repo-id'
     const sourceContext = githubSourceContext('runtime:source-runtime', 'runtime-repo-id')
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This settings, repos fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'focused-runtime' } as AppState['settings'],
       repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }]
     } as unknown as Partial<AppState>)
@@ -311,7 +315,8 @@ describe('createGitHubSlice PR comment mutations', () => {
     const store = createTestStore()
     const repoPath = '/repo'
     const repoId = 'repo-id'
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This repos fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }]
     } as unknown as Partial<AppState>)
 
@@ -338,7 +343,8 @@ describe('createGitHubSlice PR comment mutations', () => {
     const repoPath = '/repo'
     const repoId = 'repo-id'
     const sourceContext = githubSourceContext('local', repoId)
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This repos fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }]
     } as unknown as Partial<AppState>)
 
@@ -384,7 +390,8 @@ describe('createGitHubSlice PR comment mutations', () => {
     const store = createTestStore()
     const repoPath = '/repo'
     const repoId = 'repo-id'
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This settings, repos fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
       repos: [
         {
@@ -431,7 +438,8 @@ describe('createGitHubSlice PR comment mutations', () => {
     const repoPath = '/repo'
     const repoId = 'repo-id'
     const cacheKey = `${repoId}::pr-comments::acme/widgets::12`
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This repos, commentsCache fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
       commentsCache: {
         [cacheKey]: {
@@ -479,7 +487,8 @@ describe('createGitHubSlice PR comment mutations', () => {
     const repoPath = '/repo'
     const repoId = 'repo-id'
     const cacheKey = `${repoId}::pr-comments::acme/widgets::12`
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This repos, commentsCache fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
       commentsCache: {
         [cacheKey]: {
@@ -540,7 +549,8 @@ describe('createGitHubSlice PR comment mutations', () => {
     const store = createTestStore()
     const repoPath = '/repo'
     const repoId = 'repo-id'
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This settings, repos fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
       repos: [
         {
@@ -578,7 +588,8 @@ describe('createGitHubSlice PR comment mutations', () => {
     const store = createTestStore()
     const repoPath = '/repo'
     const repoId = 'repo-id'
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This repos fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }]
     } as unknown as Partial<AppState>)
 

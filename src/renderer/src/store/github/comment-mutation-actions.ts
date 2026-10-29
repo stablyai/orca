@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import type { GitHubCommentResult, PRComment } from '../../../../shared/github/comment-types'
@@ -16,8 +16,8 @@ import {
 } from './work-item-routing'
 
 export const createCommentMutationActions = (
-  set: Parameters<StateCreator<AppState>>[0],
-  get: Parameters<StateCreator<AppState>>[1]
+  set: Parameters<SessionStateCreator<AppState>>[0],
+  get: Parameters<SessionStateCreator<AppState>>[1]
 ): Pick<GitHubSlice, 'addPRReviewCommentReply' | 'setPRCommentReaction'> => ({
   addPRReviewCommentReply: async (repoPath, prNumber, commentId, body, options) => {
     const repo = get().repos?.find((candidate) =>
@@ -139,7 +139,7 @@ export const createCommentMutationActions = (
     set((state) => {
       const entry = state.commentsCache[cacheKey]
       if (!entry?.data) {
-        return state
+        return undefined
       }
       return {
         commentsCache: {
@@ -191,7 +191,7 @@ export const createCommentMutationActions = (
       set((state) => {
         const entry = state.commentsCache[cacheKey]
         if (!entry?.data) {
-          return state
+          return undefined
         }
         return {
           commentsCache: {

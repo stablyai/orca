@@ -1,4 +1,5 @@
 /** Direct SSH wake must wait for connection before declaring panes absent (STA-3500/3498 once forked five Claude writers). Paired-runtime web-terminal guards did not cover this path; retain records while unreachable and wake genuine sleepers after reconnect. */
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { useAppStore } from '@/store'
@@ -14,7 +15,7 @@ const LOCAL_WORKTREE_ID = 'repoLocal::/home/dev/proj/feature'
 
 afterEach(() => {
   vi.unstubAllGlobals()
-  useAppStore.setState(initialAppStoreState, true)
+  setSessionTestState(useAppStore, initialAppStoreState, true)
 })
 
 function makeRecord(worktreeId: string): SleepingAgentSessionRecord {
@@ -35,7 +36,8 @@ function makeRecord(worktreeId: string): SleepingAgentSessionRecord {
 /** A cold start: the catalog knows the SSH workspace, but no tab row has arrived for it yet. */
 function seedColdDirectSshStart(): SleepingAgentSessionRecord {
   const record = makeRecord(WORKTREE_ID)
-  useAppStore.setState({
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+  setSessionTestState(useAppStore, {
     repos: [
       {
         id: 'repoSsh',
@@ -118,7 +120,8 @@ describe('sleeping-agent resume across the direct-SSH hydration gap', () => {
       paneKey: 'tab-2:leaf-1',
       tabId: 'tab-2'
     }
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       sleepingAgentSessionsByPaneKey: { [localRecord.paneKey]: localRecord }
     } as never)
 

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
@@ -239,7 +240,7 @@ describe('closeBrowserTab with reason cleanup', () => {
     const unrelated = Object.fromEntries(
       Array.from({ length: 1000 }, (_, i) => [`other-${i}`, true as const])
     )
-    store.setState({
+    setSessionTestState(store, {
       browserPagesByWorkspace: { [workspaceId]: pages },
       pendingAddressBarFocusByPageId: { ...unrelated, 'closed-999': true, [workspaceId]: true },
       pendingAddressBarFocusByTabId: { ...unrelated, 'closed-999': true, [workspaceId]: true }

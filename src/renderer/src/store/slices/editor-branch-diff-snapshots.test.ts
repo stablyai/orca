@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { createEditorStore } from './editor-slice-test-harness'
 import type { AppState } from '../types'
@@ -174,7 +175,7 @@ describe('createEditorSlice openBranchDiff', () => {
       changedFiles: 1,
       status: 'ready'
     }
-    store.setState({
+    setSessionTestState(store, {
       repos: [{ id: 'repo-1', executionHostId: 'runtime:env-1' }] as unknown as AppState['repos'],
       worktreesByRepo: {
         'repo-1': [{ id: worktreeId, repoId: 'repo-1', hostId: 'runtime:env-1' }]

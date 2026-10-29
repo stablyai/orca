@@ -1,3 +1,5 @@
+import { SessionUnitReader } from '../../../shared/session-unit-reader'
+import { publishSessionChanges, sessionPublication } from '../loading-store/session-publication'
 import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import { serializeOrcadMigrationValue } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import { requireOrcadMigrationSshSource } from '../../../shared/orcad-migration/orcad-migration-source-kind'
@@ -120,7 +122,10 @@ function subtractCloseIntents(
     })
     next[destinationEnvironmentId] = destinationEntries
   }
-  state.workspaceSession.clientHostedBrowserCloseIntentsByEnvironment = next
+  const { root, index } = sessionPublication(state).partition('local')
+  const reader = new SessionUnitReader(root, index)
+  reader.replace('clientHostedBrowserCloseIntentsByEnvironment', { present: true, value: next })
+  publishSessionChanges(state, 'local', reader.prepare({ kind: 'authoritative' }))
 }
 
 function rewriteDesktopUiForDestination(

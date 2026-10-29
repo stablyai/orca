@@ -1,5 +1,5 @@
 /** Measure runtime writes that replace equal-valued references; lint cannot infer payload equality. Dev/exposed stores only, one flag check while disarmed; armed comparisons never resolve functional updaters, which remain Zustand-owned. */
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from './session-source-write-boundary'
 import type { StoreSetArgs } from './react-commit-cascade-write-probe'
 
 export const storeIdentityChurnProbe = { armed: false, captureSites: false }
@@ -146,8 +146,8 @@ function recordWrite(
 
 /** Wrap creator to reach slice-captured set closures; patching api.setState alone misses them (react-commit-cascade-write-probe). */
 export function withStoreIdentityChurnProbe<TState>(
-  createState: StateCreator<TState, [], []>
-): StateCreator<TState, [], []> {
+  createState: SessionStateCreator<TState>
+): SessionStateCreator<TState> {
   return (set, get, api) => {
     const probe = (write: typeof set): typeof set => {
       const forward = (args: StoreSetArgs<TState>): void => {

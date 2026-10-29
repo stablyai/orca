@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -147,7 +148,7 @@ function seed(
   comments: DiffComment[],
   worktreeOverrides: Partial<Worktree> = {}
 ): void {
-  store.setState({
+  setSessionTestState(store, {
     repos: [{ id: REPO, path: '/path/repo', displayName: 'repo', badgeColor: '#000', addedAt: 0 }],
     worktreesByRepo: { [REPO]: [{ ...makeWorktree(comments), ...worktreeOverrides }] }
   })
@@ -253,7 +254,7 @@ describe('updateDiffComment', () => {
 
   it('persists through the selected runtime environment', async () => {
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       worktreesByRepo: {
         [REPO]: [
@@ -294,7 +295,7 @@ describe('updateDiffComment', () => {
 
   it('persists explicit local worktree comments locally while a runtime is focused', async () => {
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       repos: [
         {
@@ -629,7 +630,7 @@ describe('bulk clear diff comments', () => {
 
   it('persists clear through the selected runtime environment', async () => {
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       worktreesByRepo: {
         [REPO]: [

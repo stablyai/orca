@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { setSessionTestState } from '../../src/renderer/src/lib/test-support/session-source-fixture'
 // Register preload/store seams before importing their consumers.
 import {
   fixture,
@@ -150,7 +151,7 @@ describe('Explicit desktop read acknowledgements', () => {
   it('Mark all read covers every chat it marks, viewed earlier or never opened', async () => {
     const OTHER = 'session-beta'
     const otherSubject = structuredAgentSessionPaneKey('chat-2', OTHER)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       unifiedTabsByWorktree: {
         [WORKSPACE]: [
           ...(useAppStore.getState().unifiedTabsByWorktree[WORKSPACE] ?? []),
@@ -489,7 +490,7 @@ describe('Accepted structured history read retirement', () => {
       if (!tab) {
         throw new Error('chat tab missing')
       }
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         unifiedTabsByWorktree: { [WORKSPACE]: [{ ...tab, executionHostId: 'runtime:retry-host' }] }
       })
       addPrompt('A')

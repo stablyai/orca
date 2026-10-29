@@ -1,3 +1,4 @@
+import { setSessionTestState } from '../../src/renderer/src/lib/test-support/session-source-fixture'
 import { getDefaultSettings } from '../../src/shared/constants'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -88,7 +89,7 @@ function makeLayout(leafId: string, ptyId: string) {
 }
 
 function seedWorkspace(options: { helper?: boolean } = {}): void {
-  useAppStore.setState(initialAppStoreState, true)
+  setSessionTestState(useAppStore, initialAppStoreState, true)
   const target = makeWorktree(WORKTREE_ID, WORKTREE_PATH)
   const canary = makeWorktree(CANARY_WORKTREE_ID, CANARY_WORKTREE_PATH)
   const original = makeTab(
@@ -99,7 +100,7 @@ function seedWorkspace(options: { helper?: boolean } = {}): void {
   )
   const unrelated = makeTab(CANARY_TAB_ID, CANARY_WORKTREE_ID, CANARY_PTY_ID, 'Unrelated')
   const helper = makeTab(HELPER_TAB_ID, WORKTREE_ID, 'pty-worker-child', 'Worker child')
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     repos: [
       {
         id: REPO_ID,
@@ -392,7 +393,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
-  useAppStore.setState(initialAppStoreState, true)
+  setSessionTestState(useAppStore, initialAppStoreState, true)
 })
 
 describe('completed background-worker retirement resume matrix', () => {
@@ -469,7 +470,7 @@ describe('completed background-worker retirement resume matrix', () => {
 
     seedWorkspace({ helper: true })
     recordCompletedWorker()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       sleepingAgentSessionsByPaneKey: {
         ...useAppStore.getState().sleepingAgentSessionsByPaneKey,
         [HELPER_PANE_KEY]: {

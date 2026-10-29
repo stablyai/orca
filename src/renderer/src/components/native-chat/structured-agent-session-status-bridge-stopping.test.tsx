@@ -1,3 +1,5 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
+import type { SessionSourceSet } from '@/store/session-source-edits'
 // @vitest-environment happy-dom
 
 // A settled Stop can change only stopping; sidebar status must follow both edges.
@@ -13,8 +15,8 @@ import type { Tab } from '../../../../shared/tab-types'
 import type { AppState } from '@/store/types'
 
 type TestStore = {
-  getState: () => AppState
-  setState: (state: Partial<AppState> & { testRuntimeOwner?: string | null }) => void
+  getState: () => AppState & { testRuntimeOwner?: string | null }
+  setState: SessionSourceSet<AppState & { testRuntimeOwner?: string | null }>
 }
 
 const mocks = vi.hoisted(() => {
@@ -25,6 +27,12 @@ const mocks = vi.hoisted(() => {
   }
   return hoisted
 })
+
+function seedMockState(partial: Partial<AppState & { testRuntimeOwner?: string | null }>): void {
+  if (mocks.store) {
+    setSessionTestState(mocks.store, partial)
+  }
+}
 
 vi.mock('@/store', async () => {
   const { createTestStore } = await import('@/store/slices/store-test-helpers')
@@ -88,7 +96,7 @@ describe("the sidebar row's Stopping", () => {
     vi.clearAllMocks()
     resetStructuredAgentSessionStatusFeedsForTests()
     mocks.subscribeStatus.mockResolvedValue({ unsubscribe: mocks.unsubscribe })
-    mocks.store?.setState({
+    seedMockState({
       agentStatusByPaneKey: {},
       testRuntimeOwner: null,
       unifiedTabsByWorktree: { 'wt-1': [structuredTab] }

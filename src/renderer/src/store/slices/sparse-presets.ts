@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
@@ -37,7 +37,7 @@ type SparsePresetsMaps = Pick<
 export function omitSparsePresetsForRepos(
   s: SparsePresetsMaps,
   removedRepoIds: Iterable<string>
-): Partial<AppState> {
+): Partial<SparsePresetsMaps> {
   const removed = removedRepoIds instanceof Set ? removedRepoIds : new Set(removedRepoIds)
   if (removed.size === 0) {
     return {}
@@ -53,7 +53,7 @@ export function omitSparsePresetsForRepos(
     }
     return changed ? out : obj
   }
-  const result: Partial<AppState> = {}
+  const result: Partial<SparsePresetsMaps> = {}
   const byRepo = omit(s.sparsePresetsByRepo)
   if (byRepo !== s.sparsePresetsByRepo) {
     result.sparsePresetsByRepo = byRepo
@@ -73,7 +73,7 @@ export function omitSparsePresetsForRepos(
   return result
 }
 
-export const createSparsePresetsSlice: StateCreator<AppState, [], [], SparsePresetsSlice> = (
+export const createSparsePresetsSlice: SessionStateCreator<AppState, SparsePresetsSlice> = (
   set,
   get
 ) => ({
@@ -140,7 +140,7 @@ export const createSparsePresetsSlice: StateCreator<AppState, [], [], SparsePres
       set((s) => {
         const existing = s.sparsePresetsByRepo[args.repoId]
         if (existing === undefined) {
-          return s
+          return undefined
         }
         const without = existing.filter((preset) => preset.id !== saved.id)
         return {

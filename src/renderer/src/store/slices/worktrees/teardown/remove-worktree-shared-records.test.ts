@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
@@ -30,8 +31,8 @@ beforeEach(() => {
   show.mockClear()
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   vi.stubGlobal('window', { api: { pty: { kill: vi.fn() } } })
-  useAppStore.setState(useAppStore.getInitialState(), true)
-  useAppStore.setState({
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, {
     worktreesByRepo: {
       'repo-1': [
         makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }),
@@ -43,7 +44,7 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 it('removing one workspace keeps the shared record, its draft and its key in the other', async () => {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     openFiles: [tab('a', 'wt-1', { isDirty: true }), tab('b', 'wt-2', { isDirty: true })],
     editorDrafts: { a: 'shared edits', b: 'shared edits' }
   })
@@ -64,7 +65,7 @@ it('removing one workspace keeps the shared record, its draft and its key in the
 })
 
 it("a removal with no prompt keeps the last view's dirty record; reopening the file joins it", async () => {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     openFiles: [tab('b', 'wt-2', { isDirty: true })],
     editorDrafts: { b: 'only copy' }
   })
@@ -75,14 +76,14 @@ it("a removal with no prompt keeps the last view's dirty record; reopening the f
   expect(state().openFiles).toEqual([])
   expect(state().editorBufferKept[recordId]?.draft).toBe('only copy')
 
-  useAppStore.setState({ openFiles: [tab('a', 'wt-1')] })
+  setSessionTestState(useAppStore, { openFiles: [tab('a', 'wt-1')] })
   expect(state().editorBufferIdOf.a).toBe(recordId)
   expect(state().editorDrafts.a).toBe('only copy')
   expect(state().openFiles[0]?.isDirty).toBe(true)
 })
 
 it('a confirmed removal discards: nothing is kept', () => {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     openFiles: [tab('b', 'wt-2', { isDirty: true })],
     editorDrafts: { b: 'listed and confirmed' }
   })
@@ -97,7 +98,7 @@ it('a confirmed removal discards: nothing is kept', () => {
 })
 
 it('a removal closing tabs over several writes keeps every dirty record it closes', async () => {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     openFiles: [
       tab('x', 'wt-1', { filePath: '/repo/x.ts', isDirty: true }),
       tab('y', 'wt-2', { filePath: '/repo/y.ts', isDirty: true }),
@@ -127,7 +128,7 @@ it('releases the kept records when the notice cannot be shown', async () => {
   show.mockImplementationOnce(() => {
     throw new Error('toast failed')
   })
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     openFiles: [tab('b', 'wt-2', { isDirty: true })],
     editorDrafts: { b: 'only copy' }
   })
@@ -137,14 +138,14 @@ it('releases the kept records when the notice cannot be shown', async () => {
 })
 
 it('dismissing one notice leaves the records a newer notice kept for the same file', async () => {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     openFiles: [tab('b', 'wt-2', { isDirty: true })],
     editorDrafts: { b: 'first' }
   })
   applyRemoveWorktreeSuccessState(useAppStore.setState, 'wt-2', new Set(), 'local')
   await vi.waitFor(() => expect(show).toHaveBeenCalledTimes(1))
   // The same tab id reopened elsewhere with different text, then removed again.
-  useAppStore.setState((s) => ({
+  setSessionTestState(useAppStore, (s) => ({
     openFiles: [tab('b', 'wt-1', { isDirty: true })],
     editorDrafts: { ...s.editorDrafts, b: 'second' }
   }))

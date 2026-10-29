@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 /** Delete a confirmed SSH twin while its local twin is active; real transport fixtures remove only the routed host’s temp directory. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as fs from 'node:fs'
@@ -68,7 +69,8 @@ function seedCollidingSidebar(
   confirmedRowHostId: ExecutionHostId
 ): void {
   const otherHostId = confirmedRowHostId === LOCAL_HOST ? SSH_HOST : LOCAL_HOST
-  store.setState({
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This repos, worktreesByRepo, detectedWorktreesByRepo fixture intentionally supplies only the state members exercised by this scenario.
+  setSessionTestState(store, {
     repos: [{ id: 'repo1', path: '/repo1', displayName: 'Repo 1', executionHostId: LOCAL_HOST }],
     worktreesByRepo: { repo1: [rowOnHost(otherHostId), rowOnHost(confirmedRowHostId)] },
     detectedWorktreesByRepo: {
@@ -161,7 +163,8 @@ describe('STA-4343 sidebar delete: the confirmed row decides the host', () => {
     )
     const store = storeRef.current as ReturnType<typeof createTestStore>
     seedCollidingSidebar(store, SSH_HOST)
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This tabsByWorktree fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       tabsByWorktree: {
         [WORKTREE_ID]: [makeTab({ id: 'shared-tab', worktreeId: WORKTREE_ID })]
       }
@@ -233,7 +236,7 @@ describe('STA-4343 sidebar delete: the confirmed row decides the host', () => {
     )
     const store = createTestStore()
     storeRef.current = store
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         {
           id: 'repo1',

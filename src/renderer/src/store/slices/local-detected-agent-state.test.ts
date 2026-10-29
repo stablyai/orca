@@ -1,3 +1,5 @@
+import { withSessionSourceTestWrites } from '@/lib/test-support/session-source-test-store'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
@@ -28,9 +30,11 @@ function makeRepo(id: string): Repo {
 
 function createTestStore(repos: Repo[]) {
   const store = create<AppState>()(
-    (...args) => createDetectedAgentsSlice(...args) as unknown as AppState
+    withSessionSourceTestWrites(
+      (...args) => createDetectedAgentsSlice(...args) as unknown as AppState
+    )
   )
-  store.setState({
+  setSessionTestState(store, {
     repos,
     projects: repos.map((repo) => ({
       id: repo.id,
@@ -476,14 +480,14 @@ describe('local detected agent context lifecycle', () => {
     expect(store.getState().isDetectingLocalAgentsByContext).toEqual({})
     expect(store.getState().isRefreshingLocalAgentsByContext).toEqual({})
 
-    store.setState({ repos: [repo2] })
+    setSessionTestState(store, { repos: [repo2] })
     store.getState().clearLocalDetectedAgentContextsForProjects(['repo-1'])
 
     expect(store.getState().localDetectedAgentIdsByContext).toEqual({
       'repo-2:wsl:Ubuntu': ['claude']
     })
 
-    store.setState({ repos: [repo1, repo2], activeRepoId: 'repo-1' })
+    setSessionTestState(store, { repos: [repo1, repo2], activeRepoId: 'repo-1' })
     await expect(store.getState().ensureDetectedAgents()).resolves.toEqual(['claude'])
     expect(detectAgents).toHaveBeenCalledTimes(3)
   })

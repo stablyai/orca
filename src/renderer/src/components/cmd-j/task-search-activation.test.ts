@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { findCmdJTaskWorkspace, openCmdJTask } from './task-search-activation'
@@ -6,7 +7,7 @@ import { makeWorktree, makeFolderWorkspace } from '../worktree-jump-palette-test
 import { getFolderWorkspaceWorktree } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 
 const initial = useAppStore.getInitialState()
-afterEach(() => useAppStore.setState(initial, true))
+afterEach(() => setSessionTestState(useAppStore, initial, true))
 const attachment = {
   provider: 'jira' as const,
   type: 'issue' as const,

@@ -1,3 +1,19 @@
+import { deriveIndexedShutdownReconnectFacts } from '../runtime/terminal/recovery/shutdown-reconnect-fact-index'
+import type { SessionUnitReader, SessionUnitSelection } from '../../shared/session-unit-reader'
+import { SESSION_MAP_FIELDS } from '../../shared/session-change-set'
+import {
+  loadWorkspaceLayoutUnits,
+  loadWorkspaceLayoutWithoutReport
+} from '../../shared/workspace-layout/workspace-layout-load'
+import {
+  patchSessionUnits,
+  patchStoredSession
+} from '../../shared/workspace-layout/workspace-layout-record-patch'
+import { isWorkspaceSleepRecord } from '../../shared/workspace-sleep'
+import type {
+  ReconnectFactSources,
+  ShutdownReconnectFacts
+} from '../runtime/terminal/recovery/shutdown-reconnect-facts'
 // Preserve main-owned layout while merging renderer views/facts; paired-server mirrors pass through.
 
 import {
@@ -11,13 +27,12 @@ import type {
   WorkspaceSessionState
 } from '../../shared/workspace-session-state-types'
 import { SESSION_FIELD_OWNERS } from '../../shared/workspace-layout/workspace-layout-beside'
-import { loadWorkspaceLayoutWithoutReport } from '../../shared/workspace-layout/workspace-layout-load'
+
 import type { LoadedWorkspaceLayout } from '../../shared/workspace-layout/workspace-layout-load-types'
 import { nameBasedLoadContext } from '../../shared/workspace-layout/workspace-layout-minted-ids'
 import type { WorkspaceLayoutModel } from '../../shared/workspace-layout/workspace-layout-model'
-import { patchStoredSession } from '../../shared/workspace-layout/workspace-layout-record-patch'
+
 import { saveWorkspaceLayout } from '../../shared/workspace-layout/workspace-layout-save'
-import type { ShutdownReconnectFacts } from '../runtime/terminal/recovery/shutdown-reconnect-facts'
 
 const FIELD_OWNERS: Readonly<Record<string, string>> = SESSION_FIELD_OWNERS
 
@@ -156,4 +171,97 @@ export function windowViewPatchForMain(
   return reconnectFacts && carried.length > 0
     ? withReconnectFacts(result, reconnectFacts({ ...stored, ...result }, partition), carried)
     : result
+}
+
+export type SessionWindowAdmission = {
+  layoutOwner: 'main' | 'window'
+  reconnectSources?: ReconnectFactSources
+}
+
+export function reduceWindowSessionPatch(
+  reader: SessionUnitReader,
+  partition: ExecutionHostId,
+  selected: SessionUnitSelection,
+  admission: SessionWindowAdmission,
+  full: boolean
+): void {
+  if (parseExecutionHostId(partition)?.kind === 'runtime') {
+    return
+  }
+  if (admission.layoutOwner === 'window') {
+    for (const key of selected.get('sleepingAgentSessionsByPaneKey') ?? []) {
+      const prior = reader.unit('sleepingAgentSessionsByPaneKey', key, 'prior')
+      const candidate = reader.unit('sleepingAgentSessionsByPaneKey', key)
+      if (prior.value && isWorkspaceSleepRecord(prior.value)) {
+        reader.write('sleepingAgentSessionsByPaneKey', key, prior)
+      } else if (candidate.value && isWorkspaceSleepRecord(candidate.value)) {
+        reader.write('sleepingAgentSessionsByPaneKey', key, { present: false, value: undefined })
+      }
+    }
+    return
+  }
+  const fields = new Set(reader.touchedFields())
+  if ([...fields].some(isLayoutField)) {
+    const owners = reader.affectedOwners(selected)
+    const ordered = [...reader.orderSelection('tabsByWorktree', owners)]
+    const context = nameBasedLoadContext()
+    const main = loadWorkspaceLayoutUnits(
+      partition,
+      reader.view('prior'),
+      ordered,
+      selected,
+      context
+    )
+    const windows = loadWorkspaceLayoutUnits(partition, reader, ordered, selected, context)
+    const before = saveWorkspaceLayout(main)
+    const joined = joinWindowView(main, windows)
+    const after = { ...before }
+    for (const field of new Set([...Object.keys(before), ...Object.keys(joined)])) {
+      if (!isLayoutField(field)) {
+        continue
+      }
+      if (Object.hasOwn(joined, field)) {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: layout fields come from the saved workspace session domain.
+        const name = field as keyof WorkspaceSessionState
+        Object.assign(after, { [field]: joined[name] })
+      } else {
+        Reflect.deleteProperty(after, field)
+      }
+    }
+    for (const field of SESSION_MAP_FIELDS) {
+      if (!isLayoutField(field)) {
+        continue
+      }
+      if (full) {
+        reader.replace(
+          field,
+          Object.hasOwn(reader.prior, field)
+            ? { present: true, value: reader.prior[field] }
+            : { present: false, value: undefined }
+        )
+      } else {
+        for (const key of selected.get(field) ?? []) {
+          reader.write(field, key, reader.unit(field, key, 'prior'))
+        }
+      }
+    }
+    patchSessionUnits(
+      reader,
+      before,
+      after,
+      full ? { kind: 'complete' } : { kind: 'selected', fields: selected }
+    )
+  }
+  const carried = RECONNECT_FACT_FIELDS.filter((field) => fields.has(field))
+  if (admission.reconnectSources && carried.length) {
+    const facts = deriveIndexedShutdownReconnectFacts(reader, selected, admission.reconnectSources)
+    for (const field of carried) {
+      reader.replace(
+        field,
+        facts[field] === undefined
+          ? { present: false, value: undefined }
+          : { present: true, value: facts[field] }
+      )
+    }
+  }
 }

@@ -1,3 +1,4 @@
+import type { SessionSourceEdit } from '../../../session-source-edits'
 import type { AppState } from '../../../types'
 import type { EditorSlice } from '../types/editor-slice'
 import type { EditorTabSelection, OpenFile } from '../types/open-file'
@@ -123,29 +124,30 @@ export function getReplaceablePreviewFileId(
 }
 
 export function removeEditorStateForReplacedPreview(
-  state: Pick<
-    EditorSlice,
-    | 'editorDrafts'
-    | 'editorCursorLine'
-    | 'markdownViewMode'
-    | 'markdownRichModeSizeOverride'
-    | 'editorViewMode'
-    | 'markdownFrontmatterVisible'
-    | 'markdownTableOfContentsVisible'
-    | 'openFiles'
+  edit: SessionSourceEdit<
+    Pick<
+      EditorSlice,
+      | 'editorDrafts'
+      | 'editorCursorLine'
+      | 'markdownViewMode'
+      | 'markdownRichModeSizeOverride'
+      | 'editorViewMode'
+      | 'markdownFrontmatterVisible'
+      | 'markdownTableOfContentsVisible'
+      | 'openFiles'
+    >
   >,
   replacedFile: Pick<OpenFile, 'id' | 'markdownPreviewSourceFileId'>,
   nextFileId: string
 ): Pick<
   EditorSlice,
-  | 'editorDrafts'
   | 'editorCursorLine'
   | 'markdownViewMode'
   | 'markdownRichModeSizeOverride'
   | 'editorViewMode'
-  | 'markdownFrontmatterVisible'
   | 'markdownTableOfContentsVisible'
 > {
+  const state = edit.view()
   const visibilityKeys = [
     replacedFile.id,
     ...(replacedFile.markdownPreviewSourceFileId ? [replacedFile.markdownPreviewSourceFileId] : [])
@@ -160,19 +162,16 @@ export function removeEditorStateForReplacedPreview(
   )
   if (replacedFile.id === nextFileId) {
     return {
-      editorDrafts: state.editorDrafts,
       editorCursorLine: state.editorCursorLine,
       markdownViewMode: state.markdownViewMode,
       markdownRichModeSizeOverride: state.markdownRichModeSizeOverride,
       editorViewMode: state.editorViewMode,
-      markdownFrontmatterVisible: state.markdownFrontmatterVisible,
       markdownTableOfContentsVisible: state.markdownTableOfContentsVisible
     }
   }
+  edit.remove('editorDrafts', replacedFile.id)
+  edit.removeKeys('markdownFrontmatterVisible', visibilityKeys)
   return {
-    editorDrafts: Object.fromEntries(
-      Object.entries(state.editorDrafts).filter(([fileId]) => fileId !== replacedFile.id)
-    ),
     editorCursorLine: Object.fromEntries(
       Object.entries(state.editorCursorLine).filter(([fileId]) => fileId !== replacedFile.id)
     ),
@@ -186,10 +185,6 @@ export function removeEditorStateForReplacedPreview(
     ),
     editorViewMode: Object.fromEntries(
       Object.entries(state.editorViewMode).filter(([fileId]) => fileId !== replacedFile.id)
-    ),
-    markdownFrontmatterVisible: removeMarkdownVisibilityKeys(
-      state.markdownFrontmatterVisible,
-      visibilityKeys
     ),
     markdownTableOfContentsVisible: removeMarkdownVisibilityKeys(
       state.markdownTableOfContentsVisible,

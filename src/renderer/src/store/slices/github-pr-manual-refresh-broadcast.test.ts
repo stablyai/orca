@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { _clearGitHubPRRefreshStartedEntriesForTest } from '../github/request-coordination'
 import {
@@ -20,7 +21,7 @@ function createRefreshContext(pr: PRInfo | null = null) {
   const worktreeId = 'wt-agent-made'
   const cacheKey = `${repoId}::${branch}`
   const alias = { cacheKey, repoId, repoPath, branch, worktreeId }
-  store.setState({
+  setSessionTestState(store, {
     repos: [
       { id: repoId, path: repoPath, displayName: 'repo', badgeColor: '', addedAt: 1, kind: 'git' }
     ],

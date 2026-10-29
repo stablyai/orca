@@ -1,3 +1,4 @@
+import type { SessionSourceEdit } from '@/store/session-source-edits'
 import {
   MAX_PAIRED_TERMINAL_TAB_CLOSE_INTENTS,
   PAIRED_TERMINAL_TAB_CLOSE_INTENT_MAX_AGE_MS,
@@ -22,27 +23,53 @@ const PAIRED_TERMINAL_TAB_CLOSE_INTENT_LIST: EnvironmentCloseIntentList<PairedTe
     maxAgeMs: PAIRED_TERMINAL_TAB_CLOSE_INTENT_MAX_AGE_MS
   }
 
-/** Adds a held close, newest last, bounded per environment. Returns null if unchanged. */
+/** Adds a held close, newest last, bounded per environment. Returns false if unchanged. */
 export function recordPairedTerminalTabCloseIntent(
-  current: PairedTerminalTabCloseIntentsByEnvironment,
+  edit: SessionSourceEdit<{
+    pairedTerminalTabCloseIntentsByEnvironment: PairedTerminalTabCloseIntentsByEnvironment
+  }>,
   environmentId: string,
   intent: PairedTerminalTabCloseIntent
-): PairedTerminalTabCloseIntentsByEnvironment | null {
-  return appendEnvironmentCloseIntents(PAIRED_TERMINAL_TAB_CLOSE_INTENT_LIST, current, [
-    { environmentId, intent }
-  ])
+): boolean {
+  return appendEnvironmentCloseIntents(
+    PAIRED_TERMINAL_TAB_CLOSE_INTENT_LIST,
+    {
+      read: (id) => edit.entry('pairedTerminalTabCloseIntentsByEnvironment', id),
+      set: (id, rows) => {
+        edit.set('pairedTerminalTabCloseIntentsByEnvironment', id, rows)
+      },
+      remove: (id) => {
+        edit.remove('pairedTerminalTabCloseIntentsByEnvironment', id)
+      }
+    },
+    [{ environmentId, intent }]
+  )
 }
 
-/** Drops the named intents plus anything past the give-up bound. Returns null if unchanged. */
+/** Drops the named intents plus anything past the give-up bound. Returns false if unchanged. */
 export function clearPairedTerminalTabCloseIntents(
-  current: PairedTerminalTabCloseIntentsByEnvironment,
+  edit: SessionSourceEdit<{
+    pairedTerminalTabCloseIntentsByEnvironment: PairedTerminalTabCloseIntentsByEnvironment
+  }>,
   args: { environmentId: string; intentKeys: readonly string[]; now: number }
-): PairedTerminalTabCloseIntentsByEnvironment | null {
-  return removeEnvironmentCloseIntents(PAIRED_TERMINAL_TAB_CLOSE_INTENT_LIST, current, {
-    environmentId: args.environmentId,
-    keys: args.intentKeys,
-    now: args.now
-  })
+): boolean {
+  return removeEnvironmentCloseIntents(
+    PAIRED_TERMINAL_TAB_CLOSE_INTENT_LIST,
+    {
+      read: (id) => edit.entry('pairedTerminalTabCloseIntentsByEnvironment', id),
+      set: (id, rows) => {
+        edit.set('pairedTerminalTabCloseIntentsByEnvironment', id, rows)
+      },
+      remove: (id) => {
+        edit.remove('pairedTerminalTabCloseIntentsByEnvironment', id)
+      }
+    },
+    {
+      environmentId: args.environmentId,
+      keys: args.intentKeys,
+      now: args.now
+    }
+  )
 }
 
 /** Only the closes owed to a server the catalog still lists; the rest can never be sent. */

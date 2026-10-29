@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { setPresenceGated } from '@/hooks/agent-auto-ack-presence'
 import { createTerminalAttentionSurface } from './terminal-attention-surface'
@@ -24,7 +25,7 @@ type TestStore = ReturnType<typeof createTestStore>
 
 function seedLiveTab(): TestStore {
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     tabsByWorktree: { [WORKSPACE]: [makeTab({ id: TAB, worktreeId: WORKSPACE })] },
     activeGroupIdByWorktree: { [WORKSPACE]: 'main-group' },
     unifiedTabsByWorktree: {
@@ -85,7 +86,7 @@ describe('createTerminalAttentionSurface', () => {
 
   it('falls back to the known-pane gate when no live pty backs the tab', () => {
     const store = seedLiveTab()
-    store.setState({ ptyIdsByTabId: {} })
+    setSessionTestState(store, { ptyIdsByTabId: {} })
     expect(
       surfaceFor(store).admitSurface(
         { workspaceId: WORKSPACE, surfaceKey: PANE },
@@ -96,7 +97,7 @@ describe('createTerminalAttentionSurface', () => {
 
   it('rejects a known pane whose only pty hint is suppressed', () => {
     const store = seedLiveTab()
-    store.setState({
+    setSessionTestState(store, {
       tabsByWorktree: {
         [WORKSPACE]: [makeTab({ id: TAB, worktreeId: WORKSPACE, ptyId: 'pty-1' })]
       },
@@ -117,7 +118,7 @@ describe('createTerminalAttentionSurface', () => {
 
   it('resolves no viewed subject when the active leaf is not a terminal leaf', () => {
     const store = seedLiveTab()
-    store.setState({
+    setSessionTestState(store, {
       terminalLayoutsByTabId: {
         [TAB]: {
           root: { type: 'leaf', leafId: 'chat-leaf' },
@@ -163,7 +164,7 @@ describe('createTerminalAttentionSurface', () => {
 
     function seedFloatingAgent(panelOpen: boolean): TestStore {
       const store = createTestStore()
-      store.setState({
+      setSessionTestState(store, {
         settings: { ...getDefaultSettings('/home/test'), floatingTerminalEnabled: true },
         floatingWorkspacePanelOpen: panelOpen,
         activeView: 'terminal',
@@ -217,7 +218,7 @@ describe('createTerminalAttentionSurface', () => {
 
     function seedMainSplit(): TestStore {
       const store = seedLiveTab()
-      store.setState({
+      setSessionTestState(store, {
         activeView: 'terminal',
         activeWorktreeId: WORKSPACE,
         activeTabId: TAB,

@@ -1,3 +1,5 @@
+import { sessionPublication } from './session-publication'
+import { profileStateWriterFailureOutcome } from '../profile-state/profile-state-writer-errors'
 import type { AsyncProfileStateAuthority } from './profile-state-authority'
 import type { PrimaryStateWriteOperationsContext } from './primary-state-write-context'
 import { markPrimaryStateWriteDurable } from './primary-state-write-runtime'
@@ -11,6 +13,8 @@ export async function writeProfileStateInWorker(
   authority.assertWritable()
   const generation = runtime.writeGeneration
   const dirtyDomains = runtime.dirtyProfileStateDomains
+  const publication = sessionPublication(runtime.state)
+  const refs = publication.captureRefs(dirtyDomains)
   const automationRuns = runtime.pendingAutomationRunsAfter
   runtime.dirtyProfileStateDomains = new Set()
   runtime.pendingAutomationRunsAfter = undefined
@@ -37,6 +41,7 @@ export async function writeProfileStateInWorker(
     )
     if (!prepared) {
       restoreIntent()
+      publication.finishRefs(refs, 'failed')
       return false
     }
     await prepared.completion
@@ -44,6 +49,12 @@ export async function writeProfileStateInWorker(
     runtime.lastWrittenStateHash =
       runtime.writeGeneration === generation ? prepared.stateHash : null
     markPrimaryStateWriteDurable(runtime, generation)
+    publication.finishRefs(
+      refs,
+      'committed',
+      runtime.terminalScrollbackSnapshotStorage,
+      runtime.retainedScrollbackRefsByMigrationId
+    )
     if (runtime.writeGeneration === generation) {
       if (runtime.writeTimer) {
         clearTimeout(runtime.writeTimer)
@@ -52,6 +63,10 @@ export async function writeProfileStateInWorker(
       runtime.firstPendingSaveAt = null
     }
   } catch (error) {
+    publication.finishRefs(
+      refs,
+      profileStateWriterFailureOutcome(error) === 'indeterminate' ? 'indeterminate' : 'failed'
+    )
     restoreIntent()
     throw error
   }

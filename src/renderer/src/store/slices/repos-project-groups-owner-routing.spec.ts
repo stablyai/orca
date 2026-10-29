@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
@@ -80,7 +81,7 @@ export function registerReposProjectGroupsOwnerRoutingTests(): void {
         runtimeRpcResponse({ group: { ...runtimeGroup, name: 'Renamed' } })
       )
       const store = createTestStore()
-      store.setState({
+      setSessionTestState(store, {
         settings: { activeRuntimeEnvironmentId: null } as never,
         projectGroups: [runtimeGroup]
       })
@@ -105,7 +106,7 @@ export function registerReposProjectGroupsOwnerRoutingTests(): void {
     it('deletes a local folder-scan group while a runtime host is focused', async () => {
       projectGroupsDelete.mockResolvedValue(true)
       const store = createTestStore()
-      store.setState({
+      setSessionTestState(store, {
         settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
         projectGroups: [{ ...folderScanGroup, executionHostId: 'local' }]
       })
@@ -120,7 +121,7 @@ export function registerReposProjectGroupsOwnerRoutingTests(): void {
     it('routes a direct-SSH group through the local catalog, not the focused runtime', async () => {
       projectGroupsDelete.mockResolvedValue(true)
       const store = createTestStore()
-      store.setState({
+      setSessionTestState(store, {
         settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
         projectGroups: [{ ...folderScanGroup, connectionId: 'conn-1' }]
       })
@@ -134,7 +135,7 @@ export function registerReposProjectGroupsOwnerRoutingTests(): void {
     it('prefers an explicit hostId over both the focused host and a colliding row', async () => {
       runtimeEnvironmentCall.mockResolvedValue(runtimeRpcResponse({ deleted: true }))
       const store = createTestStore()
-      store.setState({
+      setSessionTestState(store, {
         settings: { activeRuntimeEnvironmentId: null } as never,
         projectGroups: [
           { ...folderScanGroup, executionHostId: 'local' },
@@ -159,7 +160,7 @@ export function registerReposProjectGroupsOwnerRoutingTests(): void {
     it('refuses, rather than following focus, when a colliding id has no unambiguous owner', async () => {
       projectGroupsDelete.mockResolvedValue(true)
       const store = createTestStore()
-      store.setState({
+      setSessionTestState(store, {
         settings: { activeRuntimeEnvironmentId: null } as never,
         projectGroups: [
           { ...folderScanGroup, executionHostId: 'local' },
@@ -178,7 +179,7 @@ export function registerReposProjectGroupsOwnerRoutingTests(): void {
       const runtimeGroup: ProjectGroup = { ...folderScanGroup, executionHostId: 'runtime:env-1' }
       runtimeEnvironmentCall.mockRejectedValue(new Error('runtime rpc timed out'))
       const store = createTestStore()
-      store.setState({
+      setSessionTestState(store, {
         settings: { activeRuntimeEnvironmentId: null } as never,
         projectGroups: [runtimeGroup],
         folderWorkspaces: [baseFolderWorkspace]
@@ -205,7 +206,7 @@ export function registerReposProjectGroupsOwnerRoutingTests(): void {
         executionHostId: 'runtime:env-1'
       }
       const store = createTestStore()
-      store.setState({
+      setSessionTestState(store, {
         settings: { activeRuntimeEnvironmentId: null } as never,
         projectGroups: [
           { ...folderScanGroup, executionHostId: 'local' },
@@ -255,7 +256,7 @@ export function registerReposProjectGroupsOwnerRoutingTests(): void {
         name: 'Renamed'
       })
       const store = createTestStore()
-      store.setState({
+      setSessionTestState(store, {
         settings: { activeRuntimeEnvironmentId: null } as never,
         projectGroups: [
           { ...folderScanGroup, executionHostId: 'local' },
@@ -290,7 +291,7 @@ export function registerReposProjectGroupsOwnerRoutingTests(): void {
         }
       })
       const store = createTestStore()
-      store.setState({
+      setSessionTestState(store, {
         settings: { activeRuntimeEnvironmentId: null } as never,
         projectGroups: [
           { ...folderScanGroup, executionHostId: 'local' },

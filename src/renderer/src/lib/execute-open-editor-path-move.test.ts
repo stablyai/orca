@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RuntimeFileMutationClient from '@/runtime/runtime-file-mutation-client'
 import type * as EditorAutosave from '@/components/editor/editor-autosave'
@@ -65,7 +66,7 @@ function openDirtyTab(): string {
 
 describe('executeOpenEditorPathMove', () => {
   beforeEach(async () => {
-    useAppStore.setState(useAppStore.getInitialState(), true)
+    setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
     mocks.renameRuntimePath.mockReset().mockResolvedValue(undefined)
     main = await drawTabsFromMain(useAppStore)
   })

@@ -1,3 +1,5 @@
+import { sessionBindingIndex } from './session-binding-index'
+import { sessionNormalizationRepos } from './session-normalization-catalog'
 import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
 import { toComparableRelaySshPtyId, toRelaySshPtyId } from '../../providers/ssh-pty-id'
@@ -42,9 +44,7 @@ export class TerminalBindingRecoveryOperations {
     tabId?: string
     leafId?: string
   }): boolean {
-    const leases = this.runtime.state.sshRemotePtyLeases?.filter((entry) =>
-      this.sshRemotePtyLeaseMatchesBinding(entry, binding)
-    )
+    const leases = this.matchingLeases(binding)
     return !leases?.some(sshRemotePtyLeaseWithdrawsBinding)
   }
 
@@ -89,7 +89,7 @@ export class TerminalBindingRecoveryOperations {
     leafId?: string
   }): boolean {
     return (
-      this.runtime.state.sshRemotePtyLeases?.some(
+      this.matchingLeases(binding).some(
         (lease) =>
           this.sshRemotePtyLeaseMatchesBinding(lease, binding) &&
           !sshRemotePtyLeaseWithdrawsBinding(lease)
@@ -97,8 +97,34 @@ export class TerminalBindingRecoveryOperations {
     )
   }
 
+  private matchingLeases(binding: {
+    ptyId: string
+    targetId?: string | null
+    worktreeId?: string
+    tabId?: string
+    leafId?: string
+  }): readonly SshRemotePtyLease[] {
+    const leases = this.runtime.state.sshRemotePtyLeases
+    if (!leases) {
+      return []
+    }
+    const index = sessionBindingIndex(leases)
+    const targets = binding.targetId ? [binding.targetId] : index.byTarget.keys()
+    const selected: SshRemotePtyLease[] = []
+    for (const target of targets) {
+      const id = this.getRelayPtyIdForSshLeaseComparison(target, binding.ptyId)
+      for (const lease of index.byTarget.get(target)?.get(id) ?? []) {
+        if (this.sshRemotePtyLeaseMatchesBinding(lease, binding)) {
+          selected.push(lease)
+        }
+      }
+    }
+    return selected
+  }
+
   getConnectionIdForWorktree(worktreeId: string): string | null {
     const repoId = getRepoIdFromWorktreeId(worktreeId)
-    return this.runtime.state.repos.find((repo) => repo.id === repoId)?.connectionId ?? null
+    const scope = new Map([['terminalTopologyRevisionByRepoId' as const, new Set([repoId])]])
+    return sessionNormalizationRepos(this.runtime.state.repos, scope)[0]?.connectionId ?? null
   }
 }

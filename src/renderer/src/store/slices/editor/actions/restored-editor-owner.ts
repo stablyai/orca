@@ -1,3 +1,4 @@
+import { editSessionSource } from '../../../session-source-edits'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import type { RestoredEditorOwnerResult } from '../types/restored-editor-owner'
@@ -14,9 +15,12 @@ export function createRestoredEditorOwner(
     setRestoredEditorOwnerMigrationPending: (fileId, pending) => {
       let changed = false
       set((s) => {
-        const next = updateEditorBuffer(s, fileId, { pendingOwnerMigration: pending || undefined })
-        changed = next !== s
-        return next
+        const edit = editSessionSource(s)
+        const next = updateEditorBuffer(edit, fileId, {
+          pendingOwnerMigration: pending || undefined
+        })
+        changed = next !== null
+        return next ? edit.finish(next) : undefined
       })
       return changed
     },
@@ -38,7 +42,10 @@ export function createRestoredEditorOwner(
             stateTransition: projectReparent
           })
         } else {
-          set((state) => projectReparent(state).patch)
+          set((state) => {
+            const edit = editSessionSource(state)
+            return edit.finish(projectReparent(state, edit).patch)
+          })
         }
       }
       // Switch point: main moves the tabs and its frame rekeys the content.

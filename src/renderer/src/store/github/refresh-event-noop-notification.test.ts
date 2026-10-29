@@ -1,3 +1,4 @@
+import { withSessionSourceTestWrites } from '@/lib/test-support/session-source-test-store'
 import { describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import { useAppStore } from '../index'
@@ -9,11 +10,13 @@ import type { AppState } from '../types'
 globalThis.window = { api: { gh: { prChecks: vi.fn() }, cache: { setGitHub: vi.fn() } } }
 
 function createTestStore() {
-  return create<AppState>()((...a) => ({
-    ...useAppStore.getInitialState(),
-    ...createGitHubSlice(...a),
-    ...createHostedReviewSlice(...a)
-  }))
+  return create<AppState>()(
+    withSessionSourceTestWrites((...a) => ({
+      ...useAppStore.getInitialState(),
+      ...createGitHubSlice(...a),
+      ...createHostedReviewSlice(...a)
+    }))
+  )
 }
 
 const inFlightEvent = (sequence: number) => ({

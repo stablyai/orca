@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, expect, vi, type Mock } from 'vitest'
 import { getDefaultSettings } from '../../../../../shared/constants'
@@ -66,7 +67,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
-  useAppStore.setState(originalState, true)
+  setSessionTestState(useAppStore, originalState, true)
   Object.defineProperty(window, 'api', { configurable: true, value: originalApi })
   vi.restoreAllMocks()
 })

@@ -9,7 +9,7 @@ export function createBrowserAudioActions(
     setBrowserPageAudible: (pageId, audible) => {
       set((s) => {
         if (audible === Boolean(s.browserAudiblePageIds[pageId])) {
-          return s
+          return undefined
         }
         return {
           browserAudiblePageIds: audible
@@ -22,7 +22,7 @@ export function createBrowserAudioActions(
     setBrowserTabAudioMuted: (tabId, muted) => {
       set((s) => {
         if (muted === Boolean(s.browserAudioMutedTabIds[tabId])) {
-          return s
+          return undefined
         }
         return {
           browserAudioMutedTabIds: muted

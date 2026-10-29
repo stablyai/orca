@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GENERATED_TAB_TITLE_SOURCE_SCAN_LIMIT } from '../../../../shared/agent-tab-title'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -222,7 +223,7 @@ Old dispatch task that already finished`,
     await layoutApplyTestTransport.settle()
     // Clear dispatch title so next prompt exercises first-write under sticky orchestration.
     const tabs = store.getState().tabsByWorktree[WORKTREE_ID]
-    store.setState({
+    setSessionTestState(store, {
       tabsByWorktree: {
         ...store.getState().tabsByWorktree,
         [WORKTREE_ID]: tabs.map((tab) =>

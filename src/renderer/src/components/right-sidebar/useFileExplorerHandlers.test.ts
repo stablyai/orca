@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it, vi } from 'vitest'
 
 const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }))
@@ -100,7 +101,7 @@ describe('activateFileExplorerNode', () => {
 
   it('opens a file link that leads out of the project by its absolute path', async () => {
     const openFile = vi.fn()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       worktreesByRepo: {
         'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' } as never]
       }
@@ -131,7 +132,7 @@ describe('activateFileExplorerNode', () => {
 
   it('opens a symlink as a file when target stat fails', async () => {
     const openFile = vi.fn()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       worktreesByRepo: {
         'repo-1': [
           {
@@ -181,7 +182,7 @@ describe('activateFileExplorerNode', () => {
         operationOwner: { kind: 'local' }
       }
       const openFile = vi.fn()
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         worktreesByRepo: {
           'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' } as never]
         }

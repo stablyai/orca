@@ -1,3 +1,5 @@
+import { applySessionTestUpdate } from '@/lib/test-support/session-source-fixture'
+import type { SessionSourceUpdate } from '@/store/session-source-edits'
 import { vi, type Mock } from 'vitest'
 import {
   createRemountTerminalTabForRecovery,
@@ -37,12 +39,8 @@ export const recoveryLedgerMocks: RecoveryLedgerMocks = {
   hasPty: vi.fn<(id: string) => Promise<boolean | null>>(async () => true)
 }
 
-const storeSet = (updater: unknown): void => {
-  const patch =
-    typeof updater === 'function'
-      ? (updater as (state: unknown) => object)(recoveryLedgerMocks.state)
-      : (updater as object)
-  Object.assign(recoveryLedgerMocks.state, patch)
+const storeSet = (updater: SessionSourceUpdate<RecoveryLedgerMocks['state']>): void => {
+  recoveryLedgerMocks.state = applySessionTestUpdate(recoveryLedgerMocks.state, updater)
 }
 const storeGet = (): unknown => recoveryLedgerMocks.state
 

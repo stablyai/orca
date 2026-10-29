@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 /** User deletion clears drafts using pre-RPC keys; host removal announcements may purge listings before reply, while non-user purges must retain drafts. */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
@@ -145,7 +146,7 @@ const FOLDER: FolderWorkspace = {
 }
 
 function seedFolderWorkspace(store: ReturnType<typeof createTestStore>): void {
-  store.setState({
+  setSessionTestState(store, {
     projectGroups: [
       {
         id: 'group-a',

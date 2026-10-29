@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../store'
 import {
@@ -11,7 +12,7 @@ const listTargets = vi.fn()
 beforeEach(() => {
   vi.useFakeTimers()
   resetSshConfigPassiveSyncForTests()
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
   importConfig.mockReset().mockResolvedValue({ targets: [], repoReadoptions: [] })
   listTargets.mockReset().mockResolvedValue([])
   vi.stubGlobal('window', { api: { ssh: { importConfig, listTargets } } })

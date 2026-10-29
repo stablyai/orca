@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DetectedWorktree, Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeCatalogVersion } from '../../../../../../shared/worktree/catalog-version'
@@ -247,7 +248,7 @@ describe('a listing versioned before an applied create', () => {
   it('reports a listing whose repo owner went away as not-current, even when also older', () => {
     const store = createTestStore()
     seedWithAppliedCreate(store)
-    store.setState({ repos: [] })
+    setSessionTestState(store, { repos: [] })
     const existingRow = store.getState().worktreesByRepo[REPO_ID]![0]!
 
     expect(applyListing(store, [existingRow], before)).toBe('not-current')

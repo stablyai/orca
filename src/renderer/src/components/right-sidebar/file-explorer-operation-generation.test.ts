@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { useAppStore } from '@/store'
@@ -24,7 +25,7 @@ function worktree(hostId: Worktree['hostId'], runtimeOwnerEnvironmentId?: string
 
 afterEach(() => {
   useAppStore.getState().setRuntimeEnvironments([])
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
 })
 
 describe('file explorer operation generations', () => {
@@ -47,7 +48,7 @@ describe('file explorer operation generations', () => {
   })
 
   it('invalidates a nested SSH mutation when that target reconnects', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [],
       worktreesByRepo: { 'repo-1': [worktree('ssh:private-target', 'hub-a')] }
     })
@@ -73,7 +74,7 @@ describe('file explorer operation generations', () => {
   })
 
   it('invalidates a direct SSH mutation when that target reconnects', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [],
       worktreesByRepo: { 'repo-1': [worktree('ssh:client-target')] }
     })
@@ -101,7 +102,7 @@ describe('file explorer operation generations', () => {
   it('invalidates a folder-workspace mutation when its SSH target reconnects', () => {
     const folderWorkspaceId = 'folder-1'
     const folderWorktreeId = folderWorkspaceKey(folderWorkspaceId)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [
         {
           id: folderWorkspaceId,
@@ -135,7 +136,7 @@ describe('file explorer operation generations', () => {
   })
 
   it('invalidates a mutation when the saved HUB points at a replacement runtime', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [],
       worktreesByRepo: { 'repo-1': [worktree('local', 'hub-a')] }
     })
@@ -155,7 +156,7 @@ describe('file explorer operation generations', () => {
   })
 
   it('fails closed when nested SSH ownership has no authoritative generation', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [],
       worktreesByRepo: { 'repo-1': [worktree('ssh:private-target', 'hub-a')] }
     })
@@ -167,7 +168,7 @@ describe('file explorer operation generations', () => {
   })
 
   it('invalidates a mutation when the same saved HUB id is re-paired', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [],
       worktreesByRepo: { 'repo-1': [worktree('local', 'hub-a')] }
     })

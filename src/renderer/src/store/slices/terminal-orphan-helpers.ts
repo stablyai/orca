@@ -1,3 +1,4 @@
+import type { SessionSourceEdit, OrdinarySourcePartial } from '../session-source-edits'
 import type { AppState } from '../types'
 
 type TerminalTabReconnectState = Pick<
@@ -75,36 +76,17 @@ export function getOrphanTerminalIds(
 }
 
 export function buildOrphanTerminalCleanupPatch(
-  state: OrphanTerminalCleanupState,
+  edit: SessionSourceEdit<OrphanTerminalCleanupState>,
   worktreeId: string,
-  orphanTerminalIds: Set<string>
-): Pick<
-  AppState,
-  | 'tabsByWorktree'
-  | 'ptyIdsByTabId'
-  | 'runtimePaneTitlesByTabId'
-  | 'expandedPaneByTabId'
-  | 'canExpandPaneByTabId'
-  | 'terminalLayoutsByTabId'
-  | 'pendingStartupByTabId'
-  | 'pendingInitialCwdByTabId'
-  | 'pendingIssueCommandSplitByTabId'
-  | 'automaticAgentResumeClaimsByTabId'
-  | 'nativeChatLaunchPromptByTabId'
-  | 'nativeChatLaunchDraftByTabId'
-  | 'tabBarOrderByWorktree'
-  | 'cacheTimerByKey'
-  | 'activeTabIdByWorktree'
-  | 'activeTabId'
-> {
+  orphanTerminalIds: Set<string>,
+  priorPatch: OrdinarySourcePartial<OrphanTerminalCleanupState> = {}
+): OrdinarySourcePartial<OrphanTerminalCleanupState> {
+  const state = edit.view(priorPatch)
   if (orphanTerminalIds.size === 0) {
     return {
-      tabsByWorktree: state.tabsByWorktree,
-      ptyIdsByTabId: state.ptyIdsByTabId,
       runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
       expandedPaneByTabId: state.expandedPaneByTabId,
       canExpandPaneByTabId: state.canExpandPaneByTabId,
-      terminalLayoutsByTabId: state.terminalLayoutsByTabId,
       pendingStartupByTabId: state.pendingStartupByTabId,
       pendingInitialCwdByTabId: state.pendingInitialCwdByTabId,
       pendingIssueCommandSplitByTabId: state.pendingIssueCommandSplitByTabId,
@@ -113,7 +95,6 @@ export function buildOrphanTerminalCleanupPatch(
       nativeChatLaunchDraftByTabId: state.nativeChatLaunchDraftByTabId,
       tabBarOrderByWorktree: state.tabBarOrderByWorktree,
       cacheTimerByKey: state.cacheTimerByKey,
-      activeTabIdByWorktree: state.activeTabIdByWorktree,
       activeTabId: state.activeTabId
     }
   }
@@ -121,11 +102,9 @@ export function buildOrphanTerminalCleanupPatch(
   const nextTabs = (state.tabsByWorktree[worktreeId] ?? []).filter(
     (tab) => !orphanTerminalIds.has(tab.id)
   )
-  const nextPtyIdsByTabId = { ...state.ptyIdsByTabId }
   const nextRuntimePaneTitlesByTabId = { ...state.runtimePaneTitlesByTabId }
   const nextExpandedPaneByTabId = { ...state.expandedPaneByTabId }
   const nextCanExpandPaneByTabId = { ...state.canExpandPaneByTabId }
-  const nextTerminalLayoutsByTabId = { ...state.terminalLayoutsByTabId }
   const nextPendingStartupByTabId = { ...state.pendingStartupByTabId }
   const nextPendingInitialCwdByTabId = { ...state.pendingInitialCwdByTabId }
   const nextPendingIssueCommandSplitByTabId = { ...state.pendingIssueCommandSplitByTabId }
@@ -144,11 +123,11 @@ export function buildOrphanTerminalCleanupPatch(
 
   // Share per-tab cache teardown across creation/reconciliation so orphan detection and cleanup cannot diverge.
   for (const orphanTabId of orphanTerminalIds) {
-    delete nextPtyIdsByTabId[orphanTabId]
+    edit.remove('ptyIdsByTabId', orphanTabId)
     delete nextRuntimePaneTitlesByTabId[orphanTabId]
     delete nextExpandedPaneByTabId[orphanTabId]
     delete nextCanExpandPaneByTabId[orphanTabId]
-    delete nextTerminalLayoutsByTabId[orphanTabId]
+    edit.remove('terminalLayoutsByTabId', orphanTabId)
     delete nextPendingStartupByTabId[orphanTabId]
     delete nextPendingInitialCwdByTabId[orphanTabId]
     delete nextPendingIssueCommandSplitByTabId[orphanTabId]
@@ -162,23 +141,19 @@ export function buildOrphanTerminalCleanupPatch(
     }
   }
 
-  const nextActiveTabIdByWorktree = {
-    ...state.activeTabIdByWorktree,
-    [worktreeId]: orphanTerminalIds.has(state.activeTabIdByWorktree[worktreeId] ?? '')
+  edit.set(
+    'activeTabIdByWorktree',
+    worktreeId,
+    orphanTerminalIds.has(state.activeTabIdByWorktree[worktreeId] ?? '')
       ? (nextTabs[0]?.id ?? null)
       : state.activeTabIdByWorktree[worktreeId]
-  }
+  )
+  edit.set('tabsByWorktree', worktreeId, nextTabs)
 
   return {
-    tabsByWorktree: {
-      ...state.tabsByWorktree,
-      [worktreeId]: nextTabs
-    },
-    ptyIdsByTabId: nextPtyIdsByTabId,
     runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId,
     expandedPaneByTabId: nextExpandedPaneByTabId,
     canExpandPaneByTabId: nextCanExpandPaneByTabId,
-    terminalLayoutsByTabId: nextTerminalLayoutsByTabId,
     pendingStartupByTabId: nextPendingStartupByTabId,
     pendingInitialCwdByTabId: nextPendingInitialCwdByTabId,
     pendingIssueCommandSplitByTabId: nextPendingIssueCommandSplitByTabId,
@@ -187,7 +162,6 @@ export function buildOrphanTerminalCleanupPatch(
     nativeChatLaunchDraftByTabId: nextNativeChatLaunchDraftByTabId,
     tabBarOrderByWorktree: nextTabBarOrderByWorktree,
     cacheTimerByKey: nextCacheTimerByKey,
-    activeTabIdByWorktree: nextActiveTabIdByWorktree,
     activeTabId:
       state.activeTabId && orphanTerminalIds.has(state.activeTabId) ? null : state.activeTabId
   }

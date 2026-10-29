@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { switchSortToManualAfterDrop } from './manual-sort-switch-toast'
@@ -25,7 +26,7 @@ function lastToastOptions(): ToastOptions {
 
 describe('switchSortToManualAfterDrop', () => {
   beforeEach(() => {
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
     toastInfo.mockClear()
     toastDismiss.mockClear()
   })
@@ -34,7 +35,7 @@ describe('switchSortToManualAfterDrop', () => {
     if (toastInfo.mock.calls.length > 0) {
       lastToastOptions().onDismiss?.()
     }
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   it('switches to Manual and offers a way back to the previous sort', () => {

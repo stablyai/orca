@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { makePaneKey } from '../../../shared/stable-pane-id'
@@ -18,7 +19,7 @@ const OTHER_LEAF_ID = '22222222-2222-4222-8222-222222222222'
 
 afterEach(() => {
   vi.unstubAllGlobals()
-  useAppStore.setState(initialAppStoreState, true)
+  setSessionTestState(useAppStore, initialAppStoreState, true)
 })
 
 function makeRecord(
@@ -91,7 +92,8 @@ function makeActiveTerminalState(tabId: string, worktreeId = 'wt-1'): Record<str
 describe('resumeSleepingAgentSessionsForWorktree', () => {
   it('resumes quit-captured records when no preserved pane can own recovery', () => {
     const record = makeRecord({ origin: 'quit' })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
     } as never)
@@ -108,7 +110,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
 
   it('resumes live-checkpoint records when no preserved pane can own recovery', () => {
     const record = makeRecord({ origin: 'live' })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
     } as never)
@@ -125,7 +128,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
 
   it('resumes legacy sleep records without an origin when no preserved pane can own recovery', () => {
     const record = makeRecord()
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
     } as never)
@@ -143,7 +147,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
   it('skips worktree-sleep records owned by a preserved stable UUID pane', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const record = makeRecord({ paneKey, origin: 'worktree-sleep' })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       ...makeActiveTerminalState('tab-1'),
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
       terminalLayoutsByTabId: { 'tab-1': makeLayout(LEAF_ID) },
@@ -161,7 +166,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
   it('skips active stable-pane records owned by a single-leaf tab-level wake hint', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const record = makeRecord({ paneKey, origin: 'worktree-sleep' })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       ...makeActiveTerminalState('tab-1'),
       tabsByWorktree: {
         'wt-1': [{ ...makeTerminalTab('tab-1', 'wt-1'), ptyId: 'tab-level-wake-hint' }]
@@ -188,7 +194,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     const worktreeId = 'folder:folder-1'
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const record = makeRecord({ paneKey, worktreeId, origin: 'worktree-sleep' })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       ...makeActiveTerminalState('tab-1', worktreeId),
       tabsByWorktree: { [worktreeId]: [makeTerminalTab('tab-1', worktreeId)] },
       terminalLayoutsByTabId: { 'tab-1': makeLayout(LEAF_ID) },
@@ -207,7 +214,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
   it('leaves a hidden restorable stable-pane record for in-place cold restore during activation', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const record = makeRecord({ paneKey, origin: 'worktree-sleep' })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       ...makeActiveTerminalState('tab-2'),
       tabsByWorktree: {
         'wt-1': [makeTerminalTab('tab-1', 'wt-1'), makeTerminalTab('tab-2', 'wt-1')]
@@ -246,7 +254,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
       capturedAt: 2,
       updatedAt: 2
     })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       ...makeActiveTerminalState('tab-active'),
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-active', 'wt-1')] },
       terminalLayoutsByTabId: { 'tab-active': makeLayout(LEAF_ID) },
@@ -279,7 +288,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
       }),
       activeLeafId: OTHER_LEAF_ID
     }
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       ...makeActiveTerminalState('tab-1'),
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
       terminalLayoutsByTabId: { 'tab-1': layout },
@@ -297,7 +307,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
   it('skips active stable-pane records owned by a visible non-focused split-group terminal', () => {
     const paneKey = makePaneKey('tab-right', LEAF_ID)
     const record = makeRecord({ paneKey, tabId: 'tab-right', origin: 'worktree-sleep' })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       ...makeActiveTerminalState('tab-left'),
       activeGroupIdByWorktree: { 'wt-1': 'group-left' },
       groupsByWorktree: {
@@ -351,7 +362,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
   it('resumes active worktree-sleep stable-pane records when the preserved leaf has no PTY to cold-restore', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const record = makeRecord({ paneKey, origin: 'quit' })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       ...makeActiveTerminalState('tab-1'),
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
       terminalLayoutsByTabId: {
@@ -377,7 +389,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
   it('resumes live stable-pane records when the preserved leaf has no PTY to cold-restore', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const record = makeRecord({ paneKey, origin: 'live' })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       ...makeActiveTerminalState('tab-1'),
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
       terminalLayoutsByTabId: {
@@ -403,7 +416,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
   it('does not let a sibling split-pane PTY claim a live stable-pane record', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const record = makeRecord({ paneKey, origin: 'live' })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       tabsByWorktree: {
         'wt-1': [{ ...makeTerminalTab('tab-1', 'wt-1'), ptyId: 'tab-level-wake-hint' }]
       },
@@ -427,7 +441,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
   it('skips hibernated stable panes after their live PTY binding is cleared', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const record = makeRecord({ paneKey, origin: 'worktree-sleep', state: 'done' })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
       terminalLayoutsByTabId: {
         'tab-1': {
@@ -450,7 +465,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
 
   it('skips legacy numeric pane-key records owned by a preserved tab wake hint', () => {
     const record = makeRecord({ paneKey: 'tab-1:0', origin: 'worktree-sleep' })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       ...makeActiveTerminalState('tab-1'),
       tabsByWorktree: {
         'wt-1': [{ ...makeTerminalTab('tab-1', 'wt-1'), ptyId: 'wake-hint' }]
@@ -479,7 +495,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
       capturedAt: 2,
       updatedAt: 2
     })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       tabsByWorktree: {
         'wt-1': [{ ...makeTerminalTab('tab-1', 'wt-1'), ptyId: 'wake-hint' }]
       },
@@ -500,7 +517,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
 
   it("leaves a workspace sleep's records to main while their tab remains", () => {
     const record = makeRecord({ origin: 'worktree-sleep' })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
     } as never)
@@ -521,7 +539,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
         agentEnv: { CODEX_PROFILE: 'captured' }
       }
     })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       settings: {
         agentCmdOverrides: { codex: 'codex --profile changed' },
         agentDefaultArgs: { codex: '--model changed' },
@@ -559,7 +578,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
       updatedAt: 2,
       launchConfig: { agentArgs: '--newer', agentEnv: {} }
     })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { 'wt-1': [] },
       sleepingAgentSessionsByPaneKey: {
         [first.paneKey]: first,
@@ -591,7 +611,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
       capturedAt: 2,
       updatedAt: 2
     })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       ...makeActiveTerminalState('tab-1'),
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
       terminalLayoutsByTabId: { 'tab-1': makeLayout(LEAF_ID) },
@@ -621,7 +642,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
       capturedAt: 2,
       updatedAt: 2
     })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       ...makeActiveTerminalState('tab-1'),
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
       terminalLayoutsByTabId: { 'tab-1': makeLayout(LEAF_ID) },
@@ -660,7 +682,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
       updatedAt: 2,
       launchConfig: { agentArgs: '--active', agentEnv: {} }
     })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       ...makeActiveTerminalState('tab-active'),
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-active', 'wt-1')] },
       terminalLayoutsByTabId: {
@@ -706,7 +729,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
       capturedAt: 3_000_001,
       updatedAt: 3_000_001
     })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
       terminalLayoutsByTabId: { 'tab-1': makeLayout(LEAF_ID) },
       sleepingAgentSessionsByPaneKey: {
@@ -728,7 +752,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
   it('fresh-resumes when explicit tabId disagrees with the stable pane-key tab id', () => {
     const paneKey = makePaneKey('parsed-tab', LEAF_ID)
     const record = makeRecord({ paneKey, tabId: 'explicit-tab', origin: 'quit' })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       tabsByWorktree: {
         'wt-1': [makeTerminalTab('explicit-tab', 'wt-1'), makeTerminalTab('parsed-tab', 'wt-1')]
       },
@@ -752,7 +777,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
 
   it('clears completed worktree-sleep records without preserved panes instead of resuming', () => {
     const record = makeRecord({ origin: 'worktree-sleep', state: 'done' })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { 'wt-1': [] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
     } as never)
@@ -768,7 +794,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
 
   it('clears stale manual records without launching a tab', () => {
     const record = makeRecord({ capturedAt: 3_000_000, updatedAt: 1 })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { 'wt-1': [] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
     } as never)
@@ -782,7 +809,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
 
   it('resumes interrupted manual records that no preserved pane can own', () => {
     const record = makeRecord({ origin: 'quit', interrupted: true })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { 'wt-1': [] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
     } as never)
@@ -815,7 +843,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
       throw new Error(parsed.error)
     }
     const record = parsed.value.sleepingAgentSessionsByPaneKey!['tab-1:leaf-1']!
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { 'wt-1': [] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
     } as never)
@@ -829,7 +858,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
 
   it('clears legacy completed live records without launching a tab', () => {
     const record = makeRecord({ state: 'done' })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { 'wt-1': [] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
     } as never)
@@ -846,7 +876,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
       providerSession: { key: 'session_id', id: "sess-1's" },
       origin: 'quit'
     })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       activeRepoId: 'repo-1',
       activeWorktreeId: 'wt-1',
       repos: [{ id: 'repo-1', path: 'C:\\repo', displayName: 'repo', addedAt: 1 }],

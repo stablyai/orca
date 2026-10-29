@@ -1,3 +1,4 @@
+import { applyWebSessionTabsSnapshotsToEdit } from './web-session-tabs-sync/snapshot-api'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
@@ -63,12 +64,8 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
   } = {}
 ): Promise<void> {
   // Await up front; list application and its receipt must not yield between them.
-  const [
-    { applyWebSessionTabsSnapshot },
-    { applyWebSessionTabsStorePatch },
-    { decideWebSessionTabsSnapshot },
-    trackingLifecycle
-  ] = await loadSessionTabsApplyModules()
+  const [, { applyWebSessionTabsStorePatch }, { decideWebSessionTabsSnapshot }, trackingLifecycle] =
+    await loadSessionTabsApplyModules()
   const expectedEnvironmentPairingRevision =
     options.expectedEnvironmentPairingRevision ?? getRuntimeEnvironmentRevision(environmentId)
   const expectedEnvironmentConnectionGeneration =
@@ -157,19 +154,20 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
       ? decideWebSessionTabsSnapshot(recovered, environmentId)
       : WEB_SESSION_TABS_FRAME_OUTRANKED
     const settleMirror = applyWebSessionTabsStorePatch(
-      (state, changedAgentPaneKeys) => {
+      (state, changedAgentPaneKeys, sourceEdit) => {
         // Eager refresh can outlive workspace switches; update tabs without taking focus.
         const patch = decision.apply
-          ? applyWebSessionTabsSnapshot(
+          ? applyWebSessionTabsSnapshotsToEdit(
+              sourceEdit,
               state,
-              recovered,
+              [recovered],
               environmentId,
               undefined,
-              undefined,
-              changedAgentPaneKeys
+              changedAgentPaneKeys,
+              undefined
             )
-          : state
-        return patch === state ? state : patch
+          : undefined
+        return patch
       },
       {
         frames: [

@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import type { GitHubAssignableUser } from '../../../../shared/github/pull-request-types'
 
@@ -23,7 +23,7 @@ function createEmptyNewIssueDraft(): NewIssueDraft {
   return { title: '', body: '', labels: [], assignees: [], repoId: null }
 }
 
-export const createNewIssueDraftSlice: StateCreator<AppState, [], [], NewIssueDraftSlice> = (
+export const createNewIssueDraftSlice: SessionStateCreator<AppState, NewIssueDraftSlice> = (
   set
 ) => ({
   newIssueDraft: null,

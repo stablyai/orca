@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
@@ -48,7 +49,7 @@ function setup() {
     configurable: true,
     value: { forBranch: branchLookup }
   })
-  store.setState({
+  setSessionTestState(store, {
     repos: [{ id: 'repo', path: '/repo', displayName: 'Orca', addedAt: 0, badgeColor: '' }],
     worktreesByRepo: { repo: [workspace] }
   })
@@ -124,10 +125,10 @@ it.each([false, true])(
       branch: 'refs/heads/local-copy',
       pushTarget: { remoteName: 'origin', branchName: 'feature' }
     }
-    store.setState({ worktreesByRepo: { repo: [saved] } })
+    setSessionTestState(store, { worktreesByRepo: { repo: [saved] } })
     store.getState().observeTerminalGitHubPullRequestLink(workspace.id, link)
     if (replace) {
-      store.setState({
+      setSessionTestState(store, {
         worktreesByRepo: {
           repo: [{ ...saved, pushTarget: { remoteName: 'origin', branchName: 'replacement' } }]
         }

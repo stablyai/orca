@@ -1,3 +1,4 @@
+import { editSessionSource, type SessionSourceEdit } from '@/store/session-source-edits'
 import { tryRuntimeTargetForWorktreeOwner } from './worktree-owner-target'
 import { warnAmbiguousOwnerOnce } from '@/lib/ambiguous-owner-warning'
 import type { Worktree } from '../../../../../../shared/worktree/types'
@@ -15,7 +16,8 @@ import { selectWorktreesByRepo } from '../../../workspace-record-selectors'
 export function replaceWorktreeInRepoLists(
   state: Pick<AppState, 'repos' | 'worktreesByRepo'>,
   updatedWorktree: Worktree,
-  hostId: ExecutionHostId
+  hostId: ExecutionHostId,
+  edit: SessionSourceEdit<Pick<AppState, 'repos' | 'worktreesByRepo'>> = editSessionSource(state)
 ): Record<string, Worktree[]> {
   const repoId = getRepoIdFromWorktreeId(updatedWorktree.id)
   const current = selectWorktreesByRepo(state)[repoId]
@@ -23,14 +25,16 @@ export function replaceWorktreeInRepoLists(
     return selectWorktreesByRepo(state)
   }
   const options = worktreeHostMatchOptions(state, repoId, hostId)
-  return {
-    ...selectWorktreesByRepo(state),
-    [repoId]: current.map((worktree) =>
+  edit.set(
+    'worktreesByRepo',
+    repoId,
+    current.map((worktree) =>
       worktree.id === updatedWorktree.id && worktreeMatchesHost(worktree, hostId, options)
         ? updatedWorktree
         : worktree
     )
-  }
+  )
+  return edit.read('worktreesByRepo')
 }
 
 export function persistPassiveWorktreeMetaForOwner(

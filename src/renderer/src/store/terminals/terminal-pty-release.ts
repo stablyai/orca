@@ -1,6 +1,7 @@
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
+import { editSessionSource } from '../session-source-edits'
 import {
   consumePendingActivationSpawn,
   getPendingActivationSpawnCount
@@ -20,9 +21,9 @@ export function createTerminalPtyReleaseActions(
       let wasActivationSpawn = false
       let isRemoteRuntimeMirror = isRemoteRuntimePtyId(ptyId)
       set((s) => {
+        const edit = editSessionSource(s)
         const existingPtyIds = s.ptyIdsByTabId[tabId] ?? []
         const remainingPtyIds = ptyId ? existingPtyIds.filter((id) => id !== ptyId) : []
-        let nextTabsByWorktree = s.tabsByWorktree
         for (const [wId, tabs] of Object.entries(s.tabsByWorktree)) {
           const index = tabs.findIndex((t) => t.id === tabId)
           if (index === -1) {
@@ -55,16 +56,15 @@ export function createTerminalPtyReleaseActions(
                 : {}),
               ptyId: nextTabPtyId
             }
-            nextTabsByWorktree = { ...s.tabsByWorktree, [wId]: nextTabs }
+            edit.set('tabsByWorktree', wId, nextTabs)
           }
           break
         }
-        const nextPtyIdsByTabId = { ...s.ptyIdsByTabId }
         if (worktreeId) {
-          nextPtyIdsByTabId[tabId] = remainingPtyIds
+          edit.set('ptyIdsByTabId', tabId, remainingPtyIds)
         } else {
           // Why: repo purge can retire the owning tab before its async exit arrives; don't resurrect an orphan PTY index.
-          delete nextPtyIdsByTabId[tabId]
+          edit.remove('ptyIdsByTabId', tabId)
         }
         const nextPendingPaneAccountRestarts = { ...s.pendingPaneAccountRestarts }
         const nextCodexRestartNoticeByPtyId = { ...s.codexRestartNoticeByPtyId }
@@ -78,25 +78,19 @@ export function createTerminalPtyReleaseActions(
           }
         }
         // Why: an explicit exit drops the dead relay ID; bulk clears retain it for relay grace.
-        const nextLastKnownRelay = { ...s.lastKnownRelayPtyIdByTabId }
-        if (ptyId && nextLastKnownRelay[tabId] === ptyId) {
+        if (ptyId && s.lastKnownRelayPtyIdByTabId[tabId] === ptyId) {
           // If last-bound relay slot exits, promote a survivor or later bulk relay clearing makes orphan sweep delete the still-live split tab (#9911).
           const survivingPtyId = remainingPtyIds.at(-1)
           if (survivingPtyId) {
-            nextLastKnownRelay[tabId] = survivingPtyId
+            edit.set('lastKnownRelayPtyIdByTabId', tabId, survivingPtyId)
           } else {
-            delete nextLastKnownRelay[tabId]
+            edit.remove('lastKnownRelayPtyIdByTabId', tabId)
           }
         }
-        return {
-          ...(nextTabsByWorktree !== s.tabsByWorktree
-            ? { tabsByWorktree: nextTabsByWorktree }
-            : {}),
-          ptyIdsByTabId: nextPtyIdsByTabId,
-          lastKnownRelayPtyIdByTabId: nextLastKnownRelay,
+        return edit.finish({
           pendingPaneAccountRestarts: nextPendingPaneAccountRestarts,
           codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId
-        }
+        })
       })
       // Bump activity on PTY exit, but skip intentional shutdowns (suppressed exits) and click-driven pane unmounts (pendingActivationSpawn).
       if (

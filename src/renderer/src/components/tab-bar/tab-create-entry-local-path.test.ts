@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
@@ -64,7 +65,7 @@ function makeProjectGroup(overrides: Partial<ProjectGroup> = {}): ProjectGroup {
 describe('getTabEntryAllowAbsolutePaths', () => {
   afterEach(() => {
     vi.restoreAllMocks()
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   it.each(['report.html', 'notes.txt'])(
@@ -76,13 +77,13 @@ describe('getTabEntryAllowAbsolutePaths', () => {
         path: '/Users/me/repo',
         hostId: 'local'
       })
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         repos: [makeRepo({ id: 'repo-local', executionHostId: 'local' })],
         worktreesByRepo: { 'repo-local': [worktree] },
         runtimeEnvironmentCatalogHydrated: true
       })
       vi.spyOn(metadata, 'statRuntimePath').mockImplementationOnce(async () => {
-        useAppStore.setState({
+        setSessionTestState(useAppStore, {
           repos: [makeRepo({ id: 'repo-local', executionHostId: 'runtime:hub-a' })],
           worktreesByRepo: {
             'repo-local': [
@@ -108,7 +109,7 @@ describe('getTabEntryAllowAbsolutePaths', () => {
   it('opens existing HTML as source in a local folder workspace', async () => {
     const folder = makeFolderWorkspace()
     const worktreeId = folderWorkspaceKey(folder.id)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [folder],
       projectGroups: [makeProjectGroup()],
       repos: []
@@ -139,7 +140,7 @@ describe('getTabEntryAllowAbsolutePaths', () => {
   })
 
   it('allows absolute paths for a known local worktree', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [makeRepo({ id: 'repo-local' })],
       worktreesByRepo: {
         'repo-local': [
@@ -161,7 +162,7 @@ describe('getTabEntryAllowAbsolutePaths', () => {
   })
 
   it('blocks absolute paths when the worktree has an SSH connectionId', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [makeRepo({ id: 'repo-ssh', connectionId: 'ssh-1' })],
       worktreesByRepo: {
         'repo-ssh': [
@@ -181,7 +182,7 @@ describe('getTabEntryAllowAbsolutePaths', () => {
   })
 
   it('blocks absolute paths when activeRuntimeEnvironmentId is set', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [makeRepo({ id: 'repo-local' })],
       worktreesByRepo: {
         'repo-local': [
@@ -204,7 +205,7 @@ describe('getTabEntryAllowAbsolutePaths', () => {
   })
 
   it('blocks absolute paths while worktree connection ownership is unresolved', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [],
       worktreesByRepo: {}
     })
@@ -215,7 +216,7 @@ describe('getTabEntryAllowAbsolutePaths', () => {
   })
 
   it('blocks absolute paths when the worktree is missing from a known local repo', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [makeRepo({ id: 'repo-local' })],
       worktreesByRepo: { 'repo-local': [] },
       runtimeEnvironmentCatalogHydrated: true,
@@ -230,7 +231,7 @@ describe('getTabEntryAllowAbsolutePaths', () => {
   })
 
   it('blocks absolute paths for conflicting local and paired-runtime ownership', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [makeRepo({ id: 'repo-local' }), makeRepo({ id: 'repo-runtime' })],
       worktreesByRepo: {
         'repo-local': [
@@ -263,7 +264,7 @@ describe('getTabEntryAllowAbsolutePaths', () => {
   it('allows positively known local folder workspaces', () => {
     const folderWorkspace = makeFolderWorkspace()
     const worktreeId = folderWorkspaceKey(folderWorkspace.id)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [folderWorkspace],
       projectGroups: [makeProjectGroup()],
       repos: [],
@@ -291,7 +292,7 @@ describe('getTabEntryAllowAbsolutePaths', () => {
       connectionId: 'ssh-1'
     })
     const worktreeId = folderWorkspaceKey(folderWorkspace.id)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [folderWorkspace],
       projectGroups: [makeProjectGroup()],
       repos: [],
@@ -303,7 +304,7 @@ describe('getTabEntryAllowAbsolutePaths', () => {
 
   it('blocks folder workspaces until their project group owner is hydrated', () => {
     const folderWorkspace = makeFolderWorkspace()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [folderWorkspace],
       projectGroups: [],
       repos: []
@@ -316,7 +317,7 @@ describe('getTabEntryAllowAbsolutePaths', () => {
 
   it('blocks paired-runtime folder workspaces', () => {
     const folderWorkspace = makeFolderWorkspace()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [folderWorkspace],
       projectGroups: [makeProjectGroup({ executionHostId: 'runtime:hub-a' })],
       repos: [],
@@ -331,7 +332,7 @@ describe('getTabEntryAllowAbsolutePaths', () => {
   it('blocks folder workspaces restored from a paired runtime', () => {
     const folderWorkspace = makeFolderWorkspace()
     const worktreeId = folderWorkspaceKey(folderWorkspace.id)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [folderWorkspace],
       projectGroups: [makeProjectGroup()],
       repos: [],
@@ -345,7 +346,7 @@ describe('getTabEntryAllowAbsolutePaths', () => {
 
   it('blocks folder workspaces whose repos infer SSH ownership', () => {
     const folderWorkspace = makeFolderWorkspace()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [folderWorkspace],
       projectGroups: [makeProjectGroup()],
       repos: [
@@ -365,7 +366,7 @@ describe('getTabEntryAllowAbsolutePaths', () => {
 
   it('blocks folder workspaces with mixed local and SSH repo ownership', () => {
     const folderWorkspace = makeFolderWorkspace()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [folderWorkspace],
       projectGroups: [makeProjectGroup()],
       repos: [
@@ -389,7 +390,7 @@ describe('getTabEntryAllowAbsolutePaths', () => {
   })
 
   it('does not repeat owner resolution for unrelated store writes', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [makeRepo({ id: 'repo-local' })],
       worktreesByRepo: {
         'repo-local': [
@@ -420,7 +421,7 @@ describe('getTabEntryAllowAbsolutePaths', () => {
   })
 
   it('recomputes when an ownership-causal slice changes', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [makeRepo({ id: 'repo-local' })],
       worktreesByRepo: {
         'repo-local': [

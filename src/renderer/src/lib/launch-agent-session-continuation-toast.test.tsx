@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -39,7 +40,7 @@ beforeEach(() => {
     })
     return { surface: { kind: 'host-published' }, pasteDraftAfterLaunch: false }
   })
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     settings: getDefaultSettings('/test'),
     repos: [{ id: 'repo-1', path: '/repo', displayName: 'Repo', badgeColor: '', addedAt: 0 }],
     worktreesByRepo: {
@@ -78,7 +79,7 @@ afterEach(() => {
   toast.dismiss()
   vi.clearAllTimers()
   vi.useRealTimers()
-  useAppStore.setState(initial, true)
+  setSessionTestState(useAppStore, initial, true)
 })
 
 it.each([

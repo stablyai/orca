@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // Clean tabs must not retain disk-text drafts that could later overwrite a shared model.
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { attachEditorAutosaveController } from './editor-autosave-controller'
@@ -92,7 +93,7 @@ it('reload leaves no draft', () => {
 it("lets a clean record's draft reach its model, since every view shares that draft", () => {
   const { store, id } = openCleanTab('disk')
   // A Markdown-whitespace draft may stay on a clean tab; it is the record's text, so views show it.
-  store.setState({ editorDrafts: { ...store.getState().editorDrafts, [id]: 'disk ' } })
+  setSessionTestState(store, { editorDrafts: { ...store.getState().editorDrafts, [id]: 'disk ' } })
   expect(mayPushTabTextIntoModel(id)).toBe(true)
   store.getState().markFileDirty(id, true)
   expect(mayPushTabTextIntoModel(id)).toBe(true)

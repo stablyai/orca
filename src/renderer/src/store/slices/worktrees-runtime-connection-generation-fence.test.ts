@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compatibility-test-fixture'
@@ -25,7 +26,8 @@ const ENV = 'env-remote'
 const REPO_IDS = ['repo1', 'repo2', 'repo3', 'repo4', 'repo5'] as const
 
 function seedRuntimeRepos(store: ReturnType<typeof createTestStore>) {
-  store.setState({
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This repos, settings, hasHydratedWorktreePurge fixture intentionally supplies only the state members exercised by this scenario.
+  setSessionTestState(store, {
     repos: REPO_IDS.map((id) => ({
       id,
       path: `C:/remote/${id}`,

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 /** Repo UUIDs never recur; removal must evict all four lazily populated sparse-preset maps or session memory grows forever. */
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -26,7 +27,7 @@ function preset(id: string, repoId: string): SparsePreset {
 }
 
 function seed(store: ReturnType<typeof createTestStore>): void {
-  store.setState({
+  setSessionTestState(store, {
     repos: [repo1, repo2],
     worktreesByRepo: {
       [repo1.id]: [makeWorktree({ id: 'repo-1::/r1/wt1', repoId: repo1.id, path: '/r1/wt1' })],

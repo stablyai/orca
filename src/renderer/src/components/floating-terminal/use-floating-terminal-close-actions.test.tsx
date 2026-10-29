@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -63,7 +64,7 @@ const requestPinnedTabCloseConfirm = vi.fn()
 
 beforeEach(() => {
   vi.clearAllMocks()
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     closeFile,
     closeUnifiedTab,
     requestPinnedTabCloseConfirm,
@@ -105,7 +106,7 @@ describe('floating titlebar close actions', () => {
     'retains pinned editors without prompting during Close All Editor Tabs (confirmation %s)',
     async (confirmClosePinnedTab) => {
       setPinnedConfirmation(confirmClosePinnedTab)
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         unifiedTabsByWorktree: { [worktreeId]: [editor, pinnedEditor, chat] },
         openFiles: [
           makeOpenFile({ id: sharedFileId, worktreeId }),
@@ -125,7 +126,7 @@ describe('floating titlebar close actions', () => {
 
   it('keeps the confirmation policy for an explicit pinned editor close', () => {
     setPinnedConfirmation(true)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       unifiedTabsByWorktree: { [worktreeId]: [pinnedEditor] },
       openFiles: [makeOpenFile({ id: 'pinned-file', worktreeId })]
     })
@@ -139,7 +140,7 @@ describe('floating titlebar close actions', () => {
   })
 
   it('routes a dirty last reference through the shared save confirmation', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       unifiedTabsByWorktree: { [worktreeId]: [editor] },
       openFiles: [makeOpenFile({ id: sharedFileId, worktreeId, isDirty: true })],
       editorBuffers: {}

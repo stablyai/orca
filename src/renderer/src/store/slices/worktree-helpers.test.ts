@@ -1,6 +1,8 @@
+import type { AppState } from '../types'
+import { editSessionSource } from '../session-source-edits'
 import { describe, expect, it } from 'vitest'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { applyWorktreeUpdates } from './worktree-helpers'
+import { applyWorktreeUpdates as applyUpdates } from './worktree-helpers'
 
 function makeWorktree(overrides: Partial<Worktree> & { id: string; repoId: string }): Worktree {
   return {
@@ -69,3 +71,12 @@ describe('applyWorktreeUpdates', () => {
     expect(result['repo-a']?.[0]?.comment).toBe('edited')
   })
 })
+
+function applyWorktreeUpdates(
+  worktreesByRepo: AppState['worktreesByRepo'],
+  ...args: Parameters<typeof applyUpdates> extends [unknown, ...infer Rest] ? Rest : never
+) {
+  const edit = editSessionSource({ worktreesByRepo })
+  applyUpdates(edit, ...args)
+  return edit.read('worktreesByRepo')
+}

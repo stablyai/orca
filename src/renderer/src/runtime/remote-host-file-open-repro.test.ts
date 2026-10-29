@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // SSH repo hydration once left connectionId undefined, routing remote POSIX paths through local authorization and latching access-denied errors even after hydration (#6648, Windows). Exercise the real owner-not-ready guard so reads wait instead.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../shared/repo-types'
@@ -68,7 +69,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   vi.unstubAllGlobals()
 })
 
@@ -118,7 +119,7 @@ async function openFloatingWorkspaceFileInEditor() {
 
 describe('issue #6648: opening a remote-host file in the editor', () => {
   it('succeeds once the SSH repo is hydrated with its connectionId', async () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [makeRepo({ id: SSH_REPO_ID, connectionId: SSH_TARGET_ID })],
       worktreesByRepo: {}
     })
@@ -135,7 +136,7 @@ describe('issue #6648: opening a remote-host file in the editor', () => {
 
   it('FIXED: fails retryably (not a local access-denied) while the SSH repo hydrates', async () => {
     // Restored tab precedes SSH repo hydration, especially on Windows; unknown repo yields undefined connection ID.
-    useAppStore.setState({ repos: [], worktreesByRepo: {} })
+    setSessionTestState(useAppStore, { repos: [], worktreesByRepo: {} })
 
     expect(getConnectionIdForFile(REMOTE_WORKTREE_ID, REMOTE_FILE_PATH)).toBeUndefined()
     expect(isWorktreeConnectionResolved(REMOTE_WORKTREE_ID)).toBe(false)
@@ -147,11 +148,11 @@ describe('issue #6648: opening a remote-host file in the editor', () => {
   })
 
   it('FIXED: recovers once the SSH repo finishes hydrating', async () => {
-    useAppStore.setState({ repos: [], worktreesByRepo: {} })
+    setSessionTestState(useAppStore, { repos: [], worktreesByRepo: {} })
     await expect(openRemoteFileInEditor()).rejects.toThrow(WORKTREE_OWNER_NOT_READY_ERROR)
 
     // Relay discovery completes and the SSH repo lands in the store.
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [makeRepo({ id: SSH_REPO_ID, connectionId: SSH_TARGET_ID })],
       worktreesByRepo: {}
     })
@@ -178,7 +179,7 @@ describe('issue #6648: opening a remote-host file in the editor', () => {
 describe('issue #6831: opening a floating-workspace file in the editor', () => {
   it('FIXED: treats the floating workspace as local instead of waiting for repo hydration', async () => {
     // Floating workspace is synthetic local identity; missing repos must not make its owner guard wait forever (#6831).
-    useAppStore.setState({ repos: [], worktreesByRepo: {} })
+    setSessionTestState(useAppStore, { repos: [], worktreesByRepo: {} })
 
     expect(getConnectionIdForFile(FLOATING_TERMINAL_WORKTREE_ID, FLOATING_FILE_PATH)).toBeNull()
     expect(isWorktreeConnectionResolved(FLOATING_TERMINAL_WORKTREE_ID)).toBe(true)

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
 import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
 import type { BrowserSessionProfile } from '../../../shared/browser-workspace-types'
@@ -51,7 +52,7 @@ beforeEach(() => {
   resetWebSessionBrowserPlacementsForTests()
   resetHostPages()
   seedPairedWorktree()
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     repos: [{ ...TEST_REPO, id: 'repo', executionHostId: HOST }],
     worktreesByRepo: {
       repo: [
@@ -147,7 +148,7 @@ describe('runtime link opens through staging and materialization', () => {
   })
 
   it('creates a client split beside the source when no browser is visible', async () => {
-    useAppStore.setState((state) => ({
+    setSessionTestState(useAppStore, (state) => ({
       groupsByWorktree: {
         [WT]: state.groupsByWorktree[WT]!.map((group) => ({
           ...group,
@@ -200,7 +201,7 @@ describe('runtime link opens through staging and materialization', () => {
       label: 'Default',
       source: null
     }
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       browserSessionProfilesByHostId: { [HOST]: [profile] },
       remoteBrowserPageHandlesByPageId: {
         ...state.remoteBrowserPageHandlesByPageId,

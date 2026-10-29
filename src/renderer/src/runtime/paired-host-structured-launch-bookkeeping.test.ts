@@ -81,7 +81,7 @@ function acceptPairedHostStructuredSessions(
   environmentId: string
 ) {
   const frame = suppressCancelledStructuredSessionTabs(snapshot, SERVER)
-  applyWebSessionTabsStorePatch((s) => s, {
+  applyWebSessionTabsStorePatch(() => undefined, {
     frames: [
       {
         environmentId,

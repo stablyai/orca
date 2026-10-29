@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import type { StatsSummary } from '../../../../shared/process-stats-types'
 
@@ -7,7 +7,7 @@ export type StatsSlice = {
   fetchStatsSummary: () => Promise<void>
 }
 
-export const createStatsSlice: StateCreator<AppState, [], [], StatsSlice> = (set) => ({
+export const createStatsSlice: SessionStateCreator<AppState, StatsSlice> = (set) => ({
   statsSummary: null,
 
   fetchStatsSummary: async () => {

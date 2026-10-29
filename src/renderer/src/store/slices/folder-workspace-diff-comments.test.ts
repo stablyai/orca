@@ -1,3 +1,5 @@
+import { withSessionSourceTestWrites } from '@/lib/test-support/session-source-test-store'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
@@ -28,20 +30,22 @@ globalThis.window = {
 } as never
 
 function createTestStore() {
-  return create<AppState>()((...args) => {
-    const slice = createDiffCommentsSlice(...args)
-    return {
-      ...slice,
-      settings: null,
-      activeWorktreeId: null,
-      activeWorkspaceExecutionHostId: null,
-      folderWorkspaces: [],
-      projectGroups: [],
-      runtimeEnvironments: [],
-      restoredRuntimeHostIdByWorkspaceSessionKey: {},
-      worktreesByRepo: {}
-    } as unknown as AppState
-  })
+  return create<AppState>()(
+    withSessionSourceTestWrites((...args) => {
+      const slice = createDiffCommentsSlice(...args)
+      return {
+        ...slice,
+        settings: null,
+        activeWorktreeId: null,
+        activeWorkspaceExecutionHostId: null,
+        folderWorkspaces: [],
+        projectGroups: [],
+        runtimeEnvironments: [],
+        restoredRuntimeHostIdByWorkspaceSessionKey: {},
+        worktreesByRepo: {}
+      } as unknown as AppState
+    })
+  )
 }
 
 function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWorkspace {
@@ -62,7 +66,7 @@ function seedLocalFolderWorkspace(store: ReturnType<typeof createTestStore>): Fo
     parentPath: '/workspace',
     executionHostId: 'local'
   } as ProjectGroup
-  store.setState({
+  setSessionTestState(store, {
     activeWorktreeId: folderWorkspaceKey(folderWorkspace.id),
     activeWorkspaceExecutionHostId: 'local',
     projectGroups: [projectGroup],
@@ -217,7 +221,7 @@ describe('folder workspace diff comments', () => {
       },
       _meta: { runtimeId: 'remote-runtime' }
     }))
-    store.setState({
+    setSessionTestState(store, {
       activeWorktreeId: workspaceKey,
       activeWorkspaceExecutionHostId: 'local',
       folderWorkspaces: [localWorkspace, runtimeWorkspace]
@@ -416,7 +420,9 @@ describe('folder workspace diff comment rollback convergence', () => {
         side: 'modified'
       } as DiffComment
     ]
-    store.setState({ folderWorkspaces: [{ ...folderWorkspace, diffComments: hydrated }] })
+    setSessionTestState(store, {
+      folderWorkspaces: [{ ...folderWorkspace, diffComments: hydrated }]
+    })
 
     await addNote(store, key, 'D', 4)
 
@@ -450,7 +456,9 @@ describe('folder workspace diff comment rollback convergence', () => {
         side: 'modified'
       } as DiffComment
     ]
-    store.setState({ folderWorkspaces: [{ ...folderWorkspace, diffComments: hydrated }] })
+    setSessionTestState(store, {
+      folderWorkspaces: [{ ...folderWorkspace, diffComments: hydrated }]
+    })
     const addE = addNote(store, key, 'note E', 2)
     rejectFirst(new Error('disk full'))
 
@@ -486,7 +494,9 @@ describe('folder workspace diff comment rollback convergence', () => {
         side: 'modified'
       } as DiffComment
     ]
-    store.setState({ folderWorkspaces: [{ ...folderWorkspace, diffComments: hydrated }] })
+    setSessionTestState(store, {
+      folderWorkspaces: [{ ...folderWorkspace, diffComments: hydrated }]
+    })
     // Why: the chain break re-seeds the floor to `hydrated`; A's success must not restore its pre-replacement capture.
     const addE = addNote(store, key, 'note E', 2)
     releaseFirst()
@@ -519,7 +529,9 @@ describe('folder workspace diff comment rollback convergence', () => {
         side: 'modified'
       } as DiffComment
     ]
-    store.setState({ folderWorkspaces: [{ ...folderWorkspace, diffComments: hydrated }] })
+    setSessionTestState(store, {
+      folderWorkspaces: [{ ...folderWorkspace, diffComments: hydrated }]
+    })
     const addE = addNote(store, key, 'note E', 2)
 
     await Promise.all([addA, addE])
@@ -537,7 +549,9 @@ describe('folder workspace diff comment rollback convergence', () => {
     const key = folderWorkspaceKey(folderWorkspace.id)
     // Why: a malformed entry makes normalizeDiffComment throw inside run, before persist is ever called.
     const malformed = [null as unknown as DiffComment]
-    store.setState({ folderWorkspaces: [{ ...folderWorkspace, diffComments: malformed }] })
+    setSessionTestState(store, {
+      folderWorkspaces: [{ ...folderWorkspace, diffComments: malformed }]
+    })
     folderWorkspacesUpdate.mockImplementation(async ({ updates }) => ({
       ...folderWorkspace,
       ...updates
@@ -584,7 +598,7 @@ describe('folder workspace diff comment rollback convergence', () => {
     const store = createTestStore()
     const runtimeWorkspace = makeFolderWorkspace({ executionHostId: 'runtime:env-owner' })
     const key = folderWorkspaceKey(runtimeWorkspace.id)
-    store.setState({
+    setSessionTestState(store, {
       activeWorktreeId: key,
       activeWorkspaceExecutionHostId: 'runtime:env-owner',
       folderWorkspaces: [runtimeWorkspace]
@@ -605,7 +619,7 @@ describe('folder workspace diff comment rollback convergence', () => {
       connectionId: 'nested-box'
     })
     const key = folderWorkspaceKey(runtimeWorkspace.id)
-    store.setState({
+    setSessionTestState(store, {
       activeWorktreeId: key,
       activeWorkspaceExecutionHostId: 'runtime:env-owner',
       folderWorkspaces: [runtimeWorkspace]
@@ -644,7 +658,7 @@ describe('folder workspace diff comment rollback convergence', () => {
       projectGroupId: 'runtime-group',
       executionHostId: 'runtime:env-owner'
     })
-    store.setState({
+    setSessionTestState(store, {
       activeWorktreeId: key,
       activeWorkspaceExecutionHostId: 'runtime:env-owner',
       folderWorkspaces: [localWorkspace, runtimeWorkspace]

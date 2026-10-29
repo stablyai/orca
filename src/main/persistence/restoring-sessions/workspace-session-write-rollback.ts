@@ -1,3 +1,4 @@
+import type { SessionPresence } from '../../../shared/session-unit-reader'
 import { isDeepStrictEqual } from 'node:util'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 
@@ -128,4 +129,25 @@ export function rollbackWorkspaceSessionAfterFailedAsyncWrite(
 ): WorkspaceSessionState {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Each restored field retains a value from the same field of a typed session.
   return rollbackValue(original, staged, current) as WorkspaceSessionState
+}
+
+export function rollbackSessionUnit<T>(
+  original: SessionPresence<T>,
+  staged: SessionPresence<T>,
+  current: SessionPresence<T>
+): SessionPresence<T> {
+  // SAFETY: session slots contain DTOs; rollback only retains values from the same typed slot.
+  const restored = rollbackValue(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: session slots contain DTOs; rollback only retains values from the same typed slot.
+    original.present ? (original.value as RollbackSlot) : MISSING,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: session slots contain DTOs; rollback only retains values from the same typed slot.
+    staged.present ? (staged.value as RollbackSlot) : MISSING,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: session slots contain DTOs; rollback only retains values from the same typed slot.
+    current.present ? (current.value as RollbackSlot) : MISSING
+  )
+  // SAFETY: the recursion combines values exclusively from this slot's typed inputs.
+  return restored === MISSING
+    ? { present: false, value: undefined }
+    : // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recursion combines values exclusively from this slot's typed inputs.
+      { present: true, value: restored as T }
 }

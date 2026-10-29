@@ -1,3 +1,5 @@
+import type { AppState } from '../types'
+import { withSessionSourceTestWrites } from '@/lib/test-support/session-source-test-store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import { toast } from 'sonner'
@@ -11,7 +13,6 @@ import {
 import {
   clearRuntimeEnvironmentConnectionGenerationsForTests,
   createRuntimeStatusSlice,
-  type RuntimeStatusSlice,
   getRuntimeEnvironmentConnectionGeneration
 } from './runtime-status'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
@@ -23,9 +24,12 @@ vi.mock('sonner', () => ({
 }))
 
 function createSliceStore() {
-  return create<RuntimeStatusSlice>()((...a) => ({
-    ...createRuntimeStatusSlice(...(a as unknown as Parameters<typeof createRuntimeStatusSlice>))
-  }))
+  return create<AppState>()(
+    withSessionSourceTestWrites((...args) => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture intentionally supplies the runtime-status slice and only the owner fields each case seeds.
+      return { ...createRuntimeStatusSlice(...args) } as AppState
+    })
+  )
 }
 
 function makeStatus(overrides: Partial<RuntimeStatus> = {}): RuntimeStatus {

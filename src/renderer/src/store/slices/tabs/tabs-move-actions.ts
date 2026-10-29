@@ -1,5 +1,6 @@
+import { editSessionSource } from '../../session-source-edits'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
-import { collapseGroupLayout } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
+import { collapseGroupLayoutEdit } from './tab-group-layout-edits'
 import { buildActiveSurfacePatch } from './tabs-surface'
 import {
   findGroupAndWorktree,
@@ -22,16 +23,16 @@ export function createTabsMoveActions(
         const foundTab = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
         const foundTarget = findGroupAndWorktree(state.groupsByWorktree, targetGroupId)
         if (!foundTab || !foundTarget || foundTab.worktreeId !== foundTarget.worktreeId) {
-          return state
+          return undefined
         }
         const { tab, worktreeId } = foundTab
         if (tab.groupId === targetGroupId) {
-          return state
+          return undefined
         }
         const sourceGroup = findGroupForTab(state.groupsByWorktree, worktreeId, tab.groupId)
         const targetGroup = foundTarget.group
         if (!sourceGroup) {
-          return state
+          return undefined
         }
         moved = true
 
@@ -44,10 +45,12 @@ export function createTabsMoveActions(
           Math.min(opts?.index ?? targetOrder.length, targetOrder.length)
         )
         targetOrder.splice(targetIndex, 0, tabId)
-        const nextActiveGroupIdByWorktree = {
-          ...state.activeGroupIdByWorktree,
-          [worktreeId]: opts?.activate ? targetGroupId : state.activeGroupIdByWorktree[worktreeId]
-        }
+        const edit = editSessionSource(state)
+        edit.set(
+          'activeGroupIdByWorktree',
+          worktreeId,
+          opts?.activate ? targetGroupId : state.activeGroupIdByWorktree[worktreeId]
+        )
         const sourceRecentTabIds = sanitizeRecentTabIds(
           (sourceGroup.recentTabIds ?? []).filter((id) => id !== tabId),
           sourceOrder
@@ -83,50 +86,28 @@ export function createTabsMoveActions(
           }
           return group
         })
-        let nextLayoutByWorktree = state.layoutByWorktree
-        let nextActiveGroupIdByWorktreeResolved = nextActiveGroupIdByWorktree
         let filteredGroups = nextGroups
         if (sourceOrder.length === 0) {
           filteredGroups = nextGroups.filter((group) => group.id !== sourceGroup.id)
-          const collapsedState = collapseGroupLayout(
-            nextLayoutByWorktree,
-            nextActiveGroupIdByWorktreeResolved,
-            worktreeId,
-            sourceGroup.id,
-            targetGroupId
-          )
-          nextLayoutByWorktree = collapsedState.layoutByWorktree
-          nextActiveGroupIdByWorktreeResolved = collapsedState.activeGroupIdByWorktree
+          collapseGroupLayoutEdit(edit, worktreeId, sourceGroup.id, targetGroupId)
         }
-        const nextGroupsByWorktree = {
-          ...state.groupsByWorktree,
-          [worktreeId]: filteredGroups
-        }
-        const nextUnifiedTabsByWorktree = {
-          ...state.unifiedTabsByWorktree,
-          [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
+        edit.set('groupsByWorktree', worktreeId, filteredGroups)
+        edit.set(
+          'unifiedTabsByWorktree',
+          worktreeId,
+          (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
             candidate.id === tabId ? { ...candidate, groupId: targetGroupId } : candidate
           )
-        }
-        return {
-          unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
-          groupsByWorktree: nextGroupsByWorktree,
-          layoutByWorktree: nextLayoutByWorktree,
-          activeGroupIdByWorktree: nextActiveGroupIdByWorktreeResolved,
-          ...(state.activeWorktreeId === worktreeId
+        )
+        return edit.finish(
+          state.activeWorktreeId === worktreeId
             ? buildActiveSurfacePatch(
-                {
-                  ...state,
-                  unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
-                  groupsByWorktree: nextGroupsByWorktree,
-                  layoutByWorktree: nextLayoutByWorktree,
-                  activeGroupIdByWorktree: nextActiveGroupIdByWorktreeResolved
-                },
+                edit,
                 worktreeId,
-                nextActiveGroupIdByWorktreeResolved[worktreeId] ?? null
+                edit.entry('activeGroupIdByWorktree', worktreeId) ?? null
               )
-            : {})
-        }
+            : {}
+        )
       })
       if (moved && opts?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('tab-splits')

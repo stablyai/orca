@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
@@ -23,7 +24,7 @@ createStoreSessionMockApi()
 /** The startup hydration a switch-off window runs (use-app-startup-hydration.ts). */
 function restoredWindow(session: WorkspaceSessionState) {
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     repos: [
       {
         id: 'repo-local',

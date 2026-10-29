@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, renderHook, cleanup } from '@testing-library/react'
 import { it, expect, afterEach, vi } from 'vitest'
@@ -19,7 +20,7 @@ import { openQuickOpenFile } from './quick-open-file-navigation'
 const initial = useAppStore.getInitialState()
 afterEach(() => {
   cleanup()
-  useAppStore.setState(initial, true)
+  setSessionTestState(useAppStore, initial, true)
   vi.clearAllMocks()
 })
 it('revokes a pending actual open when detected ownership changes and returns', async () => {
@@ -30,7 +31,7 @@ it('revokes a pending actual open when detected ownership changes and returns', 
     selectedCheckout: true,
     visible: true
   }
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     openFile: mocks.open,
     activeModal: 'quick-open',
     activeWorktreeId: id,
@@ -112,7 +113,7 @@ it.each(['root', 'root-return', 'restored-owner'])(
   'revokes a pending actual open on %s change',
   async (change) => {
     const id = folderWorkspaceKey(folder.id)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       openFile: mocks.open,
       activeModal: 'quick-open',
       activeWorktreeId: id,
@@ -148,18 +149,20 @@ it.each(['root', 'root-return', 'restored-owner'])(
     )
     act(() => {
       if (change === 'restored-owner') {
-        useAppStore.setState({
+        setSessionTestState(useAppStore, {
           restoredRuntimeHostIdByWorkspaceSessionKey: { [id]: 'runtime:env-b' }
         })
         expect(getFileExplorerOperationOwnerFromState(useAppStore.getState(), id)).toMatchObject({
           kind: 'runtime'
         })
-        useAppStore.setState({ restoredRuntimeHostIdByWorkspaceSessionKey: {} })
+        setSessionTestState(useAppStore, { restoredRuntimeHostIdByWorkspaceSessionKey: {} })
       } else {
-        useAppStore.setState({ folderWorkspaces: [{ ...folder, folderPath: '/rootB' }] })
+        setSessionTestState(useAppStore, {
+          folderWorkspaces: [{ ...folder, folderPath: '/rootB' }]
+        })
         expect(useAppStore.getState().getKnownWorktreeById(id)?.path).toBe('/rootB')
         if (change === 'root-return') {
-          useAppStore.setState({ folderWorkspaces: [folder] })
+          setSessionTestState(useAppStore, { folderWorkspaces: [folder] })
         }
       }
     })

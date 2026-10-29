@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import {
   commitSourceControlActionArguments,
   editSourceControlActionArguments
@@ -37,7 +38,7 @@ const initialState = useAppStore.getState()
 afterEach(() => {
   cleanup()
   clearHostAgentMenuSettingsForTests()
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   setLocalRuntimeCapabilitiesForTests(null)
 })
 
@@ -160,7 +161,7 @@ it.each(['codex', null] as const)(
         }
       }
     }
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       settings,
       repos: [repo],
       worktreesByRepo: {
@@ -384,7 +385,7 @@ it('distinguishes masked eligibility from owning reset and uses the captured par
   const reopened = f.mount()
   expect(screen.getByText(/Model from Settings: o3/)).toBeDefined()
   reopened.unmount()
-  useAppStore.setState((state) => ({
+  setSessionTestState(useAppStore, (state) => ({
     repos: state.repos.map((row) =>
       row.id === f.repo.id
         ? {

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act } from 'react'
@@ -62,7 +63,7 @@ function configureStoreForHideAction(overrides: {
   const openSettingsPage = vi.fn()
   const openSettingsTarget = vi.fn()
 
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     closeUnifiedTab,
     dismissMobileEmulatorTabIntro,
     openSettingsPage,
@@ -95,7 +96,7 @@ afterEach(async () => {
   container?.remove()
   container = null
   latestActions = null
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
   vi.clearAllMocks()
 })
 

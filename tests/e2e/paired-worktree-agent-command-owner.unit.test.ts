@@ -1,3 +1,4 @@
+import { setSessionTestState } from '../../src/renderer/src/lib/test-support/session-source-fixture'
 import { WorktreeCreate } from '../../src/shared/rpc-contract/worktree-create-params'
 import { buildManagedWorktreeCreateArgs } from '../../src/main/runtime/rpc/methods/worktree-create-args'
 import { resolveManagedWorktreeCreateStartup } from '../../src/main/runtime/workspaces/managed-worktree-create-startup'
@@ -59,7 +60,7 @@ describe('paired workspace agent startup ownership', () => {
         agentDefaultEnv: { claude: { LAUNCH_OWNER: 'host' } }
       }
       const store = createTestStore()
-      store.setState({ repos: [{ ...TEST_REPO, executionHostId: 'runtime:env-1' }] })
+      setSessionTestState(store, { repos: [{ ...TEST_REPO, executionHostId: 'runtime:env-1' }] })
       let launchedCommand = ''
       let launchedEnv: Record<string, string> | undefined
       let delivered = ''

@@ -111,11 +111,11 @@ function fixture(folderCount: number) {
 afterEach(() => vi.restoreAllMocks())
 
 describe('project group session removal', () => {
-  it('copies each host session once when deleting many folder workspaces', () => {
+  it('deletes many folder workspaces without cloning a session', () => {
     const { operations } = fixture(24)
     const clone = vi.spyOn(globalThis, 'structuredClone')
     expect(operations.deleteProjectGroup('root')).toBe(true)
-    expect(clone).toHaveBeenCalledTimes(3)
+    expect(clone).not.toHaveBeenCalled()
   })
 
   it('removes the entire subtree from local spill and remote sessions while preserving other owners', () => {

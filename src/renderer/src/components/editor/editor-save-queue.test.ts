@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
 import { createEditorSaveQueue, type EditorSaveQueue } from './editor-save-queue'
@@ -66,7 +67,7 @@ describe('editor save queue: one running and one queued save per record', () => 
   beforeEach(() => {
     disk = stubEditorWindowWithDisk(createFakeEditorDisk({ [PATH]: '' }))
     store = createEditorStore()
-    store.setState({ openFiles: [tab('a')] })
+    setSessionTestState(store, { openFiles: [tab('a')] })
     withLoadedBaselines(store, disk)
     queue = createEditorSaveQueue(store)
   })
@@ -132,7 +133,7 @@ describe('editor save queue: one running and one queued save per record', () => 
   )
 
   it('serializes two tabs writing one file (edit + unstaged diff)', async () => {
-    store.setState({
+    setSessionTestState(store, {
       openFiles: [
         ...store.getState().openFiles,
         tab('diff', { mode: 'diff', diffSource: 'unstaged' })

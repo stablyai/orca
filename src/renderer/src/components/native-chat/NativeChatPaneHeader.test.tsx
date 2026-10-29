@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -29,8 +30,8 @@ Object.assign(window, { api })
 afterEach(cleanup)
 beforeEach(() => {
   vi.clearAllMocks()
-  useAppStore.setState(useAppStore.getInitialState(), true)
-  useAppStore.setState({
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, {
     folderWorkspaces: [makeFolderWorkspace({ id: 'workspace', folderPath: '/repo' })]
   })
 })
@@ -82,9 +83,13 @@ it('offers the terminal header action order and targets Resume and Close at the 
     'Close tab'
   ])
   const folder = useAppStore.getState().folderWorkspaces[0]
-  act(() => useAppStore.setState({ folderWorkspaces: [{ ...folder, executionHostId: 'ssh:dev' }] }))
+  act(() =>
+    setSessionTestState(useAppStore, {
+      folderWorkspaces: [{ ...folder, executionHostId: 'ssh:dev' }]
+    })
+  )
   expect(screen.queryByRole('button', { name: 'Continue with Terminal Agent' })).toBeNull()
-  act(() => useAppStore.setState({ folderWorkspaces: [folder] }))
+  act(() => setSessionTestState(useAppStore, { folderWorkspaces: [folder] }))
   expect(fullRequest).not.toHaveBeenCalled()
   fireEvent.click(screen.getByRole('button', { name: 'Continue with Terminal Agent' }))
   expect(fullRequest).toHaveBeenCalledTimes(1)

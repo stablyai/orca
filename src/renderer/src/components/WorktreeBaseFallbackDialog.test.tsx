@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -39,7 +40,7 @@ function getButton(label: string): HTMLButtonElement {
 
 describe('WorktreeBaseFallbackDialog', () => {
   beforeEach(() => {
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
     resetWorktreeBaseFallbackNoticesForTests()
   })
 
@@ -50,7 +51,7 @@ describe('WorktreeBaseFallbackDialog', () => {
     root = null
     document.body.innerHTML = ''
     resetWorktreeBaseFallbackNoticesForTests()
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   it('explains the fallback and advances queued notices', async () => {

@@ -1,3 +1,4 @@
+import { editSessionSource, type SessionSourceEdit } from '../../session-source-edits'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import {
   findTabAndWorktree,
@@ -27,46 +28,42 @@ type ActivationState = Pick<
 /** The store update that makes `tab` its group's active tab and its group the active one;
  *  `endsPreview` is `endsPreviewHere` for the tab's workspace. */
 export function tabActivationPatch(
-  state: ActivationState,
+  edit: SessionSourceEdit<ActivationState>,
   tab: Tab,
   worktreeId: string,
   opts: { preservePreview?: boolean; recordFocus?: boolean } | undefined,
   endsPreview: boolean
-): ActivationState {
+): void {
   const tabId = tab.id
-  return {
-    unifiedTabsByWorktree: {
-      ...state.unifiedTabsByWorktree,
-      [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((item) =>
-        item.id === tabId
-          ? {
-              ...withPreviewOnActivation(item, opts?.preservePreview === true, endsPreview),
-              ...(opts?.recordFocus === false ? {} : { lastFocusedAt: Date.now() })
-            }
-          : item
-      )
-    },
-    groupsByWorktree: {
-      ...state.groupsByWorktree,
-      [worktreeId]: (state.groupsByWorktree[worktreeId] ?? []).map((group) =>
-        group.id === tab.groupId
-          ? {
-              ...group,
-              activeTabId: tabId,
-              // Track MRU for close-time selection, pruning removed IDs.
-              recentTabIds: pushRecentTabId(
-                sanitizeRecentTabIds(group.recentTabIds, group.tabOrder),
-                tabId
-              )
-            }
-          : group
-      )
-    },
-    activeGroupIdByWorktree: {
-      ...state.activeGroupIdByWorktree,
-      [worktreeId]: tab.groupId
-    }
-  }
+  edit.set(
+    'unifiedTabsByWorktree',
+    worktreeId,
+    (edit.entry('unifiedTabsByWorktree', worktreeId) ?? []).map((item) =>
+      item.id === tabId
+        ? {
+            ...withPreviewOnActivation(item, opts?.preservePreview === true, endsPreview),
+            ...(opts?.recordFocus === false ? {} : { lastFocusedAt: Date.now() })
+          }
+        : item
+    )
+  )
+  edit.set(
+    'groupsByWorktree',
+    worktreeId,
+    (edit.entry('groupsByWorktree', worktreeId) ?? []).map((group) =>
+      group.id === tab.groupId
+        ? {
+            ...group,
+            activeTabId: tabId,
+            recentTabIds: pushRecentTabId(
+              sanitizeRecentTabIds(group.recentTabIds, group.tabOrder),
+              tabId
+            )
+          }
+        : group
+    )
+  )
+  edit.set('activeGroupIdByWorktree', worktreeId, tab.groupId)
 }
 
 export function createTabsFocusActions(
@@ -117,13 +114,15 @@ export function createTabsFocusActions(
           found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
         }
         if (!found) {
-          return state
+          return undefined
         }
         const { tab, worktreeId } = found
         if (ORCA_LAYOUT_OWNER_IS_MAIN && tab.isPreview && !opts?.preservePreview) {
           promoted.push(tab)
         }
-        return tabActivationPatch(state, tab, worktreeId, opts, endsPreviewHere(state, worktreeId))
+        const edit = editSessionSource(state)
+        tabActivationPatch(edit, tab, worktreeId, opts, endsPreviewHere(state, worktreeId))
+        return edit.finish()
       })
       // Switch point: main makes the activated preview permanent; its frame clears the flag.
       if (ORCA_LAYOUT_OWNER_IS_MAIN && promoted.length > 0) {

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import { assertEditorBufferInvariant } from '../../../editor-buffer-record-lifecycle'
@@ -28,8 +29,8 @@ const recordOf = (id: string) => state().editorBufferIdOf[id]
 const settled = () => Promise.resolve()
 
 beforeEach(() => {
-  useAppStore.setState(useAppStore.getInitialState(), true)
-  useAppStore.setState({
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, {
     worktreesByRepo: {
       'repo-1': [
         makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }),
@@ -41,7 +42,7 @@ beforeEach(() => {
 
 /** A restored divergent pair: `a` holds "abc", `b` holds "abcd" and is detached. */
 function divergentPair(bPatch: Partial<OpenFile> = {}): void {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     openFiles: [
       tab('a', 'wt-1', { isDirty: true }),
       tab('b', 'wt-2', { isDirty: true, ...bPatch })
@@ -129,14 +130,14 @@ describe('detached records rejoin once one side is clean', () => {
 
 describe('a dirty record whose last view closed without a prompt', () => {
   function closeWithoutPrompt(ids: string[], notice = 1): void {
-    useAppStore.setState((s) => ({
+    setSessionTestState(useAppStore, (s) => ({
       openFiles: s.openFiles.filter((file) => !ids.includes(file.id)),
       editorBufferKeepRequest: { viewIds: new Set(ids), notice }
     }))
   }
 
   it('is kept, and reopening the file joins it: draft, dirty flag and baseline', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       openFiles: [tab('a', 'wt-1', { isDirty: true, lastKnownDiskSignature: 'sig-old' })],
       editorDrafts: { a: 'kept edits' }
     })
@@ -145,7 +146,7 @@ describe('a dirty record whose last view closed without a prompt', () => {
     expect(Object.keys(state().editorBuffers)).toEqual([])
     expect(state().editorBufferKept[recordId]?.draft).toBe('kept edits')
 
-    useAppStore.setState((s) => ({ openFiles: [...s.openFiles, tab('b', 'wt-2')] }))
+    setSessionTestState(useAppStore, (s) => ({ openFiles: [...s.openFiles, tab('b', 'wt-2')] }))
     expect(recordOf('b')).toBe(recordId)
     expect(state().editorDrafts.b).toBe('kept edits')
     expect(view('b')?.isDirty).toBe(true)
@@ -154,7 +155,7 @@ describe('a dirty record whose last view closed without a prompt', () => {
   })
 
   it('is not kept when the close asked nothing (Don’t save) or the record was clean', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       openFiles: [
         tab('a', 'wt-1', { isDirty: true }),
         tab('c', 'wt-1', { filePath: '/repo/c.ts' })
@@ -167,14 +168,14 @@ describe('a dirty record whose last view closed without a prompt', () => {
   })
 
   it('a divergent dirty view reopening it stays detached, on its own model, until one side is clean', async () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       openFiles: [tab('a', 'wt-1', { isDirty: true })],
       editorDrafts: { a: 'kept edits' }
     })
     const recordId = recordOf('a')
     const keptOwner = getEditorModelOwnerKey(view('a')!, state())
     closeWithoutPrompt(['a'])
-    useAppStore.setState((s) => ({
+    setSessionTestState(useAppStore, (s) => ({
       openFiles: [...s.openFiles, tab('b', 'wt-2', { isDirty: true })],
       editorDrafts: { ...s.editorDrafts, b: 'other edits' }
     }))
@@ -195,13 +196,13 @@ describe('a dirty record whose last view closed without a prompt', () => {
   })
 
   it('is dropped when a rename moves another file onto its path', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       openFiles: [tab('a', 'wt-1', { isDirty: true })],
       editorDrafts: { a: 'kept edits' }
     })
     const recordId = recordOf('a')
     closeWithoutPrompt(['a'])
-    useAppStore.setState((s) => ({
+    setSessionTestState(useAppStore, (s) => ({
       openFiles: [...s.openFiles, tab('/repo/z.ts', 'wt-1', { filePath: '/repo/z.ts' })]
     }))
     state().rekeyOpenFilesForPathChange({
@@ -222,7 +223,7 @@ describe('a dirty record whose last view closed without a prompt', () => {
   })
 
   it('is dropped when its own removal notice goes away, not when an older one does', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       openFiles: [tab('a', 'wt-1', { isDirty: true })],
       editorDrafts: { a: 'kept edits' }
     })

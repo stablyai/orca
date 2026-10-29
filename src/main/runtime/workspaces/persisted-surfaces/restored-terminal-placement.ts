@@ -20,6 +20,7 @@ import {
 import { onLocalPtyProviderRebound } from '../../../ipc/pty/provider/local-provider-rebound'
 import {
   deriveShutdownReconnectFacts,
+  type ReconnectFactSources,
   type ShutdownReconnectFacts
 } from '../../terminal/recovery/shutdown-reconnect-facts'
 import { OrcaRuntimeWithAutomationOperations } from './automation-operations'
@@ -214,8 +215,13 @@ export abstract class OrcaRuntimeWithRestoredTerminalPlacement extends OrcaRunti
     session: WorkspaceSessionState,
     partition: ExecutionHostId
   ): ShutdownReconnectFacts {
+    return deriveShutdownReconnectFacts(session, this.shutdownReconnectSources(partition))
+  }
+
+  shutdownReconnectSources(partition: ExecutionHostId): ReconnectFactSources {
     const store = this.store
-    return deriveShutdownReconnectFacts(session, {
+    return {
+      factOwner: this,
       isLiveLocalPty: (ptyId) => {
         const pty = this.ptysById.get(ptyId)
         return pty?.connected === true && pty.connectionId === null
@@ -233,6 +239,6 @@ export abstract class OrcaRuntimeWithRestoredTerminalPlacement extends OrcaRunti
           const other = hostId === partition ? null : store?.getWorkspaceSession?.(hostId)
           return other ? [other] : []
         })
-    })
+    }
   }
 }

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it } from 'vitest'
 import type { RuntimeMobileSessionBrowserTab } from '../../../shared/runtime-types'
 import {
@@ -21,7 +22,7 @@ function desktopSnapshot(profileId: string | null | undefined) {
     executionHostId: 'local',
     activate: false
   })
-  host.setState({
+  setSessionTestState(host, {
     browserTabsByWorktree: { [WORKSPACE]: [{ ...workspace, sessionProfileId: profileId }] }
   })
   const snapshot = buildMobileSessionTabSnapshots(host.getState()).find(
@@ -40,13 +41,13 @@ function desktopSnapshot(profileId: string | null | undefined) {
 
 function mirrorOnClient(snapshot: ReturnType<typeof desktopSnapshot>) {
   const client = createBrowserLinkTestStore()
-  client.setState({
+  setSessionTestState(client, {
     activeWorkspaceExecutionHostId: 'runtime:server',
     worktreesByRepo: {
       repo1: [makeWorktree({ id: WORKSPACE, repoId: 'repo1', hostId: 'runtime:server' })]
     }
   })
-  client.setState(applyWebSessionTabsSnapshot(client.getState(), snapshot, 'server'))
+  setSessionTestState(client, applyWebSessionTabsSnapshot(client.getState(), snapshot, 'server'))
   return client
 }
 
@@ -112,7 +113,8 @@ describe('server browser profile publication and link reuse', () => {
   it('clears a previously known identity when an old peer republishes without it', () => {
     const snapshot = desktopSnapshot('isolated-login')
     const client = mirrorOnClient(snapshot)
-    client.setState(
+    setSessionTestState(
+      client,
       applyWebSessionTabsSnapshot(
         client.getState(),
         {

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
@@ -57,7 +58,7 @@ describe('owned reading positions', () => {
     (cancelled) => {
       const { owner, store, file, identity, text, logKey } = readingFixture()
       const pending = { ...file.checkRunDetails!, details: null }
-      store.setState({ openFiles: [{ ...file, checkRunDetails: pending }] })
+      setSessionTestState(store, { openFiles: [{ ...file, checkRunDetails: pending }] })
       reconcileCheckDetailsReadingCache(file.id, undefined, pending, () => true)
       const detachOwner = owner.attach()
       const outer = measuredReadingNode()
@@ -70,7 +71,7 @@ describe('owned reading positions', () => {
         fireReading(outer)
       }
       const next = file.checkRunDetails!
-      store.setState({ openFiles: [file] })
+      setSessionTestState(store, { openFiles: [file] })
       reconcileCheckDetailsReadingCache(file.id, pending, next, () => true)
       const node = measuredReadingNode(text)
       const initial = vi.fn(() => 600)
@@ -108,10 +109,10 @@ describe('owned reading positions', () => {
       text
     })
     const callback = [...frames.values()][0]
-    store.setState({ openFiles: [] })
+    setSessionTestState(store, { openFiles: [] })
     expect(frames.size).toBe(0)
     scrollTopCache.delete(logKey)
-    store.setState({ openFiles: [file] })
+    setSessionTestState(store, { openFiles: [file] })
     Object.defineProperty(node, 'clientHeight', { configurable: true, value: 200 })
     callback(0)
     node.dispatchEvent(new Event('scroll'))
@@ -231,13 +232,13 @@ describe('owned reading positions', () => {
     const node = measuredReadingNode(text)
     const options = { node, owner, cacheKey: logKey, job: identity, text }
     const detach = attachCheckReadingViewport(options)
-    store.setState({
+    setSessionTestState(store, {
       openFiles: [
         ...store.getState().openFiles,
         { ...readingFile(), id: 'other', mode: 'edit', isDirty: true }
       ]
     })
-    store.setState({
+    setSessionTestState(store, {
       openFiles: store
         .getState()
         .openFiles.map((file) => (file.id === 'other' ? { ...file, isDirty: false } : file))
@@ -261,7 +262,7 @@ describe('owned reading positions', () => {
       node.dispatchEvent(new Event('scroll'))
       if (!nested) {
         nested = true
-        store.setState({ openFiles: [] })
+        setSessionTestState(store, { openFiles: [] })
       }
     })
     const detachOwner = owner.attach()
@@ -273,11 +274,11 @@ describe('owned reading positions', () => {
       text
     })
     const writes = vi.spyOn(scrollTopCache, 'set')
-    store.setState({ openFiles: [{ ...file, isDirty: true }] })
+    setSessionTestState(store, { openFiles: [{ ...file, isDirty: true }] })
     expect(writes).not.toHaveBeenCalled()
     before()
     scrollTopCache.delete(logKey)
-    store.setState({ openFiles: [file] })
+    setSessionTestState(store, { openFiles: [file] })
     node.dispatchEvent(new Event('scroll'))
     detach()
     expect(scrollTopCache.has(logKey)).toBe(false)
@@ -299,7 +300,7 @@ describe('owned reading positions', () => {
     node.dispatchEvent(new Event('scroll'))
     const details = readingDetails('Error: accepted new text')
     const next = { ...file.checkRunDetails!, details }
-    store.setState({ openFiles: [{ ...file, checkRunDetails: next }] })
+    setSessionTestState(store, { openFiles: [{ ...file, checkRunDetails: next }] })
     const destination = checkReadingLogKey(
       owner.key,
       identity,

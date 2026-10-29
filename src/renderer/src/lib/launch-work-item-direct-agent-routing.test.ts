@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionLaunchPlan } from './agent-session-launch-plan'
 
@@ -65,7 +66,7 @@ describe('resolveDirectWorkItemAgent', () => {
       connectionId: 'server-ssh-target',
       executionHostId: 'runtime:env-1'
     }
-    store.setState({
+    setSessionTestState(store, {
       repos: [repo],
       worktreesByRepo: { [TEST_REPO.id]: [makeWorktree({ id: 'wt-1', repoId: TEST_REPO.id })] },
       runtimeDetectedAgentIds: { [getRuntimeAgentInventoryKey('env-1', 'wt-1')]: ['claude'] },

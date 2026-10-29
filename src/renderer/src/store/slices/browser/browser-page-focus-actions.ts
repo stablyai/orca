@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from './browser-slice-contract'
 import { mirrorWorkspaceFromActivePage } from '../browser-page-records'
 import { isLocalBrowserPageOwner } from './browser-host-state'
@@ -25,27 +26,21 @@ export function createBrowserPageFocusActions(
       set((s) => {
         const isActiveWorktree = s.activeWorktreeId === worktreeId
         // Per-worktree slots: always update — safe pre-staging, only visible when user navigates here.
-        const nextTabsByWorktree = {
-          ...s.browserTabsByWorktree,
-          [worktreeId]: tabsForWorktree.map((tab) =>
-            tab.id === workspace.id ? nextWorkspace : tab
-          )
+        const edit = editSessionSource(s)
+        edit.set(
+          'browserTabsByWorktree',
+          worktreeId,
+          tabsForWorktree.map((tab) => (tab.id === workspace.id ? nextWorkspace : tab))
+        )
+        edit.set('activeBrowserTabIdByWorktree', worktreeId, workspace.id)
+        if (surfacePane) {
+          edit.set('activeTabTypeByWorktree', worktreeId, 'browser')
         }
-        const nextActiveTabIdByWorktree = {
-          ...s.activeBrowserTabIdByWorktree,
-          [worktreeId]: workspace.id
-        }
-        const nextActiveTabTypeByWorktree = surfacePane
-          ? { ...s.activeTabTypeByWorktree, [worktreeId]: 'browser' as const }
-          : s.activeTabTypeByWorktree
         // Globals: mutate only when the targeted worktree is active — keeps cross-worktree --focus silent.
-        return {
-          browserTabsByWorktree: nextTabsByWorktree,
-          activeBrowserTabIdByWorktree: nextActiveTabIdByWorktree,
-          activeTabTypeByWorktree: nextActiveTabTypeByWorktree,
+        return edit.finish({
           activeBrowserTabId: isActiveWorktree ? workspace.id : s.activeBrowserTabId,
           activeTabType: isActiveWorktree && surfacePane ? 'browser' : s.activeTabType
-        }
+        })
       })
 
       // Why: notify the CDP bridge which guest webContents is active so agent commands target the correct page.

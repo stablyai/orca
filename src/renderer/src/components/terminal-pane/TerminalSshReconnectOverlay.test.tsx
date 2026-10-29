@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import '@testing-library/jest-dom/vitest'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -59,7 +60,7 @@ function installSshConnect(
 
 describe('TerminalSshReconnectOverlay', () => {
   beforeEach(() => {
-    useAppStore.setState(useAppStore.getInitialState(), true)
+    setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
     resetSshConnectInFlightForTests()
     toastMocks.error.mockReset()
     deleteFlowMocks.runWorktreeDelete.mockReset()

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 /** Provider session IDs locate machine-local transcripts; resuming elsewhere fails or opens an unrelated same-ID transcript. Worktree IDs/merged sleeping records/current-catalog routing lack sufficient host scope. Refuse positively foreign records while preserving unstamped legacy resumes; absence of evidence alone cannot strand them. */
 import { afterEach, describe, expect, it } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
@@ -20,7 +21,7 @@ const WORKTREE_ID = `repo-1::${REMOTE_PATH}`
 const SESSION_ID = '87987465-66f6-4967-bf3f-0659565cbcc5'
 
 afterEach(() => {
-  useAppStore.setState(initialAppStoreState, true)
+  setSessionTestState(useAppStore, initialAppStoreState, true)
 })
 
 function makeRecord(
@@ -169,7 +170,7 @@ describe('agentResumeOriginNamesAnotherExecutionHost', () => {
 
 /** Use connected SSH so host authority allows the sweep; otherwise unrelated connection refusal makes these assertions vacuous. */
 function seedAnsweredSshWorkspace(...records: SleepingAgentSessionRecord[]): void {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     repos: [{ ...TEST_REPO, id: 'repo-1', path: '/home/neil/projects', connectionId: TARGET_ID }],
     worktreesByRepo: {
       'repo-1': [

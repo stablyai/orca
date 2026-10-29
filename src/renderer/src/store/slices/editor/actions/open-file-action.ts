@@ -1,3 +1,4 @@
+import { editSessionSource } from '../../../session-source-edits'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import type { OpenFile } from '../types/open-file'
@@ -31,7 +32,11 @@ export function createOpenFileAction(
       editorItemIsPreview: false,
       refused: false
     }
-    set((s) => applyOpenFileToState(s, file, options, scratch, linkIntent))
+    set((s) => {
+      const edit = editSessionSource(s)
+      const patch = applyOpenFileToState(edit, file, options, scratch, linkIntent)
+      return patch ? edit.finish(patch) : undefined
+    })
     if (scratch.refused) {
       return { fileId: scratch.editorItemFileId, result: null }
     }

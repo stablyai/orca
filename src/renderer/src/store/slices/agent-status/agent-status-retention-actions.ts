@@ -31,7 +31,7 @@ export function createAgentStatusRetentionActions(
           }
         }
         if (!changed) {
-          return s
+          return undefined
         }
         const next = { ...s.retainedAgentsByPaneKey }
         for (const retained of entries) {
@@ -53,7 +53,7 @@ export function createAgentStatusRetentionActions(
     dismissRetainedAgent: (paneKey) => {
       set((s) => {
         if (!(paneKey in s.retainedAgentsByPaneKey)) {
-          return s
+          return undefined
         }
         const next = { ...s.retainedAgentsByPaneKey }
         delete next[paneKey]
@@ -91,7 +91,7 @@ export function createAgentStatusRetentionActions(
           }
         }
         if (next === null) {
-          return s
+          return undefined
         }
         return {
           retainedAgentsByPaneKey: next,
@@ -118,7 +118,7 @@ export function createAgentStatusRetentionActions(
           }
         }
         if (!changed) {
-          return s
+          return undefined
         }
         if (toSuppress.length === 0) {
           return { retainedAgentsByPaneKey: next }
@@ -150,7 +150,7 @@ export function createAgentStatusRetentionActions(
             next[key] = retained
           }
         }
-        return changed ? { retainedAgentsByPaneKey: next } : s
+        return changed ? { retainedAgentsByPaneKey: next } : undefined
       })
     },
 
@@ -165,7 +165,7 @@ export function createAgentStatusRetentionActions(
           delete next[paneKey]
           changed = true
         }
-        return changed ? { retentionSuppressedPaneKeys: next } : s
+        return changed ? { retentionSuppressedPaneKeys: next } : undefined
       })
     }
   }

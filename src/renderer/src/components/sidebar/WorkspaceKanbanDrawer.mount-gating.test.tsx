@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import React, { act } from 'react'
@@ -161,7 +162,7 @@ async function renderDrawer(open: boolean, dragPreview = false): Promise<void> {
 async function churnRemoteWorkspaceState(count: number): Promise<void> {
   await act(async () => {
     for (let index = 0; index < count; index += 1) {
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         worktreesByRepo: {},
         tabsByWorktree: {},
         ptyIdsByTabId: {},
@@ -180,7 +181,7 @@ describe('WorkspaceKanbanDrawer mount gating', () => {
     contextualTourMock.mockClear()
     onOpenChange.mockClear()
     onMenuOpenChange.mockClear()
-    useAppStore.setState(initialAppState, true)
+    setSessionTestState(useAppStore, initialAppState, true)
     testContainer = document.createElement('div')
     document.body.appendChild(testContainer)
     testRoot = createRoot(testContainer)
@@ -189,7 +190,7 @@ describe('WorkspaceKanbanDrawer mount gating', () => {
   afterEach(async () => {
     await act(async () => testRoot.unmount())
     document.body.replaceChildren()
-    useAppStore.setState(initialAppState, true)
+    setSessionTestState(useAppStore, initialAppState, true)
     vi.clearAllTimers()
     vi.useRealTimers()
   })

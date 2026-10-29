@@ -1,3 +1,4 @@
+import type { SessionSourceSet } from '../session-source-edits'
 import type { AppState } from '../types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type {
@@ -42,10 +43,7 @@ export type WorkspaceCleanupRemoveOptions = {
 
 export async function removeWorkspaceCleanupCandidates(
   get: () => AppState,
-  set: (
-    partial: Partial<AppState> | ((state: AppState) => Partial<AppState>),
-    replace?: false
-  ) => void,
+  set: SessionSourceSet<AppState>,
   worktreeIds: readonly string[],
   options?: WorkspaceCleanupRemoveOptions
 ): Promise<WorkspaceCleanupRemoveResult> {

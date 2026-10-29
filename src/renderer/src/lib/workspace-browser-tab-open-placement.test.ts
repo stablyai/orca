@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as SnapshotModule from '../runtime/web-runtime-session-snapshot'
 import { useAppStore } from '../store'
@@ -29,13 +30,13 @@ const initialState = useAppStore.getInitialState()
 
 describe('workspace URL tab placement', () => {
   beforeEach(() => {
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
     resetWebSessionTabsSyncTestState()
     resetWebSessionBrowserPlacementsForTests()
     resetHostPages()
     seedPairedWorktree()
     installRuntimeTransport()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [{ ...makeRepo(), id: 'repo', executionHostId: HOST }],
       worktreesByRepo: {
         repo: [makeWorktree(WT, 'Workspace', { repoId: 'repo', hostId: HOST })]
@@ -47,7 +48,7 @@ describe('workspace URL tab placement', () => {
     vi.unstubAllGlobals()
     resetWebSessionTabsSyncTestState()
     resetWebSessionBrowserPlacementsForTests()
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   it.each([true, false])(

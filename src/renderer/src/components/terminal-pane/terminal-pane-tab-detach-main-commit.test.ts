@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // Main move responses/frames can arrive after intervening user actions; verify roll-forward outcomes matching window-side commit tests.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
@@ -118,7 +119,7 @@ describe('detachTerminalPaneToTab rolls main’s committed move forward (layout-
     const store = await seeded()
     const move = await moveHeldByMain(() => detachFrom(store))
     // A tab close drops its row and its layout.
-    store.setState((state) => {
+    setSessionTestState(store, (state) => {
       const { [SOURCE]: _closed, ...terminalLayoutsByTabId } = state.terminalLayoutsByTabId
       return {
         tabsByWorktree: {

@@ -1,3 +1,4 @@
+import { editSessionSource } from '../session-source-edits'
 /** Evict nativeChatLaunchDraftByTabId wherever launch prompt retires (close, orphan sweep, bulk/single purge); stranded drafts otherwise keep publishing to mobile. */
 import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
@@ -170,10 +171,14 @@ describe('nativeChatLaunchDraftByTabId teardown', () => {
     const store = createTestStore()
     seedDrafts(store)
 
-    const patch = buildOrphanTerminalCleanupPatch(store.getState(), WT1, new Set([TAB1]))
+    const patch = buildOrphanTerminalCleanupPatch(
+      editSessionSource(store.getState()),
+      WT1,
+      new Set([TAB1])
+    )
 
-    expect(patch.nativeChatLaunchDraftByTabId[TAB1]).toBeUndefined()
-    expect(patch.nativeChatLaunchDraftByTabId[TAB2]).toBeDefined()
+    expect(patch.nativeChatLaunchDraftByTabId?.[TAB1]).toBeUndefined()
+    expect(patch.nativeChatLaunchDraftByTabId?.[TAB2]).toBeDefined()
   })
 
   it('removing a worktree drops the unsent composer drafts of its tabs only', async () => {

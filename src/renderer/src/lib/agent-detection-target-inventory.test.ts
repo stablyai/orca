@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { createTestStore } from '@/store/slices/store-test-helpers'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
@@ -14,7 +15,7 @@ function storeWithRepo(repo: Partial<Repo>) {
   const ensureDetectedAgents = vi.fn(async (): Promise<TuiAgent[]> => ['codex'])
   const ensureRemoteDetectedAgents = vi.fn(async (): Promise<TuiAgent[]> => ['gemini'])
   const ensureRuntimeDetectedAgents = vi.fn(async (): Promise<TuiAgent[]> => ['claude'])
-  store.setState({
+  setSessionTestState(store, {
     repos: [{ ...TEST_REPO, ...repo }],
     worktreesByRepo: { [TEST_REPO.id]: [makeWorktree({ id: 'wt-1', repoId: TEST_REPO.id })] },
     ensureDetectedAgents,
@@ -65,7 +66,7 @@ describe('agent inventory for a worktree', () => {
 
   it('probes nothing while the workspace owner is unknown', async () => {
     const harness = storeWithRepo({})
-    harness.store.setState({ repos: [], worktreesByRepo: {} })
+    setSessionTestState(harness.store, { repos: [], worktreesByRepo: {} })
     const state = harness.store.getState()
 
     expect(readDetectedAgentsForWorktree(state, 'repo-missing::wt')).toBeNull()

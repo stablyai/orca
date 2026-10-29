@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { ManagedBrowserProfileOwner } from '../../../../../shared/browser-profile-scope'
 
 /** What a new tab opens on; a partition only when it must not be derived from the profile. */
@@ -300,7 +300,7 @@ export type BrowserSlice = {
   setDefaultBrowserSessionProfileId: (profileId: string | null) => void
 }
 
-type BrowserStateCreator = StateCreator<AppState, [], [], BrowserSlice>
+type BrowserStateCreator = SessionStateCreator<AppState, BrowserSlice>
 export type BrowserSliceSet = Parameters<BrowserStateCreator>[0]
 export type BrowserSliceGet = Parameters<BrowserStateCreator>[1]
 

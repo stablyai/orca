@@ -1,8 +1,8 @@
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type {
   AgentSubjectRead,
   AgentSubjectReadIntent
 } from '@/attention/agent-subject-read-actions'
-import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
@@ -227,5 +227,5 @@ export type UISliceCore = {
   ) => void
 }
 
-export type UISliceSet = Parameters<StateCreator<AppState, [], [], UISliceCore>>[0]
-export type UISliceGet = Parameters<StateCreator<AppState, [], [], UISliceCore>>[1]
+export type UISliceSet = Parameters<SessionStateCreator<AppState, UISliceCore>>[0]
+export type UISliceGet = Parameters<SessionStateCreator<AppState, UISliceCore>>[1]

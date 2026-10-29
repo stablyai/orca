@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 // Read-only raw Monaco views share writable records; show their unsaved edits without pushing older disk text over them.
 import { afterEach, beforeEach, expect, it } from 'vitest'
@@ -29,9 +30,9 @@ afterEach(() => {
 })
 
 beforeEach(() => {
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
   // Seed a resolved local owner so both tabs share one model URI.
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     worktreesByRepo: {
       'repo-1': [makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' })]
     }
@@ -41,12 +42,12 @@ beforeEach(() => {
 it.each(['/repo/notes.md', '/repo/data.csv', '/repo/log.jsonl'])(
   'a read-only %s view joins a dirty writable view and shows its edits, not disk text',
   (filePath) => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       openFiles: [tab('writable', filePath, { isDirty: true })],
       editorDrafts: { writable: 'unsaved edits' },
       markdownViewMode: { writable: 'source' }
     })
-    useAppStore.setState((s) => ({
+    setSessionTestState(useAppStore, (s) => ({
       openFiles: [...s.openFiles, tab('read-only', filePath, { readOnly: true })]
     }))
 
@@ -71,7 +72,7 @@ it.each(['/repo/notes.md', '/repo/data.csv', '/repo/log.jsonl'])(
 )
 
 it('a read-only view may still load disk text into a clean model', () => {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     openFiles: [
       tab('writable', '/repo/notes.md'),
       tab('read-only', '/repo/notes.md', { readOnly: true })
@@ -82,7 +83,7 @@ it('a read-only view may still load disk text into a clean model', () => {
 })
 
 it('a dirty view with no draft never pushes its text over the shared model', () => {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     openFiles: [tab('mirrored', '/repo/notes.md', { isDirty: true })],
     editorDrafts: {}
   })
@@ -90,7 +91,7 @@ it('a dirty view with no draft never pushes its text over the shared model', () 
 })
 
 it('a dirty view with a draft may push it', () => {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     openFiles: [tab('writable', '/repo/notes.md', { isDirty: true })],
     editorDrafts: { writable: 'edits' }
   })

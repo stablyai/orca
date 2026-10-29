@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore, mockApi, resetRemoteRuntimeMocks } from './github-slice-test-harness'
 import { selectTaskPageWorkItemsCacheEntries } from '../../components/task-page/task-page-cache-selectors'
@@ -46,7 +47,7 @@ describe('work-item cache for a repo id on this computer and over SSH', () => {
 
   it('keeps each twin in its own bucket, and a source-less reader reads each one back', async () => {
     const store = createTestStore()
-    store.setState({ repos: [localRow, sshRow] })
+    setSessionTestState(store, { repos: [localRow, sshRow] })
 
     await store.getState().fetchWorkItems('twin', localRow.path, 24, '')
     await store.getState().fetchWorkItems('twin', sshRow.path, 24, '')
@@ -67,7 +68,7 @@ describe('work-item cache for a repo id on this computer and over SSH', () => {
 
   it('keys a row with no host stamp as local, whichever server is focused', async () => {
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [localRow],
       settings: { ...store.getState().settings!, activeRuntimeEnvironmentId: 'focused' }
     })
@@ -85,7 +86,7 @@ describe('work-item cache for a repo id on this computer and over SSH', () => {
 
   it('serves the SSH twin its own cached rows, not the local twin’s', async () => {
     const store = createTestStore()
-    store.setState({ repos: [localRow, sshRow] })
+    setSessionTestState(store, { repos: [localRow, sshRow] })
 
     await store.getState().fetchWorkItems('twin', localRow.path, 24, '')
 

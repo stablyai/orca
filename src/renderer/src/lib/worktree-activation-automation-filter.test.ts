@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Worktree } from '../../../shared/worktree/types'
 import { useAppStore } from '@/store'
@@ -17,7 +18,7 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
 const initialAppStoreState = useAppStore.getState()
 
 afterEach(() => {
-  useAppStore.setState(initialAppStoreState, true)
+  setSessionTestState(useAppStore, initialAppStoreState, true)
 })
 
 function makeAutomationWorktree(): Worktree {
@@ -59,7 +60,7 @@ function seedAutomationWorktreeState(
   worktree: Worktree,
   overrides: Partial<ReturnType<typeof useAppStore.getState>> = {}
 ): void {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     repos: [
       {
         id: worktree.repoId,
@@ -149,7 +150,7 @@ describe('activateAndRevealWorktree automation filters', () => {
       exists: false,
       reason: 'missing' as const
     }))
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       sidebarBody: 'agents',
       folderWorkspaces: [
         {

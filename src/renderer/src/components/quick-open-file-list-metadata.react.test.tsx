@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act } from 'react'
@@ -26,7 +27,7 @@ vi.mock('@/runtime/runtime-file-search-client', async () => {
 
 async function replaceWorktrees(worktrees: Worktree[]): Promise<void> {
   await act(async () => {
-    useAppStore.setState({ worktreesByRepo: { 'repo-remote': worktrees } })
+    setSessionTestState(useAppStore, { worktreesByRepo: { 'repo-remote': worktrees } })
   })
   await flushEffects()
 }

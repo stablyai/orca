@@ -1,3 +1,4 @@
+import type { SessionSourceSet } from '@/store/session-source-edits'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { defaultScopeHost } from '@/lib/default-creation-host'
 import {
@@ -14,7 +15,7 @@ export async function persistVisibilityAwareSettings(args: {
   sourceDefaultsSupportedRuntimeEnvironmentId?: string | null
   shouldPublish?: () => boolean
   onAcknowledged?: (settings: GlobalSettings) => void
-  set: (updater: (state: AppState) => Partial<AppState>) => void
+  set: SessionSourceSet<AppState>
 }): Promise<void> {
   const {
     normalizedUpdates,

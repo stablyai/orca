@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { resolveAutoAckTabTargets } from '@/hooks/agent-auto-ack-targets'
 import type * as AgentStatusModule from '@/lib/agent-status'
@@ -50,7 +51,9 @@ describe('TabsSlice', () => {
     })
 
     it('promotes a preview tab to permanent on activation', async () => {
-      store.setState({ openFiles: [makeOpenFile({ id: 'f.ts', worktreeId: WT, isPreview: true })] })
+      setSessionTestState(store, {
+        openFiles: [makeOpenFile({ id: 'f.ts', worktreeId: WT, isPreview: true })]
+      })
       const preview = store.getState().createUnifiedTab(WT, 'editor', {
         id: 'f.ts',
         label: 'f.ts',
@@ -151,7 +154,7 @@ describe('TabsSlice', () => {
       store.setState({ activeWorktreeId: WT })
 
       // Seed the backing legacy terminal tab so the owner-missing guard doesn't short-circuit.
-      store.setState({
+      setSessionTestState(store, {
         tabsByWorktree: {
           [WT]: [
             {
@@ -191,7 +194,7 @@ describe('TabsSlice', () => {
       store.getState().focusGroup(WT, groupBId)
       store.setState({ activeWorktreeId: WT })
       // Bell marking requires backing legacy terminal rows, as every production terminal has.
-      store.setState({
+      setSessionTestState(store, {
         tabsByWorktree: {
           [WT]: [
             {
@@ -220,7 +223,7 @@ describe('TabsSlice', () => {
       const tab = store.getState().createUnifiedTab(WT, 'terminal')
       // Point active* at this tab but mark a different worktree active (skips the visible-groups check); only activeTabType='editor' remains as a guard.
       // Why: seed tabsByWorktree — the tab marker guards against a missing owner tab.
-      store.setState({
+      setSessionTestState(store, {
         activeWorktreeId: 'other-wt::/path/x',
         activeTabId: tab.entityId,
         activeTabType: 'editor',
@@ -250,7 +253,7 @@ describe('TabsSlice', () => {
     it('is a no-op when the tab is already flagged', () => {
       const tab = store.getState().createUnifiedTab(WT, 'terminal')
       // Why: seed tabsByWorktree so the owner-missing guard doesn't short-circuit before we reach the "already flagged" branch.
-      store.setState({
+      setSessionTestState(store, {
         unreadTerminalTabs: { [tab.entityId]: true as const },
         activeTabId: 'something-else',
         activeTabType: 'terminal',
@@ -283,7 +286,7 @@ describe('TabsSlice', () => {
     // Why: the bell's tab marker is agent-agnostic — blocking the working→idle dot here would swallow the agent's completion signal.
     it('marks unread for an agent tab when it is not focused', () => {
       const agentTabId = 'agent-tab-1'
-      store.setState({
+      setSessionTestState(store, {
         activeTabId: 'something-else',
         activeTabType: 'terminal',
         activeWorktreeId: 'other-wt',
@@ -354,7 +357,7 @@ describe('TabsSlice', () => {
         label: 'main.ts'
       })
       const groupId = store.getState().groupsByWorktree[WT][0].id
-      store.setState({
+      setSessionTestState(store, {
         activeWorktreeId: WT,
         openFiles: [makeOpenFile({ id: editorFileId, worktreeId: WT })],
         activeGroupIdByWorktree: { [WT]: groupId },

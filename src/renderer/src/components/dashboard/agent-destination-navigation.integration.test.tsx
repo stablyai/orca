@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -51,7 +52,7 @@ const NOW = 1_000_000_000
 
 afterEach(() => {
   cleanup()
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   vi.clearAllMocks()
 })
 
@@ -106,7 +107,7 @@ describe('Dashboard and retained sidebar destination contract', () => {
         createdAt: NOW,
         updatedAt: NOW
       }
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         activeWorktreeId: null,
         activeWorkspaceExecutionHostId: null,
         activeTabType: 'editor',
@@ -240,7 +241,7 @@ describe('Dashboard and retained sidebar destination contract', () => {
 
       // Keep the exact tab alive while its workspace disappears: neither entry may focus or notify it.
       cleanup()
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         worktreesByRepo: {},
         folderWorkspaces: [],
         activeWorktreeId: null,

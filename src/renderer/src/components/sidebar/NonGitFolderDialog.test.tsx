@@ -1,3 +1,5 @@
+import { applySessionTestUpdate } from '@/lib/test-support/session-source-fixture'
+import type { SessionSourceUpdate } from '@/store/session-source-edits'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -61,8 +63,8 @@ vi.mock('@/store', () => {
       selector(dialogStore?.getState() ?? mocks.state),
     {
       getState: () => dialogStore?.getState() ?? mocks.state,
-      setState: (next: Partial<typeof mocks.state>) => {
-        Object.assign(mocks.state, next)
+      setState: (next: SessionSourceUpdate<typeof mocks.state>) => {
+        Object.assign(mocks.state, applySessionTestUpdate(mocks.state, next))
       }
     }
   )

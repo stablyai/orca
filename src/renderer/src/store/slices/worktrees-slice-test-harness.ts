@@ -1,6 +1,8 @@
 import { createAgentStatusSlice } from './agent-status/agent-status'
 import { vi, type Mock } from 'vitest'
 import { create } from 'zustand'
+import { withSessionSourceTestWrites } from '@/lib/test-support/session-source-test-store'
+import { setSessionTestState } from '../../lib/test-support/session-source-fixture'
 import type { AppState } from '../types'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
@@ -130,86 +132,88 @@ export function resetRemoteRuntimeMocks() {
 /** Supplies the worktree slice with the minimal UI and runtime state needed to exercise creation and teardown. */
 export function createTestStore() {
   return create<AppState>()(
-    (...a) =>
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This slice fixture supplies the state read by worktree actions; unrelated slices are intentionally omitted.
-      ({
-        // Why: this test isolates the worktree slice, so it provides only the state surface createWorktreeSlice touches.
-        ...createWorktreeSlice(...a),
-        ...createWorkspaceAttentionSlice(...a),
-        ...createAgentStatusSlice(...a),
-        trustedOrcaHooks: {},
-        sshConnectionStates: new Map([
-          [
-            TEST_SSH_AUTHORITY.targetId,
-            {
-              targetId: TEST_SSH_AUTHORITY.targetId,
-              status: 'connected',
-              error: null,
-              reconnectAttempt: 0,
-              providerEpoch: TEST_SSH_AUTHORITY.providerEpoch,
-              connectionGeneration: TEST_SSH_AUTHORITY.connectionGeneration
-            }
-          ]
-        ]),
-        repos: [],
-        projectHostSetups: [],
-        deleteProjectHostSetup: vi.fn().mockResolvedValue(null),
-        updateFolderWorkspace: vi.fn().mockResolvedValue(true),
-        updateSettings: vi.fn().mockResolvedValue(undefined),
-        openModal: vi.fn(),
-        shutdownWorktreeTerminals: vi.fn().mockResolvedValue(undefined),
-        shutdownWorktreeBrowsers: vi.fn().mockResolvedValue(undefined),
-        deleteManagedBrowserSessionProfile: vi.fn().mockResolvedValue(undefined),
-        ptyIdsByTabId: {},
-        tabsByWorktree: {},
-        tabBarOrderByWorktree: {},
-        pendingReconnectTabByWorktree: {},
-        activeTabIdByWorktree: {},
-        unifiedTabsByWorktree: {},
-        groupsByWorktree: {},
-        activeGroupIdByWorktree: {},
-        layoutByWorktree: {},
-        openFiles: [],
-        editorDrafts: {},
-        markdownViewMode: {},
-        markdownRichModeSizeOverride: {},
-        editorViewMode: {},
-        explorerDisplayRootByWorktree: {},
-        showDotfilesByWorktree: {},
-        expandedDirs: {},
-        gitStatusByWorktree: {},
-        gitStatusHeadByWorktree: {},
-        gitIgnoredPathsByWorktree: {},
-        gitConflictOperationByWorktree: {},
-        trackedConflictPathsByWorktree: {},
-        gitBranchChangesByWorktree: {},
-        gitBranchCompareSummaryByWorktree: {},
-        gitBranchCompareRequestKeyByWorktree: {},
-        gitBranchCompareRequestStatusHeadByWorktree: {},
-        activeFileIdByWorktree: {},
-        activeBrowserTabIdByWorktree: {},
-        browserTabsByWorktree: {},
-        recentlyClosedBrowserTabsByWorktree: {},
-        activeTabTypeByWorktree: {},
-        rightSidebarTab: 'explorer' as const,
-        rightSidebarTabByWorktree: {},
-        activeWorktreeId: null,
-        activeTabId: null,
-        activeFileId: null,
-        activeBrowserTabId: null,
-        activeTabType: 'terminal' as const,
-        reconcileWorktreeTabModel: vi.fn(() => ({
-          activeRenderableTabId: null,
-          renderableTabCount: 0
-        })),
-        refreshGitHubForWorktreeIfStale: vi.fn()
-      }) as unknown as AppState
+    withSessionSourceTestWrites(
+      (...a) =>
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This slice fixture supplies the state read by worktree actions; unrelated slices are intentionally omitted.
+        ({
+          // Why: this test isolates the worktree slice, so it provides only the state surface createWorktreeSlice touches.
+          ...createWorktreeSlice(...a),
+          ...createAgentStatusSlice(...a),
+          ...createWorkspaceAttentionSlice(...a),
+          trustedOrcaHooks: {},
+          sshConnectionStates: new Map([
+            [
+              TEST_SSH_AUTHORITY.targetId,
+              {
+                targetId: TEST_SSH_AUTHORITY.targetId,
+                status: 'connected',
+                error: null,
+                reconnectAttempt: 0,
+                providerEpoch: TEST_SSH_AUTHORITY.providerEpoch,
+                connectionGeneration: TEST_SSH_AUTHORITY.connectionGeneration
+              }
+            ]
+          ]),
+          repos: [],
+          projectHostSetups: [],
+          deleteProjectHostSetup: vi.fn().mockResolvedValue(null),
+          updateFolderWorkspace: vi.fn().mockResolvedValue(true),
+          updateSettings: vi.fn().mockResolvedValue(undefined),
+          openModal: vi.fn(),
+          shutdownWorktreeTerminals: vi.fn().mockResolvedValue(undefined),
+          shutdownWorktreeBrowsers: vi.fn().mockResolvedValue(undefined),
+          deleteManagedBrowserSessionProfile: vi.fn().mockResolvedValue(undefined),
+          ptyIdsByTabId: {},
+          tabsByWorktree: {},
+          tabBarOrderByWorktree: {},
+          pendingReconnectTabByWorktree: {},
+          activeTabIdByWorktree: {},
+          unifiedTabsByWorktree: {},
+          groupsByWorktree: {},
+          activeGroupIdByWorktree: {},
+          layoutByWorktree: {},
+          openFiles: [],
+          editorDrafts: {},
+          markdownViewMode: {},
+          markdownRichModeSizeOverride: {},
+          editorViewMode: {},
+          explorerDisplayRootByWorktree: {},
+          showDotfilesByWorktree: {},
+          expandedDirs: {},
+          gitStatusByWorktree: {},
+          gitStatusHeadByWorktree: {},
+          gitIgnoredPathsByWorktree: {},
+          gitConflictOperationByWorktree: {},
+          trackedConflictPathsByWorktree: {},
+          gitBranchChangesByWorktree: {},
+          gitBranchCompareSummaryByWorktree: {},
+          gitBranchCompareRequestKeyByWorktree: {},
+          gitBranchCompareRequestStatusHeadByWorktree: {},
+          activeFileIdByWorktree: {},
+          activeBrowserTabIdByWorktree: {},
+          browserTabsByWorktree: {},
+          recentlyClosedBrowserTabsByWorktree: {},
+          activeTabTypeByWorktree: {},
+          rightSidebarTab: 'explorer' as const,
+          rightSidebarTabByWorktree: {},
+          activeWorktreeId: null,
+          activeTabId: null,
+          activeFileId: null,
+          activeBrowserTabId: null,
+          activeTabType: 'terminal' as const,
+          reconcileWorktreeTabModel: vi.fn(() => ({
+            activeRenderableTabId: null,
+            renderableTabCount: 0
+          })),
+          refreshGitHubForWorktreeIfStale: vi.fn()
+        }) as unknown as AppState
+    )
   )
 }
 
 export function createLocalLineageTestStore(lineage: WorktreeLineage) {
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     worktreesByRepo: {
       repo1: [
         makeWorktree({
@@ -219,7 +223,7 @@ export function createLocalLineageTestStore(lineage: WorktreeLineage) {
         })
       ]
     }
-  } as Partial<AppState>)
+  })
   return store
 }
 

@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it } from 'vitest'
@@ -14,7 +15,7 @@ const root = createRoot(container)
 
 afterEach(() => {
   act(() => root.unmount())
-  useAppStore.setState(original, true)
+  setSessionTestState(useAppStore, original, true)
 })
 
 it('does not render the workspace root for fresh evidence with unchanged parking', () => {

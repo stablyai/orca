@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type * as FrameDrawnModule from './web-session-tabs-sync/frame-drawn-server-workspaces'
@@ -299,7 +300,7 @@ describe('a workspace that turns out to be the server’s after its snapshot', (
 
       hoisted.owners.set(WT, ENV)
       // A routing slice moves, as pairing does when it names the workspace's owner.
-      store.setState({ repos: [...store.getState().repos] })
+      setSessionTestState(store, { repos: [...store.getState().repos] })
       expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(true)
       await settle()
       expect(check.fullBuilt).toEqual([WT])
@@ -316,7 +317,7 @@ describe('a workspace that turns out to be the server’s after its snapshot', (
       expect(hoisted.resync.mock.calls).toEqual([[ENV, WT]])
       // The owner still reads ENV: a routing change after the loss must not take it back.
       expect(hoisted.owners.get(WT)).toBe(ENV)
-      store.setState({ repos: [...store.getState().repos] })
+      setSessionTestState(store, { repos: [...store.getState().repos] })
       await settle()
       expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(false)
       expect(check.failures).toEqual([])
@@ -339,10 +340,10 @@ describe('a workspace whose owner briefly reads unknown', () => {
       expect(check.fullBuilt).toEqual([WT])
 
       hoisted.owners.delete(WT)
-      store.setState({ repos: [...store.getState().repos] })
+      setSessionTestState(store, { repos: [...store.getState().repos] })
       expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(false)
       hoisted.owners.set(WT, ENV)
-      store.setState({ repos: [...store.getState().repos] })
+      setSessionTestState(store, { repos: [...store.getState().repos] })
       expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(true)
       await settle()
 

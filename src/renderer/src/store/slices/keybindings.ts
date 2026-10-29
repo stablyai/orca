@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import type {
   KeybindingActionId,
@@ -31,7 +31,7 @@ function applySnapshot(
   }
 }
 
-export const createKeybindingsSlice: StateCreator<AppState, [], [], KeybindingsSlice> = (set) => ({
+export const createKeybindingsSlice: SessionStateCreator<AppState, KeybindingsSlice> = (set) => ({
   keybindings: EMPTY_KEYBINDINGS,
   keybindingSnapshot: null,
 

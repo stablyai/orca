@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultUIState } from '../../../../shared/constants'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
@@ -318,7 +319,8 @@ describe('createUISlice hydratePersistedUI', () => {
     const staleDismissalKey = getSetupScriptPromptDismissalKey(
       getRepoHostIdentityForParts('stale-repo', 'local')
     )
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       repos: [
         { id: 'local-repo', path: '/local', displayName: 'Local', badgeColor: '#000', addedAt: 1 }
       ]
@@ -425,7 +427,7 @@ describe('createUISlice hydratePersistedUI', () => {
       displayName: 'Remote',
       executionHostId: 'runtime:node-b'
     }
-    store.setState({ repos: [local, remote] })
+    setSessionTestState(store, { repos: [local, remote] })
 
     store.getState().hydratePersistedUI(
       makePersistedUI({

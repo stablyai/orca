@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createTestStore,
@@ -131,7 +132,7 @@ describe('revealing a terminal main created, in a layout-owner build', () => {
 
   it('reuses the frame-drawn tab even when stale records leave the terminal’s owner unclear', () => {
     const { store, reveal, replyTerminalCreate } = setup()
-    store.setState({
+    setSessionTestState(store, {
       tabsByWorktree: {
         [WORKTREE]: [
           ...store.getState().tabsByWorktree[WORKTREE]!,

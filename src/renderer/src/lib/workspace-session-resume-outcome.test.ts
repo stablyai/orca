@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it } from 'vitest'
 import { createTestStore, makeTab } from '@/store/slices/store-test-helpers'
 import { buildWorkspaceSessionPayload } from './workspace-session'
@@ -12,7 +13,7 @@ describe("the window's saved session", () => {
       title: 'restored',
       createdAt: 1
     })
-    store.setState({
+    setSessionTestState(store, {
       tabsByWorktree: { 'wt-1': [tab] },
       terminalLayoutsByTabId: {
         'tab-1': {

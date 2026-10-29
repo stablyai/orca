@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
@@ -173,7 +174,7 @@ export function registerReposAllHostsFolderWorkspacesTests(): void {
       folderWorkspacesList.mockReturnValueOnce(firstCatalog).mockReturnValueOnce(secondCatalog)
       const store = createTestStore()
       const key = folderWorkspaceKey('local-folder')
-      store.setState({ restoredRuntimeHostIdByWorkspaceSessionKey: { [key]: 'local' } })
+      setSessionTestState(store, { restoredRuntimeHostIdByWorkspaceSessionKey: { [key]: 'local' } })
       const first = store.getState().fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
       const second = store.getState().fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
       resolveFirst([])
@@ -212,7 +213,9 @@ export function registerReposAllHostsFolderWorkspacesTests(): void {
       )
       const key = folderWorkspaceKey('missing-runtime-folder-env-1')
       const store = createTestStore()
-      store.setState({ restoredRuntimeHostIdByWorkspaceSessionKey: { [key]: 'runtime:env-1' } })
+      setSessionTestState(store, {
+        restoredRuntimeHostIdByWorkspaceSessionKey: { [key]: 'runtime:env-1' }
+      })
 
       const stale = store.getState().fetchFolderWorkspacesForAllHosts()
       await vi.waitFor(() => expect(runtimeEnvironmentsList).toHaveBeenCalledTimes(1))
@@ -269,7 +272,7 @@ export function registerReposAllHostsFolderWorkspacesTests(): void {
       const missingFailedRuntimeFolderKey = folderWorkspaceKey('missing-runtime-folder-env-1')
       const missingHydratedRuntimeFolderKey = folderWorkspaceKey('missing-runtime-folder-env-2')
       const store = createTestStore()
-      store.setState({
+      setSessionTestState(store, {
         settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
         restoredRuntimeHostIdByWorkspaceSessionKey: {
           [localFolderKey]: 'runtime:env-1',
@@ -293,7 +296,7 @@ export function registerReposAllHostsFolderWorkspacesTests(): void {
       const missingSshFolderKey = folderWorkspaceKey('missing-ssh-folder')
       const missingRemoteFolderKey = folderWorkspaceKey('missing-runtime-folder')
       const store = createTestStore()
-      store.setState({
+      setSessionTestState(store, {
         restoredRuntimeHostIdByWorkspaceSessionKey: {
           [missingSshFolderKey]: 'ssh:box',
           [missingRemoteFolderKey]: 'runtime:env-1'
@@ -315,7 +318,7 @@ export function registerReposAllHostsFolderWorkspacesTests(): void {
       const store = createTestStore()
       store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
       const restoredFolderKey = folderWorkspaceKey('remote-folder')
-      store.setState({
+      setSessionTestState(store, {
         restoredRuntimeHostIdByWorkspaceSessionKey: {
           [restoredFolderKey]: 'runtime:env-1',
           'remote-repo::/srv/repo': 'runtime:env-1'
@@ -338,7 +341,7 @@ export function registerReposAllHostsFolderWorkspacesTests(): void {
       })
 
       const missingGroupStore = createTestStore()
-      missingGroupStore.setState({
+      setSessionTestState(missingGroupStore, {
         settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
         projectGroups: [localProjectGroup],
         restoredRuntimeHostIdByWorkspaceSessionKey: { [restoredFolderKey]: 'runtime:env-1' }
@@ -386,7 +389,7 @@ export function registerReposAllHostsFolderWorkspacesTests(): void {
         }
       )
       const store = createTestStore()
-      store.setState({
+      setSessionTestState(store, {
         projectGroups: [
           { ...localProjectGroup, executionHostId: 'local' },
           { ...remoteProjectGroup, executionHostId: 'runtime:env-1' },
@@ -441,7 +444,7 @@ export function registerReposAllHostsFolderWorkspacesTests(): void {
       const store = createTestStore()
       store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
       const restoredFolderKey = folderWorkspaceKey('remote-folder')
-      store.setState({
+      setSessionTestState(store, {
         restoredRuntimeHostIdByWorkspaceSessionKey: {
           [restoredFolderKey]: 'runtime:env-1'
         }

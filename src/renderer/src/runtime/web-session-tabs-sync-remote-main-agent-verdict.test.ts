@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // mainAgent can fail while subagents keep state/start/update time unchanged. Mirror that verdict and invalidate the epoch-cached worktree rollup.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
@@ -84,7 +85,10 @@ describe('a mirrored main agent that fails while its subagents keep the row work
       activeWorktreeId: WT
     })
     const apply = (snapshot: RuntimeMobileSessionTabsResult): void => {
-      store.setState(applyFreshWebSessionTabsSnapshot(store.getState(), snapshot, ENV, T0))
+      setSessionTestState(
+        store,
+        applyFreshWebSessionTabsSnapshot(store.getState(), snapshot, ENV, T0)
+      )
     }
 
     apply(hostSnapshot(1, { state: 'working', stateStartedAt: T0 - 5_000 }))

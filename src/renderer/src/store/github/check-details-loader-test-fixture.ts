@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { expect, vi } from 'vitest'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
@@ -53,7 +54,7 @@ export function createLoader(surface: Surface, transport: Transport) {
     'source-repo-id'
   )
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     settings: createGlobalSettingsFixture({ activeRuntimeEnvironmentId: 'focused-env' }),
     repos: [
       {

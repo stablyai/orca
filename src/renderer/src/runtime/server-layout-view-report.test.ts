@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type * as FrameDrawnModule from './web-session-tabs-sync/frame-drawn-server-workspaces'
 import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
@@ -109,7 +110,7 @@ function reports(): unknown[] {
 }
 
 function showGroup(store: TestStore, key: string, groupId: string): void {
-  store.setState({
+  setSessionTestState(store, {
     activeGroupIdByWorktree: { ...store.getState().activeGroupIdByWorktree, [key]: groupId }
   })
 }
@@ -162,7 +163,9 @@ describe('the group this window shows, told to the server whose frames draw it',
     hoisted.call.mockClear()
 
     showGroup(store, LOCAL_WT, 'local-group-2')
-    store.setState({ activeGroupIdByWorktree: { ...store.getState().activeGroupIdByWorktree } })
+    setSessionTestState(store, {
+      activeGroupIdByWorktree: { ...store.getState().activeGroupIdByWorktree }
+    })
     expect(reports()).toEqual([])
 
     showGroup(store, WT, 'host-group-2')
@@ -178,7 +181,9 @@ describe('the group this window shows, told to the server whose frames draw it',
   it('does not resend a report the server failed to take', async () => {
     hoisted.call.mockRejectedValue(new Error('offline'))
     const store = await frameDrawnStore()
-    store.setState({ activeGroupIdByWorktree: { ...store.getState().activeGroupIdByWorktree } })
+    setSessionTestState(store, {
+      activeGroupIdByWorktree: { ...store.getState().activeGroupIdByWorktree }
+    })
     await settle()
 
     expect(reports()).toHaveLength(1)

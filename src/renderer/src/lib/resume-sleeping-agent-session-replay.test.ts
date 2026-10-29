@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { useAppStore } from '@/store'
@@ -15,7 +16,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  useAppStore.setState(initialAppStoreState, true)
+  setSessionTestState(useAppStore, initialAppStoreState, true)
   vi.unstubAllGlobals()
 })
 
@@ -44,7 +45,8 @@ function makeTerminalTab(id: string): Record<string, unknown> {
 describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
   it('publishes the resume command and ownership claim with the first visible tab state', () => {
     const record = makeRecord()
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { 'wt-1': [] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
     } as never)
@@ -86,7 +88,8 @@ describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
 
   it('stores provider-session metadata in the queued startup and runtime claim', () => {
     const record = makeRecord()
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { 'wt-1': [] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
     } as never)
@@ -106,13 +109,14 @@ describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
 
   it('does not fork a provider session that is already queued', () => {
     const record = makeRecord()
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { 'wt-1': [] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
     } as never)
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
-    useAppStore.setState((state) => ({
+    setSessionTestState(useAppStore, (state) => ({
       sleepingAgentSessionsByPaneKey: {
         ...state.sleepingAgentSessionsByPaneKey,
         [record.paneKey]: record
@@ -126,7 +130,8 @@ describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
 
   it('does not fork after startup is consumed but before hooks report live status', () => {
     const record = makeRecord()
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { 'wt-1': [] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
     } as never)
@@ -136,7 +141,8 @@ describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
     expect(useAppStore.getState().consumeTabStartupCommand(resumedTab.id)).not.toBeNull()
     expect(useAppStore.getState().pendingStartupByTabId[resumedTab.id]).toBeUndefined()
 
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
     } as never)
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
@@ -146,7 +152,8 @@ describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
 
   it('does not fork when the same provider session is already live', () => {
     const record = makeRecord()
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { 'wt-1': [makeTerminalTab('old-tab'), makeTerminalTab('live-tab')] },
       agentStatusByPaneKey: {
         'live-tab:leaf-1': {
@@ -170,7 +177,8 @@ describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
 
   it('does not let another worktree claim block the same provider session id', () => {
     const record = makeRecord()
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       tabsByWorktree: {
         'wt-1': [],
         'wt-2': [{ ...makeTerminalTab('claimed-tab'), worktreeId: 'wt-2' }]
@@ -192,7 +200,8 @@ describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
 
   it('clears runtime automatic-resume claims when the tab closes', () => {
     const record = makeRecord()
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { 'wt-1': [] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
     } as never)
@@ -207,7 +216,8 @@ describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
   })
 
   it('does not include runtime automatic-resume claims in workspace-session payloads', () => {
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1')] },
       automaticAgentResumeClaimsByTabId: {
         'tab-1': {
@@ -224,7 +234,8 @@ describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
   })
 
   it('leaves explicit AI Vault resumes outside automatic-resume claims', () => {
-    useAppStore.setState({ tabsByWorktree: { 'wt-1': [] } } as never)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This replay supplies a controlled partial resume payload to exercise the missing-field compatibility path.
+    setSessionTestState(useAppStore, { tabsByWorktree: { 'wt-1': [] } } as never)
 
     const first = launchAiVaultSessionInNewTab({
       agent: 'codex',

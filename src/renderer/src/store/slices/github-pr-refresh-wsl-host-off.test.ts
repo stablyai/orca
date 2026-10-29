@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { Repo } from '../../../../shared/repo-types'
@@ -55,7 +56,7 @@ describe('PR refresh for a WSL host that is off (E9)', () => {
       _meta: { runtimeId: 'remote-runtime' }
     })
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: null },
       repos: [REPO],
       worktreesByRepo: {

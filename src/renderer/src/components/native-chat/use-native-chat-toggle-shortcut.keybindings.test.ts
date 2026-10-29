@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -53,7 +54,7 @@ function input(target = document.body, init: KeyboardEventInit = {}, type = 'key
 }
 beforeEach(() => {
   vi.stubGlobal('navigator', { userAgent: 'Windows NT 10.0' })
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     activeView: 'terminal',
     activeWorktreeId: 'main',
     activeGroupIdByWorktree: { main: 'group-main' },
@@ -69,7 +70,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   cleanup()
-  useAppStore.setState(initial, true)
+  setSessionTestState(useAppStore, initial, true)
   vi.clearAllMocks()
   vi.unstubAllGlobals()
 })
@@ -175,7 +176,7 @@ it('yields the reverse held family, frees an unbound family, and refuses repeate
   expect(input().defaultPrevented).toBe(false)
   expect(toggle).toHaveBeenCalledTimes(1)
   act(() =>
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       keybindings: {},
       tabsByWorktree: {
         main: [{ ...makeTerminalTab('terminal', 'main', 'Gemini'), launchAgent: 'gemini' }]

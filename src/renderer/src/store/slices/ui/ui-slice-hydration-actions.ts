@@ -1,5 +1,5 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
-import type { AppState } from '../../types'
+import { editSessionSource } from '../../session-source-edits'
 import { normalizeRightSidebarRoute } from '../../right-sidebar-route'
 import {
   applyManualRepoOrder,
@@ -48,11 +48,12 @@ import {
   withWslMovedRepoIds,
   withWslMovedSetupScriptDismissals
 } from '../../repos/wsl-moved-repo-ui-retention'
-import type { PersistedUIWriteBaseline } from '../persisted-ui-write-baseline'
 import {
+  type PersistedUIWriteBaseline,
   capturePersistedUIWriteBaseline,
   diffPersistedUIWriteFields
 } from '../persisted-ui-write-baseline'
+
 import {
   hydrateTrustedOrcaHooks,
   hydrateUnexpectedSignoutDismissal,
@@ -138,7 +139,6 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           automationHostFilter: parsePersistedAutomationHostFilter(ui.automationHostFilter),
           manualRepoOrder,
           // Why: apply the desktop-owned overlay immediately since UI state can arrive after a catalog or from another client.
-          repos: orderedRepos,
           hideDefaultBranchWorkspace: ui.hideDefaultBranchWorkspace ?? false,
           hideAutomationGeneratedWorkspaces: ui.hideAutomationGeneratedWorkspaces === true,
           hideCliCreatedWorkspaces: ui.hideCliCreatedWorkspaces === true,
@@ -299,20 +299,24 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
         const nextWriteBaselineGeneration = writeBaselineMoved
           ? s.persistedUIWriteBaselineGeneration + 1
           : s.persistedUIWriteBaselineGeneration
-        if (hydratedUIPartialMatchesState(s, hydrated as Partial<UISlice>)) {
+        if (orderedRepos === s.repos && hydratedUIPartialMatchesState(s, hydrated)) {
           if (!writeBaselineMoved) {
-            return s
+            return undefined
           }
           return {
             persistedUIWriteBaseline: nextWriteBaseline,
             persistedUIWriteBaselineGeneration: nextWriteBaselineGeneration
           }
         }
-        return {
+        const edit = editSessionSource(s)
+        if (orderedRepos !== s.repos) {
+          edit.replace('repos', orderedRepos, 'hydration')
+        }
+        return edit.finish({
           ...hydrated,
           persistedUIWriteBaseline: nextWriteBaseline,
           persistedUIWriteBaselineGeneration: nextWriteBaselineGeneration
-        } as Partial<AppState>
+        })
       })
   }
 }

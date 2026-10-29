@@ -1,3 +1,5 @@
+import { editSessionSource } from '../../../session-source-edits'
+import { replaceSessionSourceFields } from '../../../session-source-write-boundary'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import { addAdditionalValidWorkspaceKeys } from '@/lib/workspace-session-hydration-keys'
@@ -31,10 +33,16 @@ export function createHydrateEditorSession(
           // Why: use the store's activeWorktreeId — hydrateWorkspaceSession may have nulled an invalid ID, and we must respect that.
           s.activeWorktreeId
         )
-        return {
-          ...state,
-          ...migrateHydratedEditorTabsAndGroups(s, editorFileIdMigrationsByWorktree)
-        }
+        const edit = editSessionSource(s)
+        migrateHydratedEditorTabsAndGroups(edit, editorFileIdMigrationsByWorktree)
+        return replaceSessionSourceFields(
+          {
+            ...state,
+            unifiedTabsByWorktree: edit.read('unifiedTabsByWorktree'),
+            groupsByWorktree: edit.read('groupsByWorktree')
+          },
+          'hydration'
+        )
       })
     }
   }

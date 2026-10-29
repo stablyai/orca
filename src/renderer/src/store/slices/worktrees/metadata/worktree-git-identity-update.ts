@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import { runtimeTargetForWorktreeOwner } from '../listing/worktree-owner-target'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
@@ -105,7 +106,7 @@ export function createUpdateWorktreeGitIdentity(
     set((s) => {
       const current = s.worktreesByRepo[repoId]
       if (!current) {
-        return s
+        return undefined
       }
 
       let changed = false
@@ -204,13 +205,12 @@ export function createUpdateWorktreeGitIdentity(
       })
 
       if (!changed) {
-        return s
+        return undefined
       }
 
-      return {
-        worktreesByRepo: { ...s.worktreesByRepo, [repoId]: next },
-        sortEpoch: s.sortEpoch + 1
-      }
+      return editSessionSource(s)
+        .set('worktreesByRepo', repoId, next)
+        .finish({ sortEpoch: s.sortEpoch + 1 })
     })
     if (!shouldPersistHostedReviewClear || clearedBranch === null) {
       return

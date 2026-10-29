@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 
 /** Session-only text drafts for Linear/Jira creation dialogs; picker selections stay fresh. */
@@ -23,10 +23,8 @@ export type TaskCreationDraftsSlice = {
   clearNewJiraIssueDraft: () => void
 }
 
-export const createTaskCreationDraftsSlice: StateCreator<
+export const createTaskCreationDraftsSlice: SessionStateCreator<
   AppState,
-  [],
-  [],
   TaskCreationDraftsSlice
 > = (set) => ({
   newLinearIssueDraft: null,

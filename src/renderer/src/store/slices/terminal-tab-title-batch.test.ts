@@ -1,3 +1,5 @@
+import { isSessionSourceOracleActive } from '../../lib/test-support/session-source-oracle'
+import { replaceSessionSourceFields } from '@/store/session-source-write-boundary'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -136,11 +138,17 @@ describe('terminal tab title batches', () => {
     const currentTabsByWorktree = store.getState().tabsByWorktree
     const observedTabsByWorktree = new Proxy(currentTabsByWorktree, {
       ownKeys(target) {
-        outerKeyVisits += 1
+        if (!isSessionSourceOracleActive()) {
+          outerKeyVisits += 1
+        }
         return Reflect.ownKeys(target)
       },
       get(target, property, receiver) {
-        if (typeof property === 'string' && property.startsWith('wt-')) {
+        if (
+          !isSessionSourceOracleActive() &&
+          typeof property === 'string' &&
+          property.startsWith('wt-')
+        ) {
           bucketVisits += 1
         }
         // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
@@ -148,7 +156,9 @@ describe('terminal tab title batches', () => {
       }
     })
     adoptTerminalTabOwnerMetadataOnlyBuckets(currentTabsByWorktree, observedTabsByWorktree, [])
-    store.setState({ tabsByWorktree: observedTabsByWorktree })
+    store.setState(
+      replaceSessionSourceFields({ tabsByWorktree: observedTabsByWorktree }, 'hydration')
+    )
     outerKeyVisits = 0
     bucketVisits = 0
 

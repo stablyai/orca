@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type * as ResolveOwnerModule from '@/lib/resolve-owner'
@@ -326,7 +327,7 @@ describe('a terminal tab’s own changes in a layout-owner build', () => {
 
   it('titles a tab main has no tab-bar entry for as today', async () => {
     const { store, tabId } = await storeWithTab()
-    store.setState({ unifiedTabsByWorktree: { [WORKTREE]: [] } })
+    setSessionTestState(store, { unifiedTabsByWorktree: { [WORKTREE]: [] } })
 
     store
       .getState()

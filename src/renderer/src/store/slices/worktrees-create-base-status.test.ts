@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
@@ -56,7 +57,8 @@ describe('createWorktree base status merge', () => {
 
   it('prefetches create base through runtime RPC for remote runtime targets', async () => {
     const store = createRepoTestStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This settings fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'remote-runtime' }
     } as Partial<AppState>)
     seedRepoHost(store, 'runtime:remote-runtime')
@@ -249,7 +251,8 @@ describe('createWorktree base status merge', () => {
       // Why: the remote reports the worktree from its own perspective, so it comes back with the default local host.
       hostId: 'local'
     })
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       repos: [
         {
           id: 'repo-remote',
@@ -294,7 +297,8 @@ describe('createWorktree base status merge', () => {
       parentWorkspaceKey: folderWorkspaceKey('folder-1'),
       capture: { source: 'active-workspace', confidence: 'explicit' }
     })
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This activeWorkspaceKey fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       activeWorkspaceKey: folderWorkspaceKey('folder-1')
     } as Partial<AppState>)
     mockApi.worktrees.create.mockResolvedValue({ worktree: wt, workspaceLineage })
@@ -324,7 +328,8 @@ describe('createWorktree base status merge', () => {
       ...watcherWorktree,
       baseRef: 'refs/remotes/origin/main'
     })
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       worktreesByRepo: { repo1: [watcherWorktree] }
     } as Partial<AppState>)
     mockApi.worktrees.create.mockResolvedValue({ worktree: createdWorktree })
@@ -523,7 +528,7 @@ describe('createWorktree base status merge', () => {
   // Creates that joined one refresh report the same fact, so they share one toast per repo+branch.
   it('reuses one toast id for every create of the same repo and base branch', async () => {
     const store = createRepoTestStore()
-    store.setState({ repos: [TEST_REPO, { ...TEST_REPO, id: 'repo2' }] })
+    setSessionTestState(store, { repos: [TEST_REPO, { ...TEST_REPO, id: 'repo2' }] })
     const refresh = {
       status: 'skipped_error',
       baseRef: 'origin/main',
@@ -614,7 +619,8 @@ describe('createWorktree base status merge', () => {
 
   it('persists the dismissal flag when the suggestion toast is closed or swiped', async () => {
     const store = createRepoTestStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This settings, updateSettings fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       settings: { refreshLocalBaseRefOnWorktreeCreate: false } as AppState['settings'],
       updateSettings: vi.fn().mockResolvedValue(undefined)
     } as Partial<AppState>)
@@ -640,7 +646,8 @@ describe('createWorktree base status merge', () => {
 
   it('does not record a dismissal on close when the feature is already enabled', async () => {
     const store = createRepoTestStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This settings, updateSettings fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       settings: { refreshLocalBaseRefOnWorktreeCreate: true } as AppState['settings'],
       updateSettings: vi.fn().mockResolvedValue(undefined)
     } as Partial<AppState>)
@@ -666,7 +673,8 @@ describe('createWorktree base status merge', () => {
 
   it('stamps manualOrder on create while Manual sort is active', async () => {
     const store = createRepoTestStore()
-    store.setState({ sortBy: 'manual' } as Partial<AppState>)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This sortBy fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, { sortBy: 'manual' } as Partial<AppState>)
     const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(123_456)
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
@@ -822,7 +830,7 @@ function lastWarningDescriptionText(): string {
 }
 
 function seedRepoHost(store: ReturnType<typeof createTestStore>, hostId: ExecutionHostId): void {
-  store.setState({ repos: [{ ...TEST_REPO, executionHostId: hostId }] })
+  setSessionTestState(store, { repos: [{ ...TEST_REPO, executionHostId: hostId }] })
 }
 
 function createRepoTestStore(): ReturnType<typeof createTestStore> {

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act, createElement } from 'react'
@@ -86,7 +87,7 @@ describe('NativeChatImageAttachments', () => {
     const original = useAppStore.getState()
     const fixture = nativeChatFanoutFixture(1, 1, 0)
     const workspaceId = nativeChatFanoutWorkspace(0)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       ...useAppStore.getInitialState(),
       ...fixture,
       activeWorktreeId: null,
@@ -116,7 +117,7 @@ describe('NativeChatImageAttachments', () => {
       expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
 
       await act(async () => {
-        useAppStore.setState({
+        setSessionTestState(useAppStore, {
           folderWorkspaces: fixture.folderWorkspaces.map((folder) => ({
             ...folder,
             executionHostId: 'runtime:attachment-owner' as const
@@ -134,7 +135,7 @@ describe('NativeChatImageAttachments', () => {
       expect(window.api.fs.readFile).toHaveBeenCalledTimes(1)
 
       await act(async () => {
-        useAppStore.setState({ unifiedTabsByWorktree: {} })
+        setSessionTestState(useAppStore, { unifiedTabsByWorktree: {} })
         await flushPromises()
       })
       expect(container.querySelector('img')).toBeNull()
@@ -144,7 +145,7 @@ describe('NativeChatImageAttachments', () => {
       expect(mocks.callRuntimeRpc).toHaveBeenCalledTimes(1)
     } finally {
       await act(async () => root.unmount())
-      useAppStore.setState(original, true)
+      setSessionTestState(useAppStore, original, true)
     }
   })
 

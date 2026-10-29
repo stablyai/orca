@@ -1,3 +1,5 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
+import type { SessionSourceSet } from '@/store/session-source-edits'
 // @vitest-environment happy-dom
 
 // Child updatedAt changes must not reset the parent’s host-dated completion/read stamp; older hosts retain legacy dating.
@@ -15,8 +17,8 @@ import type { AppState } from '@/store/types'
 import { countActivityUnread } from '../activity/useActivityUnreadCount'
 
 type TestStore = {
-  getState: () => AppState
-  setState: (state: Partial<AppState> & { testRuntimeOwner?: string | null }) => void
+  getState: () => AppState & { testRuntimeOwner?: string | null }
+  setState: SessionSourceSet<AppState & { testRuntimeOwner?: string | null }>
 }
 
 const mocks = vi.hoisted(() => {
@@ -27,6 +29,12 @@ const mocks = vi.hoisted(() => {
   }
   return hoisted
 })
+
+function seedMockState(partial: Partial<AppState & { testRuntimeOwner?: string | null }>): void {
+  if (mocks.store) {
+    setSessionTestState(mocks.store, partial)
+  }
+}
 
 vi.mock('@/store', async () => {
   const { createTestStore } = await import('@/store/slices/store-test-helpers')
@@ -89,7 +97,7 @@ function row(): AgentStatusEntry {
 }
 
 function acknowledge(at: number): void {
-  mocks.store?.setState({ acknowledgedAgentsByPaneKey: { [row().paneKey]: at } })
+  seedMockState({ acknowledgedAgentsByPaneKey: { [row().paneKey]: at } })
 }
 
 function unread(): number {
@@ -112,7 +120,7 @@ describe("the structured row's state clock", () => {
     vi.clearAllMocks()
     resetStructuredAgentSessionStatusFeedsForTests()
     mocks.subscribeStatus.mockResolvedValue({ unsubscribe: mocks.unsubscribe })
-    mocks.store?.setState({
+    seedMockState({
       agentStatusByPaneKey: {},
       acknowledgedAgentsByPaneKey: {},
       testRuntimeOwner: null,

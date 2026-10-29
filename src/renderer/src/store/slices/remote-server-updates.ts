@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import type { RemoteServerUpdaterSnapshot } from '../../../../shared/remote-server-update'
 import { isListedRemoteServer } from '../../../../shared/runtime-environments'
@@ -60,10 +60,8 @@ export type RemoteServerUpdatesSlice = {
   startRemoteServerUpdates: (environmentIds?: readonly string[]) => Promise<void>
 }
 
-export const createRemoteServerUpdatesSlice: StateCreator<
+export const createRemoteServerUpdatesSlice: SessionStateCreator<
   AppState,
-  [],
-  [],
   RemoteServerUpdatesSlice
 > = (set, get) => ({
   remoteServerUpdates: new Map(),

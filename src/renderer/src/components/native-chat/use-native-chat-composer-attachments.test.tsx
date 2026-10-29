@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act } from 'react'
@@ -36,7 +37,7 @@ function publishOwner(
     sortOrder: 0,
     createdAt: 0
   }
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     unifiedTabsByWorktree: owner ? { [owner.workspaceId]: [tab] } : {},
     activeWorktreeId: owner?.workspaceId ?? null,
     activeWorkspaceExecutionHostId: owner?.executionHostId ?? null
@@ -83,7 +84,7 @@ function publishUnrelatedStatuses(): void {
 
 describe('useNativeChatComposerAttachments', () => {
   afterEach(() => {
-    useAppStore.setState(initialStoreState, true)
+    setSessionTestState(useAppStore, initialStoreState, true)
     runtimeTarget.remote = false
     clearNativeChatAttachmentCacheForTests()
     document.body.replaceChildren()
@@ -528,7 +529,7 @@ describe('useNativeChatComposerAttachments', () => {
     act(() => probe.latest().attachResolvedPaths(refused))
     expect(probe.notice()).toBe('Local attachments are not available for remote sessions.')
 
-    useAppStore.setState(initialStoreState, true)
+    setSessionTestState(useAppStore, initialStoreState, true)
     runtimeTarget.remote = false
     act(() => probe.latest().attachResolvedPaths(['/local/allowed.txt']))
     composing = false

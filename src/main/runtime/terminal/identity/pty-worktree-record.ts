@@ -1,3 +1,4 @@
+import { invalidateShutdownReconnectPty } from '../recovery/shutdown-reconnect-fact-index'
 import { RuntimeWorkspaceRepoScanRefresh } from '../../workspaces/workspace-repo-scan-refresh'
 import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
@@ -32,6 +33,7 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
   protected setPtyConnected(pty: RuntimePtyWorktreeRecord, connected: boolean): void {
     const prior = mainPaneRecordFacts(pty)
     pty.connected = connected
+    invalidateShutdownReconnectPty(this, pty.ptyId)
     pty.disconnectedAt = connected ? null : (pty.disconnectedAt ?? Date.now())
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       noteMainPaneRecordChange(this, prior, pty)
@@ -150,6 +152,7 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
         this.setPtyManagementTitleFromObservedTitle(pty, state.title, titleObservedAt ?? 0)
       }
       this.ptysById.set(ptyId, pty)
+      invalidateShutdownReconnectPty(this, ptyId)
       if (wslDistro) {
         this.wslDistroByPtyId.set(ptyId, wslDistro)
       } else if (connectionId !== null) {
@@ -228,6 +231,7 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
     }
     if (state.connected !== undefined) {
       pty.connected = state.connected
+      invalidateShutdownReconnectPty(this, pty.ptyId)
       pty.disconnectedAt = state.connected ? null : (pty.disconnectedAt ?? Date.now())
     }
     if (state.lastOutputAt !== undefined) {
@@ -253,6 +257,7 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
     if (prior !== null) {
       noteMainPaneRecordChange(this, prior, pty)
     }
+    invalidateShutdownReconnectPty(this, ptyId)
     return pty
   }
 

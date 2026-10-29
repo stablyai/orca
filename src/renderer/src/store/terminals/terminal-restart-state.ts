@@ -29,7 +29,7 @@ export function createTerminalRestartActions(
       let wasSuppressed = false
       set((s) => {
         if (!s.suppressedPtyExitIds[ptyId]) {
-          return s
+          return undefined
         }
         wasSuppressed = true
         const next = { ...s.suppressedPtyExitIds }
@@ -77,7 +77,7 @@ export function createTerminalRestartActions(
       set((s) => {
         const agent = s.pendingPaneAccountRestarts[ptyId]
         if (!agent) {
-          return s
+          return undefined
         }
         queuedAgent = agent
         const next = { ...s.pendingPaneAccountRestarts }
@@ -141,7 +141,7 @@ export function createTerminalRestartActions(
     clearCodexRestartNotice: (ptyId) => {
       set((s) => {
         if (!s.codexRestartNoticeByPtyId[ptyId]) {
-          return s
+          return undefined
         }
         const next = { ...s.codexRestartNoticeByPtyId }
         const nextPendingPaneAccountRestarts = { ...s.pendingPaneAccountRestarts }
@@ -170,7 +170,7 @@ export function createTerminalRestartActions(
           changed = true
         }
         if (!changed) {
-          return s
+          return undefined
         }
         return {
           codexRestartNoticeByPtyId: next,
@@ -182,7 +182,7 @@ export function createTerminalRestartActions(
       set((s) => {
         const notice = s.codexRestartNoticeByPtyId[ptyId]
         if (!notice?.restartRequested) {
-          return s
+          return undefined
         }
         const { restartRequested: _restartRequested, ...kept } = notice
         const nextPendingPaneAccountRestarts = { ...s.pendingPaneAccountRestarts }

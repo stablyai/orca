@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // Boot stored partitions through real startup hydration, then compare user-visible state.
 
 import { vi } from 'vitest'
@@ -61,7 +62,7 @@ export async function bootWindowFromPartitions(
     .spyOn(globalThis.crypto, 'randomUUID')
     .mockImplementation(() => `00000000-0000-4000-8000-${String(++minted).padStart(12, '0')}`)
   try {
-    store.setState({ repos: firstPaintRepos(partitions) })
+    setSessionTestState(store, { repos: firstPaintRepos(partitions) })
     const read = async (hostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID) =>
       structuredClone(
         partitions.find((partition) => partition.hostId === hostId)?.session ??

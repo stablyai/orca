@@ -1,3 +1,4 @@
+import type { SessionUnitReader } from '../../../shared/session-unit-reader'
 // Runtime partitions mirror a paired server, so main's per-repo topology fence must not outlive the
 // race it guards: the window never echoes revisions, and a permanent fence froze its membership.
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
@@ -107,4 +108,48 @@ export function keepRuntimePartitionRevisions(
     revisions[repoId] = Math.max(revision, revisions[repoId] ?? 0)
   }
   return { ...session, terminalTopologyRevisionByRepoId: revisions }
+}
+
+export function runtimePartitionFenceRevisions(
+  owner: FenceOwner,
+  hostId: ExecutionHostId,
+  reader: SessionUnitReader,
+  repoIds: Iterable<string>,
+  tombstoneKeys: Iterable<string>,
+  now = performance.now()
+): ReadonlyMap<string, number> | undefined {
+  if (!isRuntimePartition(hostId)) {
+    return undefined
+  }
+  const fences = fencedRepos(owner, hostId)
+  const selected = [...repoIds]
+  for (const repo of selected) {
+    if (
+      (reader.unit('terminalTopologyRevisionByRepoId', repo).value ?? 0) >
+      (reader.unit('terminalTopologyRevisionByRepoId', repo, 'prior').value ?? 0)
+    ) {
+      fences.set(repo, now)
+    }
+  }
+  for (const pane of tombstoneKeys) {
+    for (const phase of ['prior', 'candidate'] as const) {
+      const record = reader.unit('terminalSurfaceTombstonesByPaneKey', pane, phase).value
+      if (record) {
+        fences.set(getRepoIdFromWorktreeId(record.worktreeId), now)
+      }
+    }
+  }
+  return new Map(
+    selected.flatMap((repo) => {
+      const at = fences.get(repo)
+      return at !== undefined && now - at < RUNTIME_PARTITION_TOPOLOGY_FENCE_MS
+        ? [
+            [
+              repo,
+              reader.unit('terminalTopologyRevisionByRepoId', repo, 'prior').value ?? 0
+            ] as const
+          ]
+        : []
+    })
+  )
 }

@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../../types'
 import type { BrowserSlice } from './browser-slice-contract'
 import { createBrowserHostActions } from './browser-host-actions'
@@ -18,7 +18,7 @@ import { createBrowserProfileImportActions } from './browser-profile-import-acti
 import { createBrowserCookieImportActions } from './browser-cookie-import-actions'
 import { createBrowserHistoryActions } from './browser-history-actions'
 
-export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = (set, get) => ({
+export const createBrowserSlice: SessionStateCreator<AppState, BrowserSlice> = (set, get) => ({
   browserTabsByWorktree: {},
   browserPagesByWorkspace: {},
   browserCertificateFailuresByPageId: {},

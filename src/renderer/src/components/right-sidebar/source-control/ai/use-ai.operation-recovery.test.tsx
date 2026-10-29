@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { sourceControlActionRecipeEntry } from '../../../../../../shared/source-control-action-selection'
 import { runtimeStatusEntry } from '@/runtime/server-layout-frames.test-fixture'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
@@ -72,7 +73,7 @@ describe('AI operation recovery composer', () => {
     detectAgents.mockReset().mockResolvedValue(['codex'])
     launchAgent.mockReset().mockReturnValue({ surface: { kind: 'local-terminal', tabId: 'agent' } })
     setLocalRuntimeCapabilitiesForTests([])
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       isRemoteOperationActive: false,
       repos: [TEST_REPO],
       worktreesByRepo: { [TEST_REPO.id]: [makeWorktree({ id: 'wt-1', repoId: TEST_REPO.id })] },
@@ -95,7 +96,7 @@ describe('AI operation recovery composer', () => {
     cleanup()
     clearHostAgentMenuSettingsForTests()
     setLocalRuntimeCapabilitiesForTests(null)
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   it.each<GitConflictOperation>(['merge', 'rebase', 'cherry-pick'])(
@@ -240,7 +241,7 @@ describe('AI operation recovery composer', () => {
         settings: ReturnType<typeof projectAgentLaunchSettings>
       }>()
       hostRpc.mockReturnValueOnce(pending.promise)
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         settings,
         repos: [TEST_REPO],
         runtimeStatusByEnvironmentId: new Map([['alpha', runtimeStatusEntry('r1', false)]]),
@@ -313,7 +314,7 @@ describe('AI operation recovery composer', () => {
       const settings = getDefaultSettings(path.resolve('tmp'))
       settings.sourceControlAi!.actions = { resolveConflicts: { agentId: 'codex' } }
       if (resultKind === 'runtime-replaced') {
-        useAppStore.setState({
+        setSessionTestState(useAppStore, {
           runtimeStatusByEnvironmentId: new Map([['alpha', runtimeStatusEntry('r1', false)]]),
           worktreesByRepo: {
             [TEST_REPO.id]: [

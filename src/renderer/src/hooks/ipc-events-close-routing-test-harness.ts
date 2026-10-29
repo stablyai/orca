@@ -1,3 +1,4 @@
+import type * as WorkspaceSessionModule from '@/lib/workspace-session'
 import type * as ReactModule from 'react'
 import { vi } from 'vitest'
 import type { TerminalSurfaceCloseTarget } from '../../../shared/terminal-surface-close-target'
@@ -144,7 +145,8 @@ export async function useIpcEventsForCloseRouting({
   vi.doMock('@/lib/workspace-session-host-persistence', () => ({
     persistWorkspaceSessionByHost: persistWorkspaceSession
   }))
-  vi.doMock('@/lib/workspace-session', () => ({
+  vi.doMock('@/lib/workspace-session', async (importOriginal) => ({
+    ...(await importOriginal<typeof WorkspaceSessionModule>()),
     buildWorkspaceSessionPayload: vi.fn(() => ({}))
   }))
 

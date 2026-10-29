@@ -1,4 +1,5 @@
-import type { StateCreator } from 'zustand'
+import type { SessionSourceSet } from '@/store/session-source-edits'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import { findWorktreeById } from './worktree-helpers'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
@@ -222,10 +223,8 @@ export function canGoForwardWorktreeHistory(state: AppState): boolean {
   return findNextLiveWorktreeHistoryIndex(state) !== null
 }
 
-export const createWorktreeNavHistorySlice: StateCreator<
+export const createWorktreeNavHistorySlice: SessionStateCreator<
   AppState,
-  [],
-  [],
   WorktreeNavHistorySlice
 > = (set, get) => ({
   worktreeNavHistory: [],
@@ -251,7 +250,7 @@ export const createWorktreeNavHistorySlice: StateCreator<
 
 function navigateToIndex(
   get: () => AppState,
-  set: (partial: Partial<AppState>) => void,
+  set: SessionSourceSet<AppState>,
   direction: 'back' | 'forward'
 ): void {
   const state = get()
@@ -275,7 +274,7 @@ function navigateToIndex(
 
   // Why: capture-and-restore (not force false) so re-entrant navigation doesn't clobber the flag.
   const prevNavigating = get().isNavigatingHistory
-  set({ isNavigatingHistory: true } as Partial<AppState>)
+  set({ isNavigatingHistory: true })
   try {
     if (isViewEntry(targetEntry)) {
       if (!viewActivator) {
@@ -287,7 +286,7 @@ function navigateToIndex(
       }
       // Why: use setActiveView (not open*Page) so replay doesn't mutate previousViewBefore* or fire page-open side effects.
       viewActivator(targetEntry)
-      set({ worktreeNavHistoryIndex: targetIndex } as Partial<AppState>)
+      set({ worktreeNavHistoryIndex: targetIndex })
     } else {
       if (!activator) {
         // Why: warn (not a silent no-op) so a missing activator is diagnosable.
@@ -299,10 +298,10 @@ function navigateToIndex(
       // Why: `false` is the activator's only failure signal — advance the index only on success.
       const result = activator(targetEntry)
       if (result !== false) {
-        set({ worktreeNavHistoryIndex: targetIndex } as Partial<AppState>)
+        set({ worktreeNavHistoryIndex: targetIndex })
       }
     }
   } finally {
-    set({ isNavigatingHistory: prevNavigating } as Partial<AppState>)
+    set({ isNavigatingHistory: prevNavigating })
   }
 }

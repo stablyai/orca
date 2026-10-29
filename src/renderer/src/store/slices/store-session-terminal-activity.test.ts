@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTestStore, makeWorktree, makeTab } from './store-test-helpers'
@@ -24,7 +25,7 @@ describe('terminal slice behaviors', () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
 
-    store.setState({
+    setSessionTestState(store, {
       tabsByWorktree: {
         [worktreeId]: [
           makeTab({ id: 'tab-a', worktreeId, sortOrder: 0, createdAt: 1 }),
@@ -47,7 +48,7 @@ describe('terminal slice behaviors', () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -75,7 +76,7 @@ describe('terminal slice behaviors', () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -104,7 +105,7 @@ describe('terminal slice behaviors', () => {
     const targetWorktreeId = 'repo1::/path/wt1'
     const otherWorktreeId = 'repo1::/path/wt2'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -144,7 +145,7 @@ describe('terminal slice behaviors', () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -169,7 +170,7 @@ describe('terminal slice behaviors', () => {
     const targetWorktreeId = 'repo1::/path/wt1'
     const otherWorktreeId = 'repo1::/path/wt2'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -229,7 +230,7 @@ describe('terminal slice behaviors', () => {
       ])
     )
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -253,7 +254,7 @@ describe('terminal slice behaviors', () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -289,7 +290,7 @@ describe('terminal slice behaviors', () => {
     const originalLastActivityAt = 1000
 
     // Why: a null-ptyId tab hits setActiveWorktree's allDead branch, which tags pendingActivationSpawn to suppress the fresh spawn.
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -349,7 +350,7 @@ describe('terminal slice behaviors', () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -401,7 +402,7 @@ describe('terminal slice behaviors', () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -452,7 +453,7 @@ describe('terminal slice behaviors', () => {
     const worktreeId = 'repo1::/path/wt1'
     const originalLastActivityAt = 1000
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -523,7 +524,7 @@ describe('terminal slice behaviors', () => {
     const worktreeId = 'repo1::/path/wt1'
     const originalLastActivityAt = 1000
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -600,7 +601,7 @@ describe('terminal slice behaviors', () => {
     const worktreeId = 'repo1::/path/wt1'
     const originalLastActivityAt = 1000
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -643,7 +644,7 @@ describe('terminal slice behaviors', () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],

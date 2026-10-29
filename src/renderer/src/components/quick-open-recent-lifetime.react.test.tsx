@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, createElement } from 'react'
 import { expect, it, vi } from 'vitest'
@@ -131,7 +132,7 @@ it('revokes pending eligibility on close and owner change without overlapping ho
     })
     await act(async () => vi.advanceTimersByTimeAsync(320))
     await act(async () => {
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         worktreesByRepo: {
           'repo-remote': [
             { ...makeRemoteWorktree(), hostId: 'runtime:env-2', runtimeOwnerEnvironmentId: 'env-2' }

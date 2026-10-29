@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerPendingEditorFlush } from '@/components/editor/editor-pending-flush'
 import { editorModelRegistry } from '@/lib/editor-model-registry'
@@ -35,7 +36,7 @@ afterEach(() => vi.unstubAllGlobals())
 /** A store whose workspaces each hold one dirty tab `<id>/file.ts` with draft `draft <id>`. */
 function dirtyStore(ids: readonly string[], hostId: 'local' | typeof RUNTIME = 'local'): Store {
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     repos: [{ ...TEST_REPO, executionHostId: hostId }],
     worktreesByRepo: {
       [TEST_REPO.id]: ids.map((id) =>
@@ -51,7 +52,9 @@ function dirtyStore(ids: readonly string[], hostId: 'local' | typeof RUNTIME = '
 }
 
 const edit = (store: Store, id: string, text: string): void =>
-  store.setState((s) => ({ editorDrafts: { ...s.editorDrafts, [`${id}/file.ts`]: text } }))
+  setSessionTestState(store, (s) => ({
+    editorDrafts: { ...s.editorDrafts, [`${id}/file.ts`]: text }
+  }))
 
 const GONE = `${TEST_REPO.id}::/gone`
 
@@ -189,7 +192,7 @@ describe('the closed-files notice', () => {
     const f = createHostTwinFixture('local+runtime')
     try {
       const full = 'other::/full'
-      f.store.setState((s) => ({
+      setSessionTestState(f.store, (s) => ({
         openFiles: [
           ...s.openFiles,
           makeOpenFile({ id: 'full.ts', worktreeId: full, isDirty: true })
@@ -217,7 +220,7 @@ describe('the closed-files notice', () => {
     const store = dirtyStore([GONE])
     const tab = (id: string, isDirty: boolean) =>
       makeOpenFile({ id, filePath: '/w/shared.ts', worktreeId: GONE, isDirty })
-    store.setState({
+    setSessionTestState(store, {
       openFiles: [tab('first', true), tab('second', true)],
       // One record: both views hold its one draft.
       editorDrafts: { first: 'newer draft', second: 'newer draft' }
@@ -242,7 +245,10 @@ describe('the closed-files notice', () => {
     const store = dirtyStore([GONE])
     const tab = (id: string) =>
       makeOpenFile({ id, filePath: '/w/shared.ts', worktreeId: GONE, isDirty: true })
-    store.setState({ openFiles: [tab('first'), tab('second')], editorDrafts: { second: 'kept' } })
+    setSessionTestState(store, {
+      openFiles: [tab('first'), tab('second')],
+      editorDrafts: { second: 'kept' }
+    })
     store.getState().purgeWorktreeTerminalState([GONE])
     await vi.waitFor(() => expect(show).toHaveBeenCalledTimes(1))
     expect(shownContents()).toEqual(['kept'])

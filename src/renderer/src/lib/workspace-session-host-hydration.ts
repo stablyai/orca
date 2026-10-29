@@ -1,3 +1,5 @@
+import type { WorkspaceSessionHostRead } from './workspace-session-host-read'
+export type { WorkspaceSessionHostRead } from './workspace-session-host-read'
 import type { Repo } from '../../../shared/repo-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import {
@@ -26,15 +28,6 @@ type SessionReadApi = {
   get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
   /** Enumerate actual persisted partitions, including SSH folder-only hosts absent from repos. Optional channel preserves older-main catalog-only startup. */
   listHostIds?: () => Promise<ExecutionHostId[]>
-}
-
-export type WorkspaceSessionHostRead = {
-  session: WorkspaceSessionState
-  runtimeHostIdByWorkspaceSessionKey: Record<string, ExecutionHostId>
-  contestedHostWorkspaceSessions: HostSessionSlices
-  contestedPrimaryHostBySessionKey: Record<string, ExecutionHostId>
-  /** Runtime partitions this read actually loaded, so a later write may speak for all of their rows. */
-  hydratedRuntimeSessionHostIds: ExecutionHostId[]
 }
 
 const WORKSPACE_SESSION_KEYED_FIELDS = [
@@ -228,7 +221,11 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
     runtimeHostIdByWorkspaceSessionKey: buildRuntimeHostIdByWorkspaceSessionKey(merged.slices),
     contestedHostWorkspaceSessions: shadow,
     contestedPrimaryHostBySessionKey: primaryHostBySessionKey,
-    hydratedRuntimeSessionHostIds: [...runtimeHostIds].filter((hostId) => slices[hostId])
+    hydratedRuntimeSessionHostIds: [...runtimeHostIds]
+      .filter((hostId) => slices[hostId])
+      .concat(
+        sshPartitions.flatMap(([hostId, slice]) => (slice && !shadow[hostId] ? [hostId] : []))
+      )
   }
 }
 

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // Test window-owned paired-host moves; local main-owned frame placement is covered in tab-moves-drawn-from-frames.test.ts.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../../store'
@@ -18,7 +19,7 @@ vi.mock('./web-runtime-tab-move-mirror', () => ({
 describe('tab-move-to-pane-column', () => {
   beforeEach(() => {
     mocks.mirrorWebRuntimeTabMove.mockReset()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       activeWorktreeId: WT,
       worktreesByRepo: { repo1: [makeRuntimeOwnedWorktree({ id: WT, repoId: 'repo1' })] },
       groupsByWorktree: {
@@ -70,7 +71,7 @@ describe('tab-move-to-pane-column', () => {
   })
 
   it('blocks moving the only tab in a group', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       groupsByWorktree: {
         [WT]: [
           {
@@ -91,7 +92,10 @@ describe('tab-move-to-pane-column', () => {
 
   it('creates a sibling split pane via dropUnifiedTab', () => {
     const dropUnifiedTab = vi.fn(() => true)
-    useAppStore.setState({ dropUnifiedTab } as Partial<ReturnType<typeof useAppStore.getState>>)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This dropUnifiedTab fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(useAppStore, { dropUnifiedTab } as Partial<
+      ReturnType<typeof useAppStore.getState>
+    >)
 
     expect(
       moveTabToNewPaneColumn({ unifiedTabId: 'tab-b', groupId: 'group-1', direction: 'right' })
@@ -111,7 +115,10 @@ describe('tab-move-to-pane-column', () => {
 
   it('does not mirror when the local store rejects the move', () => {
     const dropUnifiedTab = vi.fn(() => false)
-    useAppStore.setState({ dropUnifiedTab } as Partial<ReturnType<typeof useAppStore.getState>>)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This dropUnifiedTab fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(useAppStore, { dropUnifiedTab } as Partial<
+      ReturnType<typeof useAppStore.getState>
+    >)
 
     expect(
       moveTabToNewPaneColumn({ unifiedTabId: 'tab-b', groupId: 'group-1', direction: 'right' })

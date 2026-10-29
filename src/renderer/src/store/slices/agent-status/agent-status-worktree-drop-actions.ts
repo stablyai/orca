@@ -112,7 +112,7 @@ export function createAgentStatusWorktreeDropActions(
               ? { manuallyUnreadTurnsByPaneKey: nextManualUnread }
               : {})
           }
-          return Object.keys(cleanupPatch).length > 0 ? cleanupPatch : s
+          return Object.keys(cleanupPatch).length > 0 ? cleanupPatch : undefined
         }
         hadLive = liveKeys.length > 0
         const nextLive =

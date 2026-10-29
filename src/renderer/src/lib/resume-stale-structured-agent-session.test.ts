@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
@@ -11,7 +12,7 @@ const SESSION_ID = 'structured-session-stale'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
 afterEach(() => {
-  useAppStore.setState(initialAppStoreState, true)
+  setSessionTestState(useAppStore, initialAppStoreState, true)
 })
 
 describe('stale structured sleeping session', () => {
@@ -29,7 +30,8 @@ describe('stale structured sleeping session', () => {
       capturedAt: 1,
       updatedAt: 1
     }
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { [WORKTREE_ID]: [] },
       sleepingAgentSessionsByPaneKey: { [paneKey]: record }
     } as never)

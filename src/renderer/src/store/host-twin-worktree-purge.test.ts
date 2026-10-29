@@ -1,3 +1,5 @@
+import type { AppState } from '@/store/types'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { getWorktreeVisitKey } from '@/lib/worktree-visit-recency'
@@ -31,7 +33,7 @@ function twin(kind: Parameters<typeof createHostTwinFixture>[0] = 'local+ssh'): 
   const fixture = createHostTwinFixture(kind)
   current = fixture
   const key = fixture.workspaceKey
-  fixture.store.setState({
+  setSessionTestState(fixture.store, {
     gitStatusByWorktree: { [key]: [] },
     activeWorktreeId: key,
     activeWorkspaceExecutionHostId: fixture.remote.hostId,
@@ -44,7 +46,7 @@ function twin(kind: Parameters<typeof createHostTwinFixture>[0] = 'local+ssh'): 
 }
 
 function keepOnlyRemoteRow(fixture: HostTwinFixture): void {
-  fixture.store.setState((s) => ({
+  setSessionTestState(fixture.store, (s): Partial<AppState> => ({
     worktreesByRepo: {
       [fixture.projectId]: (s.worktreesByRepo[fixture.projectId] ?? []).filter(
         (row) => row.hostId === fixture.remote.hostId
@@ -111,7 +113,7 @@ describe('purgeWorktreeTerminalState with a surviving twin', () => {
     const f = twin()
     const shared = f.remote.ptyId
     // A mixed-host split: the kept local tab also binds the purged copy's PTY.
-    f.store.setState((s) => ({
+    setSessionTestState(f.store, (s): Partial<AppState> => ({
       ptyIdsByTabId: { ...s.ptyIdsByTabId, [f.local.terminalTabId]: [f.local.ptyId, shared] },
       suppressedPtyExitIds: { [shared]: true },
       pendingPaneAccountRestarts: { [shared]: 'codex' }
@@ -130,7 +132,7 @@ describe('purgeWorktreeTerminalState with a surviving twin', () => {
   it('collapses a split the purged copy emptied, handing selection to the survivor', () => {
     const f = twin()
     const key = f.workspaceKey
-    f.store.setState((s) => {
+    setSessionTestState(f.store, (s): Partial<AppState> => {
       const [group] = s.groupsByWorktree[key] ?? []
       if (!group) {
         throw new Error('fixture has no tab group')
@@ -174,7 +176,7 @@ describe('purgeWorktreeTerminalState with a surviving twin', () => {
     const f = twin()
     const key = f.workspaceKey
     const remoteIds = [f.remote.terminalTabId, f.remote.fileId]
-    f.store.setState((s) => {
+    setSessionTestState(f.store, (s): Partial<AppState> => {
       const [group] = s.groupsByWorktree[key] ?? []
       if (!group) {
         throw new Error('fixture has no tab group')
@@ -275,7 +277,7 @@ describe('purgeWorktreeTerminalState with a surviving twin', () => {
     const f = twin()
     const key = f.workspaceKey
     const record = f.store.getState().sleepingAgentSessionsByPaneKey[f.remote.paneKey]
-    f.store.setState((s) => ({
+    setSessionTestState(f.store, (s): Partial<AppState> => ({
       sleepingAgentSessionsByPaneKey: {
         ...s.sleepingAgentSessionsByPaneKey,
         'gone-ssh:leaf': { ...record, paneKey: 'gone-ssh:leaf' },
@@ -293,7 +295,7 @@ describe('purgeWorktreeTerminalState with a surviving twin', () => {
   it('selects a surviving tab when the purged terminal was active', () => {
     const f = twin()
     const key = f.workspaceKey
-    f.store.setState((s) => ({
+    setSessionTestState(f.store, (s): Partial<AppState> => ({
       activeTabId: f.remote.terminalTabId,
       activeTabType: 'terminal',
       groupsByWorktree: {
@@ -317,7 +319,7 @@ describe('purgeWorktreeTerminalState with a surviving twin', () => {
     const f = twin()
     const key = f.workspaceKey
     const runtimeHostId = `runtime:${TWIN_RUNTIME_ENV}` as const
-    f.store.setState((s) => ({
+    setSessionTestState(f.store, (s): Partial<AppState> => ({
       worktreesByRepo: {
         [f.projectId]: (s.worktreesByRepo[f.projectId] ?? []).map((row) =>
           row.hostId === f.remote.hostId
@@ -350,7 +352,7 @@ describe('purgeWorktreeTerminalState with a surviving twin', () => {
   it('keeps an untouched legacy selection when another host is purged', () => {
     const f = twin()
     const key = f.workspaceKey
-    f.store.setState({
+    setSessionTestState(f.store, {
       activeWorkspaceExecutionHostId: f.local.hostId,
       activeTabId: f.local.terminalTabId,
       activeTabType: 'terminal',
@@ -373,7 +375,7 @@ describe('purgeWorktreeTerminalState with a surviving twin', () => {
     (_verb, remoteSource, localSource, kept) => {
       const f = twin()
       const key = f.workspaceKey
-      f.store.setState((s) => ({
+      setSessionTestState(f.store, (s): Partial<AppState> => ({
         openFiles: s.openFiles.map((file) => ({
           ...file,
           markdownPreviewSourceFileId: file.id === f.remote.fileId ? remoteSource : localSource

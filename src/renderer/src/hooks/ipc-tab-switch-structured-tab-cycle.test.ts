@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab, TabGroup } from '../../../shared/tab-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
@@ -80,9 +81,12 @@ function storeWithStructuredTabActive({
     setActiveFile: vi.fn(),
     setActiveBrowserTab: vi.fn()
   } as unknown as AppState
+  const edit = editSessionSource(rawState)
+  const surface = buildActiveSurfacePatch(edit, WORKTREE_ID)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
   const store = {
-    ...rawState,
-    ...buildActiveSurfacePatch(rawState, WORKTREE_ID)
+    ...edit.view(),
+    ...surface
   } as AppState
   const noopSet = (() => {}) as unknown as TabsSliceSet
   store.getActiveTab = createTabsFocusActions(noopSet, (() => store) as TabsSliceGet).getActiveTab

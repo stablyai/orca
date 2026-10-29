@@ -278,8 +278,7 @@ export function buildTerminalSessionData(
 
   return {
     activeWorktreeIdsOnShutdown,
-    remoteSessionIdsByTabId:
-      Object.keys(remoteSessionIdsByTabId).length > 0 ? remoteSessionIdsByTabId : undefined
+    remoteSessionIdsByTabId
   }
 }
 

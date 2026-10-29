@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, cleanup, render, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -38,7 +39,7 @@ beforeEach(() => {
     worktrees: { listRetiredNames: vi.fn(async () => ({ names: [], exhaustedTiers: 0 })) },
     preflight: { detectAgents: vi.fn(async () => []) }
   })
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     repos: [
       {
         id: 'local-project',

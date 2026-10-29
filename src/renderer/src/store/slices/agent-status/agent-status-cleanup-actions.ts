@@ -21,7 +21,7 @@ export function createAgentStatusCleanupActions(
       set((s) => {
         const existing = s.migrationUnsupportedByPtyId[entry.ptyId]
         if (existing && entry.updatedAt < existing.updatedAt) {
-          return s
+          return undefined
         }
         return {
           migrationUnsupportedByPtyId: {
@@ -194,7 +194,7 @@ export function createAgentStatusCleanupActions(
         }
         const alreadyBlocked = connectionId in s.transientClearedAgentStatusConnectionIds
         if (!next && alreadyBlocked) {
-          return s
+          return undefined
         }
         removed = next !== null
         return {

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act } from 'react'
@@ -25,8 +26,8 @@ const FILE_PATH = '/root/repo/README.md'
 
 /** Simulate unstamped relay-era tabs after their workspace moves to a managed server. */
 function seedConvertedWorkspace(): void {
-  useAppStore.setState(useAppStore.getInitialState(), true)
-  useAppStore.setState({
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, {
     activeWorktreeId: WORKTREE,
     repos: [
       {

@@ -1,3 +1,6 @@
+import type { AppState } from '@/store/types'
+import { withSessionSourceWrites } from '@/store/session-source-write-boundary'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 /** Capability verdicts must change only on async daemon answers, never pane mount/unmount; repeatedly flip them between commits while mount writes update other exemption inputs to catch React #185 loops. */
 /** @vitest-environment happy-dom */
 import { act, StrictMode } from 'react'
@@ -21,23 +24,25 @@ const harness = vi.hoisted(() => ({
 
 vi.mock('../../store', async () => {
   const { create } = await import('zustand')
-  const useAppStore = create(() => ({
-    activeGroupIdByWorktree: {} as Record<string, string | undefined>,
-    groupsByWorktree: {} as Record<string, TabGroup[]>,
-    pendingStartupByTabId: {} as Record<string, unknown>,
-    ptyIdsByTabId: {} as Record<string, string[]>,
-    runtimeStatusByEnvironmentId: new Map<string, unknown>(),
-    runtimePaneTitlesByTabId: {} as Record<string, Record<number, string>>,
-    settings: {} as Record<string, unknown>,
-    sleepingAgentSessionsByPaneKey: {} as Record<string, unknown>,
-    tabsByWorktree: {} as Record<string, TerminalTab[]>,
-    terminalLayoutsByTabId: {} as Record<string, unknown>,
-    unifiedTabsByWorktree: {} as Record<string, Tab[]>,
-    consumeSuppressedPtyExit: () => false,
-    focusGroup: () => {},
-    reconcileWorktreeTabModel: () => ({ renderableTabCount: 2 }),
-    setActiveWorktree: () => {}
-  }))
+  const useAppStore = create(
+    withSessionSourceWrites(() => ({
+      activeGroupIdByWorktree: {} as Record<string, string | undefined>,
+      groupsByWorktree: {} as Record<string, TabGroup[]>,
+      pendingStartupByTabId: {} as Record<string, unknown>,
+      ptyIdsByTabId: {} as Record<string, string[]>,
+      runtimeStatusByEnvironmentId: new Map<string, unknown>(),
+      runtimePaneTitlesByTabId: {} as Record<string, Record<number, string>>,
+      settings: {} as Record<string, unknown>,
+      sleepingAgentSessionsByPaneKey: {} as Record<string, unknown>,
+      tabsByWorktree: {} as Record<string, TerminalTab[]>,
+      terminalLayoutsByTabId: {} as Record<string, unknown>,
+      unifiedTabsByWorktree: {} as Record<string, Tab[]>,
+      consumeSuppressedPtyExit: () => false,
+      focusGroup: () => {},
+      reconcileWorktreeTabModel: () => ({ renderableTabCount: 2 }),
+      setActiveWorktree: () => {}
+    }))
+  )
   return { useAppStore }
 })
 
@@ -57,10 +62,6 @@ vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
 vi.mock('./TerminalOverlaySlot', async () => {
   const { useEffect } = await vi.importActual<typeof ReactModule>('react')
   const { useAppStore } = await import('../../store')
-  type SlotStoreState = {
-    tabsByWorktree: Record<string, TerminalTab[]>
-    terminalLayoutsByTabId: Record<string, unknown>
-  }
   return {
     TerminalOverlaySlot: ({ terminalTabId }: { terminalTabId: string }) => {
       harness.slotRenders += 1
@@ -69,11 +70,7 @@ vi.mock('./TerminalOverlaySlot', async () => {
         if (harness.slotMounts > 400) {
           throw new Error('harness runaway: slot remount storm exceeded 400 mounts')
         }
-        ;(
-          useAppStore as unknown as {
-            setState: (update: (state: SlotStoreState) => Partial<SlotStoreState>) => void
-          }
-        ).setState((state) => ({
+        setSessionTestState(useAppStore, (state): Partial<AppState> => ({
           tabsByWorktree: {
             ...state.tabsByWorktree,
             [harness.worktreeId]: state.tabsByWorktree[harness.worktreeId].map((tab) =>
@@ -134,10 +131,7 @@ const LEAF_IDS: Record<string, string> = {
   'tab-b': '11111111-2222-4333-8444-55555555555b'
 }
 
-const harnessStore = useAppStore as unknown as {
-  setState: (partial: Record<string, unknown>) => void
-  getState: () => { tabsByWorktree: Record<string, TerminalTab[]> }
-}
+const harnessStore = useAppStore
 
 function ptyIdFor(tabId: string): string {
   return `${harness.worktreeId}@@session-${tabId}`
@@ -170,7 +164,7 @@ function unifiedTerminalTab(id: string): Tab {
 
 // Capability answers update module state; routine title writes wake the store memo to observe them.
 function touchStoreTitles(marker: string): void {
-  harnessStore.setState({
+  setSessionTestState(harnessStore, {
     tabsByWorktree: {
       [harness.worktreeId]: harnessStore
         .getState()
@@ -193,7 +187,7 @@ describe('force-park exemption flips under capability changes', () => {
     harness.slotMounts = 0
     harness.observedParkedCounts.clear()
     harness.watcherEntries.clear()
-    harnessStore.setState({
+    setSessionTestState(harnessStore, {
       activeGroupIdByWorktree: { [harness.worktreeId]: GROUP_ID },
       groupsByWorktree: {
         [harness.worktreeId]: [
@@ -214,6 +208,7 @@ describe('force-park exemption flips under capability changes', () => {
           {
             root: { type: 'leaf', leafId: LEAF_IDS[id] },
             activeLeafId: LEAF_IDS[id],
+            expandedLeafId: null,
             ptyIdsByLeafId: { [LEAF_IDS[id]]: ptyIdFor(id) }
           }
         ])

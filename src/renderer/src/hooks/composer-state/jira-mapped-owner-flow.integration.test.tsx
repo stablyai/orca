@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import {
@@ -80,7 +81,7 @@ const runtimeCall = vi.fn<Window['api']['runtimeEnvironments']['call']>()
 
 function seedRepos(repos: readonly Repo[] = [localRepo, executionRepo], configured = true) {
   const projection = projectHostSetupProjectionFromRepos(repos)
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     settings: null,
     repos,
     projects: [...projection.projects],
@@ -222,7 +223,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   clearRuntimeCompatibilityCacheForTests()
-  useAppStore.setState(originalState, true)
+  setSessionTestState(useAppStore, originalState, true)
   if (originalApi) {
     Object.defineProperty(window, 'api', originalApi)
   } else {

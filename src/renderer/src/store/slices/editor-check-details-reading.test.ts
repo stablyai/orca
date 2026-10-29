@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createEditorTabsStore } from './editor-slice-test-harness'
 import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
@@ -302,7 +303,7 @@ describe('accepted details requests and reading cache', () => {
       error: null
     })
     expect([...scrollTopCache]).toEqual(before)
-    store.setState({ openFiles: [] })
+    setSessionTestState(store, { openFiles: [] })
     store.getState().patchOpenCheckRunDetails('wt-1', context, readingCheck, {
       details: readingDetails(),
       loading: false,

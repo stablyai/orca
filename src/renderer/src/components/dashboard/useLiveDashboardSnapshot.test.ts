@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { getDefaultSettings } from '../../../../shared/constants'
 import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT,
@@ -30,14 +31,14 @@ const PANE_KEY = makePaneKey(TAB_ID, LEAF_ID)
 const initialAppState = useAppStore.getInitialState()
 
 beforeEach(() => {
-  useAppStore.setState(initialAppState, true)
+  setSessionTestState(useAppStore, initialAppState, true)
 })
 
 afterEach(() => {
   cleanup()
   setLocalRuntimeCapabilitiesForTests(null)
   resetHostStructuredAgentsForTests()
-  useAppStore.setState(initialAppState, true)
+  setSessionTestState(useAppStore, initialAppState, true)
 })
 
 function repo(): Repo {
@@ -102,7 +103,7 @@ function entry(): AgentStatusEntry {
 }
 
 function seed(settings: Partial<GlobalSettings> | null): void {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     repos: [repo()],
     worktreesByRepo: { 'repo-1': [worktree()] },
     tabsByWorktree: { 'wt-1': [tab()] },
@@ -146,7 +147,7 @@ describe('useLiveDashboardSnapshot', () => {
     const { result: localResult } = renderHook(() => useLiveDashboardSnapshot())
     expect(localResult.current.cards[0].terminalInput?.hostPlatform).toBe('linux')
 
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [{ ...repo(), connectionId: 'conn-1', executionHostId: 'ssh:conn-1' }],
       sshConnectionStates: new Map([
         ['conn-1', { remotePlatform: 'win32' }]
@@ -159,13 +160,13 @@ describe('useLiveDashboardSnapshot', () => {
   // Re-render the same hook to prove host-only changes invalidate it; a fresh mount would conceal missing subscriptions.
   it('re-derives the host-input profile when only a host slice changes', () => {
     seed({ tabAutoGenerateTitle: false })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [{ ...repo(), connectionId: 'conn-1', executionHostId: 'ssh:conn-1' }]
     })
     const { result, rerender } = renderHook(() => useLiveDashboardSnapshot())
     expect(result.current.cards[0].terminalInput?.hostPlatform).toBe('linux')
 
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       sshConnectionStates: new Map([
         ['conn-1', { remotePlatform: 'win32' }]
       ]) as unknown as ReturnType<typeof useAppStore.getState>['sshConnectionStates']
@@ -176,7 +177,7 @@ describe('useLiveDashboardSnapshot', () => {
 
   it('re-derives saved SSH labels when the target catalog changes', () => {
     seed({ tabAutoGenerateTitle: false })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [{ ...repo(), connectionId: 'target-1', executionHostId: 'ssh:target-1' }]
     })
     const { result, rerender } = renderHook(() => useLiveDashboardSnapshot())
@@ -194,7 +195,7 @@ it('publishes real chat options to main and popout, retaining card candidates an
   transport.subscribe.mockResolvedValue({ unsubscribe })
   setLocalRuntimeCapabilitiesForTests([CHAT, CATALOG, HEALTH])
   seed({ ...getDefaultSettings('/tmp'), experimentalNativeChat: true })
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     detectedAgentIds: [],
     worktreesByRepo: { 'repo-1': [worktree(), { ...worktree(), id: 'wt-2' }] }
   })
@@ -228,11 +229,17 @@ it('publishes real chat options to main and popout, retaining card candidates an
   await vi.waitFor(() => expect(lastPublished()?.['wt-1']).toEqual(['claude', 'grok']))
   for (const route of [{ projects: [] }, { activeWorkspaceExecutionHostId: 'local' as const }]) {
     const [live, published] = [view.result.current, publishSnapshot.mock.calls.length]
-    act(() => useAppStore.setState(route))
+    act(() => setSessionTestState(useAppStore, route))
     expect(view.result.current).not.toBe(live)
     await vi.waitFor(() => expect(publishSnapshot.mock.calls.length).toBeGreaterThan(published))
   }
-  act(() => useAppStore.setState({ worktreesByRepo: {}, tabsByWorktree: {}, folderWorkspaces: [] }))
+  act(() =>
+    setSessionTestState(useAppStore, {
+      worktreesByRepo: {},
+      tabsByWorktree: {},
+      folderWorkspaces: []
+    })
+  )
   view.unmount()
   await Promise.resolve()
   expect(unsubscribe).toHaveBeenCalledOnce()

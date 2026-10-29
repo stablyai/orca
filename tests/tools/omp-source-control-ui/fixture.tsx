@@ -1,3 +1,4 @@
+import { setSessionTestState } from '../../../src/renderer/src/lib/test-support/session-source-fixture'
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import { getDefaultSettings } from '../../../src/shared/constants'
@@ -22,9 +23,9 @@ const updateSettings = async (patch: Partial<GlobalSettings>): Promise<void> => 
   if (!current) {
     throw new Error('Settings fixture not initialized')
   }
-  useAppStore.setState({ settings: { ...current, ...patch } })
+  setSessionTestState(useAppStore, { settings: { ...current, ...patch } })
 }
-useAppStore.setState({ settings, repos: [], settingsSearchQuery: '', updateSettings })
+setSessionTestState(useAppStore, { settings, repos: [], settingsSearchQuery: '', updateSettings })
 
 function Fixture(): React.JSX.Element {
   const current = useAppStore((state) => state.settings)

@@ -241,7 +241,13 @@ describe('shared terminal spawn operation/retention scaling contract', () => {
           second: root
         }
       }
-      session.terminalLayoutsByTabId[pane.tabId]!.root = root
+      store.setWorkspaceSession({
+        ...session,
+        terminalLayoutsByTabId: {
+          ...session.terminalLayoutsByTabId,
+          [pane.tabId]: { ...session.terminalLayoutsByTabId[pane.tabId]!, root }
+        }
+      })
     }
     const counts = observeSession(store)
     const exitWork = { calls: 0, tabs: 0, nodes: 0 }
@@ -367,9 +373,10 @@ describe('shared terminal spawn operation/retention scaling contract', () => {
     expect(mapRoots()).toEqual({ roots: 2 * panes.length, payloads: 0 })
     // Populate after admitted producer startup; count only requests against this fixed saved snapshot.
     const session = store.getWorkspaceSession()
+    const tabsByWorktree = { ...session.tabsByWorktree }
     for (const pane of panes) {
       const target = session.tabsByWorktree[pane.worktreeId]!.find((tab) => tab.id === pane.tabId)!
-      session.tabsByWorktree[pane.worktreeId] = [
+      tabsByWorktree[pane.worktreeId] = [
         ...Array.from({ length: (dimension === 'tabs' ? size : N) - 1 }, (_, i) => ({
           ...target,
           id: `unrelated-${i}`
@@ -377,6 +384,7 @@ describe('shared terminal spawn operation/retention scaling contract', () => {
         outcome === 'absent' && dimension === 'tabs' ? { ...target, id: 'absent-target' } : target
       ]
     }
+    store.setWorkspaceSession({ ...session, tabsByWorktree })
     const beforeJoin = counts.tabs
     const requests = dimension === 'callers' ? size : N
     const views = panes.flatMap((pane) =>
@@ -395,16 +403,27 @@ describe('shared terminal spawn operation/retention scaling contract', () => {
       vi.spyOn(store, 'runDurableMutation').mockImplementation(async (write) => {
         const value = await mutate(write)
         // A retained saved view may arrive after retirement; it carries topology, no live binding.
-        const layout = store.getWorkspaceSession().terminalLayoutsByTabId[panes[0]!.tabId]
-        if (layout && outcome === 'exit') {
-          layout.root = root
-        }
-        if (layout && outcome === 'successor') {
-          layout.ptyIdsByLeafId = { [panes[0]!.leafId]: 'successor' }
-          const session = store.getWorkspaceSession()
-          session.terminalPtyIncarnationsByPaneKey ??= {}
-          session.terminalPtyIncarnationsByPaneKey[makePaneKey(panes[0]!.tabId, panes[0]!.leafId)] =
-            'successor-inc'
+        const session = store.getWorkspaceSession()
+        const layout = session.terminalLayoutsByTabId[panes[0]!.tabId]
+        if (layout && (outcome === 'exit' || outcome === 'successor')) {
+          store.setWorkspaceSession({
+            ...session,
+            terminalLayoutsByTabId: {
+              ...session.terminalLayoutsByTabId,
+              [panes[0]!.tabId]:
+                outcome === 'exit'
+                  ? { ...layout, root }
+                  : { ...layout, ptyIdsByLeafId: { [panes[0]!.leafId]: 'successor' } }
+            },
+            ...(outcome === 'successor'
+              ? {
+                  terminalPtyIncarnationsByPaneKey: {
+                    ...session.terminalPtyIncarnationsByPaneKey,
+                    [makePaneKey(panes[0]!.tabId, panes[0]!.leafId)]: 'successor-inc'
+                  }
+                }
+              : {})
+          })
         }
         return value
       })

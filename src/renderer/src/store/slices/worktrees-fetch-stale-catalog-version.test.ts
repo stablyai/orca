@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorktreeCatalogVersion } from '../../../../shared/worktree/catalog-version'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -41,7 +42,7 @@ function seed(store: ReturnType<typeof createTestStore>) {
     repoId: 'repo1',
     path: '/path/surviving'
   })
-  store.setState({
+  setSessionTestState(store, {
     repos: [
       { id: 'repo1', path: '/path/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
     ],
@@ -167,7 +168,7 @@ describe('fetchWorktrees with a listing versioned before an applied create', () 
       repoId: 'repo1',
       hostId: runtimeHost
     })
-    store.setState({
+    setSessionTestState(store, {
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'env-1' },
       repos: [
         {
@@ -359,7 +360,7 @@ describe('the startup hydration purge behind a listing that is no longer current
     const created = makeWorktree({ id: 'repo1::/path/created', repoId: 'repo1' })
     const other = makeWorktree({ id: 'repo2::/path/other', repoId: 'repo2' })
     const zombieId = 'repo1::/path/deleted-last-session'
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/path/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 },
         { id: 'repo2', path: '/path/repo2', displayName: 'Repo 2', badgeColor: '#000', addedAt: 0 }
@@ -394,7 +395,7 @@ describe('the startup hydration purge behind a listing that is no longer current
       worktree: created,
       catalogVersion: APPLIED_BY_CREATE
     })
-    store.setState({
+    setSessionTestState(store, {
       tabsByWorktree: {
         ...store.getState().tabsByWorktree,
         [created.id]: [makeTerminalTab({ id: 'tab-created', worktreeId: created.id })]
@@ -432,13 +433,13 @@ describe('the startup hydration purge behind a listing that is no longer current
       badgeColor: '#000',
       addedAt: 0
     }
-    store.setState({
+    setSessionTestState(store, {
       repos: [repo1],
       tabsByWorktree: { [zombieId]: [makeTerminalTab({ id: 'tab-zombie', worktreeId: zombieId })] }
     })
     mockApi.worktrees.listDetected.mockImplementation(async (args) => {
       // A second owner on the same host makes the listing's owner ambiguous by the time it lands.
-      store.setState({ repos: [repo1, { ...repo1 }] })
+      setSessionTestState(store, { repos: [repo1, { ...repo1 }] })
       return qualifyDetectedResult(args, makeDetectedResult('repo1', [surviving]))
     })
 
@@ -466,7 +467,7 @@ describe('a direct SSH listing older than an applied create', () => {
       path: '/home/orca/created',
       hostId: sshHost
     })
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         {
           id: 'repo-ssh',

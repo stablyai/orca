@@ -15,7 +15,7 @@ export function createJiraIssuePatchAction(set: JiraSliceSet): Pick<JiraSlice, '
           options?.contextKey &&
           options.contextKey !== scope.contextKey
         ) {
-          return state
+          return undefined
         }
         const canPatchCacheKey = (key: string): boolean =>
           scope.cachePrefix ? key.startsWith(`${scope.cachePrefix}::`) : !key.startsWith('jira:')
@@ -42,7 +42,7 @@ export function createJiraIssuePatchAction(set: JiraSliceSet): Pick<JiraSlice, '
           jiraSearchCache[key] = { ...entry, data: updatedIssues }
           changed = true
         }
-        return changed ? { jiraIssueCache, jiraSearchCache } : state
+        return changed ? { jiraIssueCache, jiraSearchCache } : undefined
       })
     }
   }

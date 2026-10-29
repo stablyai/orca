@@ -1,3 +1,4 @@
+import type { SessionSourceEdit } from '../../../session-source-edits'
 import type { OpenFile } from '../types/open-file'
 import { editorBufferRecordFromFile, isMovedEditorBufferId } from './editor-buffer-record'
 import {
@@ -22,7 +23,8 @@ export function reconcileEditorBufferRecords(
   state: EditorBufferReconcileState,
   identityOf: (file: OpenFile) => string,
   keep?: EditorBufferKeepRequest & { drafts: Readonly<Record<string, string>> },
-  rejoin = false
+  rejoin = false,
+  sourceEdit?: SessionSourceEdit<EditorBufferReconcileState>
 ): EditorBufferReconcileResult {
   const detached: EditorBufferDetachments = {}
   const desired = new Map<string, string>()
@@ -42,7 +44,7 @@ export function reconcileEditorBufferRecords(
     }
   }
 
-  const write = new ReconcileWrite(state)
+  const write = new ReconcileWrite(state, sourceEdit)
   const index = new IndexBuilder()
   const kept = new Set<string>()
   const moving: OpenFile[] = []

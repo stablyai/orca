@@ -1,3 +1,4 @@
+import { editSessionSource, type OrdinarySourcePartial } from '@/store/session-source-edits'
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from './browser-slice-contract'
 import type { AppState } from '../../types'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
@@ -29,11 +30,11 @@ export function createBrowserPageStateActions(
       set((s) => {
         const page = findPage(s.browserPagesByWorkspace, pageId)
         if (!page) {
-          return s
+          return undefined
         }
         const workspace = findWorkspace(s.browserTabsByWorktree, page.workspaceId)
         if (!workspace) {
-          return s
+          return undefined
         }
         const nextPage = {
           ...page,
@@ -71,36 +72,34 @@ export function createBrowserPageStateActions(
           mirroredWorkspace !== null &&
           !browserWorkspaceMirrorFieldsEqual(workspace, mirroredWorkspace)
         if (pageStateUnchanged && !unifiedLabelNeedsRepair && !workspaceNeedsRepair) {
-          return s
+          return undefined
         }
+        const edit = editSessionSource(s)
         if (pageStateUnchanged) {
-          const nextState: Partial<AppState> = {}
           if (workspaceNeedsRepair && mirroredWorkspace) {
-            nextState.browserTabsByWorktree = {
-              ...s.browserTabsByWorktree,
-              [workspace.worktreeId]: (s.browserTabsByWorktree[workspace.worktreeId] ?? []).map(
-                (tab) => (tab.id === workspace.id ? mirroredWorkspace : tab)
+            edit.set(
+              'browserTabsByWorktree',
+              workspace.worktreeId,
+              (s.browserTabsByWorktree[workspace.worktreeId] ?? []).map((tab) =>
+                tab.id === workspace.id ? mirroredWorkspace : tab
               )
-            }
+            )
           }
           if (unifiedLabelNeedsRepair) {
-            nextState.unifiedTabsByWorktree = {
-              ...s.unifiedTabsByWorktree,
-              [workspace.worktreeId]: unifiedTabs.map((entry, index) =>
+            edit.set(
+              'unifiedTabsByWorktree',
+              workspace.worktreeId,
+              unifiedTabs.map((entry, index) =>
                 index === unifiedIndex ? { ...entry, label: nextPage.title } : entry
               )
-            }
+            )
           }
-          return nextState
+          return edit.finish()
         }
         const nextPages = currentPages.map((entry) => (entry.id === pageId ? nextPage : entry))
         const nextWorkspace = mirrorWorkspaceFromActivePage(workspace, nextPages)
-        const nextState: Partial<AppState> = {
-          browserPagesByWorkspace: {
-            ...s.browserPagesByWorkspace,
-            [workspace.id]: nextPages
-          }
-        }
+        edit.set('browserPagesByWorkspace', workspace.id, nextPages)
+        const nextState: OrdinarySourcePartial<AppState> = {}
         if (updates.faviconUrl !== undefined && updates.faviconUrl !== page.faviconUrl) {
           const historyIndex = s.browserUrlHistory.findIndex(
             (entry) => entry.normalizedUrl === normalizeBrowserHistoryUrl(page.url)
@@ -113,12 +112,13 @@ export function createBrowserPageStateActions(
           }
         }
         if (!browserWorkspaceMirrorFieldsEqual(workspace, nextWorkspace)) {
-          nextState.browserTabsByWorktree = {
-            ...s.browserTabsByWorktree,
-            [workspace.worktreeId]: (s.browserTabsByWorktree[workspace.worktreeId] ?? []).map(
-              (tab) => (tab.id === workspace.id ? nextWorkspace : tab)
+          edit.set(
+            'browserTabsByWorktree',
+            workspace.worktreeId,
+            (s.browserTabsByWorktree[workspace.worktreeId] ?? []).map((tab) =>
+              tab.id === workspace.id ? nextWorkspace : tab
             )
-          }
+          )
         }
         if (
           workspace.activePageId === pageId &&
@@ -126,15 +126,16 @@ export function createBrowserPageStateActions(
           unifiedIndex !== -1
         ) {
           if (unifiedLabelNeedsRepair || unifiedTabs[unifiedIndex]?.label !== nextWorkspace.title) {
-            nextState.unifiedTabsByWorktree = {
-              ...s.unifiedTabsByWorktree,
-              [workspace.worktreeId]: unifiedTabs.map((entry, index) =>
+            edit.set(
+              'unifiedTabsByWorktree',
+              workspace.worktreeId,
+              unifiedTabs.map((entry, index) =>
                 index === unifiedIndex ? { ...entry, label: nextWorkspace.title } : entry
               )
-            }
+            )
           }
         }
-        return nextState
+        return edit.finish(nextState)
       })
       if (updates.loadError === null) {
         get().setBrowserPageCertificateFailure(pageId, null)
@@ -146,14 +147,14 @@ export function createBrowserPageStateActions(
         const current = s.browserCertificateFailuresByPageId[pageId]
         if (failure === null) {
           if (!current) {
-            return s
+            return undefined
           }
           const nextFailures = { ...s.browserCertificateFailuresByPageId }
           delete nextFailures[pageId]
           return { browserCertificateFailuresByPageId: nextFailures }
         }
         if (!findPage(s.browserPagesByWorkspace, pageId) || current === failure) {
-          return s
+          return undefined
         }
         return {
           browserCertificateFailuresByPageId: {
@@ -177,11 +178,11 @@ export function createBrowserPageStateActions(
       set((s) => {
         const page = findPage(s.browserPagesByWorkspace, pageId)
         if (!page) {
-          return s
+          return undefined
         }
         const workspace = findWorkspace(s.browserTabsByWorktree, page.workspaceId)
         if (!workspace) {
-          return s
+          return undefined
         }
         // Keep document URL blank at navigation sink too; committing grants here leaks to persistence, publication and address bar.
         const nextPageUrl = page.docLocation ? ORCA_BROWSER_BLANK_URL : nextUrl
@@ -198,18 +199,16 @@ export function createBrowserPageStateActions(
             : entry
         )
         const nextWorkspace = mirrorWorkspaceFromActivePage(workspace, nextPages)
-        return {
-          browserPagesByWorkspace: {
-            ...s.browserPagesByWorkspace,
-            [workspace.id]: nextPages
-          },
-          browserTabsByWorktree: {
-            ...s.browserTabsByWorktree,
-            [workspace.worktreeId]: (s.browserTabsByWorktree[workspace.worktreeId] ?? []).map(
-              (tab) => (tab.id === workspace.id ? nextWorkspace : tab)
+        return editSessionSource(s)
+          .set('browserPagesByWorkspace', workspace.id, nextPages)
+          .set(
+            'browserTabsByWorktree',
+            workspace.worktreeId,
+            (s.browserTabsByWorktree[workspace.worktreeId] ?? []).map((tab) =>
+              tab.id === workspace.id ? nextWorkspace : tab
             )
-          }
-        }
+          )
+          .finish({})
       })
       get().setBrowserPageCertificateFailure(pageId, null)
     }

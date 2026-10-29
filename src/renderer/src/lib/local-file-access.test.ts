@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
@@ -43,7 +44,7 @@ function accessKind(file: TabFileAccessFields): string | undefined {
 
 describe('editorTabFileAccess', () => {
   beforeEach(() => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [
         makeRepo({ id: 'repo-local', path: '/Users/me/project' }),
         makeRepo({ id: 'repo-ssh', path: '/work/project', connectionId: 'ssh-1' })
@@ -55,7 +56,7 @@ describe('editorTabFileAccess', () => {
   })
 
   afterEach(() => {
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   it.each<[string, TabFileAccessFields, string | undefined]>([
@@ -170,7 +171,7 @@ describe('editorTabFileAccess', () => {
 
 describe('editorTabDocumentFolderAccess', () => {
   beforeEach(() => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [
         makeRepo({ id: 'repo-local', path: '/Users/me/project' }),
         makeRepo({ id: 'repo-ssh', path: '/work/project', connectionId: 'ssh-1' })
@@ -182,7 +183,7 @@ describe('editorTabDocumentFolderAccess', () => {
   })
 
   afterEach(() => {
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   it('declares the file itself for writes on a local user-named tab', () => {

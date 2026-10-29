@@ -1,3 +1,4 @@
+import { publishSessionReplacement } from '../loading-store/session-publication'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { markdownFileIdCandidates } from '../../orca-profiles/profile-session-markdown-transfer'
 import { removeWorkspaceSessionOwners } from '../restoring-sessions/session-owner-removal'
@@ -8,7 +9,11 @@ import {
   orcadMigrationPartitionScope,
   type OrcadMigrationSourceScope
 } from './orcad-source-scope'
-import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
+  normalizeExecutionHostId
+} from '../../../shared/execution-host'
 import { collectSessionOwnerKeys } from './orcad-source-workspace-session-fragments'
 import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -34,20 +39,25 @@ export function subtractOrcadMigrationScopeWorkspaceSession(
     catalog: manifest.payload,
     repos: state.repos
   })
-  state.workspaceSession = removeOwnedSessionState(
-    state.workspaceSession,
-    orcadMigrationPartitionScope(scope, LOCAL_EXECUTION_HOST_ID)
+  publishSessionReplacement(
+    state,
+    LOCAL_EXECUTION_HOST_ID,
+    removeOwnedSessionState(
+      state.workspaceSession,
+      orcadMigrationPartitionScope(scope, LOCAL_EXECUTION_HOST_ID)
+    ),
+    'fullReplacement'
   )
-  const partitions = state.workspaceSessionsByHostId
-  if (partitions) {
-    state.workspaceSessionsByHostId = Object.fromEntries(
-      Object.entries(partitions).map(([hostId, session]) => [
+  for (const [key, session] of Object.entries(state.workspaceSessionsByHostId ?? {})) {
+    const hostId = normalizeExecutionHostId(key)
+    if (hostId && session) {
+      publishSessionReplacement(
+        state,
         hostId,
-        session
-          ? removeOwnedSessionState(session, orcadMigrationPartitionScope(scope, hostId))
-          : session
-      ])
-    )
+        removeOwnedSessionState(session, orcadMigrationPartitionScope(scope, hostId)),
+        'fullReplacement'
+      )
+    }
   }
 }
 
@@ -105,6 +115,9 @@ function removeOwnedSessionState(
         ([fileId]) => !removedMarkdownFileIds.has(fileId)
       )
     )
+  }
+  if (retired.terminalTopologyRevisionByRepoId) {
+    retired.terminalTopologyRevisionByRepoId = { ...retired.terminalTopologyRevisionByRepoId }
   }
   for (const repoId of scope.repoIds) {
     if (!scope.sharedRepoIds.has(repoId)) {

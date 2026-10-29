@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from './browser-slice-contract'
 import {
   clearClientHostedBrowserCloseIntents,
@@ -19,22 +20,21 @@ export function createBrowserHostActions(
   return {
     recordClientHostedBrowserCloseIntents: (closes) => {
       set((s) => {
-        const next = recordClientHostedBrowserCloseIntents(
-          s.clientHostedBrowserCloseIntentsByEnvironment,
-          closes,
-          Date.now()
-        )
-        return next ? { clientHostedBrowserCloseIntentsByEnvironment: next } : s
+        const edit = editSessionSource(s)
+        const changed = recordClientHostedBrowserCloseIntents(edit, closes, Date.now())
+        return changed ? edit.finish() : undefined
       })
     },
 
     clearClientHostedBrowserCloseIntents: (environmentId, browserPageIds) => {
       set((s) => {
-        const next = clearClientHostedBrowserCloseIntents(
-          s.clientHostedBrowserCloseIntentsByEnvironment,
-          { environmentId, browserPageIds, now: Date.now() }
-        )
-        return next ? { clientHostedBrowserCloseIntentsByEnvironment: next } : s
+        const edit = editSessionSource(s)
+        const changed = clearClientHostedBrowserCloseIntents(edit, {
+          environmentId,
+          browserPageIds,
+          now: Date.now()
+        })
+        return changed ? edit.finish() : undefined
       })
     },
 

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -227,7 +228,7 @@ describe('hydrateWorkspaceSession', () => {
   it('avoids duplicate repo placeholders when a same-id local repo is already loaded', () => {
     const store = createTestStore()
     const worktreeId = 'same-repo::/srv/remote-wt'
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         {
           id: 'same-repo',

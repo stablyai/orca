@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import type { TerminalAgent } from '../../../../shared/terminal-agent'
 
@@ -33,10 +33,8 @@ export type PaneForegroundAgentSlice = {
   clearPaneForegroundAgentByWorktree: (worktreeId: string) => void
 }
 
-export const createPaneForegroundAgentSlice: StateCreator<
+export const createPaneForegroundAgentSlice: SessionStateCreator<
   AppState,
-  [],
-  [],
   PaneForegroundAgentSlice
 > = (set) => ({
   paneForegroundAgentByPaneKey: {},
@@ -52,7 +50,7 @@ export const createPaneForegroundAgentSlice: StateCreator<
         current.routingConfirmationPending === entry.routingConfirmationPending &&
         current.shellForeground === entry.shellForeground
       ) {
-        return s
+        return undefined
       }
       return {
         paneForegroundAgentByPaneKey: { ...s.paneForegroundAgentByPaneKey, [paneKey]: entry }
@@ -62,7 +60,7 @@ export const createPaneForegroundAgentSlice: StateCreator<
   clearPaneForegroundAgent: (paneKey) => {
     set((s) => {
       if (!(paneKey in s.paneForegroundAgentByPaneKey)) {
-        return s
+        return undefined
       }
       const next = { ...s.paneForegroundAgentByPaneKey }
       delete next[paneKey]
@@ -82,7 +80,8 @@ export const createPaneForegroundAgentSlice: StateCreator<
     set((s) => {
       const prefixes = (s.tabsByWorktree[worktreeId] ?? []).map((tab) => `${tab.id}:`)
       return (
-        buildPaneForegroundAgentTabPrefixClearPatch(s.paneForegroundAgentByPaneKey, prefixes) ?? s
+        buildPaneForegroundAgentTabPrefixClearPatch(s.paneForegroundAgentByPaneKey, prefixes) ??
+        undefined
       )
     })
   }

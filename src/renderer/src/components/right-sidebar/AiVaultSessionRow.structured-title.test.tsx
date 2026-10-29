@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act, cleanup, render, screen } from '@testing-library/react'
@@ -153,7 +154,7 @@ async function renderRow(session: AiVaultSession): Promise<void> {
 
 beforeEach(() => {
   vi.useFakeTimers()
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   resetStructuredAgentSessionStatusFeedsForTests()
   emitters.clear()
   mocks.supports.mockReset()
@@ -171,20 +172,20 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   resetStructuredAgentSessionStatusFeedsForTests()
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   vi.useRealTimers()
 })
 
 describe('native chat names in Vault rows', () => {
   it('shows the name its host publishes with the tab open, and keeps it when the tab closes', async () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       unifiedTabsByWorktree: { 'folder-workspace': [tab()] }
     })
     await renderRow(row())
     expect(screen.getByText('Codex Chat')).toBeTruthy()
     publish('local', 'Explain the parser')
     expect(screen.getByText('Explain the parser')).toBeTruthy()
-    act(() => useAppStore.setState({ unifiedTabsByWorktree: {} }))
+    act(() => setSessionTestState(useAppStore, { unifiedTabsByWorktree: {} }))
     expect(screen.getByText('Explain the parser')).toBeTruthy()
     expect(screen.queryByText('Codex Chat')).toBeNull()
   })
@@ -195,14 +196,14 @@ describe('native chat names in Vault rows', () => {
   ])(
     'lets a manual tab rename win in a %s row, and returns to the name once cleared',
     async (_kind, make) => {
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         unifiedTabsByWorktree: { 'folder-workspace': [tab('Manual name')] }
       })
       await renderRow(make())
       publish('local', 'Explain the parser')
       expect(screen.getByText('Manual name')).toBeTruthy()
       act(() =>
-        useAppStore.setState({
+        setSessionTestState(useAppStore, {
           unifiedTabsByWorktree: { 'folder-workspace': [tab()] }
         })
       )

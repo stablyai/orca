@@ -1,3 +1,4 @@
+import type { SessionSourceEdit } from '@/store/session-source-edits'
 import {
   CLIENT_HOSTED_BROWSER_CLOSE_INTENT_MAX_AGE_MS,
   MAX_CLIENT_HOSTED_BROWSER_CLOSE_INTENTS,
@@ -82,15 +83,25 @@ const BROWSER_CLOSE_INTENT_LIST: EnvironmentCloseIntentList<ClientHostedBrowserC
   maxAgeMs: CLIENT_HOSTED_BROWSER_CLOSE_INTENT_MAX_AGE_MS
 }
 
-/** Adds closes to the durable map, newest last, bounded per environment. Returns null if unchanged. */
+/** Adds closes to the durable map, newest last, bounded per environment. Returns false if unchanged. */
 export function recordClientHostedBrowserCloseIntents(
-  current: ClientHostedBrowserCloseIntentsByEnvironment,
+  edit: SessionSourceEdit<{
+    clientHostedBrowserCloseIntentsByEnvironment: ClientHostedBrowserCloseIntentsByEnvironment
+  }>,
   closes: readonly PendingClientHostedBrowserClose[],
   now: number
-): ClientHostedBrowserCloseIntentsByEnvironment | null {
+): boolean {
   return appendEnvironmentCloseIntents(
     BROWSER_CLOSE_INTENT_LIST,
-    current,
+    {
+      read: (id) => edit.entry('clientHostedBrowserCloseIntentsByEnvironment', id),
+      set: (id, rows) => {
+        edit.set('clientHostedBrowserCloseIntentsByEnvironment', id, rows)
+      },
+      remove: (id) => {
+        edit.remove('clientHostedBrowserCloseIntentsByEnvironment', id)
+      }
+    },
     closes.map((close) => ({
       environmentId: close.environmentId,
       intent: { browserPageId: close.browserPageId, worktreeId: close.worktreeId, closedAt: now }
@@ -98,16 +109,30 @@ export function recordClientHostedBrowserCloseIntents(
   )
 }
 
-/** Drops the named pages plus anything older than the give-up bound. Returns null if unchanged. */
+/** Drops the named pages plus anything older than the give-up bound. Returns false if unchanged. */
 export function clearClientHostedBrowserCloseIntents(
-  current: ClientHostedBrowserCloseIntentsByEnvironment,
+  edit: SessionSourceEdit<{
+    clientHostedBrowserCloseIntentsByEnvironment: ClientHostedBrowserCloseIntentsByEnvironment
+  }>,
   args: { environmentId: string; browserPageIds: readonly string[]; now: number }
-): ClientHostedBrowserCloseIntentsByEnvironment | null {
-  return removeEnvironmentCloseIntents(BROWSER_CLOSE_INTENT_LIST, current, {
-    environmentId: args.environmentId,
-    keys: args.browserPageIds,
-    now: args.now
-  })
+): boolean {
+  return removeEnvironmentCloseIntents(
+    BROWSER_CLOSE_INTENT_LIST,
+    {
+      read: (id) => edit.entry('clientHostedBrowserCloseIntentsByEnvironment', id),
+      set: (id, rows) => {
+        edit.set('clientHostedBrowserCloseIntentsByEnvironment', id, rows)
+      },
+      remove: (id) => {
+        edit.remove('clientHostedBrowserCloseIntentsByEnvironment', id)
+      }
+    },
+    {
+      environmentId: args.environmentId,
+      keys: args.browserPageIds,
+      now: args.now
+    }
+  )
 }
 
 export function listClientHostedBrowserCloseIntents(

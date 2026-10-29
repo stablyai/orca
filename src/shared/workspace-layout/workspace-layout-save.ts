@@ -1,3 +1,4 @@
+import { sessionFieldIsPresent } from '../session-change-set'
 // Serialize the model and beside records into session documents older builds understand; derive redundant fields from one source.
 
 import type { SleepingAgentSessionRecord } from '../agent-session-resume'
@@ -148,11 +149,27 @@ function saveWorkspaceRecords({
     }
   }
   return {
-    ...(Object.keys(sleeping).length > 0 ? { sleepingAgentSessionsByPaneKey: sleeping } : {}),
-    ...(Object.keys(incarnations).length > 0
+    ...(sessionFieldIsPresent(
+      'sleepingAgentSessionsByPaneKey',
+      { kind: 'output', present: true },
+      Object.keys(sleeping).length
+    )
+      ? { sleepingAgentSessionsByPaneKey: sleeping }
+      : {}),
+    ...(sessionFieldIsPresent(
+      'terminalPtyIncarnationsByPaneKey',
+      { kind: 'output', present: true },
+      Object.keys(incarnations).length
+    )
       ? { terminalPtyIncarnationsByPaneKey: incarnations }
       : {}),
-    ...(Object.keys(closed).length > 0 ? { closedTerminalTabTombstonesByTabId: closed } : {})
+    ...(sessionFieldIsPresent(
+      'closedTerminalTabTombstonesByTabId',
+      { kind: 'output', present: true },
+      Object.keys(closed).length
+    )
+      ? { closedTerminalTabTombstonesByTabId: closed }
+      : {})
   }
 }
 

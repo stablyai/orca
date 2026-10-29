@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // Dirty records must retain every view’s edits and conflict state without per-view reloads.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -39,7 +40,7 @@ vi.mock('@/runtime/runtime-file-read-client', async (importOriginal) => ({
 function openSharedTabsWithDirtySibling() {
   const store = createEditorStore()
   storeRef.current = store
-  store.setState({
+  setSessionTestState(store, {
     worktreesByRepo: {
       'repo-1': [
         makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }),
@@ -181,7 +182,7 @@ describe('a dirty record shown in several workspaces', () => {
   })
 
   const openThirdView = (store: ReturnType<typeof createEditorStore>) => {
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {
         'repo-1': [
           ...(store.getState().worktreesByRepo['repo-1'] ?? []),

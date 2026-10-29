@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { NotificationDispatchRequest } from '../../../shared/notification-settings-types'
@@ -78,7 +79,7 @@ function seed(
     createdAt: 0,
     updatedAt: 0
   }
-  store.setState({
+  setSessionTestState(store, {
     settings: createGlobalSettingsFixture(),
     repos: [{ ...TEST_REPO, executionHostId: hostId }],
     worktreesByRepo: {
@@ -223,7 +224,7 @@ it.each([false, true])(
 it('keeps direct SSH independent from the same target name inside a paired server', () => {
   const tab = seed('ssh:qa', 'remote:hub@@pty-1', false)
   const state = store.getState()
-  store.setState({
+  setSessionTestState(store, {
     worktreesByRepo: {
       repo1: [
         ...state.worktreesByRepo.repo1,
@@ -242,7 +243,7 @@ it('keeps direct SSH independent from the same target name inside a paired serve
 
 it('uses the captured transport owner while catalogs and bindings hydrate', () => {
   const tab = seed('ssh:qa', 'ssh:qa@@pty-1', false)
-  store.setState({
+  setSessionTestState(store, {
     worktreesByRepo: {},
     ptyIdsByTabId: {},
     terminalLayoutsByTabId: {}
@@ -265,7 +266,7 @@ it('does not invent an owner for an opaque remote PTY', () => {
 
 it('does not list removed SSH targets or recipe VMs from leftover workspace records', () => {
   seed('ssh:qa', 'ssh:qa@@pty-1', false)
-  store.setState({
+  setSessionTestState(store, {
     sshTargetLabels: new Map(),
     tabsByWorktree: {},
     unifiedTabsByWorktree: {},

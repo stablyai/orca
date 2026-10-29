@@ -1,3 +1,6 @@
+import { SessionUnitIndex } from '../session-unit-index'
+import { SessionUnitReader, type SessionUnitView } from '../session-unit-reader'
+import { SESSION_MAP_FIELDS, isSessionMapField, type SessionMapField } from '../session-change-set'
 // Load one session partition after Store pane-identity normalization. Reapply fixed precedence on every load because older builds may rewrite the documents; do not merge disagreements.
 
 import type { ExecutionHostId } from '../execution-host'
@@ -11,7 +14,7 @@ import {
   type DesktopLayoutView,
   type LayoutContentFacts
 } from './workspace-layout-beside'
-import { omitStoredFields, pickStoredFields } from './stored-record-fields'
+import { omitStoredFields } from './stored-record-fields'
 import {
   applyLegacySurfaceTombstones,
   loadLeaves,
@@ -32,27 +35,31 @@ import type {
   WorkspaceLayoutRecords
 } from './workspace-layout-model'
 
+const WORKSPACE_SOURCE_FIELDS = [
+  'tabsByWorktree',
+  'unifiedTabs',
+  'tabGroups',
+  'tabGroupLayouts',
+  'openFilesByWorktree',
+  'browserTabsByWorktree'
+] as const
+
 function workspaceKeys(session: WorkspaceSessionState): string[] {
-  return [
-    ...new Set([
-      ...Object.keys(session.tabsByWorktree ?? {}),
-      ...Object.keys(session.unifiedTabs ?? {}),
-      ...Object.keys(session.tabGroups ?? {}),
-      ...Object.keys(session.tabGroupLayouts ?? {}),
-      ...Object.keys(session.openFilesByWorktree ?? {}),
-      ...Object.keys(session.browserTabsByWorktree ?? {})
-    ])
-  ]
+  return [...new Set(WORKSPACE_SOURCE_FIELDS.flatMap((field) => Object.keys(session[field] ?? {})))]
 }
 
 /** Keep a terminal row in the workspace whose tab bar/group names it, falling back to its first occurrence. */
-function resolveTerminalHomes(session: WorkspaceSessionState): Map<string, string> {
+function resolveTerminalHomes(
+  reader: SessionUnitView,
+  owners: readonly string[]
+): Map<string, string> {
   const homes = new Map<string, string>()
   const namedByTabBar = (key: string, tabId: string): boolean =>
-    (session.unifiedTabs?.[key] ?? []).some(
+    (reader.unit('unifiedTabs', key).value ?? []).some(
       (entry) => entry.contentType === 'terminal' && entry.entityId === tabId
-    ) || (session.tabGroups?.[key] ?? []).some((group) => group.tabOrder.includes(tabId))
-  for (const [key, rows] of Object.entries(session.tabsByWorktree ?? {})) {
+    ) || (reader.unit('tabGroups', key).value ?? []).some((group) => group.tabOrder.includes(tabId))
+  for (const key of owners) {
+    const rows = reader.unit('tabsByWorktree', key).value ?? []
     for (const row of rows) {
       const home = homes.get(row.id)
       if (home === undefined || (!namedByTabBar(home, row.id) && namedByTabBar(key, row.id))) {
@@ -63,34 +70,85 @@ function resolveTerminalHomes(session: WorkspaceSessionState): Map<string, strin
   return homes
 }
 
-function loadRecords(session: WorkspaceSessionState): WorkspaceLayoutRecords {
+function loadRecords(
+  reader: SessionUnitView,
+  selected: ReadonlyMap<SessionMapField, ReadonlySet<string>>
+): WorkspaceLayoutRecords {
   return {
-    ...(session.defaultTerminalTabsAppliedByWorktreeId
-      ? { defaultTabsAppliedByWorkspace: session.defaultTerminalTabsAppliedByWorktreeId }
+    ...(reader.hasField('defaultTerminalTabsAppliedByWorktreeId')
+      ? {
+          defaultTabsAppliedByWorkspace: reader.map(
+            'defaultTerminalTabsAppliedByWorktreeId',
+            selected.get('defaultTerminalTabsAppliedByWorktreeId') ?? []
+          )
+        }
       : {}),
-    ...(session.clientHostedBrowserPagesByWorktree
-      ? { clientHostedBrowserPagesByWorkspace: session.clientHostedBrowserPagesByWorktree }
+    ...(reader.hasField('clientHostedBrowserPagesByWorktree')
+      ? {
+          clientHostedBrowserPagesByWorkspace: reader.map(
+            'clientHostedBrowserPagesByWorktree',
+            selected.get('clientHostedBrowserPagesByWorktree') ?? []
+          )
+        }
       : {}),
-    ...(session.closedTerminalPanesByPaneKey
-      ? { closedTerminalPanesByPaneKey: session.closedTerminalPanesByPaneKey }
+    ...(reader.hasField('closedTerminalPanesByPaneKey')
+      ? {
+          closedTerminalPanesByPaneKey: reader.map(
+            'closedTerminalPanesByPaneKey',
+            selected.get('closedTerminalPanesByPaneKey') ?? []
+          )
+        }
       : {})
   }
 }
 
-function loadLegacy(session: WorkspaceSessionState): LegacyLayoutPersistence {
+function loadLegacy(
+  reader: SessionUnitView,
+  owners: readonly string[],
+  selected: ReadonlyMap<SessionMapField, ReadonlySet<string>>
+): LegacyLayoutPersistence {
   return {
     terminalRowOwners: Object.fromEntries(
-      Object.keys(session.tabsByWorktree ?? {}).map((key) => [key, true as const])
+      owners
+        .filter((key) => reader.unit('tabsByWorktree', key).present)
+        .map((key) => [key, true as const])
     ),
-    ...(session.terminalTopologyRevisionByRepoId
-      ? { topologyRevisionByRepoId: session.terminalTopologyRevisionByRepoId }
+    ...(reader.hasField('terminalTopologyRevisionByRepoId')
+      ? {
+          topologyRevisionByRepoId: reader.map(
+            'terminalTopologyRevisionByRepoId',
+            selected.get('terminalTopologyRevisionByRepoId') ?? []
+          )
+        }
       : {})
   }
+}
+
+function readBesideFields<F extends keyof WorkspaceSessionState>(
+  reader: SessionUnitView,
+  fields: readonly F[],
+  selected: ReadonlyMap<SessionMapField, ReadonlySet<string>>
+): Pick<WorkspaceSessionState, F> {
+  const result = {}
+  for (const field of fields) {
+    if (isSessionMapField(field)) {
+      if (reader.hasField(field)) {
+        Object.assign(result, { [field]: reader.map(field, selected.get(field) ?? []) })
+      }
+    } else {
+      const value = reader.field(field)
+      if (value.present) {
+        Object.assign(result, { [field]: value.value })
+      }
+    }
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every selected field has the same value type as the captured root.
+  return result as Pick<WorkspaceSessionState, F>
 }
 
 /** A closed tab's record goes to the workspace its worktree id names, else it is carried. */
 function placeClosedTabs(
-  session: WorkspaceSessionState,
+  records: WorkspaceSessionState['closedTerminalTabTombstonesByTabId'],
   layout: WorkspaceLayoutModel,
   carried: CarriedSessionFields
 ): void {
@@ -98,7 +156,7 @@ function placeClosedTabs(
   for (const workspace of Object.values(layout.workspaces)) {
     byWorktree.set(workspace.worktreeId, byWorktree.get(workspace.worktreeId) ?? workspace)
   }
-  for (const [tabId, record] of Object.entries(session.closedTerminalTabTombstonesByTabId ?? {})) {
+  for (const [tabId, record] of Object.entries(records ?? {})) {
     const workspace = byWorktree.get(record.worktreeId)
     if (workspace === undefined) {
       carried.unplacedClosedTabs[tabId] = record
@@ -144,20 +202,36 @@ export function loadWorkspaceLayoutWithoutReport(
   stored: WorkspaceSessionState,
   context: WorkspaceLayoutLoadContext
 ): LoadedWorkspaceLayout {
-  // The Loader edits its own copy; the Store's object stays untouched.
-  const session = structuredClone(stored)
+  const reader = new SessionUnitReader(stored, new SessionUnitIndex(stored))
+  const selected = new Map(
+    SESSION_MAP_FIELDS.map((field) => [field, new Set(reader.index.keys(field))])
+  )
+  return loadWorkspaceLayoutUnits(hostId, reader, workspaceKeys(stored), selected, context)
+}
+
+/** Selection schedules kernels; every kernel reads actual prior/candidate values. */
+export function loadWorkspaceLayoutUnits(
+  hostId: ExecutionHostId,
+  reader: SessionUnitView,
+  owners: readonly string[],
+  selected: ReadonlyMap<SessionMapField, ReadonlySet<string>>,
+  context: WorkspaceLayoutLoadContext
+): LoadedWorkspaceLayout {
+  owners = owners.filter((key) =>
+    WORKSPACE_SOURCE_FIELDS.some((field) => reader.unit(field, key).present)
+  )
   const desktopView: DesktopLayoutView = {
-    ...pickStoredFields(session, VIEW_SESSION_FIELDS),
-    activeRepoId: session.activeRepoId,
-    activeWorktreeId: session.activeWorktreeId,
-    activeTabId: session.activeTabId,
+    ...readBesideFields(reader, VIEW_SESSION_FIELDS, selected),
+    activeRepoId: reader.field('activeRepoId').value ?? null,
+    activeWorktreeId: reader.field('activeWorktreeId').value ?? null,
+    activeTabId: reader.field('activeTabId').value ?? null,
     groups: {},
     lastFocusedAt: {},
     panes: {},
     editorDrafts: {}
   }
   const facts: LayoutContentFacts = {
-    ...pickStoredFields(session, FACT_SESSION_FIELDS),
+    ...readBesideFields(reader, FACT_SESSION_FIELDS, selected),
     tabLabels: {},
     terminalRows: {},
     scrollback: {},
@@ -166,15 +240,15 @@ export function loadWorkspaceLayoutWithoutReport(
   let layout: WorkspaceLayoutModel = {
     hostId,
     workspaces: {},
-    records: loadRecords(session),
-    legacy: loadLegacy(session)
+    records: loadRecords(reader, selected),
+    legacy: loadLegacy(reader, owners, selected)
   }
-  const terminalHomes = resolveTerminalHomes(session)
+  const terminalHomes = resolveTerminalHomes(reader, owners)
   const layouts = new Map<string, TerminalLayoutSnapshot>()
   const canonicalTabIdBySubsumedTabId = new Map<string, string>()
-  for (const key of workspaceKeys(session)) {
+  for (const key of owners) {
     layout.workspaces[key] = loadWorkspace({
-      session,
+      session: reader,
       hostId,
       key,
       terminalHomes,
@@ -187,19 +261,36 @@ export function loadWorkspaceLayoutWithoutReport(
   }
   followSubsumedTabSelections(desktopView, canonicalTabIdBySubsumedTabId)
   const carried: CarriedSessionFields = {
-    ...pickStoredFields(session, CARRIED_SESSION_FIELDS),
+    ...readBesideFields(reader, CARRIED_SESSION_FIELDS, selected),
     unownedTerminalLayouts: Object.fromEntries(
-      Object.entries(session.terminalLayoutsByTabId ?? {}).filter(
-        ([tabId]) => !terminalHomes.has(tabId)
-      )
+      Object.entries(
+        reader.map('terminalLayoutsByTabId', selected.get('terminalLayoutsByTabId') ?? [])
+      ).filter(([tabId]) => !terminalHomes.has(tabId))
     ),
     unplacedSleepingRecords: {},
     unplacedIncarnations: {},
     unplacedClosedTabs: {}
   }
-  placeClosedTabs(session, layout, carried)
-  loadLeaves(layout, { session, layouts }, { view: desktopView, facts, carried }, context)
+  placeClosedTabs(
+    reader.map(
+      'closedTerminalTabTombstonesByTabId',
+      selected.get('closedTerminalTabTombstonesByTabId') ?? []
+    ),
+    layout,
+    carried
+  )
+  loadLeaves(
+    layout,
+    { session: reader, layouts, selected },
+    { view: desktopView, facts, carried },
+    context
+  )
   unbindDuplicateTerminals(layout)
-  layout = applyLegacySurfaceTombstones(layout, session, carried)
+  layout = applyLegacySurfaceTombstones(
+    layout,
+    reader,
+    carried,
+    selected.get('terminalSurfaceTombstonesByPaneKey')
+  )
   return { layout, desktopView, facts, carried }
 }

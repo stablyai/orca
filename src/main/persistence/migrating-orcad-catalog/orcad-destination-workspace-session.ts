@@ -1,3 +1,4 @@
+import { publishSessionReplacement } from '../loading-store/session-publication'
 import { serializeOrcadMigrationValue } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import { isRecord } from '../../../shared/orcad-migration/orcad-migration-manifest-fields'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -69,7 +70,7 @@ export function applyPreparedOrcadMigrationWorkspaceSession(
   state: PersistedState
 ): void {
   if (prepared.merged) {
-    state.workspaceSession = prepared.merged
+    publishSessionReplacement(state, 'local', prepared.merged, 'fullReplacement')
   }
 }
 

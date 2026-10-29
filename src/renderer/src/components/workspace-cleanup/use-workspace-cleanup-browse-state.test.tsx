@@ -1,3 +1,5 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
+import { withSessionSourceTestWrites } from '@/lib/test-support/session-source-test-store'
 // @vitest-environment happy-dom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -14,11 +16,13 @@ import { useWorkspaceCleanupBrowseState } from './use-workspace-cleanup-browse-s
 import type { WorkspaceCleanupBrowseController } from './use-workspace-cleanup-browse-state'
 
 const store = create<AppState>()(
-  (...a) =>
-    ({
-      workspaceCleanupDismissals: {},
-      ...createWorkspaceCleanupBrowseSlice(...a)
-    }) as unknown as AppState
+  withSessionSourceTestWrites(
+    (...a) =>
+      ({
+        workspaceCleanupDismissals: {},
+        ...createWorkspaceCleanupBrowseSlice(...a)
+      }) as unknown as AppState
+  )
 )
 
 vi.mock('@/store', () => ({
@@ -48,7 +52,8 @@ describe('useWorkspaceCleanupBrowseState', () => {
       ...globalThis.window,
       api: { ui: { set: vi.fn().mockResolvedValue(undefined) } }
     }
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This workspaceCleanupBrowse fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       workspaceCleanupBrowse: createDefaultWorkspaceCleanupBrowseState()
     } as Partial<AppState>)
   })

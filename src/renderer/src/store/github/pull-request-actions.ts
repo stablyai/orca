@@ -1,5 +1,5 @@
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../../../../shared/worktree/hosted-review-links'
-import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
@@ -21,8 +21,8 @@ import {
 import { startPullRequestLookup } from './pull-request-execution'
 
 export const createPullRequestActions = (
-  set: Parameters<StateCreator<AppState>>[0],
-  get: Parameters<StateCreator<AppState>>[1]
+  set: Parameters<SessionStateCreator<AppState>>[0],
+  get: Parameters<SessionStateCreator<AppState>>[1]
 ): Pick<GitHubSlice, 'fetchPRForBranch'> => ({
   fetchPRForBranch: async (repoPath, branch, options): Promise<PRInfo | null> => {
     const repoLookup = getGitHubRepoLookupIndex(get().repos)

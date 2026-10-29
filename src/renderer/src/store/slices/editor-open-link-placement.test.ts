@@ -1,4 +1,5 @@
-import type { StoreApi } from 'zustand/vanilla'
+import type { SessionTestStore } from '@/lib/test-support/session-source-fixture'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { createEditorTabsStore } from './editor-slice-test-harness'
 import type { AppState } from '../types'
@@ -32,7 +33,7 @@ function fileInput(filePath: string, worktreeId = 'wt-1'): Omit<OpenFile, 'id' |
   }
 }
 
-function splitRight(store: StoreApi<AppState>, groupId: string): string {
+function splitRight(store: SessionTestStore<AppState>, groupId: string): string {
   const created = store.getState().createEmptySplitGroup('wt-1', groupId, 'right')
   if (!created) {
     throw new Error('Expected split group')
@@ -41,7 +42,7 @@ function splitRight(store: StoreApi<AppState>, groupId: string): string {
 }
 
 function addTab(
-  store: StoreApi<AppState>,
+  store: SessionTestStore<AppState>,
   contentType: 'terminal' | 'agent-session',
   id: string,
   groupId?: string
@@ -55,7 +56,7 @@ function addTab(
   // A terminal with its row, so main holds it once it takes the layout.
   if (ORCA_LAYOUT_OWNER_IS_MAIN && contentType === 'terminal') {
     const state = store.getState()
-    store.setState({
+    setSessionTestState(store, {
       tabsByWorktree: {
         ...state.tabsByWorktree,
         'wt-1': [
@@ -69,12 +70,12 @@ function addTab(
 }
 
 /** A seeded editor; a layout-owner build lays it out as a restore does, before main takes it. */
-function addEditor(store: StoreApi<AppState>, filePath: string, groupId: string): void {
+function addEditor(store: SessionTestStore<AppState>, filePath: string, groupId: string): void {
   if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
     store.getState().openFile(fileInput(filePath), { targetGroupId: groupId })
     return
   }
-  store.setState({
+  setSessionTestState(store, {
     openFiles: [
       ...store.getState().openFiles,
       { ...fileInput(filePath), id: filePath, isDirty: false }
@@ -88,9 +89,9 @@ function addEditor(store: StoreApi<AppState>, filePath: string, groupId: string)
 }
 
 /** Drops a tab the way a close would, without the terminal slice the harness lacks. */
-function removeTab(store: StoreApi<AppState>, tabId: string): void {
+function removeTab(store: SessionTestStore<AppState>, tabId: string): void {
   const state = store.getState()
-  store.setState({
+  setSessionTestState(store, {
     unifiedTabsByWorktree: {
       'wt-1': state.unifiedTabsByWorktree['wt-1']!.filter((tab) => tab.id !== tabId)
     },
@@ -103,9 +104,9 @@ function removeTab(store: StoreApi<AppState>, tabId: string): void {
   })
 }
 
-function removeGroup(store: StoreApi<AppState>, groupId: string): void {
+function removeGroup(store: SessionTestStore<AppState>, groupId: string): void {
   const state = store.getState()
-  store.setState({
+  setSessionTestState(store, {
     groupsByWorktree: {
       'wt-1': state.groupsByWorktree['wt-1']!.filter((group) => group.id !== groupId)
     },
@@ -115,11 +116,11 @@ function removeGroup(store: StoreApi<AppState>, groupId: string): void {
   })
 }
 
-function focus(store: StoreApi<AppState>, groupId: string): void {
-  store.setState({ activeGroupIdByWorktree: { 'wt-1': groupId } })
+function focus(store: SessionTestStore<AppState>, groupId: string): void {
+  setSessionTestState(store, { activeGroupIdByWorktree: { 'wt-1': groupId } })
 }
 
-function groupOfFile(store: StoreApi<AppState>, filePath: string): string[] {
+function groupOfFile(store: SessionTestStore<AppState>, filePath: string): string[] {
   return (store.getState().unifiedTabsByWorktree['wt-1'] ?? [])
     .filter((tab) => tab.entityId === filePath)
     .map((tab) => tab.groupId)
@@ -127,7 +128,7 @@ function groupOfFile(store: StoreApi<AppState>, filePath: string): string[] {
 
 /** Three columns A–B–C with the source tab in A. */
 function seedColumns(
-  store: StoreApi<AppState>,
+  store: SessionTestStore<AppState>,
   source: 'terminal' | 'agent-session',
   middle: 'terminal' | 'editor',
   right: 'terminal' | 'editor'
@@ -150,7 +151,7 @@ function seedColumns(
   return { a, b, c }
 }
 
-function linkIntent(store: StoreApi<AppState>, explicit = false) {
+function linkIntent(store: SessionTestStore<AppState>, explicit = false) {
   return captureEditorOpenLinkIntent(store.getState(), 'wt-1', 'source', {
     explicitSourceGroup: explicit
   })

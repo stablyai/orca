@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act, cleanup, renderHook } from '@testing-library/react'
@@ -53,7 +54,8 @@ beforeEach(() => {
     configurable: true,
     value: { folderWorkspaces: { getPathStatus } }
   })
-  useAppStore.setState(
+  setSessionTestState(
+    useAppStore,
     {
       ...initialState,
       projectGroups: [group],
@@ -71,7 +73,7 @@ afterEach(() => {
   expect(vi.getTimerCount()).toBe(0)
   vi.restoreAllMocks()
   vi.useRealTimers()
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   if (originalApi) {
     Object.defineProperty(window, 'api', originalApi)
   } else {
@@ -255,7 +257,7 @@ describe('folder composer cache expiry requests', () => {
 
   it('uses the selected runtime cache entry instead of a same-group local entry', async () => {
     const fetchStatus = vi.fn().mockResolvedValue(null)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       projectGroups: [group, { ...group, executionHostId: 'runtime:env-1' }]
     })
     const snapshot = getFolderWorkspaceStatusRequestSnapshot(useAppStore.getState(), request, {
@@ -288,7 +290,10 @@ describe('folder composer cache expiry requests', () => {
 
   it('replaces the timer when the selected group changes', async () => {
     const secondGroup: ProjectGroup = { ...group, id: 'second', parentPath: '/second' }
-    useAppStore.setState({ projectGroups: [group, secondGroup], folderWorkspacePathStatuses: {} })
+    setSessionTestState(useAppStore, {
+      projectGroups: [group, secondGroup],
+      folderWorkspacePathStatuses: {}
+    })
     getPathStatus.mockImplementation(async (input) => ({
       path:
         input.scope === 'project-group' && input.projectGroupId === 'second'

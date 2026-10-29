@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import React, { act } from 'react'
@@ -89,7 +90,7 @@ function renderFields(initialRepoId: string): {
 beforeEach(() => {
   getRuntimeRepoBaseRefDefault.mockReset()
   const repo = { path: '/repo', displayName: 'Repo', badgeColor: '#000', addedAt: 0 }
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     repos: [
       { ...repo, id: 'repo-1' },
       { ...repo, id: 'repo-2' }

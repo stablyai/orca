@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
@@ -123,7 +124,7 @@ beforeEach(() => {
 
 function storeWithRestoredFolderOwner(): ReturnType<typeof createTestStore> {
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     projectGroups: [
       { ...localGroup, executionHostId: 'local' },
       { ...remoteGroup, executionHostId: 'runtime:env-1' }
@@ -163,7 +164,7 @@ describe('all-host folder workspace settlement', () => {
       args.method === 'repo.list' ? rpc({ repos: [] }) : remoteResult(args.method)
     )
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       restoredRuntimeHostIdByWorkspaceSessionKey: { [restoredFolderKey]: 'runtime:env-1' }
     })
 

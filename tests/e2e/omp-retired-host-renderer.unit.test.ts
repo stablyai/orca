@@ -1,3 +1,4 @@
+import { setSessionTestState } from '../../src/renderer/src/lib/test-support/session-source-fixture'
 import { resetAgentPaneAuthorityAliasesForTests } from '../../src/renderer/src/store/slices/agent-pane-authority'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from '../../src/main/agent-hooks/server'
@@ -22,7 +23,7 @@ function fixture() {
   const server = new AgentHookServer()
   const store = createTestStore()
   const emitted: AgentStatusIpcPayload[] = []
-  store.setState({
+  setSessionTestState(store, {
     tabsByWorktree: {
       'wt-1': [
         {
@@ -138,7 +139,7 @@ describe('OMP host-authorized renderer retirement recovery', () => {
       f.store.getState().dropAgentStatusByTabPrefix('tab-omp')
     }
     if (reason === 'missing-pane') {
-      f.store.setState({ tabsByWorktree: {} })
+      setSessionTestState(f.store, { tabsByWorktree: {} })
     }
     f.apply(f.emitted[0], reason === 'replay')
     expect(f.store.getState().agentStatusByPaneKey[paneKey]).toBeUndefined()
@@ -156,7 +157,7 @@ it.each([false, true])(
     f.store
       .getState()
       .transferAgentPaneAuthority({ fromPaneKey: paneKey, toPaneKey: owner, ptyId: 'pty-1' })
-    f.store.setState({
+    setSessionTestState(f.store, {
       tabsByWorktree: {
         'wt-1': [
           {
@@ -215,7 +216,7 @@ it.each([false, true])(
     f.store
       .getState()
       .transferAgentPaneAuthority({ fromPaneKey: paneKey, toPaneKey: owner, ptyId: 'pty-1' })
-    f.store.setState({
+    setSessionTestState(f.store, {
       tabsByWorktree: {
         'wt-1': [
           {

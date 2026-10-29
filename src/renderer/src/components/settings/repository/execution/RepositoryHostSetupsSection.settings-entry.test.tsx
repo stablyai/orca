@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import React, { act } from 'react'
@@ -40,7 +41,7 @@ function findButton(label: string): HTMLButtonElement | undefined {
 }
 
 beforeEach(() => {
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -51,7 +52,7 @@ afterEach(() => {
     root.unmount()
   })
   container.remove()
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
 })
 
 describe('RepositoryHostSetupsSection settings entry scope', () => {
@@ -64,7 +65,7 @@ describe('RepositoryHostSetupsSection settings entry scope', () => {
       path: '/home/alice/orca',
       connectionId: 'openclaw 2'
     })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [cloneA, cloneB, remoteRepo],
       projects: [
         {
@@ -126,7 +127,7 @@ describe('RepositoryHostSetupsSection settings entry scope', () => {
       connectionId: 'openclaw 2'
     })
     const sshHostId = toSshExecutionHostId('openclaw 2')
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [cloneA, cloneATwin],
       projectHostSetups: [
         makeSetup({ id: 'clone-a', repoId: 'clone-a', hostId: 'local', path: '/work/orca' }),

@@ -114,7 +114,8 @@ export function buildWebSessionTabsFinalPatch(
           buildEditorBufferViewIndex(
             nextOpenFiles,
             (file) => state.editorBufferIdOf?.[file.id] ?? editorBufferIdForFile(file, state)
-          )
+          ),
+          batchContext?.sourceEdit
         )
 
   const patch: Partial<WebSessionTabsSyncState> = {

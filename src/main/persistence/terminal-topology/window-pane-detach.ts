@@ -1,3 +1,6 @@
+import { SessionUnitReader } from '../../../shared/session-unit-reader'
+import { SessionUnitIndex } from '../../../shared/session-unit-index'
+import { loadLayoutOperation } from './terminal-pane-admission'
 // Validate every holder before any partition writes a renderer-requested detach.
 
 import { randomUUID } from 'node:crypto'
@@ -13,8 +16,6 @@ import type {
   LayoutRefusalCode,
   WindowPaneDetach
 } from '../../../shared/workspace-layout/workspace-layout-command-types'
-import { loadWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-load'
-import { nameBasedLoadContext } from '../../../shared/workspace-layout/workspace-layout-minted-ids'
 import { leafHeldByOtherTab } from './terminal-leaf-move'
 import {
   isTerminalOwnerPartition,
@@ -41,12 +42,21 @@ export function resolveWindowPaneDetach(
   command: WindowPaneDetachCommand
 ): ResolvedWindowPaneDetach {
   const { leafId } = command
-  const holders = partitions.flatMap(({ hostId, session }) => {
+  const inputs = partitions.map((partition) => ({
+    ...partition,
+    reader:
+      partition.prepared ??
+      new SessionUnitReader(partition.session, new SessionUnitIndex(partition.session))
+  }))
+  const holders = inputs.flatMap(({ hostId, reader }) => {
     if (!holderIds.includes(hostId)) {
       return []
     }
-    const workspace = loadWorkspaceLayout(hostId, session, nameBasedLoadContext()).layout
-      .workspaces[command.workspace]
+    const workspace = loadLayoutOperation(hostId, reader, [
+      { kind: 'owner', id: command.workspace },
+      { kind: 'tab', id: command.tabId },
+      { kind: 'leaf', id: leafId }
+    ]).loaded.layout.workspaces[command.workspace]
     const tab = workspace && findTerminal(workspace, command.tabId)
     return tab && layoutContainsLeafId(tab.panes.root, leafId)
       ? [
@@ -64,9 +74,9 @@ export function resolveWindowPaneDetach(
   }
   const sourceEntityId = holders[0]!.entityId
   if (
-    partitions.some(
-      ({ hostId, session }) =>
-        isTerminalOwnerPartition(hostId) && leafHeldByOtherTab(session, sourceEntityId, leafId)
+    inputs.some(
+      ({ hostId, reader }) =>
+        isTerminalOwnerPartition(hostId) && leafHeldByOtherTab(reader, sourceEntityId, leafId)
     )
   ) {
     return { code: 'pane_in_other_tab' }

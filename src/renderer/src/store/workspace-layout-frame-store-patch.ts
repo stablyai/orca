@@ -5,6 +5,8 @@ import { stableJson } from '../../../shared/workspace-layout/workspace-layout-lo
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { isEditorTabContentType } from './slices/editor/tabs/editor-tab-content-type'
 import type { AppState } from './types'
+import type { SessionSourceEdit } from './session-source-edits'
+import type { Entry } from './session-source-write-types'
 import type { LayoutFrameSlices } from './workspace-layout-frame-slices'
 import {
   NO_HELD_TABS,
@@ -100,26 +102,22 @@ function mergeById<T extends { id: string }>(
 const isEmpty = (value: unknown): boolean =>
   value === undefined || value === null || (Array.isArray(value) && value.length === 0)
 
-function setKey<T>(
-  map: Record<string, T>,
+function setKey<F extends KeyedSlice | 'terminalLayoutsByTabId'>(
+  edit: SessionSourceEdit<LayoutFrameStoreState>,
+  field: F,
   key: string,
-  value: T | undefined
-): Record<string, T> | null {
-  // A workspace with no records or selection of a kind may be listed empty or left out.
-  if (isEmpty(map[key]) && isEmpty(value)) {
-    return null
-  }
-  if (map[key] === value || (value !== undefined && key in map && same(map[key], value))) {
-    return null
+  value: Entry<LayoutFrameStoreState, F> | undefined
+): void {
+  const prior = edit.entry(field, key)
+  // A workspace may omit empty records and selections.
+  if ((isEmpty(prior) && isEmpty(value)) || same(prior, value)) {
+    return
   }
   if (value === undefined) {
-    if (!(key in map)) {
-      return null
-    }
-    const { [key]: _removed, ...rest } = map
-    return rest
+    edit.remove(field, key)
+  } else {
+    edit.set(field, key, value)
   }
-  return { ...map, [key]: value }
 }
 
 /**
@@ -127,7 +125,7 @@ function setKey<T>(
  * Returns only the slices that changed.
  */
 export function buildLayoutFrameStorePatch(
-  state: LayoutFrameStoreState,
+  edit: SessionSourceEdit<LayoutFrameStoreState>,
   frameSlices: LayoutFrameSlices,
   keys: readonly string[],
   /** A tab whose pane layout stays as the store has it: the window's own pane command holds it. */
@@ -136,16 +134,15 @@ export function buildLayoutFrameStorePatch(
   newRowFields: (tabId: string) => Partial<TerminalTab> | null = () => null,
   /** Tabs the window drew, closed or moved before main answered: they stay as the store has them. */
   held: HeldDrawnTabs = NO_HELD_TABS
-): Partial<LayoutFrameStoreState> {
+): void {
+  const state = edit.view()
   const built = withHeldTabsAsDrawn(state, frameSlices, keys, held)
-  const patch: Partial<LayoutFrameStoreState> = {}
-  const keyed = (slice: KeyedSlice, value: (key: string) => unknown): void => {
-    let next: Record<string, unknown> = state[slice]
+  const keyed = <F extends KeyedSlice>(
+    slice: F,
+    value: (key: string) => Entry<LayoutFrameStoreState, F> | undefined
+  ): void => {
     for (const key of keys) {
-      next = setKey(next, key, value(key)) ?? next
-    }
-    if (next !== state[slice]) {
-      Object.assign(patch, { [slice]: next })
+      setKey(edit, slice, key, value(key))
     }
   }
 
@@ -193,22 +190,19 @@ export function buildLayoutFrameStorePatch(
 
   const tabIdsOf = (tabs: Record<string, readonly TerminalTab[]>): Set<string> =>
     new Set(keys.flatMap((key) => (tabs[key] ?? []).map((tab) => tab.id)))
-  let terminalLayouts = state.terminalLayoutsByTabId
   for (const tabId of new Set([
     ...tabIdsOf(state.tabsByWorktree),
     ...tabIdsOf(built.tabsByWorktree)
   ])) {
     if (
       keepsTerminalLayout(tabId) &&
-      tabId in terminalLayouts &&
+      edit.has('terminalLayoutsByTabId', tabId) &&
       tabId in built.terminalLayoutsByTabId
     ) {
       continue
     }
-    terminalLayouts =
-      setKey(terminalLayouts, tabId, built.terminalLayoutsByTabId[tabId]) ?? terminalLayouts
+    setKey(edit, 'terminalLayoutsByTabId', tabId, built.terminalLayoutsByTabId[tabId])
   }
-  Object.assign(patch, terminalLayoutsPatch(state, terminalLayouts))
 
   const keySet = new Set(keys)
   // Keep window editor state. Frames carry edit-mode files; diff/preview/conflict records leave with their last tab, while unshown conflict-review selections stay.
@@ -233,15 +227,12 @@ export function buildLayoutFrameStorePatch(
       !shown.has(entity)
     )
   }
-  const files = [
-    ...state.openFiles.filter(keeps),
-    ...built.openFiles.filter((file) => !heldFileIds.has(file.id))
-  ]
-  if (
-    files.length !== state.openFiles.length ||
-    files.some((file, index) => file !== state.openFiles[index])
-  ) {
-    patch.openFiles = files
+  if (state.openFiles.some((file) => !keeps(file))) {
+    edit.sequence('openFiles').filter(keeps)
+  }
+  const addedFiles = built.openFiles.filter((file) => !heldFileIds.has(file.id))
+  if (addedFiles.length) {
+    edit.sequence('openFiles').append(...addedFiles)
   }
 
   // Pages and handles are this window's: a frame brings those of a tab it has not seen and drops
@@ -259,30 +250,16 @@ export function buildLayoutFrameStorePatch(
       (state.browserPagesByWorkspace[id] ?? []).map((page) => page.id)
     )
   )
-  const pages = { ...state.browserPagesByWorkspace }
-  for (const id of closedBrowserTabIds) {
-    delete pages[id]
+  edit.removeKeys('browserPagesByWorkspace', closedBrowserTabIds)
+  edit.removeKeys('remoteBrowserPageHandlesByPageId', closedPageIds)
+  for (const [id, pages] of Object.entries(built.browserPagesByWorkspace)) {
+    if (!edit.has('browserPagesByWorkspace', id)) {
+      edit.set('browserPagesByWorkspace', id, pages)
+    }
   }
-  const handles = Object.fromEntries(
-    Object.entries(state.remoteBrowserPageHandlesByPageId).filter(([id]) => !closedPageIds.has(id))
-  )
-  const addedPages = Object.entries(built.browserPagesByWorkspace).filter(([id]) => !(id in pages))
-  const addedHandles = Object.entries(built.remoteBrowserPageHandlesByPageId).filter(
-    ([id]) => !(id in handles)
-  )
-  if (closedBrowserTabIds.length > 0 || addedPages.length > 0) {
-    patch.browserPagesByWorkspace = { ...pages, ...Object.fromEntries(addedPages) }
+  for (const [id, handle] of Object.entries(built.remoteBrowserPageHandlesByPageId)) {
+    if (!edit.has('remoteBrowserPageHandlesByPageId', id)) {
+      edit.set('remoteBrowserPageHandlesByPageId', id, handle)
+    }
   }
-  if (closedPageIds.size > 0 || addedHandles.length > 0) {
-    patch.remoteBrowserPageHandlesByPageId = { ...handles, ...Object.fromEntries(addedHandles) }
-  }
-  return patch
-}
-
-/** The patch that shows `layouts` as the store's pane trees; empty when they are the store's. */
-export function terminalLayoutsPatch(
-  state: Pick<LayoutFrameStoreState, 'terminalLayoutsByTabId'>,
-  layouts: LayoutFrameStoreState['terminalLayoutsByTabId']
-): Partial<LayoutFrameStoreState> {
-  return layouts === state.terminalLayoutsByTabId ? {} : { terminalLayoutsByTabId: layouts }
 }

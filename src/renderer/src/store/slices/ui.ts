@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import type { UISlice } from './ui/ui-slice-contract'
 import { createUiAgentActions } from './ui/ui-slice-agent-actions'
@@ -25,7 +25,7 @@ export type {
   UISlice
 } from './ui/ui-slice-contract'
 
-export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) =>
+export const createUISlice: SessionStateCreator<AppState, UISlice> = (set, get) =>
   ({
     ...createUiAgentActions(set, get),
     ...createUiTaskActions(set, get),

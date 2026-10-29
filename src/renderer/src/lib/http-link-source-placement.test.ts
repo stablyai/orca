@@ -1,3 +1,5 @@
+import type { AppState } from '@/store/types'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { toast } from 'sonner'
 import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
@@ -58,7 +60,7 @@ async function settle() {
 it.each([false, true])(
   'opens hostless legacy links relative to their source (explicit: %s)',
   async (explicit) => {
-    store.setState((state) => ({
+    setSessionTestState(store, (state): Partial<AppState> => ({
       unifiedTabsByWorktree: {
         [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.map((tab) => ({
           ...tab,
@@ -99,7 +101,7 @@ it('captures the link owner before an asynchronous preference decision and follo
     sourceOwner: { kind: 'local' },
     requestOpenLinksInAppPreference: () => preference
   })
-  store.setState((state) => ({
+  setSessionTestState(store, (state): Partial<AppState> => ({
     unifiedTabsByWorktree: {
       [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.map((tab) =>
         tab.id === 'source' ? { ...tab, groupId: 'b' } : tab
@@ -148,7 +150,7 @@ it('the native chat context menu pins the owning tab when the action runs, even 
   })
   const row = actions?.secondaryActions?.find((action) => action.label === 'Open in this group')
   expect(row).toBeDefined()
-  store.setState((state) => ({
+  setSessionTestState(store, (state): Partial<AppState> => ({
     unifiedTabsByWorktree: {
       [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.map((tab) =>
         tab.id === 'source' ? { ...tab, groupId: 'b' } : tab
@@ -169,7 +171,7 @@ it('refuses a stale explicit chat action when its source closed before activatio
   })
   const action = actions?.secondaryActions?.find((row) => row.label === 'Open in this group')
   expect(action).toBeDefined()
-  store.setState((state) => ({
+  setSessionTestState(store, (state): Partial<AppState> => ({
     unifiedTabsByWorktree: {
       [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.filter((tab) => tab.id !== 'source')
     }
@@ -185,7 +187,7 @@ it.each([false, true])(
   'opens floating HTTP links through the managed route (explicit: %s)',
   async (explicit) => {
     const floating = FLOATING_TERMINAL_WORKTREE_ID
-    store.setState((state) => ({
+    setSessionTestState(store, (state): Partial<AppState> => ({
       groupsByWorktree: {
         ...state.groupsByWorktree,
         [floating]: ['left', 'right'].map((id) =>

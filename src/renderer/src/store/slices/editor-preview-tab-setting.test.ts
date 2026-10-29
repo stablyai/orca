@@ -1,4 +1,4 @@
-import type { StoreApi } from 'zustand/vanilla'
+import type { SessionTestStore } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { createEditorTabsStore } from './editor-slice-test-harness'
 import type { AppState } from '../types'
@@ -33,7 +33,7 @@ vi.mock('@/runtime/close-mirrored-editor-tab', () => ({
     notifyHostOfMirroredEditorCloseMock(...args)
 }))
 
-function openPreview(store: StoreApi<AppState>, relativePath: string): void {
+function openPreview(store: SessionTestStore<AppState>, relativePath: string): void {
   store.getState().openFile(
     {
       filePath: `/repo/${relativePath}`,
@@ -46,10 +46,10 @@ function openPreview(store: StoreApi<AppState>, relativePath: string): void {
   )
 }
 
-const previewTabs = (store: StoreApi<AppState>) =>
+const previewTabs = (store: SessionTestStore<AppState>) =>
   (store.getState().unifiedTabsByWorktree['wt-1'] ?? []).filter((tab) => tab.isPreview)
 
-function storeWithPreviewTabs(enabled: boolean): StoreApi<AppState> {
+function storeWithPreviewTabs(enabled: boolean): SessionTestStore<AppState> {
   const store = createEditorTabsStore()
   store.setState({ settings: createGlobalSettingsFixture({ editorPreviewTabsEnabled: enabled }) })
   return store

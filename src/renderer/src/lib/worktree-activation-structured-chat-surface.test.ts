@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from './worktree-activation'
@@ -21,7 +22,7 @@ registerWorktreeActivationReset()
 
 afterEach(() => {
   vi.restoreAllMocks()
-  useAppStore.setState(initialAppStoreState, true)
+  setSessionTestState(useAppStore, initialAppStoreState, true)
 })
 
 const setup = {

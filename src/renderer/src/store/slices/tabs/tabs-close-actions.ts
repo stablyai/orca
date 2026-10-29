@@ -1,6 +1,12 @@
+import {
+  editSessionSource,
+  type SessionSourceEdit,
+  type OrdinarySourcePartial,
+  type SessionSourceSet
+} from '../../session-source-edits'
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
-import { collapseGroupLayout } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
+import { collapseGroupLayoutEdit } from './tab-group-layout-edits'
 import {
   findGroupForTab,
   findTabAndWorktree,
@@ -141,8 +147,7 @@ export function createTabsCloseActions(
                   }
                 : candidate
             )
-            let nextLayoutByWorktree = current.layoutByWorktree
-            let nextActiveGroupIdByWorktree = current.activeGroupIdByWorktree
+            const edit = editSessionSource(current)
             if (
               group &&
               wasLastTab &&
@@ -150,55 +155,28 @@ export function createTabsCloseActions(
               nextGroups.length > 1
             ) {
               nextGroups = nextGroups.filter((candidate) => candidate.id !== group.id)
-              const collapsedState = collapseGroupLayout(
-                current.layoutByWorktree,
-                current.activeGroupIdByWorktree,
-                worktreeId,
-                group.id,
-                nextGroups[0]?.id ?? null
-              )
-              nextLayoutByWorktree = collapsedState.layoutByWorktree
-              nextActiveGroupIdByWorktree = collapsedState.activeGroupIdByWorktree
+              collapseGroupLayoutEdit(edit, worktreeId, group.id, nextGroups[0]?.id ?? null)
             }
             // Unwinding a failed create added no tab; preserve the original selection instead of landing on welcome.
             const shouldDeactivateWorktree =
               !opts?.preserveWorktreeSelection &&
               landsOnEmptiedWorktree(current, worktreeId, nextTabs.length)
-            return {
-              unifiedTabsByWorktree: { ...current.unifiedTabsByWorktree, [worktreeId]: nextTabs },
-              groupsByWorktree: {
-                ...current.groupsByWorktree,
-                [worktreeId]: nextGroups
-              },
-              layoutByWorktree: nextLayoutByWorktree,
-              activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
-              // Avoid no-op unread allocations that wake full-state selectors.
+            edit.set('unifiedTabsByWorktree', worktreeId, nextTabs)
+            edit.set('groupsByWorktree', worktreeId, nextGroups)
+            return edit.finish({
               ...(nextUnreadTerminalTabs !== current.unreadTerminalTabs
                 ? { unreadTerminalTabs: nextUnreadTerminalTabs }
                 : {}),
               ...structuredAttention,
-              // Why: closing the last tab can leave the worktree selected but render-empty, so write the landing-state fallback directly.
-              ...(shouldDeactivateWorktree ? emptiedWorktreeLandingPatch(current, worktreeId) : {}),
+              ...(shouldDeactivateWorktree ? emptiedWorktreeLandingPatch(edit, worktreeId) : {}),
               ...(!shouldDeactivateWorktree && ownsGlobalSelection(current, worktreeId)
                 ? buildActiveSurfacePatch(
-                    {
-                      ...current,
-                      unifiedTabsByWorktree: {
-                        ...current.unifiedTabsByWorktree,
-                        [worktreeId]: nextTabs
-                      },
-                      groupsByWorktree: {
-                        ...current.groupsByWorktree,
-                        [worktreeId]: nextGroups
-                      },
-                      layoutByWorktree: nextLayoutByWorktree,
-                      activeGroupIdByWorktree: nextActiveGroupIdByWorktree
-                    },
+                    edit,
                     worktreeId,
-                    nextActiveGroupIdByWorktree[worktreeId] ?? null
+                    edit.entry('activeGroupIdByWorktree', worktreeId) ?? null
                   )
                 : {})
-            }
+            })
           })
         )
       // Switch point: main closes an editor, browser, chat or simulator tab first; its frame drops it.
@@ -267,7 +245,14 @@ function landsOnEmptiedWorktree(
   )
 }
 
-function emptiedWorktreeLandingPatch(current: LandingState, worktreeId: string) {
+function emptiedWorktreeLandingPatch(
+  edit: SessionSourceEdit<LandingState>,
+  worktreeId: string
+): OrdinarySourcePartial<AppState> {
+  edit.set('activeTabIdByWorktree', worktreeId, null)
+  edit.set('activeBrowserTabIdByWorktree', worktreeId, null)
+  edit.set('activeFileIdByWorktree', worktreeId, null)
+  edit.set('activeTabTypeByWorktree', worktreeId, 'terminal')
   return {
     activeWorktreeId: null,
     activeWorkspaceKey: null,
@@ -275,18 +260,11 @@ function emptiedWorktreeLandingPatch(current: LandingState, worktreeId: string) 
     activeTabId: null,
     activeBrowserTabId: null,
     activeFileId: null,
-    activeTabType: 'terminal' as const,
-    activeTabIdByWorktree: { ...current.activeTabIdByWorktree, [worktreeId]: null },
-    activeBrowserTabIdByWorktree: { ...current.activeBrowserTabIdByWorktree, [worktreeId]: null },
-    activeFileIdByWorktree: { ...current.activeFileIdByWorktree, [worktreeId]: null },
-    activeTabTypeByWorktree: {
-      ...current.activeTabTypeByWorktree,
-      [worktreeId]: 'terminal' as const
-    }
+    activeTabType: 'terminal' as const
   }
 }
 
-type LandingSet = (update: (state: AppState) => Partial<AppState>) => void
+type LandingSet = SessionSourceSet<AppState>
 
 /** After main's frame dropped a closed tab: lands when that emptied the active worktree. */
 export function landOnEmptiedWorktree(
@@ -304,7 +282,10 @@ export function landOnEmptiedWorktree(
   ) {
     return false
   }
-  set((current) => emptiedWorktreeLandingPatch(current, worktreeId))
+  set((current) => {
+    const edit = editSessionSource(current)
+    return edit.finish(emptiedWorktreeLandingPatch(edit, worktreeId))
+  })
   return true
 }
 

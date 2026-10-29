@@ -1,3 +1,9 @@
+import type { RekeyOpenFilesEdit } from '../actions/rekey-open-files-action'
+import {
+  editSessionSource,
+  type SessionSourceEdit,
+  type OrdinarySourcePartial
+} from '@/store/session-source-edits'
 // In layout-owner builds propose per-workspace rename IDs to main; its frame atomically rekeys drafts/buffers/autosave gate. Refusal changes nothing.
 
 import { isTwinWorkspace, runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
@@ -68,27 +74,29 @@ export function renameEditorFilesThroughLayoutOwner(
   moveOperationId: string | undefined,
   /** The window's pure rekey (rekey-open-files-action), passed in so neither module imports the other. */
   rekeyOpenFilesPatch: (
+    edit: SessionSourceEdit<AppState>,
     state: AppState,
     rekeys: readonly OpenFilePathRekey[],
     moveOperationId: string | undefined
-  ) => { ok: true; patch: Partial<AppState> } | Extract<RekeyOpenFilesResult, { ok: false }>
+  ) => RekeyOpenFilesEdit
 ): RekeyOpenFilesResult {
   const state = get()
-  const planned = rekeyOpenFilesPatch(state, rekeys, moveOperationId)
+  const plannedEdit = editSessionSource(state)
+  const planned = rekeyOpenFilesPatch(plannedEdit, state, rekeys, moveOperationId)
   if (!planned.ok) {
     return planned
   }
   const before = new Map(state.openFiles.map((file) => [file.id, file]))
-  const after = new Map((planned.patch.openFiles ?? []).map((file) => [file.id, file]))
-  const rekeyHere = (own: readonly OpenFilePathRekey[]) => (s: AppState) => {
-    const next = rekeyOpenFilesPatch(s, own, moveOperationId)
-    if (!next.ok) {
-      return {}
+  const after = new Map(plannedEdit.read('openFiles').map((file) => [file.id, file]))
+  const rekeyHere =
+    (own: readonly OpenFilePathRekey[]) => (edit: SessionSourceEdit<AppState>, s: AppState) => {
+      const next = rekeyOpenFilesPatch(edit, s, own, moveOperationId)
+      if (!next.ok) {
+        return {}
+      }
+      rekeyEditorBytesDocuments(own)
+      return next.patch
     }
-    // Why here: this runs as the rename lands, so the old tab's close never frees its bytes.
-    rekeyEditorBytesDocuments(own)
-    return next.patch
-  }
   // Each file's own workspace: the same path can be open in more than one.
   const byWorktree = new Map<string, OpenFilePathRekey[]>()
   for (const rekey of rekeys) {
@@ -102,7 +110,8 @@ export function renameEditorFilesThroughLayoutOwner(
     sendRenames(set, get, state, parts, rekeyHere, (own) => renamesOf(own, before, after))
   for (const [worktreeId, own] of byWorktree) {
     if (runtimeEnvironmentIdUnlessTwin(state, worktreeId)) {
-      set(rekeyHere(own)(get()))
+      const edit = editSessionSource(get())
+      set(edit.finish(rekeyHere(own)(edit, edit.view())))
     } else if (isTwinWorkspace(state, worktreeId)) {
       // Why alone: main's host_not_owned for a twin would refuse every workspace sent with it.
       send([{ worktreeId, own }])
@@ -124,7 +133,9 @@ function sendRenames(
   get: EditorGet,
   state: AppState,
   [first, ...rest]: readonly RenamePart[],
-  rekeyHere: (own: readonly OpenFilePathRekey[]) => (s: AppState) => Partial<AppState>,
+  rekeyHere: (
+    own: readonly OpenFilePathRekey[]
+  ) => (edit: SessionSourceEdit<AppState>, state: AppState) => OrdinarySourcePartial<AppState>,
   renamesIn: (own: readonly OpenFilePathRekey[]) => EditorFileRename[]
 ): void {
   if (!first) {

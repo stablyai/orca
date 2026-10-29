@@ -133,13 +133,13 @@ export function createBrowserProfileImportActions(
           set((s) =>
             getBrowserSettingsHostId(s) === hostId
               ? { detectedBrowsers: browsers, detectedBrowsersLoaded: true, detectedBrowsersHost }
-              : s
+              : undefined
           )
         } catch {
           set((s) =>
             getBrowserSettingsHostId(s) === hostId
               ? { detectedBrowsers: [], detectedBrowsersLoaded: true, detectedBrowsersHost: null }
-              : s
+              : undefined
           )
         }
         return
@@ -161,11 +161,13 @@ export function createBrowserProfileImportActions(
                 detectedBrowsersLoaded: true,
                 detectedBrowsersHost: null
               }
-            : s
+            : undefined
         )
       } catch {
         /* best-effort — empty list is acceptable fallback */
-        set((s) => (getBrowserSettingsHostId(s) === hostId ? { detectedBrowsersLoaded: true } : s))
+        set((s) =>
+          getBrowserSettingsHostId(s) === hostId ? { detectedBrowsersLoaded: true } : undefined
+        )
       }
     }
   }

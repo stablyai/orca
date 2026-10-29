@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
@@ -126,7 +127,8 @@ describe('session-tabs streams the host ends over a live connection', () => {
       publicRuntimeEnvironment({ id: ENV_A, createdAt: 100, pairingRevision: 101 })
     ]
     replaceRuntimeEnvironmentRevisions(runtimeEnvironments)
-    useAppStore.setState(
+    setSessionTestState(
+      useAppStore,
       {
         ...initialState,
         activeWorktreeId: WORKTREE,
@@ -140,7 +142,7 @@ describe('session-tabs streams the host ends over a live connection', () => {
 
   afterEach(() => {
     cleanup()
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
     replaceRuntimeEnvironmentRevisions([])
     resetWebSessionTabsSnapshotFreshnessForTests()
     vi.useRealTimers()

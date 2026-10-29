@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { createElement } from 'react'
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -29,7 +30,7 @@ import {
 const originalState = useAppStore.getState()
 afterEach(() => {
   cleanup()
-  useAppStore.setState(originalState, true)
+  setSessionTestState(useAppStore, originalState, true)
 })
 
 function state(overrides: Partial<AppState> = {}): AppState {
@@ -441,10 +442,10 @@ describe('resolveNativeChatImageRuntimeContext', () => {
       observed = useNativeChatImageRuntimeContext('tab-1')
       return null
     }
-    useAppStore.setState(base)
+    setSessionTestState(useAppStore, base)
     render(createElement(Probe))
     for (const [name, snapshot, expected] of cases) {
-      act(() => useAppStore.setState(snapshot))
+      act(() => setSessionTestState(useAppStore, snapshot))
       expect(observed, name).toEqual(resolveNativeChatImageRuntimeContext(snapshot, 'tab-1'))
       if (expected === null) {
         expect(observed, name).toBeNull()

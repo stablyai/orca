@@ -1,8 +1,12 @@
+import {
+  loadWorkspaceLayoutUnits,
+  loadWorkspaceLayoutWithoutReport
+} from '../../shared/workspace-layout/workspace-layout-load'
 // Reproject dirty Store partitions and publish each workspace only from its owning partition.
 
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
-import { loadWorkspaceLayoutWithoutReport } from '../../shared/workspace-layout/workspace-layout-load'
+
 import { stableJson } from '../../shared/workspace-layout/workspace-layout-load-report'
 import type {
   LoadedWorkspaceLayout,
@@ -13,6 +17,7 @@ import {
   publishWorkspaceLayout,
   type PublishedWorkspaceLayout
 } from '../../shared/workspace-layout/workspace-layout-published'
+import type { SessionChangeSet } from '../../shared/session-change-set'
 import type { RuntimeStore } from './runtime-store-contract'
 
 export type ProjectedLayout = { layout: PublishedWorkspaceLayout; json: string }
@@ -23,6 +28,8 @@ export type ProjectionStore = Pick<
   | 'getWorkspaceSessionHostIds'
   | 'getPtyBindingGeneration'
   | 'getLayoutEditorViews'
+  | 'readWorkspaceSessionUnits'
+  | 'getWorkspaceSessionReferences'
 >
 
 export type DirtyPartitions = Set<ExecutionHostId> | 'all'
@@ -51,10 +58,26 @@ export function runtimeLayoutLoadContext(
 class ProjectedPartition {
   private published: Map<string, ProjectedLayout> | null = null
 
+  loadedStale = false
+
   constructor(
     private readonly hostId: ExecutionHostId,
     readonly loaded: LoadedWorkspaceLayout | null
   ) {}
+
+  update(owners: ReadonlySet<string>, loaded: LoadedWorkspaceLayout): void {
+    const published = this.workspaces()
+    for (const key of owners) {
+      const workspace = loaded.layout.workspaces[key]
+      if (workspace) {
+        const layout = publishWorkspaceLayout(workspace, this.hostId)
+        published.set(key, { layout, json: stableJson(layout) })
+      } else {
+        published.delete(key)
+      }
+    }
+    this.loadedStale = true
+  }
 
   /** Includes stray copies of workspaces owned by other partitions. */
   workspaces(): Map<string, ProjectedLayout> {
@@ -72,6 +95,8 @@ class ProjectedPartition {
 export class WorkspaceLayoutProjection {
   published = new Map<string, ProjectedLayout>()
   private partitions = new Map<ExecutionHostId, ProjectedPartition>()
+  private readonly pendingOwners = new Map<ExecutionHostId, Set<string>>()
+  private changed: ReadonlySet<string> | null = null
   private stale: DirtyPartitions = 'all'
   /** Keep routing failures separate so they cannot suppress later projection/listener errors. */
   private routingFailureLogged = false
@@ -90,10 +115,23 @@ export class WorkspaceLayoutProjection {
 
   forgetPartitions(): void {
     this.partitions.clear()
+    this.pendingOwners.clear()
     this.stale = 'all'
   }
 
-  invalidate(hostId: ExecutionHostId | null): void {
+  invalidate(hostId: ExecutionHostId | null, changes?: SessionChangeSet): void {
+    if (changes && !changes.fullReplacement && this.stale !== 'all') {
+      const owners = this.pendingOwners.get(changes.hostId) ?? new Set<string>()
+      for (const key of changes.owners) {
+        owners.add(key)
+      }
+      this.pendingOwners.set(changes.hostId, owners)
+      const partition = this.partitions.get(changes.hostId)
+      if (partition) {
+        partition.loadedStale = true
+      }
+      return
+    }
     if (hostId === null || this.stale === 'all') {
       this.stale = 'all'
     } else {
@@ -103,14 +141,64 @@ export class WorkspaceLayoutProjection {
 
   /** Cache only for readers that invalidate on every write; null without a Store. */
   loaded(hostId: ExecutionHostId, keep: boolean): LoadedWorkspaceLayout | null {
-    return keep ? this.cachedPartition(hostId).loaded : this.loadPartition(hostId).loaded
+    if (!keep) {
+      return this.loadPartition(hostId).loaded
+    }
+    const partition = this.cachedPartition(hostId)
+    if (!partition.loadedStale) {
+      return partition.loaded
+    }
+    // A caller explicitly requesting a partition pays for its complete read.
+    return this.loadPartition(hostId).loaded
+  }
+
+  changedKeys(): ReadonlySet<string> | null {
+    return this.changed
   }
 
   project(): Map<string, ProjectedLayout> {
-    const hostIds = this.deps.store()?.getWorkspaceSessionHostIds?.() ?? []
-    const partitions = new Map(hostIds.map((hostId) => [hostId, this.cachedPartition(hostId)]))
-    this.partitions = partitions
-    this.published = this.route(partitions)
+    const store = this.deps.store()
+    if (this.stale === 'all' || this.stale.size || !store?.readWorkspaceSessionUnits) {
+      const hostIds = store?.getWorkspaceSessionHostIds?.() ?? []
+      const partitions = new Map(hostIds.map((hostId) => [hostId, this.cachedPartition(hostId)]))
+      this.partitions = partitions
+      this.published = this.route(partitions)
+      this.changed = null
+      this.pendingOwners.clear()
+      return this.published
+    }
+    const changed = new Set<string>()
+    for (const [hostId, owners] of this.pendingOwners) {
+      const projection = store.readWorkspaceSessionUnits([...owners], hostId)
+      const loaded = loadWorkspaceLayoutUnits(
+        hostId,
+        projection.reader,
+        projection.owners,
+        projection.selected,
+        runtimeLayoutLoadContext(store, hostId)
+      )
+      const partition = this.partitions.get(hostId) ?? new ProjectedPartition(hostId, null)
+      partition.update(owners, loaded)
+      this.partitions.set(hostId, partition)
+      for (const key of owners) {
+        changed.add(key)
+      }
+    }
+    this.pendingOwners.clear()
+    const unroutable = new Set<string>()
+    for (const key of changed) {
+      const home = this.homeOf(key, unroutable)
+      if (unroutable.has(key)) {
+        continue
+      }
+      const next = home && this.partitions.get(home)?.workspaces().get(key)
+      if (next) {
+        this.published.set(key, next)
+      } else {
+        this.published.delete(key)
+      }
+    }
+    this.changed = changed
     return this.published
   }
 

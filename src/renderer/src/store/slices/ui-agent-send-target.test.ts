@@ -1,4 +1,5 @@
-import type { StoreApi } from 'zustand/vanilla'
+import type { SessionTestStore } from '@/lib/test-support/session-source-fixture'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
@@ -108,9 +109,9 @@ function makeTerminalTab(id: string, worktreeId: string): TerminalTab {
 }
 
 // Why: send targets list structured chats from the tabs slice, which the UI harness omits.
-function createAgentSendStore(): StoreApi<AppState> {
+function createAgentSendStore(): SessionTestStore<AppState> {
   const store = createUIStore()
-  store.setState({ unifiedTabsByWorktree: {} })
+  setSessionTestState(store, { unifiedTabsByWorktree: {} })
   return store
 }
 
@@ -130,9 +131,10 @@ describe('createUISlice agent send target mode', () => {
   const readyPaneKey = makePaneKey(tabId, readyLeafId)
   const workingPaneKey = makePaneKey(tabId, workingLeafId)
 
-  function seedAgentSendState(store: StoreApi<AppState>): void {
+  function seedAgentSendState(store: SessionTestStore<AppState>): void {
     const now = Date.now()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       tabsByWorktree: {
         [worktreeId]: [
           {
@@ -237,7 +239,8 @@ describe('createUISlice agent send target mode', () => {
     const store = createAgentSendStore()
     seedAgentSendState(store)
     const agentStatusByPaneKey = store.getState().agentStatusByPaneKey
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This agentStatusByPaneKey fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       agentStatusByPaneKey: {
         ...agentStatusByPaneKey,
         [workingPaneKey]: {
@@ -273,7 +276,7 @@ describe('createUISlice agent send target mode', () => {
   it('does not reveal the sidebar when the current workspace has no eligible targets', () => {
     const store = createAgentSendStore()
     seedAgentSendState(store)
-    store.setState({
+    setSessionTestState(store, {
       terminalLayoutsByTabId: {
         [tabId]: {
           root: {
@@ -356,10 +359,10 @@ describe('createUISlice agent send target mode', () => {
   const chatPaneKey = structuredAgentSessionPaneKey(chatTabId, 'claude_1')
 
   function seedChatState(
-    store: StoreApi<AppState>,
+    store: SessionTestStore<AppState>,
     agentStatusByPaneKey: AppState['agentStatusByPaneKey']
   ): void {
-    store.setState({
+    setSessionTestState(store, {
       agentStatusByPaneKey,
       tabsByWorktree: {},
       terminalLayoutsByTabId: {},
@@ -694,7 +697,8 @@ describe('createUISlice acknowledgeAgents notification dismissal', () => {
     const dismiss = vi.fn().mockResolvedValue({ dismissed: 0 })
     vi.stubGlobal('window', { api: { notifications: { dismiss } } })
     const store = createAgentSendStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test supplies only the preload API members exercised by its scenario.
+    setSessionTestState(store, {
       tabsByWorktree: {
         'wt-live': [makeTerminalTab(tabId, 'wt-live')]
       },
@@ -747,7 +751,8 @@ describe('createUISlice acknowledgeAgents notification dismissal', () => {
     vi.stubGlobal('window', { api: { notifications: { dismiss } } })
     const store = createAgentSendStore()
     const fallbackPaneKey = makePaneKey('tab-fallback', '44444444-4444-4444-8444-444444444444')
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test supplies only the preload API members exercised by its scenario.
+    setSessionTestState(store, {
       tabsByWorktree: {},
       agentStatusByPaneKey: {
         [fallbackPaneKey]: {
@@ -777,7 +782,8 @@ describe('createUISlice acknowledgeAgents notification dismissal', () => {
     const dismiss = vi.fn().mockResolvedValue({ dismissed: 0 })
     vi.stubGlobal('window', { api: { notifications: { dismiss } } })
     const store = createAgentSendStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test supplies only the preload API members exercised by its scenario.
+    setSessionTestState(store, {
       tabsByWorktree: {
         'wt-live': [makeTerminalTab(tabId, 'wt-live')]
       },
@@ -814,10 +820,11 @@ describe('openDiffNotesSendMenuForActiveWorktree', () => {
   function stubDiffNotesStore(
     comments: { sentAt?: number }[],
     activeWorktreeId: string | null = 'wt-1'
-  ): { store: StoreApi<AppState>; setRightSidebarTab: ReturnType<typeof vi.fn> } {
+  ): { store: SessionTestStore<AppState>; setRightSidebarTab: ReturnType<typeof vi.fn> } {
     const store = createAgentSendStore()
     const setRightSidebarTab = vi.fn()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This activeWorktreeId, getDiffComments, setRightSidebarTab fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       activeWorktreeId,
       getDiffComments: () => comments,
       setRightSidebarTab,

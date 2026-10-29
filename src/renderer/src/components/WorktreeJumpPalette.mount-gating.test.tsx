@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -123,7 +124,7 @@ describe('WorktreeJumpPalette mount gating', () => {
     contentProbe.storeNotifications.mockClear()
     contentProbe.subscriptions.mockClear()
     contentProbe.unsubscriptions.mockClear()
-    useAppStore.setState(initialAppState, true)
+    setSessionTestState(useAppStore, initialAppState, true)
     useAppStore.setState({ activeModal: 'none', activeWorktreeId: null })
     testContainer = document.createElement('div')
     document.body.appendChild(testContainer)
@@ -133,7 +134,7 @@ describe('WorktreeJumpPalette mount gating', () => {
   afterEach(async () => {
     await act(async () => testRoot.unmount())
     document.body.replaceChildren()
-    useAppStore.setState(initialAppState, true)
+    setSessionTestState(useAppStore, initialAppState, true)
     vi.clearAllTimers()
     vi.useRealTimers()
   })

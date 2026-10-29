@@ -1,3 +1,4 @@
+import { editSessionSource, type SessionSourceEdit } from '../session-source-edits'
 import type { BrowserPageConversionOrigin } from '../../../../shared/browser-workspace-types'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { getKnownExecutionHostIdForWorktree } from '../../lib/worktree-runtime-owner'
@@ -14,10 +15,12 @@ function preserveLocalUrlOrigin(
 
 export function preserveConvertedSshBrowserPages(
   state: WorktreeRuntimeOwnerState & Pick<AppState, 'browserPagesByWorkspace'>,
-  targetId: string
+  targetId: string,
+  edit: SessionSourceEdit<
+    WorktreeRuntimeOwnerState & Pick<AppState, 'browserPagesByWorkspace'>
+  > = editSessionSource(state)
 ): AppState['browserPagesByWorkspace'] {
   const hostId = toSshExecutionHostId(targetId)
-  let result = state.browserPagesByWorkspace
   for (const [workspaceId, pages] of Object.entries(state.browserPagesByWorkspace)) {
     let changed = false
     const next = pages.map((page) => {
@@ -39,11 +42,8 @@ export function preserveConvertedSshBrowserPages(
       }
     })
     if (changed) {
-      if (result === state.browserPagesByWorkspace) {
-        result = { ...result }
-      }
-      result[workspaceId] = next
+      edit.set('browserPagesByWorkspace', workspaceId, next)
     }
   }
-  return result
+  return edit.read('browserPagesByWorkspace')
 }

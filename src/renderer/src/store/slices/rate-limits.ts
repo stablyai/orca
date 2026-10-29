@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { RateLimitRuntimeTarget, RateLimitState } from '../../../../shared/rate-limit-types'
 import { createEmptyRateLimitState } from '../../../../shared/rate-limit-state-factory'
 import type { AppState } from '../types'
@@ -16,7 +16,7 @@ export type RateLimitSlice = {
   setRateLimitsFromPush: (state: RateLimitState) => void
 }
 
-export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice> = (set, get) => ({
+export const createRateLimitSlice: SessionStateCreator<AppState, RateLimitSlice> = (set, get) => ({
   rateLimits: createEmptyRateLimitState(),
 
   fetchRateLimits: async () => {

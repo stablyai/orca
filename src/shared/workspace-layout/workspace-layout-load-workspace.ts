@@ -1,3 +1,5 @@
+import { isSessionUnitView, type SessionUnitView, readSessionUnit } from '../session-unit-reader'
+
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
 import type { Tab } from '../tab-types'
 import { normalizeTerminalLayoutPtyOwnership } from '../terminal-layout-pty-ownership'
@@ -26,7 +28,7 @@ import { pruneGroupLayout } from '../workspace-session-terminal-tab-close'
 function takeRows({ session, key, terminalHomes }: WorkspaceLoadArgs) {
   const rows: TerminalTab[] = []
   const local = new Set<string>()
-  for (const row of session.tabsByWorktree?.[key] ?? []) {
+  for (const row of readSessionUnit(session, 'tabsByWorktree', key) ?? []) {
     if (local.has(row.id) || terminalHomes.get(row.id) !== key) {
       continue
     }
@@ -37,15 +39,27 @@ function takeRows({ session, key, terminalHomes }: WorkspaceLoadArgs) {
 }
 
 /** A pane key's leaf for this tab, from the records that name one (the old window's leaf). */
-function recordedLeafId(session: WorkspaceSessionState, tabId: string): string | undefined {
+function recordedLeafId(
+  session: WorkspaceSessionState | SessionUnitView,
+  tabId: string
+): string | undefined {
+  const paneKeys = isSessionUnitView(session)
+    ? session
+        .references('tab', tabId)
+        .filter(
+          (unit) =>
+            unit.field === 'terminalPtyIncarnationsByPaneKey' ||
+            unit.field === 'sleepingAgentSessionsByPaneKey' ||
+            unit.field === 'terminalSurfaceTombstonesByPaneKey'
+        )
+        .map((unit) => unit.key)
+    : [
+        ...Object.keys(session.terminalPtyIncarnationsByPaneKey ?? {}),
+        ...Object.keys(session.sleepingAgentSessionsByPaneKey ?? {}),
+        ...Object.keys(session.terminalSurfaceTombstonesByPaneKey ?? {})
+      ]
   const leafIds = new Set(
-    [
-      ...Object.keys(session.terminalPtyIncarnationsByPaneKey ?? {}),
-      ...Object.keys(session.sleepingAgentSessionsByPaneKey ?? {}),
-      ...Object.keys(session.terminalSurfaceTombstonesByPaneKey ?? {})
-    ].flatMap((paneKey) =>
-      paneKey.startsWith(`${tabId}:`) ? [paneKey.slice(tabId.length + 1)] : []
-    )
+    paneKeys.flatMap((key) => (key.startsWith(`${tabId}:`) ? [key.slice(tabId.length + 1)] : []))
   )
   return leafIds.size === 1 ? [...leafIds][0] : undefined
 }
@@ -55,7 +69,7 @@ function recordedLeafId(session: WorkspaceSessionState, tabId: string): string |
  * as today's window restores it; the pane reuses the leaf the records name, else a new one.
  */
 function legacyLayout(
-  session: WorkspaceSessionState,
+  session: WorkspaceSessionState | SessionUnitView,
   row: TerminalTab,
   args: WorkspaceLoadArgs
 ): TerminalLayoutSnapshot {
@@ -69,13 +83,15 @@ function legacyLayout(
 }
 
 function loadPanes(
-  session: WorkspaceSessionState,
+  session: WorkspaceSessionState | SessionUnitView,
   row: TerminalTab,
   tab: Omit<LayoutTerminalTab, 'panes'>,
   args: WorkspaceLoadArgs,
   entry: Tab | undefined
 ): LayoutTerminalTab {
-  const stored = session.terminalLayoutsByTabId?.[tab.entityId] ?? legacyLayout(session, row, args)
+  const stored =
+    readSessionUnit(session, 'terminalLayoutsByTabId', tab.entityId) ??
+    legacyLayout(session, row, args)
   // Match window restore: one pane per terminal; discard lone-pane titles that repeat the tab name.
   const layout = ORCA_LAYOUT_OWNER_IS_MAIN
     ? sanitizeTerminalLayoutPaneTitles(normalizeTerminalLayoutPtyOwnership(stored).snapshot, {
@@ -95,18 +111,18 @@ function loadTabs(args: WorkspaceLoadArgs): {
   aliases: ReadonlyMap<string, string>
 } {
   const { session, key } = args
-  const aliases = duplicateEditorTabAliases(session.unifiedTabs?.[key] ?? [])
+  const aliases = duplicateEditorTabAliases(readSessionUnit(session, 'unifiedTabs', key) ?? [])
   const rows = takeRows(args)
   const rowByEntity = new Map(rows.map((row) => [row.id, row]))
   const merged = new Set<string>()
   const savedEditFilePaths = new Set(
-    (session.openFilesByWorktree?.[key] ?? []).map((file) => file.filePath)
+    (readSessionUnit(session, 'openFilesByWorktree', key) ?? []).map((file) => file.filePath)
   )
   // Prune transient tabs only when loading with main’s views; loads without views retain all stored tabs.
   const viewsOf = ORCA_LAYOUT_OWNER_IS_MAIN ? args.context.editorViewsOf : undefined
   const heldViews = viewsOf?.(key) ?? {}
   const viewedEntities = new Set(
-    (session.unifiedTabs?.[key] ?? []).flatMap((entry) =>
+    (readSessionUnit(session, 'unifiedTabs', key) ?? []).flatMap((entry) =>
       heldViews[entry.id] ? [entry.entityId] : []
     )
   )
@@ -134,7 +150,7 @@ function loadTabs(args: WorkspaceLoadArgs): {
       createdAt: tab.createdAt
     })
   }
-  for (const entry of session.unifiedTabs?.[key] ?? []) {
+  for (const entry of readSessionUnit(session, 'unifiedTabs', key) ?? []) {
     if (tabIds.has(entry.id) || aliases.has(entry.id)) {
       continue
     }
@@ -170,14 +186,14 @@ function loadTabs(args: WorkspaceLoadArgs): {
   }
   // Match window browser hydration: append orphaned browser records to the retained active group so the window never invents an unknown ID.
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-    const storedGroups = session.tabGroups?.[key] ?? []
+    const storedGroups = readSessionUnit(session, 'tabGroups', key) ?? []
     const heldGroupIds = new Set(resolveTabGroupOwners(candidates, storedGroups).values())
-    const savedActive = session.activeGroupIdByWorktree?.[key]
+    const savedActive = readSessionUnit(session, 'activeGroupIdByWorktree', key)
     const activeGroupId =
       savedActive && heldGroupIds.has(savedActive)
         ? savedActive
         : storedGroups.find((group) => heldGroupIds.has(group.id))?.id
-    for (const record of session.browserTabsByWorktree?.[key] ?? []) {
+    for (const record of readSessionUnit(session, 'browserTabsByWorktree', key) ?? []) {
       if (tabs.some((tab) => tab.kind === 'browser' && tab.entityId === record.id)) {
         continue
       }
@@ -219,7 +235,7 @@ export function loadWorkspace(args: WorkspaceLoadArgs): WorkspaceLayout {
   const { session, key, view } = args
   const worktreeId = resolveWorktreeId(args)
   const { tabs, candidates, aliases } = loadTabs(args)
-  const storedGroups = session.tabGroups?.[key] ?? []
+  const storedGroups = readSessionUnit(session, 'tabGroups', key) ?? []
   const kept = (tabId: string): string => aliases.get(tabId) ?? tabId
   for (const group of storedGroups) {
     const recent =
@@ -239,7 +255,7 @@ export function loadWorkspace(args: WorkspaceLoadArgs): WorkspaceLayout {
   })
   const workspace: WorkspaceLayout = { worktreeId, tabs, groups }
   const groupLayout = pruneGroupLayout(
-    session.tabGroupLayouts?.[key],
+    readSessionUnit(session, 'tabGroupLayouts', key),
     new Set(groups.map((group) => group.id))
   )
   if (groupLayout) {

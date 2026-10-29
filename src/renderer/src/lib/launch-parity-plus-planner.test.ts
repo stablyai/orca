@@ -38,7 +38,8 @@ describe('"+" saved default args at the window planner', () => {
     const store = modules.createStore()
     holder.store = store
     const workspace = { kind: 'repo', path } as const
-    store.setState(
+    modules.setSessionTestState(
+      store,
       launchWorkspaceState(workspace, {
         ...getDefaultSettings('/home/alice'),
         agentDefaultArgs: { claude: String.raw`--x it\'s` }

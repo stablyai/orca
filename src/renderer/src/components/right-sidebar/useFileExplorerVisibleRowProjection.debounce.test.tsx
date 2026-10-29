@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
@@ -59,7 +60,7 @@ describe('file explorer ignored-path query debounce', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     getRuntimeGitIgnoredPathsMock.mockReset().mockResolvedValue([])
-    useAppStore.setState(initialAppState, true)
+    setSessionTestState(useAppStore, initialAppState, true)
     useAppStore.setState({
       settings: { activeRuntimeEnvironmentId: null } as AppState['settings']
     })
@@ -67,7 +68,7 @@ describe('file explorer ignored-path query debounce', () => {
 
   afterEach(() => {
     cleanup()
-    useAppStore.setState(initialAppState, true)
+    setSessionTestState(useAppStore, initialAppState, true)
     vi.useRealTimers()
   })
 

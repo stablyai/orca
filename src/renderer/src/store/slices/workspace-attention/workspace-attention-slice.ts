@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AgentAttentionUnreadReason } from '@/attention/agent-attention-contract'
 import { emitAgentSubjectReads } from '@/attention/agent-subject-read-actions'
 import type { AppState } from '../../types'
@@ -20,10 +20,8 @@ import { workspaceMarkerTabIds } from './workspace-live-markers'
 import { isTabOnScreen } from '@/hooks/agent-auto-ack-targets'
 import { isWorkspaceNotificationMutedBySidebarFilters } from '@/attention/hidden-workspace-notification-mute'
 
-export const createWorkspaceAttentionSlice: StateCreator<
+export const createWorkspaceAttentionSlice: SessionStateCreator<
   AppState,
-  [],
-  [],
   WorkspaceAttentionSlice
 > = (set, get) => {
   const markTabUnread = (tabId: string, reason: AgentAttentionUnreadReason): void => {
@@ -42,21 +40,21 @@ export const createWorkspaceAttentionSlice: StateCreator<
     // Why: a marker stays until its tab is read on screen, Marked as read, or closed.
     set((s) =>
       s.unreadTerminalTabs[tabId]
-        ? s
+        ? undefined
         : { unreadTerminalTabs: { ...s.unreadTerminalTabs, [tabId]: reason } }
     )
   }
   const markPaneUnread = (paneKey: string, reason: AgentAttentionUnreadReason): void => {
     set((s) =>
       s.unreadTerminalPanes[paneKey]
-        ? s
+        ? undefined
         : { unreadTerminalPanes: { ...s.unreadTerminalPanes, [paneKey]: reason } }
     )
   }
   const markCompletionUnread = (paneKey: string, reason: AgentAttentionUnreadReason): void => {
     set((s) =>
       s.unreadAgentCompletionPanes[paneKey]
-        ? s
+        ? undefined
         : { unreadAgentCompletionPanes: { ...s.unreadAgentCompletionPanes, [paneKey]: reason } }
     )
   }
@@ -65,7 +63,7 @@ export const createWorkspaceAttentionSlice: StateCreator<
     const before = get()
     set((s) => {
       const next = removeTabsAttention(s, tabIds)
-      return sameMarkers(s, next) ? s : next
+      return sameMarkers(s, next) ? undefined : next
     })
     const removed = collectRemovedAttention(before, get())
     if (removed) {

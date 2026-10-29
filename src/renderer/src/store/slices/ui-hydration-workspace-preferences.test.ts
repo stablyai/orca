@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getWorktreeCardModeProperties } from '../../../../shared/constants'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
@@ -696,7 +697,7 @@ describe('createUISlice hydratePersistedUI', () => {
 
   it('sanitizes and prunes agents repo filters against a loaded repo catalog', () => {
     const store = createUIStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         {
           id: 'repo-1',

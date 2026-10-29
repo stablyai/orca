@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import type { GitHubPRRefreshCandidate } from '../../../../shared/github/pull-request-refresh-types'
@@ -15,8 +15,8 @@ import {
 } from './visible-hosted-review-refresh-ownership'
 
 export const createRefreshRoutingActions = (
-  set: Parameters<StateCreator<AppState>>[0],
-  get: Parameters<StateCreator<AppState>>[1]
+  set: Parameters<SessionStateCreator<AppState>>[0],
+  get: Parameters<SessionStateCreator<AppState>>[1]
 ): Pick<
   GitHubSlice,
   | 'enqueueGitHubPRRefresh'
@@ -28,7 +28,7 @@ export const createRefreshRoutingActions = (
     set((s) =>
       s.visibleReviewCardWorktreeIds?.length === ids.length &&
       ids.every((id, index) => s.visibleReviewCardWorktreeIds[index] === id)
-        ? s
+        ? undefined
         : { visibleReviewCardWorktreeIds: ids }
     )
   },
@@ -74,7 +74,7 @@ export const createRefreshRoutingActions = (
     set((s) =>
       s.visibleReviewWorktreeIds?.length === worktreeIds.length &&
       worktreeIds.every((id, index) => s.visibleReviewWorktreeIds[index] === id)
-        ? s
+        ? undefined
         : { visibleReviewWorktreeIds: worktreeIds }
     )
     const state = get()

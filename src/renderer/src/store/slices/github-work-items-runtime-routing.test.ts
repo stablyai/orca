@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { workItemsCacheKey } from '../github/cache-identity'
 import {
@@ -52,7 +53,8 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
         executionHostId: 'runtime:env-1'
       }
     ]
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' },
       repos
     } as Partial<AppState>)
@@ -97,7 +99,8 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       _meta: { runtimeId: 'remote-runtime' }
     })
     const store = createTestStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       settings: null,
       repos: [
         {
@@ -144,7 +147,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       _meta: { runtimeId: 'remote-runtime' }
     })
     const store = createTestStore()
-    store.setState((state) => ({
+    setSessionTestState(store, (state): Partial<AppState> => ({
       ...state,
       settings: null,
       repos: [
@@ -205,7 +208,8 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
         addedAt: 1
       }
     ]
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'focused-runtime' },
       repos
     } as Partial<AppState>)
@@ -300,7 +304,8 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       items: [{ type: 'issue', number: 27, title: 'SSH issue', url: 'https://example.test/27' }],
       sources: { issues: { owner: 'up', repo: 'r' }, prs: { owner: 'up', repo: 'r' } }
     })
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-focused' } as AppState['settings'],
       repos: [
         {
@@ -362,7 +367,10 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     const store = createTestStore()
     const error = new Error('Access denied: unknown repository path')
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    store.setState(runtimeOwnedRepoState('env-1', 'runtime-repo-id', '/server/known-repo'))
+    setSessionTestState(
+      store,
+      runtimeOwnedRepoState('env-1', 'runtime-repo-id', '/server/known-repo')
+    )
     mockApi.gh.listWorkItems.mockRejectedValueOnce(error)
 
     try {
@@ -422,12 +430,13 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       _meta: { runtimeId: 'remote-runtime' }
     })
 
-    store.setState(runtimeOwnedRepoState('env-start', 'repo-start', '/server/repo'))
+    setSessionTestState(store, runtimeOwnedRepoState('env-start', 'repo-start', '/server/repo'))
     const queued = store
       .getState()
       .fetchWorkItems('caller-repo-id', '/server/repo', 24, 'is:open', { force: true })
 
-    store.setState(
+    setSessionTestState(
+      store,
       runtimeOwnedRepoState('env-switched', 'repo-switched', '/server/repo', {
         workItemsCache: {}
       })
@@ -486,13 +495,14 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
           })
       )
 
-    store.setState(runtimeOwnedRepoState('env-old', 'repo-old-runtime', '/server/repo'))
+    setSessionTestState(store, runtimeOwnedRepoState('env-old', 'repo-old-runtime', '/server/repo'))
     const oldFetch = store
       .getState()
       .fetchWorkItems('caller-repo-id', '/server/repo', 24, 'is:open')
     await vi.waitFor(() => expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1))
 
-    store.setState(
+    setSessionTestState(
+      store,
       runtimeOwnedRepoState('env-new', 'repo-new-runtime', '/server/repo', {
         workItemsCache: {}
       })

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 /**
  * #13699: a project can only join a group in its own host's catalog. The host stores any other
  * group id as "no group" and still returns the row, so the move used to look successful.
@@ -80,7 +81,7 @@ beforeEach(() => {
 
 function storeWith(projectGroups: ProjectGroup[]) {
   const store = createTestStore()
-  store.setState({ repos: [remoteRepo], projectGroups })
+  setSessionTestState(store, { repos: [remoteRepo], projectGroups })
   return store
 }
 
@@ -142,7 +143,7 @@ describe('moving one twin of a repo id shared by a local and an SSH row', () => 
     const sshTwin: Repo = { ...remoteRepo, executionHostId: undefined, connectionId: 'ssh-1' }
     moveProject.mockResolvedValue({ ...sshTwin, projectGroupId: 'ssh-group' })
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [localTwin, sshTwin],
       projectGroups: [group('ssh-group', 'ssh:ssh-1')]
     })
@@ -161,7 +162,7 @@ describe('moving one twin of a repo id on a paired server (server-local and serv
     const serverSshTwin: Repo = { ...remoteRepo, connectionId: 'srv-ssh', projectGroupId: null }
     runtimeMoveReturns({ ...serverSshTwin, projectGroupId: 'remote-group' })
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [serverLocalTwin, serverSshTwin],
       projectGroups: [group('remote-group', REMOTE_HOST)]
     })

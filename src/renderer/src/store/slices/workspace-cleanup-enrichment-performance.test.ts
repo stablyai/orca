@@ -1,3 +1,5 @@
+import { isSessionSourceOracleActive } from '@/lib/test-support/session-source-oracle'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import type {
@@ -32,13 +34,17 @@ function countOpenFileScans(
     get(target, property, receiver) {
       if (property === Symbol.iterator) {
         return () => {
-          counts.openFiles += 1
+          if (!isSessionSourceOracleActive()) {
+            counts.openFiles += 1
+          }
           return target[Symbol.iterator]()
         }
       }
       if (property === 'filter') {
         return (predicate: (file: AppState['openFiles'][number]) => boolean) => {
-          counts.openFiles += 1
+          if (!isSessionSourceOracleActive()) {
+            counts.openFiles += 1
+          }
           return target.filter(predicate)
         }
       }
@@ -51,7 +57,9 @@ function countOpenFileScans(
 function countRecordScans<T extends object>(record: T, onScan: () => void): T {
   return new Proxy(record, {
     ownKeys(target) {
-      onScan()
+      if (!isSessionSourceOracleActive()) {
+        onScan()
+      }
       return Reflect.ownKeys(target)
     }
   })
@@ -208,7 +216,8 @@ describe('workspace cleanup enrichment performance', () => {
       })
     ) as unknown as AppState['tabsByWorktree']
     const store = createCleanupTestStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This activeWorktreeId, tabsByWorktree, openFiles fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       activeWorktreeId: BETA_ID,
       tabsByWorktree,
       openFiles,
@@ -326,7 +335,8 @@ describe('workspace cleanup enrichment performance', () => {
       getForegroundProcess: vi.fn().mockResolvedValue('zsh')
     }
     const store = createCleanupTestStore()
-    store.setState({ tabsByWorktree, ptyIdsByTabId } as Partial<AppState>)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This tabsByWorktree, ptyIdsByTabId fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, { tabsByWorktree, ptyIdsByTabId } as Partial<AppState>)
 
     const scanPromise = store.getState().scanWorkspaceCleanup()
     onProgress?.({
@@ -416,7 +426,8 @@ describe('workspace cleanup enrichment performance', () => {
       getForegroundProcess: vi.fn().mockResolvedValue('zsh')
     }
     const store = createCleanupTestStore()
-    store.setState({ tabsByWorktree, ptyIdsByTabId } as Partial<AppState>)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This tabsByWorktree, ptyIdsByTabId fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, { tabsByWorktree, ptyIdsByTabId } as Partial<AppState>)
 
     const scanPromise = store.getState().scanWorkspaceCleanup()
     onProgress?.({
@@ -471,7 +482,8 @@ describe('workspace cleanup enrichment performance', () => {
 
     await store.getState().scanWorkspaceCleanup()
     const removal = store.getState().removeWorkspaceCleanupCandidates([candidate.worktreeId])
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This tabsByWorktree, ptyIdsByTabId fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       tabsByWorktree: {
         [candidate.worktreeId]: [
           { id: 'post-scan-tab', title: 'shell' }

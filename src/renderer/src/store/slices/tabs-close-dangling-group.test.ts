@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
 import { createTestStore } from './store-test-helpers'
@@ -35,7 +36,7 @@ describe('closeUnifiedTab with a missing group record (#11308)', () => {
     const closing = store.getState().createUnifiedTab(WT, contentType, { id: `${contentType}-x` })
     // Only an editor tab's close goes to main first; a terminal's (rowless here) closes as today.
     main = contentType === 'editor' ? await drawTabsFromMain(store) : NO_MAIN
-    store.setState({ groupsByWorktree: { [WT]: [] } })
+    setSessionTestState(store, { groupsByWorktree: { [WT]: [] } })
 
     const result = store.getState().closeUnifiedTab(closing.id)
     // A layout-owner build closes an editor tab in main; its frame drops it.
@@ -48,7 +49,7 @@ describe('closeUnifiedTab with a missing group record (#11308)', () => {
   it('reports the last tab when the worktree has no other tab', async () => {
     const only = store.getState().createUnifiedTab(WT, 'editor', { id: 'editor-only' })
     main = await drawTabsFromMain(store)
-    store.setState({ groupsByWorktree: { [WT]: [] } })
+    setSessionTestState(store, { groupsByWorktree: { [WT]: [] } })
 
     expect(store.getState().closeUnifiedTab(only.id)?.wasLastTab).toBe(true)
     await main.settle()

@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 /** Run the same goldens with host-owned Recent/Smart stamps and every stamped Smart tier. */
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup } from '@testing-library/react'
 import { useAppStore } from '@/store'
@@ -62,12 +63,12 @@ describe('sidebar row model goldens: stamp tiers', () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(GOLDEN_NOW)
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   afterEach(() => {
     cleanup()
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
     vi.useRealTimers()
   })
 
@@ -90,7 +91,7 @@ describe('sidebar row model goldens: stamp tiers', () => {
             `sort=${sortBy} groupBy=${groupBy} pinnedInGroups=${pinnedInGroups}`,
             captureScenario(view, stampTierState())
           )
-          useAppStore.setState(initialState, true)
+          setSessionTestState(useAppStore, initialState, true)
         }
       }
     }

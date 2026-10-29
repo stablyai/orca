@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import { tryRuntimeTargetForWorktreeOwner } from '../listing/worktree-owner-target'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
@@ -30,17 +31,16 @@ export function createBumpWorktreeActivity(
       let shouldPersist = false
       set((s) => {
         if (!s.folderWorkspaces.some((workspace) => workspace.id === folderWorkspaceId)) {
-          return s
+          return undefined
         }
         shouldPersist = true
         const isActive = s.activeWorktreeId === worktreeId
-        return {
-          folderWorkspaces: s.folderWorkspaces.map((workspace) =>
+        return editSessionSource(s)
+          .sequence('folderWorkspaces')
+          .map((workspace) =>
             workspace.id === folderWorkspaceId ? { ...workspace, lastActivityAt: now } : workspace
-          ),
-          // Why: active-workspace PTY events are click side-effects, so they must not reorder it.
-          ...(isActive ? {} : { sortEpoch: s.sortEpoch + 1 })
-        }
+          )
+          .finish(isActive ? {} : { sortEpoch: s.sortEpoch + 1 })
       })
       if (shouldPersist) {
         getFolderWorkspaceActivityPersistence(get).record(folderWorkspaceId, now)
@@ -51,14 +51,16 @@ export function createBumpWorktreeActivity(
     set((s) => {
       const worktree = findKnownWorktreeById(s, worktreeId)
       if (!worktree) {
-        return s
+        return undefined
       }
       shouldPersist = true
       // Active-worktree PTY side effects must not reorder selection; persist activity for the next background sort (PR #209).
       const isActive = s.activeWorktreeId === worktreeId
-      const nextWorktrees = applyWorktreeUpdates(s.worktreesByRepo, worktreeId, {
+      const edit = editSessionSource(s)
+      applyWorktreeUpdates(edit, worktreeId, {
         lastActivityAt: now
       })
+      const nextWorktrees = edit.read('worktreesByRepo')
       const nextDetectedWorktrees = applyDetectedWorktreeUpdates(
         s.detectedWorktreesByRepo,
         worktreeId,
@@ -66,17 +68,12 @@ export function createBumpWorktreeActivity(
           lastActivityAt: now
         }
       )
-      return {
-        ...(nextWorktrees !== s.worktreesByRepo
-          ? {
-              worktreesByRepo: nextWorktrees,
-              ...(isActive ? {} : { sortEpoch: s.sortEpoch + 1 })
-            }
-          : {}),
+      return edit.finish({
+        ...(nextWorktrees !== s.worktreesByRepo && !isActive ? { sortEpoch: s.sortEpoch + 1 } : {}),
         ...(nextDetectedWorktrees !== s.detectedWorktreesByRepo
           ? { detectedWorktreesByRepo: nextDetectedWorktrees }
           : {})
-      }
+      })
     })
 
     if (!shouldPersist) {

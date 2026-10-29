@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
@@ -19,8 +20,8 @@ function tab(id: string, patch: Partial<OpenFile> = {}): OpenFile {
 }
 
 beforeEach(() => {
-  useAppStore.setState(useAppStore.getInitialState(), true)
-  useAppStore.setState({
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, {
     worktreesByRepo: {
       'repo-1': [makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' })]
     }
@@ -28,8 +29,8 @@ beforeEach(() => {
 })
 
 it('through the real identity index, skips a file whose record keeps a view open', () => {
-  useAppStore.setState({ openFiles: [tab('a')], editorDrafts: { a: 'edits' } })
-  useAppStore.setState((s) => ({
+  setSessionTestState(useAppStore, { openFiles: [tab('a')], editorDrafts: { a: 'edits' } })
+  setSessionTestState(useAppStore, (s) => ({
     openFiles: [...s.openFiles, tab('b')],
     editorDrafts: { ...s.editorDrafts, b: 'edits' }
   }))

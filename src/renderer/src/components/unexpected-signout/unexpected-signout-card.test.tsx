@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../../store'
@@ -33,7 +34,7 @@ beforeEach(() => {
       updater: { getVersion: vi.fn().mockResolvedValue('1.4.197') }
     }
   })
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
   useAppStore.setState({
     orcaProfileAuthStatus: status,
     persistedUIReady: true,
@@ -58,7 +59,7 @@ describe('unexpected signout lifecycle', () => {
     })
     expect(screen.queryByRole('complementary')).not.toBeNull()
     cleanup()
-    useAppStore.setState(useAppStore.getInitialState(), true)
+    setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
     useAppStore.setState({
       orcaProfileAuthStatus: status,
       persistedUIReady: true,

@@ -1,4 +1,5 @@
-import { createStore, type StoreApi } from 'zustand/vanilla'
+import { withSessionSourceTestWrites } from '@/lib/test-support/session-source-test-store'
+import { createStore } from 'zustand/vanilla'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AppState } from '../types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
@@ -14,34 +15,29 @@ import {
   type WorktreeNavHistorySimpleViewEntry
 } from './worktree-nav-history'
 
-type MinimalState = Pick<
-  AppState,
-  | 'worktreeNavHistory'
-  | 'worktreeNavHistoryIndex'
-  | 'isNavigatingHistory'
-  | 'recordWorktreeVisit'
-  | 'recordViewVisit'
-  | 'goBackWorktree'
-  | 'goForwardWorktree'
-  | 'worktreesByRepo'
->
-
 function makeWorktree(id: string): Worktree {
   return { id } as unknown as Worktree
 }
 
-function createHistoryStore(worktreeIds: string[] = []): StoreApi<MinimalState> {
+function createHistoryStore(worktreeIds: string[] = []) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return createStore<any>()((set, get, api) => ({
-    worktreesByRepo: {
-      'repo-1': worktreeIds.map(makeWorktree)
-    },
-    ...createWorktreeNavHistorySlice(
-      set as Parameters<typeof createWorktreeNavHistorySlice>[0],
-      get as Parameters<typeof createWorktreeNavHistorySlice>[1],
-      api as Parameters<typeof createWorktreeNavHistorySlice>[2]
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+  return createStore<AppState>()(
+    withSessionSourceTestWrites(
+      (set, get, api) =>
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+        ({
+          worktreesByRepo: {
+            'repo-1': worktreeIds.map(makeWorktree)
+          },
+          ...createWorktreeNavHistorySlice(
+            set as Parameters<typeof createWorktreeNavHistorySlice>[0],
+            get as Parameters<typeof createWorktreeNavHistorySlice>[1],
+            api as Parameters<typeof createWorktreeNavHistorySlice>[2]
+          )
+        }) as unknown as AppState
     )
-  })) as unknown as StoreApi<MinimalState>
+  )
 }
 
 const viewCases: { entry: WorktreeNavHistorySimpleViewEntry; label: string }[] = [

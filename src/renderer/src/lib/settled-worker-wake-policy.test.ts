@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
@@ -13,7 +14,7 @@ const initialState = useAppStore.getState()
 
 afterEach(() => {
   vi.unstubAllGlobals()
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
 })
 
 it('resumes a settled worker and an ordinary agent once each in the same wake sweep', () => {
@@ -31,7 +32,7 @@ it('resumes a settled worker and an ordinary agent once each in the same wake sw
     // Old clients can still publish the withdrawn policy field.
     ...(id === 'settled-worker' ? { automaticResumeBlockedBy: 'legacy-orchestration-worker' } : {})
   }))
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     tabsByWorktree: { 'wt-1': [] },
     sleepingAgentSessionsByPaneKey: Object.fromEntries(records.map((r) => [r.paneKey, r]))
   })

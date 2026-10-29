@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab } from '../../../../shared/tab-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
@@ -49,7 +50,9 @@ const terminalTab: Tab = {
 }
 
 function closeFloatingTab(tab: Tab): void {
-  useAppStore.setState({ unifiedTabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [tab] } })
+  setSessionTestState(useAppStore, {
+    unifiedTabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [tab] }
+  })
   dispatchWorkspaceTabCommand({
     type: 'close',
     target: { kind: 'tab', worktreeId: FLOATING_TERMINAL_WORKTREE_ID, tabId: tab.id }
@@ -63,7 +66,7 @@ function requestTerminalClose(): { land: () => void } {
 }
 
 function floatingNote({ isDirty, isPinned }: { isDirty: boolean; isPinned: boolean }): Tab {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     openFiles: [makeOpenFile({ id: 'note', worktreeId: FLOATING_TERMINAL_WORKTREE_ID, isDirty })],
     editorBuffers: {}
   })

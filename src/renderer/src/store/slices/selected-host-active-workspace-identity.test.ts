@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -32,7 +33,8 @@ function worktree(path: string, hostId: ExecutionHostId): Worktree {
 }
 
 afterEach(() => {
-  useAppStore.setState({
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+  setSessionTestState(useAppStore, {
     repos: [],
     worktreesByRepo: {},
     detectedWorktreesByRepo: {},
@@ -49,7 +51,7 @@ describe('selected-host active workspace identity', () => {
   it('selects the runtime worktree when exact IDs collide in local-first order', () => {
     const local = worktree('/local/repo', 'local')
     const runtime = worktree('/runtime/repo', RUNTIME_HOST)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [
         {
           id: SAME_REPO_ID,
@@ -84,7 +86,7 @@ describe('selected-host active workspace identity', () => {
   it('selects the runtime worktree when exact-ID catalog order is reversed', () => {
     const local = worktree('/local/repo', 'local')
     const runtime = worktree('/runtime/repo', RUNTIME_HOST)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [
         {
           id: SAME_REPO_ID,
@@ -112,7 +114,7 @@ describe('selected-host active workspace identity', () => {
   })
 
   it('keeps exact-ID folder and group activation on the selected runtime', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       projectGroups: [
         {
           id: 'same-group',

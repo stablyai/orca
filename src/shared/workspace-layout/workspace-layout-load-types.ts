@@ -1,3 +1,4 @@
+import type { SessionUnitView } from '../session-unit-reader'
 import type { ExecutionHostId } from '../execution-host'
 import type { TerminalLayoutSnapshot } from '../terminal-tab-types'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
@@ -34,7 +35,7 @@ export type WorkspaceLayoutLoadResult = LoadedWorkspaceLayout & {
 }
 
 export type WorkspaceLoadArgs = {
-  session: WorkspaceSessionState
+  session: WorkspaceSessionState | SessionUnitView
   hostId: ExecutionHostId
   key: string
   /** Terminal tab id → the one workspace that keeps its row. */

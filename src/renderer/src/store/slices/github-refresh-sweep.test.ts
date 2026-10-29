@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createTestStore,
@@ -17,7 +18,7 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
 
   it('publishes no store update when the cache sweep changes nothing', () => {
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         {
           id: 'repo-1',
@@ -92,7 +93,8 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
         return repoId
       }
     })
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       repos: [repo],
       groupBy: 'repo',
       worktreeCardProperties: ['comment'],
@@ -116,7 +118,7 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
     'does not fan out PR lookups on resume with %s grouping',
     (groupBy) => {
       const store = createTestStore()
-      store.setState({
+      setSessionTestState(store, {
         repos: [
           {
             id: 'repo-1',
@@ -202,7 +204,8 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
         ]
       ])
     )
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
       repos,
       groupBy: 'repo',
@@ -223,7 +226,8 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
     const repoPath = '/repo'
     const branch = 'feature/test'
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
       groupBy: 'repo',
       worktreeCardProperties: ['comment'],
@@ -257,7 +261,8 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
     const repoPath = '/repo'
     const branch = 'feature/test'
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
       groupBy: 'repo',
       worktreeCardProperties: ['issue'],
@@ -309,7 +314,8 @@ describe('createGitHubSlice.refreshGitHubForWorktree', () => {
     const branch = 'feature/runtime'
     const worktreeId = 'wt-runtime'
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
       repos: [
         {
@@ -363,7 +369,8 @@ describe('createGitHubSlice.refreshGitHubForWorktree', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     mockApi.gh.enqueuePRRefresh.mockRejectedValueOnce(error)
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
       worktreesByRepo: {
         'repo-1': [

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 /** Route cleanup to the confirmed host, replacing #14731’s blanket refusal (STA-4343). Real per-host temp directories and destructive transport fakes prove exactly the confirmed copy is removed; neither deleting none nor deleting all can pass. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import * as fs from 'node:fs'
@@ -330,7 +331,7 @@ describe('STA-4343: cleanup deletes on the confirmed host, never the active one'
       removeWorktree: vi.fn(async (...args: Parameters<typeof originalRemoveWorktree>) => {
         const result = await originalRemoveWorktree(...args)
         if (args[0].id === FIRST_WORKTREE_ID) {
-          store.setState({
+          setSessionTestState(store, {
             activeWorktreeId: WORKTREE_ID,
             activeWorkspaceExecutionHostId: HOST_B_HOST_ID,
             worktreesByRepo: { repo1: [secondHostAWorktree, secondHostBWorktree] }

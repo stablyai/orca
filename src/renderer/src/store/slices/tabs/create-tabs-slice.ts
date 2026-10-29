@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../../types'
 import type { TabsSlice } from './tabs-slice-contract'
 import { createTabsCreateActions } from './tabs-create-actions'
@@ -13,7 +13,7 @@ import { createTabsSplitRatioActions } from './tabs-split-ratio-actions'
 import { createTabsDragPreviewActions } from './tabs-drag-preview-actions'
 import { createTabsSessionActions } from './tabs-session-actions'
 
-export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, get) => ({
+export const createTabsSlice: SessionStateCreator<AppState, TabsSlice> = (set, get) => ({
   unifiedTabsByWorktree: {},
   groupsByWorktree: {},
   activeGroupIdByWorktree: {},

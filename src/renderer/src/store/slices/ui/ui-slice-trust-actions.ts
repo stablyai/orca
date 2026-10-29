@@ -12,7 +12,7 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
       set((s) => {
         const next = withOrcaHookScriptConfirmed(s.trustedOrcaHooks, repoId, kind, contentHash)
         if (next === s.trustedOrcaHooks) {
-          return s
+          return undefined
         }
         window.api.ui.set({ trustedOrcaHooks: next }).catch(console.error)
         return { trustedOrcaHooks: next }
@@ -21,7 +21,7 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
       set((s) => {
         const next = withOrcaHookRepoAlwaysTrusted(s.trustedOrcaHooks, repoId)
         if (next === s.trustedOrcaHooks) {
-          return s
+          return undefined
         }
         window.api.ui.set({ trustedOrcaHooks: next }).catch(console.error)
         return { trustedOrcaHooks: next }
@@ -29,7 +29,7 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
     clearOrcaHookTrustForRepo: (repoId) =>
       set((s) => {
         if (!(repoId in s.trustedOrcaHooks)) {
-          return s
+          return undefined
         }
         const next = { ...s.trustedOrcaHooks }
         delete next[repoId]
@@ -41,7 +41,7 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
       set((s) => {
         const dismissalKey = getSetupScriptPromptDismissalKey(repoHostIdentity)
         if (!repoHostIdentity || s.setupScriptPromptDismissedRepoIds.includes(dismissalKey)) {
-          return s
+          return undefined
         }
         const next = [...s.setupScriptPromptDismissedRepoIds, dismissalKey]
         window.api.ui.set({ setupScriptPromptDismissedRepoIds: next }).catch(console.error)
@@ -51,7 +51,7 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
     setSetupGuideSidebarDismissed: (dismissed) =>
       set((s) => {
         if (s.setupGuideSidebarDismissed === dismissed) {
-          return s
+          return undefined
         }
         window.api.ui.set({ setupGuideSidebarDismissed: dismissed }).catch(console.error)
         return { setupGuideSidebarDismissed: dismissed }
@@ -64,7 +64,7 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
           s.setupGuideBrowserMilestoneMigrated &&
           s.setupGuideBrowserMilestoneLegacyComplete === legacyComplete
         ) {
-          return s
+          return undefined
         }
         const updates = {
           setupGuideBrowserMilestoneMigrated: true,
@@ -77,7 +77,7 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
     setBrowserImportHintHidden: (hidden) =>
       set((s) => {
         if (s.browserImportHintHidden === hidden) {
-          return s
+          return undefined
         }
         window.api.ui.set({ browserImportHintHidden: hidden }).catch(console.error)
         return { browserImportHintHidden: hidden }
@@ -86,7 +86,7 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
     dismissMobileEmulatorTabIntro: () =>
       set((s) => {
         if (s.mobileEmulatorTabIntroDismissed) {
-          return s
+          return undefined
         }
         window.api.ui.set({ mobileEmulatorTabIntroDismissed: true }).catch(console.error)
         return { mobileEmulatorTabIntroDismissed: true }
@@ -95,7 +95,7 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
     dismissMobileEmulatorAgentSetup: () =>
       set((s) => {
         if (s.mobileEmulatorAgentSetupDismissed) {
-          return s
+          return undefined
         }
         window.api.ui.set({ mobileEmulatorAgentSetupDismissed: true }).catch(console.error)
         return { mobileEmulatorAgentSetupDismissed: true }
@@ -104,7 +104,7 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
     dismissProjectOrderManualDefaultNotice: () =>
       set((s) => {
         if (s.projectOrderManualDefaultNoticeDismissed) {
-          return s
+          return undefined
         }
         window.api.ui.set({ projectOrderManualDefaultNoticeDismissed: true }).catch(console.error)
         return { projectOrderManualDefaultNoticeDismissed: true }
@@ -114,7 +114,7 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
     dismissUsagePercentageDisplayChangeNotice: () =>
       set((s) => {
         if (s.usagePercentageDisplayChangeNoticeDismissed) {
-          return s
+          return undefined
         }
         window.api.ui
           .set({ usagePercentageDisplayChangeNoticeDismissed: true })
@@ -125,7 +125,7 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
     dismissStatusBarCompactChangeNotice: () =>
       set((s) => {
         if (s.statusBarCompactChangeNoticeDismissed) {
-          return s
+          return undefined
         }
         window.api.ui.set({ statusBarCompactChangeNoticeDismissed: true }).catch(console.error)
         return { statusBarCompactChangeNoticeDismissed: true }
@@ -134,7 +134,7 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
     dismissPluginsAlphaNotice: () =>
       set((s) => {
         if (s.pluginsAlphaNoticeDismissed) {
-          return s
+          return undefined
         }
         window.api.ui.set({ pluginsAlphaNoticeDismissed: true }).catch(console.error)
         return { pluginsAlphaNoticeDismissed: true }
@@ -143,7 +143,7 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
     dismissUsageEmptyState: () =>
       set((s) => {
         if (s.usageEmptyStateDismissed) {
-          return s
+          return undefined
         }
         window.api.ui.set({ usageEmptyStateDismissed: true }).catch(console.error)
         return { usageEmptyStateDismissed: true }
@@ -153,7 +153,7 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
     markCodexTerminalServerIsolationNoticeSeen: () =>
       set((s) => {
         if (s.codexTerminalServerIsolationNoticeSeen) {
-          return s
+          return undefined
         }
         window.api.ui.set({ codexTerminalServerIsolationNoticeSeen: true }).catch(console.error)
         return { codexTerminalServerIsolationNoticeSeen: true }
@@ -162,7 +162,7 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
     markCodexSharedSettingsNoticeSeen: () =>
       set((s) => {
         if (s.codexSharedSettingsNoticeSeen) {
-          return s
+          return undefined
         }
         window.api.ui.set({ codexSharedSettingsNoticeSeen: true }).catch(console.error)
         return { codexSharedSettingsNoticeSeen: true }
@@ -171,7 +171,7 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
     markClaudeDiffPanelNoticeSeen: () =>
       set((s) => {
         if (s.claudeDiffPanelNoticeSeen) {
-          return s
+          return undefined
         }
         window.api.ui.set({ claudeDiffPanelNoticeSeen: true }).catch(console.error)
         return { claudeDiffPanelNoticeSeen: true }

@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ITerminalOptions } from '@xterm/xterm'
@@ -165,7 +166,7 @@ beforeEach(() => {
       terminalPreview: { connect, fit, unsubscribe, onData: () => vi.fn() }
     }
   })
-  useAppStore.setState({ ...initial, settings }, true)
+  setSessionTestState(useAppStore, { ...initial, settings }, true)
 })
 
 afterEach(() => {
@@ -173,7 +174,7 @@ afterEach(() => {
   for (const instance of harness.instances) {
     expect(instance.dispose).toHaveBeenCalledOnce()
   }
-  useAppStore.setState(initial, true)
+  setSessionTestState(useAppStore, initial, true)
   if (originalApi) {
     Object.defineProperty(window, 'api', originalApi)
   } else {

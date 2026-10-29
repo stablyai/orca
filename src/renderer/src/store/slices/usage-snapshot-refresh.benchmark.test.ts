@@ -1,3 +1,4 @@
+import { withSessionSourceTestWrites } from '@/lib/test-support/session-source-test-store'
 import { performance } from 'node:perf_hooks'
 import { create } from 'zustand'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -29,7 +30,10 @@ async function flushImmediatePromises(): Promise<void> {
 }
 
 function createCodexOnlyStore() {
-  return create<AppState>()((...args) => createCodexUsageSlice(...args) as AppState)
+  return create<AppState>()(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the AppState) fixture and intentionally supplies only the scenario's members.
+    withSessionSourceTestWrites((...args) => createCodexUsageSlice(...args) as AppState)
+  )
 }
 
 function createScanState(overrides: Partial<CodexUsageScanState> = {}): CodexUsageScanState {

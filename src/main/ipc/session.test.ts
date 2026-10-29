@@ -36,12 +36,23 @@ describe('registerSessionHandlers', () => {
       ),
       // Read by the switch-on save, which keeps main's own layout.
       getWorkspaceSession: vi.fn(() => getDefaultWorkspaceSession()),
+      getWorkspaceSessionGeneration: vi.fn(() => 0),
       setWorkspaceSession: vi.fn(),
       patchWorkspaceSession: vi.fn(),
       flushPendingOrThrowAsync: vi.fn(() => Promise.resolve())
     }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers under test touch only the store methods stubbed above and never the runtime.
-    registerSessionHandlers(store as never, {} as never)
+    registerSessionHandlers(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fenced-write fixture supplies every Store method these handlers call.
+      store as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture exercises only save handlers and supplies their runtime reconnect source.
+      {
+        shutdownReconnectSources: () => ({
+          isLiveLocalPty: () => false,
+          isKnownExited: () => false,
+          sshStatusByTargetId: new Map()
+        })
+      } as never
+    )
 
     for (const hostId of ['ssh:fenced', 'ssh:open', undefined]) {
       await handlers.get('session:set')?.({}, {}, hostId)

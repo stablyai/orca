@@ -1,12 +1,15 @@
+import { withSessionSourceTestWrites } from '@/lib/test-support/session-source-test-store'
 /** @vitest-environment happy-dom */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { create, type StateCreator } from 'zustand'
+import { create } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { SpeechModelState } from '../../../../shared/speech-types'
 import type { AppState } from '../types'
 import { createDictationSlice } from './dictation'
 
 type DictationTestStore = Pick<AppState, 'modelStates' | 'refreshModelStates' | 'setModelStates'>
-const dictationSlice = createDictationSlice as unknown as StateCreator<DictationTestStore>
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this slice uses only its own initialized dictation fields; no omitted AppState field is read.
+const dictationSlice = createDictationSlice as unknown as SessionStateCreator<DictationTestStore>
 
 let reply: SpeechModelState[]
 
@@ -22,7 +25,7 @@ beforeEach(() => {
 describe('dictation model-state stabilisation', () => {
   it('does not publish an unchanged reply', async () => {
     reply = [{ id: 'whisper-tiny', status: 'downloading', progress: 0.42 }]
-    const store = create<DictationTestStore>(dictationSlice)
+    const store = create<DictationTestStore>()(withSessionSourceTestWrites(dictationSlice))
     await store.getState().refreshModelStates()
     const previous = store.getState()
     const subscriber = vi.fn()
@@ -48,7 +51,7 @@ describe('dictation model-state stabilisation', () => {
       ]
     }
   ] as { changed: SpeechModelState[] }[])('publishes a changed reply', async ({ changed }) => {
-    const store = create<DictationTestStore>(dictationSlice)
+    const store = create<DictationTestStore>()(withSessionSourceTestWrites(dictationSlice))
     store.getState().setModelStates([{ id: 'whisper-tiny', status: 'downloading', progress: 0.42 }])
     const subscriber = vi.fn()
     store.subscribe(subscriber)

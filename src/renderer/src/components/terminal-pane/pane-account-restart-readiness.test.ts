@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { shallow } from 'zustand/shallow'
 import { useAppStore } from '@/store'
@@ -31,8 +32,8 @@ const ready = (): string[] => selectReadyAccountRestartPtyIds(useAppStore.getSta
 
 describe('selectReadyAccountRestartPtyIds', () => {
   beforeEach(() => {
-    useAppStore.setState(useAppStore.getInitialState(), true)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
+    setSessionTestState(useAppStore, {
       terminalLayoutsByTabId: Object.fromEntries(
         ['tab-1', 'tab-2'].map((tabId) => [
           tabId,

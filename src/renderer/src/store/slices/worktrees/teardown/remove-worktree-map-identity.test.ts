@@ -1,3 +1,4 @@
+import { applySessionTestUpdate } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it } from 'vitest'
 import type { AppState } from '../../../types'
 import { applyRemoveWorktreeSuccessState } from './remove-worktree-store-cleanup'
@@ -40,8 +41,7 @@ function removeWorktree(state: AppState): AppState {
   let current = state
   applyRemoveWorktreeSuccessState(
     (update) => {
-      const patch = typeof update === 'function' ? update(current) : update
-      current = { ...current, ...patch }
+      current = applySessionTestUpdate(current, update)
     },
     REMOVED_ID,
     new Set(['removed-tab'])

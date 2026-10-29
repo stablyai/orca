@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
@@ -74,6 +75,8 @@ export function createTerminalShutdownGuardController({
     clearStoppedTabBindings = false
   ): void => {
     set((state) => {
+      const sourceEdit = editSessionSource(state)
+
       const pendingPtyShutdownIds = { ...state.pendingPtyShutdownIds }
       const suppressedPtyExitIds = { ...state.suppressedPtyExitIds }
       for (const ptyId of exitGuardPtyIds) {
@@ -88,15 +91,17 @@ export function createTerminalShutdownGuardController({
         }
       }
       if (!clearStoppedTabBindings) {
-        return { pendingPtyShutdownIds, suppressedPtyExitIds }
+        return sourceEdit.finish({ pendingPtyShutdownIds, suppressedPtyExitIds })
       }
-      const ptyIdsByTabId = { ...state.ptyIdsByTabId }
+
       for (const tab of tabs) {
-        ptyIdsByTabId[tab.id] = (state.ptyIdsByTabId[tab.id] ?? []).filter(
-          (ptyId) => !stoppedPtyIds.has(ptyId)
+        sourceEdit.set(
+          'ptyIdsByTabId',
+          tab.id,
+          (state.ptyIdsByTabId[tab.id] ?? []).filter((ptyId) => !stoppedPtyIds.has(ptyId))
         )
       }
-      return { ptyIdsByTabId, pendingPtyShutdownIds, suppressedPtyExitIds }
+      return sourceEdit.finish({ pendingPtyShutdownIds, suppressedPtyExitIds })
     })
   }
 

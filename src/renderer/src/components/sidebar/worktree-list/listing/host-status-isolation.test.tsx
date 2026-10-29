@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -172,8 +173,8 @@ vi.mock('../rows/project-header-host-context', async (original) => {
 
 const initial = useAppStore.getInitialState()
 beforeEach(() => {
-  useAppStore.setState(initial, true)
-  useAppStore.setState({
+  setSessionTestState(useAppStore, initial, true)
+  setSessionTestState(useAppStore, {
     runtimeEnvironments: [environment('A', 'mine'), environment('B')],
     worktreesByRepo: { [repo.id]: [worktree] }
   })
@@ -199,7 +200,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   cleanup()
-  useAppStore.setState(initial, true)
+  setSessionTestState(useAppStore, initial, true)
 })
 
 it('does zero device scans while off and preserves equal identities while on, including catalog fallback', () => {
@@ -394,7 +395,7 @@ it('keeps compatibility, blocked guidance, aliases and diagnostic equality live 
     aliasHostIds: ['ssh:managed']
   })
   act(() =>
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       sshConnectionStates: new Map([
         [
           'managed',
@@ -449,7 +450,7 @@ it.each([
     )
     args.repos[0] = { ...args.repos[0]!, projectGroupId: 'nested' }
     args.repoMap.set(args.repos[0]!.id, args.repos[0]!)
-    useAppStore.setState({ repos: args.repos, projectGroups, folderWorkspaces })
+    setSessionTestState(useAppStore, { repos: args.repos, projectGroups, folderWorkspaces })
     // Keep requests pending: count production discovery/action snapshots without settlement writes.
     const callRuntimeRpc = vi.fn(() => new Promise<never>(() => {}))
     runtimeRpc.callRuntimeRpc.mockImplementation(callRuntimeRpc)
@@ -530,7 +531,7 @@ it.each([
     }
     for (let sequence = 0; sequence < 10; sequence++) {
       act(() =>
-        useAppStore.setState({
+        setSessionTestState(useAppStore, {
           sshConnectionStates: statusMap(sequence % 2 ? 'connected' : 'disconnected')
         })
       )
@@ -587,7 +588,7 @@ it.each([
     expect(renders).toBe(settledRenders)
     expect(result.current).toBe(first)
     act(() =>
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         sshConnectionStates: new Map([['target-0', ssh('connected', 'target-0')]])
       })
     )
@@ -597,7 +598,7 @@ it.each([
     expect(renders).toBeGreaterThan(settledRenders)
     const catalogBuilds = counts.dependencies
     act(() =>
-      useAppStore.setState((state) => ({
+      setSessionTestState(useAppStore, (state) => ({
         repos: state.repos.map((repo, index) =>
           index === 0 ? { ...repo, path: '/moved/repo' } : repo
         )
@@ -606,7 +607,7 @@ it.each([
     expect(counts.dependencies - catalogBuilds).toBe(2 * repoCount)
     expect(fetch).toHaveBeenCalledTimes(6 * repoCount)
     // Requests remain accepted when their snapshot becomes null; route/force policy is unchanged.
-    act(() => useAppStore.setState({ projectGroups: [], folderWorkspaces: [] }))
+    act(() => setSessionTestState(useAppStore, { projectGroups: [], folderWorkspaces: [] }))
     expect(fetch).toHaveBeenCalledTimes(8 * repoCount)
     expect(
       fetch.mock.calls.every(
@@ -630,7 +631,7 @@ it.each([
 
 it('keeps real collapsed same-name header contexts reactive through parent host options and row scope', () => {
   const fixture = collapsedSameNameProjectHeaders()
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     runtimeEnvironments: [{ ...environment('home'), name: 'Home' }, environment('B')],
     runtimeStatusByEnvironmentId: new Map(),
     worktreesByRepo: {}
@@ -663,7 +664,7 @@ it('keeps real collapsed same-name header contexts reactive through parent host 
   expect(first.get(fixture.rows[1]!.key)).toMatchObject({ hostId: 'runtime:home', label: 'Home' })
   for (let sequence = 0; sequence < 10; sequence++) {
     act(() =>
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         sshConnectionStates: new Map([
           ['outside', ssh(sequence % 2 ? 'connected' : 'disconnected')]
         ])

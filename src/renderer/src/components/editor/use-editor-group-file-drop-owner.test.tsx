@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { Suspense, use } from 'react'
 import { act, cleanup, render, waitFor } from '@testing-library/react'
@@ -78,7 +79,7 @@ beforeEach(() => {
     'folder:notes': [{ id: 'group-b' }],
     [FLOATING_TERMINAL_WORKTREE_ID]: [{ id: 'floating-group' }]
   }
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     settings: getDefaultSettings('/home/me'),
     repos: [{ ...TEST_REPO, executionHostId: 'local', connectionId: null }],
     worktreesByRepo: {
@@ -104,7 +105,7 @@ beforeEach(() => {
     openFile: mocks.openFile,
     setActiveTabType: mocks.setActiveTabType
   })
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     groupsByWorktree: Object.fromEntries(
       Object.entries(mocks.groupsByWorktree).map(([worktreeId, groups]) => [
         worktreeId,
@@ -259,7 +260,7 @@ describe('editor group OS file drops', () => {
     const view = render(<EditorGroup worktreeId="wt-b" groupId="group-b" />)
     dropFile(view.getByTestId('group-b:area'), 'shot.png')
     view.unmount()
-    useAppStore.setState({ groupsByWorktree: {} })
+    setSessionTestState(useAppStore, { groupsByWorktree: {} })
     await act(async () =>
       finish({
         paths: ['/repos/wt-b/shot.png'],
@@ -309,9 +310,9 @@ describe('editor group OS file drops', () => {
       expect(mocks.toastError).toHaveBeenCalledTimes(1)
       view.unmount()
       if (closed === 'workspace') {
-        useAppStore.setState({ groupsByWorktree: {} })
+        setSessionTestState(useAppStore, { groupsByWorktree: {} })
       } else {
-        useAppStore.setState({
+        setSessionTestState(useAppStore, {
           groupsByWorktree: {
             'wt-b': [{ id: 'group-other', worktreeId: 'wt-b', activeTabId: null, tabOrder: [] }]
           }

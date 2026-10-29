@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { Repo } from '../../../../shared/repo-types'
@@ -56,7 +57,7 @@ it.each([
     configurable: true,
     value: { forBranch: branchLookup }
   })
-  store.setState({ repos: [repo], worktreesByRepo: { repo: [workspace] } })
+  setSessionTestState(store, { repos: [repo], worktreesByRepo: { repo: [workspace] } })
   store.getState().observeTerminalGitHubPullRequestLink(workspace.id, {
     number: 42,
     url: review.url,
@@ -66,7 +67,7 @@ it.each([
     await Promise.resolve()
   }
   expect(branchLookup).toHaveBeenCalledTimes(1)
-  store.setState({
+  setSessionTestState(store, {
     repos:
       change === 'removed'
         ? []

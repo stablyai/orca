@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import type { TerminalSlice, TerminalStoreGet } from '../terminals/terminal-state'
 
@@ -26,7 +26,7 @@ import { createWorkspaceTerminalHydrationActions } from '../terminals/workspace-
 import { createWorkspaceTerminalReconnectActions } from '../terminals/workspace-terminal-reconnect'
 import { createPairedTerminalTabCloseIntentSlice } from '../terminals/paired-terminal-tab-close-intent-actions'
 
-export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> = (
+export const createTerminalSlice: SessionStateCreator<AppState, TerminalSlice> = (
   set,
   get,
   api

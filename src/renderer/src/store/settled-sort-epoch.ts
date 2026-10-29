@@ -1,5 +1,6 @@
 /** Keep settled sidebar sortEpoch in store: React effect mirroring nested burst flushSync updates into React #185. Store listener covers slice/runtime writes even without mounted components. */
 import type { StoreApi } from 'zustand'
+import type { SessionSourceSet } from './session-source-edits'
 import {
   INITIAL_SORT_SETTLE_STATE,
   reduceSortSettle,
@@ -21,7 +22,7 @@ function countLiveWorktrees(worktreesByRepo: AppState['worktreesByRepo']): numbe
 
 /** Call once from inside the store's state creator, passing its `api`. */
 export function installSettledSortEpoch(
-  api: Pick<StoreApi<AppState>, 'setState' | 'subscribe'>
+  api: Pick<StoreApi<AppState>, 'subscribe'> & { setState: SessionSourceSet<AppState> }
 ): void {
   let settleState = INITIAL_SORT_SETTLE_STATE
   let timer: ReturnType<typeof setTimeout> | undefined

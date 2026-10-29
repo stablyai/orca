@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { needsSavePromptOnClose } from '@/store/slices/editor/buffers/editor-buffer-close-rule'
 import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
@@ -79,8 +80,8 @@ describe('editor save queue: the saving view closes mid-write', () => {
     [
       'listed after a read-only view',
       (): void => {
-        h.store.setState({ openFiles: [] })
-        h.store.setState({
+        setSessionTestState(h.store, { openFiles: [] })
+        setSessionTestState(h.store, {
           openFiles: [
             closedViewTab('A', 'wt-1'),
             { ...closedViewTab('log', 'wt-2'), readOnly: true },
@@ -123,8 +124,8 @@ describe('editor save queue: the saving view closes mid-write', () => {
 
   it('writes through the view left when the writer closes while another record holds the file', async () => {
     // Divergent dirty drafts keep C off the A+B record, but both write the same file.
-    h.store.setState({ openFiles: [] })
-    h.store.setState({
+    setSessionTestState(h.store, { openFiles: [] })
+    setSessionTestState(h.store, {
       worktreesByRepo: {
         'repo-1': [
           closedViewWorktree('wt-1'),

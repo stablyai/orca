@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { buildDefaultSettings } from '../../../../shared/default-global-settings'
 import { createRoot } from 'react-dom/client'
 import { useAppStore } from '@/store'
@@ -141,17 +142,17 @@ export function installBrowserLinkMaterializationProbe() {
       const state = useAppStore.getState()
       const tabs = state.browserTabsByWorktree[worktreeId] ?? []
       if (transition === 'remove-tab') {
-        useAppStore.setState({
+        setSessionTestState(useAppStore, {
           browserTabsByWorktree: {
             [worktreeId]: tabs.filter((tab) => tab.id !== sourceWorkspaceId)
           }
         })
       }
       if (transition === 'remove-page') {
-        useAppStore.setState({ browserPagesByWorkspace: {} })
+        setSessionTestState(useAppStore, { browserPagesByWorkspace: {} })
       }
       if (transition === 'profile-switch') {
-        useAppStore.setState({
+        setSessionTestState(useAppStore, {
           browserTabsByWorktree: {
             [worktreeId]: tabs.map((tab) =>
               tab.id === sourceWorkspaceId

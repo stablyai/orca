@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import type { ClassifiedError } from '../../../../shared/classified-error'
@@ -33,7 +33,7 @@ import {
 } from './work-item-routing'
 
 export const createWorkItemAggregateActions = (
-  get: Parameters<StateCreator<AppState>>[1]
+  get: Parameters<SessionStateCreator<AppState>>[1]
 ): Pick<
   GitHubSlice,
   | 'fetchWorkItemsAcrossRepos'

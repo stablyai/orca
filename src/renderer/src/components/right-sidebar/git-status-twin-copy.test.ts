@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -58,7 +59,7 @@ beforeEach(() => {
     conflictOperation: 'unknown'
   })
   vi.stubGlobal('window', { ...window, api: { git: { status } } })
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     repos: [repo({ connectionId: null }), repo({ connectionId: 'box-b' })],
     worktreesByRepo: {
       repo1: [
@@ -77,7 +78,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  useAppStore.setState(initialAppState, true)
+  setSessionTestState(useAppStore, initialAppState, true)
   vi.unstubAllGlobals()
 })
 
@@ -120,7 +121,7 @@ describe('git status poll for a same-path twin', () => {
 describe('push target for a same-path twin', () => {
   it("names the pinned SSH copy's remote and branch, not the local copy's", () => {
     const [local, remote] = useAppStore.getState().worktreesByRepo.repo1
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       worktreesByRepo: {
         repo1: [
           { ...local, pushTarget: { remoteName: 'origin', branchName: 'local-review' } },
@@ -135,7 +136,7 @@ describe('push target for a same-path twin', () => {
     })
     // An unplaced host must not fall back to either twin, nor to a lone copy stamped elsewhere.
     expect(worktreeCopyPushTarget(useAppStore.getState(), id, 'ssh:other')).toBeUndefined()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       worktreesByRepo: { repo1: [useAppStore.getState().worktreesByRepo.repo1[0]] }
     })
     expect(worktreeCopyPushTarget(useAppStore.getState(), id, 'ssh:box-b')).toBeUndefined()

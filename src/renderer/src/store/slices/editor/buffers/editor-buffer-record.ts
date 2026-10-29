@@ -6,6 +6,7 @@ import {
   type EditorBufferViewIndex
 } from './editor-buffer-views'
 import type { EditorBufferKeepRequest, EditorBufferKeptRecords } from './editor-buffer-kept'
+import type { SessionSourceEdit } from '@/store/session-source-edits'
 
 /** Record owns buffer state under file identity (or private tab ID); OpenFile mirrors update atomically for existing readers. */
 export type EditorBufferRecord = Pick<
@@ -60,16 +61,17 @@ export function editorBufferMirrorMismatch(
 
 /** Writes `patch` to the file's record and every view's mirror in one update; `tabPatch` lands on `fileId` only. */
 export function writeEditorBuffer(
-  state: EditorBufferState,
+  edit: SessionSourceEdit<EditorBufferState>,
   fileId: string,
   patch: Partial<EditorBufferRecord>,
   tabPatch?: Partial<OpenFile>
-): EditorBufferWrite {
+): Pick<EditorBufferState, 'editorBuffers'> {
+  const state = edit.view()
   const recordId = editorBufferIdOfView(state, fileId)
   const viewIds = new Set(editorBufferViewIds(state, recordId))
   viewIds.add(fileId)
   let editorBuffers = state.editorBuffers
-  const openFiles = state.openFiles.map((file) => {
+  edit.sequence('openFiles').map((file) => {
     if (!viewIds.has(file.id)) {
       return file
     }
@@ -81,18 +83,19 @@ export function writeEditorBuffer(
     }
     return file.id === fileId ? { ...file, ...tabPatch, ...patch } : { ...file, ...patch }
   })
-  return { openFiles, editorBuffers }
+  return { editorBuffers }
 }
 
 /** Writes `patch` through the file's record; returns `state` itself when the record already holds it. */
 export function updateEditorBuffer<TState extends EditorBufferState>(
-  state: TState,
+  edit: SessionSourceEdit<TState>,
   fileId: string,
   patch: Partial<EditorBufferRecord>
-): TState | EditorBufferWrite {
+): Pick<EditorBufferState, 'editorBuffers'> | null {
+  const state = edit.view()
   const file = state.openFiles.find((candidate) => candidate.id === fileId)
   if (!file) {
-    return state
+    return null
   }
   const record = editorBufferOf(state, file)
   // Why the mirror too: a view must never keep showing a value its record no longer holds.
@@ -101,14 +104,15 @@ export function updateEditorBuffer<TState extends EditorBufferState>(
       Object.hasOwn(patch, field) &&
       (!Object.is(record[field], patch[field]) || !Object.is(file[field], patch[field]))
   )
-  return changes ? writeEditorBuffer(state, fileId, patch) : state
+  return changes ? writeEditorBuffer(edit, fileId, patch) : null
 }
 
 /** Adopt host-mirror buffer state atomically. Older hosts send dirty per tab, so OR across record views and mirror flag to openFiles for caller’s session-sync patch. */
 export function adoptMirroredEditorBuffers(
   records: EditorBufferRecords,
   openFiles: OpenFile[],
-  index: EditorBufferViewIndex
+  index: EditorBufferViewIndex,
+  sourceEdit?: SessionSourceEdit<Pick<EditorBufferState, 'openFiles'>>
 ): { editorBuffers: EditorBufferRecords; views: OpenFile[] } {
   const adopted = new Map<string, EditorBufferRecord>()
   for (const file of openFiles) {
@@ -137,7 +141,7 @@ export function adoptMirroredEditorBuffers(
     editorBuffers[recordId] = record
   }
   let mirrored = false
-  const nextOpenFiles = openFiles.map((file) => {
+  const mirror = (file: OpenFile): OpenFile => {
     const record = adopted.get(editorBufferIdOfView(index, file.id))
     // Why dirty only: it is the one field ORed across views; the rest each view publishes itself.
     if (!record || file.isDirty === record.isDirty) {
@@ -145,7 +149,14 @@ export function adoptMirroredEditorBuffers(
     }
     mirrored = true
     return { ...file, isDirty: record.isDirty }
-  })
+  }
+  let nextOpenFiles: OpenFile[]
+  if (sourceEdit) {
+    sourceEdit.sequence('openFiles').map(mirror)
+    nextOpenFiles = sourceEdit.read('openFiles')
+  } else {
+    nextOpenFiles = openFiles.map(mirror)
+  }
   return { editorBuffers, views: mirrored ? nextOpenFiles : openFiles }
 }
 

@@ -218,3 +218,22 @@ export function resetTerminalCreateEnvironment(): void {
   resetWebSessionFocusIntentForTests()
   vi.clearAllMocks()
 }
+
+/** The high-level snapshot spy observes the snapshots passed to the edit-taking adapter. */
+export function mockWebSessionTabsSnapshotsToEdit(applySnapshot: (...args: unknown[]) => unknown) {
+  return (
+    _edit: unknown,
+    state: unknown,
+    snapshots: readonly unknown[],
+    environmentId: string,
+    now?: number,
+    changedAgentPaneKeys?: Set<string>,
+    options?: unknown
+  ) => {
+    let patch: unknown
+    for (const snapshot of snapshots) {
+      patch = applySnapshot(state, snapshot, environmentId, now, options, changedAgentPaneKeys)
+    }
+    return patch
+  }
+}

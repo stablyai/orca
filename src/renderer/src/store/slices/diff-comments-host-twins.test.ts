@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -62,7 +63,7 @@ function createTwinStore(activeHostId: Worktree['hostId'] | null) {
     { ...repoBase, connectionId: 'box', executionHostId: 'ssh:box' }
   ]
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     activeWorktreeId: activeHostId ? WT : null,
     activeWorkspaceExecutionHostId: activeHostId,
     repos,
@@ -110,7 +111,7 @@ describe('diff comments on twin worktrees', () => {
 
   it('rolls back only the twin it wrote', async () => {
     const store = createTwinStore('ssh:box')
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {
         [REPO]: [worktree('local', [note('l1', 'local note')]), worktree('ssh:box')]
       }
@@ -135,14 +136,16 @@ describe('diff comments on twin worktrees', () => {
 
   it('drops a queued save whose twin left, instead of writing the other copy under its host', async () => {
     const store = createTwinStore('ssh:box')
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {
         [REPO]: [worktree('local', [note('l1', 'local note')]), worktree('ssh:box')]
       }
     })
 
     const pending = addNote(store)
-    store.setState({ worktreesByRepo: { [REPO]: [worktree('local', [note('l1', 'local note')])] } })
+    setSessionTestState(store, {
+      worktreesByRepo: { [REPO]: [worktree('local', [note('l1', 'local note')])] }
+    })
 
     expect(await pending).toBeNull()
     expect(updateMeta).not.toHaveBeenCalled()
@@ -155,7 +158,9 @@ describe('diff comments on twin worktrees', () => {
 
     const first = addNote(store)
     // The local copy goes before the second save, so the SSH copy is the only row left.
-    store.setState({ worktreesByRepo: { [REPO]: [store.getState().worktreesByRepo[REPO][1]] } })
+    setSessionTestState(store, {
+      worktreesByRepo: { [REPO]: [store.getState().worktreesByRepo[REPO][1]] }
+    })
     const second = addNote(store)
 
     expect(await first).toBeNull()
@@ -165,7 +170,9 @@ describe('diff comments on twin worktrees', () => {
 
   it('writes every duplicated row of one copy, so reads see the note', async () => {
     const store = createTwinStore(null)
-    store.setState({ worktreesByRepo: { [REPO]: [worktree('local'), worktree('local')] } })
+    setSessionTestState(store, {
+      worktreesByRepo: { [REPO]: [worktree('local'), worktree('local')] }
+    })
 
     expect(await addNote(store)).not.toBeNull()
 
@@ -195,7 +202,7 @@ describe('diff comments on twin worktrees', () => {
 
   it('leaves an unstamped row to the owner its repo names, not this computer', async () => {
     const store = createTwinStore(null)
-    store.setState({
+    setSessionTestState(store, {
       repos: [{ ...repoBase, connectionId: 'box', executionHostId: 'ssh:box' }],
       worktreesByRepo: { [REPO]: [worktree(undefined)] }
     })
@@ -208,7 +215,7 @@ describe('diff comments on twin worktrees', () => {
 
   it('saves an open unstamped row its SSH repo owns', async () => {
     const store = createTwinStore('ssh:box')
-    store.setState({
+    setSessionTestState(store, {
       repos: [{ ...repoBase, connectionId: 'box', executionHostId: 'ssh:box' }],
       worktreesByRepo: { [REPO]: [worktree(undefined)] }
     })
@@ -221,7 +228,7 @@ describe('diff comments on twin worktrees', () => {
   it('picks an SSH twin a paired server proxies by its own stamp', () => {
     const store = createTwinStore('ssh:box')
     const proxied = { ...worktree('ssh:box'), runtimeOwnerEnvironmentId: 'hub' }
-    store.setState({ worktreesByRepo: { [REPO]: [worktree('local'), proxied] } })
+    setSessionTestState(store, { worktreesByRepo: { [REPO]: [worktree('local'), proxied] } })
 
     // The optimistic write lands synchronously; its transport is not under test here.
     void addNote(store).catch(() => {})
@@ -233,7 +240,9 @@ describe('diff comments on twin worktrees', () => {
 
   it('treats an unstamped row as local when the local twin is open', async () => {
     const store = createTwinStore('local')
-    store.setState({ worktreesByRepo: { [REPO]: [worktree(undefined), worktree('ssh:box')] } })
+    setSessionTestState(store, {
+      worktreesByRepo: { [REPO]: [worktree(undefined), worktree('ssh:box')] }
+    })
 
     expect(await addNote(store)).not.toBeNull()
 
@@ -245,7 +254,7 @@ describe('diff comments on twin worktrees', () => {
 
   it('reads the latest duplicate row of the open copy, as the id index does', () => {
     const store = createTwinStore('ssh:box')
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {
         [REPO]: [worktree('local'), worktree('ssh:box'), worktree('ssh:box', [note('s1', 'fresh')])]
       }
@@ -258,7 +267,7 @@ describe('diff comments on twin worktrees', () => {
 
   it('keeps saves in order when a listing stamps the row mid-burst', async () => {
     const store = createTwinStore(null)
-    store.setState({ worktreesByRepo: { [REPO]: [worktree(undefined)] } })
+    setSessionTestState(store, { worktreesByRepo: { [REPO]: [worktree(undefined)] } })
     let releaseFirst = () => {}
     updateMeta.mockImplementationOnce(
       () => new Promise((resolve) => (releaseFirst = () => resolve({})))
@@ -266,7 +275,7 @@ describe('diff comments on twin worktrees', () => {
 
     const first = addNote(store)
     const [row] = store.getState().worktreesByRepo[REPO]
-    store.setState({ worktreesByRepo: { [REPO]: [{ ...row, hostId: 'local' }] } })
+    setSessionTestState(store, { worktreesByRepo: { [REPO]: [{ ...row, hostId: 'local' }] } })
     const second = addNote(store)
     await Promise.resolve()
 
@@ -280,12 +289,12 @@ describe('diff comments on twin worktrees', () => {
 
   it('rolls a failed burst back to disk when a listing stamps the row mid-burst', async () => {
     const store = createTwinStore(null)
-    store.setState({ worktreesByRepo: { [REPO]: [worktree(undefined)] } })
+    setSessionTestState(store, { worktreesByRepo: { [REPO]: [worktree(undefined)] } })
     updateMeta.mockRejectedValue(new Error('write failed'))
 
     const first = addNote(store)
     const [row] = store.getState().worktreesByRepo[REPO]
-    store.setState({ worktreesByRepo: { [REPO]: [{ ...row, hostId: 'local' }] } })
+    setSessionTestState(store, { worktreesByRepo: { [REPO]: [{ ...row, hostId: 'local' }] } })
     const second = addNote(store)
 
     expect(await first).toBeNull()
@@ -300,7 +309,7 @@ describe('diff comments on twin worktrees', () => {
       ...worktree('ssh:box', [note('b1', 'hub b note')]),
       runtimeOwnerEnvironmentId: 'hub-b'
     }
-    store.setState({ worktreesByRepo: { [REPO]: [viaA, viaB] } })
+    setSessionTestState(store, { worktreesByRepo: { [REPO]: [viaA, viaB] } })
 
     expect(selectWorktreeDiffCommentsOrEmpty(store.getState(), WT)).toEqual([])
     void addNote(store).catch(() => {})
@@ -312,7 +321,7 @@ describe('diff comments on twin worktrees', () => {
 
   it("rolls a failed twin write back to its own notes, not the other twin's", async () => {
     const store = createTwinStore('local')
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {
         [REPO]: [worktree('local'), worktree('ssh:box', [note('s1', 'ssh note 1')])]
       }
@@ -340,7 +349,7 @@ describe('diff comments on twin worktrees', () => {
 
   it('edits the duplicate row the notes panel shows', async () => {
     const store = createTwinStore(null)
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: { [REPO]: [worktree('local'), worktree('local', [note('l1', 'old')])] }
     })
 
@@ -355,11 +364,11 @@ describe('diff comments on twin worktrees', () => {
 
   it('sends its own copy when an SSH twin is listed before the queued save runs', async () => {
     const store = createTwinStore('local')
-    store.setState({ worktreesByRepo: { [REPO]: [worktree('local')] } })
+    setSessionTestState(store, { worktreesByRepo: { [REPO]: [worktree('local')] } })
 
     const pending = addNote(store)
     const [local] = store.getState().worktreesByRepo[REPO]
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: { [REPO]: [local, worktree('ssh:box', [note('s1', 'remote')])] }
     })
 
@@ -371,11 +380,15 @@ describe('diff comments on twin worktrees', () => {
 
   it('still saves a twin whose row a listing stamps before the queued save runs', async () => {
     const store = createTwinStore('local')
-    store.setState({ worktreesByRepo: { [REPO]: [worktree(undefined), worktree('ssh:box')] } })
+    setSessionTestState(store, {
+      worktreesByRepo: { [REPO]: [worktree(undefined), worktree('ssh:box')] }
+    })
 
     const pending = addNote(store)
     const [unstamped, ssh] = store.getState().worktreesByRepo[REPO]
-    store.setState({ worktreesByRepo: { [REPO]: [{ ...unstamped, hostId: 'local' }, ssh] } })
+    setSessionTestState(store, {
+      worktreesByRepo: { [REPO]: [{ ...unstamped, hostId: 'local' }, ssh] }
+    })
 
     expect(await pending).not.toBeNull()
     expect(rowNotes(store, 'local')).toEqual(['ssh note'])
@@ -384,7 +397,7 @@ describe('diff comments on twin worktrees', () => {
   it("names the row's own host even when only one copy lists the worktree", async () => {
     // The project is added on both hosts, but this worktree exists only on this computer.
     const store = createTwinStore(null)
-    store.setState({ worktreesByRepo: { [REPO]: [worktree('local')] } })
+    setSessionTestState(store, { worktreesByRepo: { [REPO]: [worktree('local')] } })
 
     expect(await addNote(store)).not.toBeNull()
 
@@ -402,7 +415,7 @@ describe('diff comments on twin worktrees', () => {
 
   it('refuses a note-id change on an unstamped twin rather than route it by the open one', async () => {
     const store = createTwinStore('ssh:box')
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {
         [REPO]: [worktree(undefined, [note('u1', 'unstamped')]), worktree('ssh:box')]
       }
@@ -418,7 +431,7 @@ describe('diff comments on twin worktrees', () => {
 
   it('never sends a copy listed after a queued save, even after a refresh replaced its notes', async () => {
     const store = createTwinStore('local')
-    store.setState({ worktreesByRepo: { [REPO]: [worktree('local')] } })
+    setSessionTestState(store, { worktreesByRepo: { [REPO]: [worktree('local')] } })
     let releaseFirst = () => {}
     updateMeta.mockImplementationOnce(
       () => new Promise((resolve) => (releaseFirst = () => resolve({})))
@@ -429,7 +442,7 @@ describe('diff comments on twin worktrees', () => {
     await vi.waitFor(() => expect(updateMeta).toHaveBeenCalledTimes(1))
     // A refresh rebuilds the local row's list and lists an SSH copy, which the user opens.
     const [local] = store.getState().worktreesByRepo[REPO]
-    store.setState({
+    setSessionTestState(store, {
       activeWorkspaceExecutionHostId: 'ssh:box',
       worktreesByRepo: {
         [REPO]: [
@@ -448,7 +461,9 @@ describe('diff comments on twin worktrees', () => {
 
   it('still saves when a listing stamps the row and rebuilds its notes before the save runs', async () => {
     const store = createTwinStore('local')
-    store.setState({ worktreesByRepo: { [REPO]: [worktree(undefined), worktree('ssh:box')] } })
+    setSessionTestState(store, {
+      worktreesByRepo: { [REPO]: [worktree(undefined), worktree('ssh:box')] }
+    })
 
     const pending = addNote(store)
     const [unstamped, ssh] = store.getState().worktreesByRepo[REPO]
@@ -457,7 +472,7 @@ describe('diff comments on twin worktrees', () => {
       hostId: 'local' as const,
       diffComments: [...(unstamped.diffComments ?? [])]
     }
-    store.setState({ worktreesByRepo: { [REPO]: [rebuilt, ssh] } })
+    setSessionTestState(store, { worktreesByRepo: { [REPO]: [rebuilt, ssh] } })
 
     expect(await pending).not.toBeNull()
     expect(updateMeta).toHaveBeenCalledTimes(1)
@@ -465,7 +480,9 @@ describe('diff comments on twin worktrees', () => {
 
   it('refuses a write while the open SSH copy is not listed yet and only its local sibling is', async () => {
     const store = createTwinStore('ssh:box')
-    store.setState({ worktreesByRepo: { [REPO]: [worktree('local', [note('l1', 'local note')])] } })
+    setSessionTestState(store, {
+      worktreesByRepo: { [REPO]: [worktree('local', [note('l1', 'local note')])] }
+    })
 
     await store.getState().clearDiffComments(WT)
 
@@ -475,11 +492,11 @@ describe('diff comments on twin worktrees', () => {
 
   it('still saves a lone unstamped row a listing stamps and rebuilds before the save runs', async () => {
     const store = createTwinStore(null)
-    store.setState({ worktreesByRepo: { [REPO]: [worktree(undefined)] } })
+    setSessionTestState(store, { worktreesByRepo: { [REPO]: [worktree(undefined)] } })
 
     const pending = addNote(store)
     const [row] = store.getState().worktreesByRepo[REPO]
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {
         [REPO]: [{ ...row, hostId: 'local', diffComments: [...(row.diffComments ?? [])] }]
       }

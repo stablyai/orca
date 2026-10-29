@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { makeFolderWorkspace, makeWorktree } from './worktrees-slice-test-fixtures'
@@ -43,7 +44,7 @@ describe('window-side Recent stamps with the sidebar-inputs switch on', () => {
 
   function storeWith() {
     const store = createTestStore()
-    store.setState({ worktreesByRepo: { repo1: [wt] } })
+    setSessionTestState(store, { worktreesByRepo: { repo1: [wt] } })
     return store
   }
 
@@ -92,7 +93,7 @@ describe('window-side Recent stamps with the sidebar-inputs switch on', () => {
   it('a folder workspace’s terminal activity and finish write no stamp and no flag', async () => {
     const store = createTestStore()
     const folder = makeFolderWorkspace({ id: 'folder-1', lastActivityAt: 5 })
-    store.setState({ folderWorkspaces: [folder], projectGroups: [] })
+    setSessionTestState(store, { folderWorkspaces: [folder], projectGroups: [] })
     store.getState().bumpWorktreeActivity(folderWorkspaceKey(folder.id))
     store.getState().markAgentAttentionUnread({
       workspaceId: folderWorkspaceKey(folder.id),

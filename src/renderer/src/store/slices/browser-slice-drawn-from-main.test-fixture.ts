@@ -1,5 +1,6 @@
 // The browser slice's partial test store with main drawing its tabs in a layout-owner build.
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { onTestFinished } from 'vitest'
 import type { AppState } from '../types'
 import { createTabsGroupActions } from './tabs/tabs-group-actions'
@@ -41,7 +42,7 @@ export async function createTestStoreDrawnFromMain(
     store.setState,
     store.getState
   )
-  store.setState({ ...DRAWN_STORE_SEED, ensureWorktreeRootGroup, focusGroup, ...seed })
+  setSessionTestState(store, { ...DRAWN_STORE_SEED, ensureWorktreeRootGroup, focusGroup, ...seed })
   const main = await drawTabsFromMain(store)
   onTestFinished(() => main.close())
   return { store, main }

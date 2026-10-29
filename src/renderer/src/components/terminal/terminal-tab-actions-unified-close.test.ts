@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 
@@ -123,7 +124,8 @@ function group(worktreeId: string) {
 }
 
 beforeEach(() => {
-  store.setState({
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+  setSessionTestState(store, {
     activeWorktreeId: null,
     tabsByWorktree: {},
     unifiedTabsByWorktree: {},
@@ -219,7 +221,7 @@ describe('closeTerminalTab unified close contract', () => {
       activeTerminalId: 'term-1',
       includeChatTab: false
     })
-    store.setState((state) => ({
+    setSessionTestState(store, (state) => ({
       openFiles: [
         {
           id: 'file-1',

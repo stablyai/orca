@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../../types'
 import type * as WorktreeMetaPersistModule from '../worktrees/metadata/worktree-meta-persist'
@@ -55,7 +56,7 @@ const FOLDER_ID = 'folder-1'
 function createStore() {
   const store = createTestStore()
   const updateFolderWorkspace = vi.fn<AppState['updateFolderWorkspace']>(async () => true)
-  store.setState({
+  setSessionTestState(store, {
     repos: [{ ...TEST_REPO, executionHostId: 'local' }],
     worktreesByRepo: {
       repo1: [LOCAL_WT, NEW_SERVER_WT, OLD_SERVER_WT, SLOW_SERVER_WT, UNREACHABLE_SERVER_WT].map(
@@ -187,7 +188,7 @@ describe('the window raises the unread flag only where its host does not', () =>
   it('clears a flag on every owner, whichever side raised it', () => {
     const { store, isUnread } = createStore()
     for (const id of [LOCAL_WT, NEW_SERVER_WT, OLD_SERVER_WT]) {
-      store.setState((s) => ({
+      setSessionTestState(store, (s) => ({
         worktreesByRepo: {
           repo1: s.worktreesByRepo.repo1.map((worktree) =>
             worktree.id === id ? { ...worktree, isUnread: true } : worktree

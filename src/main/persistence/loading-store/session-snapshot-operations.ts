@@ -1,27 +1,42 @@
+import { workspaceSessionPatchNeedsFullNormalization } from './terminal-session-cleanup'
+import {
+  SessionUnitReader,
+  selectSessionUnits,
+  type SessionEntry
+} from '../../../shared/session-unit-reader'
+import {
+  SESSION_MAP_FIELDS,
+  isSessionMapField,
+  type SessionPatchAck
+} from '../../../shared/session-change-set'
+import { reduceWindowSessionPatch, type SessionWindowAdmission } from '../window-save-view'
+import {
+  publishWorkspaceSessionSnapshot,
+  setLocalWorkspaceSession
+} from './workspace-session-snapshot-publication'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../../../shared/workspace-session-state-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
-import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session-browser-history'
 
-import { workspaceSessionPatchNeedsFullNormalization } from './terminal-session-cleanup'
-
-import { setLocalWorkspaceSession } from './workspace-session-snapshot-publication'
 import type { StoreRuntimeState } from './store-runtime-state'
-import type { SessionHostPartitionOperations } from './session-host-partitions'
-import type { TerminalBindingRecoveryOperations } from './terminal-binding-recovery'
-import type { WriteSchedulingOperations } from './write-scheduling'
 import {
+  type SessionHostPartitionOperations,
   resolveHostId,
   setHostWorkspaceSession,
   withRequiredWorkspaceSessionMaps
 } from './session-host-partitions'
-import { dropClosedTerminalTabs } from '../closed-terminal-tab-write-fence'
+import type { TerminalBindingRecoveryOperations } from './terminal-binding-recovery'
+import { type WriteSchedulingOperations, scheduleSave } from './write-scheduling'
+
 import { keepWslMoveFrozenSessionsForStore } from '../moving-wsl-projects/wsl-move-session-freeze'
-import { scheduleSave } from './write-scheduling'
+
 import { orderTerminalRowsByTabGroups } from '../../../shared/workspace-layout/terminal-row-order'
+import { publishSessionReplacement, sessionPublication } from './session-publication'
+
+import { validateSessionPatch } from '../../../shared/session-patch-validation'
 
 type SessionSnapshotOperationsRuntime = Pick<
   StoreRuntimeState,
@@ -90,42 +105,97 @@ export class SessionSnapshotOperations {
     setHostWorkspaceSession(this[sessionSnapshotOperationsContext].sessions, resolved, session)
   }
 
-  patchWorkspaceSession(patch: WorkspaceSessionPatch, hostId?: string | null): void {
+  patchWorkspaceSession(
+    patch: WorkspaceSessionPatch,
+    hostId?: string | null,
+    window?: SessionWindowAdmission
+  ): SessionPatchAck {
     const resolved = resolveHostId(hostId)
-    // Scalar patches skip topology work; membership patches retain stale-binding protections.
-    let next: WorkspaceSessionState = {
-      ...this[sessionSnapshotOperationsContext].sessions.getWorkspaceSession(resolved),
-      ...patch
+    validateSessionPatch(patch)
+    const context = this[sessionSnapshotOperationsContext]
+    const publication = sessionPublication(context.runtime.state)
+    const partitionGeneration = publication.generation(resolved)
+    if (
+      patch.expectedPartitionGeneration !== undefined &&
+      patch.expectedPartitionGeneration !== partitionGeneration
+    ) {
+      return { applied: false, reason: 'generationChanged', partitionGeneration }
     }
-    if (workspaceSessionPatchNeedsFullNormalization(patch)) {
-      this.setWorkspaceSession(next, resolved)
-      return
+    this.assertSnapshotAdmission(true)
+    const { root, index } = publication.partition(resolved)
+    const reader = new SessionUnitReader(root, index)
+    for (const [field, value] of Object.entries(patch)) {
+      if (
+        ['mapDeltas', 'membershipDeltas', 'clearFields', 'expectedPartitionGeneration'].includes(
+          field
+        )
+      ) {
+        continue
+      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: validation restricts these keys to the session DTO.
+      reader.replace(field as keyof WorkspaceSessionState, {
+        present: true,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: validateSessionPatch admits only session-field values after envelope fields are excluded.
+        value: value as WorkspaceSessionState[keyof WorkspaceSessionState]
+      })
     }
-    if (Object.hasOwn(patch, 'browserUrlHistory')) {
-      next = pruneWorkspaceSessionBrowserHistory(next)
+    for (const field of SESSION_MAP_FIELDS) {
+      const delta = patch.mapDeltas?.[field]
+      for (const key of delta?.remove ?? []) {
+        reader.write(field, key, { present: false, value: undefined })
+      }
+      for (const key of Object.keys(delta?.set ?? {})) {
+        reader.write(field, key, {
+          present: true,
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: validation and the field-keyed delta admit the selected field's entry domain.
+          value: delta!.set![key] as SessionEntry<typeof field>
+        })
+      }
     }
-    // Unified-tab patches bypass full normalization but still need close tombstones.
-    if (Object.hasOwn(patch, 'unifiedTabs')) {
-      next = dropClosedTerminalTabs(next)
+    for (const field of patch.clearFields ?? [])
+    // SAFETY: the clear value is chosen from this validated field's DTO category.
+    {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the clear value is chosen from this validated field's DTO category.
+      reader.replace(field, { present: true, value: clearedSessionField(field) as never })
     }
-    if (resolved === LOCAL_EXECUTION_HOST_ID) {
-      const { state } = this[sessionSnapshotOperationsContext].runtime
-      next = keepWslMoveFrozenSessionsForStore(next, state.workspaceSession)
+    for (const field of ['activeWorktreeIdsOnShutdown', 'activeConnectionIdsAtShutdown'] as const) {
+      const delta = patch.membershipDeltas?.[field]
+      if (!delta) {
+        continue
+      }
+      const remove = new Set(delta.remove ?? [])
+      const members = new Set((reader.field(field).value ?? []).filter((id) => !remove.has(id)))
+      for (const id of delta.add ?? []) {
+        members.add(id)
+      }
+      reader.replace(field, { present: true, value: [...members] })
     }
-    this.publishSession(next, resolved)
+    const full = Object.keys(patch).some(isSessionMapField)
+    const selected = selectSessionUnits(reader, [], full)
+    if (window) {
+      reduceWindowSessionPatch(reader, resolved, selected, window, full)
+    }
+    publishWorkspaceSessionSnapshot(
+      context,
+      resolved,
+      reader,
+      full,
+      false,
+      selected,
+      workspaceSessionPatchNeedsFullNormalization(patch)
+    )
+    return { applied: true, partitionGeneration: publication.generation(resolved) }
   }
 
   private publishSession(session: WorkspaceSessionState, hostId: ExecutionHostId): void {
     session = orderTerminalRowsByTabGroups(session)
     const { runtime, scheduling } = this[sessionSnapshotOperationsContext]
-    if (hostId === LOCAL_EXECUTION_HOST_ID) {
-      runtime.state.workspaceSession = session
-    } else {
-      runtime.state.workspaceSessionsByHostId = {
-        ...runtime.state.workspaceSessionsByHostId,
-        [hostId]: withRequiredWorkspaceSessionMaps(session)
-      }
-    }
+    publishSessionReplacement(
+      runtime.state,
+      hostId,
+      withRequiredWorkspaceSessionMaps(session),
+      runtime.durableMutationPhase === 'rollback' ? 'rollback' : 'fullReplacement'
+    )
     scheduleSave(
       scheduling,
       hostId === LOCAL_EXECUTION_HOST_ID ? ['workspaceSession'] : ['workspaceSessionsByHostId'],
@@ -147,4 +217,19 @@ export class SessionSnapshotOperations {
 
 export function getSessionSnapshotOperationsContext(owner: SessionSnapshotOperations) {
   return owner[sessionSnapshotOperationsContext]
+}
+
+function clearedSessionField(field: keyof WorkspaceSessionState): unknown {
+  if (isSessionMapField(field)) {
+    return {}
+  }
+  if (
+    field === 'browserUrlHistory' ||
+    field === 'workspaceDocHistory' ||
+    field === 'activeWorktreeIdsOnShutdown' ||
+    field === 'activeConnectionIdsAtShutdown'
+  ) {
+    return []
+  }
+  return null
 }

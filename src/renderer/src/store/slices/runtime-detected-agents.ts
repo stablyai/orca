@@ -1,3 +1,4 @@
+import type { SessionSourceUpdate } from '../session-source-edits'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
   callRuntimeRpc,
@@ -120,9 +121,7 @@ export type RuntimeDetectedAgentsStoreState = RuntimeDetectedAgentsSlice &
   Parameters<typeof getConnectionIdFromState>[0]
 
 export type RuntimeDetectedAgentsStoreSetState = (
-  partial:
-    | Partial<RuntimeDetectedAgentsStoreState>
-    | ((state: RuntimeDetectedAgentsStoreState) => Partial<RuntimeDetectedAgentsStoreState>)
+  partial: SessionSourceUpdate<RuntimeDetectedAgentsStoreState>
 ) => void
 
 export const createRuntimeDetectedAgentsSlice: (
@@ -153,7 +152,7 @@ export const createRuntimeDetectedAgentsSlice: (
         isDetectingRuntimeAgents === s.isDetectingRuntimeAgents &&
         isRefreshingRuntimeAgents === s.isRefreshingRuntimeAgents &&
         runtimeAgentDetectionNeedsServerUpdate === s.runtimeAgentDetectionNeedsServerUpdate
-        ? s
+        ? undefined
         : {
             runtimeDetectedAgentIds,
             isDetectingRuntimeAgents,

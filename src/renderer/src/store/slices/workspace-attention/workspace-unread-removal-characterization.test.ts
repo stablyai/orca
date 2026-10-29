@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WorktreeMetaPersistModule from '../worktrees/metadata/worktree-meta-persist'
 import type * as AgentStatusModule from '@/lib/agent-status'
@@ -170,7 +171,7 @@ describe('closing tabs', () => {
 
   it('closing the only unread folder tab clears the folder flag', () => {
     const { store, persists } = createAttentionStore()
-    store.setState({
+    setSessionTestState(store, {
       projectGroups: [
         {
           id: 'group-1',
@@ -320,7 +321,7 @@ describe('sleep, hibernate, retire, rekey, reconcile, purge', () => {
 
   it('reconciling a dropped terminal on activation leaves no live marker, so the flag reads', () => {
     const { store, persists, first } = seedLitWorkspace()
-    store.setState({
+    setSessionTestState(store, {
       tabsByWorktree: {
         [WS_A]: (store.getState().tabsByWorktree[WS_A] ?? []).filter(
           (tab) => tab.id !== first.tabId

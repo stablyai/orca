@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
@@ -84,7 +85,7 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
 
     describe('pinTab / unpinTab', () => {
       it('pins a tab and promotes preview to permanent', async () => {
-        store.setState({
+        setSessionTestState(store, {
           openFiles: [makeOpenFile({ id: 'f.ts', worktreeId: WT, isPreview: true })]
         })
         const tab = store.getState().createUnifiedTab(WT, 'editor', {
@@ -164,7 +165,7 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
       it('syncs isPinned to the TerminalTab in tabsByWorktree (reconcile echo guard)', async () => {
         // Sync legacy isPinned too or reconciliation unpins the tab during host-snapshot echo.
         const tab = store.getState().createUnifiedTab(WT, 'terminal')
-        store.setState((state) => ({
+        setSessionTestState(store, (state) => ({
           tabsByWorktree: {
             ...state.tabsByWorktree,
             [WT]: [

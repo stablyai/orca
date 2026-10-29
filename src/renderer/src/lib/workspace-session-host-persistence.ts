@@ -1,3 +1,4 @@
+import type { SessionPatchAck } from '../../../shared/session-change-set'
 import type { Repo } from '../../../shared/repo-types'
 import type {
   WorkspaceSessionPatch,
@@ -60,7 +61,7 @@ export type HostPersistenceState = WorkspaceTabOwnerCatalog & {
 
 type SessionApi = {
   get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
-  patch: (args: WorkspaceSessionPatch, hostId?: ExecutionHostId) => Promise<void>
+  patch: (args: WorkspaceSessionPatch, hostId?: ExecutionHostId) => Promise<void | SessionPatchAck>
 }
 
 type DurableSessionApi = SessionApi & {
@@ -194,6 +195,24 @@ export function buildHostIdByWorktreeId(state: HostPersistenceState): HostIdByWo
   return buildHostSessionRouting(state).hostIdByWorktreeId
 }
 
+/** Full-field clears require an adopted read with no parked rows. */
+export function fullyOwnedSessionHostIds(state: HostPersistenceState): ExecutionHostId[] {
+  const hosts = new Set<ExecutionHostId>([
+    LOCAL_EXECUTION_HOST_ID,
+    ...(state.hydratedRuntimeSessionHostIds ?? [])
+  ])
+  const routing = buildHostSessionRouting(state)
+  for (const [key, host] of Object.entries({
+    ...state.restoredRuntimeHostIdByWorkspaceSessionKey,
+    ...state.contestedPrimaryHostBySessionKey
+  })) {
+    if (routing.hostIdByWorktreeId(key) === host) {
+      hosts.add(host)
+    }
+  }
+  return [...hosts].filter((host) => !state.contestedHostWorkspaceSessions?.[host])
+}
+
 /** Partition a session for writing: route each entry to its owner host, then restore the parked
  *  rows of every host that lost a contested id so this write cannot erase them. */
 function splitWorkspaceSessionForWrite(
@@ -202,17 +221,7 @@ function splitWorkspaceSessionForWrite(
   mode: HostSessionWriteMode
 ): HostSessionSlices {
   const routing = buildHostSessionRouting(state)
-  const catalogRuntimeHostIds = new Set(state.repos.map((repo) => getRepoExecutionHostId(repo)))
-  // A patch replaces fields fieldwise, so a host whose last entry went needs the emptied field. Only a
-  // partition this window loaded and still catalogs is one its state speaks for in full.
-  // The contested shadow restores only worktree-keyed rows, so a host holding parked rows keeps today's rule.
-  const emptyContainerHostIds =
-    mode === 'patch'
-      ? (state.hydratedRuntimeSessionHostIds ?? []).filter(
-          (hostId) =>
-            catalogRuntimeHostIds.has(hostId) && !state.contestedHostWorkspaceSessions?.[hostId]
-        )
-      : []
+  const emptyContainerHostIds = mode === 'patch' ? fullyOwnedSessionHostIds(state) : []
   // Use live tab catalogs for layouts-only patches; payload-only routing loses remote park scrollback in local pruning (#21295).
   const worktreeIdByTabId = extendWorktreeIdByTabId(buildWorktreeIdByTabId(payload), state)
   const slices = splitWorkspaceSessionByHost(payload, routing.hostIdByWorktreeId, {
@@ -231,12 +240,20 @@ export function patchWorkspaceSessionByHost(
 ): { localWrite: Promise<void>; written: Promise<void> } {
   const slices = splitWorkspaceSessionForWrite(patch as WorkspaceSessionState, state, 'patch')
   const local = (slices[LOCAL_EXECUTION_HOST_ID] ?? patch) as WorkspaceSessionPatch
-  const localWrite = api.patch(local)
+  const applied = (ack: SessionPatchAck | void): void => {
+    if (ack && !ack.applied) {
+      throw new Error(`Session patch not applied: ${ack.reason ?? 'unknown'}`)
+    }
+  }
+  const localWrite = api.patch(local).then(applied)
   const hostWrites = nonLocalHostSessionEntries(slices).map(([hostId, slice]) =>
-    api.patch(slice, hostId).catch((err: unknown) => {
-      console.warn(`[session] host partition patch failed for ${hostId}:`, err)
-      throw err
-    })
+    api
+      .patch(slice, hostId)
+      .then(applied)
+      .catch((err: unknown) => {
+        console.warn(`[session] host partition patch failed for ${hostId}:`, err)
+        throw err
+      })
   )
   // Why allSettled: every partition finishes before a retry rewrites the same fields.
   const written = Promise.allSettled([localWrite, ...hostWrites]).then((results) => {

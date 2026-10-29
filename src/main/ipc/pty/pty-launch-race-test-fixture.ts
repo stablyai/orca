@@ -200,7 +200,7 @@ export function createPaneBindingStore() {
           if (!accepted || ptyBindingIsRefused(binding, session, workspace, paneKey, [])) {
             return false
           }
-          applyPtyBinding(binding, session, workspace, paneKey)
+          session = applyPtyBinding(binding, session, workspace, paneKey)
           return true
         }
       )

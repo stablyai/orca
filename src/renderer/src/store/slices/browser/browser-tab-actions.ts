@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { translate } from '@/i18n/i18n'
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from './browser-slice-contract'
@@ -97,17 +98,13 @@ export function createBrowserTabActions(
       const drawHere = (): void => {
         set((s) => {
           options?.validateLinkPlacement?.(s)
-          return {
-            browserTabsByWorktree: {
-              ...s.browserTabsByWorktree,
-              [worktreeId]: [...(s.browserTabsByWorktree[worktreeId] ?? []), browserTab]
-            },
-            browserPagesByWorkspace: {
-              ...s.browserPagesByWorkspace,
-              [workspaceId]: [page]
-            },
-            ...browserTabOpenView(s, worktreeId, browserTab, page, options)
-          }
+          const edit = editSessionSource(s)
+            .set('browserTabsByWorktree', worktreeId, [
+              ...(s.browserTabsByWorktree[worktreeId] ?? []),
+              browserTab
+            ])
+            .set('browserPagesByWorkspace', workspaceId, [page])
+          return edit.finish(browserTabOpenView(s, edit, worktreeId, browserTab, page, options))
         })
 
         const state = get()
@@ -153,7 +150,10 @@ export function createBrowserTabActions(
           page,
           options,
           showView: () => {
-            set((s) => browserTabOpenView(s, worktreeId, browserTab, page, options))
+            set((s) => {
+              const edit = editSessionSource(s)
+              return edit.finish(browserTabOpenView(s, edit, worktreeId, browserTab, page, options))
+            })
             admitLinkPageMount()
           },
           drawHere

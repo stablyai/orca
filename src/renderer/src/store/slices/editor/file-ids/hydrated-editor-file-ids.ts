@@ -1,5 +1,5 @@
+import type { SessionSourceEdit } from '../../../session-source-edits'
 import type { AppState } from '../../../types'
-import type { Tab, TabGroup } from '../../../../../../shared/tab-types'
 import type { PersistedOpenFile } from '../../../../../../shared/workspace-session-state-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import type { OpenFile } from '../types/open-file'
@@ -126,12 +126,10 @@ export function areStringArraysEqual(
 }
 
 export function migrateHydratedEditorTabsAndGroups(
-  state: Pick<AppState, 'unifiedTabsByWorktree' | 'groupsByWorktree'>,
+  edit: SessionSourceEdit<Pick<AppState, 'unifiedTabsByWorktree' | 'groupsByWorktree'>>,
   migrationsByWorktree: Record<string, Map<string, string>>
-): Partial<Pick<AppState, 'unifiedTabsByWorktree' | 'groupsByWorktree'>> {
-  let tabsChanged = false
-  let groupsChanged = false
-  const nextUnifiedTabsByWorktree: Record<string, Tab[]> = { ...state.unifiedTabsByWorktree }
+): void {
+  const state = edit.view()
   const tabIdMigrationsByWorktree: Record<string, Map<string, string>> = {}
 
   for (const [worktreeId, idMigrations] of Object.entries(migrationsByWorktree)) {
@@ -150,7 +148,6 @@ export function migrateHydratedEditorTabsAndGroups(
       if (nextId === tab.id && nextEntityId === tab.entityId) {
         return tab
       }
-      tabsChanged = true
       if (nextId !== tab.id) {
         tabIdMigrations.set(tab.id, nextId)
       }
@@ -159,17 +156,20 @@ export function migrateHydratedEditorTabsAndGroups(
     if (tabIdMigrations.size > 0) {
       tabIdMigrationsByWorktree[worktreeId] = tabIdMigrations
     }
-    nextUnifiedTabsByWorktree[worktreeId] = nextTabs
+    if (nextTabs.some((tab, index) => tab !== tabs[index])) {
+      edit.set('unifiedTabsByWorktree', worktreeId, nextTabs)
+    }
   }
 
-  const nextGroupsByWorktree: Record<string, TabGroup[]> = { ...state.groupsByWorktree }
   for (const [worktreeId, tabIdMigrations] of Object.entries(tabIdMigrationsByWorktree)) {
     const groups = state.groupsByWorktree[worktreeId]
     if (!groups) {
       continue
     }
-    const validTabIds = new Set((nextUnifiedTabsByWorktree[worktreeId] ?? []).map((tab) => tab.id))
-    nextGroupsByWorktree[worktreeId] = groups.map((group) => {
+    const validTabIds = new Set(
+      (edit.entry('unifiedTabsByWorktree', worktreeId) ?? []).map((tab) => tab.id)
+    )
+    const nextGroups = groups.map((group) => {
       const tabOrder = dedupeEditorTabOrder(
         group.tabOrder.map((tabId) => tabIdMigrations.get(tabId) ?? tabId),
         validTabIds
@@ -191,7 +191,6 @@ export function migrateHydratedEditorTabsAndGroups(
       ) {
         return group
       }
-      groupsChanged = true
       return {
         ...group,
         activeTabId: validActiveTabId,
@@ -199,10 +198,8 @@ export function migrateHydratedEditorTabsAndGroups(
         recentTabIds
       }
     })
-  }
-
-  return {
-    ...(tabsChanged ? { unifiedTabsByWorktree: nextUnifiedTabsByWorktree } : {}),
-    ...(groupsChanged ? { groupsByWorktree: nextGroupsByWorktree } : {})
+    if (nextGroups.some((group, index) => group !== groups[index])) {
+      edit.set('groupsByWorktree', worktreeId, nextGroups)
+    }
   }
 }

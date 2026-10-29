@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { renderHook } from '@testing-library/react'
@@ -36,7 +37,7 @@ describe('useActiveProjectSkillRuntime', () => {
   beforeEach(() => {
     setPlatform('win32')
     setWindowsShell('git-bash')
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       activeRepoId: null,
       activeWorktreeId: null,
       activeWorkspaceExecutionHostId: null,
@@ -137,7 +138,7 @@ describe('useActiveProjectSkillRuntime', () => {
 
   it('keeps proven local workspace ownership ahead of a focused paired transport', () => {
     const worktree = makeWorktree({ id: 'repo::/local', repoId: 'repo', hostId: 'local' })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       activeWorktreeId: worktree.id,
       activeWorkspaceExecutionHostId: 'local',
       worktreesByRepo: { repo: [worktree] },

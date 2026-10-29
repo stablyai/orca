@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createTestStore,
@@ -26,7 +27,7 @@ describe('worktree delete-state keying', () => {
   it('shows a local-qualified delete on the card of a row stored without a host', () => {
     const store = createTestStore()
     const card = makeWorktree({ id: ID, repoId: 'repo1' })
-    store.setState({ worktreesByRepo: { repo1: [card] } })
+    setSessionTestState(store, { worktreesByRepo: { repo1: [card] } })
 
     store.getState().markWorktreesQueuedForDeletion([{ id: ID, hostId: 'local' }])
     expect(
@@ -46,7 +47,7 @@ describe('worktree delete-state keying', () => {
     const store = createTestStore()
     const local = makeWorktree({ id: ID, repoId: 'repo1' })
     const remote = makeWorktree({ id: ID, repoId: 'repo1', hostId: 'ssh:host-b' })
-    store.setState({ worktreesByRepo: { repo1: [local, remote] } })
+    setSessionTestState(store, { worktreesByRepo: { repo1: [local, remote] } })
 
     store.getState().markWorktreesQueuedForDeletion([{ id: ID, hostId: 'ssh:host-b' }])
     const states = store.getState().deleteStateByWorktreeId
@@ -60,7 +61,7 @@ describe('worktree delete-state keying', () => {
   it('shows a local-qualified removal failure on the card of a row stored without a host', async () => {
     const store = createTestStore()
     const card = makeWorktree({ id: ID, repoId: 'repo1', path: '/path/wt' })
-    store.setState({ worktreesByRepo: { repo1: [card] } })
+    setSessionTestState(store, { worktreesByRepo: { repo1: [card] } })
     mockApi.worktrees.remove.mockRejectedValueOnce(new Error('delete failed'))
 
     const result = await store.getState().removeWorktree({ id: ID, executionHostId: 'local' })

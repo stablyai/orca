@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { PreflightRuntimeContext, PreflightStatus } from '../../../../preload/api-types'
 import type { AppState } from '../types'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
@@ -54,7 +54,7 @@ function buildPreflightArgs(
   }
 }
 
-export const createPreflightSlice: StateCreator<AppState, [], [], PreflightSlice> = (set, get) => ({
+export const createPreflightSlice: SessionStateCreator<AppState, PreflightSlice> = (set, get) => ({
   preflightStatus: null,
   preflightStatusChecked: false,
   preflightStatusContextKey: null,

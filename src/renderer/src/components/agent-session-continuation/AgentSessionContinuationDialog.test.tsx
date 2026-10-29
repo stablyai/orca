@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -51,7 +52,7 @@ beforeEach(() => {
   mocks.detection.mockReturnValue(detection)
   mocks.launch.mockResolvedValue(true)
   setLocalRuntimeCapabilitiesForTests([CHAT])
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     settings: { ...getDefaultSettings('/test'), experimentalNativeChat: true },
     repos: [{ id: 'repo-1', path: '/repo', displayName: 'repo', badgeColor: '', addedAt: 0 }],
     worktreesByRepo: {
@@ -61,7 +62,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   cleanup()
-  useAppStore.setState(initial, true)
+  setSessionTestState(useAppStore, initial, true)
 })
 
 it('clears failed detection, gates unresolved Start, and submits the displayed root/subfolder choice', async () => {

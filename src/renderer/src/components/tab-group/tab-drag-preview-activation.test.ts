@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
@@ -7,7 +8,7 @@ const WT = 'wt-preview-restore'
 
 describe('restoreTabDragActivationSnapshot', () => {
   beforeEach(() => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       activeWorktreeId: WT,
       activeTabType: 'terminal',
       activeTabId: 'terminal-1',

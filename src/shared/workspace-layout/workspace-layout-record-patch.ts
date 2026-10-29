@@ -1,9 +1,18 @@
+import { type SessionMapField, isSessionMapField, sessionMap } from '../session-change-set'
+import {
+  type SessionScalarField,
+  SessionUnitReader,
+  type SessionEntry
+} from '../session-unit-reader'
+
+import { SessionUnitIndex } from '../session-unit-index'
+
 // Isolate command edits by diffing saves before/after the command; patch only those fields onto stored data so unrelated Loader normalizations remain unwritten.
 
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
 import { editorFileKey } from './workspace-layout-editor-tab-file'
-import { adoptTouchedFoldedRows } from './workspace-layout-folded-rows'
+import { reduceTouchedFoldedRows } from './workspace-layout-folded-rows'
 
 type Json = Record<string, unknown>
 
@@ -33,65 +42,9 @@ export function patchStoredSession(
   before: WorkspaceSessionState,
   after: WorkspaceSessionState
 ): WorkspaceSessionState {
-  const patched = patchRecords(stored, before, after)
-  const adopted = adoptTouchedFoldedRows(stored, patched, before)
-  return adopted === stored ? patched : patchRecords(adopted, before, after)
-}
-
-function patchRecords(
-  stored: WorkspaceSessionState,
-  before: WorkspaceSessionState,
-  after: WorkspaceSessionState
-): WorkspaceSessionState {
-  const beforeFields = toJson(before)
-  const afterFields = toJson(after)
-  const changed = changedKeys(beforeFields, afterFields)
-  if (changed.length === 0) {
-    return stored
-  }
-  const storedFields = toJson(stored)
-  const patched: Json = { ...storedFields }
-  for (const field of changed) {
-    const idOf = LIST_FIELDS[field]
-    // The command dropped the field: stored records the load never read go with it.
-    if (afterFields[field] === undefined) {
-      delete patched[field]
-    } else if (idOf) {
-      patched[field] = patchLists(
-        asJson(storedFields[field]),
-        asJson(beforeFields[field]),
-        asJson(afterFields[field]),
-        idOf
-      )
-    } else {
-      patched[field] = patchValue(
-        storedFields[field],
-        beforeFields[field],
-        afterFields[field],
-        MAP_RECORD_DEPTH
-      )
-    }
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every field is the stored session's own or copied from `after`, a WorkspaceSessionState.
-  return patched as unknown as WorkspaceSessionState
-}
-
-function patchLists(
-  stored: Json,
-  before: Json,
-  after: Json,
-  idOf: (record: Json) => unknown
-): Json {
-  const patched: Json = { ...stored }
-  for (const key of changedKeys(before, after)) {
-    const list = patchList(asList(stored[key]), asList(before[key]), asList(after[key]), idOf)
-    if (list.length === 0 && (after[key] === undefined || stored[key] === undefined)) {
-      delete patched[key]
-    } else {
-      patched[key] = list
-    }
-  }
-  return patched
+  const reader = new SessionUnitReader(stored, new SessionUnitIndex(stored))
+  patchSessionUnits(reader, before, after, { kind: 'complete' })
+  return reader.snapshot()
 }
 
 function indexRecordsById(list: Json[], idOf: (record: Json) => unknown): Map<unknown, Json> {
@@ -236,4 +189,111 @@ function asList(value: unknown): Json[] {
 
 function toJson(session: WorkspaceSessionState): Json {
   return { ...session }
+}
+
+/** Patch model output onto actual captured units; omitted selected values are real absences. */
+export type SessionPatchDomain =
+  | { kind: 'complete' }
+  | {
+      kind: 'selected'
+      fields: ReadonlyMap<SessionMapField, ReadonlySet<string>>
+    }
+
+export function patchSessionUnits(
+  reader: SessionUnitReader,
+  before: WorkspaceSessionState,
+  after: WorkspaceSessionState,
+  domain: SessionPatchDomain
+): void {
+  patchRecords(reader, before, after, domain)
+  const owners = new Set([
+    ...Object.keys(before.tabsByWorktree ?? {}),
+    ...Object.keys(after.tabsByWorktree ?? {})
+  ])
+  if (reduceTouchedFoldedRows(reader, before, owners)) {
+    patchRecords(reader, before, after, domain)
+  }
+  for (const name of changedKeys(toJson(before), toJson(after))) {
+    if (!isSessionMapField(name)) {
+      continue
+    }
+    reader.reconcileField(name, {
+      kind: 'output',
+      present: Object.hasOwn(after, name),
+      explicitEmpty: after[name] !== undefined
+    })
+  }
+}
+
+function patchRecords(
+  reader: SessionUnitReader,
+  before: WorkspaceSessionState,
+  after: WorkspaceSessionState,
+  domain: SessionPatchDomain
+): void {
+  for (const name of changedKeys(toJson(before), toJson(after))) {
+    if (isSessionMapField(name)) {
+      if (domain.kind === 'complete' && after[name] === undefined) {
+        reader.replace(name, { present: Object.hasOwn(after, name), value: undefined })
+        continue
+      }
+      const previous = sessionMap(before, name) ?? {},
+        next = sessionMap(after, name) ?? {}
+      const idOf = LIST_FIELDS[name]
+      for (const key of changedKeys(previous, next)) {
+        if (
+          domain.kind === 'selected' &&
+          !domain.fields.get(name)?.has(key) &&
+          !Object.hasOwn(next, key)
+        ) {
+          continue
+        }
+        const current = reader.unit(name, key)
+        if (idOf) {
+          const list = patchList(
+            asList(current.value),
+            asList(previous[key]),
+            asList(next[key]),
+            idOf
+          )
+          reader.write(
+            name,
+            key,
+            list.length === 0 && (next[key] === undefined || !current.present)
+              ? { present: false, value: undefined }
+              : // SAFETY: the record patch preserves this field's stored/serialized entry type.
+                // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the record patch preserves this field's stored/serialized entry type.
+                { present: true, value: list as SessionEntry<typeof name> }
+          )
+        } else {
+          reader.write(
+            name,
+            key,
+            next[key] === undefined
+              ? { present: false, value: undefined }
+              : // SAFETY: record-depth patch combines only values for this same field/key.
+                {
+                  present: true,
+                  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: record-depth patch combines only values for this same field/key.
+                  value: patchValue(
+                    current.value,
+                    previous[key],
+                    next[key],
+                    MAP_RECORD_DEPTH - 1
+                  ) as never
+                }
+          )
+        }
+      }
+    } else {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: keys come from the two typed serializer outputs, excluding map fields above.
+      const field = name as SessionScalarField
+      reader.replace(
+        field,
+        Object.hasOwn(after, field)
+          ? { present: true, value: after[field] }
+          : { present: false, value: undefined }
+      )
+    }
+  }
 }

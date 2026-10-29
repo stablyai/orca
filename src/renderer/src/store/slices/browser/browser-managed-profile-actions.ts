@@ -23,10 +23,7 @@ const localProfiles = (state: AppState): BrowserSessionProfile[] =>
   state.browserSessionProfilesByHostId[LOCAL_EXECUTION_HOST_ID] ?? []
 
 // Managed profiles only ever live on this desktop, so they write the local list, never the focused host's.
-const localProfilesUpdate = (
-  state: AppState,
-  profiles: BrowserSessionProfile[]
-): Partial<BrowserSlice> => ({
+const localProfilesUpdate = (state: AppState, profiles: BrowserSessionProfile[]) => ({
   browserSessionProfilesByHostId: {
     ...state.browserSessionProfilesByHostId,
     [LOCAL_EXECUTION_HOST_ID]: profiles

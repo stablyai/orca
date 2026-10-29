@@ -1,17 +1,28 @@
+import { SessionUnitReader } from '../session-unit-reader'
+import { SessionUnitIndex } from '../session-unit-index'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
 
 /** Group tab orders are authoritative; unlisted rows retain order afterwards. Return the same session when already ordered. */
 export function orderTerminalRowsByTabGroups(
   session: WorkspaceSessionState
 ): WorkspaceSessionState {
-  let tabsByWorktree: WorkspaceSessionState['tabsByWorktree'] | null = null
-  for (const [worktreeId, rows] of Object.entries(session.tabsByWorktree ?? {})) {
-    const groups = session.tabGroups?.[worktreeId]
+  const reader = new SessionUnitReader(session, new SessionUnitIndex(session))
+  reduceTerminalRowOrder(reader, Object.keys(session.tabsByWorktree ?? {}))
+  return reader.snapshot()
+}
+
+export function reduceTerminalRowOrder(reader: SessionUnitReader, owners: Iterable<string>): void {
+  for (const worktreeId of owners) {
+    const rows = reader.unit('tabsByWorktree', worktreeId).value
+    if (!rows) {
+      continue
+    }
+    const groups = reader.unit('tabGroups', worktreeId).value
     if (!groups?.length || rows.length < 2) {
       continue
     }
     const rowIdByTabId = new Map(
-      (session.unifiedTabs?.[worktreeId] ?? [])
+      (reader.unit('unifiedTabs', worktreeId).value ?? [])
         .filter((tab) => tab.contentType === 'terminal')
         .map((tab) => [tab.id, tab.entityId ?? tab.id])
     )
@@ -31,8 +42,6 @@ export function orderTerminalRowsByTabGroups(
     if (ordered.every((row, index) => row === rows[index])) {
       continue
     }
-    tabsByWorktree ??= { ...session.tabsByWorktree }
-    tabsByWorktree[worktreeId] = ordered
+    reader.write('tabsByWorktree', worktreeId, { present: true, value: ordered })
   }
-  return tabsByWorktree ? { ...session, tabsByWorktree } : session
 }

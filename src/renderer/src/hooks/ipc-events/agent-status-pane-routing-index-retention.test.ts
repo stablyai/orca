@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it } from 'vitest'
 import type { AppState } from '../../store/types'
 import {
@@ -29,7 +30,7 @@ async function collectRetiredLayouts(): Promise<void> {
 describe('agent-status routing layout lifetime', () => {
   it('releases replayed scrollback without another status event or tab replacement', async () => {
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [{ ...TEST_REPO, connectionId: 'ssh-1' }],
       worktreesByRepo: {
         [TEST_REPO.id]: [makeWorktree({ id: WORKTREE_ID, repoId: TEST_REPO.id })]

@@ -1,3 +1,5 @@
+import type { SessionUnitView } from '../session-unit-reader'
+import { readSessionUnit } from '../session-unit-reader'
 // Share stored-row ownership between startup hydration and Loader: sessions duplicate terminals in tab-bar entries and legacy workspace rows.
 
 import { isValidTerminalTabId } from '../terminal-tab-id'
@@ -13,12 +15,12 @@ export type CanonicalPtyOwners = {
 }
 
 export function readCanonicalPtyOwners(
-  session: WorkspaceSessionState,
+  session: WorkspaceSessionState | SessionUnitView,
   workspaceKey: string,
   rows: readonly TerminalTab[]
 ): CanonicalPtyOwners {
   const tabIds = new Set(
-    (session.unifiedTabs?.[workspaceKey] ?? [])
+    (readSessionUnit(session, 'unifiedTabs', workspaceKey) ?? [])
       .filter((tab) => tab.contentType === 'terminal')
       .map((tab) => tab.entityId)
   )
@@ -41,7 +43,7 @@ const RETAINED_UNCLAIMED: CanonicalPtyClaim = { kind: 'retained', releasedPtyIds
 
 /** Canonical mounts win PTY ownership over stale legacy duplicates of the same terminal. */
 export function resolveCanonicalPtyClaim(
-  session: WorkspaceSessionState,
+  session: WorkspaceSessionState | SessionUnitView,
   row: TerminalTab,
   canonical: CanonicalPtyOwners
 ): CanonicalPtyClaim {
@@ -84,10 +86,10 @@ type PersistedTerminalPtyIds = {
 }
 
 export function readPersistedTerminalPtyIds(
-  session: WorkspaceSessionState,
+  session: WorkspaceSessionState | SessionUnitView,
   tab: TerminalTab
 ): PersistedTerminalPtyIds {
-  const layout = session.terminalLayoutsByTabId?.[tab.id]
+  const layout = readSessionUnit(session, 'terminalLayoutsByTabId', tab.id)
   // Hydration reads before normalization, so the merged/unpruned binding map can contain dead leaves. Rootless layouts treat bindings as mounted.
   const mountedLeafIds = layout?.root ? new Set(collectLayoutLeafIdsInOrder(layout.root)) : null
   const bindings = Object.entries(layout?.ptyIdsByLeafId ?? {}).filter(([, ptyId]) =>
@@ -98,7 +100,7 @@ export function readPersistedTerminalPtyIds(
   for (const [leafId, ptyId] of bindings) {
     ;(!mountedLeafIds || mountedLeafIds.has(leafId) ? mounted : unmounted).push(ptyId)
   }
-  const tabLevel = [tab.ptyId, session.remoteSessionIdsByTabId?.[tab.id]].filter(
+  const tabLevel = [tab.ptyId, readSessionUnit(session, 'remoteSessionIdsByTabId', tab.id)].filter(
     (ptyId): ptyId is string => Boolean(ptyId)
   )
   const owned = new Set([...tabLevel, ...mounted])

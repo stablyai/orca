@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { createLocalDetectedAgentState } from './local-detected-agent-state'
@@ -27,7 +27,7 @@ export function _getRemoteDetectPromiseCountForTest(): number {
   return remoteDetectPromises.size
 }
 
-export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedAgentsSlice> = (
+export const createDetectedAgentsSlice: SessionStateCreator<AppState, DetectedAgentsSlice> = (
   set,
   get,
   store

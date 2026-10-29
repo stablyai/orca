@@ -1,10 +1,11 @@
+import type { SessionTestStore } from '@/lib/test-support/session-source-fixture'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 // When a shared record goes clean, synchronize source and rich views so stale typing cannot resurrect old text.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import type { editor } from 'monaco-editor'
-import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store'
 import { editorModelRegistry } from '@/lib/editor-model-registry'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
@@ -15,7 +16,9 @@ import { useMonacoContentSyncBridge } from './use-monaco-content-sync-bridge'
 import type { FileContent } from './editor-panel-content-types'
 import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
 
-const storeRef = vi.hoisted((): { current: StoreApi<AppState> | null } => ({ current: null }))
+const storeRef = vi.hoisted((): { current: SessionTestStore<AppState> | null } => ({
+  current: null
+}))
 vi.mock('@/store', () => {
   const getState = () => storeRef.current!.getState()
   return {
@@ -44,7 +47,7 @@ afterEach(() => {
 function openSharedMarkdown() {
   const store = createEditorStore()
   storeRef.current = store
-  store.setState({
+  setSessionTestState(store, {
     worktreesByRepo: {
       'repo-1': [
         makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }),

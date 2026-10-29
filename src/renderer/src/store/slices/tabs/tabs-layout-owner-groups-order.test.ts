@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { recordLayoutApply, sendLayoutApply } from '@/runtime/layout-apply-send'
 import { insertUnifiedTabAfterAnchor } from '@/lib/unified-tab-anchor-insertion'
@@ -55,7 +56,7 @@ function tab(id: string, extra: Partial<Tab> = {}): Tab {
 
 function seeded(tabs: Tab[]) {
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     unifiedTabsByWorktree: { [WT]: tabs },
     groupsByWorktree: {
       [WT]: [{ id: GROUP, worktreeId: WT, activeTabId: null, tabOrder: tabs.map((t) => t.id) }]

@@ -1,3 +1,4 @@
+import { replaceSessionSourceFields } from './store/session-source-write-boundary'
 import './assets/main.css'
 import { StrictMode, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -36,14 +37,19 @@ function SpaceWindowRoot(): React.JSX.Element {
       const currentAnalysis = useAppStore.getState().workspaceSpaceAnalysis
       const currentScanning = useAppStore.getState().workspaceSpaceScanning
       const incomingAnalysis = value.workspaceSpaceAnalysis
-      useAppStore.setState({
-        ...value,
-        workspaceSpaceAnalysis: selectSpaceWindowAnalysis(currentAnalysis, incomingAnalysis),
-        workspaceSpaceScanning: currentScanning || value.workspaceSpaceScanning,
-        workspaceSpaceScanProgress: currentScanning
-          ? useAppStore.getState().workspaceSpaceScanProgress
-          : value.workspaceSpaceScanProgress
-      })
+      useAppStore.setState(
+        replaceSessionSourceFields(
+          {
+            ...value,
+            workspaceSpaceAnalysis: selectSpaceWindowAnalysis(currentAnalysis, incomingAnalysis),
+            workspaceSpaceScanning: currentScanning || value.workspaceSpaceScanning,
+            workspaceSpaceScanProgress: currentScanning
+              ? useAppStore.getState().workspaceSpaceScanProgress
+              : value.workspaceSpaceScanProgress
+          },
+          'catalog'
+        )
+      )
     })
     const offProgress = api.onProgress((progress) => {
       useAppStore.getState().applyWorkspaceSpaceProgress(progress)

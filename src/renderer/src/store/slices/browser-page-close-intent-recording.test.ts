@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
@@ -55,7 +56,7 @@ async function createStoreWithClientHostedPage(
 ): Promise<{ store: ReturnType<typeof createTestStore>; pageId: string }> {
   runtimeAnswers(() => undefined)
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     repos: [{ id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }],
     worktreesByRepo: {
       repo1: [makeWorktree({ id: WORKTREE_ID, repoId: 'repo1', path: '/path/wt1' })]
@@ -68,7 +69,7 @@ async function createStoreWithClientHostedPage(
   const tab = store.getState().createBrowserTab(WORKTREE_ID, 'https://remote.example/')
   await main.settle()
   const pageId = store.getState().browserPagesByWorkspace[tab.id]?.[0]?.id ?? ''
-  store.setState((s) => ({
+  setSessionTestState(store, (s) => ({
     remoteBrowserPageHandlesByPageId: {
       ...s.remoteBrowserPageHandlesByPageId,
       [pageId]: {

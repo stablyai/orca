@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act, cleanup, renderHook } from '@testing-library/react'
@@ -130,7 +131,8 @@ describe('Cmd+J website selection', () => {
 
   beforeEach(() => {
     openWorkspaceBrowserTab.mockReset().mockResolvedValue(undefined)
-    useAppStore.setState(
+    setSessionTestState(
+      useAppStore,
       {
         ...initialAppState,
         ...makeRecentTabState(),
@@ -150,12 +152,12 @@ describe('Cmd+J website selection', () => {
     main?.close()
     main = undefined
     vi.restoreAllMocks()
-    useAppStore.setState(initialAppState, true)
+    setSessionTestState(useAppStore, initialAppState, true)
   })
 
   it('leads weaker workspace and tab matches even when both sections are present', async () => {
     const state = useAppStore.getState()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       worktreesByRepo: {
         'repo-1': [
           makeWorktree('wt-alpha', 'Alpha workspace'),
@@ -218,7 +220,7 @@ describe('Cmd+J website selection', () => {
         'gives only a full name match priority over website creation (%s)',
         async (name) => {
           if (type === 'worktree') {
-            useAppStore.setState({
+            setSessionTestState(useAppStore, {
               worktreesByRepo: {
                 'repo-1': [
                   makeWorktree('wt-alpha', 'Alpha workspace'),
@@ -228,7 +230,7 @@ describe('Cmd+J website selection', () => {
             })
           } else if (type === 'workspace-tab') {
             const state = useAppStore.getState()
-            useAppStore.setState({
+            setSessionTestState(useAppStore, {
               tabsByWorktree: {
                 ...state.tabsByWorktree,
                 'wt-beta': [makeTerminalTab('term-beta', 'wt-beta', name)]

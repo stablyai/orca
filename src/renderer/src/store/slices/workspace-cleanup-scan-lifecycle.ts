@@ -1,3 +1,4 @@
+import type { SessionSourceSet } from '../session-source-edits'
 import type { AppState } from '../types'
 import type {
   WorkspaceCleanupScanArgs,
@@ -24,10 +25,7 @@ import {
 } from './workspace-cleanup-scan-progress'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 
-type SetState = (
-  partial: Partial<AppState> | ((state: AppState) => Partial<AppState>),
-  replace?: false
-) => void
+type SetState = SessionSourceSet<AppState>
 
 export async function scanWorkspaceCleanup(
   get: () => AppState,

@@ -6,6 +6,11 @@ import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AppState } from '../types'
 import {
+  editSessionSource,
+  type SessionSourceWrite,
+  type SessionSourceEdit
+} from '../session-source-edits'
+import {
   adoptTerminalTabOwnerMetadataOnlyBuckets,
   getTerminalTabOwners
 } from './terminal-tab-owner-index'
@@ -23,7 +28,9 @@ type TitleState = Pick<
   'activeWorktreeId' | 'settings' | 'sortEpoch' | 'tabsByWorktree' | 'unifiedTabsByWorktree'
 >
 
-type TitlePatch = Partial<Pick<AppState, 'sortEpoch' | 'tabsByWorktree' | 'unifiedTabsByWorktree'>>
+type TitlePatch = SessionSourceWrite<
+  Pick<AppState, 'sortEpoch' | 'tabsByWorktree' | 'unifiedTabsByWorktree'>
+>
 
 type TitleUpdateResult = {
   patch: TitlePatch | null
@@ -54,7 +61,7 @@ export function getTabIdFromPaneKey(paneKey: string): string | null {
 }
 
 function getOwnerStage(
-  state: TitleState,
+  edit: SessionSourceEdit<TitleState>,
   stages: Map<string, OwnerStage>,
   worktreeId: string
 ): OwnerStage {
@@ -62,8 +69,8 @@ function getOwnerStage(
   if (existing) {
     return existing
   }
-  const tabs = state.tabsByWorktree[worktreeId] ?? []
-  const unifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
+  const tabs = edit.entry('tabsByWorktree', worktreeId) ?? []
+  const unifiedTabs = edit.entry('unifiedTabsByWorktree', worktreeId) ?? []
   const tabIndexesById = new Map<string, number[]>()
   for (let index = 0; index < tabs.length; index += 1) {
     const tabId = tabs[index].id
@@ -127,6 +134,7 @@ function updateStageUnifiedLabel(
 function finishTitleStages(
   state: TitleState,
   stages: Map<string, OwnerStage>,
+  edit: SessionSourceEdit<TitleState>,
   sortEpochIncrement = 0
 ): TitleUpdateResult {
   const tabsChanged = [...stages.values()].some((stage) => stage.tabsChanged)
@@ -134,28 +142,21 @@ function finishTitleStages(
   if (!tabsChanged && !unifiedTabsChanged) {
     return { patch: null, runtimeGraphChanged: false }
   }
-  const patch: TitlePatch = {}
-  if (tabsChanged) {
-    patch.tabsByWorktree = { ...state.tabsByWorktree }
-  }
-  if (unifiedTabsChanged) {
-    patch.unifiedTabsByWorktree = { ...state.unifiedTabsByWorktree }
-  }
   for (const [worktreeId, stage] of stages) {
     if (stage.tabsChanged) {
-      patch.tabsByWorktree![worktreeId] = stage.tabs
+      edit.set('tabsByWorktree', worktreeId, stage.tabs)
     }
     if (stage.unifiedTabsChanged) {
-      patch.unifiedTabsByWorktree![worktreeId] = stage.unifiedTabs
+      edit.set('unifiedTabsByWorktree', worktreeId, stage.unifiedTabs)
     }
   }
-  if (sortEpochIncrement > 0) {
-    patch.sortEpoch = state.sortEpoch + sortEpochIncrement
-  }
-  if (patch.tabsByWorktree) {
+  const patch = edit.finish(
+    sortEpochIncrement > 0 ? { sortEpoch: state.sortEpoch + sortEpochIncrement } : {}
+  )
+  if (tabsChanged) {
     adoptTerminalTabOwnerMetadataOnlyBuckets(
       state.tabsByWorktree,
-      patch.tabsByWorktree,
+      edit.read('tabsByWorktree'),
       stages.keys()
     )
   }
@@ -166,6 +167,7 @@ export function applyTerminalTabTitleUpdates(
   state: TitleState,
   updates: readonly TerminalTabTitleUpdate[]
 ): TitleUpdateResult {
+  const edit = editSessionSource(state)
   const ownerByTabId = getTerminalTabOwners(state.tabsByWorktree)
   const stages = new Map<string, OwnerStage>()
   let sortEpochIncrement = 0
@@ -174,7 +176,7 @@ export function applyTerminalTabTitleUpdates(
     if (!ownerWorktreeId) {
       continue
     }
-    const stage = getOwnerStage(state, stages, ownerWorktreeId)
+    const stage = getOwnerStage(edit, stages, ownerWorktreeId)
     const tabIndexes = stage.tabIndexesById.get(tabId)
     const currentTab = tabIndexes ? stage.tabs[tabIndexes[0]] : undefined
     if (!currentTab || !tabIndexes) {
@@ -201,13 +203,14 @@ export function applyTerminalTabTitleUpdates(
       sortEpochIncrement += 1
     }
   }
-  return finishTitleStages(state, stages, sortEpochIncrement)
+  return finishTitleStages(state, stages, edit, sortEpochIncrement)
 }
 
 export function applyGeneratedTabTitleUpdates(
   state: TitleState,
   updates: readonly GeneratedTabTitleUpdate[]
 ): TitleUpdateResult {
+  const edit = editSessionSource(state)
   const ownerByTabId = getTerminalTabOwners(state.tabsByWorktree)
   if (state.settings?.tabAutoGenerateTitle !== true) {
     return { patch: null, runtimeGraphChanged: false }
@@ -219,7 +222,7 @@ export function applyGeneratedTabTitleUpdates(
     if (!tabId || !ownerWorktreeId || prompt.length === 0) {
       continue
     }
-    const stage = getOwnerStage(state, stages, ownerWorktreeId)
+    const stage = getOwnerStage(edit, stages, ownerWorktreeId)
     const tabIndexes = stage.tabIndexesById.get(tabId)
     const currentTab = tabIndexes ? stage.tabs[tabIndexes[0]] : undefined
     if (!currentTab || !tabIndexes || tabHasProtectedTitle(currentTab)) {
@@ -236,5 +239,5 @@ export function applyGeneratedTabTitleUpdates(
     updateStageTabs(stage, tabIndexes, (tab) => ({ ...tab, generatedTitle }))
     updateStageUnifiedLabel(stage, tabId, 'generatedLabel', generatedTitle)
   }
-  return finishTitleStages(state, stages)
+  return finishTitleStages(state, stages, edit)
 }

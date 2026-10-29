@@ -44,7 +44,7 @@ export function createUiSettingsActions(set: UISliceSet, get: UISliceGet): Parti
           s.settingsProjectSetupSelection[selectionKey] === setupId &&
           Object.keys(s.settingsProjectHostSelection).at(-1) === selectionKey
         ) {
-          return s
+          return undefined
         }
         // Reinsert so equivalent project/checkout keys resolve to the latest explicit pick.
         const nextHostSelections = { ...s.settingsProjectHostSelection }

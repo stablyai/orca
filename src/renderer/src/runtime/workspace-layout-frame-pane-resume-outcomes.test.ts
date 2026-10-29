@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
+import { createStore } from 'zustand/vanilla'
+import { withSessionSourceWrites } from '@/store/session-source-write-boundary'
 import { framePaneFactsShown, showFramePaneStarts } from './workspace-layout-frame-pane-starts'
 import type {
   PublishedPane,
@@ -32,15 +34,13 @@ function frameWith(pane: Omit<PublishedPane, 'leafId'>): PublishedWorkspaceLayou
 }
 
 function frameStore() {
-  let state: Pick<AppState, 'terminalPaneStartsByPaneKey' | 'terminalPaneResumeOutcomesByPaneKey'> =
-    { terminalPaneStartsByPaneKey: {}, terminalPaneResumeOutcomesByPaneKey: {} }
-  return {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: showFramePaneStarts reads only these two maps.
-    getState: () => state as AppState,
-    setState: (patch: Partial<AppState>) => {
-      state = { ...state, ...patch }
-    }
-  }
+  type State = Pick<AppState, 'terminalPaneStartsByPaneKey' | 'terminalPaneResumeOutcomesByPaneKey'>
+  return createStore<State>()(
+    withSessionSourceWrites<State>(() => ({
+      terminalPaneStartsByPaneKey: {},
+      terminalPaneResumeOutcomesByPaneKey: {}
+    }))
+  )
 }
 
 describe("main's resume outcomes in the window's store", () => {

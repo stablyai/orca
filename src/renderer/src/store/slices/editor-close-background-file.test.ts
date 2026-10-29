@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 /**
  * Closing a file that belongs to a background workspace must not change what the focused
  * workspace shows, even when that workspace has no files, browsers or terminals of its own.
@@ -19,7 +20,7 @@ describe('closing a background workspace’s last file', () => {
       language: 'markdown',
       mode: 'edit'
     })
-    store.setState({
+    setSessionTestState(store, {
       activeWorktreeId: 'wt-focused',
       activeTabType: 'agent-session',
       activeTabTypeByWorktree: { 'wt-focused': 'agent-session' }

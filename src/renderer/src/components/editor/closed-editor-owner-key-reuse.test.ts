@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { afterEach, expect, it, vi } from 'vitest'
 import {
@@ -20,7 +21,7 @@ it('re-resolves only the changed tab until an owner input changes', async () => 
   attach()
   const resolve = vi.mocked(getEditorModelOwnerKey)
   const markDirty = (id: string): void =>
-    store.setState({
+    setSessionTestState(store, {
       openFiles: store
         .getState()
         .openFiles.map((file) => (file.id === id ? { ...file, isDirty: !file.isDirty } : file))
@@ -48,7 +49,7 @@ it('resolves no owners for rank-only worktree patches but does for owner changes
   const resolve = vi.mocked(getEditorModelOwnerKey)
   const patchRows = (patch: { sortOrder?: number; hostId?: 'runtime:env' }): void => {
     const rows = store.getState().worktreesByRepo['model-fixture']
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: { 'model-fixture': rows.map((row) => ({ ...row, ...patch })) }
     })
   }

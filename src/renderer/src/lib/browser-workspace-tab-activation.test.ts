@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { afterEach, expect, it } from 'vitest'
@@ -9,7 +10,7 @@ import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { getActivatableBrowserWorkspaceTab } from './browser-workspace-tab-activation'
 
 const initialState = useAppStore.getInitialState()
-afterEach(() => useAppStore.setState(initialState, true))
+afterEach(() => setSessionTestState(useAppStore, initialState, true))
 
 function makeWorktree(overrides: Partial<Worktree> & Pick<Worktree, 'id'>): Worktree {
   return {
@@ -47,7 +48,8 @@ const browserTab: Tab = {
 }
 
 function seedState(worktreesByRepo: Record<string, Worktree[]>, tab: Tab): void {
-  useAppStore.setState(
+  setSessionTestState(
+    useAppStore,
     { ...initialState, worktreesByRepo, unifiedTabsByWorktree: { wt: [tab] } },
     true
   )
@@ -115,7 +117,7 @@ it('accepts a hostless browser tab when the worktree ID is unambiguous', () => {
     })
   ).toEqual(browserTab)
 
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     unifiedTabsByWorktree: {
       wt: [browserTab],
       other: [{ ...browserTab, worktreeId: 'other', contentType: 'terminal', entityId: 'terminal' }]
@@ -132,7 +134,8 @@ it('accepts a hostless browser tab when the worktree ID is unambiguous', () => {
 
 it('includes folder workspaces when rejecting ambiguous hostless activation', () => {
   const worktreeId = folderWorkspaceKey('shared-folder')
-  useAppStore.setState(
+  setSessionTestState(
+    useAppStore,
     {
       ...initialState,
       folderWorkspaces: [makeFolderWorkspace('local'), makeFolderWorkspace('ssh:remote')],

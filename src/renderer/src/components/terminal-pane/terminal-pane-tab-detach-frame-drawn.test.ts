@@ -1,3 +1,5 @@
+import { editSessionSource } from '@/store/session-source-edits'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
@@ -133,7 +135,7 @@ function storeWithChatSplit() {
 function storeWithUnboundSplit() {
   const store = storeWithChatSplit()
   const layout = store.getState().terminalLayoutsByTabId[SOURCE]!
-  store.setState({
+  setSessionTestState(store, {
     unifiedTabsByWorktree: { [WT]: [entry(SOURCE, 1)] },
     terminalLayoutsByTabId: {
       [SOURCE]: { ...layout, chatLeafId: undefined, ptyIdsByLeafId: { [LEAF_1]: 'pty-left' } }
@@ -175,7 +177,9 @@ function drawMainMove(
     facts: loaded.facts,
     view: loaded.desktopView
   })
-  store.setState(buildLayoutFrameStorePatch(state, slices, [WT]))
+  const edit = editSessionSource(state)
+  buildLayoutFrameStorePatch(edit, slices, [WT])
+  store.setState(edit.finish())
 }
 
 beforeEach(() => {

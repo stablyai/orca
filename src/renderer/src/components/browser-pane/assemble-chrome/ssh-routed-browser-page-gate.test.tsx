@@ -1,3 +1,5 @@
+import { createGlobalSettingsFixture } from '../../../../../shared/global-settings-test-fixture'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -29,7 +31,7 @@ const settle = () =>
 
 describe('SshRoutedBrowserPageGate', () => {
   beforeEach(() => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       sshConnectionStates: new Map([
         [
           'target-a',
@@ -46,7 +48,7 @@ describe('SshRoutedBrowserPageGate', () => {
   })
   afterEach(() => {
     cleanup()
-    useAppStore.setState({ sshConnectionStates: initialHostState.sshConnectionStates })
+    setSessionTestState(useAppStore, { sshConnectionStates: initialHostState.sshConnectionStates })
   })
 
   it('renders children with no override for non-SSH workspaces without any prepare call', async () => {
@@ -98,9 +100,12 @@ describe('SshRoutedBrowserPageGate', () => {
   it('stays unrouted when the setting is off', async () => {
     mocks.executionHostId = 'ssh:target-a'
     const priorSettings = useAppStore.getState().settings
-    useAppStore.setState({
-      settings: { ...priorSettings, browserSshWorkspaceRoutingEnabled: false }
-    } as Parameters<typeof useAppStore.setState>[0])
+    setSessionTestState(useAppStore, {
+      settings: {
+        ...createGlobalSettingsFixture(priorSettings ?? {}),
+        browserSshWorkspaceRoutingEnabled: false
+      }
+    })
     try {
       render(
         <SshRoutedBrowserPageGate worktreeId="wt-1" sessionProfileId={null} pageIds={PAGE_IDS}>
@@ -111,9 +116,7 @@ describe('SshRoutedBrowserPageGate', () => {
       expect(screen.getByTestId('page').textContent).toBe('null')
       expect(mocks.prepare).not.toHaveBeenCalled()
     } finally {
-      useAppStore.setState({ settings: priorSettings } as Parameters<
-        typeof useAppStore.setState
-      >[0])
+      setSessionTestState(useAppStore, { settings: priorSettings })
     }
   })
 
@@ -143,9 +146,7 @@ describe('SshRoutedBrowserPageGate', () => {
     mocks.prepare.mockRejectedValue(new Error('browser_local_route_ssh_unavailable'))
     const updateSettings = vi.fn()
     const prior = useAppStore.getState().updateSettings
-    useAppStore.setState({ updateSettings } as unknown as Parameters<
-      typeof useAppStore.setState
-    >[0])
+    useAppStore.setState({ updateSettings })
     try {
       render(
         <SshRoutedBrowserPageGate worktreeId="wt-1" sessionProfileId={null} pageIds={PAGE_IDS}>
@@ -158,18 +159,19 @@ describe('SshRoutedBrowserPageGate', () => {
         browserSshWorkspaceRoutingDisabledTargetIds: ['target-a']
       })
     } finally {
-      useAppStore.setState({ updateSettings: prior } as unknown as Parameters<
-        typeof useAppStore.setState
-      >[0])
+      useAppStore.setState({ updateSettings: prior })
     }
   })
 
   it('mounts unrouted for a target the user opted out of', async () => {
     mocks.executionHostId = 'ssh:target-a'
     const priorSettings = useAppStore.getState().settings
-    useAppStore.setState({
-      settings: { ...priorSettings, browserSshWorkspaceRoutingDisabledTargetIds: ['target-a'] }
-    } as Parameters<typeof useAppStore.setState>[0])
+    setSessionTestState(useAppStore, {
+      settings: {
+        ...createGlobalSettingsFixture(priorSettings ?? {}),
+        browserSshWorkspaceRoutingDisabledTargetIds: ['target-a']
+      }
+    })
     try {
       render(
         <SshRoutedBrowserPageGate worktreeId="wt-1" sessionProfileId={null} pageIds={PAGE_IDS}>
@@ -180,9 +182,7 @@ describe('SshRoutedBrowserPageGate', () => {
       expect(screen.getByTestId('page').textContent).toBe('null')
       expect(mocks.prepare).not.toHaveBeenCalled()
     } finally {
-      useAppStore.setState({ settings: priorSettings } as Parameters<
-        typeof useAppStore.setState
-      >[0])
+      setSessionTestState(useAppStore, { settings: priorSettings })
     }
   })
 

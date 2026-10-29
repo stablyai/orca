@@ -1,3 +1,4 @@
+import { readSessionUnit } from '../session-unit-reader'
 import {
   BROWSER_TAB_LAYOUT_FIELDS,
   BROWSER_TAB_WORKSPACE_FIELDS,
@@ -11,11 +12,11 @@ import type { LayoutBrowserTab, LayoutEditorFile, LayoutTab } from './workspace-
 /** Resolve disagreeing worktree IDs by record majority, falling back to the workspace key. */
 export function resolveWorktreeId({ session, key }: WorkspaceLoadArgs): string {
   const named: { worktreeId: string }[] = [
-    ...(session.tabsByWorktree?.[key] ?? []),
-    ...(session.unifiedTabs?.[key] ?? []),
-    ...(session.tabGroups?.[key] ?? []),
-    ...(session.openFilesByWorktree?.[key] ?? []),
-    ...(session.browserTabsByWorktree?.[key] ?? [])
+    ...(readSessionUnit(session, 'tabsByWorktree', key) ?? []),
+    ...(readSessionUnit(session, 'unifiedTabs', key) ?? []),
+    ...(readSessionUnit(session, 'tabGroups', key) ?? []),
+    ...(readSessionUnit(session, 'openFilesByWorktree', key) ?? []),
+    ...(readSessionUnit(session, 'browserTabsByWorktree', key) ?? [])
   ]
   const counts = new Map<string, number>()
   for (const { worktreeId: id } of named) {
@@ -39,7 +40,7 @@ export function loadEditorFiles(
   worktreeId: string
 ): LayoutEditorFile[] | undefined {
   const { session, key, view } = args
-  const files = session.openFilesByWorktree?.[key]
+  const files = readSessionUnit(session, 'openFilesByWorktree', key)
   if (!files) {
     return undefined
   }
@@ -63,7 +64,7 @@ export function loadEditorFiles(
 
 export function loadBrowserTabs(args: WorkspaceLoadArgs): LayoutBrowserTab[] | undefined {
   const { session, key, facts } = args
-  return session.browserTabsByWorktree?.[key]?.map((tab) => {
+  return readSessionUnit(session, 'browserTabsByWorktree', key)?.map((tab) => {
     childRecord(facts.browserTabs, key)[tab.id] = omitStoredFields(tab, [
       ...BROWSER_TAB_LAYOUT_FIELDS,
       ...BROWSER_TAB_WORKSPACE_FIELDS

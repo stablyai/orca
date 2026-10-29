@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -86,7 +87,7 @@ function mockHost(detect: (call: number, method: string) => Promise<unknown>): (
 
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
-  useAppStore.setState(initialAppState, true)
+  setSessionTestState(useAppStore, initialAppState, true)
   latest = null
   runtimeEnvironmentCall.mockReset()
   Object.defineProperty(globalThis.window, 'api', {

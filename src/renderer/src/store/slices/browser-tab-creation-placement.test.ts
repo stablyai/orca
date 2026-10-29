@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
@@ -164,7 +165,7 @@ describe('browser tab creation placement', () => {
 
   it('records desktop placement for both normal and profile tabs on an SSH workspace', async () => {
     seedSplit(store)
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {
         repo1: [makeWorktree({ id: WT, repoId: 'repo1', hostId: 'ssh:target' })]
       }
@@ -458,7 +459,7 @@ describe('browser tab creation placement', () => {
       tabs: [browserTab('A', G1, { executionHostId: sshHost }), browserTab('C', G1)],
       groups: [makeTabGroup({ id: G1, worktreeId: WT, activeTabId: 'A', tabOrder: ['A', 'C'] })]
     })
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {
         repo1: [
           makeWorktree({
@@ -498,7 +499,7 @@ describe('browser tab creation placement', () => {
       updatedAt: 0
     }
     for (const worktreeId of [folderWt, FLOATING_TERMINAL_WORKTREE_ID]) {
-      store.setState({
+      setSessionTestState(store, {
         folderWorkspaces: [folder],
         unifiedTabsByWorktree: {
           ...store.getState().unifiedTabsByWorktree,

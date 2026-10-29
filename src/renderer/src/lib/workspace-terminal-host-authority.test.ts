@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 /** Use one remote-authority question for seeding/resume: only none authorizes local terminal creation, never unverifiable. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
@@ -42,7 +43,7 @@ function repo(id: string, path: string, connectionId?: string): never {
 }
 
 function seedLocal(store: TestStore): void {
-  store.setState({
+  setSessionTestState(store, {
     repos: [repo('repoLocal', '/home/dev/proj')],
     worktreesByRepo: {
       repoLocal: [
@@ -58,7 +59,7 @@ function seedLocal(store: TestStore): void {
 }
 
 function seedDirectSsh(store: TestStore): void {
-  store.setState({
+  setSessionTestState(store, {
     repos: [repo('repoSsh', '/srv/proj', TARGET_ID)],
     worktreesByRepo: {
       repoSsh: [
@@ -109,16 +110,16 @@ describe('workspace terminal seeding authority', () => {
       const store = createTestStore()
       seedLocal(store)
       if (ownership === 'unstamped') {
-        store.setState({
+        setSessionTestState(store, {
           worktreesByRepo: {
             repoLocal: [makeWorktree({ id: LOCAL_WORKTREE_ID, repoId: 'repoLocal' })]
           }
         })
       } else if (ownership === 'missing') {
-        store.setState({ repos: [], worktreesByRepo: {} })
+        setSessionTestState(store, { repos: [], worktreesByRepo: {} })
       }
       if (ownership === 'folder') {
-        store.setState({ folderWorkspaces: [makeFolderWorkspace()] })
+        setSessionTestState(store, { folderWorkspaces: [makeFolderWorkspace()] })
       }
       const worktreeId = ownership === 'folder' ? 'folder:folder-1' : LOCAL_WORKTREE_ID
       const state = {
@@ -170,7 +171,7 @@ describe('workspace terminal seeding authority', () => {
     const store = createTestStore()
     seedDirectSsh(store)
     connectTarget(store)
-    store.setState({
+    setSessionTestState(store, {
       tabsByWorktree: { [SSH_WORKTREE_ID]: [] },
       closedTerminalTabTombstonesByTabId: {
         closed: { closedAt: Date.now(), worktreeId: SSH_WORKTREE_ID }
@@ -195,7 +196,7 @@ describe('workspace terminal seeding authority', () => {
 
   it('leaves terminal creation to the host of a paired runtime workspace', () => {
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [repo('repoPaired', '/srv/proj')],
       worktreesByRepo: {
         repoPaired: [
@@ -218,7 +219,7 @@ describe('workspace terminal seeding authority', () => {
   /** Rival detected owners make authority unresolved, not local; the old live-paired-client guard incorrectly seeded alongside host creation (#15556). */
   it('does not seed locally when the runtime owner cannot be named', () => {
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [repo('repoPaired', '/srv/proj')],
       worktreesByRepo: {},
       detectedWorktreesByRepo: {

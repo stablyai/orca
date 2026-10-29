@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // Don’t Save must void queued saves, including requests waiting on the remote host before writing.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { requestEditorFileSave } from './editor-autosave'
@@ -74,7 +75,7 @@ describe("Don't Save against running and queued saves", () => {
     disk = stubEditorWindowWithDisk(createFakeEditorDisk(files))
     store = createEditorStore()
     storeRef.current = store
-    store.setState({
+    setSessionTestState(store, {
       browserTabsByWorktree: {},
       tabsByWorktree: {},
       activeBrowserTabIdByWorktree: {},

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -48,7 +49,8 @@ const tab = (id: string): Tab => ({
   agentSessionAgent: 'codex'
 })
 beforeEach(() => {
-  useAppStore.setState(
+  setSessionTestState(
+    useAppStore,
     {
       ...useAppStore.getInitialState(),
       setActiveWorktree: mocks.setActiveWorktree,
@@ -62,7 +64,7 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 function setup() {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     unifiedTabsByWorktree: {
       [workspace.id]: [
         tab('Session A'),
@@ -155,7 +157,7 @@ describe('reference session associations', () => {
       setup()
       const leafId = '11111111-1111-4111-8111-111111111111'
       const otherLeaf = '22222222-2222-4222-8222-222222222222'
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         unifiedTabsByWorktree: {
           [workspace.id]: [{ ...tab('Terminal'), contentType: 'terminal' }]
         },
@@ -213,7 +215,7 @@ const foreignOrigin: WorkspaceAttachmentOrigin = {
 }
 describe('session association host and keyboard regressions', () => {
   beforeEach(() => {
-    useAppStore.setState({ unifiedTabsByWorktree: { [workspace.id]: [localTab] } })
+    setSessionTestState(useAppStore, { unifiedTabsByWorktree: { [workspace.id]: [localTab] } })
   })
   it('keeps another host observation unavailable even when a live tab has the same id', () => {
     render(

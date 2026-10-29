@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { shouldShowSourceControlActionArguments } from './source-control-action-arguments-visibility'
 import { useState } from 'react'
@@ -154,7 +155,7 @@ it.each(['', null, '--verbose', undefined])(
   'repository Args %s uses the shared controls, source and wrapping layout',
   (agentArgs) => {
     configure({ experimentalNativeChat: false })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [{ id: 'repo', path: '/repo', displayName: 'repo', badgeColor: '', addedAt: 0 }]
     })
     const source = normalizeSourceControlAiSettings({

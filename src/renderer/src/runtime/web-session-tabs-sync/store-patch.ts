@@ -1,10 +1,16 @@
 import {
+  editSessionSource,
+  type SessionSourceEdit,
+  type OrdinarySourcePartial,
+  type SessionSourcePartial
+} from '../../store/session-source-edits'
+import {
   markStructuredAgentSessionLaunchesPublished,
   publishedStructuredSessions
 } from '@/lib/agent-session/launch/structured-agent-session-launch-publication'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
-import type { AppState } from '../../store'
-import { useAppStore } from '../../store'
+import { type AppState, useAppStore } from '../../store'
+
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import {
   pickHostTurnEnd,
@@ -33,8 +39,9 @@ import {
 export function applyWebSessionTabsStorePatch(
   buildPatch: (
     state: AppState,
-    changedAgentPaneKeys: Set<string>
-  ) => WebSessionTabsSyncState | Partial<WebSessionTabsSyncState>,
+    changedAgentPaneKeys: Set<string>,
+    sourceEdit: SessionSourceEdit<WebSessionTabsSyncState>
+  ) => OrdinarySourcePartial<WebSessionTabsSyncState> | undefined,
   hostMirrorVerdict: HostSessionMirrorPatchVerdict,
   agentStatusSnapshots?: RuntimeMobileSessionTabsResult | readonly RuntimeMobileSessionTabsResult[],
   allowCompletionNotification = false
@@ -57,9 +64,10 @@ export function applyWebSessionTabsStorePatch(
   const runStorePatch = (
     state: AppState,
     changedAgentPaneKeys: Set<string>
-  ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> => {
-    const patch = buildPatch(state, changedAgentPaneKeys)
-    mirroredAgentStatusChanged = patch !== state && Object.hasOwn(patch, 'agentStatusByPaneKey')
+  ): SessionSourcePartial<AppState> | undefined => {
+    const sourceEdit = editSessionSource<WebSessionTabsSyncState>(state)
+    const patch = buildPatch(state, changedAgentPaneKeys, sourceEdit) ?? {}
+    mirroredAgentStatusChanged = Object.hasOwn(patch, 'agentStatusByPaneKey')
     if (agentStatusSnapshots) {
       const nextAgentStatuses = patch.agentStatusByPaneKey ?? state.agentStatusByPaneKey
       const snapshots = Array.isArray(agentStatusSnapshots)
@@ -182,7 +190,7 @@ export function applyWebSessionTabsStorePatch(
       }
     }
     patchCommitted = true
-    return patch
+    return sourceEdit.finish(patch)
   }
 
   try {

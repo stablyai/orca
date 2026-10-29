@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -127,7 +128,7 @@ async function inspectSkill(expectedDescription = 'A private skill'): Promise<vo
 }
 
 beforeEach(() => {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     runtimeEnvironments: [],
     runtimeStatusByEnvironmentId: new Map(),
     repos: [],

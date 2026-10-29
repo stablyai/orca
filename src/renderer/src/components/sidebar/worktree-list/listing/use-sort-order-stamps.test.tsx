@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -25,7 +26,7 @@ const identities = (...worktrees: Worktree[]): string[] => worktrees.map(getWork
 
 function setRows(worktrees: Worktree[]): void {
   act(() => {
-    useAppStore.setState({ worktreesByRepo: { [repo.id]: worktrees } })
+    setSessionTestState(useAppStore, { worktreesByRepo: { [repo.id]: worktrees } })
   })
 }
 
@@ -33,13 +34,13 @@ describe('useSidebarWorktreeSortOrder with the switch on', () => {
   afterEach(() => {
     persistOrder.mockClear()
     cleanup()
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   it('re-sorts as soon as a stamp lands, with no settle window and no saved order', () => {
     const a = makeWorktree(`${repo.id}::/a`, 'a', { repoId: repo.id, lastActivityAt: 2 })
     const b = makeWorktree(`${repo.id}::/b`, 'b', { repoId: repo.id, lastActivityAt: 1 })
-    useAppStore.setState({ sortBy: 'smart', worktreesByRepo: { [repo.id]: [a, b] } })
+    setSessionTestState(useAppStore, { sortBy: 'smart', worktreesByRepo: { [repo.id]: [a, b] } })
     const { result } = renderHook(() => useSidebarWorktreeSortOrder({ repoMap, sortBy: 'smart' }))
     expect(result.current).toEqual(identities(a, b))
 
@@ -49,7 +50,7 @@ describe('useSidebarWorktreeSortOrder with the switch on', () => {
     // The store keeps no settled epoch: a bump with a new row would settle it at once otherwise.
     const c = makeWorktree(`${repo.id}::/c`, 'c', { repoId: repo.id, lastActivityAt: 9 })
     act(() => {
-      useAppStore.setState((s) => ({
+      setSessionTestState(useAppStore, (s) => ({
         sortEpoch: s.sortEpoch + 1,
         worktreesByRepo: { [repo.id]: [a, askingB, c] }
       }))
@@ -63,7 +64,7 @@ describe('useSidebarWorktreeSortOrder with the switch on', () => {
     const other = { ...makeRepo(), id: 'repo-2', displayName: 'Zed' }
     const a = makeWorktree(`${repo.id}::/a`, 'a', { repoId: repo.id })
     const z = makeWorktree(`${other.id}::/z`, 'z', { repoId: other.id })
-    useAppStore.setState({ worktreesByRepo: { [repo.id]: [a], [other.id]: [z] } })
+    setSessionTestState(useAppStore, { worktreesByRepo: { [repo.id]: [a], [other.id]: [z] } })
     const maps = {
       before: new Map([
         [repo.id, repo],
@@ -81,7 +82,7 @@ describe('useSidebarWorktreeSortOrder with the switch on', () => {
     const first = result.current
     expect(first).toEqual(identities(a, z))
     act(() => {
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         worktreesByRepo: { [repo.id]: [{ ...a, isUnread: true }], [other.id]: [z] }
       })
     })
@@ -104,7 +105,7 @@ describe('useSidebarWorktreeSortOrder with the switch on', () => {
       smartTier: 'working',
       smartAt: 1
     })
-    useAppStore.setState({ worktreesByRepo: { [repo.id]: [done, working] } })
+    setSessionTestState(useAppStore, { worktreesByRepo: { [repo.id]: [done, working] } })
     const { result } = renderHook(() => useSidebarWorktreeSortOrder({ repoMap, sortBy: 'smart' }))
     expect(result.current).toEqual(identities(done, working))
     setRows([{ ...done, isUnread: false }, working])

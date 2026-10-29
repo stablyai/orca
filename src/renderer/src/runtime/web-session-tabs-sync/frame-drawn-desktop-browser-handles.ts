@@ -2,7 +2,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-
 import { markWebSessionBrowserPlacementAdopted } from '../web-session-browser-placement'
 import { findBrowserWorkspaceForRemotePage } from './mirrored-browser-tabs'
 import type { WebSessionTabsBatchContext, WebSessionTabsSyncState } from './state'
-import { writableWebSessionTabsRecord } from './state-equality-core'
+import { setWebSessionTabsRecordEntry } from './state-equality-core'
 import { isReadyBrowserTab } from './terminal-surfaces'
 
 /** Client-hosted pages never enter server layout. Adopt only their staged handles from session.tabs as landing proof; frames retain tab ownership (L282). */
@@ -27,18 +27,17 @@ export function adoptFrameDrawnClientHostedBrowserHandles(
     if (!existing || handles[existing.page.id]?.staged !== true) {
       continue
     }
-    if (handles === state.remoteBrowserPageHandlesByPageId) {
-      handles = writableWebSessionTabsRecord(
-        state,
-        'remoteBrowserPageHandlesByPageId',
-        batchContext
-      )
-    }
-    handles[existing.page.id] = {
-      environmentId,
-      remotePageId: tab.browserPageId,
-      placement: tab.placement
-    }
+    handles = setWebSessionTabsRecordEntry(
+      state,
+      'remoteBrowserPageHandlesByPageId',
+      existing.page.id,
+      {
+        environmentId,
+        remotePageId: tab.browserPageId,
+        placement: tab.placement
+      },
+      batchContext
+    )
     markWebSessionBrowserPlacementAdopted({
       environmentId,
       worktreeId,

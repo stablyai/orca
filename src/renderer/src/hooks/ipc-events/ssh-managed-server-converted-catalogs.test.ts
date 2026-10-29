@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
@@ -86,7 +87,7 @@ beforeEach(() => {
     dispatchEvent: vi.fn()
   })
   // What the renderer held for the host before it converted.
-  store.setState({
+  setSessionTestState(store, {
     repos: [{ ...repo, connectionId: 'ssh-1', executionHostId: 'ssh:ssh-1' }],
     worktreesByRepo: {
       'repo-1': [
@@ -105,7 +106,7 @@ beforeEach(() => {
 describe('a host that just moved to its managed server', () => {
   it('pins existing desktop pages before refreshing their workspace ownership', async () => {
     const page = buildBrowserPage('browser', worktreeId, 'https://private.invalid/')
-    store.setState({ browserPagesByWorkspace: { browser: [page] } })
+    setSessionTestState(store, { browserPagesByWorkspace: { browser: [page] } })
     applySshManagedServerTransition('ssh-1', undefined, {
       kind: 'managed',
       environmentId: 'env-browser'
@@ -144,7 +145,7 @@ describe('a host that just moved to its managed server', () => {
   })
 
   it('carries the host’s visit recency to the server instead of leaving it for the next prune', async () => {
-    store.setState({
+    setSessionTestState(store, {
       lastVisitedAtByWorktreeId: { [`ssh:ssh-1|${worktreeId}`]: 500, [`local|${worktreeId}`]: 7 }
     })
     applySshManagedServerTransition('ssh-1', undefined, { kind: 'managed', environmentId: 'env-7' })
@@ -158,7 +159,7 @@ describe('a host that just moved to its managed server', () => {
   })
 
   it('moves the open workspace onto the server so its panes stop dialing the stopped relay', async () => {
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {
         'repo-1': [
           makeWorktree({
@@ -204,7 +205,7 @@ describe('a host that just moved to its managed server', () => {
     // Startup's own scan has not run yet, so the server's row is not known.
     expect(store.getState().activeWorkspaceExecutionHostId).toBe('ssh:ssh-1')
 
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {
         'repo-1': [
           makeWorktree({
@@ -289,7 +290,7 @@ describe('a host that just moved to its managed server', () => {
           : serverReply(args)
       )
       Object.assign(window.api.runtimeEnvironments, { call })
-      store.setState({
+      setSessionTestState(store, {
         repos: [{ ...sourceRepo, connectionId: 'ssh-1', executionHostId: 'ssh:ssh-1' }],
         worktreesByRepo: {
           'repo-b': [
@@ -319,7 +320,7 @@ describe('a host that just moved to its managed server', () => {
     })
 
     it('moves the open workspace onto the server’s project, whose id differs', async () => {
-      store.setState({
+      setSessionTestState(store, {
         worktreesByRepo: { ...store.getState().worktreesByRepo, ...serverRows('env-link') }
       })
       applySshManagedServerTransition('ssh-1', undefined, {
@@ -373,7 +374,7 @@ describe('a host that just moved to its managed server', () => {
       await vi.waitFor(() => expect(store.getState().worktreesByRepo['repo-b']).toEqual([]))
       expect(store.getState().activeWorktreeId).toBe(sourceWorktreeId)
 
-      store.setState({
+      setSessionTestState(store, {
         worktreesByRepo: serverRows('env-link-cold'),
         startupWorktreeRefreshCompleted: true
       })
@@ -393,7 +394,7 @@ describe('a host that just moved to its managed server', () => {
       store.setState({ startupWorktreeRefreshCompleted: true })
       expect(store.getState().activeWorktreeId).toBe(sourceWorktreeId)
 
-      store.setState({ worktreesByRepo: serverRows('env-link-failed-scan') })
+      setSessionTestState(store, { worktreesByRepo: serverRows('env-link-failed-scan') })
 
       expect(store.getState().activeWorkspaceExecutionHostId).toBe('runtime:env-link-failed-scan')
       expect(store.getState().activeWorktreeId).toBe(serverWorktreeId)
@@ -406,7 +407,7 @@ describe('a host that just moved to its managed server', () => {
       })
       await vi.waitFor(() => expect(store.getState().worktreesByRepo['repo-b']).toEqual([]))
 
-      store.setState({
+      setSessionTestState(store, {
         worktreesByRepo: serverRows('env-unlinked'),
         startupWorktreeRefreshCompleted: true
       })
@@ -465,7 +466,7 @@ describe('a host that just moved to its managed server', () => {
       Object.assign(window.api.runtimeEnvironments, { call })
       const managed = { kind: 'managed', environmentId: 'env-1' } as const
       const targetId = `ssh-retry-${method}`
-      store.setState({
+      setSessionTestState(store, {
         repos: [{ ...repo, connectionId: targetId, executionHostId: `ssh:${targetId}` }],
         worktreesByRepo: {
           'repo-1': [makeWorktree({ id: worktreeId, repoId: 'repo-1', hostId: `ssh:${targetId}` })]
@@ -536,7 +537,7 @@ describe('a host that just moved to its managed server', () => {
       return serverReply(args)
     })
     Object.assign(window.api.runtimeEnvironments, { call })
-    store.setState({
+    setSessionTestState(store, {
       repos: [{ ...repo, connectionId: targetId, executionHostId: `ssh:${targetId}` }],
       worktreesByRepo: {
         'repo-1': [

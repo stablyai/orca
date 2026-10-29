@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { createTestStore } from '@/store/slices/store-test-helpers'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
@@ -17,7 +18,7 @@ import { resolveTerminalAgentTabShortcut } from './terminal-agent-tab-shortcut'
 describe('resolveTerminalAgentTabShortcut', () => {
   it("picks the default agent from a paired server's SSH workspace inventory", () => {
     store.current = createTestStore()
-    store.current.setState({
+    setSessionTestState(store.current, {
       repos: [
         { ...TEST_REPO, connectionId: 'server-ssh-target', executionHostId: 'runtime:env-1' }
       ],
@@ -43,7 +44,7 @@ describe('resolveTerminalAgentTabShortcut', () => {
       return ['claude' as const]
     })
     const ensureDetectedAgents = vi.fn(async () => [])
-    store.current.setState({
+    setSessionTestState(store.current, {
       repos: [{ ...TEST_REPO, executionHostId: 'runtime:env-1' }],
       worktreesByRepo: { [TEST_REPO.id]: [makeWorktree({ id: 'wt-1', repoId: TEST_REPO.id })] },
       settings: { ...store.current.getState().settings!, defaultTuiAgent: 'claude' },

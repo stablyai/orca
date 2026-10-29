@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -198,13 +199,13 @@ beforeEach(() => {
     }
   }
   resetAiVaultForcedRescanThrottleForTest()
-  useAppStore.setState(initialAppState, true)
+  setSessionTestState(useAppStore, initialAppState, true)
 })
 
 afterEach(() => {
   roots.splice(0).forEach((root) => act(() => root.unmount()))
   document.body.replaceChildren()
-  useAppStore.setState(initialAppState, true)
+  setSessionTestState(useAppStore, initialAppState, true)
   vi.useRealTimers()
   vi.restoreAllMocks()
 })

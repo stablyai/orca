@@ -1,3 +1,5 @@
+import type { AppState } from '@/store/types'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
 import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
 import { isBrowserPageMountAdmitted } from '@/components/browser-pane/host-guest/browser-page-mount-admission'
@@ -48,7 +50,7 @@ let main: TabsDrawnFromMain
 
 beforeEach(async () => {
   store = createBrowserLinkTestStore()
-  store.setState({
+  setSessionTestState(store, {
     tabsByWorktree: {
       [WORKSPACE]: store.getState().unifiedTabsByWorktree[WORKSPACE]!.map((tab) => ({
         id: tab.entityId,
@@ -231,7 +233,7 @@ it.each(['workspace', 'view', 'view-return'] as const)(
 it('does not activate a link whose owner changed while main was opening its tab', async () => {
   const opening = open('http')
   const pageId = pendingBrowserPageId()
-  store.setState((state) => ({
+  setSessionTestState(store, (state): Partial<AppState> => ({
     worktreesByRepo: {
       repo1: state.worktreesByRepo.repo1!.map((worktree) => ({
         ...worktree,

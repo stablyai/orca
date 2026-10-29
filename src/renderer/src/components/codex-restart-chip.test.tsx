@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import React, { act, Profiler } from 'react'
@@ -38,7 +39,7 @@ function button(scope: ParentNode, label: string): HTMLButtonElement {
 
 beforeEach(() => {
   returnFocus.mockReset()
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -54,7 +55,7 @@ afterEach(() => {
     root.unmount()
   })
   container.remove()
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
 })
 
 describe('CodexRestartChip pane ownership', () => {
@@ -203,7 +204,7 @@ describe('CodexRestartChip pane ownership', () => {
     const commits = onRender.mock.calls.length
 
     await act(async () => {
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         ptyIdsByTabId: { unrelated: [PTY_TWO] },
         codexRestartNoticeByPtyId: {
           [PTY_ONE]: ownedNotice,

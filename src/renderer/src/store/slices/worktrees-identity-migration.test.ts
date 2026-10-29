@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import {
@@ -65,7 +66,8 @@ describe('migrateWorktreeIdentity', () => {
 
   it('re-keys worktree-scoped maps, pointers, the Set, and openFiles old->new', () => {
     const store = createTestStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This activeWorktreeId, activeWorkspaceKey, renamingWorktreeId fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       activeWorktreeId: OLD,
       activeWorkspaceKey: worktreeWorkspaceKey(OLD),
       renamingWorktreeId: { worktreeId: OLD, rowKey: 'all:old' },
@@ -207,7 +209,8 @@ describe('migrateWorktreeIdentity', () => {
 
   it('is a no-op when the ids match', () => {
     const store = createTestStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This activeWorktreeId, tabsByWorktree fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       activeWorktreeId: OLD,
       tabsByWorktree: { [OLD]: [{ id: 'tab1' }] }
     } as unknown as Partial<AppState>)
@@ -219,7 +222,8 @@ describe('migrateWorktreeIdentity', () => {
   it('leaves an unrelated active worktree pointer alone', () => {
     const store = createTestStore()
     const OTHER = 'repo1::/ws/other'
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This activeWorktreeId, tabsByWorktree fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       activeWorktreeId: OTHER,
       tabsByWorktree: { [OLD]: [{ id: 'tab1' }] }
     } as unknown as Partial<AppState>)
@@ -230,7 +234,8 @@ describe('migrateWorktreeIdentity', () => {
 
   it('does not track hosted review aliases for migrations without hosted-review bookkeeping', () => {
     const store = createTestStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This tabsByWorktree fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       tabsByWorktree: { [OLD]: [{ id: 'tab1' }] }
     } as unknown as Partial<AppState>)
 
@@ -250,7 +255,8 @@ describe('migrateWorktreeIdentity', () => {
       pushTarget: { remoteName: 'fork', branchName: 'old/review-head' }
     })
 
-    store.setState({ worktreesByRepo: { repo1: [oldWorktree] } } as Partial<AppState>)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This worktreesByRepo fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, { worktreesByRepo: { repo1: [oldWorktree] } } as Partial<AppState>)
     store.getState().updateWorktreeGitIdentity(OLD, { branch: 'refs/heads/stack/two' }, null)
     await vi.waitFor(() => {
       expect(getHostedReviewLinkMutationGenerationForTests(OLD)).toBe(0)
@@ -268,7 +274,10 @@ describe('migrateWorktreeIdentity', () => {
     })
 
     const switched = store.getState().worktreesByRepo.repo1[0]
-    store.setState({ worktreesByRepo: { repo1: [{ ...switched, id: NEW }] } } as Partial<AppState>)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This worktreesByRepo fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
+      worktreesByRepo: { repo1: [{ ...switched, id: NEW }] }
+    } as Partial<AppState>)
     store.getState().migrateWorktreeIdentity(OLD, NEW)
     worktreeListMock.mockResolvedValue([
       {
@@ -302,7 +311,8 @@ describe('migrateWorktreeIdentity', () => {
       pushTarget: { remoteName: 'fork', branchName: 'old/review-head' }
     })
 
-    store.setState({ worktreesByRepo: { repo1: [oldWorktree] } } as Partial<AppState>)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This worktreesByRepo fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, { worktreesByRepo: { repo1: [oldWorktree] } } as Partial<AppState>)
     store.getState().updateWorktreeGitIdentity(
       OLD,
       {
@@ -319,7 +329,10 @@ describe('migrateWorktreeIdentity', () => {
     })
 
     const switched = store.getState().worktreesByRepo.repo1[0]
-    store.setState({ worktreesByRepo: { repo1: [{ ...switched, id: NEW }] } } as Partial<AppState>)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This worktreesByRepo fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
+      worktreesByRepo: { repo1: [{ ...switched, id: NEW }] }
+    } as Partial<AppState>)
     store.getState().migrateWorktreeIdentity(OLD, NEW)
     worktreeListMock.mockResolvedValue([
       {
@@ -351,7 +364,8 @@ describe('migrateWorktreeIdentity', () => {
       linkedPR: 101
     })
 
-    store.setState({ worktreesByRepo: { repo1: [oldWorktree] } } as Partial<AppState>)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This worktreesByRepo fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, { worktreesByRepo: { repo1: [oldWorktree] } } as Partial<AppState>)
     store.getState().updateWorktreeGitIdentity(OLD, { branch: 'refs/heads/stack/two' }, null)
     await vi.waitFor(() => {
       expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
@@ -360,7 +374,10 @@ describe('migrateWorktreeIdentity', () => {
       })
     })
     const switched = store.getState().worktreesByRepo.repo1[0]
-    store.setState({ worktreesByRepo: { repo1: [{ ...switched, id: NEW }] } } as Partial<AppState>)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This worktreesByRepo fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
+      worktreesByRepo: { repo1: [{ ...switched, id: NEW }] }
+    } as Partial<AppState>)
     store.getState().migrateWorktreeIdentity(OLD, NEW)
     expect(getHostedReviewLinkWorktreeAliasCountForTests()).toBeGreaterThan(0)
 
@@ -380,10 +397,12 @@ describe('migrateWorktreeIdentity', () => {
       pushTarget: { remoteName: 'fork', branchName: 'old/review-head' }
     })
 
-    store.setState({ worktreesByRepo: { repo1: [oldWorktree] } } as Partial<AppState>)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This worktreesByRepo fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, { worktreesByRepo: { repo1: [oldWorktree] } } as Partial<AppState>)
     store.getState().updateWorktreeGitIdentity(OLD, { branch: 'refs/heads/stack/two' }, null)
     const switched = store.getState().worktreesByRepo.repo1[0]
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This worktreesByRepo fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       worktreesByRepo: {
         repo1: [
           {
@@ -436,11 +455,13 @@ describe('migrateWorktreeIdentity', () => {
       }
     })
 
-    store.setState({ worktreesByRepo: { repo1: [oldWorktree] } } as Partial<AppState>)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This worktreesByRepo fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, { worktreesByRepo: { repo1: [oldWorktree] } } as Partial<AppState>)
     store.getState().updateWorktreeGitIdentity(OLD, { branch: 'refs/heads/stack/two' }, null)
     await oldPersistStartedPromise
     const switched = store.getState().worktreesByRepo.repo1[0]
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This worktreesByRepo fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       worktreesByRepo: {
         repo1: [
           {

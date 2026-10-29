@@ -1,3 +1,5 @@
+import { SessionUnitIndex } from '../../../shared/session-unit-index'
+import { SessionUnitReader } from '../../../shared/session-unit-reader'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
@@ -16,23 +18,6 @@ type TerminalBindingRecovery = Pick<
   | 'isRestorablePtyBinding'
   | 'hasRestorableSshRemotePtyLease'
 >
-
-function collectAmbiguousTabIds(
-  tabsByWorktree: WorkspaceSessionState['tabsByWorktree']
-): ReadonlySet<string> {
-  const ownerByTabId = new Map<string, string>()
-  const ambiguous = new Set<string>()
-  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-    for (const tab of tabs) {
-      if (ownerByTabId.has(tab.id)) {
-        ambiguous.add(tab.id)
-      } else {
-        ownerByTabId.set(tab.id, worktreeId)
-      }
-    }
-  }
-  return ambiguous
-}
 
 export type WorkspaceSessionTerminalBindingReplayOptions = {
   targetIdForWorktree?: (worktreeId: string) => string | null
@@ -62,136 +47,114 @@ export function preserveMissingWorkspaceSessionTerminalBindings(
     return session
   }
 
-  const priorTabs = prior.tabsByWorktree ?? {}
-  const nextTabs = session.tabsByWorktree ?? {}
-  const priorLayouts = prior.terminalLayoutsByTabId ?? {}
-  const nextLayouts = session.terminalLayoutsByTabId ?? {}
-  // Cross-snapshot duplicates can be moves; duplicates within either snapshot make replay ambiguous.
-  const ambiguousTabIds = new Set<string>([
-    ...collectAmbiguousTabIds(priorTabs),
-    ...collectAmbiguousTabIds(nextTabs)
-  ])
+  const reader = SessionUnitReader.between(prior, session, new SessionUnitIndex(prior))
+  reduceMissingSessionTerminalBindings(
+    reader,
+    Object.keys(session.tabsByWorktree ?? {}),
+    Object.keys(session.terminalLayoutsByTabId ?? {}),
+    bindingRecovery,
+    options
+  )
+  return reader.snapshot()
+}
+
+/** The same tab/owner kernels serve full ingress and indexed incremental admissions. */
+export function reduceMissingSessionTerminalBindings(
+  reader: SessionUnitReader,
+  owners: Iterable<string>,
+  tabIds: Iterable<string>,
+  bindingRecovery: TerminalBindingRecovery,
+  options: WorkspaceSessionTerminalBindingReplayOptions = {}
+): void {
+  const ambiguous = (tabId: string): boolean =>
+    reader.terminalOccurrenceCount(tabId, 'prior') > 1 || reader.terminalOccurrenceCount(tabId) > 1
   const targetIdForWorktree =
     options.targetIdForWorktree ??
-    ((worktreeId: string) => bindingRecovery.getConnectionIdForWorktree(worktreeId))
-
-  for (const [worktreeId, tabs] of Object.entries(nextTabs)) {
-    const priorList = priorTabs[worktreeId]
-    if (!priorList) {
+    ((owner: string) => bindingRecovery.getConnectionIdForWorktree(owner))
+  for (const owner of owners) {
+    const priorList = reader.unit('tabsByWorktree', owner, 'prior').value
+    const tabs = reader.unit('tabsByWorktree', owner).value
+    if (!priorList || !tabs) {
       continue
     }
     let priorById: Map<string, (typeof priorList)[number]> | undefined
-    for (const tab of tabs) {
-      if (ambiguousTabIds.has(tab.id)) {
-        continue
+    const next = tabs.map((tab) => {
+      if (tab.ptyId || ambiguous(tab.id)) {
+        return tab
       }
-      if (tab.ptyId) {
-        continue
-      }
-      priorById ??= new Map(priorList.map((candidate) => [candidate.id, candidate]))
+      priorById ??= new Map(priorList.map((row) => [row.id, row]))
       const priorTab = priorById.get(tab.id)
-      const incomingLayout = nextLayouts[tab.id]
-      const priorLayout = priorLayouts[tab.id]
-      const priorPtyLeafId = priorLayout
-        ? Object.entries(priorLayout.ptyIdsByLeafId ?? {}).find(
-            ([, ptyId]) => ptyId === priorTab?.ptyId
-          )?.[0]
-        : undefined
-      const bindingLeafWasRemoved =
+      const incomingLayout = reader.unit('terminalLayoutsByTabId', tab.id).value
+      const priorLayout = reader.unit('terminalLayoutsByTabId', tab.id, 'prior').value
+      const priorLeaf = Object.entries(priorLayout?.ptyIdsByLeafId ?? {}).find(
+        ([, pty]) => pty === priorTab?.ptyId
+      )?.[0]
+      const removed =
         incomingLayout !== undefined &&
-        priorPtyLeafId !== undefined &&
-        !bindingRecovery.getTerminalLayoutLeafIds(incomingLayout.root).has(priorPtyLeafId)
-      if (
-        priorTab?.ptyId &&
-        !bindingLeafWasRemoved &&
+        priorLeaf !== undefined &&
+        !bindingRecovery.getTerminalLayoutLeafIds(incomingLayout.root).has(priorLeaf)
+      return priorTab?.ptyId &&
+        !removed &&
         ptyBindingMatchesExecutionHost(priorTab.ptyId, options.executionHostId) &&
         bindingRecovery.isRestorablePtyBinding({
           ptyId: priorTab.ptyId,
-          worktreeId,
-          targetId: targetIdForWorktree(worktreeId),
+          worktreeId: owner,
+          targetId: targetIdForWorktree(owner),
           tabId: tab.id
         })
-      ) {
-        tab.ptyId = priorTab.ptyId
-      }
+        ? { ...tab, ptyId: priorTab.ptyId }
+        : tab
+    })
+    if (next.some((tab, i) => tab !== tabs[i])) {
+      reader.write('tabsByWorktree', owner, { present: true, value: next })
     }
   }
-
-  const worktreeIdByTabId = new Map<string, string>()
-  for (const [worktreeId, tabs] of Object.entries({ ...priorTabs, ...nextTabs })) {
-    for (const tab of tabs) {
-      worktreeIdByTabId.set(tab.id, worktreeId)
-    }
-  }
-
-  for (const [tabId, layout] of Object.entries(nextLayouts)) {
-    if (ambiguousTabIds.has(tabId)) {
-      continue
-    }
-    const priorLayout = priorLayouts[tabId]
-    if (!priorLayout?.ptyIdsByLeafId) {
+  for (const tabId of tabIds) {
+    const layout = reader.unit('terminalLayoutsByTabId', tabId).value
+    const priorLayout = reader.unit('terminalLayoutsByTabId', tabId, 'prior').value
+    if (!layout || !priorLayout?.ptyIdsByLeafId || ambiguous(tabId)) {
       continue
     }
     const incoming = layout.ptyIdsByLeafId ?? {}
-    const incomingHasAnyBinding = Object.keys(incoming).length > 0
-    const liveLeafIds = bindingRecovery.getTerminalLayoutLeafIds(layout.root)
-    const worktreeId = worktreeIdByTabId.get(tabId)
-    const targetId = worktreeId ? targetIdForWorktree(worktreeId) : null
-    const restorableBindings = Object.fromEntries(
+    const hasBinding = Object.keys(incoming).length > 0
+    const liveLeaves = bindingRecovery.getTerminalLayoutLeafIds(layout.root)
+    const owner = reader.replayTerminalOwner(tabId)
+    const targetId = owner ? targetIdForWorktree(owner) : null
+    const restored = Object.fromEntries(
       Object.entries(priorLayout.ptyIdsByLeafId).filter(
         ([leafId, ptyId]) =>
-          liveLeafIds.has(leafId) &&
+          liveLeaves.has(leafId) &&
           incoming[leafId] === undefined &&
           ptyBindingMatchesExecutionHost(ptyId, options.executionHostId) &&
-          (incomingHasAnyBinding
+          (hasBinding
             ? bindingRecovery.hasRestorableSshRemotePtyLease({
                 ptyId,
                 targetId,
-                worktreeId,
+                worktreeId: owner,
                 tabId,
                 leafId
               })
             : bindingRecovery.isRestorablePtyBinding({
                 ptyId,
                 targetId,
-                worktreeId,
+                worktreeId: owner,
                 tabId,
                 leafId
               }))
       )
     )
-    if (Object.keys(restorableBindings).length === 0) {
+    if (!Object.keys(restored).length) {
       continue
     }
-
-    layout.ptyIdsByLeafId = { ...restorableBindings, ...incoming }
-    const buffersByLeafId = preserveMissingLeafRecordEntries(
-      priorLayout.buffersByLeafId,
-      layout.buffersByLeafId,
-      liveLeafIds
-    )
-    const scrollbackRefsByLeafId = preserveMissingLeafRecordEntries(
-      priorLayout.scrollbackRefsByLeafId,
-      layout.scrollbackRefsByLeafId,
-      liveLeafIds
-    )
-    const titlesByLeafId = preserveMissingLeafRecordEntries(
-      priorLayout.titlesByLeafId,
-      layout.titlesByLeafId,
-      liveLeafIds
-    )
-    if (buffersByLeafId) {
-      layout.buffersByLeafId = buffersByLeafId
+    const next = { ...layout, ptyIdsByLeafId: { ...restored, ...incoming } }
+    for (const field of ['buffersByLeafId', 'scrollbackRefsByLeafId', 'titlesByLeafId'] as const) {
+      const kept = preserveMissingLeafRecordEntries(priorLayout[field], layout[field], liveLeaves)
+      if (kept) {
+        next[field] = kept
+      }
     }
-    if (scrollbackRefsByLeafId) {
-      layout.scrollbackRefsByLeafId = scrollbackRefsByLeafId
-    }
-    if (titlesByLeafId) {
-      layout.titlesByLeafId = titlesByLeafId
-    }
+    reader.write('terminalLayoutsByTabId', tabId, { present: true, value: next })
   }
-
-  return session
 }
 
 export function sshTargetIdForWorkspaceSessionHost(

@@ -1,9 +1,10 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import {
   areGitStatusEntriesEqual,
   areTrackedConflictMapsEqual,
-  reconcileOpenFilesForStatus
+  createStatusFileReconciler
 } from '../git/git-status-reconciliation'
 import {
   branchCompareMatchesStatusHead,
@@ -59,7 +60,7 @@ export function createGitStatusActions(
         // A failed read proves nothing about the tree, so keep the last known state and flag it.
         set((s) =>
           s.gitStatusReadErrorByWorktree[worktreeId] === readError
-            ? s
+            ? undefined
             : {
                 gitStatusReadErrorByWorktree: {
                   ...s.gitStatusReadErrorByWorktree,
@@ -131,18 +132,21 @@ export function createGitStatusActions(
           }
         }
 
-        const nextOpenFiles = reconcileOpenFilesForStatus(
-          s.openFiles,
-          worktreeId,
-          nextEntries,
-          statusIsComplete
-        )
+        const edit = editSessionSource(s)
+        let openFilesUnchanged = true
+        const reduceFile = createStatusFileReconciler(worktreeId, nextEntries, statusIsComplete)
+        edit.sequence('openFiles').flatMap((file) => {
+          const next = reduceFile(file)
+          if (next.length !== 1 || next[0] !== file) {
+            openFilesUnchanged = false
+          }
+          return next
+        })
         const statusUnchanged = hadStatusEntry && areGitStatusEntriesEqual(prevEntries, nextEntries)
         const trackedUnchanged = areTrackedConflictMapsEqual(
           s.trackedConflictPathsByWorktree[worktreeId] ?? {},
           currentTracked
         )
-        const openFilesUnchanged = nextOpenFiles === s.openFiles
         const operationUnchanged = prevOperation === nextOperation
 
         const prevIgnored = s.gitIgnoredPathsByWorktree[worktreeId]
@@ -207,7 +211,7 @@ export function createGitStatusActions(
           statusHeadUnchanged &&
           !shouldInvalidateBranchCompare
         ) {
-          return s
+          return undefined
         }
 
         const nextBranchLineTotalMap = branchLineTotalUnchanged
@@ -256,9 +260,7 @@ export function createGitStatusActions(
               delete copy[worktreeId]
               return copy
             })()
-
-        return {
-          openFiles: nextOpenFiles,
+        return edit.finish({
           gitStatusHugeByWorktree: nextHugeMap,
           gitStatusReadErrorByWorktree: nextReadErrorMap,
           gitBranchLineTotalByWorktree: nextBranchLineTotalMap,
@@ -277,7 +279,7 @@ export function createGitStatusActions(
             : { ...s.trackedConflictPathsByWorktree, [worktreeId]: currentTracked },
           gitBranchCompareSummaryByWorktree: nextBranchCompareSummaries,
           gitBranchChangesByWorktree: nextBranchChanges
-        }
+        })
       })
       // A resolved deleted-side conflict drops its placeholder record; main closes its tab, and its frame drops it.
       if (ORCA_LAYOUT_OWNER_IS_MAIN && filesBefore && filesBefore !== get().openFiles) {
@@ -288,7 +290,7 @@ export function createGitStatusActions(
       set((s) => {
         const prev = s.gitConflictOperationByWorktree[worktreeId] ?? 'unknown'
         if (prev === operation) {
-          return s
+          return undefined
         }
         // Why: when the operation clears on a non-active worktree, also clear tracked conflict paths — same as setGitStatus does for the active one.
         const nextTracked =

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { makePaneKey } from '../../../shared/stable-pane-id'
@@ -10,7 +11,7 @@ const OTHER_LEAF_ID = '44444444-4444-4444-8444-444444444444'
 
 afterEach(() => {
   vi.unstubAllGlobals()
-  useAppStore.setState(initialAppStoreState, true)
+  setSessionTestState(useAppStore, initialAppStoreState, true)
 })
 
 function makeRecord(
@@ -56,7 +57,8 @@ function makeLayout(leafId: string, ptyId = 'pty-1'): Record<string, unknown> {
 describe('waking panes slept by a manual workspace sleep', () => {
   it('keeps an interrupted worktree-sleep record owned by a preserved pane', () => {
     const record = makeRecord({ interrupted: true })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       activeWorktreeId: 'wt-1',
       activeTabType: 'terminal',
       activeTabId: 'tab-1',
@@ -77,7 +79,8 @@ describe('waking panes slept by a manual workspace sleep', () => {
   // Inactive slept tabs are unowned; classifying their records active would spawn duplicates and strand originals as bare shells.
   it('keeps a slept done record on a non-active tab for in-place cold restore', () => {
     const record = makeRecord({ state: 'done' })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       activeWorktreeId: 'wt-1',
       activeTabType: 'terminal',
       activeTabId: 'tab-2',

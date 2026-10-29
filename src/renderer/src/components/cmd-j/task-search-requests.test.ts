@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
@@ -21,7 +22,7 @@ vi.mock('@/runtime/runtime-jira-client', () => ({
 vi.mock('@/runtime/gitlab-owner-api', () => ({ gitLabApiFor: vi.fn() }))
 const initial = useAppStore.getInitialState()
 afterEach(() => {
-  useAppStore.setState(initial, true)
+  setSessionTestState(useAppStore, initial, true)
   vi.resetAllMocks()
 })
 function requests(

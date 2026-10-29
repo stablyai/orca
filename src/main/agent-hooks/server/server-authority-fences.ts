@@ -206,6 +206,9 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
   }
 
   protected resolvePaneKeyAlias(paneKey: string): string {
+    if (!this.legacyPaneKeyAliases.has(paneKey)) {
+      this.restorePaneKeyAliasRecipe(paneKey)
+    }
     return this.legacyPaneKeyAliases.get(paneKey)?.stablePaneKey ?? paneKey
   }
 

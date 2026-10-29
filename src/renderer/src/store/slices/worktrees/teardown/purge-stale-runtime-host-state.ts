@@ -1,23 +1,25 @@
+import { editSessionSource } from '../../../session-source-edits'
 import { beginEnclosingWorktreeRemoval } from '@/store/active-worktree-deselection-intent'
 import type { WorktreePurgeTarget, WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { ProjectHostSetup } from '../../../../../../shared/project-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { DetectedWorktreeListResult } from '../../../../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
+  type ExecutionHostId,
   getRepoExecutionHostId,
   toRuntimeExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import {
+  recordRuntimeWorktreeOwners,
   dropRuntimeHostedCatalogRows,
   dropWorktreeRowsForRemovedRuntimeEnvironments,
   isRemovedRuntimeHostId
 } from '../../stale-runtime-host-rows'
 import { buildFullWorktreePurgeState } from './worktree-purge-state'
-import { removeWorktreeVisitEntriesForTargets } from '@/lib/worktree-visit-recency'
+import { worktreeVisitKeysForTargets } from '@/lib/worktree-visit-recency'
 import { settleAttentionRemovedBy } from '../../workspace-attention/attention-removal-follow-up'
 import { flushRetiredHostEdits } from './removed-workspace-unsaved-files'
 
@@ -39,6 +41,7 @@ export function createPurgeStaleRuntimeHostState(
       get,
       () =>
         get().updateAgentStatusState((s, changedPaneKeys) => {
+          const edit = editSessionSource(s)
           const repoIdsWithRemovedOwners = new Set<string>()
           const survivingRepoIds = new Set<string>()
           const repoIdsWithSurvivingOwners = new Set<string>()
@@ -80,30 +83,18 @@ export function createPurgeStaleRuntimeHostState(
                 result.worktrees
               ])
             )
-          // Why: repo/setup catalogs can lag session hydration, so hosted worktree rows are ownership evidence during that gap.
-          const recordWorktreeOwners = (
-            rowsByRepo: Record<
-              string,
-              readonly { hostId?: ExecutionHostId; runtimeOwnerEnvironmentId?: string }[]
-            >
-          ): void => {
-            for (const [repoId, rows] of Object.entries(rowsByRepo)) {
-              for (const row of rows) {
-                if (!row.hostId && !row.runtimeOwnerEnvironmentId) {
-                  continue
-                }
-                const ownerWasRemoved = row.runtimeOwnerEnvironmentId
-                  ? removed.has(row.runtimeOwnerEnvironmentId)
-                  : isRemovedRuntimeHostId(row.hostId, removed)
-                const ownerSet = ownerWasRemoved
-                  ? repoIdsWithRemovedOwners
-                  : repoIdsWithSurvivingOwners
-                ownerSet.add(repoId)
-              }
-            }
-          }
-          recordWorktreeOwners(s.worktreesByRepo)
-          recordWorktreeOwners(detectedRows)
+          recordRuntimeWorktreeOwners(
+            s.worktreesByRepo,
+            removed,
+            repoIdsWithRemovedOwners,
+            repoIdsWithSurvivingOwners
+          )
+          recordRuntimeWorktreeOwners(
+            detectedRows,
+            removed,
+            repoIdsWithRemovedOwners,
+            repoIdsWithSurvivingOwners
+          )
 
           const removedWorktreeTargets: WorktreePurgeTarget[] = []
           const seenRemovedWorktreeTargets = new Set<string>()
@@ -216,7 +207,7 @@ export function createPurgeStaleRuntimeHostState(
           // Why full: survivor ids were dropped above unless the session partition proves the bare-id state is the removed host's.
           const purgeState =
             purgeTargets.length > 0
-              ? buildFullWorktreePurgeState(s, purgeTargets, changedPaneKeys)
+              ? buildFullWorktreePurgeState(edit, purgeTargets, changedPaneKeys)
               : {}
           const visitPurgeTargets = [
             ...removedWorktreeTargets,
@@ -224,13 +215,10 @@ export function createPurgeStaleRuntimeHostState(
               (target) => !removedWorktreeTargets.some((candidate) => candidate.id === target.id)
             )
           ]
-          const nextLastVisitedAtByWorktreeId = removeWorktreeVisitEntriesForTargets(
-            s.lastVisitedAtByWorktreeId,
-            visitPurgeTargets
+          edit.removeKeys(
+            'lastVisitedAtByWorktreeId',
+            worktreeVisitKeysForTargets(s.lastVisitedAtByWorktreeId, visitPurgeTargets)
           )
-          if (nextLastVisitedAtByWorktreeId !== s.lastVisitedAtByWorktreeId) {
-            purgeState.lastVisitedAtByWorktreeId = nextLastVisitedAtByWorktreeId
-          }
 
           const restoredSessionOwnersChanged =
             survivingRestoredSessionOwners !== s.restoredRuntimeHostIdByWorkspaceSessionKey
@@ -264,7 +252,7 @@ export function createPurgeStaleRuntimeHostState(
             !visibilitySourceSupportChanged &&
             removedWorktreeIds.size === 0
           ) {
-            return s
+            return undefined
           }
 
           const detectedWorktreesByRepo = detectedChanged
@@ -277,16 +265,27 @@ export function createPurgeStaleRuntimeHostState(
             : s.detectedWorktreesByRepo
 
           const rowsChanged = worktreesChanged || detectedChanged
-          return {
+          if (reposChanged) {
+            edit.replace('repos', survivingRepos, 'catalog')
+          }
+          if (groupsChanged) {
+            edit.replace('projectGroups', projectGroups, 'catalog')
+            edit.replace('folderWorkspaces', folderWorkspaces, 'catalog')
+          }
+          if (worktreesChanged) {
+            edit.replace('worktreesByRepo', worktreeDrop.rowsByRepo, 'catalog')
+          }
+          if (restoredSessionOwnersChanged) {
+            edit.replace(
+              'restoredRuntimeHostIdByWorkspaceSessionKey',
+              survivingRestoredSessionOwners,
+              'catalog'
+            )
+          }
+          return edit.finish({
             ...purgeState,
-            ...(reposChanged ? { repos: survivingRepos } : {}),
             ...(setupsChanged ? { projectHostSetups: survivingSetups } : {}),
-            ...(groupsChanged ? { projectGroups, folderWorkspaces } : {}),
-            ...(worktreesChanged ? { worktreesByRepo: worktreeDrop.rowsByRepo } : {}),
             ...(detectedChanged ? { detectedWorktreesByRepo } : {}),
-            ...(restoredSessionOwnersChanged
-              ? { restoredRuntimeHostIdByWorkspaceSessionKey: survivingRestoredSessionOwners }
-              : {}),
             ...(visibilityDefaultsChanged
               ? { worktreeVisibilityDefaultsByHost: survivingVisibilityDefaults }
               : {}),
@@ -305,7 +304,7 @@ export function createPurgeStaleRuntimeHostState(
                   filterRepoIds: s.filterRepoIds.filter((repoId) => survivingRepoIds.has(repoId))
                 }
               : {})
-          }
+          })
         }),
       { settleFlags: false }
     )

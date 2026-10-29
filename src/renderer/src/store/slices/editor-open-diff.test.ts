@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { createEditorStore, createEditorTabsStore } from './editor-slice-test-harness'
 import type { AppState } from '../types'
@@ -68,7 +69,7 @@ describe('createEditorSlice openDiff', () => {
 
   it('derives a runtime owner for source-control diffs from the worktree host', () => {
     const store = createEditorStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [{ id: 'repo-1', executionHostId: 'runtime:env-1' }] as unknown as AppState['repos'],
       worktreesByRepo: {
         'repo-1': [
@@ -118,7 +119,7 @@ describe('createEditorSlice openDiff', () => {
 
   it('routes an explicitly runtime-owned worktree diff to its owner over the focused runtime', () => {
     const store = createEditorStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'focused-env' } as AppState['settings'],
       repos: [
         { id: 'repo-1', executionHostId: 'runtime:owner-env' }
@@ -138,7 +139,7 @@ describe('createEditorSlice openDiff', () => {
   it('keeps an SSH-owned worktree diff off the focused runtime so it routes via its connection', () => {
     const store = createEditorStore()
     // SSH diffs stamp null so local IPC routes via connectionId, never focused-runtime RPC.
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'focused-env' } as AppState['settings'],
       repos: [{ id: 'repo-ssh', connectionId: 'conn-1' }] as unknown as AppState['repos'],
       worktreesByRepo: {
@@ -158,7 +159,7 @@ describe('createEditorSlice openDiff', () => {
   it('repairs an existing diff tab entry to the correct mode and staged state', () => {
     const store = createEditorStore()
 
-    store.setState({
+    setSessionTestState(store, {
       openFiles: [
         {
           id: 'wt-1::diff::staged::file.ts',
@@ -231,7 +232,7 @@ describe('createEditorSlice openDiff', () => {
     vi.stubGlobal('navigator', { userAgent: 'Windows' })
     const store = createEditorStore()
     const restoredPath = '//wsl.localhost/Ubuntu/home/Alice/repo/file.ts'
-    store.setState({
+    setSessionTestState(store, {
       openFiles: [
         {
           id: restoredPath,
@@ -279,7 +280,7 @@ describe('createEditorSlice openDiff', () => {
   it('keeps local WSL-looking aliases distinct on POSIX clients', () => {
     vi.stubGlobal('navigator', { userAgent: 'Linux' })
     const store = createEditorStore()
-    store.setState({
+    setSessionTestState(store, {
       openFiles: [
         {
           id: 'forward',
@@ -312,7 +313,8 @@ describe('createEditorSlice openDiff', () => {
 
   it('does not reuse WSL aliases for SSH-owned tabs', () => {
     const store = createEditorStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       repos: [{ id: 'repo-1', path: '/repo', connectionId: 'ssh-1' }],
       worktreesByRepo: {
         'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'ssh:ssh-1' }]
@@ -367,7 +369,8 @@ describe('createEditorSlice openDiff', () => {
       mode: 'edit' as const
     }
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       repos: [{ id: 'repo-1', path: '/repo', connectionId: 'ssh-1' }],
       sshConnectionStates: new Map([
         [
@@ -384,7 +387,8 @@ describe('createEditorSlice openDiff', () => {
     } as never)
     store.getState().openFile({ ...file, externalSshTargetId: 'ssh-1' })
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       repos: [{ id: 'repo-1', path: '/repo', connectionId: 'ssh-2' }],
       sshConnectionStates: new Map([
         [
@@ -447,7 +451,7 @@ describe('createEditorSlice openDiff', () => {
   it('opens the visible diff tab in the requested split group', async () => {
     const store = createEditorTabsStore()
     // A terminal with its row, so main holds it and its group.
-    store.setState({
+    setSessionTestState(store, {
       tabsByWorktree: { 'wt-1': [makeTab({ id: 'terminal-1', worktreeId: 'wt-1' })] },
       terminalLayoutsByTabId: { 'terminal-1': makeLayout() }
     })

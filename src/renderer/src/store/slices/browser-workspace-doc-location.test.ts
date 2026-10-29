@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
@@ -54,7 +55,7 @@ async function settled(): Promise<void> {
 /** A store showing one worktree, its tabs drawn from main once the switch is on. */
 async function createStoreWithWorktree(): Promise<ReturnType<typeof createTestStore>> {
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     repos: [{ id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }],
     worktreesByRepo: {
       repo1: [makeWorktree({ id: WORKTREE_ID, repoId: 'repo1', path: '/path/wt1' })]
@@ -251,7 +252,7 @@ describe('a browser page that shows a workspace document', () => {
     await settled()
     const page = store.getState().browserPagesByWorkspace[tab.id]?.[0]
     const otherDocument = { ...DOC_LOCATION, filePath: '/home/alice/wt1/appendix/index.html' }
-    store.setState({
+    setSessionTestState(store, {
       browserPagesByWorkspace: {
         ...store.getState().browserPagesByWorkspace,
         [tab.id]: [{ ...page!, docLocation: otherDocument }]

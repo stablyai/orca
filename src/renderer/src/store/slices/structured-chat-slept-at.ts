@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import { isStructuredTab } from '../../../../shared/structured-agent-session-tab'
 import type { Tab } from '../../../../shared/tab-types'
@@ -54,10 +54,8 @@ export const hasAwakeStructuredChat = createStructuredChatPresenceSelector(
   (sleptAt) => typeof sleptAt !== 'number'
 )
 
-export const createStructuredChatSleptAtSlice: StateCreator<
+export const createStructuredChatSleptAtSlice: SessionStateCreator<
   AppState,
-  [],
-  [],
   StructuredChatSleptAtSlice
 > = (set) => ({
   structuredChatSleptAtByPaneKey: {},
@@ -65,7 +63,7 @@ export const createStructuredChatSleptAtSlice: StateCreator<
     set((state) => {
       const current = state.structuredChatSleptAtByPaneKey
       if (current[paneKey] === sleptAt) {
-        return state
+        return undefined
       }
       const { [paneKey]: _previous, ...rest } = current
       return {

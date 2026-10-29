@@ -1,9 +1,10 @@
+import type { SessionSourceEdit, OrdinarySourcePartial } from '../../session-source-edits'
 import type { AppState } from '../../types'
 import type { BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
 import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
 import { omitRecordKeys } from '../worktrees/teardown/record-key-omission'
 import { getTerminalActivationSpawnSuppression } from '../terminal-activation-spawn-suppression'
-import { collapseGroupLayout } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
+import { collapseGroupLayoutEdit } from './tab-group-layout-edits'
 import {
   createKeptWorktreeSurfacePruners,
   type KeptWorktreeSurfaceRemoval
@@ -11,74 +12,35 @@ import {
 
 // Pure lifecycle patches let repo/worktree/SSH callers clear layout and other state in one atomic update.
 
-type WorktreeLayoutPatch = Pick<
-  AppState,
-  | 'tabsByWorktree'
-  | 'terminalLayoutsByTabId'
-  | 'ptyIdsByTabId'
-  | 'unifiedTabsByWorktree'
-  | 'groupsByWorktree'
-  | 'layoutByWorktree'
-  | 'activeGroupIdByWorktree'
-  | 'tabBarOrderByWorktree'
-  | 'browserTabsByWorktree'
-  | 'openFiles'
-  | 'activeTabIdByWorktree'
-  | 'activeFileIdByWorktree'
-  | 'activeBrowserTabIdByWorktree'
-  | 'activeTabTypeByWorktree'
-  | 'activeTabId'
-  | 'activeFileId'
-  | 'activeBrowserTabId'
-  | 'activeTabType'
->
-
 /** Collapse kept splits emptied by purge, giving their space/selection to the surviving twin’s group. */
 function collapseEmptiedKeptGroups(
-  s: Pick<AppState, 'groupsByWorktree' | 'layoutByWorktree' | 'activeGroupIdByWorktree'>,
-  groupsByWorktree: AppState['groupsByWorktree'],
+  edit: SessionSourceEdit<AppState>,
+  priorGroups: AppState['groupsByWorktree'],
   worktreeIds: ReadonlySet<string>
-): {
-  groups: AppState['groupsByWorktree']
-  layout: AppState['layoutByWorktree']
-  activeGroups: AppState['activeGroupIdByWorktree']
-} {
-  let groupsOut = groupsByWorktree
-  let layoutOut = s.layoutByWorktree
-  let activeOut = s.activeGroupIdByWorktree
+): void {
   for (const worktreeId of worktreeIds) {
-    const before = s.groupsByWorktree[worktreeId] ?? []
-    let groups = groupsOut[worktreeId] ?? []
+    const before = priorGroups[worktreeId] ?? []
+    let groups = edit.entry('groupsByWorktree', worktreeId) ?? []
     const emptied = groups.filter(
       (group) =>
         group.tabOrder.length === 0 &&
         (before.find((prior) => prior.id === group.id)?.tabOrder.length ?? 0) > 0
     )
     for (const group of emptied) {
-      if (groups.length <= 1 || !layoutOut[worktreeId]) {
+      if (groups.length <= 1 || !edit.entry('layoutByWorktree', worktreeId)) {
         break
       }
       groups = groups.filter((candidate) => candidate.id !== group.id)
-      const collapsed = collapseGroupLayout(
-        layoutOut,
-        activeOut,
-        worktreeId,
-        group.id,
-        groups[0]?.id ?? null
-      )
-      layoutOut = collapsed.layoutByWorktree
-      // Why: only the collapsed group's own focus moves; an untouched active group keeps it.
-      const activeGroupId = activeOut[worktreeId]
-      activeOut =
-        activeGroupId === undefined || activeGroupId === group.id
-          ? collapsed.activeGroupIdByWorktree
-          : { ...collapsed.activeGroupIdByWorktree, [worktreeId]: activeGroupId }
+      const activeGroupId = edit.entry('activeGroupIdByWorktree', worktreeId)
+      collapseGroupLayoutEdit(edit, worktreeId, group.id, groups[0]?.id ?? null)
+      if (activeGroupId !== undefined && activeGroupId !== group.id) {
+        edit.set('activeGroupIdByWorktree', worktreeId, activeGroupId)
+      }
     }
-    if (groups !== (groupsOut[worktreeId] ?? [])) {
-      groupsOut = { ...groupsOut, [worktreeId]: groups }
+    if (groups !== (edit.entry('groupsByWorktree', worktreeId) ?? [])) {
+      edit.set('groupsByWorktree', worktreeId, groups)
     }
   }
-  return { groups: groupsOut, layout: layoutOut, activeGroups: activeOut }
 }
 
 /**
@@ -86,52 +48,123 @@ function collapseEmptiedKeptGroups(
  * them. `kept` names surfaces leaving workspaces that stay, whose entries are pruned instead.
  */
 export function removeWorktreeLayout(
-  s: AppState,
+  edit: SessionSourceEdit<AppState>,
   removed: {
     worktreeIds: ReadonlySet<string>
     tabIds: ReadonlySet<string>
     activeFileCleared: boolean
     kept?: KeptWorktreeSurfaceRemoval
   }
-): WorktreeLayoutPatch {
+): OrdinarySourcePartial<AppState> {
+  const s = edit.view()
   const { worktreeIds, tabIds, activeFileCleared } = removed
-  const omitByWorktree = <T>(m: Record<string, T> | undefined) => omitRecordKeys(m, worktreeIds)
-  const omitByTabId = <T>(m: Record<string, T> | undefined) => omitRecordKeys(m, tabIds)
   const removedActiveWorktree = s.activeWorktreeId != null && worktreeIds.has(s.activeWorktreeId)
+  for (const id of worktreeIds) {
+    edit.remove('tabsByWorktree', id)
+    edit.remove('unifiedTabsByWorktree', id)
+    edit.remove('groupsByWorktree', id)
+    edit.remove('layoutByWorktree', id)
+    edit.remove('activeGroupIdByWorktree', id)
+    edit.remove('browserTabsByWorktree', id)
+    edit.remove('activeTabIdByWorktree', id)
+    edit.remove('activeFileIdByWorktree', id)
+    edit.remove('activeBrowserTabIdByWorktree', id)
+    edit.remove('activeTabTypeByWorktree', id)
+  }
+  for (const id of tabIds) {
+    edit.remove('terminalLayoutsByTabId', id)
+    edit.remove('ptyIdsByTabId', id)
+  }
+  let tabBarOrderByWorktree = omitRecordKeys(s.tabBarOrderByWorktree, worktreeIds)
   const kept = removed.kept ? createKeptWorktreeSurfacePruners(s, removed.kept) : null
-  const keep = <T>(value: T, prune: ((value: T) => T) | undefined): T =>
-    prune ? prune(value) : value
-  const groupLayout = removed.kept
-    ? collapseEmptiedKeptGroups(
-        s,
-        keep(omitByWorktree(s.groupsByWorktree), kept?.groups),
-        removed.kept.worktreeIds
-      )
-    : null
-  const remainingFiles = s.openFiles.some((f) => worktreeIds.has(f.worktreeId))
-    ? s.openFiles.filter((f) => !worktreeIds.has(f.worktreeId))
-    : s.openFiles
+  if (removed.kept && kept) {
+    for (const id of removed.kept.worktreeIds) {
+      if (edit.has('tabsByWorktree', id)) {
+        const value = kept.tabs(edit.entry('tabsByWorktree', id)!)
+        if (value === undefined) {
+          edit.remove('tabsByWorktree', id)
+        } else {
+          edit.set('tabsByWorktree', id, value)
+        }
+      }
+      if (edit.has('unifiedTabsByWorktree', id)) {
+        const value = kept.unifiedTabs(edit.entry('unifiedTabsByWorktree', id)!)
+        if (value === undefined) {
+          edit.remove('unifiedTabsByWorktree', id)
+        } else {
+          edit.set('unifiedTabsByWorktree', id, value)
+        }
+      }
+      if (edit.has('groupsByWorktree', id)) {
+        const value = kept.groups(edit.entry('groupsByWorktree', id)!)
+        if (value === undefined) {
+          edit.remove('groupsByWorktree', id)
+        } else {
+          edit.set('groupsByWorktree', id, value)
+        }
+      }
+      if (edit.has('browserTabsByWorktree', id)) {
+        const value = kept.browserTabs(edit.entry('browserTabsByWorktree', id)!)
+        if (value === undefined) {
+          edit.remove('browserTabsByWorktree', id)
+        } else {
+          edit.set('browserTabsByWorktree', id, value)
+        }
+      }
+      if (edit.has('activeTabIdByWorktree', id)) {
+        const prior = edit.entry('activeTabIdByWorktree', id)
+        const value = kept.activeTabIds(prior!)
+        if (value !== prior) {
+          if (value === undefined) {
+            edit.remove('activeTabIdByWorktree', id)
+          } else {
+            edit.set('activeTabIdByWorktree', id, value)
+          }
+        }
+      }
+      if (edit.has('activeFileIdByWorktree', id)) {
+        const prior = edit.entry('activeFileIdByWorktree', id)
+        const value = kept.activeFileIds(prior!)
+        if (value !== prior) {
+          if (value === undefined) {
+            edit.remove('activeFileIdByWorktree', id)
+          } else {
+            edit.set('activeFileIdByWorktree', id, value)
+          }
+        }
+      }
+      if (edit.has('activeBrowserTabIdByWorktree', id)) {
+        const prior = edit.entry('activeBrowserTabIdByWorktree', id)
+        const value = kept.activeBrowserTabIds(prior!)
+        if (value !== prior) {
+          if (value === undefined) {
+            edit.remove('activeBrowserTabIdByWorktree', id)
+          } else {
+            edit.set('activeBrowserTabIdByWorktree', id, value)
+          }
+        }
+      }
+      const order = tabBarOrderByWorktree[id]
+      if (order) {
+        const next = kept.tabBarOrder(order)
+        if (next !== order) {
+          tabBarOrderByWorktree = { ...tabBarOrderByWorktree, [id]: next }
+        }
+      }
+    }
+    collapseEmptiedKeptGroups(edit, s.groupsByWorktree, removed.kept.worktreeIds)
+  }
+  if (
+    s.openFiles.some(
+      (file) => worktreeIds.has(file.worktreeId) || removed.kept?.fileIds.has(file.id)
+    )
+  ) {
+    edit
+      .sequence('openFiles')
+      .filter((file) => !worktreeIds.has(file.worktreeId) && !removed.kept?.fileIds.has(file.id))
+  }
   return {
-    tabsByWorktree: keep(omitByWorktree(s.tabsByWorktree), kept?.tabs),
-    terminalLayoutsByTabId: omitByTabId(s.terminalLayoutsByTabId),
-    ptyIdsByTabId: omitByTabId(s.ptyIdsByTabId),
-    // Why: split-tab layout/group state is worktree-owned; leaving it makes a deleted worktree look restorable.
-    unifiedTabsByWorktree: keep(omitByWorktree(s.unifiedTabsByWorktree), kept?.unifiedTabs),
-    groupsByWorktree: groupLayout?.groups ?? omitByWorktree(s.groupsByWorktree),
-    layoutByWorktree: omitByWorktree(groupLayout?.layout ?? s.layoutByWorktree),
-    activeGroupIdByWorktree: omitByWorktree(groupLayout?.activeGroups ?? s.activeGroupIdByWorktree),
-    tabBarOrderByWorktree: keep(omitByWorktree(s.tabBarOrderByWorktree), kept?.tabBarOrder),
-    browserTabsByWorktree: keep(omitByWorktree(s.browserTabsByWorktree), kept?.browserTabs),
-    // Why guarded: a removed worktree usually has no open file, and an unconditional
-    // filter would hand openFiles a new identity anyway.
-    openFiles: keep(remainingFiles, kept?.files),
-    activeTabIdByWorktree: keep(omitByWorktree(s.activeTabIdByWorktree), kept?.activeTabIds),
-    activeFileIdByWorktree: keep(omitByWorktree(s.activeFileIdByWorktree), kept?.activeFileIds),
-    activeBrowserTabIdByWorktree: keep(
-      omitByWorktree(s.activeBrowserTabIdByWorktree),
-      kept?.activeBrowserTabIds
-    ),
-    activeTabTypeByWorktree: omitByWorktree(s.activeTabTypeByWorktree),
+    tabBarOrderByWorktree,
     activeTabId: s.activeTabId && tabIds.has(s.activeTabId) ? null : s.activeTabId,
     activeFileId: activeFileCleared ? null : s.activeFileId,
     activeBrowserTabId: removedActiveWorktree ? null : s.activeBrowserTabId,
@@ -156,51 +189,69 @@ function rekeyWorktreeEntry<T>(
 
 /** Moves a renamed worktree's tabs, groups, pane layouts and selection to its new id. */
 export function renameWorktreeLayoutKeys(
-  s: AppState,
+  edit: SessionSourceEdit<AppState>,
   oldWorktreeId: string,
   newWorktreeId: string,
   renameBrowserWorkspace: (workspace: BrowserWorkspace) => BrowserWorkspace
-): Partial<WorktreeLayoutPatch> {
+): OrdinarySourcePartial<AppState> {
+  const s = edit.view()
   const withNewWorktreeId = <T extends { worktreeId: string }>(value: T): T =>
     value.worktreeId === oldWorktreeId ? { ...value, worktreeId: newWorktreeId } : value
-  const rekey = <T>(map: Record<string, T> | undefined, mapValue?: (value: T) => T) =>
-    rekeyWorktreeEntry(map, oldWorktreeId, newWorktreeId, mapValue)
-  const patch: Partial<WorktreeLayoutPatch> = {}
-  const assign = <K extends keyof WorktreeLayoutPatch>(
-    key: K,
-    value: WorktreeLayoutPatch[K] | undefined
-  ): void => {
-    if (value !== undefined) {
-      patch[key] = value
-    }
+  if (edit.has('tabsByWorktree', oldWorktreeId)) {
+    const value = edit.entry('tabsByWorktree', oldWorktreeId)!
+    edit.set('tabsByWorktree', newWorktreeId, value.map(withNewWorktreeId))
+    edit.remove('tabsByWorktree', oldWorktreeId)
   }
-  assign(
-    'tabsByWorktree',
-    rekey(s.tabsByWorktree, (tabs) => tabs.map(withNewWorktreeId))
-  )
-  assign(
-    'browserTabsByWorktree',
-    rekey(s.browserTabsByWorktree, (workspaces) => workspaces.map(renameBrowserWorkspace))
-  )
-  assign('activeBrowserTabIdByWorktree', rekey(s.activeBrowserTabIdByWorktree))
-  assign('activeFileIdByWorktree', rekey(s.activeFileIdByWorktree))
-  assign('activeTabTypeByWorktree', rekey(s.activeTabTypeByWorktree))
-  assign('activeTabIdByWorktree', rekey(s.activeTabIdByWorktree))
-  assign('tabBarOrderByWorktree', rekey(s.tabBarOrderByWorktree))
-  assign(
-    'unifiedTabsByWorktree',
-    rekey(s.unifiedTabsByWorktree, (tabs) => tabs.map(withNewWorktreeId))
-  )
-  assign(
-    'groupsByWorktree',
-    rekey(s.groupsByWorktree, (groups) => groups.map(withNewWorktreeId))
-  )
-  assign('layoutByWorktree', rekey(s.layoutByWorktree))
-  assign('activeGroupIdByWorktree', rekey(s.activeGroupIdByWorktree))
-  if (s.openFiles?.some((f) => f.worktreeId === oldWorktreeId)) {
-    assign('openFiles', s.openFiles.map(withNewWorktreeId))
+  if (edit.has('browserTabsByWorktree', oldWorktreeId)) {
+    const value = edit.entry('browserTabsByWorktree', oldWorktreeId)!
+    edit.set('browserTabsByWorktree', newWorktreeId, value.map(renameBrowserWorkspace))
+    edit.remove('browserTabsByWorktree', oldWorktreeId)
   }
-  return patch
+  if (edit.has('activeBrowserTabIdByWorktree', oldWorktreeId)) {
+    const value = edit.entry('activeBrowserTabIdByWorktree', oldWorktreeId)!
+    edit.set('activeBrowserTabIdByWorktree', newWorktreeId, value)
+    edit.remove('activeBrowserTabIdByWorktree', oldWorktreeId)
+  }
+  if (edit.has('activeFileIdByWorktree', oldWorktreeId)) {
+    const value = edit.entry('activeFileIdByWorktree', oldWorktreeId)!
+    edit.set('activeFileIdByWorktree', newWorktreeId, value)
+    edit.remove('activeFileIdByWorktree', oldWorktreeId)
+  }
+  if (edit.has('activeTabTypeByWorktree', oldWorktreeId)) {
+    const value = edit.entry('activeTabTypeByWorktree', oldWorktreeId)!
+    edit.set('activeTabTypeByWorktree', newWorktreeId, value)
+    edit.remove('activeTabTypeByWorktree', oldWorktreeId)
+  }
+  if (edit.has('activeTabIdByWorktree', oldWorktreeId)) {
+    const value = edit.entry('activeTabIdByWorktree', oldWorktreeId)!
+    edit.set('activeTabIdByWorktree', newWorktreeId, value)
+    edit.remove('activeTabIdByWorktree', oldWorktreeId)
+  }
+  if (edit.has('unifiedTabsByWorktree', oldWorktreeId)) {
+    const value = edit.entry('unifiedTabsByWorktree', oldWorktreeId)!
+    edit.set('unifiedTabsByWorktree', newWorktreeId, value.map(withNewWorktreeId))
+    edit.remove('unifiedTabsByWorktree', oldWorktreeId)
+  }
+  if (edit.has('groupsByWorktree', oldWorktreeId)) {
+    const value = edit.entry('groupsByWorktree', oldWorktreeId)!
+    edit.set('groupsByWorktree', newWorktreeId, value.map(withNewWorktreeId))
+    edit.remove('groupsByWorktree', oldWorktreeId)
+  }
+  if (edit.has('layoutByWorktree', oldWorktreeId)) {
+    const value = edit.entry('layoutByWorktree', oldWorktreeId)!
+    edit.set('layoutByWorktree', newWorktreeId, value)
+    edit.remove('layoutByWorktree', oldWorktreeId)
+  }
+  if (edit.has('activeGroupIdByWorktree', oldWorktreeId)) {
+    const value = edit.entry('activeGroupIdByWorktree', oldWorktreeId)!
+    edit.set('activeGroupIdByWorktree', newWorktreeId, value)
+    edit.remove('activeGroupIdByWorktree', oldWorktreeId)
+  }
+  if (s.openFiles?.some((file) => file.worktreeId === oldWorktreeId)) {
+    edit.sequence('openFiles').map(withNewWorktreeId)
+  }
+  const order = rekeyWorktreeEntry(s.tabBarOrderByWorktree, oldWorktreeId, newWorktreeId)
+  return order === undefined ? {} : { tabBarOrderByWorktree: order }
 }
 
 /**
@@ -208,37 +259,35 @@ export function renameWorktreeLayoutKeys(
  * generation so dead panes remount.
  */
 export function markWorktreeTabsForActivationSpawn(
-  s: AppState,
+  edit: SessionSourceEdit<AppState>,
   worktreeId: string,
   options: { isWakeable: (tab: TerminalTab) => boolean; bumpGeneration: boolean }
-): Pick<AppState, 'tabsByWorktree'> {
+): void {
+  const s = edit.view()
   const { isWakeable, bumpGeneration } = options
-  return {
-    tabsByWorktree: {
-      ...s.tabsByWorktree,
-      [worktreeId]: (s.tabsByWorktree[worktreeId] ?? []).map((tab) =>
-        !isWakeable(tab)
-          ? tab
-          : {
-              ...tab,
-              ...(bumpGeneration ? { generation: (tab.generation ?? 0) + 1 } : {}),
-              // Why: slept terminal remount/spawn is click-driven wake work; tag its PTY updates so they don't reshuffle Recent.
-              pendingActivationSpawn: getTerminalActivationSpawnSuppression(
-                s.terminalLayoutsByTabId[tab.id]
-              )
-            }
-      )
-    }
-  }
+  edit.set(
+    'tabsByWorktree',
+    worktreeId,
+    (s.tabsByWorktree[worktreeId] ?? []).map((tab) =>
+      !isWakeable(tab)
+        ? tab
+        : {
+            ...tab,
+            ...(bumpGeneration ? { generation: (tab.generation ?? 0) + 1 } : {}),
+            pendingActivationSpawn: getTerminalActivationSpawnSuppression(
+              s.terminalLayoutsByTabId[tab.id]
+            )
+          }
+    )
+  )
 }
 
 /** Detaches terminal tabs from their PTYs, leaving the tabs in place to respawn. */
 export function unbindTerminalTabPtys(
-  s: AppState,
+  edit: SessionSourceEdit<AppState>,
   tabIds: ReadonlySet<string>
-): Pick<AppState, 'tabsByWorktree' | 'ptyIdsByTabId'> {
-  let nextTabsByWorktree = s.tabsByWorktree
-  const nextPtyIdsByTabId = { ...s.ptyIdsByTabId }
+): void {
+  const s = edit.view()
   for (const [worktreeId, tabs] of Object.entries(s.tabsByWorktree)) {
     let nextTabs = tabs
     for (const [index, tab] of tabs.entries()) {
@@ -251,14 +300,10 @@ export function unbindTerminalTabPtys(
       const { pendingActivationSpawn: _pendingActivationSpawn, ...tabWithoutActivationSpawn } = tab
       void _pendingActivationSpawn
       nextTabs[index] = { ...tabWithoutActivationSpawn, ptyId: null }
-      nextPtyIdsByTabId[tab.id] = []
+      edit.set('ptyIdsByTabId', tab.id, [])
     }
     if (nextTabs !== tabs) {
-      if (nextTabsByWorktree === s.tabsByWorktree) {
-        nextTabsByWorktree = { ...nextTabsByWorktree }
-      }
-      nextTabsByWorktree[worktreeId] = nextTabs
+      edit.set('tabsByWorktree', worktreeId, nextTabs)
     }
   }
-  return { tabsByWorktree: nextTabsByWorktree, ptyIdsByTabId: nextPtyIdsByTabId }
 }

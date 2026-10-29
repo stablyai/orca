@@ -1,3 +1,9 @@
+import {
+  editSessionSource,
+  type OrdinarySourcePartial,
+  type SessionSourceEdit,
+  type SessionSourceSet
+} from '@/store/session-source-edits'
 // Layout-owner windows draw main’s locally owned, held workspaces; paired servers remain mirror-owned. Local tab changes stay drawn until main answers (layout-owner-drawn-tab-holds). Records frames apply binding/title deltas directly and rebuild other changed workspaces from store. Startup/reopen/new/whole workspaces use full save/Loader builds (E2a/E2b).
 
 import { showFramePatch, withMovedTabsSelected } from '@/store/slices/tabs/moved-tab-selection'
@@ -6,7 +12,6 @@ import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { applyLayoutFrame, EMPTY_WORKSPACE_LAYOUT_CACHE } from '@/store/workspace-layout-cache'
 import type { WorkspaceLayoutCache } from '@/store/workspace-layout-cache'
-import { terminalLayoutsPatch } from '@/store/workspace-layout-frame-store-patch'
 import {
   layoutHoldsBoundPane,
   onWorkspaceStartsDrawing
@@ -16,11 +21,7 @@ import type { WorkspaceLayoutChangeFrame } from '../../../shared/workspace-layou
 import { liveTitleUpdates } from './workspace-layout-frame-changes'
 import { terminalLayoutsWithFramePaneTrees } from './workspace-layout-frame-pane-trees'
 import { framePaneFactsShown, showFramePaneStarts } from './workspace-layout-frame-pane-starts'
-import {
-  layoutFrameFlushPatch,
-  type LayoutFrameBuildHolds,
-  type LayoutFrameBuildPatch
-} from './workspace-layout-frame-builds'
+import { layoutFrameFlushPatch, type LayoutFrameBuildHolds } from './workspace-layout-frame-builds'
 import { eitherHeld } from '@/store/workspace-layout-frame-held-tabs'
 import { heldTabGroupFocus } from './held-tab-group-follow'
 import { shownContentRekeyPatch } from './layout-owner-content-rekeys'
@@ -54,7 +55,7 @@ import {
 
 type FrameSyncStore = {
   getState: () => AppState
-  setState: (patch: Partial<AppState>) => void
+  setState: SessionSourceSet<AppState>
   subscribe: (listener: (state: AppState) => void) => () => void
 }
 
@@ -88,8 +89,11 @@ export function openWorkspaceLayoutFrameSync(
 
   /** The moved tabs' selections this flush's writes took. */
   let selectionsTaken: MovedTabSelection[] = []
-  const show = (patch: LayoutFrameBuildPatch): void => {
-    selectionsTaken.push(...showFramePatch(store, patch))
+  const show = (
+    edit: SessionSourceEdit<AppState>,
+    patch: OrdinarySourcePartial<AppState> = {}
+  ): void => {
+    selectionsTaken.push(...showFramePatch(store, edit, patch))
   }
 
   // Each change against the cache's copy it applies to, before the frame replaces it.
@@ -113,14 +117,9 @@ export function openWorkspaceLayoutFrameSync(
 
   // Pane trees show at once; only a tab the window's own pane command holds waits.
   const showPaneTrees = (state: AppState): void => {
-    const shownTrees = terminalLayoutsWithFramePaneTrees(
-      state.terminalLayoutsByTabId,
-      cache,
-      paneTreeKeys,
-      source.draws(state)
-    )
-    paneTreeKeys = shownTrees.waiting
-    show(terminalLayoutsPatch(state, shownTrees.layouts))
+    const edit = editSessionSource(state)
+    paneTreeKeys = terminalLayoutsWithFramePaneTrees(edit, cache, paneTreeKeys, source.draws(state))
+    show(edit)
   }
 
   const flush = (): void => {
@@ -187,12 +186,11 @@ export function openWorkspaceLayoutFrameSync(
       }
     }
     // One update: a move's or rename's content rekeys with the frame that shows it.
-    const rekeyed = shownContentRekeyPatch(state, cache)
-    const base: AppState = { ...state, ...rekeyed }
-    show({
-      ...rekeyed,
-      ...layoutFrameFlushPatch(base, cache, { fullBuilt, workspaceBuilt, rebound }, holds)
-    })
+    const edit = editSessionSource(state)
+    const rekeyed = shownContentRekeyPatch(edit, cache)
+    const base = edit.view(rekeyed)
+    layoutFrameFlushPatch(edit, cache, { fullBuilt, workspaceBuilt, rebound }, holds, rekeyed)
+    show(edit, rekeyed)
     if (titleUpdates.length > 0) {
       store.getState().updateTabTitles(titleUpdates)
     }

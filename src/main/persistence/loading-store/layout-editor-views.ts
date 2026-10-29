@@ -10,6 +10,8 @@ import type { LayoutEditorView } from '../../../shared/workspace-layout/layout-e
 import type { WorkspaceLayoutModel } from '../../../shared/workspace-layout/workspace-layout-model'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { StoreRuntimeState } from './store-runtime-state'
+import { sessionPublication } from './session-publication'
+import type { SessionChangeSet } from '../../../shared/session-change-set'
 
 export type PartitionEditorViews = Readonly<
   Record<string, Readonly<Record<string, LayoutEditorView>>>
@@ -35,70 +37,173 @@ export function editorViewsOfModel(model: WorkspaceLayoutModel): PartitionEditor
   return views
 }
 
-/** Restore only if no later keep replaced this partition's views. */
+type ViewPlace = { hostId: ExecutionHostId; key: string }
+type ViewIndex = Map<string, Map<ExecutionHostId, Set<string>>>
+const viewIndexes = new WeakMap<ViewsRuntime['layoutEditorViews'], ViewIndex>()
+
+function addViewPlace(index: ViewIndex, tabId: string, place: ViewPlace, keep: boolean): void {
+  const hosts = index.get(tabId) ?? new Map<ExecutionHostId, Set<string>>()
+  const keys = hosts.get(place.hostId) ?? new Set<string>()
+  if (keep) {
+    keys.add(place.key)
+  } else {
+    keys.delete(place.key)
+  }
+  if (keys.size) {
+    hosts.set(place.hostId, keys)
+  } else {
+    hosts.delete(place.hostId)
+  }
+  if (hosts.size) {
+    index.set(tabId, hosts)
+  } else {
+    index.delete(tabId)
+  }
+}
+
+function viewIndex(runtime: ViewsRuntime): ViewIndex {
+  let index = viewIndexes.get(runtime.layoutEditorViews)
+  if (!index) {
+    index = new Map()
+    for (const [hostId, partition] of runtime.layoutEditorViews) {
+      for (const [key, views] of Object.entries(partition)) {
+        for (const tabId of Object.keys(views)) {
+          addViewPlace(index, tabId, { hostId, key }, true)
+        }
+      }
+    }
+    viewIndexes.set(runtime.layoutEditorViews, index)
+  }
+  return index
+}
+
+function keepViews(
+  runtime: ViewsRuntime,
+  hostId: ExecutionHostId,
+  views: PartitionEditorViews,
+  owners?: ReadonlySet<string>
+): PartitionEditorViews {
+  const index = viewIndex(runtime)
+  const prior = runtime.layoutEditorViews.get(hostId) ?? {}
+  const next = owners ? { ...prior } : { ...views }
+  const keys = owners ?? new Set([...Object.keys(prior), ...Object.keys(views)])
+  for (const key of keys) {
+    for (const tabId of Object.keys(prior[key] ?? {})) {
+      addViewPlace(index, tabId, { hostId, key }, false)
+    }
+    if (owners) {
+      if (views[key]) {
+        next[key] = views[key]
+      } else {
+        delete next[key]
+      }
+    }
+    for (const tabId of Object.keys(next[key] ?? {})) {
+      addViewPlace(index, tabId, { hostId, key }, true)
+    }
+  }
+  runtime.layoutEditorViews.set(hostId, next)
+  return next
+}
+
+/** Restore only view bags no later keep or refile has replaced. */
 export function keepPartitionEditorViews(
   runtime: ViewsRuntime,
   hostId: ExecutionHostId,
-  views: PartitionEditorViews
+  views: PartitionEditorViews,
+  owners?: ReadonlySet<string>
 ): () => void {
   const before = runtime.layoutEditorViews.get(hostId) ?? {}
-  runtime.layoutEditorViews.set(hostId, views)
+  const installed = keepViews(runtime, hostId, views, owners)
   return () => {
-    if (runtime.layoutEditorViews.get(hostId) === views) {
-      runtime.layoutEditorViews.set(hostId, before)
+    if (!owners) {
+      if (runtime.layoutEditorViews.get(hostId) === installed) {
+        keepViews(runtime, hostId, before)
+      }
+      return
+    }
+    const current = runtime.layoutEditorViews.get(hostId) ?? {}
+    const restorable = new Set([...owners].filter((key) => current[key] === installed[key]))
+    if (restorable.size) {
+      keepViews(runtime, hostId, before, restorable)
     }
   }
 }
 
-/** Follow moved/rekeyed tabs and drop removed ones; preserve untouched identity for pending rollbacks. */
+/** Move only affected editor tabs; untouched view bags retain their rollback identities. */
 export function refileEditorViews(
-  runtime: Pick<StoreRuntimeState, 'layoutEditorViews' | 'state'>
+  runtime: Pick<StoreRuntimeState, 'layoutEditorViews' | 'state'>,
+  changes?: SessionChangeSet
 ): void {
-  if (runtime.layoutEditorViews.size === 0) {
+  const changed = changes?.units.filter((unit) => unit.field === 'unifiedTabs')
+  if (changes && !changes.fullReplacement && !changed?.length) {
     return
   }
-  const edited = new Map<ExecutionHostId, Record<string, Record<string, LayoutEditorView>>>()
-  const editable = (hostId: ExecutionHostId) => {
-    let partition = edited.get(hostId)
-    if (!partition) {
-      const current = runtime.layoutEditorViews.get(hostId) ?? {}
-      partition = Object.fromEntries(
-        Object.entries(current).map(([key, views]) => [key, { ...views }])
-      )
-      edited.set(hostId, partition)
+  const index = viewIndex(runtime)
+  const tabs = changes && !changes.fullReplacement ? changes.tabs : new Set(index.keys())
+  const edited = new Map<
+    ExecutionHostId,
+    Record<string, Readonly<Record<string, LayoutEditorView>>>
+  >()
+  const bags = new Map<string, Record<string, LayoutEditorView>>()
+  const editable = (place: ViewPlace): Record<string, LayoutEditorView> => {
+    const id = JSON.stringify([place.hostId, place.key])
+    let bag = bags.get(id)
+    if (!bag) {
+      let partition = edited.get(place.hostId)
+      if (!partition) {
+        partition = { ...runtime.layoutEditorViews.get(place.hostId) }
+        edited.set(place.hostId, partition)
+      }
+      bag = { ...partition[place.key] }
+      bags.set(id, bag)
+      partition[place.key] = bag
     }
-    return partition
+    return bag
   }
   const strays: [string, LayoutEditorView][] = []
-  for (const [hostId, partition] of runtime.layoutEditorViews) {
-    const session = sessionOf(runtime, hostId)
-    for (const [key, views] of Object.entries(partition)) {
-      for (const [tabId, view] of Object.entries(views)) {
-        if (!holdsEditorTab(session, key, tabId)) {
-          strays.push([tabId, view])
-          delete editable(hostId)[key]?.[tabId]
+  for (const tabId of tabs) {
+    for (const [hostId, keys] of index.get(tabId) ?? []) {
+      for (const key of keys) {
+        if (holdsEditorTab(sessionOf(runtime, hostId), key, tabId)) {
+          continue
         }
+        const place = { hostId, key }
+        const view = runtime.layoutEditorViews.get(hostId)?.[key]?.[tabId]
+        if (view) {
+          strays.push([tabId, view])
+        }
+        delete editable(place)[tabId]
+        addViewPlace(index, tabId, place, false)
       }
     }
   }
   for (const [tabId, view] of strays) {
     const places = placesHolding(runtime, tabId)
     const place = places.length === 1 ? places[0] : undefined
-    const holder =
-      place && (edited.get(place.hostId) ?? runtime.layoutEditorViews.get(place.hostId))
-    if (place && !holder?.[place.key]?.[tabId]) {
-      const partition = editable(place.hostId)
-      partition[place.key] = { ...partition[place.key], [tabId]: view }
+    if (!place) {
+      continue
     }
+    const holder = edited.get(place.hostId) ?? runtime.layoutEditorViews.get(place.hostId)
+    if (holder?.[place.key]?.[tabId]) {
+      continue
+    }
+    editable(place)[tabId] = view
+    addViewPlace(index, tabId, place, true)
+  }
+  for (const [id, bag] of bags) {
+    if (Object.keys(bag).length) {
+      continue
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: keys are encoded locally as a host id and workspace key above.
+    const [hostId, key] = JSON.parse(id) as [ExecutionHostId, string]
+    delete edited.get(hostId)?.[key]
   }
   for (const [hostId, partition] of edited) {
-    const views = Object.fromEntries(
-      Object.entries(partition).filter(([, tabs]) => Object.keys(tabs).length > 0)
-    )
-    if (Object.keys(views).length === 0) {
-      runtime.layoutEditorViews.delete(hostId)
+    if (Object.keys(partition).length) {
+      runtime.layoutEditorViews.set(hostId, partition)
     } else {
-      runtime.layoutEditorViews.set(hostId, views)
+      runtime.layoutEditorViews.delete(hostId)
     }
   }
 }
@@ -134,10 +239,15 @@ function placesHolding(
       (id) => normalizeExecutionHostId(id) ?? []
     )
   ])
-  return [...hostIds].flatMap((hostId) => {
-    const session = sessionOf(runtime, hostId)
-    return Object.keys(session?.unifiedTabs ?? {})
-      .filter((key) => holdsEditorTab(session, key, tabId))
-      .map((key) => ({ hostId, key }))
-  })
+  const publication = sessionPublication(runtime.state)
+  return [...hostIds].flatMap((hostId) =>
+    publication
+      .partition(hostId)
+      .index.references('tab', tabId)
+      .filter(
+        ({ field, key }) =>
+          field === 'unifiedTabs' && holdsEditorTab(sessionOf(runtime, hostId), key, tabId)
+      )
+      .map(({ key }) => ({ hostId, key }))
+  )
 }

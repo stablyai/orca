@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
@@ -380,7 +381,7 @@ describe('active page after launch', () => {
       loadError: null,
       createdAt: 0
     }
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       activeBrowserTabId: 'browser-1',
       browserTabsByWorktree: { 'wt-1': [workspace] }
     })

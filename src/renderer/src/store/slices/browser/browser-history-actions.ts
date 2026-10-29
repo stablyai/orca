@@ -43,7 +43,7 @@ export function createBrowserHistoryActions(
         )
         if (!existing && !bump) {
           // A title refresh for a document never visited records nothing.
-          return s
+          return undefined
         }
         const normalizedTitle = normalizeWorkspaceDocHistoryTitle(
           title ?? existing?.title,
@@ -63,7 +63,7 @@ export function createBrowserHistoryActions(
           workspaceDocHistoryEntriesEqual(updated, existing) &&
           s.workspaceDocHistory.length <= MAX_WORKSPACE_DOC_HISTORY_ENTRIES
         ) {
-          return s
+          return undefined
         }
         const next: WorkspaceDocHistoryEntry[] = updated
           ? s.workspaceDocHistory.map((entry) => (entry === existing ? updated : entry))
@@ -144,7 +144,7 @@ export function createBrowserHistoryActions(
             )
         )
         if (urls.length === 0 && docs.length === 0) {
-          return s
+          return undefined
         }
         return {
           browserUrlHistory: [...urls, ...s.browserUrlHistory],
@@ -168,10 +168,10 @@ export function createBrowserHistoryActions(
         browserUrlHistory: browserUrlHistory.filter((entry) => entry.lastVisitedAt >= since),
         workspaceDocHistory: workspaceDocHistory.filter((entry) => entry.lastVisitedAt >= since)
       }
-      set({
+      set((_sourceState) => ({
         browserUrlHistory: browserUrlHistory.filter((entry) => entry.lastVisitedAt < since),
         workspaceDocHistory: workspaceDocHistory.filter((entry) => entry.lastVisitedAt < since)
-      })
+      }))
       return removed
     },
 

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
@@ -33,7 +34,7 @@ const SSH_FILE_PATH = '/srv/workspace/.scratch/preview.png'
 
 function prepareStore() {
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     repos: [
       { id: 'repo-1', path: '/workspace', displayName: 'Repo', badgeColor: '#000', addedAt: 0 }
     ],
@@ -47,7 +48,7 @@ function prepareStore() {
 
 function prepareSshFolderStore() {
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     folderWorkspaces: [
       {
         id: SSH_FOLDER_ID,

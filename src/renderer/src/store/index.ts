@@ -1,5 +1,6 @@
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import { canOfferHttpLinkGroupAction } from '@/lib/http-link-in-group-availability'
-import { create, type StateCreator } from 'zustand'
+import { create } from 'zustand'
 import type { AppState } from './types'
 import { createRepoSlice } from './slices/repos'
 import { createSparsePresetsSlice } from './slices/sparse-presets'
@@ -74,7 +75,7 @@ import { estimateStateCollectionKB } from '@/lib/state-collection-byte-estimate'
 import { registerWindowsPathAccessEnvironments } from '@/lib/windows-path-access'
 
 // Dev-only churn probe cannot be armed in shipped builds; avoid its per-write wrapper. Cascade probe stays enabled for field crash telemetry.
-const withDevelopmentStoreProbes = (createState: StateCreator<AppState, [], []>) =>
+const withDevelopmentStoreProbes = (createState: SessionStateCreator<AppState>) =>
   import.meta.env.DEV || e2eConfig.exposeStore
     ? withStoreIdentityChurnProbe(createState)
     : createState

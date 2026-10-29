@@ -1,3 +1,7 @@
+import { publishSessionChanges, sessionPublication } from '../loading-store/session-publication'
+import { readSessionOperation } from '../loading-store/session-operation'
+import { SessionUnitReader } from '../../../shared/session-unit-reader'
+import { keepFrozenSnapshotUnits } from '../loading-store/session-snapshot-normalization-effects'
 // Apply routed-partition commands first while carrying in-memory editor views through saved-session loads.
 
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
@@ -19,8 +23,7 @@ import {
   type PaneLayoutChange
 } from './terminal-pane-admission'
 import { writeMovedLeafProfileRecords } from './terminal-leaf-move'
-import { writeRestorable } from './restorable-write'
-import { assignWorkspaceSessionPartition } from './terminal-topology-membership'
+import { writeRestorableSession } from './terminal-topology-membership'
 import { resolveWindowPaneDetach, type WindowPaneDetachCommand } from './window-pane-detach'
 import type { TerminalTopologyCommitContext } from './terminal-topology-commit'
 
@@ -34,12 +37,17 @@ export type LayoutCommandRun = {
 // Preserve quiesced WSL rows.
 export function keepFrozen(
   hostId: ExecutionHostId,
-  session: WorkspaceSessionState,
-  context: TerminalTopologyCommitContext
-): WorkspaceSessionState {
-  return hostId === LOCAL_EXECUTION_HOST_ID
-    ? keepWslMoveFrozenSessionsForStore(session, context.getSession(hostId))
-    : session
+  source: WorkspaceSessionState | SessionUnitReader,
+  context: Pick<TerminalTopologyCommitContext, 'getSession'>
+): WorkspaceSessionState | SessionUnitReader {
+  if (hostId !== LOCAL_EXECUTION_HOST_ID) {
+    return source
+  }
+  if (!(source instanceof SessionUnitReader)) {
+    return keepWslMoveFrozenSessionsForStore(source, context.getSession(hostId))
+  }
+  keepFrozenSnapshotUnits(source, source.selection())
+  return source
 }
 
 /** Validate all partition holders before one atomic detach write. */
@@ -49,7 +57,11 @@ export function commitWindowPaneDetach(
   context: TerminalTopologyCommitContext
 ): DurableProfileStateMutation<LayoutApplyOutcome> {
   const resolved = resolveWindowPaneDetach(
-    context.hostIds().map((hostId) => ({ hostId, session: context.getSession(hostId) })),
+    context.hostIds().map((hostId) => ({
+      hostId,
+      session: context.getSession(hostId),
+      prepared: readSessionOperation(context.state, hostId)
+    })),
     hostIds,
     command
   )
@@ -128,7 +140,7 @@ function changeIn(
     hostId,
     change: applyCommandToSession(
       hostId,
-      context.getSession(hostId),
+      readSessionOperation(context.state, hostId),
       command,
       editorViews && partitionEditorViewsOf(editorViews, hostId),
       live
@@ -144,17 +156,50 @@ function written(
 ): DurableProfileStateMutation<LayoutApplyOutcome> {
   const { editorViews } = context
   // View-only changes still need publication even without a durable session write.
-  const viewRestores = applied.flatMap(({ hostId, change }) =>
-    editorViews && change.views ? [keepPartitionEditorViews(editorViews, hostId, change.views)] : []
-  )
+  const relatedViews = new Map<
+    ExecutionHostId,
+    ReadonlyMap<string, { prior: unknown; next: unknown }>
+  >()
+  const viewRestores = applied.flatMap(({ hostId, change }) => {
+    if (!editorViews || !change.views) {
+      return []
+    }
+    const prior = partitionEditorViewsOf(editorViews, hostId) ?? {}
+    const keys =
+      change.changedOwners ?? new Set([...Object.keys(prior), ...Object.keys(change.views)])
+    const edits = new Map(
+      [...keys]
+        .filter((key) => prior[key] !== change.views?.[key])
+        .map((key) => [key, { prior: prior[key], next: change.views?.[key] }])
+    )
+    relatedViews.set(hostId, edits)
+    const restore = keepPartitionEditorViews(
+      editorViews,
+      hostId,
+      change.views,
+      change.changedOwners
+    )
+    if (!change.session) {
+      publishSessionChanges(
+        context.state,
+        hostId,
+        new SessionUnitReader(
+          sessionPublication(context.state).partition(hostId).root,
+          sessionPublication(context.state).partition(hostId).index
+        ).prepare({ kind: 'authoritative', relatedViews: edits })
+      )
+    }
+    return [restore]
+  })
   const sessionRestores = applied.flatMap(({ hostId, change }) =>
     change.session
       ? [
-          writeRestorable(
-            () => context.getSession(hostId),
-            (next) =>
-              context.markDirty(assignWorkspaceSessionPartition(context.state, hostId, next)),
-            keepFrozen(hostId, change.session, context)
+          writeRestorableSession(
+            context.state,
+            hostId,
+            keepFrozen(hostId, change.prepared ?? change.session, context),
+            context.markDirty,
+            relatedViews.get(hostId)
           )
         ]
       : []

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { createTestStore } from '../../worktrees-slice-test-harness'
 import { makeWorktree } from '../../worktrees-slice-test-fixtures'
@@ -46,7 +47,7 @@ describe('worktree no-op notifications', () => {
     (hostId) => {
       const store = createTestStore()
       const worktree = makeWorktree({ id: 'repo1::/path/wt', repoId: 'repo1', hostId })
-      store.setState({ worktreesByRepo: { repo1: [worktree] } })
+      setSessionTestState(store, { worktreesByRepo: { repo1: [worktree] } })
       const target = { id: worktree.id, hostId }
       store.getState().markWorktreesQueuedForDeletion([target])
       store.getState().markWorktreeVisited(worktree.id, 100, hostId)

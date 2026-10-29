@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -84,7 +85,7 @@ beforeEach(() => {
   rpc.supports.mockReset().mockResolvedValue(true)
   replaceRuntimeEnvironmentRevisions([{ id: 'alpha', createdAt: 7 }])
   setLocalRuntimeCapabilitiesForTests([CHAT, CLIENT])
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     ...initial,
     settings: {
       ...getDefaultSettings('/home/me'),
@@ -106,7 +107,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   clearHostAgentMenuSettingsForTests()
-  useAppStore.setState(initial, true)
+  setSessionTestState(useAppStore, initial, true)
   setLocalRuntimeCapabilitiesForTests(null)
   replaceRuntimeEnvironmentRevisions([])
 })

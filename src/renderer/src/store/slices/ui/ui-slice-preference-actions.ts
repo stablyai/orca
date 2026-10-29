@@ -122,11 +122,11 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     setShowDotfilesForWorktree: (worktreeId, showDotfiles) =>
       set((s) => {
         if (!worktreeId) {
-          return s
+          return undefined
         }
         const current = s.showDotfilesByWorktree[worktreeId] ?? true
         if (current === showDotfiles) {
-          return s
+          return undefined
         }
         const next = { ...s.showDotfilesByWorktree }
         // Why: showing dotfiles is the default; only persist worktree-level opt-outs.
@@ -140,7 +140,7 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     toggleShowDotfilesForWorktree: (worktreeId) =>
       set((s) => {
         if (!worktreeId) {
-          return s
+          return undefined
         }
         const nextShowDotfiles = !(s.showDotfilesByWorktree[worktreeId] ?? true)
         const next = { ...s.showDotfilesByWorktree }

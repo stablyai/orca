@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -70,7 +71,7 @@ function useComposedJiraListState() {
 }
 afterEach(() => {
   cleanup()
-  useAppStore.setState(originalState, true)
+  setSessionTestState(useAppStore, originalState, true)
   localStorage.removeItem('orca.jira.has-workspace.v1')
 })
 beforeEach(() => {
@@ -208,7 +209,7 @@ describe('repository-scoped Jira Tasks', () => {
   it('keeps duplicate execution owners ambiguous through the actual Tasks list-state pipeline', () => {
     const localGitRepo: Repo = { ...repo, kind: 'git' }
     const sshGitRepo: Repo = { ...sshRepo, kind: 'git' }
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       settings: null,
       repos: [localGitRepo, sshGitRepo],
       taskPageData: { taskSource: 'jira', preselectedRepoId: repo.id },
@@ -224,7 +225,7 @@ describe('repository-scoped Jira Tasks', () => {
 
   it('keeps linked mode, saved filters, and the project override in the composed list state', async () => {
     localStorage.removeItem('orca.jira.has-workspace.v1')
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       settings: null,
       repos: [repo],
       taskPageData: { taskSource: 'jira', preselectedRepoId: repo.id },

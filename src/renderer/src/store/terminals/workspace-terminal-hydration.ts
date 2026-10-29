@@ -1,3 +1,4 @@
+import { replaceSessionSourceFields } from '@/store/session-source-write-boundary'
 import type { WorkspaceKey } from '../../../../shared/folder-workspace-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
@@ -212,9 +213,12 @@ export function createWorkspaceTerminalHydrationActions(
             )
           )
         }
-        return options?.replaceWorkspaceKeys
-          ? targetScopedWorkspaceHydrationPatch(s, hydrated, session, options)
-          : hydrated
+        return replaceSessionSourceFields(
+          options?.replaceWorkspaceKeys
+            ? targetScopedWorkspaceHydrationPatch(s, hydrated, session, options)
+            : hydrated,
+          'hydration'
+        )
       })
       for (const [tabId, transfers] of ownershipTransfersByTabId) {
         transferNormalizedTerminalLayoutPtyOwnership(get(), tabId, transfers)

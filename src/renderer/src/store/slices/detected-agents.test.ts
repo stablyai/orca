@@ -1,7 +1,9 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
+import { withSessionSourceTestWrites } from '@/lib/test-support/session-source-test-store'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
-import type { Repo } from '../../../../shared/repo-types'
+import { makeDetectedRepo as makeRepo } from './runtime-detected-agents.test-fixture'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { _getRemoteDetectPromiseCountForTest, createDetectedAgentsSlice } from './detected-agents'
 import {
@@ -38,13 +40,16 @@ globalThis.window = {
 
 function createTestStore(initial?: Partial<AppState>) {
   const store = create<AppState>()(
-    (...a) =>
-      ({
-        ...createDetectedAgentsSlice(...a),
-        ...createRuntimeDetectedAgentsSlice(...a)
-      }) as AppState
+    withSessionSourceTestWrites(
+      (...a) =>
+        ({
+          ...createDetectedAgentsSlice(...a),
+          ...createRuntimeDetectedAgentsSlice(...a)
+        }) as AppState
+    )
   )
-  store.setState({
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+  setSessionTestState(store, {
     repos: [],
     worktreesByRepo: {},
     activeRepoId: null,
@@ -52,15 +57,6 @@ function createTestStore(initial?: Partial<AppState>) {
     ...initial
   } as Partial<AppState>)
   return store
-}
-
-function makeRepo(overrides: Partial<Repo> & { id: string; path: string }): Repo {
-  return {
-    displayName: 'Repo',
-    badgeColor: '#000000',
-    addedAt: 0,
-    ...overrides
-  }
 }
 
 function makeWorktree(
@@ -237,7 +233,8 @@ describe('createDetectedAgentsSlice WSL context', () => {
     await expect(store.getState().ensureDetectedAgents()).resolves.toEqual(['claude'])
     expect(store.getState().detectedAgentIds).toEqual(['claude'])
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This settings fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       settings: {
         terminalWindowsShell: 'wsl.exe'
       } as AppState['settings']
@@ -434,7 +431,8 @@ describe('createDetectedAgentsSlice WSL context', () => {
     await expect(store.getState().ensureDetectedAgents()).resolves.toEqual(['claude'])
     expect(store.getState().detectedAgentIds).toEqual(['claude'])
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       repos: [makeRepo({ id: 'repo-1', path: 'C:\\repo' })],
       activeRepoId: 'repo-1',
       activeWorktreeId: null
@@ -549,7 +547,10 @@ describe('createDetectedAgentsSlice remote detection', () => {
 
   it('deduplicates concurrent SSH refreshes', async () => {
     const store = createTestStore()
-    store.setState({ remoteDetectedAgentIds: { 'ssh-1': ['claude'] } } as Partial<AppState>)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This remoteDetectedAgentIds fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
+      remoteDetectedAgentIds: { 'ssh-1': ['claude'] }
+    } as Partial<AppState>)
     let resolveRemote: (ids: string[]) => void = () => {}
     detectRemoteAgents.mockReturnValueOnce(
       new Promise<string[]>((resolve) => {
@@ -839,7 +840,10 @@ describe('createDetectedAgentsSlice remote detection', () => {
 
   it('does not retry ordinary runtime refresh failures with a second RPC', async () => {
     const store = createTestStore()
-    store.setState({ runtimeDetectedAgentIds: { 'env-1': ['claude'] } } as Partial<AppState>)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This runtimeDetectedAgentIds fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
+      runtimeDetectedAgentIds: { 'env-1': ['claude'] }
+    } as Partial<AppState>)
     runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
       if (method === 'status.get') {
         return Promise.resolve({

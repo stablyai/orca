@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
@@ -27,7 +28,7 @@ describe('TabsSlice', () => {
   describe('reconcileWorktreeTabModel', () => {
     it('drops unified tabs whose backing content no longer exists', () => {
       const groupId = 'g-1'
-      store.setState({
+      setSessionTestState(store, {
         unifiedTabsByWorktree: {
           [WT]: [
             {
@@ -69,7 +70,7 @@ describe('TabsSlice', () => {
 
     // Reconnect-map-only liveness must prevent orphan sweep from deleting terminals before rebind (#9911).
     it('keeps a reconnecting terminal whose live session survives only in a reconnect map', () => {
-      store.setState({
+      setSessionTestState(store, {
         tabsByWorktree: {
           [WT]: [
             {
@@ -102,7 +103,7 @@ describe('TabsSlice', () => {
     })
 
     it('restores a marker-only terminal when the host loss omitted its unified row', () => {
-      store.setState({
+      setSessionTestState(store, {
         tabsByWorktree: {
           [WT]: [
             {
@@ -136,7 +137,7 @@ describe('TabsSlice', () => {
     // Mirrored layouts could append a second leaf for one group and repeat tab strips; collapse duplicates.
     it('collapses a layout that repeats one group across leaves', () => {
       const groupId = 'g-1'
-      store.setState({
+      setSessionTestState(store, {
         unifiedTabsByWorktree: {
           [WT]: [
             {
@@ -197,7 +198,7 @@ describe('TabsSlice', () => {
     it('keeps simulator tabs because they reconnect their own backing stream', () => {
       const terminalGroupId = 'g-terminal'
       const simulatorGroupId = 'g-simulator'
-      store.setState({
+      setSessionTestState(store, {
         unifiedTabsByWorktree: {
           [WT]: [
             {
@@ -291,7 +292,7 @@ describe('TabsSlice', () => {
 
     it('keeps a structured session activation target during worktree reconciliation', () => {
       const groupId = 'g-structured'
-      store.setState({
+      setSessionTestState(store, {
         unifiedTabsByWorktree: {
           [WT]: [
             {
@@ -369,7 +370,7 @@ describe('TabsSlice', () => {
     it('collapses empty split groups when reconciliation drops a stale tab', () => {
       const terminalGroupId = 'g-terminal'
       const staleGroupId = 'g-stale'
-      store.setState({
+      setSessionTestState(store, {
         unifiedTabsByWorktree: {
           [WT]: [
             {
@@ -456,7 +457,7 @@ describe('TabsSlice', () => {
     it('restores live runtime terminal tabs into the unified tab model', () => {
       const runtimeTerminalId = 'runtime-terminal-1'
 
-      store.setState({
+      setSessionTestState(store, {
         tabsByWorktree: {
           [WT]: [
             {
@@ -511,7 +512,7 @@ describe('TabsSlice', () => {
       const firstTerminalId = 'runtime-terminal-1'
       const secondTerminalId = 'runtime-terminal-2'
 
-      store.setState({
+      setSessionTestState(store, {
         tabsByWorktree: {
           [WT]: [
             {

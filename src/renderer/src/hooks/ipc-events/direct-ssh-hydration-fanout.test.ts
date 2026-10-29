@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
@@ -17,7 +18,7 @@ describe('direct SSH hydration fanout', () => {
   const unsubs: (() => void)[] = []
 
   beforeEach(() => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       sshTargetLabels: new Map(),
       removedSshTargetLabels: new Map(),
       sshTargetsHydrated: false,

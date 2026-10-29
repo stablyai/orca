@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { cleanup, renderHook } from '@testing-library/react'
@@ -37,7 +38,7 @@ function seedFutureStampedTurn(stateStartedAt: number): void {
     paneKey: PANE_KEY,
     stateHistory: []
   }
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     activeView: 'terminal',
     activeTabId: TAB_ID,
     activeWorktreeId: 'wt-1',

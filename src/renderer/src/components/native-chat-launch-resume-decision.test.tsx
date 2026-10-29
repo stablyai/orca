@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 // Suppress other continuation offers until the launch decides and publishes the chats it will resume atomically.
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -63,7 +64,7 @@ beforeEach(() => {
   rpc.mockReset()
   _resetNativeChatRestartOffer()
   _resetNativeChatLaunchResumeDecision()
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
   seen.length = 0
   container = document.createElement('div')
   document.body.appendChild(container)

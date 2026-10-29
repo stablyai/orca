@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act, renderHook } from '@testing-library/react'
@@ -147,13 +148,13 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   vi.unstubAllGlobals()
 })
 
 describe('issue #8135: deleting a remote SSH folder file', () => {
   it('keeps an inferred SSH folder workspace off the focused runtime', async () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       settings: { activeRuntimeEnvironmentId: 'focused-env' } as never,
       folderWorkspaces: [makeFolderWorkspace()],
       projectGroups: [makeProjectGroup()],
@@ -196,7 +197,7 @@ describe('issue #8135: deleting a remote SSH folder file', () => {
   })
 
   it('fails closed for an ambiguous folder even when a runtime is focused', async () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       settings: { activeRuntimeEnvironmentId: 'focused-env' } as never,
       folderWorkspaces: [makeFolderWorkspace()],
       projectGroups: [makeProjectGroup()],
@@ -236,7 +237,7 @@ describe('issue #8135: deleting a remote SSH folder file', () => {
   })
 
   it('stops while the SSH owner is unresolved instead of deleting locally', async () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [],
       worktreesByRepo: {}
     })
@@ -259,7 +260,7 @@ describe('issue #8135: deleting a remote SSH folder file', () => {
   })
 
   it('routes a runtime-owned folder workspace with its synthetic worktree path', async () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       settings: { activeRuntimeEnvironmentId: 'focused-env' } as never,
       folderWorkspaces: [makeFolderWorkspace({ folderPath: '/tmp/project' })],
       projectGroups: [

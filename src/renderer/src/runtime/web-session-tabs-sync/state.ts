@@ -1,3 +1,4 @@
+import type { SessionSourceEdit } from '../../store/session-source-edits'
 import type { AppState } from '../../store'
 import type {
   RuntimeMobileSessionAgentTab,
@@ -278,6 +279,7 @@ export type WebSessionOpenFilesIndex = {
   byWorktree: Map<string, OpenFile[]>
 }
 export type WebSessionTabsBatchContext = {
+  sourceEdit?: SessionSourceEdit<WebSessionTabsSyncState>
   changedAgentPaneKeys?: Set<string>
   retractionPaneKeysByRecord?: WeakMap<object, Map<string, Set<string>>>
   agentPaneKeysByTabId: Map<string, Set<string>> | null

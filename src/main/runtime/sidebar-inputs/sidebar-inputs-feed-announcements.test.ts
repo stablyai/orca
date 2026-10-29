@@ -111,7 +111,10 @@ async function host() {
       'paired server rows': () => revisions.paired.bump(),
       // Only a paired server's partition holds activity (its browser and chat tabs).
       'saved session': () =>
-        store.patchWorkspaceSession({ activeTabId: 'tab-1' }, toRuntimeExecutionHostId('env-1'))
+        store.patchWorkspaceSession(
+          { mapDeltas: { unifiedTabs: { set: { [worktree.id]: [] } } } },
+          toRuntimeExecutionHostId('env-1')
+        )
     },
     temporal: { 'retention owner': () => temporal.forEach((listener) => listener()) },
     creations: { 'lifecycle queue': () => revisions.creations.bump() },

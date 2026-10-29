@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it } from 'vitest'
 import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { createTestStore, makeTab, makeWorktree, TEST_REPO } from './store-test-helpers'
@@ -13,7 +14,7 @@ describe('createSshSlice', () => {
     const staleLastKnownPtyId = toAppSshPtyId(targetId, 'pty-last-known')
     const otherPtyId = toAppSshPtyId(otherTargetId, 'pty-other')
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { ...TEST_REPO, id: 'repo-ssh', connectionId: targetId },
         { ...TEST_REPO, id: 'repo-other', connectionId: otherTargetId }
@@ -159,7 +160,7 @@ describe('createSshSlice', () => {
     const removedPtyId = toAppSshPtyId(removedTargetId, 'pty-a')
     const survivingPtyId = toAppSshPtyId(survivingTargetId, 'pty-b')
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         {
           ...TEST_REPO,
@@ -319,7 +320,7 @@ describe('createSshSlice', () => {
         { targetId: 'ssh-1', status: 'connected' as const, error: null, reconnectAttempt: 0 }
       ]
     ])
-    store.setState({ sshConnectionStates, sshConnectedGeneration: 1 })
+    setSessionTestState(store, { sshConnectionStates, sshConnectedGeneration: 1 })
     const previousState = store.getState()
 
     store.getState().setSshConnectionState('ssh-1', {
@@ -441,7 +442,7 @@ describe('createSshSlice', () => {
     const deferredSshSessionIdsByTabId = {
       'tab-other': toAppSshPtyId('ssh-2', 'pty-2')
     }
-    store.setState({
+    setSessionTestState(store, {
       sshConnectionStates,
       sshTargetLabels,
       portForwardsByConnection,

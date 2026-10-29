@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { dashboardCardDisplayState } from '../../../../shared/dashboard-snapshot'
@@ -377,7 +378,7 @@ describe('native status publication to a mounted popout', () => {
     async (executionHostId) => {
       vi.useFakeTimers()
       vi.setSystemTime(NOW)
-      useAppStore.setState(initialStoreState, true)
+      setSessionTestState(useAppStore, initialStoreState, true)
       const nativeTab = (
         id: string,
         worktreeId: string,
@@ -401,7 +402,7 @@ describe('native status publication to a mounted popout', () => {
         }) satisfies StructuredTab
       const target = nativeTab('tab1', 'w1', 'claude')
       const other = nativeTab('tab2', 'w2', 'codex', 'runtime:other')
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         ...baseState(),
         tabsByWorktree: {},
         agentStatusByPaneKey: {},
@@ -582,7 +583,7 @@ describe('native status publication to a mounted popout', () => {
     async (count) => {
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
       vi.setSystemTime(NOW)
-      useAppStore.setState(initialStoreState, true)
+      setSessionTestState(useAppStore, initialStoreState, true)
       const tabs = Array.from({ length: count }, (_, i) => tab(`scale-${i}`, 'w1'))
       const entries = Object.fromEntries(
         tabs.map((t) => {
@@ -590,7 +591,7 @@ describe('native status publication to a mounted popout', () => {
           return [paneKey, entry(paneKey, t.id, 'w1')]
         })
       )
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         ...baseState(),
         tabsByWorktree: { w1: tabs },
         agentStatusByPaneKey: entries,

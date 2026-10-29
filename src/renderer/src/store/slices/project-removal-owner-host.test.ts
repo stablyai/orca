@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // Require exact host row on removal: unique-candidate/focused fallbacks can destroy the other host’s same-ID project (#13071).
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -87,7 +88,7 @@ describe('project removal stays on its owner host (#13071)', () => {
   it('leaves the only remaining row alone when the named host has no row', async () => {
     const store = createTestStore()
     // Host A's row dropped from the catalog; host B's row is the unique candidate for the id.
-    store.setState({ repos: [runtimeRow] })
+    setSessionTestState(store, { repos: [runtimeRow] })
 
     await store.getState().removeProject('same-repo', { hostId: 'local' })
 
@@ -99,7 +100,7 @@ describe('project removal stays on its owner host (#13071)', () => {
 
   it('purges a destroyed SSH host row without touching the same id on the focused host', async () => {
     const store = createTestStore()
-    store.setState({ repos: [localRow, sshRow] })
+    setSessionTestState(store, { repos: [localRow, sshRow] })
 
     await purgeOrphanedRuntimeSshProjects(store.getState, ['target-1'])
 
@@ -113,7 +114,7 @@ describe('project removal stays on its owner host (#13071)', () => {
 
   it('removes every row an owned group holds under the id, each on its own host', async () => {
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       projectGroups: [group],
       repos: [
         { ...localRow, projectGroupId: group.id },
@@ -148,7 +149,7 @@ describe('project removal stays on its owner host (#13071)', () => {
     const store = createTestStore()
     const otherGroup: ProjectGroup = { ...group, id: 'group-2', name: 'Other' }
     const outsideSshRow: Repo = { ...sshRow, projectGroupId: otherGroup.id }
-    store.setState({
+    setSessionTestState(store, {
       projectGroups: [group, otherGroup],
       repos: [{ ...localRow, projectGroupId: group.id }, outsideSshRow]
     })
@@ -171,7 +172,7 @@ describe('project removal stays on its owner host (#13071)', () => {
     const store = createTestStore()
     const unstampedGroup: ProjectGroup = { ...group, executionHostId: undefined }
     const memberSshRow: Repo = { ...sshRow, projectGroupId: unstampedGroup.id }
-    store.setState({ projectGroups: [unstampedGroup], repos: [localRow, memberSshRow] })
+    setSessionTestState(store, { projectGroups: [unstampedGroup], repos: [localRow, memberSshRow] })
 
     const result = await store.getState().deleteProjectGroupWithContainedProjects(group.id, {
       removeContainedProjects: true
@@ -191,7 +192,7 @@ describe('project removal stays on its owner host (#13071)', () => {
     const store = createTestStore()
     const worktreeId = 'same-repo::/work/same'
     const sshTwin = makeWorktree({ id: worktreeId, repoId: 'same-repo', hostId: 'ssh:target-1' })
-    store.setState({
+    setSessionTestState(store, {
       repos: [localRow, sshRow],
       worktreesByRepo: {
         'same-repo': [
@@ -269,7 +270,7 @@ describe('removal stays host-scoped when this catalog is stale (#13071)', () => 
       ])
       const store = createTestStore()
       // Another window added the SSH twin; this renderer has not refreshed yet.
-      store.setState({ repos: [{ ...localRow, kind }] })
+      setSessionTestState(store, { repos: [{ ...localRow, kind }] })
 
       await store.getState().removeProject('same-repo', { hostId: 'local' })
 
@@ -287,7 +288,7 @@ describe('removal stays host-scoped when this catalog is stale (#13071)', () => 
         { id: 'same-repo', hostId: 'ssh:target-1', kind }
       ])
       const store = createTestStore()
-      store.setState({ repos: [{ ...sshRow, kind }] })
+      setSessionTestState(store, { repos: [{ ...sshRow, kind }] })
 
       await store.getState().removeProject('same-repo', { hostId: 'ssh:target-1' })
 
@@ -299,7 +300,7 @@ describe('removal stays host-scoped when this catalog is stale (#13071)', () => 
   it('never falls back to id-only removal when the selected row is already gone in main', async () => {
     const main = stubMainCatalog([{ id: 'same-repo', hostId: 'ssh:target-1', kind: 'git' }])
     const store = createTestStore()
-    store.setState({ repos: [localRow] })
+    setSessionTestState(store, { repos: [localRow] })
 
     await store.getState().removeProject('same-repo', { hostId: 'local' })
 

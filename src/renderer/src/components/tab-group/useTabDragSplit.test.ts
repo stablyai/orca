@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 /**
  * @vitest-environment happy-dom
  */
@@ -144,7 +145,7 @@ function renderDragHook(
 
 beforeEach(() => {
   layoutOwner.drop.mockClear()
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     activeWorktreeId: WT,
     activeGroupIdByWorktree: { [WT]: 'group-1' },
     groupsByWorktree: {
@@ -412,7 +413,10 @@ describe('useTabDragSplit', () => {
     )
     const activeData = makeDragData('group-1')
     const dropUnifiedTab = vi.fn(() => true)
-    useAppStore.setState({ dropUnifiedTab } as Partial<ReturnType<typeof useAppStore.getState>>)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This dropUnifiedTab fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(useAppStore, { dropUnifiedTab } as Partial<
+      ReturnType<typeof useAppStore.getState>
+    >)
 
     const drag = renderDragHook()
 
@@ -445,7 +449,10 @@ describe('useTabDragSplit', () => {
     )
     const activeData = makeDragData('group-1')
     const dropUnifiedTab = vi.fn(() => true)
-    useAppStore.setState({ dropUnifiedTab } as Partial<ReturnType<typeof useAppStore.getState>>)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This dropUnifiedTab fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(useAppStore, { dropUnifiedTab } as Partial<
+      ReturnType<typeof useAppStore.getState>
+    >)
 
     const drag = renderDragHook()
 

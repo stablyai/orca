@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore, mockApi, resetRemoteRuntimeMocks } from './github-slice-test-harness'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
@@ -38,7 +39,7 @@ describe('work items fetched for a repo id two hosts share', () => {
 
   it('carry the host of the row that returned them, on the first page', async () => {
     const store = createTestStore()
-    store.setState({ repos: [localRow, sshRow] })
+    setSessionTestState(store, { repos: [localRow, sshRow] })
 
     const result = await store
       .getState()
@@ -49,7 +50,7 @@ describe('work items fetched for a repo id two hosts share', () => {
 
   it('carry the host of the row that returned them, on later pages', async () => {
     const store = createTestStore()
-    store.setState({ repos: [localRow, sshRow] })
+    setSessionTestState(store, { repos: [localRow, sshRow] })
 
     const result = await store
       .getState()

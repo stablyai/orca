@@ -41,17 +41,17 @@ export async function startKeepingFailedPane<T>(
 }
 
 export abstract class OrcaRuntimeWithFailedStartPanes extends OrcaRuntimeWithCreateTerminal {
-  protected abstract markPaneLiveTitlesDirty(): void
+  protected abstract markPaneLiveTitlesDirty(ptyId?: string, paneKey?: string): void
   abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
 
   /** Switch point: main's starts into panes it already holds, published until each binds. */
   protected readonly paneStartStatuses = ORCA_LAYOUT_OWNER_IS_MAIN
-    ? new PaneStartStatuses(() => this.markPaneLiveTitlesDirty())
+    ? new PaneStartStatuses((paneKey) => this.markPaneLiveTitlesDirty(undefined, paneKey))
     : null
 
   /** Switch point: whether main's start of a pane resumed its agent, published while it stays bound. */
   protected readonly paneResumeOutcomes = ORCA_LAYOUT_OWNER_IS_MAIN
-    ? new PaneResumeOutcomes(() => this.markPaneLiveTitlesDirty())
+    ? new PaneResumeOutcomes((paneKey) => this.markPaneLiveTitlesDirty(undefined, paneKey))
     : null
 
   /**

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act, renderHook } from '@testing-library/react'
@@ -46,7 +47,7 @@ const worktreeId = `repo::${root}`
 beforeEach(() => {
   vi.clearAllMocks()
   clearFileExplorerUndoHistory()
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     repos: [],
     activeWorktreeId: worktreeId,
     worktreesByRepo: {
@@ -54,7 +55,7 @@ beforeEach(() => {
     }
   })
 })
-afterEach(() => useAppStore.setState(initialState, true))
+afterEach(() => setSessionTestState(useAppStore, initialState, true))
 
 it('undo of a delete never replaces a file recreated at the same path', async () => {
   mocks.write.mockResolvedValue({ ok: false, diskConflict: 'changed' })

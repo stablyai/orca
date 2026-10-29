@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { createEditorStore, createEditorTabsStore } from './editor-slice-test-harness'
 import { makeLayout, makeTab } from './store-test-helpers'
@@ -62,7 +63,7 @@ describe('createEditorSlice right sidebar state', () => {
 
   it('scopes the focus request to the unified tab that will render the file', async () => {
     const store = createEditorTabsStore()
-    store.setState({
+    setSessionTestState(store, {
       tabsByWorktree: { 'wt-1': [makeTab({ id: 'terminal-1', worktreeId: 'wt-1' })] },
       terminalLayoutsByTabId: { 'terminal-1': makeLayout() },
       // The session read-back main loads from reads these; this partial store lacks them.

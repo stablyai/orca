@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { defaultScopeHost } from '@/lib/default-creation-host'
@@ -16,7 +17,7 @@ describe('Codex account switch recheck against main', () => {
 
   beforeEach(() => {
     listStalePanes.mockReset().mockResolvedValue([])
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       settings: null,
       tabsByWorktree: {
         wt1: [

@@ -1,4 +1,6 @@
-import { createStore, type StoreApi } from 'zustand/vanilla'
+import { withSessionSourceTestWrites } from '@/lib/test-support/session-source-test-store'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
+import { createStore } from 'zustand/vanilla'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AppState } from '../types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
@@ -10,19 +12,6 @@ import {
   createWorktreeNavHistorySlice,
   setWorktreeNavActivator
 } from './worktree-nav-history'
-
-type MinimalState = Pick<
-  AppState,
-  | 'worktreeNavHistory'
-  | 'worktreeNavHistoryIndex'
-  | 'isNavigatingHistory'
-  | 'recordWorktreeVisit'
-  | 'recordViewVisit'
-  | 'goBackWorktree'
-  | 'goForwardWorktree'
-  | 'worktreesByRepo'
-  | 'folderWorkspaces'
->
 
 function makeWorktree(id: string): Worktree {
   // Only `id` is read by findWorktreeById, which is what the slice uses for
@@ -48,22 +37,26 @@ function makeFolderWorkspace(id: string): FolderWorkspace {
   }
 }
 
-function createHistoryStore(
-  worktreeIds: string[] = [],
-  folderWorkspaceIds: string[] = []
-): StoreApi<MinimalState> {
+function createHistoryStore(worktreeIds: string[] = [], folderWorkspaceIds: string[] = []) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return createStore<any>()((set, get, api) => ({
-    worktreesByRepo: {
-      'repo-1': worktreeIds.map(makeWorktree)
-    },
-    folderWorkspaces: folderWorkspaceIds.map(makeFolderWorkspace),
-    ...createWorktreeNavHistorySlice(
-      set as Parameters<typeof createWorktreeNavHistorySlice>[0],
-      get as Parameters<typeof createWorktreeNavHistorySlice>[1],
-      api as Parameters<typeof createWorktreeNavHistorySlice>[2]
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+  return createStore<AppState>()(
+    withSessionSourceTestWrites(
+      (set, get, api) =>
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+        ({
+          worktreesByRepo: {
+            'repo-1': worktreeIds.map(makeWorktree)
+          },
+          folderWorkspaces: folderWorkspaceIds.map(makeFolderWorkspace),
+          ...createWorktreeNavHistorySlice(
+            set as Parameters<typeof createWorktreeNavHistorySlice>[0],
+            get as Parameters<typeof createWorktreeNavHistorySlice>[1],
+            api as Parameters<typeof createWorktreeNavHistorySlice>[2]
+          )
+        }) as unknown as AppState
     )
-  })) as unknown as StoreApi<MinimalState>
+  )
 }
 
 describe('worktree-nav-history slice: recordWorktreeVisit', () => {
@@ -229,7 +222,7 @@ describe('worktree-nav-history selectors', () => {
 
     expect(canGoBackWorktreeHistory(store.getState() as AppState)).toBe(false)
 
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {
         'repo-1': [makeWorktree('a'), makeWorktree('c')]
       }
@@ -247,7 +240,7 @@ describe('worktree-nav-history selectors', () => {
 
     expect(canGoForwardWorktreeHistory(store.getState() as AppState)).toBe(false)
 
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {
         'repo-1': [makeWorktree('a'), makeWorktree('c')]
       }

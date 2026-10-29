@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act, renderHook } from '@testing-library/react'
@@ -136,7 +137,8 @@ function seedStore(
   overrides: Partial<AppState> = {},
   executionHostId?: Tab['executionHostId']
 ): void {
-  useAppStore.setState(
+  setSessionTestState(
+    useAppStore,
     {
       ...initialAppState,
       repos: [repo],
@@ -361,7 +363,7 @@ describe('useOpenTabSearch', () => {
 
     const state = useAppStore.getState()
     act(() => {
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         unifiedTabsByWorktree: {
           ...state.unifiedTabsByWorktree,
           'wt-1': [
@@ -396,7 +398,7 @@ describe('useOpenTabSearch', () => {
     clock.mockReturnValue(2_000)
     const state = useAppStore.getState()
     act(() => {
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         unifiedTabsByWorktree: {
           ...state.unifiedTabsByWorktree,
           'wt-1': (state.unifiedTabsByWorktree['wt-1'] ?? []).map((tab) =>

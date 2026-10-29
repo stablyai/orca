@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { buildBrowserPage, buildWorkspaceFromPage } from '@/store/slices/browser-page-records'
 import {
@@ -57,7 +58,7 @@ describe('browser destination scope', () => {
     'places a hostless %s source owned by %s (%s) on %s',
     (kind, hostId, runtimeOwner, destinationHostId) => {
       const workspaceId = kind === 'folder' ? 'folder:legacy' : WORKSPACE
-      store.setState((state) => ({
+      setSessionTestState(store, (state) => ({
         activeWorktreeId: workspaceId,
         activeWorkspaceExecutionHostId: hostId,
         worktreesByRepo: {
@@ -108,7 +109,7 @@ describe('browser destination scope', () => {
       sessionProfileId: null,
       activate: false
     })
-    store.setState((state) => ({
+    setSessionTestState(store, (state) => ({
       unifiedTabsByWorktree: {
         [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.map((tab) => ({
           ...tab,
@@ -128,7 +129,7 @@ describe('browser destination scope', () => {
       browserOpenResultForPage(state, destination, existing.id, existing.activePageId!)
     ).toMatchObject({ groupId: 'b', browserWorkspaceId: existing.id })
 
-    store.setState({ browserTabsByWorktree: {} })
+    setSessionTestState(store, { browserTabsByWorktree: {} })
     expect(selectBrowserLinkDestination(store.getState(), destination, intent)).toMatchObject({
       status: 'ready',
       split: { sourceGroupId: 'a', splitDirection: 'right' },
@@ -146,7 +147,7 @@ describe('browser destination scope', () => {
         sessionProfileId: null,
         activate: false
       })
-      store.setState((state) => ({
+      setSessionTestState(store, (state) => ({
         ...(catalog === 'listed'
           ? {
               worktreesByRepo: {
@@ -212,7 +213,7 @@ describe('browser destination scope', () => {
 
   it('refuses hostless folder twins despite an active host selection', () => {
     const workspaceId = 'folder:legacy'
-    store.setState((state) => ({
+    setSessionTestState(store, (state) => ({
       activeWorktreeId: workspaceId,
       folderWorkspaces: [
         makeFolderWorkspace({ id: 'legacy', executionHostId: 'local' }),
@@ -312,14 +313,14 @@ describe('browser destination scope', () => {
       activate: false
     })
     const tabs = store.getState().unifiedTabsByWorktree[WORKSPACE]!
-    store.setState({
+    setSessionTestState(store, {
       unifiedTabsByWorktree: { [WORKSPACE]: tabs.filter((tab) => tab.entityId !== existing.id) }
     })
     const intent = captureLinkOpenIntent(store.getState(), WORKSPACE, 'source')
     expect(
       selectBrowserLinkDestination(store.getState(), browserLinkTestDestination(), intent)
     ).toMatchObject({ split: { sourceGroupId: 'a' }, match: null })
-    store.setState({
+    setSessionTestState(store, {
       unifiedTabsByWorktree: {
         [WORKSPACE]: [
           ...store.getState().unifiedTabsByWorktree[WORKSPACE]!,
@@ -346,7 +347,7 @@ describe('browser destination scope', () => {
       browserRuntimeEnvironmentId: null,
       activate: true
     })
-    store.setState((state) => ({
+    setSessionTestState(store, (state) => ({
       unifiedTabsByWorktree: {
         [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.map((tab) =>
           tab.id === 'source' ? { ...tab, groupId: 'b' } : tab
@@ -357,7 +358,7 @@ describe('browser destination scope', () => {
     expect(
       selectBrowserLinkDestination(store.getState(), browserLinkTestDestination(), intent)
     ).toMatchObject({ groupId: 'a', match: null })
-    store.setState((state) => ({
+    setSessionTestState(store, (state) => ({
       groupsByWorktree: {
         [WORKSPACE]: state.groupsByWorktree[WORKSPACE]!.map((group) =>
           group.id === 'a' ? { ...group, activeTabId: 'source' } : group

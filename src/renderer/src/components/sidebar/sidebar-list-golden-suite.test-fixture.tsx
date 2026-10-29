@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, renderHook } from '@testing-library/react'
 import { useMemo } from 'react'
@@ -108,7 +109,7 @@ export function useGoldenSidebarPipeline(
 }
 
 function captureGolden(state: Partial<AppState>): string {
-  useAppStore.setState(state)
+  setSessionTestState(useAppStore, state)
   const { result, unmount } = renderHook(() => useGoldenSidebarPipeline())
   const { visibleWorktrees, rowModel, selection } = result.current
   const statuses = useAppStore.getState().workspaceStatuses
@@ -186,7 +187,7 @@ function viewLabel(view: GoldenView): string {
 
 export function captureScenario(view: GoldenView, overrides: Partial<AppState> = {}): string {
   const expanded = captureGolden(buildGoldenStoreState(view, overrides))
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   const collapsed = collapsedKeysFrom(expanded)
   const collapsedOutput = captureGolden(
     buildGoldenStoreState({ ...view, collapsedGroups: collapsed }, overrides)
@@ -201,12 +202,12 @@ export function defineSidebarListGoldens(goldenDir: string): void {
     beforeEach(() => {
       vi.useFakeTimers({ toFake: ['Date'] })
       vi.setSystemTime(GOLDEN_NOW)
-      useAppStore.setState(initialState, true)
+      setSessionTestState(useAppStore, initialState, true)
     })
 
     afterEach(() => {
       cleanup()
-      useAppStore.setState(initialState, true)
+      setSessionTestState(useAppStore, initialState, true)
       vi.useRealTimers()
     })
 
@@ -225,7 +226,7 @@ export function defineSidebarListGoldens(goldenDir: string): void {
                 collapsedGroups: new Set()
               }
               appendCapture(sections, seen, viewLabel(view), captureScenario(view))
-              useAppStore.setState(initialState, true)
+              setSessionTestState(useAppStore, initialState, true)
             }
           }
         }
@@ -265,7 +266,7 @@ export function defineSidebarListGoldens(goldenDir: string): void {
               `groupBy=${groupBy} pinnedInGroups=${pinnedInGroups}`,
               captureScenario(view, overrides)
             )
-            useAppStore.setState(initialState, true)
+            setSessionTestState(useAppStore, initialState, true)
           }
         }
         await expect(`${sections.join('\n')}\n`).toMatchFileSnapshot(
@@ -293,7 +294,7 @@ export function defineSidebarListGoldens(goldenDir: string): void {
               `groupBy=${groupBy} sort=${sortBy} projectOrder=${projectOrderBy}`,
               captureGolden(buildGoldenStoreState(view, goldenNameOrderState()))
             )
-            useAppStore.setState(initialState, true)
+            setSessionTestState(useAppStore, initialState, true)
           }
         }
       }
@@ -310,7 +311,7 @@ export function defineSidebarListGoldens(goldenDir: string): void {
         pinnedInGroups: false,
         collapsedGroups: new Set()
       })
-      useAppStore.setState(state)
+      setSessionTestState(useAppStore, state)
       const fullState = useAppStore.getState()
       const repoMap = getRepoMapFromState(fullState)
       const options = buildVisibleWorktreeOptionsFromState(fullState, repoMap)

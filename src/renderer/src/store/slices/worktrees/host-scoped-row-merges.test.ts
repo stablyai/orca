@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { CreateWorktreeResult } from '../../../../../shared/worktree/create-types'
 import { applyCreatedWorktree } from './create/created-worktree-state-merge'
@@ -104,7 +105,7 @@ describe('row writers touch only the copy on their own host', () => {
     const localChild = { ...local, parentWorktreeId: PARENT_ID }
     const remoteChild = { ...remote, parentWorktreeId: PARENT_ID }
     const remoteParent = parent(remote)
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: { [REPO_ID]: [localChild, remoteChild, parent(local), remoteParent] }
     })
     applyWorktreeLineageUpdate(store.setState, WORKTREE_ID, {
@@ -126,7 +127,7 @@ describe('row writers touch only the copy on their own host', () => {
   it("never appends a server's copy when only the local twin is listed", () => {
     const store = createTestStore()
     const { local } = seedTwins(store)
-    store.setState({ worktreesByRepo: { [REPO_ID]: [local] } })
+    setSessionTestState(store, { worktreesByRepo: { [REPO_ID]: [local] } })
     applyWorktreeLineageUpdate(store.setState, WORKTREE_ID, {
       target: { kind: 'environment', environmentId: 'hub' },
       hostId: 'runtime:hub',

@@ -1,3 +1,5 @@
+import type { AppState } from '@/store/types'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
 import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -118,7 +120,7 @@ describe('browser link placement and exact page activation', () => {
   it('prefers the focused visible browser, otherwise the most recently focused one', async () => {
     const left = browser('b', 'https://left.example/')
     const right = browser('c', 'https://right.example/')
-    store.setState((state) => ({
+    setSessionTestState(store, (state): Partial<AppState> => ({
       unifiedTabsByWorktree: {
         [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.map((tab) => ({
           ...tab,
@@ -145,7 +147,7 @@ describe('browser link placement and exact page activation', () => {
     expect(
       selectBrowserLinkDestination(store.getState(), destination, context().linkIntent)
     ).toMatchObject({ groupId: 'c' })
-    store.setState((state) => ({
+    setSessionTestState(store, (state): Partial<AppState> => ({
       unifiedTabsByWorktree: {
         [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.map((tab) => ({
           ...tab,
@@ -302,7 +304,7 @@ describe('browser link placement and exact page activation', () => {
 
   it('follows source movement while an explicit request stays pinned', async () => {
     const automatic = context()
-    store.setState({
+    setSessionTestState(store, {
       unifiedTabsByWorktree: {
         [WORKSPACE]: store
           .getState()
@@ -322,7 +324,7 @@ describe('browser link placement and exact page activation', () => {
       }
     })
     const explicit = context(true)
-    store.setState({
+    setSessionTestState(store, {
       unifiedTabsByWorktree: {
         [WORKSPACE]: store
           .getState()
@@ -336,7 +338,7 @@ describe('browser link placement and exact page activation', () => {
 
   it('uses destination defaults after the source closes, instead of its captured group', async () => {
     const captured = context()
-    store.setState({
+    setSessionTestState(store, {
       unifiedTabsByWorktree: {
         [WORKSPACE]: store
           .getState()
@@ -361,7 +363,7 @@ describe('browser link placement and exact page activation', () => {
 
   it('refuses an expired explicit group before creating records or activating a destination', async () => {
     const captured = context(true)
-    store.setState({
+    setSessionTestState(store, {
       groupsByWorktree: {
         [WORKSPACE]: store
           .getState()
@@ -379,7 +381,7 @@ describe('browser link placement and exact page activation', () => {
     const createUnifiedTab = store.getState().createUnifiedTab
     store.setState({
       createUnifiedTab: (...args) => {
-        store.setState({
+        setSessionTestState(store, {
           groupsByWorktree: {
             [WORKSPACE]: store
               .getState()
@@ -400,7 +402,7 @@ describe('browser link placement and exact page activation', () => {
   })
 
   it('reuses in one group and does not create a split', async () => {
-    store.setState({
+    setSessionTestState(store, {
       groupsByWorktree: { [WORKSPACE]: [store.getState().groupsByWorktree[WORKSPACE]![0]!] },
       layoutByWorktree: { [WORKSPACE]: { type: 'leaf', groupId: 'a' } }
     })
@@ -438,7 +440,7 @@ describe('existing open routes with link intent', () => {
   it('refuses a source owner that changed while HTTP routing was pending', async () => {
     const captured = context()
     const host = 'ssh:changed-owner'
-    store.setState((state) => ({
+    setSessionTestState(store, (state): Partial<AppState> => ({
       repos: state.repos.map((repo) => ({
         ...repo,
         executionHostId: host,
@@ -500,7 +502,7 @@ describe('existing open routes with link intent', () => {
       'inactive-doc',
       docLocation
     )
-    store.setState({
+    setSessionTestState(store, {
       browserPagesByWorkspace: {
         ...store.getState().browserPagesByWorkspace,
         [existing.id]: [...store.getState().browserPagesByWorkspace[existing.id]!, doc]
@@ -520,7 +522,7 @@ describe('existing open routes with link intent', () => {
 
   it('keeps floating browser activation inside its own layout and leaves the selected workspace alone', async () => {
     const floating = FLOATING_TERMINAL_WORKTREE_ID
-    store.setState({
+    setSessionTestState(store, {
       groupsByWorktree: {
         ...store.getState().groupsByWorktree,
         [floating]: ['fa', 'fb'].map((id) =>

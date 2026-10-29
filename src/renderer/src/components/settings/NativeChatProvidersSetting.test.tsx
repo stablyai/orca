@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { render, cleanup } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -20,7 +21,7 @@ import { NativeChatProvidersSetting } from './NativeChatProvidersSetting'
 const initial = useAppStore.getState()
 afterEach(() => {
   cleanup()
-  useAppStore.setState(initial, true)
+  setSessionTestState(useAppStore, initial, true)
 })
 it('reserves the switch footprint through unknown and failed reads, then shows managed/external installed and saved false', () => {
   useAppStore.setState({ localDetectedAgentIdsByContext: { host: [] } })

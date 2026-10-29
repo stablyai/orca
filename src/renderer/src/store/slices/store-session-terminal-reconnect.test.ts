@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
@@ -55,7 +56,7 @@ describe.each([false, true])('reconnectPersistedTerminals (layout owner is main:
     const wt1 = 'repo1::/path/wt1'
     const wt2 = 'repo1::/path/wt2'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -121,7 +122,7 @@ describe.each([false, true])('reconnectPersistedTerminals (layout owner is main:
     const store = createTestStore()
     const wt1 = 'repo1::/remote/wt1'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         {
           id: 'repo1',
@@ -158,7 +159,7 @@ describe.each([false, true])('reconnectPersistedTerminals (layout owner is main:
   it('sets workspaceSessionReady even with no pending worktrees', async () => {
     const store = createTestStore()
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -182,7 +183,7 @@ describe.each([false, true])('reconnectPersistedTerminals (layout owner is main:
     const store = createDaemonEnabledStore()
     const wt1 = 'repo1::/path/wt1'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -212,7 +213,7 @@ describe.each([false, true])('reconnectPersistedTerminals (layout owner is main:
     const store = createDaemonEnabledStore()
     const wt1 = 'repo1::/path/wt1'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -245,7 +246,7 @@ describe.each([false, true])('reconnectPersistedTerminals (layout owner is main:
     const store = createDaemonEnabledStore()
     const wt1 = 'repo1::/path/wt1'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -278,7 +279,7 @@ describe.each([false, true])('reconnectPersistedTerminals (layout owner is main:
     const store = createTestStore()
     const wt1 = 'repo1::/path/wt1'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -308,7 +309,7 @@ describe.each([false, true])('reconnectPersistedTerminals (layout owner is main:
     const existing = 'repo1::/path/wt1'
     const deleted = 'repo1::/path/deleted'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -339,7 +340,7 @@ describe.each([false, true])('reconnectPersistedTerminals (layout owner is main:
     const store = createDaemonEnabledStore()
     const wt1 = 'repo1::/path/wt1'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -391,7 +392,7 @@ describe.each([false, true])('reconnectPersistedTerminals (layout owner is main:
     const store = createDaemonEnabledStore()
     const wt1 = 'repo1::/path/wt1'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -454,7 +455,7 @@ describe.each([false, true])('reconnectPersistedTerminals (layout owner is main:
     const store = createDaemonEnabledStore()
     const worktreeId = 'repo1::/path/wt1'
     const tab = makeTab({ id: 'tab1', worktreeId, ptyId: null })
-    store.setState({
+    setSessionTestState(store, {
       tabsByWorktree: { [worktreeId]: [tab] },
       ptyIdsByTabId: { tab1: [] },
       pendingReconnectWorktreeIds: [worktreeId],
@@ -481,7 +482,7 @@ describe.each([false, true])('reconnectPersistedTerminals (layout owner is main:
   it('leaves reconnect state untouched when cancellation arrives before final publication', async () => {
     const store = createDaemonEnabledStore()
     const worktreeId = 'repo1::/path/wt1'
-    store.setState({
+    setSessionTestState(store, {
       tabsByWorktree: {
         [worktreeId]: [makeTab({ id: 'tab1', worktreeId, ptyId: null })]
       },

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { createEditorStore } from './editor-slice-test-harness'
@@ -542,7 +543,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
     function storeFor(onServer: boolean) {
       const store = createEditorStore()
       if (onServer) {
-        store.setState({
+        setSessionTestState(store, {
           folderWorkspaces: [
             makeFolderWorkspace({
               id: 'server-folder',

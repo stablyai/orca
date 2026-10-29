@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act, cleanup, render, waitFor } from '@testing-library/react'
@@ -126,7 +127,7 @@ function corpus(scale: number, dense = false) {
     })
   }
 
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     ...useAppStore.getInitialState(),
     ...fixture,
     activeRepoId: null,
@@ -187,7 +188,7 @@ function corpus(scale: number, dense = false) {
               })
             }
       Object.assign(work, emptyWork())
-      act(() => useAppStore.setState(patch))
+      act(() => setSessionTestState(useAppStore, patch))
       return { ...work }
     },
     replaceOwnList(rename: boolean) {
@@ -200,7 +201,7 @@ function corpus(scale: number, dense = false) {
           : [...list]
       })
       Object.assign(work, emptyWork())
-      act(() => useAppStore.setState({ unifiedTabsByWorktree: replacement }))
+      act(() => setSessionTestState(useAppStore, { unifiedTabsByWorktree: replacement }))
       return { ...work }
     },
     moveLastChat() {
@@ -208,7 +209,7 @@ function corpus(scale: number, dense = false) {
       const destination = workspace(workspaces - 2)
       const current = useAppStore.getState()
       act(() =>
-        useAppStore.setState({
+        setSessionTestState(useAppStore, {
           unifiedTabsByWorktree: unifiedMap({
             ...current.unifiedTabsByWorktree,
             [source]: [],
@@ -224,7 +225,7 @@ function corpus(scale: number, dense = false) {
 const initialState = useAppStore.getState()
 afterEach(() => {
   cleanup()
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   resetNativeChatSkillDiscoveryCacheForTests()
   resetStructuredAgentSessionStatusFeedsForTests()
   handOffTransport.subscribe.mockReset()
@@ -373,7 +374,7 @@ describe('native chat store subscription performance', () => {
       )
       data.reset()
       act(() =>
-        useAppStore.setState({
+        setSessionTestState(useAppStore, {
           unifiedTabsByWorktree: {
             ...current.unifiedTabsByWorktree,
             [workspace(0)]: [renamed, ...rows.slice(1)]
@@ -448,7 +449,7 @@ describe('native chat store subscription performance', () => {
       view.rerender(probes(false))
       const current = useAppStore.getState()
       act(() =>
-        useAppStore.setState({
+        setSessionTestState(useAppStore, {
           folderWorkspaces: current.folderWorkspaces.map((folder) =>
             `folder:${folder.id}` === destination
               ? {

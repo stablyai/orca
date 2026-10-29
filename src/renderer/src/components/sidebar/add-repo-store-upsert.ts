@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -32,16 +33,23 @@ export function upsertAddedRepoWithProjectHostSetup(
   const ownedRepo = repoWithCapturedOwner(repo, owner)
   const repoIdentity = getRepoHostIdentity(ownedRepo)
   const alreadyPresent = state.repos.some((entry) => getRepoHostIdentity(entry) === repoIdentity)
-  const repos = alreadyPresent
-    ? state.repos.map((entry) => (getRepoHostIdentity(entry) === repoIdentity ? ownedRepo : entry))
-    : [...state.repos, ownedRepo]
+  const edit = editSessionSource(state)
+  if (alreadyPresent) {
+    edit
+      .sequence('repos')
+      .map((entry) => (getRepoHostIdentity(entry) === repoIdentity ? ownedRepo : entry))
+  } else {
+    edit.sequence('repos').append(ownedRepo)
+  }
+  const repos = edit.read('repos')
   const projection = projectHostSetupProjectionFromRepos(repos)
 
   // Direct IPC bypasses repo-slice compatibility projection; synchronize project-first state here.
-  useAppStore.setState({
-    repos,
-    projects: projection.projects,
-    projectHostSetups: projection.setups
-  })
+  useAppStore.setState(
+    edit.finish({
+      projects: projection.projects,
+      projectHostSetups: projection.setups
+    })
+  )
   return { alreadyPresent, repo: ownedRepo }
 }

@@ -217,7 +217,7 @@ export function twinSelectionPatch(
   >,
   twinHostIds: ReadonlyMap<string, readonly ExecutionHostId[]>,
   removedHostId: ExecutionHostId
-): Partial<AppState> {
+): Partial<Pick<AppState, 'activeWorkspaceKey' | 'activeWorkspaceExecutionHostId'>> {
   // Why: with no surviving twin, the bulk purge owns the selection exactly as before.
   if (twinHostIds.size === 0) {
     return {}

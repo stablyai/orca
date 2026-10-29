@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { projectAgentLaunchSettings } from '../../../../../shared/agent-launch-settings'
 import { clearHostAgentMenuSettingsForTests } from '@/components/settings/use-host-agent-launch-preferences'
@@ -36,7 +37,7 @@ afterEach(() => {
   cleanup()
   clearHostAgentMenuSettingsForTests()
   setLocalRuntimeCapabilitiesForTests(null)
-  useAppStore.setState(original, true)
+  setSessionTestState(useAppStore, original, true)
   clearPendingPRCommentAiAck()
   vi.clearAllMocks()
 })
@@ -77,7 +78,7 @@ function fixture(saved = true, paired = false) {
       )
       return ids
     })
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     settings,
     repos: [repo],
     worktreesByRepo: { [repo.id]: [worktree] },

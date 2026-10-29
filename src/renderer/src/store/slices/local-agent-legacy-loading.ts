@@ -27,7 +27,7 @@ export function getSupersededDetectPatch(
   state: LocalAgentLegacyLoadingState & Pick<AppState, 'isDetectingLocalAgentsByContext'>,
   contextKeys: ReadonlySet<string>,
   clearsLegacyDetect: boolean
-): Partial<AppState> {
+): Partial<Pick<AppState, 'isDetectingAgents' | 'isDetectingLocalAgentsByContext'>> {
   return {
     ...(clearsLegacyDetect ? { isDetectingAgents: false } : {}),
     isDetectingLocalAgentsByContext: removeLocalAgentContextEntries(

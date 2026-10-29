@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 /** Host tab retraction must sweep renderer status and plant close markers like local close (STA-4593). Client-owned rows bypass normal mirror deletion and lose their only reachable pane keys at retraction; done rows otherwise become retained ghosts. Exercise real mirror, retention and sidebar logic with fake clocks. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
@@ -142,7 +143,8 @@ function applyHostSnapshot(
   if (opts?.expectChange !== false) {
     expect(patch, 'host snapshot must pass the freshness gate').not.toBe(state)
   }
-  store.setState(patch as Partial<AppState>)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test stub supplies only the API members exercised by this scenario.
+  setSessionTestState(store, patch as Partial<AppState>)
 }
 
 /** Replay paired pty-connection ownership: claim on transport creation, verify on byte writes, release on unmount. */
@@ -650,7 +652,8 @@ describe('a host-retracted paired tab leaves no ghost agent row behind', () => {
       T0 + 2_000
     )
     expect(patch, 'the batch must pass the freshness gate').not.toBe(state)
-    store.setState(patch as Partial<AppState>)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test stub supplies only the API members exercised by this scenario.
+    setSessionTestState(store, patch as Partial<AppState>)
     release()
 
     const observed = observeSidebar(store, T0 + 3_000)

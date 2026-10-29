@@ -15,6 +15,7 @@
  * Same defect and same remedy as the cold-park fix in
  * terminal-cold-park-tab-model-identity.react185.test.tsx.
  */
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -67,7 +68,8 @@ function terminalTab(title: string): TerminalTab {
 
 /** An ordinary agent spinner frame: re-mints tabsByWorktree, changes no agent signal. */
 function publishRuntimeTitle(revision: number): void {
-  useAppStore.setState(
+  setSessionTestState(
+    useAppStore,
     (state) =>
       ({
         tabsByWorktree: {
@@ -94,7 +96,8 @@ describe('useTabAgent observed-signal dispatch', () => {
   let root: Root | undefined
 
   beforeEach(() => {
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       agentStatusByPaneKey: { [PANE_KEY]: workingAgentStatus() },
       terminalLayoutsByTabId: { [TAB_ID]: paneLayout('pty-a') },
       ptyIdsByTabId: { [TAB_ID]: ['pty-a'] },
@@ -112,7 +115,7 @@ describe('useTabAgent observed-signal dispatch', () => {
     act(() => root?.unmount())
     root = undefined
     container.remove()
-    useAppStore.setState(initialAppState, true)
+    setSessionTestState(useAppStore, initialAppState, true)
   })
 
   it('schedules no extra commit for a title publication that changes no agent signal', () => {
@@ -127,7 +130,8 @@ describe('useTabAgent observed-signal dispatch', () => {
 
   it('still re-arms the observed signal after a pty respawn', () => {
     act(() => {
-      useAppStore.setState({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+      setSessionTestState(useAppStore, {
         agentStatusByPaneKey: {},
         terminalLayoutsByTabId: { [TAB_ID]: paneLayout('pty-b') },
         ptyIdsByTabId: { [TAB_ID]: ['pty-b'] },
@@ -137,7 +141,8 @@ describe('useTabAgent observed-signal dispatch', () => {
     expect(latestAgent).toBeNull()
 
     act(() => {
-      useAppStore.setState({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+      setSessionTestState(useAppStore, {
         agentStatusByPaneKey: { [PANE_KEY]: workingAgentStatus() },
         tabsByWorktree: { [WORKTREE_ID]: [terminalTab('⠋ codex 1')] }
       } as never)

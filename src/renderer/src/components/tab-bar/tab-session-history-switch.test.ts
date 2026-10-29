@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -101,8 +102,8 @@ function makeState(
   agentStatusByPaneKey: AppState['agentStatusByPaneKey'] = {},
   repo: Partial<ReturnType<typeof makeRepo>> = {}
 ): AppState {
-  useAppStore.setState(useAppStore.getInitialState(), true)
-  useAppStore.setState({
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, {
     agentStatusByPaneKey,
     activeRepoId: 'repo-1',
     activeWorktreeId: WORKTREE_ID,
@@ -341,7 +342,7 @@ describe('resolveTabSessionHistorySubject', () => {
     'offers nothing from a %s record once the agent has exited, though the tab title keeps it',
     (kind) => {
       makeState()
-      useAppStore.setState(exitedAgentRecords[kind])
+      setSessionTestState(useAppStore, exitedAgentRecords[kind])
       const state = useAppStore.getState()
       expect(
         resolveTabSessionHistorySubject(state, { tab: { id: 'term-1', worktreeId: WORKTREE_ID } })
@@ -372,7 +373,7 @@ describe('resolveTabSessionHistorySubject', () => {
       worktreeId: WORKTREE_ID,
       providerSession: { key: 'session_id', id: 'claude-session-old' }
     })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       terminalLayoutsByTabId: {
         'term-1': { root: null, activeLeafId: 'leaf-1', expandedLeafId: null }
       },
@@ -487,7 +488,7 @@ describe('one pane of a terminal tab', () => {
         providerSession: { key: 'session_id', id: 'gemini-session-1' }
       })
     })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       terminalLayoutsByTabId: { 'term-1': { root: null, activeLeafId, expandedLeafId: null } }
     })
     return useAppStore.getState()
@@ -542,7 +543,7 @@ describe('one pane of a terminal tab', () => {
     'offers nothing once the agent exited and only a %s record remains, as the tab menu does',
     (kind) => {
       makeState()
-      useAppStore.setState(exitedAgentRecords[kind])
+      setSessionTestState(useAppStore, exitedAgentRecords[kind])
       const exited = useAppStore.getState()
       expect(paneSubject(exited, claudePane)).toBeNull()
       expect(paneGate(exited, claudePane)).toBe(false)

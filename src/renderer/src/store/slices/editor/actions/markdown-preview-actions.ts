@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
@@ -93,10 +94,11 @@ export function createMarkdownPreviewActions(
       )
       const anchor = options?.anchor || undefined
       set((s) => {
+        const sourceEdit = editSessionSource(s)
         const existing = s.openFiles.find((openFile) => openFile.id === id)
         const worktreeId = file.worktreeId
         const runtimeEnvironmentId = resolvedRuntimeEnvironmentId
-        const activeResult = buildEditorActiveResult(s, worktreeId, id)
+        const activeResult = buildEditorActiveResult(sourceEdit, worktreeId, id)
 
         if (existing) {
           // Why: a fresh grant means the file was re-resolved; cached bytes may predate it.
@@ -114,8 +116,9 @@ export function createMarkdownPreviewActions(
             existing.markdownPreviewAnchor !== anchor ||
             existing.mode !== 'markdown-preview'
           return needsUpdate
-            ? {
-                openFiles: s.openFiles.map((openFile) =>
+            ? sourceEdit
+                .sequence('openFiles')
+                .map((openFile) =>
                   openFile.id === id
                     ? {
                         ...openFile,
@@ -135,9 +138,8 @@ export function createMarkdownPreviewActions(
                         mode: 'markdown-preview' as const
                       }
                     : openFile
-                ),
-                ...activeResult
-              }
+                )
+                .finish(activeResult)
             : activeResult
         }
 
@@ -157,10 +159,7 @@ export function createMarkdownPreviewActions(
           mode: 'markdown-preview'
         }
 
-        return {
-          openFiles: [...s.openFiles, newFile],
-          ...activeResult
-        }
+        return sourceEdit.sequence('openFiles').append(newFile).finish(activeResult)
       })
       void openWorkspaceEditorItem(
         get(),
@@ -176,20 +175,20 @@ export function createMarkdownPreviewActions(
     makePreviewFilePermanent: (fileId, tabId) => {
       const promoted: Tab[] = []
       set((s) => {
+        const sourceEdit = editSessionSource(s)
         if (ORCA_LAYOUT_OWNER_IS_MAIN) {
           promoted.push(...previewEditorTabsOf(s.unifiedTabsByWorktree, fileId, tabId))
         }
         let changed = false
-        const openFiles = s.openFiles.map((file) => {
+        sourceEdit.sequence('openFiles').map((file) => {
           if (file.id !== fileId || !file.isPreview) {
             return file
           }
           changed = true
           return { ...file, isPreview: undefined }
         })
-        const unifiedTabsByWorktree: typeof s.unifiedTabsByWorktree = {}
         for (const [worktreeId, tabs] of Object.entries(s.unifiedTabsByWorktree ?? {})) {
-          unifiedTabsByWorktree[worktreeId] = tabs.map((tab) => {
+          const updated = tabs.map((tab) => {
             if (tab.entityId !== fileId || (tabId && tab.id !== tabId) || !tab.isPreview) {
               return tab
             }
@@ -200,8 +199,9 @@ export function createMarkdownPreviewActions(
             changed = true
             return withPreviewEnded(tab)
           })
+          sourceEdit.set('unifiedTabsByWorktree', worktreeId, updated)
         }
-        return changed ? { openFiles, unifiedTabsByWorktree } : s
+        return changed ? sourceEdit.finish() : undefined
       })
       // Switch point: main makes the preview tabs the user kept permanent.
       if (ORCA_LAYOUT_OWNER_IS_MAIN && promoted.length > 0) {

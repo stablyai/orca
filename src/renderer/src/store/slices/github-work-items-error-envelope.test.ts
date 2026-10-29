@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createTestStore,
@@ -294,7 +295,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       error: { code: 'runtime_error', message: 'HTTP 503: Service Unavailable' },
       _meta: { runtimeId: 'remote-runtime' }
     })
-    store.setState(runtimeOwnedRepoState('env-1', 'runtime-repo-id', '/server/repo'))
+    setSessionTestState(store, runtimeOwnedRepoState('env-1', 'runtime-repo-id', '/server/repo'))
 
     try {
       const result = await store
@@ -325,7 +326,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       },
       _meta: { runtimeId: null }
     })
-    store.setState(runtimeOwnedRepoState('env-1', 'runtime-repo-id', '/server/repo'))
+    setSessionTestState(store, runtimeOwnedRepoState('env-1', 'runtime-repo-id', '/server/repo'))
 
     try {
       const result = await store

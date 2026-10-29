@@ -1,4 +1,5 @@
-import type { StateCreator } from 'zustand'
+import { replaceSessionSourceFields } from '@/store/session-source-write-boundary'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
 import { applyManualRepoOrder } from '../../../../shared/manual-repo-order'
@@ -42,15 +43,15 @@ import {
 } from './wsl-moved-repo-ui-retention'
 
 export function createRepoCatalogActions(
-  set: Parameters<StateCreator<AppState>>[0],
-  get: Parameters<StateCreator<AppState>>[1]
+  set: Parameters<SessionStateCreator<AppState>>[0],
+  get: Parameters<SessionStateCreator<AppState>>[1]
 ): Pick<RepoSlice, 'recordSshRepoReadoptions' | 'fetchRepos' | 'awaitLocalRepoCatalogSettlement'> {
   return {
     recordSshRepoReadoptions: (readoptions) =>
       set((s) => {
         // Why: SshPane importConfig() often reports [] on every Manage-pane open.
         if (readoptions.length === 0 && s.pendingSshRepoReadoptions.length === 0) {
-          return s
+          return undefined
         }
         const pendingSshRepoReadoptions = mergeSshRepoReadoptions(
           s.pendingSshRepoReadoptions,
@@ -78,13 +79,16 @@ export function createRepoCatalogActions(
           compatibility.projectHostSetups,
           getProjectHostSetupOwnerKey
         )
-        return {
-          repos,
-          pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
-          ...worktreeState,
-          projects,
-          projectHostSetups
-        }
+        return replaceSessionSourceFields(
+          {
+            repos,
+            pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
+            ...worktreeState,
+            projects,
+            projectHostSetups
+          },
+          'catalog'
+        )
       }),
 
     fetchRepos: async (options) => {
@@ -105,7 +109,7 @@ export function createRepoCatalogActions(
         set((s) => {
           // Why: an in-flight fetch for a just-removed env would re-add purged repos and stick; skip only when the env was tombstoned, not merely unhydrated (#8881).
           if (isRemovedRuntimeHostId(catalog.hostId, s.removedRuntimeEnvironmentIds)) {
-            return s
+            return undefined
           }
           // Why: re-adoption leaves a stale row on the old SSH target id (a ghost that fails "SSH target not found"); drop rows a live-host sibling supersedes.
           const result = mergeFetchedRepoCatalog(catalog, s.repos)
@@ -129,29 +133,32 @@ export function createRepoCatalogActions(
           finalizedHostRepos = prunedRepos.filter(
             (repo) => getRepoExecutionHostId(repo) === result.hostId
           )
-          return {
-            repos: prunedRepos,
-            pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
-            ...reconcileFetchedCatalogWorktreeState(s, catalog, prunedRepos),
-            ...mergedProjectCompatibility,
-            ...(arrayElementsUnchanged(prunedRepos, s.repos)
-              ? {}
-              : { folderWorkspacePathStatuses: {} }),
-            activeRepoId:
-              s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
-            filterRepoIds: retainValidFilterRepoIds(
-              s.filterRepoIds,
-              withWslMovedRepoIds(validRepoIds, s.wslMovedProjects)
-            ),
-            setupScriptPromptDismissedRepoIds: withWslMovedSetupScriptDismissals(
-              s.setupScriptPromptDismissedRepoIds,
-              filterSetupScriptPromptDismissalsToValidRepos(
-                s.setupScriptPromptDismissedRepoIds,
-                validRepoHostIdentities
+          return replaceSessionSourceFields(
+            {
+              repos: prunedRepos,
+              pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
+              ...reconcileFetchedCatalogWorktreeState(s, catalog, prunedRepos),
+              ...mergedProjectCompatibility,
+              ...(arrayElementsUnchanged(prunedRepos, s.repos)
+                ? {}
+                : { folderWorkspacePathStatuses: {} }),
+              activeRepoId:
+                s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
+              filterRepoIds: retainValidFilterRepoIds(
+                s.filterRepoIds,
+                withWslMovedRepoIds(validRepoIds, s.wslMovedProjects)
               ),
-              s.wslMovedProjects
-            )
-          }
+              setupScriptPromptDismissedRepoIds: withWslMovedSetupScriptDismissals(
+                s.setupScriptPromptDismissedRepoIds,
+                filterSetupScriptPromptDismissalsToValidRepos(
+                  s.setupScriptPromptDismissedRepoIds,
+                  validRepoHostIdentities
+                ),
+                s.wslMovedProjects
+              )
+            },
+            'catalog'
+          )
         })
         scheduleSafeAutoForkSync(finalizedHostRepos)
       } catch (err) {

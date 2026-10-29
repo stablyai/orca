@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { useAppStore } from '@/store'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { getDefaultSettings } from '../../../shared/constants'
@@ -37,7 +38,7 @@ export function sshConnectionStatesAt(
  * another workspace is active and a different runtime is focused.
  */
 export function seedRemoteDropWorkspaces(): void {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     activeWorktreeId: 'wt-a',
     settings: { ...getDefaultSettings('/home/me'), activeRuntimeEnvironmentId: 'focused-runtime' },
     repos: [

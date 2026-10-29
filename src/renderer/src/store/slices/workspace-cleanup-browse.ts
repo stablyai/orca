@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import {
   createDefaultWorkspaceCleanupBrowseState,
@@ -21,10 +21,8 @@ export type WorkspaceCleanupBrowseSlice = {
   updateWorkspaceCleanupBrowseState: (next: WorkspaceCleanupBrowseUpdate) => void
 }
 
-export const createWorkspaceCleanupBrowseSlice: StateCreator<
+export const createWorkspaceCleanupBrowseSlice: SessionStateCreator<
   AppState,
-  [],
-  [],
   WorkspaceCleanupBrowseSlice
 > = (set, get) => ({
   workspaceCleanupBrowse: createDefaultWorkspaceCleanupBrowseState(),

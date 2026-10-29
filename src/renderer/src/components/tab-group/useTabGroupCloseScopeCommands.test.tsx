@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -39,7 +40,7 @@ beforeEach(() => {
         settle = resolve
       })
   )
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     groupsByWorktree: { [worktreeId]: [group] },
     unifiedTabsByWorktree: { [worktreeId]: [left, anchor, right, pinned] }
   })
@@ -107,7 +108,7 @@ describe('group bulk close confirmation', () => {
     async (scope) => {
       request(scope)
       act(() =>
-        useAppStore.setState({
+        setSessionTestState(useAppStore, {
           unifiedTabsByWorktree: {
             [worktreeId]: [left, right, pinned]
           }
@@ -122,7 +123,7 @@ describe('group bulk close confirmation', () => {
     'abandons %s when the original group disappears',
     async (scope) => {
       request(scope)
-      act(() => useAppStore.setState({ groupsByWorktree: {} }))
+      act(() => setSessionTestState(useAppStore, { groupsByWorktree: {} }))
       await confirmRequest()
       expect(closeMany).not.toHaveBeenCalled()
       expect(closeItem).not.toHaveBeenCalled()
@@ -132,7 +133,7 @@ describe('group bulk close confirmation', () => {
   it('skips editors pinned while confirmation is pending', async () => {
     request('editors')
     act(() =>
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         unifiedTabsByWorktree: {
           [worktreeId]: [{ ...left, isPinned: true }, anchor, right, pinned]
         }
@@ -146,7 +147,7 @@ describe('group bulk close confirmation', () => {
     request('others')
     const added = makeUnifiedTab({ id: 'added', worktreeId, groupId })
     act(() =>
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         unifiedTabsByWorktree: {
           [worktreeId]: [{ ...left, groupId: 'other-group' }, anchor, right, pinned, added]
         }
@@ -161,7 +162,7 @@ describe('group bulk close confirmation', () => {
     async (scope) => {
       request(scope)
       act(() =>
-        useAppStore.setState({
+        setSessionTestState(useAppStore, {
           groupsByWorktree: {
             [worktreeId]: [{ ...group, tabOrder: [right.id, anchor.id, left.id, pinned.id] }]
           }
@@ -186,7 +187,7 @@ describe('group bulk close confirmation', () => {
   })
 
   it('does not prompt when there are no eligible targets', () => {
-    useAppStore.setState({ unifiedTabsByWorktree: { [worktreeId]: [anchor, pinned] } })
+    setSessionTestState(useAppStore, { unifiedTabsByWorktree: { [worktreeId]: [anchor, pinned] } })
     request('others')
     expect(confirm).not.toHaveBeenCalled()
   })

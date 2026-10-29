@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../../types'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import { createAgentStatusRuntime } from './agent-status-runtime'
@@ -22,7 +22,7 @@ import './agent-status-drop-reducer'
 import './agent-status-capacity-eviction'
 import './agent-status-pane-keyed-records'
 
-export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusSlice> = (
+export const createAgentStatusSlice: SessionStateCreator<AppState, AgentStatusSlice> = (
   storeSet,
   storeGet
 ) => {

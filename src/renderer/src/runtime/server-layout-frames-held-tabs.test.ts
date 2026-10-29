@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type * as ResolveOwnerModule from '@/lib/resolve-owner'
@@ -191,7 +192,7 @@ async function appStoreFrameDrawn(layout = SERVER_LAYOUT) {
 
 let check: ReturnType<typeof installLayoutFrameApplyCheck>
 beforeEach(() => {
-  useAppStore.setState(APP_STORE_AT_LOAD, true)
+  setSessionTestState(useAppStore, APP_STORE_AT_LOAD, true)
   hoisted.owners.clear()
   hoisted.resync.mockReset().mockResolvedValue(undefined)
   hoisted.sent.length = 0

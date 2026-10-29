@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import {
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION,
@@ -62,7 +62,7 @@ export type WorkspaceCleanupSlice = {
 
 const VIEWED_FROM_CLEANUP_MS = 2 * 60 * 60 * 1000
 
-export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], WorkspaceCleanupSlice> = (
+export const createWorkspaceCleanupSlice: SessionStateCreator<AppState, WorkspaceCleanupSlice> = (
   set,
   get
 ) => ({

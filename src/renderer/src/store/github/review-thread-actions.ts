@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
@@ -18,8 +18,8 @@ import {
 } from './review-thread-resolution-in-flight'
 
 export const createReviewThreadActions = (
-  set: Parameters<StateCreator<AppState>>[0],
-  get: Parameters<StateCreator<AppState>>[1]
+  set: Parameters<SessionStateCreator<AppState>>[0],
+  get: Parameters<SessionStateCreator<AppState>>[1]
 ): Pick<GitHubSlice, 'resolveReviewThread'> => ({
   resolveReviewThread: async (repoPath, prNumber, threadId, resolve, options) => {
     const repo = get().repos?.find((candidate) =>
@@ -52,7 +52,7 @@ export const createReviewThreadActions = (
         set((s) => {
           const entry = s.commentsCache[cacheKey]
           if (!entry?.data) {
-            return s
+            return undefined
           }
           return {
             commentsCache: {
@@ -104,7 +104,7 @@ export const createReviewThreadActions = (
         set((s) => {
           const entry = s.commentsCache[cacheKey]
           if (!entry?.data) {
-            return s
+            return undefined
           }
           return {
             commentsCache: {

@@ -1,3 +1,4 @@
+import { applyWebSessionTabsSnapshotsToEdit } from './snapshot-api'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { recheckUnconfirmedStructuredAgentLaunches } from '../../lib/agent-session/launch/structured-agent-session-launch-unconfirmed-recheck'
@@ -14,7 +15,7 @@ import {
   WEB_SESSION_TABS_FRAME_OUTRANKED
 } from './tracking-decisions'
 import { acceptReplayedWebSessionTabsSnapshot } from './tracking-lifecycle'
-import { applyWebSessionTabsSnapshots } from './snapshot-api'
+
 import {
   latestSessionTabsSnapshotByWorktree,
   replayableSessionTabsSnapshotByWorktree
@@ -131,13 +132,15 @@ export function handleGlobalSessionInventoryEvent({
         decisions[index]!.apply ? [snapshot] : []
       )
       settleHydration = applyWebSessionTabsStorePatch(
-        (state, changedAgentPaneKeys) =>
-          applyWebSessionTabsSnapshots(
+        (state, changedAgentPaneKeys, sourceEdit) =>
+          applyWebSessionTabsSnapshotsToEdit(
+            sourceEdit,
             state,
             freshSnapshots,
             environmentId,
             undefined,
-            changedAgentPaneKeys
+            changedAgentPaneKeys,
+            undefined
           ),
         {
           frames: applicable.map(({ snapshot }, index) => ({

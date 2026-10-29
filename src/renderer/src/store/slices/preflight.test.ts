@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { PreflightStatus } from '../../../../preload/api-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -102,7 +103,7 @@ function deferred<T>() {
 }
 
 function focusWorktree(store: ReturnType<typeof createTestStore>, path: string): void {
-  store.setState({
+  setSessionTestState(store, {
     repos: [makeRepo({ id: 'repo-1', path: 'C:\\repo' })],
     worktreesByRepo: { 'repo-1': [makeWorktree({ id: 'wt-1', repoId: 'repo-1', path })] },
     activeRepoId: 'repo-1',
@@ -220,7 +221,8 @@ describe('createPreflightSlice', () => {
     resetPreflightMocks()
     preflightCheck.mockResolvedValueOnce(makeStatus(true))
     const store = createTestStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       repos: [
         makeRepo({
           id: 'repo-1',
@@ -250,7 +252,8 @@ describe('createPreflightSlice', () => {
     platformGet.mockReturnValue({ platform: 'win32' })
     preflightCheck.mockResolvedValueOnce(makeStatus(true))
     const store = createTestStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       repos: [
         makeRepo({
           id: 'repo-1',
@@ -296,7 +299,8 @@ describe('createPreflightSlice', () => {
     )
     const store = createTestStore()
     const repos: AppState['repos'] = [makeRepo({ id: 'repo-1', path: 'C:\\repo' })]
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       settings: {
         localWindowsRuntimeDefault: { kind: 'wsl', distro: null }
       },
@@ -331,7 +335,8 @@ describe('createPreflightSlice', () => {
     const debian = deferred<PreflightStatus>()
     preflightCheck.mockReturnValueOnce(ubuntu.promise).mockReturnValueOnce(debian.promise)
     const store = createTestStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       repos: [makeRepo({ id: 'repo-1', path: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo' })],
       worktreesByRepo: {},
       activeRepoId: 'repo-1',
@@ -339,7 +344,8 @@ describe('createPreflightSlice', () => {
     } as Partial<AppState>)
 
     const first = store.getState().refreshPreflightStatus()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       repos: [makeRepo({ id: 'repo-1', path: '\\\\wsl.localhost\\Debian\\home\\alice\\repo' })]
     } as Partial<AppState>)
     const second = store.getState().refreshPreflightStatus()
@@ -360,12 +366,14 @@ describe('createPreflightSlice', () => {
       .mockReturnValueOnce(firstRuntime.promise)
       .mockReturnValueOnce(secondRuntime.promise)
     const store = createTestStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This settings fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'runtime-1' }
     } as Partial<AppState>)
 
     const first = store.getState().refreshPreflightStatus()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This settings fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'runtime-2' }
     } as Partial<AppState>)
     const second = store.getState().refreshPreflightStatus()
@@ -405,7 +413,7 @@ describe('createPreflightSlice', () => {
       repoId: 'repo-r',
       path: '/srv/repo'
     })
-    store.setState({
+    setSessionTestState(store, {
       repos: [remoteRepo],
       worktreesByRepo: { 'repo-r': [remoteWorktree] },
       activeRepoId: 'repo-r',
@@ -428,7 +436,7 @@ describe('createPreflightSlice', () => {
       repoId: 'repo-l',
       path: '/Users/a/repo'
     })
-    store.setState({
+    setSessionTestState(store, {
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-9' },
       repos: [remoteRepo, localRepo],
       worktreesByRepo: { 'repo-r': [remoteWorktree], 'repo-l': [localWorktree] },
@@ -452,14 +460,20 @@ describe('createPreflightSlice', () => {
       .mockReturnValueOnce(runtimeB.promise)
       .mockReturnValueOnce(reconnectedB.promise)
     const store = createTestStore()
-    store.setState({ settings: { activeRuntimeEnvironmentId: 'runtime-a' } } as Partial<AppState>)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This settings fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
+      settings: { activeRuntimeEnvironmentId: 'runtime-a' }
+    } as Partial<AppState>)
     store.getState().setRuntimeEnvironmentStatus('runtime-a', {
       status: { runtimeId: 'server-a' } as never,
       checkedAt: 1
     })
 
     const requestA = store.getState().refreshPreflightStatus()
-    store.setState({ settings: { activeRuntimeEnvironmentId: 'runtime-b' } } as Partial<AppState>)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This settings fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
+      settings: { activeRuntimeEnvironmentId: 'runtime-b' }
+    } as Partial<AppState>)
     store.getState().setRuntimeEnvironmentStatus('runtime-b', {
       status: { runtimeId: 'server-b' } as never,
       checkedAt: 2
@@ -517,7 +531,8 @@ describe('createPreflightSlice', () => {
     await first
     expect(store.getState().preflightStatusChecked).toBe(true)
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       repos: [makeRepo({ id: 'repo-1', path: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo' })],
       activeRepoId: 'repo-1',
       activeWorktreeId: null

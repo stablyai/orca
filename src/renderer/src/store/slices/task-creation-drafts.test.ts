@@ -1,3 +1,4 @@
+import { withSessionSourceTestWrites } from '@/lib/test-support/session-source-test-store'
 import { create } from 'zustand'
 import { describe, expect, it } from 'vitest'
 import {
@@ -20,8 +21,26 @@ function makeStore() {
       | 'setNewJiraIssueDraft'
       | 'clearNewJiraIssueDraft'
     >
-  >()((...args) =>
-    createTaskCreationDraftsSlice(...(args as Parameters<typeof createTaskCreationDraftsSlice>))
+  >()(
+    withSessionSourceTestWrites<
+      Pick<
+        AppState,
+        | 'newLinearIssueDraft'
+        | 'setNewLinearIssueDraft'
+        | 'clearNewLinearIssueDraft'
+        | 'newLinearProjectDraft'
+        | 'setNewLinearProjectDraft'
+        | 'clearNewLinearProjectDraft'
+        | 'newJiraIssueDraft'
+        | 'setNewJiraIssueDraft'
+        | 'clearNewJiraIssueDraft'
+      >
+    >((...args) =>
+      createTaskCreationDraftsSlice(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test stub supplies only the API members exercised by this scenario.
+        ...(args as unknown as Parameters<typeof createTaskCreationDraftsSlice>)
+      )
+    )
   )
 }
 

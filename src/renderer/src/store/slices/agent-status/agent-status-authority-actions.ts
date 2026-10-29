@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import { rendererAgentStatusObservations } from '../../../lib/renderer-agent-status-observations'
@@ -57,6 +58,10 @@ export function createAgentStatusAuthorityActions(
       let hadLive = false
       settleAttentionRemovedBy(set, get, () =>
         set((s, changedPaneKeys) => {
+          const edit = editSessionSource(s)
+          if (!options?.preserveSleepingAgentSession) {
+            edit.removeKeys('sleepingAgentSessionsByPaneKey', retiredPaneKeySet)
+          }
           const retiredLivePaneKeys = retiredPaneKeys.filter((key) => key in s.agentStatusByPaneKey)
           for (const key of retiredLivePaneKeys) {
             changedPaneKeys.add(key)
@@ -75,16 +80,13 @@ export function createAgentStatusAuthorityActions(
           for (const key of retiredLivePaneKeys) {
             nextRetentionSuppressedPaneKeys[key] = true
           }
-          return {
+          return edit.finish({
             agentStatusByPaneKey: removePaneKeys(s.agentStatusByPaneKey, retiredPaneKeySet),
             runtimeAgentOrchestrationByPaneKey: removePaneKeys(
               s.runtimeAgentOrchestrationByPaneKey,
               retiredPaneKeySet
             ),
             retainedAgentsByPaneKey: removePaneKeys(s.retainedAgentsByPaneKey, retiredPaneKeySet),
-            sleepingAgentSessionsByPaneKey: options?.preserveSleepingAgentSession
-              ? s.sleepingAgentSessionsByPaneKey
-              : removePaneKeys(s.sleepingAgentSessionsByPaneKey, retiredPaneKeySet),
             agentLaunchConfigByPaneKey: removePaneKeys(
               s.agentLaunchConfigByPaneKey,
               retiredPaneKeySet
@@ -125,7 +127,7 @@ export function createAgentStatusAuthorityActions(
             ),
             agentStatusEpoch: hadLive ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
             sortEpoch: hadLive ? s.sortEpoch + 1 : s.sortEpoch
-          }
+          })
         })
       )
       if (hadLive) {
@@ -158,7 +160,7 @@ export function createAgentStatusAuthorityActions(
           (key) => key in s.recentlyRetiredAgentStatusPaneKeys
         )
         if (restorable.length === 0) {
-          return s
+          return undefined
         }
         const next = { ...s.recentlyRetiredAgentStatusPaneKeys }
         for (const key of restorable) {
@@ -186,7 +188,17 @@ export function createAgentStatusAuthorityActions(
       set((s, changedPaneKeys) => {
         changedPaneKeys.add(from)
         changedPaneKeys.add(to)
-        return {
+        const edit = editSessionSource(s)
+        const sleeping = s.sleepingAgentSessionsByPaneKey[from]
+        if (sleeping !== undefined) {
+          edit.remove('sleepingAgentSessionsByPaneKey', from)
+          edit.set('sleepingAgentSessionsByPaneKey', to, {
+            ...sleeping,
+            paneKey: to,
+            tabId: targetTabId
+          })
+        }
+        return edit.finish({
           agentStatusByPaneKey: movePaneKeyedRecord(s.agentStatusByPaneKey, from, to, (entry) => ({
             ...entry,
             paneKey: to,
@@ -210,12 +222,6 @@ export function createAgentStatusAuthorityActions(
               entry: { ...retained.entry, paneKey: to, tabId: targetTabId },
               tab: targetTabId ? { ...retained.tab, id: targetTabId } : retained.tab
             })
-          ),
-          sleepingAgentSessionsByPaneKey: movePaneKeyedRecord(
-            s.sleepingAgentSessionsByPaneKey,
-            from,
-            to,
-            (record) => ({ ...record, paneKey: to, tabId: targetTabId })
           ),
           agentLaunchConfigByPaneKey: movePaneKeyedRecord(
             s.agentLaunchConfigByPaneKey,
@@ -246,7 +252,7 @@ export function createAgentStatusAuthorityActions(
           ),
           cacheTimerByKey: movePaneKeyedRecord(s.cacheTimerByKey, from, to),
           retentionSuppressedPaneKeys: movePaneKeyedRecord(s.retentionSuppressedPaneKeys, from, to)
-        }
+        })
       })
       if (typeof window !== 'undefined') {
         window.api?.agentStatus?.transferPaneAuthority?.({

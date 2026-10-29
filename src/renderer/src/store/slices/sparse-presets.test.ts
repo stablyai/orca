@@ -1,3 +1,5 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
+import { withSessionSourceTestWrites } from '@/lib/test-support/session-source-test-store'
 import { create } from 'zustand'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
@@ -23,7 +25,10 @@ const mockApi = {
 globalThis.window = { api: mockApi }
 
 function createTestStore() {
-  return create<AppState>()((...a) => ({ ...createSparsePresetsSlice(...a) }) as AppState)
+  return create<AppState>()(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test supplies only the preload API members exercised by its scenario.
+    withSessionSourceTestWrites((...a) => ({ ...createSparsePresetsSlice(...a) }) as AppState)
+  )
 }
 
 function makePreset(
@@ -155,7 +160,8 @@ describe('createSparsePresetsSlice', () => {
 
   it('saves presets per repo and sorts the repo list by name', async () => {
     const store = createTestStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This sparsePresetsByRepo fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       sparsePresetsByRepo: {
         'repo-1': [makePreset({ id: 'z', repoId: 'repo-1', name: 'Zed' })],
         'repo-2': [makePreset({ id: 'other', repoId: 'repo-2', name: 'Other' })]
@@ -224,7 +230,8 @@ describe('createSparsePresetsSlice', () => {
     const store = createTestStore()
     const preset = makePreset({ id: 'preset-1', repoId: 'repo-1', name: 'Web' })
     mockApi.sparsePresets.remove.mockRejectedValueOnce(new Error('disk failed'))
-    store.setState({ sparsePresetsByRepo: { 'repo-1': [preset] } } as Partial<AppState>)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This sparsePresetsByRepo fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, { sparsePresetsByRepo: { 'repo-1': [preset] } } as Partial<AppState>)
 
     await expect(
       store.getState().removeSparsePreset({ repoId: 'repo-1', presetId: 'preset-1' })

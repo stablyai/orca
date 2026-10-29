@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import '@testing-library/jest-dom/vitest'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -70,7 +71,7 @@ function renderControl(
 
 describe('WorktreeCardSshHostControl', () => {
   beforeEach(() => {
-    useAppStore.setState(useAppStore.getInitialState(), true)
+    setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
     resetSshConnectInFlightForTests()
     toastMocks.error.mockReset()
     environmentSshMocks.connectRuntimeEnvironmentSshTarget.mockReset()

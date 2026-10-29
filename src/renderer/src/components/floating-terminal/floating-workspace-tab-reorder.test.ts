@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 /**
  * @vitest-environment happy-dom
  */
@@ -129,7 +130,7 @@ function floatingTabOrder(): string[] {
 
 beforeEach(() => {
   layoutApplyTestTransport.reset()
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     // The floating workspace is never the active worktree; its tabs still reorder.
     activeWorktreeId: 'wt-main',
     activeGroupIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: GROUP_ID },

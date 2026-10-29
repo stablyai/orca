@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // Runtime metadata bypasses local GC; formerly SSH-only explicit retirement stranded every paired-runtime worktree ever seen (#17776).
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
@@ -22,7 +23,8 @@ const deletedOnHost = worktree('/home/orca/deleted')
 
 function seedClientWithBothRows(): ReturnType<typeof createTestStore> {
   const store = createTestStore()
-  store.setState({
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This settings, repos, worktreesByRepo fixture intentionally supplies only the state members exercised by this scenario.
+  setSessionTestState(store, {
     settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
     repos: [
       {

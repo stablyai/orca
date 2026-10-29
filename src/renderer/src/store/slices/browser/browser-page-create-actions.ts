@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import type {
   BrowserSlice,
   BrowserSliceGet,
@@ -66,30 +67,29 @@ export function createBrowserPageCreateActions(
             !page.docLocation &&
             (page.url === 'about:blank' || page.url === ORCA_BROWSER_BLANK_URL)
 
-          return {
-            browserPagesByWorkspace: {
-              ...s.browserPagesByWorkspace,
-              [workspaceId]: nextPages
-            },
-            browserTabsByWorktree: {
-              ...s.browserTabsByWorktree,
-              [current.worktreeId]: (s.browserTabsByWorktree[current.worktreeId] ?? []).map(
-                (tab) => (tab.id === workspaceId ? nextWorkspace : tab)
+          return editSessionSource(s)
+            .set('browserPagesByWorkspace', workspaceId, nextPages)
+            .set(
+              'browserTabsByWorktree',
+              current.worktreeId,
+              (s.browserTabsByWorktree[current.worktreeId] ?? []).map((tab) =>
+                tab.id === workspaceId ? nextWorkspace : tab
               )
-            },
-            pendingAddressBarFocusByPageId: shouldFocusAddressBar
-              ? {
-                  ...s.pendingAddressBarFocusByPageId,
-                  [page.id]: true
-                }
-              : s.pendingAddressBarFocusByPageId,
-            pendingAddressBarFocusByTabId: shouldFocusAddressBar
-              ? {
-                  ...s.pendingAddressBarFocusByTabId,
-                  [page.id]: true
-                }
-              : s.pendingAddressBarFocusByTabId
-          }
+            )
+            .finish({
+              pendingAddressBarFocusByPageId: shouldFocusAddressBar
+                ? {
+                    ...s.pendingAddressBarFocusByPageId,
+                    [page.id]: true
+                  }
+                : s.pendingAddressBarFocusByPageId,
+              pendingAddressBarFocusByTabId: shouldFocusAddressBar
+                ? {
+                    ...s.pendingAddressBarFocusByTabId,
+                    [page.id]: true
+                  }
+                : s.pendingAddressBarFocusByTabId
+            })
         })
 
         const nextWorkspace = findWorkspace(get().browserTabsByWorktree, workspaceId)
@@ -124,13 +124,15 @@ export function createBrowserPageCreateActions(
         let docPageIdToRelease: string | null = null
         const remotePagesToClose: { worktreeId: string; handle: RemoteBrowserPageHandle }[] = []
         set((s) => {
+          const sourceEdit = editSessionSource(s)
+
           const page = findPage(s.browserPagesByWorkspace, pageId)
           if (!page) {
-            return s
+            return undefined
           }
           const workspace = findWorkspace(s.browserTabsByWorktree, page.workspaceId)
           if (!workspace) {
-            return s
+            return undefined
           }
           closedWorkspaceIdForLabel = page.workspaceId
           docPageIdToRelease = page.docLocation ? page.id : null
@@ -153,10 +155,8 @@ export function createBrowserPageCreateActions(
           if (remoteHandle) {
             remotePagesToClose.push({ worktreeId: page.worktreeId, handle: remoteHandle })
           }
-          const nextRemoteBrowserPageHandlesByPageId = {
-            ...s.remoteBrowserPageHandlesByPageId
-          }
-          delete nextRemoteBrowserPageHandlesByPageId[pageId]
+
+          sourceEdit.remove('remoteBrowserPageHandlesByPageId', pageId)
           const nextBrowserAnnotationsByPageId = { ...s.browserAnnotationsByPageId }
           const nextBrowserAnnotationMarkerIdsByPageId = { ...s.browserAnnotationMarkerIdsByPageId }
           delete nextBrowserAnnotationsByPageId[pageId]
@@ -166,41 +166,39 @@ export function createBrowserPageCreateActions(
           }
           delete nextBrowserCertificateFailuresByPageId[pageId]
 
-          return {
-            browserPagesByWorkspace: {
-              ...s.browserPagesByWorkspace,
-              [workspace.id]: nextPages
-            },
-            browserTabsByWorktree: {
-              ...s.browserTabsByWorktree,
-              [workspace.worktreeId]: (s.browserTabsByWorktree[workspace.worktreeId] ?? []).map(
-                (tab) => (tab.id === workspace.id ? nextWorkspace : tab)
+          return sourceEdit
+            .set('browserPagesByWorkspace', workspace.id, nextPages)
+            .set(
+              'browserTabsByWorktree',
+              workspace.worktreeId,
+              (s.browserTabsByWorktree[workspace.worktreeId] ?? []).map((tab) =>
+                tab.id === workspace.id ? nextWorkspace : tab
               )
-            },
-            recentlyClosedBrowserPagesByWorkspace: {
-              ...s.recentlyClosedBrowserPagesByWorkspace,
-              [workspace.id]: [
-                page,
-                ...(s.recentlyClosedBrowserPagesByWorkspace[workspace.id] ?? []).filter(
-                  (entry) => entry.id !== page.id
+            )
+            .finish({
+              recentlyClosedBrowserPagesByWorkspace: {
+                ...s.recentlyClosedBrowserPagesByWorkspace,
+                [workspace.id]: [
+                  page,
+                  ...(s.recentlyClosedBrowserPagesByWorkspace[workspace.id] ?? []).filter(
+                    (entry) => entry.id !== page.id
+                  )
+                ].slice(0, 10)
+              },
+              pendingAddressBarFocusByPageId: Object.fromEntries(
+                Object.entries(s.pendingAddressBarFocusByPageId).filter(
+                  ([pendingPageId]) => pendingPageId !== pageId
                 )
-              ].slice(0, 10)
-            },
-            pendingAddressBarFocusByPageId: Object.fromEntries(
-              Object.entries(s.pendingAddressBarFocusByPageId).filter(
-                ([pendingPageId]) => pendingPageId !== pageId
-              )
-            ),
-            pendingAddressBarFocusByTabId: Object.fromEntries(
-              Object.entries(s.pendingAddressBarFocusByTabId).filter(
-                ([pendingPageId]) => pendingPageId !== pageId
-              )
-            ),
-            remoteBrowserPageHandlesByPageId: nextRemoteBrowserPageHandlesByPageId,
-            browserCertificateFailuresByPageId: nextBrowserCertificateFailuresByPageId,
-            browserAnnotationsByPageId: nextBrowserAnnotationsByPageId,
-            browserAnnotationMarkerIdsByPageId: nextBrowserAnnotationMarkerIdsByPageId
-          }
+              ),
+              pendingAddressBarFocusByTabId: Object.fromEntries(
+                Object.entries(s.pendingAddressBarFocusByTabId).filter(
+                  ([pendingPageId]) => pendingPageId !== pageId
+                )
+              ),
+              browserCertificateFailuresByPageId: nextBrowserCertificateFailuresByPageId,
+              browserAnnotationsByPageId: nextBrowserAnnotationsByPageId,
+              browserAnnotationMarkerIdsByPageId: nextBrowserAnnotationMarkerIdsByPageId
+            })
         })
 
         for (const remotePage of remotePagesToClose) {

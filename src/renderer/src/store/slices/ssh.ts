@@ -1,4 +1,5 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
+import { editSessionSource } from '../session-source-edits'
 import type { AppState } from '../types'
 import type {
   SshConnectionState,
@@ -64,7 +65,7 @@ export function getLocalSshTargetConnectionGeneration(targetId: string): number 
   return localTargetConnectionGenerations.get(targetId)
 }
 
-export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) => ({
+export const createSshSlice: SessionStateCreator<AppState, SshSlice> = (set) => ({
   sshConnectionStates: new Map(),
   sshTargetLabels: new Map(),
   sshTargetGenerations: new Map(),
@@ -78,26 +79,25 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
 
   setSshConnectionState: (targetId, state) =>
     set((s) => {
-      const next = new Map(s.sshConnectionStates)
-      const previous = next.get(targetId)
+      const previous = s.sshConnectionStates.get(targetId)
       if (sshConnectionStatesEqual(previous, state)) {
-        return s
+        return undefined
       }
       localTargetConnectionGenerations.advance(targetId)
-      next.set(targetId, state)
       const didReconnect = previous?.status !== 'connected' && state.status === 'connected'
       let blockedConnections = s.transientClearedAgentStatusConnectionIds
       if (didReconnect && targetId in blockedConnections) {
         blockedConnections = { ...blockedConnections }
         delete blockedConnections[targetId]
       }
-      return {
-        sshConnectionStates: next,
-        sshConnectedGeneration: didReconnect
-          ? s.sshConnectedGeneration + 1
-          : s.sshConnectedGeneration,
-        transientClearedAgentStatusConnectionIds: blockedConnections
-      }
+      return editSessionSource(s)
+        .set('sshConnectionStates', targetId, state)
+        .finish({
+          sshConnectedGeneration: didReconnect
+            ? s.sshConnectedGeneration + 1
+            : s.sshConnectedGeneration,
+          transientClearedAgentStatusConnectionIds: blockedConnections
+        })
     }),
 
   setSshTargetLabels: (labels) => set({ sshTargetLabels: labels }),
@@ -113,7 +113,7 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
         sshTargetGenerationsEqual(s.sshTargetGenerations, sshTargetGenerations)
       ) {
         // An unchanged empty list still proves first hydration.
-        return s.sshTargetsHydrated ? s : { sshTargetsHydrated: true }
+        return s.sshTargetsHydrated ? undefined : { sshTargetsHydrated: true }
       }
       return {
         sshTargetLabels: new Map(targets.map((target) => [target.id, target.label])),
@@ -122,7 +122,7 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
       }
     }),
   clearRemovedSshTargetState: (targetId) =>
-    set((s) => buildRemovedSshTargetCleanupPatch(s, targetId) ?? s),
+    set((s) => buildRemovedSshTargetCleanupPatch(s, targetId) ?? undefined),
   enqueueSshCredentialRequest: (req) =>
     set((s) => ({ sshCredentialQueue: [...s.sshCredentialQueue, req] })),
   removeSshCredentialRequest: (requestId) =>
@@ -149,7 +149,7 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
       } else if (targetId in next) {
         delete next[targetId]
       } else {
-        return s
+        return undefined
       }
       return { unrestoredPortForwardsByConnection: next }
     }),

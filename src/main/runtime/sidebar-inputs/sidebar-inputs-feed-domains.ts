@@ -1,3 +1,4 @@
+import { sidebarActivityFeedDomain } from './sidebar-activity-feed-domain'
 import {
   getRegisteredSshState,
   listRegisteredSshTargets
@@ -20,9 +21,6 @@ import {
   buildPairedServerReviewFacts,
   buildWorkspaceReviewFacts
 } from '../../../shared/sidebar-list/workspace-review-facts'
-import { buildPairedServerActivityFacts } from '../../../shared/sidebar-list/paired-server-activity-facts'
-import { parseExecutionHostId } from '../../../shared/execution-host'
-import { keyWorkspaceActivityByRow } from '../../../shared/sidebar-list/workspace-activity-facts'
 
 /** This host's store and connection registries, read the way sidebarInputs.desktopFacts reads them. */
 export function readRuntimeDesktopSidebarFacts(store: RuntimeStore): DesktopSidebarFacts {
@@ -101,38 +99,7 @@ export function sidebarInputsFeedDomains(
     return store
   }
   return [
-    {
-      name: 'activity',
-      read: () => {
-        const rows = workspaceRows.snapshot()?.rows
-        if (!rows) {
-          return null
-        }
-        return {
-          // This host's session tabs and agents are by bare id, so a same-id pair it lists share them.
-          ...keyWorkspaceActivityByRow(facts.getWorkspaceActivityFacts().facts, rows),
-          ...buildPairedServerActivityFacts(
-            pairedServerRows.snapshot().servers,
-            (hostId) => sources.store()?.getWorkspaceSession?.(hostId) ?? null
-          )
-        }
-      },
-      ready: () => workspaceRows.ready(),
-      watch: (changed) => {
-        const detaches = [
-          facts.workspaceActivityFacts.revision.onChange(changed),
-          workspaceRows.revision.onChange(changed),
-          pairedServerRows.revision.onChange(changed),
-          // This desktop's saved session for a paired server holds its browser and chat tabs there.
-          sources.store()?.onWorkspaceSessionWritten?.((hostId) => {
-            if (hostId === null || parseExecutionHostId(hostId)?.kind === 'runtime') {
-              changed()
-            }
-          })
-        ]
-        return () => detaches.forEach((detach) => detach?.())
-      }
-    },
+    sidebarActivityFeedDomain(sources),
     {
       name: 'temporal',
       read: () => {
@@ -209,11 +176,46 @@ export function sidebarInputsFeedDomains(
       name: 'desktop',
       // Each field its own entity.
       read: () => readRuntimeDesktopSidebarFacts(requireStore()),
+      readEntities: (keys) => {
+        if (keys.every((key) => key === 'desktopActive')) {
+          const session = requireStore().getWorkspaceSession?.('local')
+          return {
+            desktopActive: {
+              hostId: session?.activeWorkspaceExecutionHostId ?? null,
+              worktreeId: session?.activeWorktreeId ?? null
+            }
+          }
+        }
+        const facts = readRuntimeDesktopSidebarFacts(requireStore())
+        return Object.fromEntries(
+          keys
+            .filter((key) => Object.hasOwn(facts, key))
+            .map((key) => {
+              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: own-property filtering above admits desktop fact names only.
+              return [key, facts[key as keyof typeof facts]]
+            })
+        )
+      },
       watch: (changed) => {
         const store = sources.store()
         const detaches = [
           watchCatalog(changed),
-          store?.onWorkspaceSessionWritten?.(() => changed()),
+          store?.onWorkspaceSessionWritten?.((_hostId, partitions) => {
+            for (const changes of partitions ?? [undefined]) {
+              if (!changes || changes.fullReplacement) {
+                changed()
+              } else if (
+                changes.hostId === 'local' &&
+                changes.units.some(
+                  (unit) =>
+                    unit.field === 'activeWorktreeId' ||
+                    unit.field === 'activeWorkspaceExecutionHostId'
+                )
+              ) {
+                changed({ entities: ['desktopActive'] })
+              }
+            }
+          }),
           // Pins, settings (saved with or without notifying), UI, and full saves (repos, folders, SSH).
           store?.onStateWritten?.((domains) => {
             if (

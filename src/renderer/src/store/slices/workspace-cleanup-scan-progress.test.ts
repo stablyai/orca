@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import type {
@@ -185,7 +186,8 @@ describe('workspace cleanup scan progress', () => {
       }
     ).api.pty = { hasChildProcesses, getForegroundProcess }
     const store = createCleanupTestStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This tabsByWorktree, ptyIdsByTabId fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       tabsByWorktree: {
         'repo1::/tmp/terminal': [
           { id: 'tab-1', title: 'zsh' }
@@ -313,7 +315,8 @@ describe('workspace cleanup scan progress', () => {
       }
     ).api.pty = { hasChildProcesses, getForegroundProcess }
     const store = createCleanupTestStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This tabsByWorktree, ptyIdsByTabId fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       tabsByWorktree: {
         'repo1::/tmp/terminal': [
           { id: 'tab-1', title: 'zsh' }
@@ -389,7 +392,8 @@ describe('workspace cleanup scan progress', () => {
       }
     ).api.pty = { hasChildProcesses, getForegroundProcess }
     const store = createCleanupTestStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This tabsByWorktree, ptyIdsByTabId fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       tabsByWorktree: {
         'repo1::/tmp/terminal': [
           { id: 'tab-1', title: 'zsh' }
@@ -468,7 +472,8 @@ describe('workspace cleanup scan progress', () => {
       }
     ).api.pty = { hasChildProcesses, getForegroundProcess }
     const store = createCleanupTestStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This tabsByWorktree, ptyIdsByTabId fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       tabsByWorktree: {
         'repo1::/tmp/terminal': [
           { id: 'tab-1', title: 'zsh' }
@@ -553,7 +558,8 @@ describe('workspace cleanup scan progress', () => {
     ).api.workspaceCleanup.cancelScan = cancelScan
     const removeWorktree = vi.fn().mockResolvedValue({ ok: true })
     const store = createCleanupTestStore(removeWorktree)
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This workspaceCleanupScan fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       workspaceCleanupScan: { scannedAt: NOW - 1, candidates: [candidate], errors: [] }
     } as Partial<AppState>)
 

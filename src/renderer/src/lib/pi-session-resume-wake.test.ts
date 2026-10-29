@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -17,7 +18,7 @@ const initialAppStoreState = useAppStore.getState()
 const PI_TRANSCRIPT_PATH = join(tmpdir(), 'pi-session-1.jsonl')
 
 afterEach(() => {
-  useAppStore.setState(initialAppStoreState, true)
+  setSessionTestState(useAppStore, initialAppStoreState, true)
 })
 
 describe('Pi session wake', () => {
@@ -49,7 +50,7 @@ describe('Pi session wake', () => {
       sortOrder: 0,
       createdAt: 1
     }
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { 'wt-1': [tab] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
     })

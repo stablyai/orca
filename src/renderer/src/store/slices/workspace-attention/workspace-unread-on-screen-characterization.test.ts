@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WorktreeMetaPersistModule from '../worktrees/metadata/worktree-meta-persist'
 import { structuredAgentSessionPaneKey } from '../../../../../shared/structured-agent-session-projection'
@@ -55,7 +56,7 @@ afterEach(() => {
 /** A tab split into LEAF_1 | LEAF_2. */
 function splitTab(store: AttentionStore, tabId: string): void {
   const s = store.getState()
-  store.setState({
+  setSessionTestState(store, {
     terminalLayoutsByTabId: {
       ...s.terminalLayoutsByTabId,
       [tabId]: {
@@ -182,7 +183,7 @@ describe('on screen means read', () => {
 describe('the flag follows its markers', () => {
   it('a restart flag with no marker is read when its workspace comes on screen', () => {
     const { store, persists } = createAttentionStore({ windowOnScreen: false })
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {
         repo1: [makeWorktree({ id: WS_A, repoId: 'repo1', path: '/path/a', isUnread: true })]
       }

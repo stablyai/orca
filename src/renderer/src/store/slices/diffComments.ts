@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -73,7 +73,7 @@ function recordReviewNoteInteraction(get: () => AppState): void {
   }
 }
 
-export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffCommentsSlice> = (
+export const createDiffCommentsSlice: SessionStateCreator<AppState, DiffCommentsSlice> = (
   set,
   get
 ) => ({

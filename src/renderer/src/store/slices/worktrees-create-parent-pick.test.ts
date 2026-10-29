@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -39,7 +40,7 @@ describe('createWorktree composer parent pick', () => {
 
   function createParentPickStore(parent?: Worktree) {
     const store = createRepoTestStore()
-    store.setState({
+    setSessionTestState(store, {
       repos:
         parent && parent.repoId !== TEST_REPO.id
           ? [TEST_REPO, { ...TEST_REPO, id: parent.repoId }]
@@ -67,7 +68,7 @@ describe('createWorktree composer parent pick', () => {
       instanceId: 'parent-instance'
     })
     const store = createParentPickStore(parent)
-    store.setState({
+    setSessionTestState(store, {
       activeWorkspaceKey: folderWorkspaceKey('folder-1'),
       repos: [
         ...store.getState().repos,
@@ -88,7 +89,10 @@ describe('createWorktree composer parent pick', () => {
 
   it('drops a stale parent pick and falls back to the active folder workspace', async () => {
     const store = createParentPickStore()
-    store.setState({ activeWorkspaceKey: folderWorkspaceKey('folder-1') } as Partial<AppState>)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This activeWorkspaceKey fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
+      activeWorkspaceKey: folderWorkspaceKey('folder-1')
+    } as Partial<AppState>)
     mockApi.worktrees.create.mockResolvedValue({
       worktree: makeWorktree({ id: 'repo1::/path/child', repoId: 'repo1', path: '/path/child' })
     })
@@ -227,7 +231,8 @@ describe('createWorktree parent pick on a remote runtime', () => {
 
   function createRemoteStore() {
     const store = createRepoTestStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       repos: [
         {
           id: REMOTE_REPO,
@@ -365,7 +370,8 @@ describe('createWorktree parent pick on a remote runtime', () => {
   // Why: the folder parent comes from the active scope, not a pick, so nothing else would surface it.
   it('warns when the retry drops an active folder-workspace parent', async () => {
     const store = createRemoteStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       activeWorkspaceKey: folderWorkspaceKey('folder-1'),
       folderWorkspaces: [{ id: 'folder-1', name: 'Design docs' }]
     } as unknown as Partial<AppState>)
@@ -404,7 +410,7 @@ describe('createWorktree parent pick on a remote runtime', () => {
 
 // Creation routes by the project row's own host, so every test seeds that row.
 function seedRepoHost(store: ReturnType<typeof createTestStore>, hostId: ExecutionHostId): void {
-  store.setState({ repos: [{ ...TEST_REPO, executionHostId: hostId }] })
+  setSessionTestState(store, { repos: [{ ...TEST_REPO, executionHostId: hostId }] })
 }
 
 function createRepoTestStore(): ReturnType<typeof createTestStore> {

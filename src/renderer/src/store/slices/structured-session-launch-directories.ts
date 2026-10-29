@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 
 export type StructuredSessionLaunchDirectory = {
@@ -27,10 +27,8 @@ function withoutTab(
   return rest
 }
 
-export const createStructuredSessionLaunchDirectorySlice: StateCreator<
+export const createStructuredSessionLaunchDirectorySlice: SessionStateCreator<
   AppState,
-  [],
-  [],
   StructuredSessionLaunchDirectorySlice
 > = (set) => ({
   structuredSessionLaunchDirectoryByTabId: {},
@@ -45,10 +43,10 @@ export const createStructuredSessionLaunchDirectorySlice: StateCreator<
                 tabId
               )
             }
-          : state
+          : undefined
       }
       if (current?.sessionId === sessionId && current.launchDirectory === launchDirectory) {
-        return state
+        return undefined
       }
       return {
         structuredSessionLaunchDirectoryByTabId: {
@@ -67,7 +65,7 @@ export const createStructuredSessionLaunchDirectorySlice: StateCreator<
               tabId
             )
           }
-        : state
+        : undefined
     )
   }
 })

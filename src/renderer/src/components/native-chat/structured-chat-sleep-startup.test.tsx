@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -39,7 +40,7 @@ it('keeps an unidentified twin visible, then follows only its named host through
   const hosts = ['local', 'runtime:paired'] as const
   mocks.supportsCapability.mockResolvedValue(true)
   mocks.subscribeStatus.mockResolvedValue({ unsubscribe: vi.fn() })
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     activeWorktreeId: 'another-workspace',
     activeWorkspaceExecutionHostId: null,
     repos: hosts.map((executionHostId) => repoFixture({ executionHostId })),

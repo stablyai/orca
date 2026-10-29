@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type { Tab } from '../../../shared/tab-types'
@@ -170,7 +171,7 @@ function drawTab(
     ...tab
   }
   const state = store.getState()
-  store.setState({
+  setSessionTestState(store, {
     unifiedTabsByWorktree: {
       ...state.unifiedTabsByWorktree,
       [GIT_KEY]: [...state.unifiedTabsByWorktree[GIT_KEY]!, drawn]
@@ -290,7 +291,7 @@ describe('a change main applies first, with frames flowing', () => {
       relativePath: 'src/peek.ts',
       isPreview: true
     }
-    store.setState({ openFiles: [...store.getState().openFiles, file] })
+    setSessionTestState(store, { openFiles: [...store.getState().openFiles, file] })
     const tab = drawTab(store, {
       id: 'editor:peek',
       entityId: file.id,

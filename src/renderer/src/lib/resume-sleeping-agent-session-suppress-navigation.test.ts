@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
@@ -16,7 +17,7 @@ const initialAppStoreState = useAppStore.getState()
 
 afterEach(() => {
   vi.unstubAllGlobals()
-  useAppStore.setState(initialAppStoreState, true)
+  setSessionTestState(useAppStore, initialAppStoreState, true)
 })
 
 function makeRecord(
@@ -53,7 +54,8 @@ describe('resumeSleepingAgentSessionsForWorktree navigation suppression', () => 
   it('resumes without navigating the desktop when navigation is suppressed', () => {
     // Mobile wake must spawn recovery without changing the desktop’s current worktree/view.
     const record = makeRecord({ origin: 'quit' })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       activeWorktreeId: 'wt-other',
       activeTabId: 'other-tab',
       activeTabType: 'browser',
@@ -76,7 +78,8 @@ describe('resumeSleepingAgentSessionsForWorktree navigation suppression', () => 
   it('skips and preserves a record whose claim an in-place wake already consumed', () => {
     // Mounted hibernated panes own their in-place wake; generic resume must neither duplicate it nor clear its record before spawn succeeds (#7906).
     const record = makeRecord({ origin: 'quit' })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       activeWorktreeId: 'wt-other',
       activeTabId: 'other-tab',
       activeTabType: 'browser',
@@ -98,7 +101,8 @@ describe('resumeSleepingAgentSessionsForWorktree navigation suppression', () => 
 
   it('reports each launched resume tab through onSessionLaunched', () => {
     const record = makeRecord({ origin: 'quit' })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       activeWorktreeId: 'wt-other',
       activeTabId: 'other-tab',
       activeTabType: 'browser',
@@ -124,7 +128,8 @@ describe('resumeSleepingAgentSessionsForWorktree navigation suppression', () => 
   it('still navigates to the resumed tab for default (desktop) callers', () => {
     // Suppression is opt-in; desktop resume must still select its recovery terminal.
     const record = makeRecord({ origin: 'quit' })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       activeWorktreeId: 'wt-1',
       activeTabId: 'tab-1',
       activeTabType: 'browser',
@@ -151,7 +156,7 @@ describe('resumeSleepingAgentSessionsForWorktree navigation suppression', () => 
       sortOrder: 0,
       createdAt: 1
     }
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       activeWorktreeId: 'wt-other',
       activeTabId: 'other-tab',
       activeTabType: 'browser',

@@ -1,3 +1,5 @@
+import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
+
 import { createHash } from 'node:crypto'
 import {
   closeSync,
@@ -10,10 +12,10 @@ import {
   statSync,
   writeFileSync
 } from 'node:fs'
-import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { getAppEnvironment } from '../shared/app-environment'
-import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
+
 import {
   TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT,
   TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT
@@ -183,12 +185,18 @@ export function writeTerminalScrollbackSnapshotSync(args: {
   }
 }
 
-export async function writeTerminalScrollbackSnapshot(args: {
+export type PreparedTerminalScrollbackSnapshot = {
+  commit: () => string | null
+  discard: () => Promise<void>
+}
+
+/** Prepare bytes off-thread; the admitted unit commits its rename and publication without yielding. */
+export async function prepareTerminalScrollbackSnapshot(args: {
   tabId: string
   leafId: string
   buffer: string
   storage?: TerminalScrollbackSnapshotStorage
-}): Promise<string | null> {
+}): Promise<PreparedTerminalScrollbackSnapshot | null> {
   if (!args.buffer) {
     return null
   }
@@ -199,21 +207,51 @@ export async function writeTerminalScrollbackSnapshot(args: {
     return null
   }
   const tmpPath = `${path}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
-  let renamed = false
-  try {
-    await mkdir(snapshotRoot, { recursive: true, mode: 0o700 })
-    const bytes = trailingUtf8Bytes(args.buffer, TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT)
-    await writeFile(tmpPath, bytes, { mode: 0o600 })
-    await rename(tmpPath, path)
-    renamed = true
-    return ref
-  } catch (err) {
-    console.warn(`[terminal-scrollback] Failed to write snapshot: ${errorMessage(err)}`)
-    return null
-  } finally {
-    if (!renamed) {
+  let committed = false
+  const discard = async (): Promise<void> => {
+    if (!committed) {
       await rm(tmpPath, { force: true }).catch(() => {})
     }
+  }
+  try {
+    await mkdir(snapshotRoot, { recursive: true, mode: 0o700 })
+    await writeFile(tmpPath, trailingUtf8Bytes(args.buffer, TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT), {
+      mode: 0o600
+    })
+    return {
+      commit: () => {
+        try {
+          renameSync(tmpPath, path)
+          committed = true
+          return ref
+        } catch (error) {
+          console.warn(`[terminal-scrollback] Failed to commit snapshot: ${errorMessage(error)}`)
+          return null
+        }
+      },
+      discard
+    }
+  } catch (error) {
+    await discard()
+    console.warn(`[terminal-scrollback] Failed to prepare snapshot: ${errorMessage(error)}`)
+    return null
+  }
+}
+
+export async function writeTerminalScrollbackSnapshot(args: {
+  tabId: string
+  leafId: string
+  buffer: string
+  storage?: TerminalScrollbackSnapshotStorage
+}): Promise<string | null> {
+  const prepared = await prepareTerminalScrollbackSnapshot(args)
+  if (!prepared) {
+    return null
+  }
+  try {
+    return prepared.commit()
+  } finally {
+    await prepared.discard()
   }
 }
 
@@ -261,58 +299,4 @@ export function collectTerminalScrollbackSnapshotRefs(session: WorkspaceSessionS
     }
   }
   return refs
-}
-
-export function migrateWorkspaceSessionTerminalScrollbackSnapshots(
-  session: WorkspaceSessionState,
-  storage?: TerminalScrollbackSnapshotStorage
-): { session: WorkspaceSessionState; changed: boolean } {
-  let terminalLayoutsByTabId: WorkspaceSessionState['terminalLayoutsByTabId'] | null = null
-  for (const [tabId, layout] of Object.entries(session.terminalLayoutsByTabId ?? {})) {
-    const buffers = layout.buffersByLeafId
-    if (!buffers || Object.keys(buffers).length === 0) {
-      continue
-    }
-    const refs = { ...layout.scrollbackRefsByLeafId }
-    const remainingBuffers: Record<string, string> = {}
-    let layoutChanged = false
-    for (const [leafId, buffer] of Object.entries(buffers)) {
-      const ref = writeTerminalScrollbackSnapshotSync({
-        tabId,
-        leafId,
-        buffer,
-        storage
-      })
-      if (ref) {
-        refs[leafId] = ref
-        layoutChanged = true
-      } else {
-        remainingBuffers[leafId] = buffer
-        if (refs[leafId]) {
-          delete refs[leafId]
-          layoutChanged = true
-        }
-      }
-    }
-    if (!layoutChanged) {
-      continue
-    }
-    terminalLayoutsByTabId ??= { ...session.terminalLayoutsByTabId }
-    const nextLayout = { ...layout }
-    if (Object.keys(refs).length > 0) {
-      nextLayout.scrollbackRefsByLeafId = refs
-    } else {
-      delete nextLayout.scrollbackRefsByLeafId
-    }
-    if (Object.keys(remainingBuffers).length > 0) {
-      nextLayout.buffersByLeafId = remainingBuffers
-    } else {
-      delete nextLayout.buffersByLeafId
-    }
-    terminalLayoutsByTabId[tabId] = nextLayout
-  }
-  if (!terminalLayoutsByTabId) {
-    return { session, changed: false }
-  }
-  return { session: { ...session, terminalLayoutsByTabId }, changed: true }
 }

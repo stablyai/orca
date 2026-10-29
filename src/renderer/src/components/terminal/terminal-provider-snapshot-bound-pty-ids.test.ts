@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as SnapshotCapabilityModule from './terminal-provider-snapshot-capability'
@@ -48,7 +49,7 @@ function seedWorkspace(): void {
   const tabs = Array.from({ length: TAB_COUNT }, (_, index) =>
     makeTab({ id: tabId(index), worktreeId: WORKTREE_ID, ptyId: `pty-${index}` })
   )
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     worktreesByRepo: { repo: worktrees },
     tabsByWorktree: { [WORKTREE_ID]: tabs },
     ptyIdsByTabId: Object.fromEntries(tabs.map((tab, index) => [tab.id, [`pty-${index}`]])),
@@ -64,7 +65,7 @@ describe('createTerminalProviderSnapshotBoundPtyIdsSelector', () => {
   let unsubscribe: () => void
 
   beforeEach(() => {
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
     seedWorkspace()
     collectPtyIds.mockClear()
     select = createTerminalProviderSnapshotBoundPtyIdsSelector()
@@ -76,7 +77,7 @@ describe('createTerminalProviderSnapshotBoundPtyIdsSelector', () => {
 
   afterEach(() => {
     unsubscribe()
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   // Title and active-leaf writes replace scanned maps without changing their PTY set.
@@ -113,21 +114,23 @@ describe('createTerminalProviderSnapshotBoundPtyIdsSelector', () => {
     expect(boundPtyIds).toContain('pty-0-b-next')
 
     expectRecollect('split pty bound to a tab', () => {
-      useAppStore.setState((state) => ({
+      setSessionTestState(useAppStore, (state) => ({
         ptyIdsByTabId: { ...state.ptyIdsByTabId, [tabId(1)]: ['pty-1', 'pty-1-split'] }
       }))
     })
     expect(boundPtyIds).toContain('pty-1-split')
 
     expectRecollect('split pty unbound from a tab', () => {
-      useAppStore.setState((state) => ({
+      setSessionTestState(useAppStore, (state) => ({
         ptyIdsByTabId: { ...state.ptyIdsByTabId, [tabId(1)]: ['pty-1'] }
       }))
     })
     expect(boundPtyIds).not.toContain('pty-1-split')
 
     expectRecollect('pending reconnect pty appears', () => {
-      useAppStore.setState({ pendingReconnectPtyIdByTabId: { [tabId(2)]: 'pty-2-reconnect' } })
+      setSessionTestState(useAppStore, {
+        pendingReconnectPtyIdByTabId: { [tabId(2)]: 'pty-2-reconnect' }
+      })
     })
     expect(boundPtyIds).toContain('pty-2-reconnect')
 
@@ -160,7 +163,7 @@ describe('createTerminalProviderSnapshotBoundPtyIdsSelector', () => {
     expect(boundPtyIds).not.toContain('pty-3-c')
 
     expectRecollect('tab added', () => {
-      useAppStore.setState((state) => ({
+      setSessionTestState(useAppStore, (state) => ({
         tabsByWorktree: {
           ...state.tabsByWorktree,
           [WORKTREE_ID]: [
@@ -173,7 +176,7 @@ describe('createTerminalProviderSnapshotBoundPtyIdsSelector', () => {
     expect(boundPtyIds).toContain('pty-new')
 
     expectRecollect('tab removed', () => {
-      useAppStore.setState((state) => ({
+      setSessionTestState(useAppStore, (state) => ({
         tabsByWorktree: {
           ...state.tabsByWorktree,
           [WORKTREE_ID]: (state.tabsByWorktree[WORKTREE_ID] ?? []).filter(
@@ -189,7 +192,7 @@ describe('createTerminalProviderSnapshotBoundPtyIdsSelector', () => {
   it('keeps the array identity when a rebuild lands on the same id set', () => {
     const initialBoundPtyIds = boundPtyIds
 
-    useAppStore.setState((state) => ({
+    setSessionTestState(useAppStore, (state) => ({
       tabsByWorktree: {
         ...state.tabsByWorktree,
         [WORKTREE_ID]: (state.tabsByWorktree[WORKTREE_ID] ?? []).toReversed()

@@ -1,3 +1,8 @@
+import {
+  editSessionSource,
+  type OrdinarySourcePartial,
+  type SessionSourceWrite
+} from '../../../session-source-edits'
 import type { AppState } from '../../../types'
 import type {
   BrowserPage,
@@ -39,7 +44,6 @@ const WORKTREE_ID_KEYED_MAP_KEYS = [
   'explorerDisplayRootByWorktree',
   'showDotfilesByWorktree',
   'expandedDirs',
-  'defaultTerminalTabsAppliedByWorktreeId',
   'recentlyClosedTabKindsByWorktree'
 ] as const satisfies readonly (keyof AppState)[]
 
@@ -48,9 +52,10 @@ export function buildWorktreeRenameState(
   s: AppState,
   oldWorktreeId: string,
   newWorktreeId: string
-): Partial<AppState> {
+): SessionSourceWrite<AppState> {
+  const edit = editSessionSource(s)
   if (oldWorktreeId === newWorktreeId) {
-    return {}
+    return edit.finish()
   }
   renameCombinedDiffViewOwner(oldWorktreeId, newWorktreeId)
   const renamed: Record<string, unknown> = {}
@@ -105,8 +110,6 @@ export function buildWorktreeRenameState(
   }
   // Recency keys may carry a host prefix. Preserve that prefix while moving
   // the path-derived id so a rename cannot merge host twins.
-  const nextVisitRecency = { ...s.lastVisitedAtByWorktreeId }
-  let visitRecencyChanged = false
   for (const [key, value] of Object.entries(s.lastVisitedAtByWorktreeId)) {
     const rawId = getWorktreeIdFromVisitKey(key)
     if (rawId !== oldWorktreeId) {
@@ -114,12 +117,16 @@ export function buildWorktreeRenameState(
     }
     const nextKey =
       rawId === key ? newWorktreeId : `${key.slice(0, key.length - rawId.length)}${newWorktreeId}`
-    nextVisitRecency[nextKey] = value
-    delete nextVisitRecency[key]
-    visitRecencyChanged = true
+    edit.set('lastVisitedAtByWorktreeId', nextKey, value)
+    edit.remove('lastVisitedAtByWorktreeId', key)
   }
-  if (visitRecencyChanged) {
-    renamed.lastVisitedAtByWorktreeId = nextVisitRecency
+  if (edit.has('defaultTerminalTabsAppliedByWorktreeId', oldWorktreeId)) {
+    edit.set(
+      'defaultTerminalTabsAppliedByWorktreeId',
+      newWorktreeId,
+      s.defaultTerminalTabsAppliedByWorktreeId[oldWorktreeId]
+    )
+    edit.remove('defaultTerminalTabsAppliedByWorktreeId', oldWorktreeId)
   }
   // Re-key on rename so a renamed worktree keeps its editor-undo + push/pull state.
   renameKey('recentlyClosedEditorTabsByWorktree', (files: { worktreeId: string }[]) =>
@@ -133,19 +140,12 @@ export function buildWorktreeRenameState(
   )
   renameKey('remoteStatusesByWorktree')
 
-  const currentBrowserPagesByWorkspace = s.browserPagesByWorkspace ?? {}
-  const browserPagesByWorkspace = Object.values(currentBrowserPagesByWorkspace).some((pages) =>
-    pages.some(
-      (page) => page.worktreeId === oldWorktreeId || page.docLocation?.worktreeId === oldWorktreeId
-    )
-  )
-    ? Object.fromEntries(
-        Object.entries(currentBrowserPagesByWorkspace).map(([workspaceId, pages]) => [
-          workspaceId,
-          pages.map(withNewBrowserWorktreeId)
-        ])
-      )
-    : s.browserPagesByWorkspace
+  for (const [workspaceId, pages] of Object.entries(s.browserPagesByWorkspace ?? {})) {
+    const next = pages.map(withNewBrowserWorktreeId)
+    if (next.some((page, index) => page !== pages[index])) {
+      edit.set('browserPagesByWorkspace', workspaceId, next)
+    }
+  }
   const currentRecentlyClosedBrowserPagesByWorkspace = s.recentlyClosedBrowserPagesByWorkspace ?? {}
   const recentlyClosedBrowserPagesByWorkspace = Object.values(
     currentRecentlyClosedBrowserPagesByWorkspace
@@ -193,41 +193,39 @@ export function buildWorktreeRenameState(
         closedTombstoneEntries.rows.map(({ tabId, ...tombstone }) => [tabId, tombstone])
       )
     : s.closedTerminalTabTombstonesByTabId
-  const repointRowsByEnvironment = <T extends { worktreeId: string }>(
-    current: Record<string, T[]> | undefined
-  ): Record<string, T[]> | null => {
-    let changed = false
-    const next = Object.fromEntries(
-      Object.entries(current ?? {}).map(([environmentId, intents]) => {
-        const repointed = repointRows(intents)
-        changed = changed || repointed.changed
-        return [environmentId, repointed.changed ? repointed.rows : intents]
-      })
-    )
-    return changed ? next : null
+  for (const [environmentId, intents] of Object.entries(
+    s.clientHostedBrowserCloseIntentsByEnvironment ?? {}
+  )) {
+    const repointed = repointRows(intents)
+    if (repointed.changed) {
+      edit.set('clientHostedBrowserCloseIntentsByEnvironment', environmentId, repointed.rows)
+    }
   }
-  const clientHostedBrowserCloseIntentsByEnvironment = repointRowsByEnvironment(
-    s.clientHostedBrowserCloseIntentsByEnvironment
+  for (const [environmentId, intents] of Object.entries(
+    s.pairedTerminalTabCloseIntentsByEnvironment ?? {}
+  )) {
+    const repointed = repointRows(intents)
+    if (repointed.changed) {
+      edit.set('pairedTerminalTabCloseIntentsByEnvironment', environmentId, repointed.rows)
+    }
+  }
+  for (const [paneKey, record] of Object.entries(s.sleepingAgentSessionsByPaneKey ?? {})) {
+    if (record.worktreeId === oldWorktreeId) {
+      edit.set('sleepingAgentSessionsByPaneKey', paneKey, { ...record, worktreeId: newWorktreeId })
+    }
+  }
+  const layout = renameWorktreeLayoutKeys(
+    edit,
+    oldWorktreeId,
+    newWorktreeId,
+    withNewBrowserWorktreeId
   )
-  const pairedTerminalTabCloseIntentsByEnvironment = repointRowsByEnvironment(
-    s.pairedTerminalTabCloseIntentsByEnvironment
-  )
-  const currentSleepingAgentSessionsByPaneKey = s.sleepingAgentSessionsByPaneKey ?? {}
-  const sleepingAgentSessionsByPaneKey = Object.values(currentSleepingAgentSessionsByPaneKey).some(
-    (record) => record.worktreeId === oldWorktreeId
-  )
-    ? Object.fromEntries(
-        Object.entries(currentSleepingAgentSessionsByPaneKey).map(([paneKey, record]) => [
-          paneKey,
-          record.worktreeId === oldWorktreeId ? { ...record, worktreeId: newWorktreeId } : record
-        ])
-      )
-    : s.sleepingAgentSessionsByPaneKey
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the explicit inventory and renameKey calls above contain only non-source fields.
+  const ordinary = renamed as OrdinarySourcePartial<AppState>
 
-  return {
-    ...renameWorktreeLayoutKeys(s, oldWorktreeId, newWorktreeId, withNewBrowserWorktreeId),
-    ...(renamed as Partial<AppState>),
-    ...(browserPagesByWorkspace !== s.browserPagesByWorkspace ? { browserPagesByWorkspace } : {}),
+  return edit.finish({
+    ...layout,
+    ...ordinary,
     ...(recentlyClosedBrowserPagesByWorkspace !== s.recentlyClosedBrowserPagesByWorkspace
       ? { recentlyClosedBrowserPagesByWorkspace }
       : {}),
@@ -237,17 +235,8 @@ export function buildWorktreeRenameState(
     ...(pendingReconnectWorktreeIds !== s.pendingReconnectWorktreeIds
       ? { pendingReconnectWorktreeIds }
       : {}),
-    ...(sleepingAgentSessionsByPaneKey !== s.sleepingAgentSessionsByPaneKey
-      ? { sleepingAgentSessionsByPaneKey }
-      : {}),
     ...(closedTerminalTabTombstonesByTabId !== s.closedTerminalTabTombstonesByTabId
       ? { closedTerminalTabTombstonesByTabId }
-      : {}),
-    ...(clientHostedBrowserCloseIntentsByEnvironment
-      ? { clientHostedBrowserCloseIntentsByEnvironment }
-      : {}),
-    ...(pairedTerminalTabCloseIntentsByEnvironment
-      ? { pairedTerminalTabCloseIntentsByEnvironment }
       : {}),
     ...(s.activeWorktreeId === oldWorktreeId ? { activeWorktreeId: newWorktreeId } : {}),
     // The active workspace key derives from the worktree id, so keep it in sync when the active worktree is renamed.
@@ -257,5 +246,5 @@ export function buildWorktreeRenameState(
     ...(s.renamingWorktreeId?.worktreeId === oldWorktreeId
       ? { renamingWorktreeId: { ...s.renamingWorktreeId, worktreeId: newWorktreeId } }
       : {})
-  }
+  })
 }

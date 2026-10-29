@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
 import { getWorktreeOperationOwnerHostIds } from '@/lib/worktree-operation-route'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -62,6 +63,7 @@ export function dropConfirmedHostRow(
   let sameIdSurvives = false
   requestVirtualizedScrollAnchorRecord('[data-worktree-sidebar]')
   set((state) => {
+    const edit = editSessionSource(state)
     const removedActiveHost =
       state.activeWorktreeId === worktreeId &&
       state.activeWorkspaceExecutionHostId === requiredExecutionHostId
@@ -81,13 +83,16 @@ export function dropConfirmedHostRow(
         scanSurvivingHostId ??
         fallbackSurvivingHostId)
       : null
-    const nextWorktreesByRepo = { ...state.worktreesByRepo }
-    for (const [candidateRepoId, worktrees] of Object.entries(nextWorktreesByRepo)) {
+    for (const [candidateRepoId, worktrees] of Object.entries(state.worktreesByRepo)) {
       const matchOptions = worktreeHostMatchOptions(state, candidateRepoId, requiredExecutionHostId)
-      nextWorktreesByRepo[candidateRepoId] = worktrees.filter(
-        (worktree) =>
-          worktree.id !== worktreeId ||
-          !worktreeMatchesHost(worktree, requiredExecutionHostId, matchOptions)
+      edit.set(
+        'worktreesByRepo',
+        candidateRepoId,
+        worktrees.filter(
+          (worktree) =>
+            worktree.id !== worktreeId ||
+            !worktreeMatchesHost(worktree, requiredExecutionHostId, matchOptions)
+        )
       )
     }
     let nextDetectedWorktreesByRepo = state.detectedWorktreesByRepo
@@ -110,7 +115,7 @@ export function dropConfirmedHostRow(
       resolveSameIdSurvivingHostId(
         {
           ...state,
-          worktreesByRepo: nextWorktreesByRepo,
+          worktreesByRepo: edit.read('worktreesByRepo'),
           detectedWorktreesByRepo: nextDetectedWorktreesByRepo
         },
         worktreeId,
@@ -119,8 +124,7 @@ export function dropConfirmedHostRow(
       ) !== null || fallbackSurvivingHostId !== null
     const nextDeleteState = { ...state.deleteStateByWorktreeId }
     delete nextDeleteState[getWorktreeDeleteStateKey(state, worktreeId, requiredExecutionHostId)]
-    return {
-      worktreesByRepo: nextWorktreesByRepo,
+    return edit.finish({
       ...(nextDetectedWorktreesByRepo !== state.detectedWorktreesByRepo
         ? { detectedWorktreesByRepo: nextDetectedWorktreesByRepo }
         : {}),
@@ -132,7 +136,7 @@ export function dropConfirmedHostRow(
           }
         : {}),
       sortEpoch: state.sortEpoch + 1
-    }
+    })
   })
   if (parseExecutionHostId(requiredExecutionHostId)?.kind === 'ssh') {
     rememberAuthoritativelyRemovedWorktrees(requiredExecutionHostId, [worktreeId])

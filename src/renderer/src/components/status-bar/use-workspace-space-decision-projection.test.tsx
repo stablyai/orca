@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { useStore } from 'zustand'
@@ -68,7 +69,7 @@ function entry(paneKey: string, overrides: Partial<AgentStatusEntry> = {}): Agen
 }
 
 function seed(rows: WorkspaceSpaceWorktree[]) {
-  store.setState({
+  setSessionTestState(store, {
     worktreesByRepo: { repo: rows.map((r) => makeWorktree({ id: r.worktreeId, repoId: 'repo' })) },
     tabsByWorktree: Object.fromEntries(
       rows.map((r) => [
@@ -181,10 +182,12 @@ describe('mounted Space decision projection', () => {
       ])
     )
     expect(details()?.completedAgentCount).toBe(1)
-    act(() => store.setState({ openFiles: [makeOpenFile({ id: 'file', worktreeId: 'w0' })] }))
+    act(() =>
+      setSessionTestState(store, { openFiles: [makeOpenFile({ id: 'file', worktreeId: 'w0' })] })
+    )
     act(() => store.getState().setEditorDraft('file', 'Changed content'))
     expect(details()?.dirtyEditorBufferCount).toBe(1)
-    act(() => store.setState({ tabsByWorktree: { w0: [] } }))
+    act(() => setSessionTestState(store, { tabsByWorktree: { w0: [] } }))
     expect(details()?.terminalTabCount).toBe(0)
     act(() => store.setState({ workspaceSpaceAnalysis: null }))
     expect(view.result.current.decisionDetailsByWorktreeId.size).toBe(0)
@@ -192,7 +195,7 @@ describe('mounted Space decision projection', () => {
 
   it('keeps special own keys and migration workspace-or-tab ownership across host collisions', () => {
     seed([row('w0'), row('w0', 'ssh:host'), row('w1')])
-    store.setState({
+    setSessionTestState(store, {
       tabsByWorktree: {
         w0: [makeTab({ id: 'shared', worktreeId: 'w0' })],
         w1: [makeTab({ id: 'shared', worktreeId: 'w0' })]

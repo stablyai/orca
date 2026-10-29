@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type {
@@ -32,7 +32,7 @@ export type OrcaProfilesSlice = OrcaProfilesAuthActions & {
   ) => Promise<TransferOrcaProfileProjectResult | null>
 }
 
-export const createOrcaProfilesSlice: StateCreator<AppState, [], [], OrcaProfilesSlice> = (
+export const createOrcaProfilesSlice: SessionStateCreator<AppState, OrcaProfilesSlice> = (
   set,
   get,
   api

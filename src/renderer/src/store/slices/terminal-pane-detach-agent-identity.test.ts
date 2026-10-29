@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it } from 'vitest'
 import { resolveWindowsShiftEnterEncodingForPane } from '@/components/terminal-pane/terminal-windows-shift-enter'
 import { createTestStore, makeTab, makeWorktree, seedStore } from './store-test-helpers'
@@ -49,7 +50,7 @@ describe('syncPaneDetachPtyOwnership agent identity', () => {
       prompt: '',
       agentType: 'droid'
     })
-    store.setState({
+    setSessionTestState(store, {
       sleepingAgentSessionsByPaneKey: {
         [sourcePaneKey]: {
           paneKey: sourcePaneKey,

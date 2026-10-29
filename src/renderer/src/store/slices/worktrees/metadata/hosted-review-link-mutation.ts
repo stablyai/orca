@@ -1,4 +1,5 @@
-import type { StateCreator } from 'zustand'
+import { editSessionSource } from '@/store/session-source-edits'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../../../types'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import {
@@ -278,13 +279,15 @@ export function sanitizeHostedReviewLinksForBranchClears<
 }
 
 export function applyHostedReviewLinkClear(
-  set: Parameters<StateCreator<AppState, [], [], WorktreeSlice>>[0],
+  set: Parameters<SessionStateCreator<AppState, WorktreeSlice>>[0],
   worktreeId: string,
   copy: WorktreeCopyClear
 ): void {
   set((s) => {
+    const edit = editSessionSource(s)
+    clearCopyReviewLinks(edit, worktreeId, copy)
+    const nextWorktrees = edit.read('worktreesByRepo')
     const byRepo = s.worktreesByRepo
-    const nextWorktrees = clearCopyReviewLinks(byRepo, worktreeId, copy)
     const nextDetectedWorktrees = applyDetectedWorktreeUpdates(
       s.detectedWorktreesByRepo,
       worktreeId,
@@ -292,16 +295,14 @@ export function applyHostedReviewLinkClear(
       copy.hostId
     )
     if (nextWorktrees === byRepo && nextDetectedWorktrees === s.detectedWorktreesByRepo) {
-      return s
+      return undefined
     }
-    return {
-      ...(nextWorktrees !== byRepo
-        ? { worktreesByRepo: nextWorktrees, sortEpoch: s.sortEpoch + 1 }
-        : {}),
+    return edit.finish({
+      ...(nextWorktrees !== byRepo ? { sortEpoch: s.sortEpoch + 1 } : {}),
       ...(nextDetectedWorktrees !== s.detectedWorktreesByRepo
         ? { detectedWorktreesByRepo: nextDetectedWorktrees }
         : {})
-    }
+    })
   })
 }
 

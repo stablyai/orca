@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import { linearListInvalidationToken } from './linear/linear-cache'
 import { createLinearConnectionActions } from './linear/linear-slice-connection-actions'
@@ -25,7 +25,7 @@ export type {
   LinearSlice
 } from './linear/linear-slice-contract'
 
-export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (set, get) => ({
+export const createLinearSlice: SessionStateCreator<AppState, LinearSlice> = (set, get) => ({
   linearStatus: { connected: false, viewer: null },
   linearStatusChecked: false,
   linearStatusContextKey: null,

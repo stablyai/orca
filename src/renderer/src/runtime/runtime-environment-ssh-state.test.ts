@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshConnectionState, SshProviderEpoch } from '../../../shared/ssh-types'
 import { useAppStore } from '@/store'
@@ -67,7 +68,7 @@ function nextEnvId(): string {
 }
 
 beforeEach(() => {
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
   callRuntimeRpcMock.mockReset()
 })
 

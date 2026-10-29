@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { cleanup, renderHook } from '@testing-library/react'
@@ -26,7 +27,7 @@ const FLOATING_PANE_KEY = makePaneKey(FLOATING_TAB_ID, LEAF_ID)
 const MAIN_PANE_KEY = makePaneKey(MAIN_TAB_ID, MAIN_LEAF_ID)
 
 function seedFloatingCompletion(): void {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     activeView: 'activity',
     activeTabId: null,
     activeWorktreeId: 'wt-1',
@@ -100,7 +101,7 @@ describe('useReadOnScreenAttention — floating workspace panel visibility', () 
 
   // Acknowledging the first visible target synchronously reenters scanning; a stale loop snapshot would re-ack the second.
   it('clears both the active terminal tab and the floating tab in one pass', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       activeView: 'terminal',
       activeTabId: MAIN_TAB_ID,
       activeWorktreeId: 'wt-1',

@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { setSessionTestState } from '../../src/renderer/src/lib/test-support/session-source-fixture'
 import type * as StructuredSessionClient from '@/runtime/structured-agent-session-client'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -99,7 +100,7 @@ async function disposeHistory() {
     await rm(directory, { recursive: true, force: true })
   }
   directory = null
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
 }
 afterEach(disposeHistory)
 

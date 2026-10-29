@@ -1,10 +1,11 @@
+import type { SessionTestStore } from '@/lib/test-support/session-source-fixture'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 // Use real record middleware and save queues for cross-workspace restored drafts, phone writes, rich text and autosave pauses.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
-import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
@@ -34,7 +35,9 @@ import { withRecordDiskText } from './editor-buffer-adapter'
 import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
 import type { FileContent } from './editor-panel-content-types'
 
-const storeRef = vi.hoisted((): { current: StoreApi<AppState> | null } => ({ current: null }))
+const storeRef = vi.hoisted((): { current: SessionTestStore<AppState> | null } => ({
+  current: null
+}))
 
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
@@ -52,10 +55,10 @@ vi.mock('@/lib/file-owner-runtime-target', () => ({
 
 const BASE = 'base'
 
-function twoWorkspaceStore(): StoreApi<AppState> {
+function twoWorkspaceStore(): SessionTestStore<AppState> {
   const store = createEditorStore()
   storeRef.current = store
-  store.setState({
+  setSessionTestState(store, {
     worktreesByRepo: {
       'repo-1': [
         makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }),
@@ -67,7 +70,7 @@ function twoWorkspaceStore(): StoreApi<AppState> {
 }
 
 function restore(
-  store: StoreApi<AppState>,
+  store: SessionTestStore<AppState>,
   drafts: [string | undefined, string | undefined],
   workspaces = ['wt-1', 'wt-2']
 ): [OpenFile, OpenFile] {
@@ -90,7 +93,10 @@ function restore(
       workspaces.map((workspace, i) => [workspace, [entry(workspace, drafts[i])]])
     )
   }
-  store.setState(buildHydratedEditorSessionState(session, new Set(workspaces), workspaces[0]).state)
+  setSessionTestState(
+    store,
+    buildHydratedEditorSessionState(session, new Set(workspaces), workspaces[0]).state
+  )
   const [a, b] = store.getState().openFiles
   expect([a?.worktreeId, b?.worktreeId]).toEqual(workspaces)
   return [a, b]
@@ -98,7 +104,7 @@ function restore(
 
 /** Match mount reconciliation: prefer drafts and never push stale cached text into an already-live model. */
 function mount(
-  store: StoreApi<AppState>,
+  store: SessionTestStore<AppState>,
   viewId: string,
   text = store.getState().editorDrafts[viewId] ?? BASE
 ): monaco.editor.ITextModel {
@@ -119,7 +125,7 @@ function mount(
   return model
 }
 
-function bannerOf(store: StoreApi<AppState>, id: string): string | null {
+function bannerOf(store: SessionTestStore<AppState>, id: string): string | null {
   const file = view(store, id)!
   return file.externalMutation === 'changed'
     ? renderToStaticMarkup(
@@ -132,7 +138,7 @@ function bannerOf(store: StoreApi<AppState>, id: string): string | null {
     : null
 }
 
-const view = (store: StoreApi<AppState>, id: string) =>
+const view = (store: SessionTestStore<AppState>, id: string) =>
   store.getState().openFiles.find((tab) => tab.id === id)
 
 beforeEach(() => {
@@ -237,7 +243,7 @@ describe('restored floating and ordinary views', () => {
               ]
             }
           : { worktreesByRepo: store.getState().worktreesByRepo }
-      store.setState(late ? { worktreesByRepo: {}, folderWorkspaces: [] } : catalog)
+      setSessionTestState(store, late ? { worktreesByRepo: {}, folderWorkspaces: [] } : catalog)
       const [ordinary, floating] = restore(
         store,
         [undefined, 'restored draft'],
@@ -246,7 +252,7 @@ describe('restored floating and ordinary views', () => {
       const recordOf = (id: string) => store.getState().editorBufferIdOf[id]
       if (late) {
         expect(recordOf(ordinary.id)).not.toBe(recordOf(floating.id))
-        store.setState(catalog)
+        setSessionTestState(store, catalog)
       }
       expect(recordOf(ordinary.id)).toBe(recordOf(floating.id))
       expect(store.getState().editorDrafts[ordinary.id]).toBe('restored draft')

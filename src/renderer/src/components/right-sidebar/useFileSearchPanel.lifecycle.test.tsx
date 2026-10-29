@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -15,7 +16,8 @@ const empty: SearchResult = { files: [], totalMatches: 0, truncated: false }
 beforeEach(() => {
   vi.useFakeTimers()
   search.mockReset()
-  useAppStore.setState(
+  setSessionTestState(
+    useAppStore,
     {
       ...initial,
       folderWorkspaces: [
@@ -28,7 +30,7 @@ beforeEach(() => {
   )
 })
 afterEach(() => {
-  useAppStore.setState(initial, true)
+  setSessionTestState(useAppStore, initial, true)
   vi.useRealTimers()
 })
 
@@ -85,7 +87,7 @@ it.each(['search', 'files', 'unmounted'] as const)(
       hook.rerender({ view })
     }
     await act(async () =>
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         folderWorkspaces: [makeFolderWorkspace({ id: 'a', folderPath: '/replacement' })]
       })
     )
@@ -113,7 +115,7 @@ it('invalidates completed results and errors when the execution owner changes at
   const hook = renderHook(() => useFileSearchPanel('search'))
   await act(async () => vi.advanceTimersByTimeAsync(300))
   await act(async () =>
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [
         makeFolderWorkspace({ id: 'a', folderPath: '/a', executionHostId: 'runtime:remote-a' })
       ]
@@ -139,7 +141,7 @@ it('automatically replaces pending root searches and ignores a late old completi
   const hook = renderHook(() => useFileSearchPanel('search'))
   await act(async () => vi.advanceTimersByTimeAsync(300))
   await act(async () =>
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [makeFolderWorkspace({ id: 'a', folderPath: '/replacement' })]
     })
   )
@@ -167,7 +169,7 @@ it('retries a saved failure after its root changes without reusing the old error
       'old root unavailable'
     )
     await act(async () =>
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         folderWorkspaces: [makeFolderWorkspace({ id: 'a', folderPath: '/replacement' })]
       })
     )
@@ -196,7 +198,7 @@ it.each(['root', 'owner'] as const)(
     expect(hook.result.current.resultsProps.error).toBe('current failure')
     renders.length = 0
     await act(async () =>
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         folderWorkspaces: [
           makeFolderWorkspace({
             id: 'a',

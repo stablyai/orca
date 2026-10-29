@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act } from 'react'
@@ -91,7 +92,7 @@ describe('runtime graph draft hashing at publication', () => {
     resetRuntimeMobileSyncProjectionCachesForTests()
     graphState.mobileSessionSnapshotCacheByWorktree.clear()
     store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       workspaceSessionReady: true,
       openFiles: [file],
       editorDrafts: { markdown: 'initial' }
@@ -118,7 +119,7 @@ describe('runtime graph draft hashing at publication', () => {
   it.each([40_000, 400_000])(
     'hashes only the final %i-character Markdown draft in a burst',
     async (size) => {
-      store.setState({ editorDrafts: { markdown: 'x'.repeat(size) } })
+      setSessionTestState(store, { editorDrafts: { markdown: 'x'.repeat(size) } })
       await render()
       await flush()
       resetCounts()
@@ -133,7 +134,7 @@ describe('runtime graph draft hashing at publication', () => {
       const version = stableHashString(store.getState().editorDrafts.markdown)
       expect(latestVersion()).toBe(version)
       resetCounts()
-      store.setState({ editorDrafts: { ...store.getState().editorDrafts } })
+      setSessionTestState(store, { editorDrafts: { ...store.getState().editorDrafts } })
       await flush()
       expect(mocks.publish).not.toHaveBeenCalled()
       expect(mocks.hashes.calls).toBe(0)
@@ -199,7 +200,10 @@ describe('runtime graph draft hashing at publication', () => {
       mode: 'markdown-preview' as const,
       markdownPreviewSourceFileId: source.id
     }
-    store.setState({ openFiles: [source, preview], editorDrafts: { source: 'preview exact' } })
+    setSessionTestState(store, {
+      openFiles: [source, preview],
+      editorDrafts: { source: 'preview exact' }
+    })
     await render()
     await flush()
     expect(latestVersion()).toBe(stableHashString('preview exact'))
@@ -208,14 +212,14 @@ describe('runtime graph draft hashing at publication', () => {
     await flush()
     expect(latestVersion()).toBe('file:source')
     expect(mocks.hashes.calls).toBe(0)
-    store.setState({ openFiles: [source], editorDrafts: { source: 'ordinary source' } })
+    setSessionTestState(store, { openFiles: [source], editorDrafts: { source: 'ordinary source' } })
     await flush()
     resetCounts()
     store.getState().setEditorDraft(source.id, 'ordinary edit')
     await flush()
     expect(mocks.publish).not.toHaveBeenCalled()
     expect(mocks.hashes.calls).toBe(0)
-    store.setState({ openFiles: [{ ...source, language: 'markdown' }] })
+    setSessionTestState(store, { openFiles: [{ ...source, language: 'markdown' }] })
     await flush()
     expect(latestVersion()).toBe(stableHashString('ordinary edit'))
   })

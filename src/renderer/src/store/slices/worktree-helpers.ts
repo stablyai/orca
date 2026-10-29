@@ -1,3 +1,4 @@
+import type { SessionSourceEdit, OrdinarySourcePartial } from '../session-source-edits'
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
 import type { WorkspaceReferenceObservationContext } from '@/lib/workspace-attachment-observed-origin'
 import type {
@@ -93,8 +94,11 @@ export type WorktreeRenameRequest = {
   rowKey?: string
 }
 
-export type ActiveWorktreeStateTransition = (state: AppState) => {
-  patch: Partial<AppState>
+export type ActiveWorktreeStateTransition = (
+  state: AppState,
+  edit: SessionSourceEdit<AppState>
+) => {
+  patch: OrdinarySourcePartial<AppState>
   activate: boolean
   preferredActiveUnifiedTabId?: string
 }

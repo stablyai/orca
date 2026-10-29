@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import {
@@ -27,13 +28,13 @@ const initialAppStoreState = useAppStore.getState()
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
-  useAppStore.setState(initialAppStoreState, true)
+  setSessionTestState(useAppStore, initialAppStoreState, true)
 })
 
 /** The state a workspace lands in once its last terminal is closed: the row survives as an
  *  explicit empty list rather than disappearing, beside the close's record. */
 function seedClosedLastTerminal(worktreeId: string): void {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     tabsByWorktree: { [worktreeId]: [] },
     closedTerminalTabTombstonesByTabId: { closed: { closedAt: Date.now(), worktreeId } }
   })
@@ -65,7 +66,7 @@ describe('activating a workspace whose last terminal was closed', () => {
       const worktree = makeWorktree()
       seedEmptyActivatableWorktree(worktree)
       seedClosedLastTerminal(worktree.id)
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         sleepingAgentSessionsByPaneKey: {
           'pane-1': { worktreeId: worktree.id }
         } as never
@@ -97,7 +98,7 @@ describe('activating a workspace whose last terminal was closed', () => {
     const worktree = makeWorktree()
     seedEmptyActivatableWorktree(worktree)
     seedClosedLastTerminal(worktree.id)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       sleepingAgentSessionsByPaneKey: {
         'pane-1': { worktreeId: worktree.id }
       } as never
@@ -120,7 +121,7 @@ describe('activating a workspace whose last terminal was closed', () => {
     const worktree = makeWorktree()
     seedEmptyActivatableWorktree(worktree)
     seedClosedLastTerminal(worktree.id)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       sleepingAgentSessionsByPaneKey: {
         'pane-1': { worktreeId: worktree.id }
       } as never
@@ -146,7 +147,7 @@ describe('activating a workspace whose last terminal was closed', () => {
     const worktree = makeWorktree()
     seedEmptyActivatableWorktree(worktree)
     seedClosedLastTerminal(worktree.id)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       sleepingAgentSessionsByPaneKey: {
         'pane-1': { worktreeId: worktree.id }
       } as never
@@ -255,7 +256,8 @@ describe('activating a workspace whose last terminal was closed', () => {
     const worktree = makeWorktree()
     seedEmptyActivatableWorktree(worktree)
     seedClosedLastTerminal(worktree.id)
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       browserTabsByWorktree: {
         [worktree.id]: [
           {
@@ -324,7 +326,8 @@ function seedEmptiedFolderWorkspaceOnTwoHosts(): void {
     isPinned: false,
     sortOrder: 0
   }
-  useAppStore.setState({
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+  setSessionTestState(useAppStore, {
     folderWorkspaces: [
       { ...base, folderPath: '/local/notes', executionHostId: 'local' },
       // Why: an SSH host, not a runtime one — runtime-owned workspaces return early from
@@ -364,7 +367,7 @@ describe('activating a folder workspace whose last terminal was closed', () => {
     'forwards providesInitialSurface=%s through the async activation gate',
     async (providesInitialSurface) => {
       seedEmptiedFolderWorkspaceOnTwoHosts()
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         sleepingAgentSessionsByPaneKey: {
           'pane-1': { worktreeId: FOLDER_KEY }
         } as never
@@ -417,7 +420,7 @@ describe('activating a folder workspace whose last terminal was closed', () => {
     're-seeds a gate-reported empty workspace for %s',
     async (_label, selection, executionHostId, expectedTabs) => {
       seedEmptiedFolderWorkspaceOnTwoHosts()
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         sleepingAgentSessionsByPaneKey: {
           'pane-1': { worktreeId: FOLDER_KEY }
         } as never

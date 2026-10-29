@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { getDefaultSettings } from '../../../shared/constants'
@@ -54,7 +55,7 @@ afterEach(() => {
   vi.useRealTimers()
   vi.clearAllMocks()
   setLocalRuntimeCapabilitiesForTests(null)
-  useAppStore.setState(initialAppStoreState, true)
+  setSessionTestState(useAppStore, initialAppStoreState, true)
 })
 
 describe('openDefaultAgentChatInEmptyWorkspace', () => {

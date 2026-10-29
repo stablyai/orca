@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { useAppStore } from '@/store'
 import { createTestStore } from '@/store/slices/store-test-helpers'
@@ -144,7 +145,7 @@ describe('hook-driven tab title IPC integration', () => {
           titlesByLeafId: { [LEAF_ID]: 'Codex ready', [otherLeaf]: title }
         }
       }
-      store.setState({ ...seeded, workspaceSessionReady: true, activeWorktreeId: null })
+      setSessionTestState(store, { ...seeded, workspaceSessionReady: true, activeWorktreeId: null })
       const events = states.map((state, index): AgentStatusIpcPayload & AgentStatusSetData => ({
         paneKey: PANE_KEY,
         worktreeId: WORKTREE_ID,

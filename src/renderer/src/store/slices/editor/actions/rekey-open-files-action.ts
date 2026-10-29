@@ -1,3 +1,9 @@
+import {
+  editSessionSource,
+  type SessionSourceEdit,
+  type OrdinarySourcePartial,
+  type SessionSourceWrite
+} from '../../../session-source-edits'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import type { AppState } from '../../../types'
@@ -9,17 +15,22 @@ import { renameEditorFilesThroughLayoutOwner } from '../tabs/editor-file-rename-
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import { rekeyEditorBytesDocuments } from '@/components/editor/editor-bytes-document-boxes'
 
+export type RekeyOpenFilesEdit =
+  | { ok: true; patch: OrdinarySourcePartial<AppState> }
+  | Extract<RekeyOpenFilesResult, { ok: false }>
+
 // The store change is pure, so a layout-owner build applies it in the frame that shows main's rename.
 export type RekeyOpenFilesPatch =
-  | { ok: true; patch: Partial<AppState> }
+  | { ok: true; patch: SessionSourceWrite<AppState> }
   | Extract<RekeyOpenFilesResult, { ok: false }>
 
 /** The rekey of `s`; refused as a whole when a source is gone or two files would share an id. */
-export function rekeyOpenFilesPatch(
+export function applyOpenFileRekeys(
+  edit: SessionSourceEdit<AppState>,
   s: AppState,
   rekeys: readonly OpenFilePathRekey[],
   moveOperationId: string | undefined
-): RekeyOpenFilesPatch {
+): RekeyOpenFilesEdit {
   const migrations = new Map<string, string>()
   const rekeyByOldId = new Map<string, OpenFilePathRekey>()
   for (const rekey of rekeys) {
@@ -44,7 +55,7 @@ export function rekeyOpenFilesPatch(
     }
   }
 
-  const nextOpenFiles = s.openFiles.map((f) => {
+  edit.sequence('openFiles').map((f) => {
     const rekey = rekeyByOldId.get(f.id)
     if (!rekey) {
       return f
@@ -82,9 +93,12 @@ export function rekeyOpenFilesPatch(
     }
   })
 
-  const activeFileIdByWorktree: Record<string, string | null> = {}
   for (const [wtId, activeId] of Object.entries(s.activeFileIdByWorktree)) {
-    activeFileIdByWorktree[wtId] = activeId ? (migrations.get(activeId) ?? activeId) : activeId
+    edit.set(
+      'activeFileIdByWorktree',
+      wtId,
+      activeId ? (migrations.get(activeId) ?? activeId) : activeId
+    )
   }
 
   // Partition by each file’s workspace; same paths can be open in multiple workspaces with independent tab/group state.
@@ -110,25 +124,27 @@ export function rekeyOpenFilesPatch(
       ? rekeyByOldId.get(reveal.fileId)
       : rekeys.find((r) => r.oldFilePath === reveal.filePath)
 
+  edit.replace('editorDrafts', rekeyFileIdRecord(s.editorDrafts, migrations), 'order')
+  edit.replace(
+    'markdownFrontmatterVisible',
+    rekeyFileIdRecord(s.markdownFrontmatterVisible, migrations),
+    'order'
+  )
+  migrateHydratedEditorTabsAndGroups(edit, migrationsByWorktree)
   return {
     ok: true,
     patch: {
-      openFiles: nextOpenFiles,
       ...rekeyEditorBuffers(s, s.openFiles, migrations, 'rename'),
-      editorDrafts: rekeyFileIdRecord(s.editorDrafts, migrations),
       editorCursorLine: rekeyFileIdRecord(s.editorCursorLine, migrations),
       markdownViewMode: rekeyFileIdRecord(s.markdownViewMode, migrations),
       markdownRichModeSizeOverride: rekeyFileIdRecord(s.markdownRichModeSizeOverride, migrations),
       editorViewMode: rekeyFileIdRecord(s.editorViewMode, migrations),
-      markdownFrontmatterVisible: rekeyFileIdRecord(s.markdownFrontmatterVisible, migrations),
       markdownTableOfContentsVisible: rekeyFileIdRecord(
         s.markdownTableOfContentsVisible,
         migrations
       ),
       activeFileId: s.activeFileId ? (migrations.get(s.activeFileId) ?? s.activeFileId) : null,
-      activeFileIdByWorktree,
       tabBarOrderByWorktree,
-      ...migrateHydratedEditorTabsAndGroups(s, migrationsByWorktree),
       ...(reveal && rekeyForReveal
         ? {
             pendingEditorReveal: {
@@ -141,6 +157,16 @@ export function rekeyOpenFilesPatch(
         : {})
     }
   }
+}
+
+export function rekeyOpenFilesPatch(
+  s: AppState,
+  rekeys: readonly OpenFilePathRekey[],
+  moveOperationId: string | undefined
+): RekeyOpenFilesPatch {
+  const edit = editSessionSource(s)
+  const result = applyOpenFileRekeys(edit, s, rekeys, moveOperationId)
+  return result.ok ? { ok: true, patch: edit.finish(result.patch) } : result
 }
 
 export function createRekeyOpenFilesAction(
@@ -159,7 +185,7 @@ export function createRekeyOpenFilesAction(
           get,
           rekeys,
           moveOperationId,
-          rekeyOpenFilesPatch
+          applyOpenFileRekeys
         )
       }
       let result: RekeyOpenFilesResult = { ok: true }
@@ -167,7 +193,7 @@ export function createRekeyOpenFilesAction(
         const next = rekeyOpenFilesPatch(s, rekeys, moveOperationId)
         if (!next.ok) {
           result = next
-          return s
+          return undefined
         }
         rekeyEditorBytesDocuments(rekeys)
         return next.patch

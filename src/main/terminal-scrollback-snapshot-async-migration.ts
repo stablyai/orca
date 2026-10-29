@@ -1,14 +1,17 @@
+import type { TerminalLayoutSnapshot } from '../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
 import {
   collectTerminalScrollbackSnapshotRefs,
   deleteTerminalScrollbackSnapshot,
   type TerminalScrollbackSnapshotStorage,
-  writeTerminalScrollbackSnapshot
+  prepareTerminalScrollbackSnapshot,
+  type PreparedTerminalScrollbackSnapshot
 } from './terminal-scrollback-snapshots'
 
 export async function migrateWorkspaceSessionTerminalScrollbackSnapshotsAsync(
   session: WorkspaceSessionState,
-  storage?: TerminalScrollbackSnapshotStorage
+  storage?: TerminalScrollbackSnapshotStorage,
+  admit?: (tabId: string, commit: () => TerminalLayoutSnapshot) => void
 ): Promise<WorkspaceSessionState> {
   let terminalLayoutsByTabId: WorkspaceSessionState['terminalLayoutsByTabId'] | null = null
   for (const [tabId, layout] of Object.entries(session.terminalLayoutsByTabId ?? {})) {
@@ -16,22 +19,40 @@ export async function migrateWorkspaceSessionTerminalScrollbackSnapshotsAsync(
     if (!buffers || Object.keys(buffers).length === 0) {
       continue
     }
-    const refs = { ...layout.scrollbackRefsByLeafId }
-    const remainingBuffers: Record<string, string> = {}
-    for (const [leafId, buffer] of Object.entries(buffers)) {
-      const ref = await writeTerminalScrollbackSnapshot({ tabId, leafId, buffer, storage })
-      if (ref) {
-        refs[leafId] = ref
-      } else {
-        remainingBuffers[leafId] = buffer
-        delete refs[leafId]
+    const prepared = new Map<string, PreparedTerminalScrollbackSnapshot | null>()
+    try {
+      for (const [leafId, buffer] of Object.entries(buffers)) {
+        prepared.set(
+          leafId,
+          await prepareTerminalScrollbackSnapshot({ tabId, leafId, buffer, storage })
+        )
       }
-    }
-    terminalLayoutsByTabId ??= { ...session.terminalLayoutsByTabId }
-    terminalLayoutsByTabId[tabId] = {
-      ...layout,
-      buffersByLeafId: Object.keys(remainingBuffers).length > 0 ? remainingBuffers : undefined,
-      scrollbackRefsByLeafId: Object.keys(refs).length > 0 ? refs : undefined
+      const commit = (): TerminalLayoutSnapshot => {
+        const refs = { ...layout.scrollbackRefsByLeafId }
+        const remainingBuffers: Record<string, string> = {}
+        for (const [leafId, buffer] of Object.entries(buffers)) {
+          const ref = prepared.get(leafId)?.commit()
+          if (ref) {
+            refs[leafId] = ref
+          } else {
+            remainingBuffers[leafId] = buffer
+            delete refs[leafId]
+          }
+        }
+        return {
+          ...layout,
+          buffersByLeafId: Object.keys(remainingBuffers).length ? remainingBuffers : undefined,
+          scrollbackRefsByLeafId: Object.keys(refs).length ? refs : undefined
+        }
+      }
+      if (admit) {
+        admit(tabId, commit)
+      } else {
+        terminalLayoutsByTabId ??= { ...session.terminalLayoutsByTabId }
+        terminalLayoutsByTabId[tabId] = commit()
+      }
+    } finally {
+      await Promise.all([...prepared.values()].map(async (entry) => entry?.discard()))
     }
   }
   return terminalLayoutsByTabId ? { ...session, terminalLayoutsByTabId } : session

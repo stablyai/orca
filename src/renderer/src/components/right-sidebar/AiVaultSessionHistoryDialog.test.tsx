@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -127,8 +128,8 @@ beforeEach(() => {
   mocks.scopePaths.length = 0
   mocks.sessions = []
   mocks.handleResumeInNewChat.mockReset()
-  useAppStore.setState(useAppStore.getInitialState(), true)
-  useAppStore.setState({
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, {
     activeRepoId: 'repo-1',
     activeWorktreeId: OTHER_WORKTREE,
     repos: [makeRepo()],
@@ -159,7 +160,7 @@ describe('Session History dialog', () => {
     expect(dialogSearch().value).toBe('auth')
 
     mocks.handleResumeInNewChat.mockImplementation(() =>
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         activeGroupIdByWorktree: { [OTHER_WORKTREE]: 'group-1' },
         groupsByWorktree: {
           [OTHER_WORKTREE]: [

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import type { ComponentProps } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -23,8 +24,8 @@ function renderOnboardingFlow(props: ComponentProps<typeof OnboardingFlow>): str
 
 describe('OnboardingFlow', () => {
   beforeEach(() => {
-    useAppStore.setState(useAppStore.getInitialState(), true)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
+    setSessionTestState(useAppStore, {
       repos: [],
       settings: getDefaultSettings('/tmp')
     })
@@ -32,7 +33,7 @@ describe('OnboardingFlow', () => {
   })
 
   afterEach(() => {
-    useAppStore.setState(useAppStore.getInitialState(), true)
+    setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
     vi.unstubAllGlobals()
   })
 

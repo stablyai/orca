@@ -95,6 +95,11 @@ describe('a window save in a layout-owner build', () => {
         activeWorktreeIdsOnShutdown: session.activeWorktreeIdsOnShutdown,
         remoteSessionIdsByTabId: session.remoteSessionIdsByTabId,
         activeConnectionIdsAtShutdown: session.activeConnectionIdsAtShutdown
+      }),
+      shutdownReconnectSources: () => ({
+        isLiveLocalPty: () => false,
+        isKnownExited: () => false,
+        sshStatusByTargetId: new Map()
       })
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the save handlers reach only this runtime method.

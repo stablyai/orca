@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { TEST_LEAF_1, TEST_LEAF_2 } from '../persistence-session-fixtures'
 import { ProfileStateWriterError } from '../profile-state/profile-state-writer-errors'
 import { fixture } from './profile-state-delayed-authority-fixture'
+import { editPublishedFixture } from './session-publication-test-fixture'
 
 export function registerPtyBindingAsyncDurabilityTests(): void {
   const binding = {
@@ -15,7 +16,9 @@ export function registerPtyBindingAsyncDurabilityTests(): void {
   describe('durable asynchronous PTY binding', () => {
     it('acknowledges only after the binding reaches SQLite', async () => {
       const { store, authority, readState } = await fixture()
-      store.getWorkspaceSession().activeWorktreeIdsOnShutdown = []
+      editPublishedFixture(store, (session) => {
+        session.activeWorktreeIdsOnShutdown = []
+      })
       await store.flushPendingOrThrowAsync()
       const gate = authority.pause()
       let acknowledged = false
@@ -40,7 +43,9 @@ export function registerPtyBindingAsyncDurabilityTests(): void {
     it('repairs activity on an otherwise matching durable reattach', async () => {
       const { store, authority, readState } = await fixture()
       await store.persistPtyBinding(binding)
-      store.getWorkspaceSession().activeWorktreeIdsOnShutdown = []
+      editPublishedFixture(store, (session) => {
+        session.activeWorktreeIdsOnShutdown = []
+      })
       await store.flushPendingOrThrowAsync()
       authority.captures.length = 0
       await store.persistPtyBinding(binding)
@@ -60,10 +65,10 @@ export function registerPtyBindingAsyncDurabilityTests(): void {
       const resolveBinding = vi.fn(() => ({ ...binding, mayCreate: false }))
       const queued = store.persistPtyBinding(resolveBinding)
       expect(resolveBinding).not.toHaveBeenCalled()
-      const session = store.getWorkspaceSession()
-      session.tabsByWorktree[binding.worktreeId] = []
-      delete session.terminalLayoutsByTabId[binding.tabId]
-      store.setWorkspaceSession(session)
+      editPublishedFixture(store, (session) => {
+        session.tabsByWorktree[binding.worktreeId] = []
+        delete session.terminalLayoutsByTabId[binding.tabId]
+      })
       gate.finish.resolve()
       await older
       expect(await queued).toBe(false)
@@ -73,7 +78,9 @@ export function registerPtyBindingAsyncDurabilityTests(): void {
     it('restores the binding after a known write failure', async () => {
       const { store, authority } = await fixture()
       vi.spyOn(console, 'error').mockImplementation(() => {})
-      store.getWorkspaceSession().activeWorktreeIdsOnShutdown = []
+      editPublishedFixture(store, (session) => {
+        session.activeWorktreeIdsOnShutdown = []
+      })
       const before = structuredClone(store.getWorkspaceSession())
       const gate = authority.pause()
       const rejected = expect(store.persistPtyBinding(binding)).rejects.toThrow('disk refused')
@@ -85,15 +92,17 @@ export function registerPtyBindingAsyncDurabilityTests(): void {
       expect(store.getWorkspaceSession()).toEqual(before)
     })
 
-    it('preserves newer getter edits when an older binding write fails', async () => {
+    it('preserves newer published edits when an older binding write fails', async () => {
       const { store, authority } = await fixture()
       vi.spyOn(console, 'error').mockImplementation(() => {})
       const gate = authority.pause()
       const rejected = expect(store.persistPtyBinding(binding)).rejects.toThrow('disk refused')
       await gate.started.promise
-      store.getWorkspaceSession().terminalLayoutsByTabId[binding.tabId].ptyIdsByLeafId = {
-        [binding.leafId]: 'newer-pty'
-      }
+      editPublishedFixture(store, (session) => {
+        session.terminalLayoutsByTabId[binding.tabId].ptyIdsByLeafId = {
+          [binding.leafId]: 'newer-pty'
+        }
+      })
       gate.finish.reject(
         new ProfileStateWriterError('test-disk-failure', 'disk refused', 'known-failure')
       )
@@ -121,20 +130,21 @@ export function registerPtyBindingAsyncDurabilityTests(): void {
           })
         ).rejects.toThrow('disk refused')
         await gate.started.promise
-        const session = store.getWorkspaceSession()
-        const tab = session.tabsByWorktree[binding.worktreeId].find(
-          (candidate) => candidate.id === binding.tabId
-        )
-        if (!tab) {
-          throw new Error('binding did not create its terminal row')
-        }
-        if (edit === 'tab title') {
-          tab.customTitle = 'new title'
-        } else {
-          session.terminalLayoutsByTabId[binding.tabId].titlesByLeafId = {
-            [binding.leafId]: 'new title'
+        editPublishedFixture(store, (session) => {
+          const tab = session.tabsByWorktree[binding.worktreeId].find(
+            (candidate) => candidate.id === binding.tabId
+          )
+          if (!tab) {
+            throw new Error('binding did not create its terminal row')
           }
-        }
+          if (edit === 'tab title') {
+            tab.customTitle = 'new title'
+          } else {
+            session.terminalLayoutsByTabId[binding.tabId].titlesByLeafId = {
+              [binding.leafId]: 'new title'
+            }
+          }
+        })
         gate.finish.reject(
           new ProfileStateWriterError('test-disk-failure', 'disk refused', 'known-failure')
         )
@@ -165,7 +175,9 @@ export function registerPtyBindingAsyncDurabilityTests(): void {
       const gate = authority.pause()
       const rejected = expect(store.persistPtyBinding(binding)).rejects.toThrow('disk refused')
       await gate.started.promise
-      store.getWorkspaceSession().activeRepoId = 'newer-repo'
+      editPublishedFixture(store, (session) => {
+        session.activeRepoId = 'newer-repo'
+      })
       gate.finish.reject(
         new ProfileStateWriterError('test-disk-failure', 'disk refused', 'known-failure')
       )
@@ -183,23 +195,25 @@ export function registerPtyBindingAsyncDurabilityTests(): void {
         store.persistPtyBinding({ ...binding, ptyId: 'failed-replacement' })
       ).rejects.toThrow('disk refused')
       await gate.started.promise
-      const session = store.getWorkspaceSession()
-      const tab = session.tabsByWorktree[binding.worktreeId].find(
-        (candidate) => candidate.id === binding.tabId
-      )
-      if (!tab) {
-        throw new Error('binding did not create its terminal row')
-      }
-      const layout = session.terminalLayoutsByTabId[binding.tabId]
-      layout.root = {
-        type: 'split',
-        direction: 'horizontal',
-        first: { type: 'leaf', leafId: TEST_LEAF_2 },
-        second: { type: 'leaf', leafId: binding.leafId }
-      }
-      layout.ptyIdsByLeafId = { ...layout.ptyIdsByLeafId, [TEST_LEAF_2]: 'new-root-pty' }
-      tab.ptyId = 'new-root-pty'
-      const expectedRoot = structuredClone(layout.root)
+      let expectedRoot
+      editPublishedFixture(store, (session) => {
+        const tab = session.tabsByWorktree[binding.worktreeId].find(
+          (candidate) => candidate.id === binding.tabId
+        )
+        if (!tab) {
+          throw new Error('binding did not create its terminal row')
+        }
+        const layout = session.terminalLayoutsByTabId[binding.tabId]
+        layout.root = {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', leafId: TEST_LEAF_2 },
+          second: { type: 'leaf', leafId: binding.leafId }
+        }
+        layout.ptyIdsByLeafId = { ...layout.ptyIdsByLeafId, [TEST_LEAF_2]: 'new-root-pty' }
+        tab.ptyId = 'new-root-pty'
+        expectedRoot = structuredClone(layout.root)
+      })
       gate.finish.reject(
         new ProfileStateWriterError('test-disk-failure', 'disk refused', 'known-failure')
       )
@@ -222,12 +236,14 @@ export function registerPtyBindingAsyncDurabilityTests(): void {
       const gate = authority.pause()
       const rejected = expect(store.persistPtyBinding(binding)).rejects.toThrow('disk refused')
       await gate.started.promise
-      const tabs = store.getWorkspaceSession().tabsByWorktree[binding.worktreeId]
-      const boundTab = tabs.find((tab) => tab.id === binding.tabId)
-      if (!boundTab) {
-        throw new Error('binding did not create its terminal row')
-      }
-      tabs.push({ ...boundTab, id: 'newer-sibling', ptyId: 'newer-sibling-pty' })
+      editPublishedFixture(store, (session) => {
+        const tabs = session.tabsByWorktree[binding.worktreeId]
+        const boundTab = tabs.find((tab) => tab.id === binding.tabId)
+        if (!boundTab) {
+          throw new Error('binding did not create its terminal row')
+        }
+        tabs.push({ ...boundTab, id: 'newer-sibling', ptyId: 'newer-sibling-pty' })
+      })
       gate.finish.reject(
         new ProfileStateWriterError('test-disk-failure', 'disk refused', 'known-failure')
       )

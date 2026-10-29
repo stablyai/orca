@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import React, { act } from 'react'
@@ -105,8 +106,9 @@ describe('palette live status', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     bodyRenderCount = 0
-    useAppStore.setState(initialAppState, true)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, initialAppState, true)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { 'wt-a': [makeTerminalTab('term-a', 'wt-a')] },
       ptyIdsByTabId: { 'term-a': ['pty-term-a'] },
       browserTabsByWorktree: {}
@@ -121,7 +123,7 @@ describe('palette live status', () => {
       testRoot.unmount()
     })
     document.body.replaceChildren()
-    useAppStore.setState(initialAppState, true)
+    setSessionTestState(useAppStore, initialAppState, true)
   })
 
   async function render(active = true): Promise<void> {
@@ -141,7 +143,7 @@ describe('palette live status', () => {
     'does not paint a stale self-authored title as a live %s question',
     async (surface) => {
       const staleAt = Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1
-      useAppStore.setState((s) => ({
+      setSessionTestState(useAppStore, (s) => ({
         tabsByWorktree: {
           'wt-a': [{ ...makeTerminalTab('term-a', 'wt-a'), title: 'Codex - action required' }]
         },
@@ -196,7 +198,7 @@ describe('palette live status', () => {
     const otherLeaf = '22222222-2222-4222-8222-222222222222'
     const staleAt = Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1
     setAgentState('done', { updatedAt: staleAt, stateStartedAt: staleAt })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       terminalLayoutsByTabId: {
         'term-a': {
           root: {
@@ -241,7 +243,8 @@ describe('palette live status', () => {
 
   it('shows monitoring when a covered pane retains a working title', async () => {
     setAgentState('working', { workingMode: 'monitoring' })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       tabsByWorktree: {
         'wt-a': [{ ...makeTerminalTab('term-a', 'wt-a'), title: 'claude [working]' }]
       }
@@ -291,7 +294,10 @@ describe('palette live status', () => {
     const rendersAfterMount = bodyRenderCount
 
     await act(async () => {
-      useAppStore.setState({ unreadTerminalTabs: { 'term-a': true } } as Partial<AppState>)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This unreadTerminalTabs fixture intentionally supplies only the state members exercised by this scenario.
+      setSessionTestState(useAppStore, {
+        unreadTerminalTabs: { 'term-a': true }
+      } as Partial<AppState>)
     })
 
     expect(dotLabels()).toEqual(['Unread agent completion'])
@@ -393,7 +399,8 @@ describe('palette live status', () => {
   })
 
   it('shows only the content icon when a terminal-backed row is inactive', async () => {
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       ptyIdsByTabId: {}
     } as Partial<AppState>)
     await act(async () => {
@@ -418,7 +425,8 @@ describe('palette live status', () => {
   })
 
   it('badges unread agent completion when the agent is quiet', async () => {
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This unreadAgentCompletionPanes fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(useAppStore, {
       unreadAgentCompletionPanes: {
         [makePaneKey('term-a', LEAF)]: true
       }
@@ -447,7 +455,8 @@ describe('palette live status', () => {
 
   it('prefers working over unread on the same row', async () => {
     setAgentState('working')
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This unreadTerminalTabs fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(useAppStore, {
       unreadTerminalTabs: { 'term-a': true }
     } as Partial<AppState>)
     await act(async () => {
@@ -496,7 +505,8 @@ describe('palette live status', () => {
 
   it('prefers unread over freshly done on the same row', async () => {
     setAgentState('done')
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This unreadTerminalTabs fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(useAppStore, {
       unreadTerminalTabs: { 'term-a': true }
     } as Partial<AppState>)
     await act(async () => {
@@ -521,7 +531,8 @@ describe('palette live status', () => {
 
   it('prefers permission over unread on the same row', async () => {
     setAgentState('blocked')
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This unreadTerminalTabs fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(useAppStore, {
       unreadTerminalTabs: { 'term-a': true }
     } as Partial<AppState>)
     await act(async () => {

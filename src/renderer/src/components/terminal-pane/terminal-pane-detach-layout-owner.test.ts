@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
 import type {
@@ -48,7 +49,7 @@ beforeEach(() => {
 })
 
 describe('moveLeafThroughLayoutOwner', () => {
-  afterEach(() => useAppStore.setState({ terminalLayoutsByTabId: {} }))
+  afterEach(() => setSessionTestState(useAppStore, { terminalLayoutsByTabId: {} }))
 
   it('sends the drag-out with the window’s terminal and answers with main’s tab', async () => {
     const moving = moveLeafThroughLayoutOwner(request, { groupId: TARGET_GROUP_ID, index: 1 })
@@ -96,7 +97,7 @@ describe('moveLeafThroughLayoutOwner', () => {
 
   it('binds the moved pane to the terminal the server’s frame drew, not a stale one', async () => {
     // The server respawned the pane's shell; its frame drew the new tab with the new handle.
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       terminalLayoutsByTabId: {
         'tab-server': {
           root: { type: 'leaf', leafId: LEAF_2 },

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
@@ -59,7 +60,7 @@ export function createClosedViewHarness(): ClosedViewHarness {
   vi.useFakeTimers()
   const disk = stubEditorWindowWithDisk(createFakeEditorDisk({ [CLOSED_VIEW_PATH]: 'disk' }))
   const store = createEditorStore()
-  store.setState({
+  setSessionTestState(store, {
     worktreesByRepo: { 'repo-1': [closedViewWorktree('wt-1'), closedViewWorktree('wt-2')] },
     openFiles: [closedViewTab('A', 'wt-1'), closedViewTab('B', 'wt-2')]
   })
@@ -100,7 +101,9 @@ export function createClosedViewHarness(): ClosedViewHarness {
     },
     release: () => releaseWrite(),
     closeView: (id) => {
-      store.setState((s) => ({ openFiles: s.openFiles.filter((file) => file.id !== id) }))
+      setSessionTestState(store, (s) => ({
+        openFiles: s.openFiles.filter((file) => file.id !== id)
+      }))
     },
     dispose: () => {
       window.removeEventListener(ORCA_EDITOR_FILE_SAVED_EVENT, onSaved)

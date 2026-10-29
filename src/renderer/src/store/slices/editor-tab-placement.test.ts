@@ -1,4 +1,5 @@
-import type { StoreApi } from 'zustand/vanilla'
+import type { SessionTestStore } from '@/lib/test-support/session-source-fixture'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createEditorStore,
@@ -46,9 +47,9 @@ afterEach(() => {
 })
 
 /** An editor-tabs store main draws from; its session read-back needs these maps. */
-function createDrawnEditorTabsStore(): StoreApi<AppState> {
+function createDrawnEditorTabsStore(): SessionTestStore<AppState> {
   const store = createEditorTabsStore()
-  store.setState({ ptyIdsByTabId: {}, lastKnownRelayPtyIdByTabId: {} })
+  setSessionTestState(store, { ptyIdsByTabId: {}, lastKnownRelayPtyIdByTabId: {} })
   return store
 }
 
@@ -101,7 +102,8 @@ describe('createEditorSlice floating editor activation', () => {
 
   it('opens floating markdown tabs without changing the main active editor surface', () => {
     const store = createEditorStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       activeFileId: '/repo/main.md',
       activeTabType: 'editor',
       activeFileIdByWorktree: { 'wt-1': '/repo/main.md' },
@@ -127,7 +129,8 @@ describe('createEditorSlice floating editor activation', () => {
 
   it('opens same-path floating markdown as a separate owner-qualified tab', () => {
     const store = createEditorStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       openFiles: [
         {
           id: '/repo/README.md',
@@ -174,7 +177,7 @@ describe('createEditorSlice floating editor activation', () => {
 
 describe('createEditorSlice split-group editor routing', () => {
   function openSourceFile(
-    store: StoreApi<AppState>,
+    store: SessionTestStore<AppState>,
     filePath: string,
     options?: Parameters<AppState['openFile']>[1]
   ): void {
@@ -190,13 +193,13 @@ describe('createEditorSlice split-group editor routing', () => {
     )
   }
 
-  async function seedTerminalAndEditorGroups(store: StoreApi<AppState>): Promise<{
+  async function seedTerminalAndEditorGroups(store: SessionTestStore<AppState>): Promise<{
     terminalTabId: string
     terminalGroupId: string
     editorGroupId: string
   }> {
     // The terminal's row, so main holds the agent tab and its group.
-    store.setState({
+    setSessionTestState(store, {
       tabsByWorktree: { 'wt-1': [makeTab({ id: 'terminal-tab', worktreeId: 'wt-1' })] },
       terminalLayoutsByTabId: { 'terminal-tab': makeLayout() }
     })
@@ -217,7 +220,8 @@ describe('createEditorSlice split-group editor routing', () => {
     }
     openSourceFile(store, '/repo/seed.ts', { targetGroupId: editorGroupId })
     await main.settle()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       activeGroupIdByWorktree: { 'wt-1': terminalGroupId },
       activeTabType: 'terminal',
       activeTabTypeByWorktree: { 'wt-1': 'terminal' }
@@ -225,12 +229,12 @@ describe('createEditorSlice split-group editor routing', () => {
     return { terminalTabId: terminalTab.id, terminalGroupId, editorGroupId }
   }
 
-  function findUnifiedTabByEntity(store: StoreApi<AppState>, entityId: string) {
+  function findUnifiedTabByEntity(store: SessionTestStore<AppState>, entityId: string) {
     return store.getState().unifiedTabsByWorktree['wt-1']?.find((tab) => tab.entityId === entityId)
   }
 
   /** The group an open put the file in: a layout-owner build names it in main's open command. */
-  function openedGroupOf(store: StoreApi<AppState>, entityId: string): string | undefined {
+  function openedGroupOf(store: SessionTestStore<AppState>, entityId: string): string | undefined {
     return ORCA_LAYOUT_OWNER_IS_MAIN
       ? layoutApplyTestTransport
           .sentOfType('openEditorTab')
@@ -298,7 +302,8 @@ describe('createEditorSlice split-group editor routing', () => {
       label: 'Browser',
       targetGroupId: browserGroupId
     })
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       activeGroupIdByWorktree: { 'wt-1': browserGroupId },
       activeTabType: 'browser',
       activeTabTypeByWorktree: { 'wt-1': 'browser' }

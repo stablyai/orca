@@ -1,6 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import React, { createRef, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -213,7 +214,7 @@ it('updates nominal toggle labels, including an unassigned binding', () => {
   expect(view.container.textContent).not.toContain('Ctrl+Alt+Y')
   expect(view.container.textContent).not.toContain('Unassigned')
   view.unmount()
-  useAppStore.setState(initial, true)
+  setSessionTestState(useAppStore, initial, true)
   vi.unstubAllGlobals()
 })
 

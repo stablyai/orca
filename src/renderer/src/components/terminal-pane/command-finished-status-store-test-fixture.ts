@@ -1,3 +1,4 @@
+import { withSessionSourceTestWrites } from '@/lib/test-support/session-source-test-store'
 import { createStore } from 'zustand/vanilla'
 import type { AppState } from '@/store/types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
@@ -9,20 +10,22 @@ export function createCommandFinishedStatusStore(): {
   dropAgentStatus: (paneKey: string) => void
   getStatus: (paneKey: string) => AgentStatusEntry | undefined
 } {
-  const store = createStore<AppState>()((...args) => {
-    const state = {
-      settings: null,
-      tabsByWorktree: {},
-      sortEpoch: 0,
-      acknowledgedAgentsByPaneKey: {},
-      activityClearedAtByPaneKey: {},
-      manuallyUnreadTurnsByPaneKey: {},
-      ...createAgentStatusSlice(...args),
-      ...createTerminalTabPresentationActions(args[0], args[1])
-    } satisfies Partial<AppState>
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only fixed working-Claude acceptance, row reads, and drop are exposed; their external fields and real title action are composed above.
-    return state as AppState
-  })
+  const store = createStore<AppState>()(
+    withSessionSourceTestWrites((...args) => {
+      const state = {
+        settings: null,
+        tabsByWorktree: {},
+        sortEpoch: 0,
+        acknowledgedAgentsByPaneKey: {},
+        activityClearedAtByPaneKey: {},
+        manuallyUnreadTurnsByPaneKey: {},
+        ...createAgentStatusSlice(...args),
+        ...createTerminalTabPresentationActions(args[0], args[1])
+      } satisfies Partial<AppState>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only fixed working-Claude acceptance, row reads, and drop are exposed; their external fields and real title action are composed above.
+      return state as AppState
+    })
+  )
   return {
     acceptWorkingClaudeStatus: (paneKey) => {
       store.getState().setAgentStatus(paneKey, {

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createTestStore,
@@ -123,7 +124,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
     const localRepo = { ...TEST_REPO, id: 'repo-routing-local', connectionId: null }
     const sshRepo = { ...TEST_REPO, id: 'repo-routing-ssh', connectionId: 'ssh-live' }
     const store = createTestStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This workspaceSessionReady, repos, worktreesByRepo fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       workspaceSessionReady: true,
       repos: [localRepo, sshRepo],
       worktreesByRepo: {
@@ -213,7 +215,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
       }
     ] satisfies AgentStatusSetData[])
     const store = createTestStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This workspaceSessionReady, repos, worktreesByRepo fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       workspaceSessionReady: true,
       repos: [TEST_REPO],
       worktreesByRepo: {

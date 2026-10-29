@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -97,7 +98,11 @@ export function createWorktreeEventRuntime(
     ) {
       // Why: the host published the saved values, so refetching the repo would only re-download them (#27268).
       const { executionHostId, sortOrders } = options
-      useAppStore.setState((s) => patchWorktreeSortOrders(s, repoId, executionHostId, sortOrders))
+      useAppStore.setState((s) => {
+        const edit = editSessionSource(s)
+        const patch = patchWorktreeSortOrders(edit, repoId, executionHostId, sortOrders)
+        return patch ? edit.finish(patch) : undefined
+      })
       // Keep the existing retry for a host whose lineage snapshot is not fresh.
       if (!isRemoteWorktreeLineageFresh(useAppStore.getState, sortOrderOwner.environmentId)) {
         await useAppStore.getState().fetchWorktreeLineage({ executionHostId })

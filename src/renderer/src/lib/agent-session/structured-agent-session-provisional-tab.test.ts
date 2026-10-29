@@ -1,9 +1,14 @@
+import { sessionTestEdit, setSessionTestState } from '@/lib/test-support/session-source-fixture'
+
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import type * as launchModule from '../structured-agent-session-launch-create-call'
-import type { AgentSessionLaunchPlan } from '../agent-session-launch-plan'
-import { adoptAgentSessionLaunchVerdict } from '../agent-session-launch-plan'
+import {
+  type AgentSessionLaunchPlan,
+  adoptAgentSessionLaunchVerdict
+} from '../agent-session-launch-plan'
+
 import { beginStructuredAgentSessionProvisionalLaunch } from './structured-agent-session-provisional-tab'
 import { StructuredAgentSessionCreateRefusalError } from '../structured-agent-session-launch-errors'
 import { act, renderHook } from '@testing-library/react'
@@ -91,7 +96,7 @@ beforeEach(async () => {
   mocks.text = ''
   resetStructuredAgentLaunchRegistryForTests()
   clearNativeChatPendingAttachmentsForTests()
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     activeWorktreeId: 'wt-1',
     unifiedTabsByWorktree: {},
     groupsByWorktree: {},
@@ -232,7 +237,7 @@ describe('a provisional structured chat tab', () => {
     const groupId = sibling.groupId
     const siblingRecords = () =>
       ORCA_LAYOUT_OWNER_IS_MAIN ? [terminalRecord(sibling.entityId)] : []
-    useAppStore.setState({ tabsByWorktree: { 'wt-1': siblingRecords() } })
+    setSessionTestState(useAppStore, { tabsByWorktree: { 'wt-1': siblingRecords() } })
     await mainLoadsStoreLayout()
     const pinnedSource = scenario === 'empty' || scenario === 'typed-during'
     if (pinnedSource) {
@@ -271,7 +276,7 @@ describe('a provisional structured chat tab', () => {
             .getState()
             .createUnifiedTab('wt-1', 'terminal', { id: 'replacement', activate: false })
     if (terminal) {
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         tabsByWorktree: { 'wt-1': [terminalRecord(terminal.entityId), ...siblingRecords()] }
       })
       if (scenario === 'typed-before') {
@@ -371,7 +376,7 @@ describe('a provisional structured chat tab', () => {
       targetGroupId: chatGroupId,
       activate: false
     })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       tabsByWorktree: {
         'wt-1': ORCA_LAYOUT_OWNER_IS_MAIN
           ? [terminalRecord(sibling.entityId), terminalRecord(terminal.entityId)]
@@ -432,7 +437,10 @@ it.each(['expiry', 'purge'])('created pane publication: %s', async (order) => {
     groupId
   })
   if (order === 'purge') {
-    useAppStore.setState(buildFullWorktreePurgeState(store(), [{ id: 'wt-1' }]))
+    setSessionTestState(
+      useAppStore,
+      sessionTestEdit(store(), (edit) => buildFullWorktreePurgeState(edit, [{ id: 'wt-1' }]))
+    )
   }
   await vi.advanceTimersByTimeAsync(30_000)
   expect(unlisted.isUnlistedCreatedChat('wt-1', chat.entityId)).toBe(false)

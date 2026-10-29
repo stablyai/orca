@@ -1,5 +1,7 @@
+import type { AppState } from '../types'
+import { editSessionSource } from '../session-source-edits'
 import { describe, expect, it } from 'vitest'
-import { applyWorktreeUpdates } from './worktree-meta-update-application'
+import { applyWorktreeUpdates as applyUpdates } from './worktree-meta-update-application'
 
 describe('applyWorktreeUpdates display-name provenance', () => {
   it('returns to the current branch immediately when a label is cleared', () => {
@@ -42,3 +44,12 @@ describe('applyWorktreeUpdates display-name provenance', () => {
     })
   })
 })
+
+function applyWorktreeUpdates(
+  worktreesByRepo: AppState['worktreesByRepo'],
+  ...args: Parameters<typeof applyUpdates> extends [unknown, ...infer Rest] ? Rest : never
+) {
+  const edit = editSessionSource({ worktreesByRepo })
+  applyUpdates(edit, ...args)
+  return edit.read('worktreesByRepo')
+}

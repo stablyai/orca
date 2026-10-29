@@ -1,4 +1,5 @@
-import { createStore, type StoreApi } from 'zustand/vanilla'
+import { withSessionSourceTestWrites } from '@/lib/test-support/session-source-test-store'
+import { createStore } from 'zustand/vanilla'
 import { describe, expect, it, vi } from 'vitest'
 import { createEditorSlice } from './editor'
 import type { AppState } from '../types'
@@ -15,19 +16,25 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
 
-function createEditorStore(overrides?: Partial<AppState>): StoreApi<AppState> {
+function createEditorStore(overrides?: Partial<AppState>) {
   // oxlint-disable-next-line typescript/no-explicit-any, typescript/consistent-type-assertions -- SAFETY: a partial store; tests read only the slices it builds.
-  return createStore<any>()((...args: any[]) => ({
-    ...emptyTabLayoutState(),
-    activeWorktreeId: 'wt-1',
-    tabsByWorktree: {},
-    browserTabsByWorktree: {},
-    activeBrowserTabId: null,
-    activeBrowserTabIdByWorktree: {},
-    tabBarOrderByWorktree: {},
-    ...overrides,
-    ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
-  })) as unknown as StoreApi<AppState>
+  return createStore<AppState>()(
+    withSessionSourceTestWrites(
+      (...args) =>
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial store; tests read only the slices it builds.
+        ({
+          ...emptyTabLayoutState(),
+          activeWorktreeId: 'wt-1',
+          tabsByWorktree: {},
+          browserTabsByWorktree: {},
+          activeBrowserTabId: null,
+          activeBrowserTabIdByWorktree: {},
+          tabBarOrderByWorktree: {},
+          ...overrides,
+          ...createEditorSlice(...args)
+        }) as AppState
+    )
+  )
 }
 
 function makeBrowserTab(id: string): BrowserTab {

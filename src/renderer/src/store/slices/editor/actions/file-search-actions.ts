@@ -24,7 +24,7 @@ export function createFileSearchActions(
         const next = { ...(existing || defaultFileSearchState()), ...updates }
         // Switching workspaces cancels the outgoing idle search; a no-op write would re-notify every subscriber.
         if (existing && shallow(existing, next)) {
-          return s
+          return undefined
         }
         return {
           fileSearchStateByWorktree: {
@@ -75,7 +75,7 @@ export function createFileSearchActions(
       set((s) => {
         const current = s.fileSearchStateByWorktree[worktreeId]
         if (!current || current.seedRequestId !== seedRequestId) {
-          return s
+          return undefined
         }
         const next = { ...current }
         delete next.seedRequestId
@@ -90,7 +90,7 @@ export function createFileSearchActions(
       set((s) => {
         const current = s.fileSearchStateByWorktree[worktreeId]
         if (!current) {
-          return s
+          return undefined
         }
         const nextCollapsed = new Set(current.collapsedFiles)
         if (nextCollapsed.has(filePath)) {
@@ -109,7 +109,7 @@ export function createFileSearchActions(
       set((s) => {
         const current = s.fileSearchStateByWorktree[worktreeId]
         if (!current) {
-          return s
+          return undefined
         }
         return {
           fileSearchStateByWorktree: {

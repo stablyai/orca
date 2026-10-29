@@ -1,3 +1,5 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
+import { withSessionSourceTestWrites } from '@/lib/test-support/session-source-test-store'
 import { vi, type Mock } from 'vitest'
 import { create } from 'zustand'
 import { createGitHubSlice } from './github'
@@ -119,11 +121,13 @@ export function resetRemoteRuntimeMocks() {
 
 export function createTestStore() {
   return create<AppState>()(
-    (...a) =>
-      ({
-        ...createGitHubSlice(...a),
-        ...createHostedReviewSlice(...a)
-      }) as AppState
+    withSessionSourceTestWrites(
+      (...a) =>
+        ({
+          ...createGitHubSlice(...a),
+          ...createHostedReviewSlice(...a)
+        }) as AppState
+    )
   )
 }
 
@@ -186,7 +190,7 @@ export function installLinkedPRClearStub(
       if (options?.shouldApply && !options.shouldApply(currentWorktree)) {
         return
       }
-      store.setState((state) => {
+      setSessionTestState(store, (state) => {
         const nextWorktrees = {
           ...state.worktreesByRepo,
           [args.repoId]: (state.worktreesByRepo[args.repoId] ?? []).map((worktree) =>
@@ -201,7 +205,8 @@ export function installLinkedPRClearStub(
       })
     }
   )
-  store.setState({
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+  setSessionTestState(store, {
     repos: [{ id: args.repoId, path: args.repoPath, name: 'repo', kind: 'git' }],
     worktreesByRepo: { [args.repoId]: [args.worktree] },
     updateWorktreeMeta

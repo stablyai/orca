@@ -73,7 +73,7 @@ export function createAgentStatusDropActions(
               ? { manuallyUnreadTurnsByPaneKey: nextManualUnread }
               : {})
           }
-          return Object.keys(cleanupPatch).length > 0 ? cleanupPatch : s
+          return Object.keys(cleanupPatch).length > 0 ? cleanupPatch : undefined
         }
         const nextLive = hasLive ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
         if (hasLive) {
@@ -201,7 +201,7 @@ export function createAgentStatusDropActions(
               ? { manuallyUnreadTurnsByPaneKey: nextManualUnread }
               : {})
           }
-          return Object.keys(cleanupPatch).length > 0 ? cleanupPatch : s
+          return Object.keys(cleanupPatch).length > 0 ? cleanupPatch : undefined
         }
         hadLive = hasLive
         const nextLive = hasLive ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey

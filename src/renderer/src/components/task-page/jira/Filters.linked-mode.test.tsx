@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
@@ -92,7 +93,8 @@ function FiltersFixture({
 
 beforeEach(() => {
   fixture.loading = false
-  useAppStore.setState(
+  setSessionTestState(
+    useAppStore,
     {
       ...initialStore,
       settings: null,
@@ -121,7 +123,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
-  useAppStore.setState(initialStore, true)
+  setSessionTestState(useAppStore, initialStore, true)
   if (initialApiDescriptor) {
     Object.defineProperty(window, 'api', initialApiDescriptor)
   } else {

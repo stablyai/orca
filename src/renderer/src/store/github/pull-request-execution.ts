@@ -1,5 +1,5 @@
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../../../../shared/worktree/hosted-review-links'
-import type { StateCreator } from 'zustand'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { AppState } from '../types'
 import type { RuntimeFocusSettings } from '../../../../shared/github/github-cache-key'
@@ -35,8 +35,8 @@ import {
   shouldClearDivergedLinkedMergedPR
 } from '../../../../shared/github/linked-pr-staleness'
 export function startPullRequestLookup(args: {
-  set: Parameters<StateCreator<AppState>>[0]
-  get: Parameters<StateCreator<AppState>>[1]
+  set: Parameters<SessionStateCreator<AppState>>[0]
+  get: Parameters<SessionStateCreator<AppState>>[1]
   repoPath: string
   branch: string
   options: Parameters<GitHubSlice['fetchPRForBranch']>[2]
@@ -153,7 +153,7 @@ export function startPullRequestLookup(args: {
           // Why: unlinking a PR mid exact-linked-PR-lookup must stop the older result from restoring the manual link UI.
           if (isStaleExactLinkedPRLookup(s, options?.worktreeId, linkedPRNumber)) {
             skippedStaleLinkedPRLookup = true
-            return s
+            return undefined
           }
           const updates = setGitHubPRResultCaches(s, {
             prCacheKey: cacheKey,
@@ -184,7 +184,7 @@ export function startPullRequestLookup(args: {
             requestStartedAt,
             requestStartedEntry: requestStartedHostedReviewEntry
           })
-          return updates.prCache || updates.hostedReviewCache ? updates : s
+          return updates.prCache || updates.hostedReviewCache ? updates : undefined
         })
         if (skippedStaleLinkedPRLookup) {
           return null

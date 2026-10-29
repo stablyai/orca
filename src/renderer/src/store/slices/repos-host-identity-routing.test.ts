@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
@@ -110,7 +111,7 @@ describe('repo slice host identity routing', () => {
       _meta: { runtimeId: 'runtime-remote' }
     })
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       repos: [localDuplicate, remoteDuplicate]
     })
@@ -134,7 +135,8 @@ describe('repo slice host identity routing', () => {
     const { executionHostId: _executionHostId, ...legacyLocalDuplicate } = localDuplicate
     reposUpdate.mockResolvedValue(undefined)
     const store = createTestStore()
-    store.setState({ repos: [legacyLocalDuplicate as Repo, remoteDuplicate] })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the Repo fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, { repos: [legacyLocalDuplicate as Repo, remoteDuplicate] })
 
     await store.getState().updateRepo('same-repo', { displayName: 'Local Renamed' })
 
@@ -160,7 +162,7 @@ describe('repo slice host identity routing', () => {
     })
     const store = createTestStore()
     // Explicit hostId must override locally focused fallback.
-    store.setState({ repos: [localDuplicate, remoteDuplicate] })
+    setSessionTestState(store, { repos: [localDuplicate, remoteDuplicate] })
 
     await store
       .getState()
@@ -183,7 +185,7 @@ describe('repo slice host identity routing', () => {
     // Self-paired same-ID rows still require explicit local hostId to route IPC, not runtime RPC.
     reposUpdate.mockResolvedValue(undefined)
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       repos: [localDuplicate, remoteDuplicate]
     })
@@ -209,7 +211,7 @@ describe('repo slice host identity routing', () => {
   it('updateRepo preserves an explicit SSH host through local IPC', async () => {
     reposUpdate.mockResolvedValue(undefined)
     const store = createTestStore()
-    store.setState({ repos: [localDuplicate, sshDuplicate] })
+    setSessionTestState(store, { repos: [localDuplicate, sshDuplicate] })
 
     await store
       .getState()
@@ -256,7 +258,7 @@ describe('repo slice host identity routing', () => {
       })
     })
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       repos: [localDuplicate, remoteDuplicate]
     })
@@ -310,7 +312,7 @@ describe('repo slice host identity routing', () => {
       hostId: 'runtime:env-1'
     })
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [localDuplicate, remoteDuplicate],
       activeRepoId: 'same-repo',
       filterRepoIds: ['same-repo'],
@@ -380,7 +382,7 @@ describe('repo slice host identity routing', () => {
       hostId: 'runtime:env-1'
     })
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [localDuplicate, remoteDuplicate],
       worktreesByRepo: { 'same-repo': [localWorktree, remoteWorktree] },
       tabsByWorktree: {
@@ -404,7 +406,7 @@ describe('repo slice host identity routing', () => {
     const { promise: secondRemoval, resolve: resolveSecondRemoval } = Promise.withResolvers<void>()
     reposRemoveForHost.mockReturnValueOnce(firstRemoval).mockReturnValueOnce(secondRemoval)
     const store = createTestStore()
-    store.setState({ repos: [localDuplicate] })
+    setSessionTestState(store, { repos: [localDuplicate] })
 
     const first = store.getState().removeProject(localDuplicate.id, { hostId: 'local' })
     const second = store.getState().removeProject(localDuplicate.id, { hostId: 'local' })
@@ -426,7 +428,7 @@ describe('repo slice host identity routing', () => {
       hostId: 'runtime:env-1'
     })
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [localDuplicate, remoteDuplicate],
       worktreesByRepo: { 'same-repo': [localWorktree, remoteWorktree] },
       lastVisitedAtByWorktreeId: {
@@ -457,7 +459,7 @@ describe('repo slice host identity routing', () => {
     })
     const store = createTestStore()
     // Derive runtime target from explicit hostId despite local focus or removal deletes the wrong row.
-    store.setState({
+    setSessionTestState(store, {
       repos: [localDuplicate, remoteDuplicate],
       worktreesByRepo: { 'same-repo': [localWorktree, remoteWorktree] }
     })
@@ -499,7 +501,7 @@ describe('repo slice host identity routing', () => {
     })
     const store = createTestStore()
     // A runtime env is focused, but the row being removed is SSH-owned.
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       repos: [localDuplicate, sshDuplicate],
       worktreesByRepo: { 'same-repo': [sshWorktree] }
@@ -532,7 +534,7 @@ describe('repo slice host identity routing', () => {
       hostId: 'runtime:env-1'
     })
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       repos: [localDuplicate, remoteDuplicate],
       worktreesByRepo: { 'same-repo': [localWorktree, remoteWorktree] },
@@ -579,7 +581,7 @@ describe('repo slice host identity routing', () => {
       _meta: { runtimeId: 'runtime-remote' }
     })
     const store = createTestStore()
-    store.setState({ repos: [localDuplicate, remoteDuplicate] })
+    setSessionTestState(store, { repos: [localDuplicate, remoteDuplicate] })
 
     await store.getState().reorderRepos(['same-repo', 'same-repo'])
 
@@ -614,7 +616,7 @@ describe('repo slice host identity routing', () => {
     const bravo = { ...localDuplicate, id: 'bravo' }
     const charlie = { ...remoteDuplicate, id: 'charlie' }
     const store = createTestStore()
-    store.setState({ repos: [bravo, localDuplicate, charlie, remoteDuplicate] })
+    setSessionTestState(store, { repos: [bravo, localDuplicate, charlie, remoteDuplicate] })
 
     await store.getState().reorderRepos(['same-repo', 'same-repo', 'bravo', 'charlie'])
 
@@ -652,7 +654,7 @@ describe('repo slice host identity routing', () => {
     const charlie = { ...remoteDuplicate, id: 'charlie' }
     const delta = { ...remoteDuplicate, id: 'delta' }
     const store = createTestStore()
-    store.setState({ repos: [alpha, bravo, charlie, delta] })
+    setSessionTestState(store, { repos: [alpha, bravo, charlie, delta] })
 
     await store.getState().reorderRepos(['alpha', 'charlie', 'bravo', 'delta'])
 
@@ -690,7 +692,7 @@ describe('repo slice host identity routing', () => {
     }
     const delta = { ...charlie, id: 'delta', path: '/ssh/delta' }
     const store = createTestStore()
-    store.setState({ repos: [alpha, charlie, bravo, delta] })
+    setSessionTestState(store, { repos: [alpha, charlie, bravo, delta] })
 
     await store.getState().reorderRepos(['bravo', 'delta', 'alpha', 'charlie'])
 
@@ -709,7 +711,7 @@ describe('repo slice host identity routing', () => {
   })
   it('treats an occurrence-invalid reorder as a total no-op', async () => {
     const store = createTestStore()
-    store.setState({ repos: [localDuplicate, remoteDuplicate] })
+    setSessionTestState(store, { repos: [localDuplicate, remoteDuplicate] })
 
     await store.getState().reorderRepos(['same-repo'])
 
@@ -725,7 +727,7 @@ describe('repo slice host identity routing', () => {
     const alpha = { ...localDuplicate, id: 'alpha' }
     const bravo = { ...localDuplicate, id: 'bravo' }
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [alpha, bravo],
       fetchReposForAllHosts: resync
     })
@@ -743,7 +745,7 @@ describe('repo slice host identity routing', () => {
     const alpha = { ...localDuplicate, id: 'alpha' }
     const bravo = { ...localDuplicate, id: 'bravo' }
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [alpha, bravo],
       fetchReposForAllHosts: resync
     })

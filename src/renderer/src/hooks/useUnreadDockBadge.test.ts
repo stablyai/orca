@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act, cleanup, renderHook } from '@testing-library/react'
@@ -25,7 +26,8 @@ describe('useUnreadDockBadge', () => {
 
   beforeEach(() => {
     getUnreadBadgeCount.mockClear()
-    useAppStore.setState(
+    setSessionTestState(
+      useAppStore,
       {
         ...initialState,
         worktreesByRepo: {},
@@ -47,7 +49,7 @@ describe('useUnreadDockBadge', () => {
 
   afterEach(() => {
     cleanup()
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
     vi.unstubAllGlobals()
   })
 
@@ -76,7 +78,7 @@ describe('useUnreadDockBadge', () => {
     const worktrees = Array.from({ length: 100 }, (_, index) =>
       makeWorktree({ id: `repo::worktree-${index}`, repoId: 'repo', isUnread: index === 99 })
     )
-    useAppStore.setState({ worktreesByRepo: { repo: worktrees } })
+    setSessionTestState(useAppStore, { worktreesByRepo: { repo: worktrees } })
     const hook = renderHook(() => useUnreadDockBadge(false))
 
     expect(getUnreadBadgeCount).toHaveBeenCalledTimes(1)
@@ -98,12 +100,12 @@ describe('useUnreadDockBadge', () => {
     const worktree = makeWorktree({ id: 'repo::unread', repoId: 'repo' })
     const tab = makeTab({ id: 'tab-unread', worktreeId: worktree.id })
 
-    act(() => useAppStore.setState({ worktreesByRepo: { repo: [worktree] } }))
+    act(() => setSessionTestState(useAppStore, { worktreesByRepo: { repo: [worktree] } }))
     expect(getUnreadBadgeCount).toHaveBeenCalledTimes(2)
     expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(0)
 
     act(() =>
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         tabsByWorktree: { [worktree.id]: [tab] },
         unreadTerminalTabs: { [tab.id]: 'terminal-bell' }
       })
@@ -145,7 +147,7 @@ describe('useUnreadDockBadge', () => {
         [makeTab({ id: `tab-${index}`, worktreeId: worktree.id })]
       ])
     )
-    useAppStore.setState({ worktreesByRepo: { repo: worktrees }, tabsByWorktree })
+    setSessionTestState(useAppStore, { worktreesByRepo: { repo: worktrees }, tabsByWorktree })
     let renders = 0
     renderHook(() => {
       renders += 1
@@ -188,7 +190,7 @@ describe('useUnreadDockBadge', () => {
     const folder = makeFolderWorkspace({ id: 'bell-folder', isUnread: true })
     const key = `folder:${folder.id}`
     const tab = makeTab({ id: 'folder-bell', worktreeId: key })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       projectGroups: [
         {
           id: folder.projectGroupId,
@@ -234,7 +236,7 @@ describe('useUnreadDockBadge', () => {
 
   it('adds the floating terminal only while its launcher shows the unread dot', () => {
     const tab = makeTab({ id: 'floating-tab', worktreeId: FLOATING_TERMINAL_WORKTREE_ID })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       settings: { ...getDefaultSettings('/tmp'), floatingTerminalEnabled: true },
       worktreesByRepo: {
         repo: [makeWorktree({ id: 'repo::unread', repoId: 'repo', isUnread: true })]

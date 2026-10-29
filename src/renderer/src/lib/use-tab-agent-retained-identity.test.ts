@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act, createElement } from 'react'
@@ -83,8 +84,8 @@ async function renderProbe(tab: TerminalTab = baseTab): Promise<void> {
 describe('useTabAgent retained completion identity', () => {
   beforeEach(() => {
     latestAgent = undefined
-    useAppStore.setState(initialAppState, true)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, initialAppState, true)
+    setSessionTestState(useAppStore, {
       ptyIdsByTabId: { [TAB_ID]: ['pty-focused', 'pty-sibling'] },
       terminalLayoutsByTabId: { [TAB_ID]: layout() },
       agentStatusByPaneKey: {},
@@ -99,7 +100,7 @@ describe('useTabAgent retained completion identity', () => {
       root = null
     }
     document.body.replaceChildren()
-    useAppStore.setState(initialAppState, true)
+    setSessionTestState(useAppStore, initialAppState, true)
   })
 
   it('uses focused retained Codex identity over stale Claude launch metadata', async () => {

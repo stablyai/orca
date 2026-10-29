@@ -1,3 +1,4 @@
+import type { SessionPatchEnvelope } from './session-change-set'
 import type { ExecutionHostId } from './execution-host'
 import type { SleepingAgentSessionRecord } from './agent-session-resume'
 import type { WorkspaceKey } from './folder-workspace-types'
@@ -116,4 +117,4 @@ export type WorkspaceSessionState = {
   closedTerminalPanesByPaneKey?: ClosedTerminalPanesByPaneKey
 }
 
-export type WorkspaceSessionPatch = Partial<WorkspaceSessionState>
+export type WorkspaceSessionPatch = Partial<WorkspaceSessionState> & SessionPatchEnvelope

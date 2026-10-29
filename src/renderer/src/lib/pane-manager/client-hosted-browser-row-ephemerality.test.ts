@@ -1,4 +1,5 @@
 /** Client-hosted UI rows own no host page and must never enter persistence/runtime graphs, which would resurrect them as local tabs. Exercise both sinks with paired live-row presence checks so empty results cannot pass vacuously. */
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore, type AppState } from '@/store'
 import { buildWorkspaceSessionPayload } from '../workspace-session'
@@ -71,7 +72,7 @@ beforeEach(() => {
 afterEach(() => {
   main?.close()
   main = undefined
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   hydrateClientHostedBrowserRows([])
 })
 

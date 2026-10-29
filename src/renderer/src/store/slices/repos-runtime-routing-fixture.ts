@@ -1,3 +1,4 @@
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { beforeEach, vi, type Mock } from 'vitest'
 import { toast } from 'sonner'
 import type { Repo } from '../../../../shared/repo-types'
@@ -130,3 +131,5 @@ export function installReposRuntimeRoutingHarness(): void {
     })
   })
 }
+
+export const ownerOf = (repo: Repo) => ({ hostId: getRepoExecutionHostId(repo) })

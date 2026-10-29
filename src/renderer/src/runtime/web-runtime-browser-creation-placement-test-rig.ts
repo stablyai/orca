@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { vi } from 'vitest'
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
@@ -5,7 +6,8 @@ import type { Tab, TabGroup } from '../../../shared/tab-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { useAppStore } from '../store'
 import type { AppState } from '../store/types'
-import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import { applyWebSessionTabsSnapshotsToEdit } from './web-session-tabs-sync/snapshot-api'
+import { applyWebSessionTabsStorePatch } from './web-session-tabs-sync/store-patch'
 import { ENV, NOW, WT, makeSnapshot } from './web-session-tabs-sync-test-harness'
 
 export const HOST: ExecutionHostId = `runtime:${ENV}`
@@ -108,7 +110,7 @@ export function seedPairedWorktree(): void {
       recentTabIds: [OTHER.unifiedTabId]
     }
   ]
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     activeWorktreeId: WT,
     activeWorkspaceExecutionHostId: HOST,
     runtimeStatusByEnvironmentId: runtimeStatusesFor([
@@ -169,9 +171,11 @@ export function publishHostSnapshot(): void {
     [SOURCE.pageId, AFTER.pageId, OTHER.pageId, ...hostPages].map((id) => hostBrowserTab(id)),
     { snapshotVersion, activeTabType: 'browser', activeTabId: null }
   )
-  useAppStore.setState((state) =>
-    applyWebSessionTabsSnapshot(state, snapshot, ENV, NOW + snapshotVersion)
-  )
+  applyWebSessionTabsStorePatch(
+    (state, keys, edit) =>
+      applyWebSessionTabsSnapshotsToEdit(edit, state, [snapshot], ENV, NOW + snapshotVersion, keys),
+    { frames: [] }
+  )()
 }
 
 export function resetHostPages(): void {

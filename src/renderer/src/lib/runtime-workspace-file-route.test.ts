@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
 import { createGlobalSettingsFixture } from '../../../shared/global-settings-test-fixture'
@@ -14,7 +15,7 @@ import {
 
 function state(): AppState {
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     settings: createGlobalSettingsFixture({ activeRuntimeEnvironmentId: 'runtime-a' }),
     repos: [],
     detectedWorktreesByRepo: {},

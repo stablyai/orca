@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
@@ -36,7 +37,8 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
   it('wipes tab-id-keyed maps (terminalLayoutsByTabId, ptyIdsByTabId) and clears actives', () => {
     const store = createTestStore()
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This tabsByWorktree, terminalLayoutsByTabId, ptyIdsByTabId fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       tabsByWorktree: {
         'repoA::/a/wt1': [
           { id: 'tab-1', worktreeId: 'repoA::/a/wt1' },
@@ -154,7 +156,8 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
     const before = {
       'repoA::/a/wt1': [{ id: 'tab-1', worktreeId: 'repoA::/a/wt1' }]
     }
-    store.setState({ tabsByWorktree: before } as unknown as Partial<AppState>)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This tabsByWorktree fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, { tabsByWorktree: before } as unknown as Partial<AppState>)
 
     store.getState().purgeWorktreeTerminalState([])
 
@@ -175,7 +178,8 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
       mode: 'edit' as const
     }
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This tabsByWorktree, browserTabsByWorktree, openFiles fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       tabsByWorktree: {
         [staleId]: [{ id: 'tab-1', worktreeId: staleId }],
         [FLOATING_TERMINAL_WORKTREE_ID]: [
@@ -292,7 +296,8 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
       [FLOATING_TERMINAL_WORKTREE_ID]: { type: 'leaf', groupId: 'floating-group' }
     }
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This tabsByWorktree, browserTabsByWorktree, openFiles fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       tabsByWorktree,
       browserTabsByWorktree,
       openFiles,

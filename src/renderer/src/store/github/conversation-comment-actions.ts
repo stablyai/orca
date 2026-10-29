@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import type { GitHubCommentResult } from '../../../../shared/github/comment-types'
@@ -15,8 +15,8 @@ import {
 } from './work-item-routing'
 
 export const createConversationCommentActions = (
-  set: Parameters<StateCreator<AppState>>[0],
-  get: Parameters<StateCreator<AppState>>[1]
+  set: Parameters<SessionStateCreator<AppState>>[0],
+  get: Parameters<SessionStateCreator<AppState>>[1]
 ): Pick<GitHubSlice, 'addPRConversationComment'> => ({
   addPRConversationComment: async (repoPath, prNumber, body, options) => {
     const repo = get().repos?.find((candidate) =>

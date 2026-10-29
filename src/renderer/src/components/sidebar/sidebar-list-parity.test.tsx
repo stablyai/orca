@@ -2,6 +2,7 @@
 
 /** Require adapters to agree on shared inputs; goldens independently verify the resulting list.
  * Excludes desktop-only UI, server-side creation/unlink, SSH via paired hosts and other-client terminals. */
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, renderHook } from '@testing-library/react'
 import { useAppStore } from '@/store'
@@ -91,7 +92,7 @@ function desktopList(
   state: Partial<AppState>,
   useListModel?: Parameters<typeof useGoldenSidebarPipeline>[0]
 ): string[] {
-  useAppStore.setState(state)
+  setSessionTestState(useAppStore, state)
   const { result, unmount } = renderHook(() => useGoldenSidebarPipeline(useListModel))
   const { sectionRows } = result.current.rowModel
   const lines = projectParityRows(
@@ -103,7 +104,7 @@ function desktopList(
 }
 
 async function installFeed(state: Partial<AppState>) {
-  useAppStore.setState(state)
+  setSessionTestState(useAppStore, state)
   const full = useAppStore.getState()
   const feed = new SidebarInputsFeed(
     () => feedDomainsFromWindowState(full),
@@ -146,11 +147,11 @@ async function windowFeedList(state: Partial<AppState>): Promise<string[]> {
 
 async function expectAdaptersAgree(state: Partial<AppState>): Promise<string[]> {
   const desktop = desktopList(state)
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   const phone = await phoneList(state)
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   const fromFeed = await windowFeedList(state)
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   expect(phone.join('\n')).toBe(desktop.join('\n'))
   expect(fromFeed.join('\n')).toBe(desktop.join('\n'))
   return desktop
@@ -179,12 +180,12 @@ describe('sidebar list parity: desktop window and feed reader', () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(GOLDEN_NOW)
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   afterEach(() => {
     cleanup()
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
     vi.useRealTimers()
   })
 

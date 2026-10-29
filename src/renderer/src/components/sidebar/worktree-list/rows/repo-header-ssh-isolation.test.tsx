@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { Profiler } from 'react'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
@@ -27,7 +28,7 @@ vi.mock('@/lib/repo-ssh-connection', async (original) => {
 })
 const initial = useAppStore.getInitialState()
 beforeEach(() => {
-  useAppStore.setState(initial, true)
+  setSessionTestState(useAppStore, initial, true)
   useAppStore.setState({ runtimeEnvironments: [environment('A'), environment('B')] })
   publish('A', 1)
   publish('B', 1)
@@ -38,7 +39,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   cleanup()
-  useAppStore.setState(initial, true)
+  setSessionTestState(useAppStore, initial, true)
 })
 
 it.each([10, 100])('bounds mounted Create work independently of a %i-target catalog', (size) => {
@@ -48,7 +49,7 @@ it.each([10, 100])('bounds mounted Create work independently of a %i-target cata
     executionHostId: 'runtime:A',
     connectionId: `target-${index}`
   }))
-  useAppStore.setState({ repos })
+  setSessionTestState(useAppStore, { repos })
   for (const repo of repos) {
     useAppStore
       .getState()
@@ -123,7 +124,7 @@ it.each([10, 100])('bounds mounted Create work independently of a %i-target cata
         )
     )
     publication(() =>
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         sshConnectionStates: new Map([
           ['outside', ssh(sequence % 2 ? 'connected' : 'disconnected', 'outside')]
         ])
@@ -271,10 +272,12 @@ it('preserves owner, hydration, transport, refusal, removal and local-missing au
   rerender(<Control repo={{ ...repo, executionHostId: 'local', connectionId: 'absent' }} />)
   expect(disabled()).toBe(true)
   act(() =>
-    useAppStore.setState({ sshConnectionStates: new Map([['absent', ssh('connected', 'absent')]]) })
+    setSessionTestState(useAppStore, {
+      sshConnectionStates: new Map([['absent', ssh('connected', 'absent')]])
+    })
   )
   expect(disabled()).toBe(false)
-  act(() => useAppStore.setState({ sshConnectionStates: new Map() }))
+  act(() => setSessionTestState(useAppStore, { sshConnectionStates: new Map() }))
   expect(disabled()).toBe(true)
   rerender(<Control repo={{ ...repo, executionHostId: 'local', connectionId: undefined }} />)
   expect(disabled()).toBe(false)

@@ -1,5 +1,6 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
+import type { SessionTestStore } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { StoreApi } from 'zustand/vanilla'
 import { createTestStore } from '@/store/slices/store-test-helpers'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { AppState } from '@/store'
@@ -22,7 +23,7 @@ vi.mock('@/lib/connection-context', () => ({
 }))
 
 function openRestoredDirtyTab(
-  store: StoreApi<AppState>,
+  store: SessionTestStore<AppState>,
   filePath: string,
   baselineContent: string,
   owner: { relativePath: string; worktreeId: string } = {
@@ -282,11 +283,11 @@ describe('attachRestoredTabConflictScan', () => {
   it('does not verify an external SSH file through a replacement target', async () => {
     const store = createTestStore()
     openRestoredDirtyTab(store, '/tmp/external.ts', 'original baseline')
-    store.setState({
+    setSessionTestState(store, {
       openFiles: store
         .getState()
         .openFiles.map((file) => ({ ...file, externalSshTargetId: 'ssh-original' }))
-    } as never)
+    })
     mocks.getConnectionIdForFile.mockReturnValue('ssh-replacement')
 
     const detach = attachRestoredTabConflictScan(store)

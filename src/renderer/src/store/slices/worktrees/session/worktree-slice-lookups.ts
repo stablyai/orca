@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
@@ -56,7 +57,7 @@ export function createRemountTerminalTabForRecovery(
           const { admitted: _admitted, ...decline } = admission
           result = { remounted: false, ...decline }
         }
-        return s
+        return undefined
       }
       const { worktreeId, index, tab } = location
       const nextTabs = s.tabsByWorktree[worktreeId].slice()
@@ -80,21 +81,19 @@ export function createRemountTerminalTabForRecovery(
         ...(recovery ? { recovery } : {})
       }
       result = { remounted: true, generation: recovery?.generation ?? 0 }
-      return {
-        tabsByWorktree: {
-          ...s.tabsByWorktree,
-          [worktreeId]: nextTabs
-        },
-        ...(pendingStartup
-          ? {
-              // Remount needs a distinct startup record so stale-pane teardown cannot consume the successor’s command.
-              pendingStartupByTabId: {
-                ...s.pendingStartupByTabId,
-                [tabId]: { ...pendingStartup }
+      return editSessionSource(s)
+        .set('tabsByWorktree', worktreeId, nextTabs)
+        .finish(
+          pendingStartup
+            ? {
+                // Remount needs a distinct startup record so stale-pane teardown cannot consume the successor’s command.
+                pendingStartupByTabId: {
+                  ...s.pendingStartupByTabId,
+                  [tabId]: { ...pendingStartup }
+                }
               }
-            }
-          : {})
-      }
+            : {}
+        )
     })
     return result
   }
@@ -108,16 +107,16 @@ export function createSettleTerminalTabRecovery(
     set((s) => {
       const location = locateTerminalTab(s.tabsByWorktree, tabId)
       if (!location) {
-        return s
+        return undefined
       }
       const { worktreeId, index, tab } = location
       const recovery = settledTerminalRecoveryLedger(tab, generation, outcome)
       if (!recovery) {
-        return s
+        return undefined
       }
       const nextTabs = s.tabsByWorktree[worktreeId].slice()
       nextTabs[index] = { ...tab, recovery }
-      return { tabsByWorktree: { ...s.tabsByWorktree, [worktreeId]: nextTabs } }
+      return editSessionSource(s).set('tabsByWorktree', worktreeId, nextTabs).finish({})
     })
   }
 }
@@ -156,9 +155,10 @@ export function createPurgeWorktreeTerminalState(
       )
     )
     settleAttentionRemovedBy(set, get, () =>
-      get().updateAgentStatusState((s, changedPaneKeys) =>
-        buildWorktreePurgeState(s, purgeableWorktreeTargets, changedPaneKeys)
-      )
+      get().updateAgentStatusState((s, changedPaneKeys) => {
+        const edit = editSessionSource(s)
+        return edit.finish(buildWorktreePurgeState(edit, purgeableWorktreeTargets, changedPaneKeys))
+      })
     )
   }
 }

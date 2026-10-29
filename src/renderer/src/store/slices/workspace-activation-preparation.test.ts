@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
 import { installAttentionScreen } from './workspace-attention/workspace-unread-characterization-fixture'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -22,7 +23,7 @@ afterEach(() => {
 function seedWorkspace(kind: 'folder' | 'git', executionHostId: ExecutionHostId) {
   const store = createTestStore()
   const workspaceId = kind === 'folder' ? FOLDER_KEY : WORKTREE_ID
-  store.setState({
+  setSessionTestState(store, {
     folderWorkspaces: [makeFolderWorkspace({ id: FOLDER_ID, executionHostId })],
     worktreesByRepo: {
       repo: [makeWorktree({ id: WORKTREE_ID, repoId: 'repo', hostId: executionHostId })]
@@ -76,7 +77,7 @@ it.each([
 
 it.each(['folder', 'git'] as const)('preserves a live %s terminal on repeat activation', (kind) => {
   const { store, workspaceId, activate } = seedWorkspace(kind, 'local')
-  store.setState({ ptyIdsByTabId: { terminal: ['live-pty'] } })
+  setSessionTestState(store, { ptyIdsByTabId: { terminal: ['live-pty'] } })
   activate()
   const activated = store.getState()
 
@@ -90,9 +91,9 @@ it.each(['folder', 'git'] as const)(
   'wakes an already-selected %s after its PTY is released',
   (kind) => {
     const { store, workspaceId, activate } = seedWorkspace(kind, 'local')
-    store.setState({ ptyIdsByTabId: { terminal: ['live-pty'] } })
+    setSessionTestState(store, { ptyIdsByTabId: { terminal: ['live-pty'] } })
     activate()
-    store.setState({ ptyIdsByTabId: {} })
+    setSessionTestState(store, { ptyIdsByTabId: {} })
 
     activate()
 
@@ -103,7 +104,7 @@ it.each(['folder', 'git'] as const)(
 it('reads only the selected folder owner on screen and persists to that host', () => {
   const { store, activate } = seedWorkspace('folder', 'ssh:remote')
   const updateFolderWorkspace = vi.fn().mockResolvedValue(null)
-  store.setState({
+  setSessionTestState(store, {
     folderWorkspaces: [
       makeFolderWorkspace({ id: FOLDER_ID, executionHostId: 'local', isUnread: true }),
       makeFolderWorkspace({ id: FOLDER_ID, executionHostId: 'ssh:remote', isUnread: true })

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import path from 'node:path'
@@ -88,7 +89,7 @@ const CREATED = worktree('created')
 function seedPairedServer(): ReturnType<typeof vi.fn> {
   const call = vi.fn(() => new Promise(() => undefined))
   vi.stubGlobal('window', { ...window, api: { runtimeEnvironments: { call, subscribe: vi.fn() } } })
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     repos: [
       {
         id: 'repo-1',
@@ -128,7 +129,7 @@ const REQUEST = {
 afterEach(() => {
   mocks.mainStarts.length = 0
   vi.unstubAllGlobals()
-  useAppStore.setState(initial, true)
+  setSessionTestState(useAppStore, initial, true)
 })
 
 describe('a background worktree create whose paired server declines the chat', () => {
@@ -165,7 +166,7 @@ const LOCAL_OTHER = worktree('local-other', 'local')
 const LOCAL_CREATED = worktree('local-created', 'local')
 
 function seedThisMachine(): void {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     repos: [
       {
         id: 'repo-1',

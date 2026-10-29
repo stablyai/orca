@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
@@ -41,7 +42,7 @@ function muted(workspaceId: string): boolean {
 
 beforeEach(() => {
   store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     repos: [TEST_REPO],
     worktreesByRepo: { repo1: [cliRow, plainRow] },
     persistedUIReady: true,
@@ -79,7 +80,7 @@ describe('isWorkspaceNotificationMutedBySidebarFilters', () => {
   })
 
   it('keeps notifying for a hidden parent the sidebar shows above a visible child', () => {
-    store.setState({
+    setSessionTestState(store, {
       worktreeLineageById: {
         [PLAIN_ID]: {
           worktreeId: PLAIN_ID,
@@ -102,7 +103,7 @@ describe('isWorkspaceNotificationMutedBySidebarFilters', () => {
   })
 
   it('keeps notifying for an id whose twin on another host the switches show', () => {
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {
         repo1: [cliRow, plainRow],
         'repo1@other-host': [{ ...cliRow, cliProvenance: undefined }]
@@ -128,7 +129,7 @@ describe('isWorkspaceNotificationMutedBySidebarFilters', () => {
       createdAt: 0,
       updatedAt: 0
     }
-    store.setState({ folderWorkspaces: [folder] })
+    setSessionTestState(store, { folderWorkspaces: [folder] })
     expect(muted(folderWorkspaceKey('f1'))).toBe(false)
     store.setState({ hideWorkspacesFromOtherDevices: true })
     expect(muted(folderWorkspaceKey('f1'))).toBe(true)
@@ -166,7 +167,7 @@ describe('muted workspace attention', () => {
       sortOrder: 0,
       createdAt: 0
     })
-    store.setState({
+    setSessionTestState(store, {
       tabsByWorktree: {
         [CLI_ID]: [terminalTab('tab-cli', CLI_ID)],
         [PLAIN_ID]: [terminalTab('tab-plain', PLAIN_ID)]

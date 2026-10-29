@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
 import { createEditorStore, ownedEditorFileId } from './editor-slice-test-harness'
@@ -201,7 +202,8 @@ describe('createEditorSlice activateMarkdownLink', () => {
   it('stats SSH markdown links through the source worktree connection before opening', async () => {
     const store = createEditorStore()
     pathExistsMock.mockResolvedValue(true)
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       repos: [
         {
           id: 'repo1',
@@ -377,7 +379,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
   it('reveals active-runtime markdown line anchors on the owner-qualified tab id', async () => {
     const store = createEditorStore()
     pathExistsMock.mockResolvedValue(true)
-    store.setState({
+    setSessionTestState(store, {
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'env-active' },
       // The server's rows are stamped as they land; focus alone never names a file's owner.
       worktreesByRepo: {
@@ -588,7 +590,8 @@ describe('createEditorSlice activateMarkdownLink', () => {
 
   it('blocks external file URLs from SSH markdown sources', async () => {
     const store = createEditorStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       repos: [
         {
           id: 'repo1',

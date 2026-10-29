@@ -59,3 +59,27 @@ export function dropRuntimeHostedCatalogRows<T extends { executionHostId?: strin
   )
   return kept.length === rows.length ? rows : kept
 }
+
+/** Catalog rows also prove ownership before metadata hydration completes. */
+export function recordRuntimeWorktreeOwners(
+  rowsByRepo: Record<
+    string,
+    readonly { hostId?: ExecutionHostId; runtimeOwnerEnvironmentId?: string }[]
+  >,
+  removed: ReadonlySet<string>,
+  repoIdsWithRemovedOwners: Set<string>,
+  repoIdsWithSurvivingOwners: Set<string>
+): void {
+  for (const [repoId, rows] of Object.entries(rowsByRepo)) {
+    for (const row of rows) {
+      if (!row.hostId && !row.runtimeOwnerEnvironmentId) {
+        continue
+      }
+      const ownerWasRemoved = row.runtimeOwnerEnvironmentId
+        ? removed.has(row.runtimeOwnerEnvironmentId)
+        : isRemovedRuntimeHostId(row.hostId, removed)
+      const ownerSet = ownerWasRemoved ? repoIdsWithRemovedOwners : repoIdsWithSurvivingOwners
+      ownerSet.add(repoId)
+    }
+  }
+}

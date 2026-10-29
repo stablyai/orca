@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FolderWorkspacePathStatus } from '../../../../shared/folder-workspace-path-status'
 import type { Repo } from '../../../../shared/repo-types'
@@ -40,7 +41,7 @@ describe('folder path status ownership', () => {
     'keeps the $executionHostId cache valid after catalog reordering',
     async (owner) => {
       const store = createTestStore()
-      store.setState({ folderWorkspaces: folders })
+      setSessionTestState(store, { folderWorkspaces: folders })
       for (const candidate of owners) {
         const status: FolderWorkspacePathStatus = {
           path: candidate.path,
@@ -52,7 +53,7 @@ describe('folder path status ownership', () => {
         await store.getState().fetchFolderWorkspacePathStatus(request, candidate)
       }
 
-      store.setState({ folderWorkspaces: folders.toReversed() })
+      setSessionTestState(store, { folderWorkspaces: folders.toReversed() })
 
       expect(store.getState().getFreshFolderWorkspacePathStatus(request, owner)).toMatchObject({
         path: owner.path,
@@ -73,7 +74,7 @@ describe('folder path status ownership', () => {
     async (owner) => {
       const store = createTestStore()
       // The selected folder is second, so a bare-id lookup would fingerprint the other host.
-      store.setState({
+      setSessionTestState(store, {
         folderWorkspaces: [
           ...folders.filter((folder) => folder.executionHostId !== owner.executionHostId),
           ...folders.filter((folder) => folder.executionHostId === owner.executionHostId)
@@ -84,7 +85,7 @@ describe('folder path status ownership', () => {
       mocks.callRuntimeRpc.mockImplementation(async () => ({ status: await pending.promise }))
       const oldProbe = store.getState().fetchFolderWorkspacePathStatus(request, owner)
       const repairedPath = `${owner.path}-repaired`
-      store.setState((state) => ({
+      setSessionTestState(store, (state) => ({
         folderWorkspaces: state.folderWorkspaces.map((folder) =>
           folder.executionHostId === owner.executionHostId
             ? { ...folder, folderPath: repairedPath }
@@ -108,7 +109,7 @@ describe('folder path status ownership', () => {
 
   it('does not borrow a same-id folder when the requested host has no owner', async () => {
     const store = createTestStore()
-    store.setState({ folderWorkspaces: folders })
+    setSessionTestState(store, { folderWorkspaces: folders })
     mocks.callRuntimeRpc.mockResolvedValue({
       status: { path: '/unrelated/folder', exists: false, reason: 'missing' }
     })
@@ -137,14 +138,14 @@ describe('folder path status ownership', () => {
         updatedAt: 0
       }))
       const store = createTestStore()
-      store.setState({ projectGroups: groups })
+      setSessionTestState(store, { projectGroups: groups })
       const groupRequest = { scope: 'project-group', projectGroupId: 'group-1' } as const
       const status = { path: owner.path, exists: true }
       mocks.getPathStatus.mockResolvedValue(status)
       mocks.callRuntimeRpc.mockResolvedValue({ status })
       await store.getState().fetchFolderWorkspacePathStatus(groupRequest, owner)
 
-      store.setState({ projectGroups: groups.toReversed() })
+      setSessionTestState(store, { projectGroups: groups.toReversed() })
 
       expect(store.getState().getFreshFolderWorkspacePathStatus(groupRequest, owner)).toEqual(
         status
@@ -205,7 +206,7 @@ describe('shared folder snapshot candidate extraction', () => {
       folderPath: '/root',
       executionHostId: 'local'
     })
-    store.setState({
+    setSessionTestState(store, {
       projectGroups: [
         group,
         child,
@@ -252,7 +253,7 @@ describe('shared folder snapshot candidate extraction', () => {
       ['/root', '', 'C', 'local', 'B:missing|C:missing', 'contained:/root/repo::B:local'].join('\0')
     )
     // Reordering cannot change the sorted token or request ownership.
-    store.setState((state) => ({
+    setSessionTestState(store, (state) => ({
       repos: state.repos.toReversed(),
       projectGroups: state.projectGroups.toReversed(),
       folderWorkspaces: state.folderWorkspaces.toReversed()
@@ -260,34 +261,34 @@ describe('shared folder snapshot candidate extraction', () => {
     expect(getFolderWorkspaceStatusRequestSnapshot(store.getState(), folderRequest, options)).toBe(
       expected
     )
-    store.setState({ projectGroups: [group, { ...child, parentGroupId: null }] })
+    setSessionTestState(store, { projectGroups: [group, { ...child, parentGroupId: null }] })
     expect(getFolderWorkspaceStatusRequestSnapshot(store.getState(), groupRequest, options)).toBe(
       ['/root', 'root', 'C', 'local', 'B:missing|C:missing', 'contained:/root/repo::B:local'].join(
         '\0'
       )
     )
-    store.setState({
+    setSessionTestState(store, {
       repos: repos.map((repo) => ({ ...repo, path: '/moved', projectGroupId: null }))
     })
     expect(getFolderWorkspaceStatusRequestSnapshot(store.getState(), groupRequest, options)).toBe(
       ['/root', 'root', 'C', 'local', 'C:missing', ''].join('\0')
     )
-    store.setState({ folderWorkspaces: [] })
+    setSessionTestState(store, { folderWorkspaces: [] })
     expect(
       getFolderWorkspaceStatusRequestDependencies(store.getState(), folderRequest, options)
     ).toBeNull()
     expect(
       getFolderWorkspaceStatusRequestSnapshot(store.getState(), folderRequest, options)
     ).toBeNull()
-    store.setState({ projectGroups: [group, group] })
+    setSessionTestState(store, { projectGroups: [group, group] })
     expect(
       getFolderWorkspaceStatusRequestSnapshot(store.getState(), groupRequest, options)
     ).toBeNull()
-    store.setState({ projectGroups: [] })
+    setSessionTestState(store, { projectGroups: [] })
     expect(
       getFolderWorkspaceStatusRequestSnapshot(store.getState(), groupRequest, options)
     ).toBeNull()
-    store.setState({ projectGroups: [group] })
+    setSessionTestState(store, { projectGroups: [group] })
     expect(
       getFolderWorkspaceStatusRequestDependencies(store.getState(), groupRequest, options)
         ?.relevantConnectionIds

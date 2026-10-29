@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PRComment } from '../../../../shared/github/comment-types'
 import type { AppState } from '../types'
@@ -30,7 +31,8 @@ function makeComments(isResolved = false): PRComment[] {
 
 function installLocalComments(store: ReturnType<typeof createTestStore>): string {
   const cacheKey = sourceScopedRepoCacheKey(repoPath, repoId, prCommentsCacheSuffix(12))
-  store.setState({
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This repos, commentsCache fixture intentionally supplies only the state members exercised by this scenario.
+  setSessionTestState(store, {
     repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
     commentsCache: { [cacheKey]: { data: makeComments(), fetchedAt: 1 } }
   } as unknown as Partial<AppState>)
@@ -56,7 +58,8 @@ describe('createGitHubSlice.resolveReviewThread', () => {
       undefined,
       true
     )
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This settings, repos, commentsCache fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       settings,
       repos: [
         {

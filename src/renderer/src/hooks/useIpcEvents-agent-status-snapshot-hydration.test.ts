@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -398,7 +399,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
         })
     )
     const store = createTestStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       workspaceSessionReady: true,
       repos: [TEST_REPO],
       worktreesByRepo: { [TEST_REPO.id]: worktrees },
@@ -411,7 +413,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         terminalFontSize: 13
       }
     } as Partial<AppState>)
-    store.setState({ unifiedTabsByWorktree })
+    setSessionTestState(store, { unifiedTabsByWorktree })
 
     stubReactSyncEffect()
     vi.doMock('../store', () => ({
@@ -521,7 +523,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
         })
     )
     const store = createTestStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       workspaceSessionReady: true,
       repos: [TEST_REPO],
       worktreesByRepo: {
@@ -623,7 +626,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
         })
     )
     const store = createTestStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       workspaceSessionReady: true,
       repos: [TEST_REPO],
       worktreesByRepo: {

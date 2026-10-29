@@ -1,5 +1,5 @@
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import { createObserveTerminalGitHubPullRequestLink } from './worktrees/session/worktree-terminal-reference'
-import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { WorktreeSlice } from './worktree-helpers'
 import { worktreeSliceInitialState } from './worktrees/session/worktree-slice-initial-state'
@@ -72,7 +72,7 @@ export {
 } from './worktrees/metadata/detached-head-display-name'
 export { resetAuthoritativelyRemovedWorktreeMemoryForTests } from './worktrees/listing/authoritative-worktree-removal-memory'
 
-export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> = (set, get) => ({
+export const createWorktreeSlice: SessionStateCreator<AppState, WorktreeSlice> = (set, get) => ({
   ...worktreeSliceInitialState,
   fetchDetectedWorktrees: createFetchDetectedWorktrees(set, get),
   fetchWorktrees: createFetchWorktrees(set, get),

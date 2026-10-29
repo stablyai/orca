@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act } from 'react'
@@ -54,7 +55,7 @@ describe('useFolderWorkspaceComposerPathStatus', () => {
     container = null
     delete (globalThis as { __folderWorkspaceComposerPathStatusResult?: unknown })
       .__folderWorkspaceComposerPathStatusResult
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   it('blocks creation while an expired path status refresh is pending', async () => {
@@ -65,7 +66,7 @@ describe('useFolderWorkspaceComposerPathStatus', () => {
       .getState()
       .getFolderWorkspacePathStatusCacheKey(request, { runtimeEnvironmentId: null })
     const fetchFolderWorkspacePathStatus = vi.fn().mockResolvedValue(null)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       projectGroups: [projectGroup],
       fetchFolderWorkspacePathStatus,
       folderWorkspacePathStatuses: {
@@ -131,7 +132,7 @@ describe('useFolderWorkspaceComposerPathStatus', () => {
   it('unblocks creation when the first path status check settles without cache', async () => {
     const request = { scope: 'project-group' as const, projectGroupId: projectGroup.id }
     const fetchFolderWorkspacePathStatus = vi.fn().mockResolvedValue(null)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       projectGroups: [projectGroup],
       fetchFolderWorkspacePathStatus,
       folderWorkspacePathStatuses: {}
@@ -177,7 +178,7 @@ describe('useFolderWorkspaceComposerPathStatus', () => {
     const cacheKey = useAppStore
       .getState()
       .getFolderWorkspacePathStatusCacheKey(request, { runtimeEnvironmentId: null })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       projectGroups: [projectGroup],
       fetchFolderWorkspacePathStatus: vi.fn().mockResolvedValue(null),
       folderWorkspacePathStatuses: {
@@ -216,7 +217,7 @@ describe('useFolderWorkspaceComposerPathStatus', () => {
     const cacheKey = useAppStore
       .getState()
       .getFolderWorkspacePathStatusCacheKey(request, { runtimeEnvironmentId: null })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       projectGroups: [projectGroup],
       fetchFolderWorkspacePathStatus: vi.fn(),
       folderWorkspacePathStatuses: {

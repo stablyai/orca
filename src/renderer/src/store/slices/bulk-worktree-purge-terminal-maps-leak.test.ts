@@ -1,3 +1,5 @@
+import type { AppState } from '@/store/types'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 /** Bulk purge runs no terminal teardown; evict tab maps and PTY maps from live/durable bindings like single removal. External scans/project removal/hydration otherwise leak ephemeral terminal/agent keys for renderer lifetime. */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
@@ -157,7 +159,7 @@ describe('bulk worktree purge evicts the per-tab/per-pty terminal maps it previo
   it('keeps environment-scoped remote guard identities independent', () => {
     const store = createTestStore()
     seedMaps(store)
-    store.setState((s) => ({
+    setSessionTestState(store, (s): Partial<AppState> => ({
       ptyIdsByTabId: {
         ...s.ptyIdsByTabId,
         [TAB2]: [...s.ptyIdsByTabId[TAB2], REMOTE_PTY2_SAME_HANDLE]
@@ -184,7 +186,7 @@ describe('bulk worktree purge evicts the per-tab/per-pty terminal maps it previo
   it('retains a raw remote handle that is also a surviving local PTY id', () => {
     const store = createTestStore()
     seedMaps(store)
-    store.setState((s) => ({
+    setSessionTestState(store, (s): Partial<AppState> => ({
       ptyIdsByTabId: {
         ...s.ptyIdsByTabId,
         [TAB2]: [...s.ptyIdsByTabId[TAB2], REMOTE_HANDLE1]

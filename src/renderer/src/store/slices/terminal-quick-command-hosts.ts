@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
 import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
@@ -51,7 +51,7 @@ function readCommands(result: unknown): TerminalQuickCommand[] {
 }
 
 function updateEntry(
-  set: Parameters<StateCreator<AppState>>[0],
+  set: Parameters<SessionStateCreator<AppState>>[0],
   environmentId: string,
   update: (current: RuntimeTerminalQuickCommands | undefined) => RuntimeTerminalQuickCommands
 ): void {
@@ -63,7 +63,7 @@ function updateEntry(
 }
 
 async function mutateLocalCommands(
-  get: Parameters<StateCreator<AppState>>[1],
+  get: Parameters<SessionStateCreator<AppState>>[1],
   mutation: TerminalQuickCommandMutation
 ): Promise<boolean> {
   try {
@@ -86,7 +86,7 @@ async function mutateLocalCommands(
 }
 
 async function mutateRemoteCommands(
-  set: Parameters<StateCreator<AppState>>[0],
+  set: Parameters<SessionStateCreator<AppState>>[0],
   environmentId: string,
   mutation: TerminalQuickCommandMutation
 ): Promise<boolean> {
@@ -146,10 +146,8 @@ async function mutateRemoteCommands(
   return succeeded
 }
 
-export const createTerminalQuickCommandHostsSlice: StateCreator<
+export const createTerminalQuickCommandHostsSlice: SessionStateCreator<
   AppState,
-  [],
-  [],
   TerminalQuickCommandHostsSlice
 > = (set, get) => ({
   runtimeTerminalQuickCommands: new Map(),
@@ -281,7 +279,7 @@ export const createTerminalQuickCommandHostsSlice: StateCreator<
           changed = true
         }
       }
-      return changed ? { runtimeTerminalQuickCommands: next } : state
+      return changed ? { runtimeTerminalQuickCommands: next } : undefined
     })
   }
 })

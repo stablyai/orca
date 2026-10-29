@@ -1,3 +1,4 @@
+import { observeMobileConversationTitles } from './mobile-conversation-title-observer'
 import { selectFreshAgentRowForMobileTab } from '../../runtime-hook-agent-row-selection'
 import { OrcaRuntimeWithScheduleMobileSessionTabsChanged } from '../../session-tabs/session-tabs-change-publication'
 import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
@@ -36,15 +37,11 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
   ) {
     super(...args)
     // Desktop chat renames reach main through saved window sessions only.
-    this.store?.onWorkspaceSessionWritten?.(() => {
-      for (const [workspaceId, snapshot] of this.mobileSessionTabsByWorktree) {
-        for (const tab of snapshot.tabs) {
-          if (tab.type === 'agent-session') {
-            this.refreshStructuredConversationTabTitle(workspaceId, tab.sessionId)
-          }
-        }
-      }
-    })
+    observeMobileConversationTitles(
+      this.store,
+      this.mobileSessionTabsByWorktree,
+      (workspaceId, sessionId) => this.refreshStructuredConversationTabTitle(workspaceId, sessionId)
+    )
   }
 
   protected pruneMobileSessionTabGroupLayout(

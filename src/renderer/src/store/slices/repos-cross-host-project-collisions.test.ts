@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 /** Host-change refetch and repo_not_found ghost cleanup must isolate owners (#11994). Pin both same-name distinct-ID projects and same-ID cross-host rows; removal may never affect another host. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
@@ -105,7 +106,7 @@ function answerCatalogs(reposByEnvironment: Record<string, Repo[]>): void {
 
 function seed(repos: readonly Repo[], activeRuntimeEnvironmentId: string | null = null) {
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     settings: { activeRuntimeEnvironmentId } as never,
     repos: [...repos]
   })

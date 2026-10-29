@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import {
@@ -23,7 +24,7 @@ const initialAppStoreState = useAppStore.getState()
 
 /** Publishes the row AND the layout binding that makes the pane unverifiable rather than dead. */
 function publishRow(options: { handleLanded: boolean }): void {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     tabsByWorktree: {
       [WORKTREE]: [makeTerminalTab({ id: TAB_ID, worktreeId: WORKTREE, title: 't' })]
     },
@@ -42,14 +43,14 @@ function publishRow(options: { handleLanded: boolean }): void {
 describe('handle-gap verdict, landed-handle eviction', () => {
   beforeEach(() => {
     vi.useFakeTimers()
-    useAppStore.setState(initialAppStoreState, true)
+    setSessionTestState(useAppStore, initialAppStoreState, true)
     setRuntimeEnvironmentConnectionGenerationForTests(ENV_ID, 1)
   })
 
   afterEach(() => {
     resetHostMirrorHandleGapWaitsForTests()
     clearRuntimeEnvironmentConnectionGenerationsForTests()
-    useAppStore.setState(initialAppStoreState, true)
+    setSessionTestState(useAppStore, initialAppStoreState, true)
     vi.useRealTimers()
   })
 
@@ -86,7 +87,7 @@ describe('handle-gap verdict, landed-handle eviction', () => {
     // Adopting an orphaned terminal re-keys `tabsByWorktree` without re-keying the record, so the
     // re-park hands the live wait a new worktree. Retraction evidence about the OLD one says
     // nothing about the wait that is actually running.
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       tabsByWorktree: {
         'wt-old': [makeTerminalTab({ id: TAB_ID, worktreeId: 'wt-old', title: 't' })],
         'wt-new': [makeTerminalTab({ id: TAB_ID, worktreeId: 'wt-new', title: 't' })]
@@ -97,7 +98,7 @@ describe('handle-gap verdict, landed-handle eviction', () => {
     const replayAfterAdoption = vi.fn()
     parkUntilHostMirrorHandleLands(ENV_ID, 'wt-new', TAB_ID, replayAfterAdoption)
 
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       tabsByWorktree: {
         'wt-new': [makeTerminalTab({ id: TAB_ID, worktreeId: 'wt-new', title: 't' })]
       }
@@ -105,7 +106,7 @@ describe('handle-gap verdict, landed-handle eviction', () => {
     expect(replayAfterAdoption).not.toHaveBeenCalled()
     expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(1)
 
-    useAppStore.setState({ tabsByWorktree: {} })
+    setSessionTestState(useAppStore, { tabsByWorktree: {} })
     expect(replayAfterAdoption).toHaveBeenCalledTimes(1)
   })
 })

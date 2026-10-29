@@ -90,10 +90,7 @@ export function setPRRefreshStartedHostedReviewEntry(
   }
 }
 
-export function setGitHubPRResultCaches(
-  state: AppState,
-  args: GitHubPRResultCacheArgs
-): Partial<AppState> {
+export function setGitHubPRResultCaches(state: AppState, args: GitHubPRResultCacheArgs) {
   const next = applyGitHubPRResultToCaches({
     ...args,
     state,

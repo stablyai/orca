@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import React, { act } from 'react'
@@ -236,7 +237,7 @@ beforeEach(() => {
   selectionScopeState.current = []
   syncWorkspaceBoardTaskStatusesMock.mockClear()
   updateWorktreesMeta = vi.fn<UpdateWorktreesMeta>(() => Promise.resolve())
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     repos: [
       { id: 'repo-a', path: '/repo-a', name: 'repo-a', connectionId: null } as unknown as Repo
     ],

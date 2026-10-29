@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act, createElement } from 'react'
@@ -81,7 +82,7 @@ export function makeRemoteWorktree(): Worktree {
 }
 
 export function seedRemoteWorktree(): void {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     settings: {
       ...getDefaultSettings('/tmp'),
       ...initialAppState.settings,
@@ -146,7 +147,7 @@ export async function renderProbe(args: {
 }
 
 beforeEach(() => {
-  useAppStore.setState(initialAppState, true)
+  setSessionTestState(useAppStore, initialAppState, true)
   listRuntimeFilesMock.mockReset().mockResolvedValue(['packages/app/package.json'])
   cancelRuntimeFileListMock.mockReset()
   searchRuntimeFilePathsMock.mockReset().mockResolvedValue({ files: [], truncated: false })
@@ -159,7 +160,7 @@ afterEach(async () => {
     })
   }
   roots.length = 0
-  useAppStore.setState(initialAppState, true)
+  setSessionTestState(useAppStore, initialAppState, true)
 })
 
 export { listRuntimeFilesMock, cancelRuntimeFileListMock, searchRuntimeFilePathsMock }

@@ -12,6 +12,7 @@ import {
 import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
 import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { omitDisownedPtyIds } from './terminal-disowned-pty-sources'
+import { editSessionSource } from '../session-source-edits'
 
 export function createTerminalPtyBindingActions(
   set: TerminalStoreSet,
@@ -28,6 +29,7 @@ export function createTerminalPtyBindingActions(
       let wasAlreadyBound = false
       const isRemoteRuntimeMirror = isRemoteRuntimePtyId(ptyId)
       set((s) => {
+        const edit = editSessionSource(s)
         const existingPtyIds = s.ptyIdsByTabId[tabId] ?? []
         wasAlreadyBound = !replacedPtyId && existingPtyIds.includes(ptyId)
         const remote = parseRemoteRuntimePtyId(ptyId)
@@ -46,7 +48,6 @@ export function createTerminalPtyBindingActions(
             ? existingPtyIds
             : [...existingPtyIds, ptyId]
         // Keep provider handle rotation atomic across tab and pane ownership.
-        let nextTerminalLayoutsByTabId = s.terminalLayoutsByTabId
         if (replacementPtyId) {
           const existingLayout = s.terminalLayoutsByTabId[tabId]
           const existingBindings = existingLayout?.ptyIdsByLeafId
@@ -62,14 +63,13 @@ export function createTerminalPtyBindingActions(
               })
             )
             if (changed) {
-              nextTerminalLayoutsByTabId = {
-                ...s.terminalLayoutsByTabId,
-                [tabId]: { ...existingLayout, ptyIdsByLeafId: nextBindings }
-              }
+              edit.set('terminalLayoutsByTabId', tabId, {
+                ...existingLayout,
+                ptyIdsByLeafId: nextBindings
+              })
             }
           }
         }
-        let nextTabsByWorktree = s.tabsByWorktree
         for (const [wId, tabs] of Object.entries(s.tabsByWorktree)) {
           const index = tabs.findIndex((t) => t.id === tabId)
           if (index === -1) {
@@ -99,7 +99,7 @@ export function createTerminalPtyBindingActions(
                 : {}),
               ptyId: nextTabPtyId
             }
-            nextTabsByWorktree = { ...s.tabsByWorktree, [wId]: nextTabs }
+            edit.set('tabsByWorktree', wId, nextTabs)
           }
           break
         }
@@ -174,36 +174,22 @@ export function createTerminalPtyBindingActions(
             delete nextMigrationUnsupportedByPtyId[replacementPtyId]
           }
         }
-        return {
-          ...(nextTabsByWorktree !== s.tabsByWorktree
-            ? { tabsByWorktree: nextTabsByWorktree }
-            : {}),
-          ...(nextPtyIds !== existingPtyIds || !(tabId in s.ptyIdsByTabId)
-            ? { ptyIdsByTabId: { ...s.ptyIdsByTabId, [tabId]: nextPtyIds } }
-            : {}),
-          ...(s.lastKnownRelayPtyIdByTabId[tabId] !== ptyId
-            ? {
-                lastKnownRelayPtyIdByTabId: {
-                  ...s.lastKnownRelayPtyIdByTabId,
-                  [tabId]: ptyId
-                }
-              }
-            : {}),
-          ...(nextUnverifiedPtyLossTabIds !== s.unverifiedPtyLossTabIds
-            ? { unverifiedPtyLossTabIds: nextUnverifiedPtyLossTabIds }
-            : {}),
-          ...(nextDisownedPtyIds !== s.disownedPtyIds
-            ? { disownedPtyIds: nextDisownedPtyIds }
-            : {}),
-          suppressedPtyExitIds: nextSuppressedPtyExitIds,
-          pendingPaneAccountRestarts: nextPendingPaneAccountRestarts,
-          codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
-          migrationUnsupportedByPtyId: nextMigrationUnsupportedByPtyId,
-          ...(nextTerminalLayoutsByTabId !== s.terminalLayoutsByTabId
-            ? { terminalLayoutsByTabId: nextTerminalLayoutsByTabId }
-            : {}),
-          ...(shouldBumpSortEpoch ? { sortEpoch: s.sortEpoch + 1 } : {})
-        }
+        return edit
+          .set('ptyIdsByTabId', tabId, nextPtyIds)
+          .set('lastKnownRelayPtyIdByTabId', tabId, ptyId)
+          .finish({
+            ...(nextUnverifiedPtyLossTabIds !== s.unverifiedPtyLossTabIds
+              ? { unverifiedPtyLossTabIds: nextUnverifiedPtyLossTabIds }
+              : {}),
+            ...(nextDisownedPtyIds !== s.disownedPtyIds
+              ? { disownedPtyIds: nextDisownedPtyIds }
+              : {}),
+            suppressedPtyExitIds: nextSuppressedPtyExitIds,
+            pendingPaneAccountRestarts: nextPendingPaneAccountRestarts,
+            codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
+            migrationUnsupportedByPtyId: nextMigrationUnsupportedByPtyId,
+            ...(shouldBumpSortEpoch ? { sortEpoch: s.sortEpoch + 1 } : {})
+          })
       })
       // Why: a bound PTY means the workspace is awake by any route (CLI, automation, client wake), not only activation.
       clearWorktreeSleepIntent(worktreeId)

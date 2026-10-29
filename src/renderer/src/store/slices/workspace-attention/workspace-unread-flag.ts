@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { applyWorktreeUpdates } from '../worktree-helpers'
 import {
@@ -105,12 +106,14 @@ function raiseWorkspaceUnreadFlag(
     if (!marked || marked.isUnread) {
       return
     }
-    set((s) => ({
-      folderWorkspaces: s.folderWorkspaces.map((workspace) =>
-        workspace === marked ? { ...workspace, isUnread: true, ...stamp } : workspace
-      ),
-      sortEpoch: s.sortEpoch + 1
-    }))
+    set((s) =>
+      editSessionSource(s)
+        .sequence('folderWorkspaces')
+        .map((workspace) =>
+          workspace === marked ? { ...workspace, isUnread: true, ...stamp } : workspace
+        )
+        .finish({ sortEpoch: s.sortEpoch + 1 })
+    )
     // Why the row's own host: the row flipped here is the owner updateFolderWorkspace writes.
     void get().updateFolderWorkspace(
       folderWorkspaceId,
@@ -125,13 +128,15 @@ function raiseWorkspaceUnreadFlag(
   set((s) => {
     const worktree = findKnownWorktreeById(s, worktreeId)
     if (!worktree || worktree.isUnread) {
-      return s
+      return undefined
     }
     shouldPersist = true
-    const nextWorktrees = applyWorktreeUpdates(s.worktreesByRepo, worktreeId, {
+    const edit = editSessionSource(s)
+    applyWorktreeUpdates(edit, worktreeId, {
       isUnread: true,
       ...stamp
     })
+    const nextWorktrees = edit.read('worktreesByRepo')
     const nextDetectedWorktrees = applyDetectedWorktreeUpdates(
       s.detectedWorktreesByRepo,
       worktreeId,
@@ -140,14 +145,12 @@ function raiseWorkspaceUnreadFlag(
         ...stamp
       }
     )
-    return {
-      ...(nextWorktrees !== s.worktreesByRepo
-        ? { worktreesByRepo: nextWorktrees, sortEpoch: s.sortEpoch + 1 }
-        : {}),
+    return edit.finish({
+      ...(nextWorktrees !== s.worktreesByRepo ? { sortEpoch: s.sortEpoch + 1 } : {}),
       ...(nextDetectedWorktrees !== s.detectedWorktreesByRepo
         ? { detectedWorktreesByRepo: nextDetectedWorktrees }
         : {})
-    }
+    })
   })
 
   if (!shouldPersist) {
@@ -186,11 +189,14 @@ export function clearWorkspaceUnreadFlag(
       return
     }
     // Why: flip locally first so repeated reads dedupe on the guard above before the IPC round-trip lands.
-    set((s) => ({
-      folderWorkspaces: s.folderWorkspaces.map((workspace) =>
-        cleared.includes(workspace) ? { ...workspace, isUnread: false } : workspace
-      )
-    }))
+    set((s) =>
+      editSessionSource(s)
+        .sequence('folderWorkspaces')
+        .map((workspace) =>
+          cleared.includes(workspace) ? { ...workspace, isUnread: false } : workspace
+        )
+        .finish({})
+    )
     for (const workspace of cleared) {
       void get().updateFolderWorkspace(
         folderWorkspaceId,
@@ -205,10 +211,11 @@ export function clearWorkspaceUnreadFlag(
     const worktree = findKnownWorktreeById(s, worktreeId)
     if (!worktree || !worktree.isUnread) {
       // Why: return `s` (not {}) to keep the object reference on a no-op, avoiding selector churn.
-      return s
+      return undefined
     }
     shouldPersist = true
-    const nextWorktrees = applyWorktreeUpdates(s.worktreesByRepo, worktreeId, {
+    const edit = editSessionSource(s)
+    applyWorktreeUpdates(edit, worktreeId, {
       isUnread: false
     })
     const nextDetectedWorktrees = applyDetectedWorktreeUpdates(
@@ -218,12 +225,11 @@ export function clearWorkspaceUnreadFlag(
         isUnread: false
       }
     )
-    return {
-      ...(nextWorktrees !== s.worktreesByRepo ? { worktreesByRepo: nextWorktrees } : {}),
-      ...(nextDetectedWorktrees !== s.detectedWorktreesByRepo
+    return edit.finish(
+      nextDetectedWorktrees !== s.detectedWorktreesByRepo
         ? { detectedWorktreesByRepo: nextDetectedWorktrees }
-        : {})
-    }
+        : {}
+    )
   })
 
   if (!shouldPersist) {

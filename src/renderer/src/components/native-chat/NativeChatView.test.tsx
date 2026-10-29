@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
@@ -82,11 +83,11 @@ describe('NativeChatSessionGate', () => {
   afterEach(() => {
     cleanup()
     clearNativeChatDraftCacheForTests()
-    useAppStore.setState(useAppStore.getInitialState())
+    setSessionTestState(useAppStore, useAppStore.getInitialState())
   })
 
   it('keeps Find open with its query when the bridge first receives session metadata', () => {
-    useAppStore.setState(useAppStore.getInitialState())
+    setSessionTestState(useAppStore, useAppStore.getInitialState())
     const paneKey = 'tab-1:leaf-1'
     render(
       <NativeChatView

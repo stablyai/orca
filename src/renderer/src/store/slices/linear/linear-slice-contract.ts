@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../../types'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type {
@@ -161,6 +161,6 @@ export type LinearSlice = {
   ) => void
 }
 
-export type LinearSliceStateCreator = StateCreator<AppState, [], [], LinearSlice>
+export type LinearSliceStateCreator = SessionStateCreator<AppState, LinearSlice>
 export type LinearSliceSet = Parameters<LinearSliceStateCreator>[0]
 export type LinearSliceGet = Parameters<LinearSliceStateCreator>[1]

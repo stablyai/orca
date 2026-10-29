@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -19,7 +20,7 @@ beforeEach(() => {
   vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
   Object.assign(window, { api: { notifications: { getDesktopAwayState: readAway, dismiss } } })
   vi.spyOn(document, 'hasFocus').mockReturnValue(true)
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     activeView: 'terminal',
     activeTabId: 'away-tab',
     activeWorktreeId: 'away-workspace',

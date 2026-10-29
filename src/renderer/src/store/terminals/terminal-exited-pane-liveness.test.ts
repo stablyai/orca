@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { tabHasLivePty } from '../../../../shared/tab-has-live-pty'
@@ -30,7 +31,7 @@ function splitLayout(): TerminalLayoutSnapshot {
 
 function storeWithSplitTab() {
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     repos: [{ id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }],
     worktreesByRepo: {
       repo1: [makeWorktree({ id: WORKTREE, repoId: 'repo1', path: '/path/wt1', hostId: 'local' })]

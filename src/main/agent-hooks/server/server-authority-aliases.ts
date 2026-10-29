@@ -1,3 +1,5 @@
+import { PaneAliasRecipeSources } from './pane-alias-recipe-sources'
+import type { SessionPaneAliasRecipe } from '../../persistence/restoring-sessions/session-pane-alias-recipes'
 import { deriveCliWriterTopology } from './cli-writer-observation'
 import {
   admitLegacyAgentStatus,
@@ -13,6 +15,28 @@ import { isValidPaneKey } from './server-status-identity'
 import { AgentHookServerAuthorityEvidence } from './server-authority-evidence'
 
 export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAuthorityEvidence {
+  private readonly recipeSources = new PaneAliasRecipeSources()
+  replacePaneKeyAliasRecipes(source: string, recipes: readonly SessionPaneAliasRecipe[]): void {
+    this.recipeSources.replace(source, recipes)
+  }
+  hasPaneKeyAlias(legacyPaneKey: string, stablePaneKey: string, ptyId?: string): boolean {
+    const entry = this.legacyPaneKeyAliases.get(legacyPaneKey)
+    return entry?.stablePaneKey === stablePaneKey && entry.ptyId === (ptyId ?? null)
+  }
+
+  protected restorePaneKeyAliasRecipe(legacyPaneKey: string): void {
+    const recipe = this.recipeSources.first(legacyPaneKey)
+    if (recipe) {
+      this.registerPaneKeyAlias(
+        recipe.legacyPaneKey,
+        recipe.stablePaneKey,
+        recipe.ptyId,
+        recipe.updatedAt,
+        { overwriteExisting: false }
+      )
+    }
+  }
+
   setPaneKeyAliasPersistenceListener(listener: PaneKeyAliasPersistenceListener | null): void {
     this.paneKeyAliasPersistenceListener = listener
   }

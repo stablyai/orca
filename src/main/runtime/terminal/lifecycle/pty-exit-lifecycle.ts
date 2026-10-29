@@ -1,3 +1,4 @@
+import { invalidateShutdownReconnectPty } from '../recovery/shutdown-reconnect-fact-index'
 import { OrcaRuntimeWithOnClientDisconnected } from '../layout/terminal-client-disconnect'
 import type { PtyIncarnationId } from '../../../../shared/pty-incarnation'
 import type { TerminalExitCause } from '../../../../shared/terminal-exit-cause'
@@ -234,6 +235,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       }
       if (pty) {
         pty.connected = false
+        invalidateShutdownReconnectPty(this, pty.ptyId)
         pty.runtimeSessionOwned = false
         this.setPairedRendererSessionOwnership(pty.ptyId, false)
         pty.disconnectedAt = Date.now()
@@ -275,6 +277,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       this.notifyPtyExitListeners(ptyId)
     }
 
+    invalidateShutdownReconnectPty(this, ptyId)
     const exitedSurfaces: { handle: string; paneKey: string | null }[] = []
     for (const leaf of this.getLeavesForPty(ptyId)) {
       this.detachedPreAllocatedLeaves.delete(ptyId)

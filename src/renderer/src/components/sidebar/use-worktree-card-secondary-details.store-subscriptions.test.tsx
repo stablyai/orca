@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -107,7 +108,7 @@ function secondaryDetailsArgs(settings: GlobalSettings) {
 
 afterEach(() => {
   unmount()
-  useAppStore.setState(originalState, true)
+  setSessionTestState(useAppStore, originalState, true)
 })
 
 describe('useWorktreeCardSecondaryDetails store subscriptions', () => {

@@ -1,3 +1,4 @@
+import { withSessionSourceTestWrites } from '@/lib/test-support/session-source-test-store'
 import { create } from 'zustand'
 import { describe, expect, it, vi } from 'vitest'
 import { createPinnedTabCloseConfirmSlice } from './pinned-tab-close-confirm'
@@ -13,9 +14,21 @@ function makeStore() {
       | 'confirmPinnedTabClose'
       | 'dismissPinnedTabClose'
     >
-  >()((...args) =>
-    createPinnedTabCloseConfirmSlice(
-      ...(args as Parameters<typeof createPinnedTabCloseConfirmSlice>)
+  >()(
+    withSessionSourceTestWrites<
+      Pick<
+        AppState,
+        | 'pinnedTabCloseConfirm'
+        | 'requestPinnedTabCloseConfirm'
+        | 'cancelPinnedTabCloseRequest'
+        | 'confirmPinnedTabClose'
+        | 'dismissPinnedTabClose'
+      >
+    >((...args) =>
+      createPinnedTabCloseConfirmSlice(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test stub supplies only the API members exercised by this scenario.
+        ...(args as unknown as Parameters<typeof createPinnedTabCloseConfirmSlice>)
+      )
     )
   )
 }

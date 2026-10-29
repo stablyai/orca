@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 /** Separate Windows/non-Windows files because client platform is captured at module load. */
@@ -52,7 +53,11 @@ describe('TabBar worktree-write gate (Windows client)', () => {
     probeWindowsCapabilities.hostPlatform = null
     tabBarSurfaceRenders.count = 0
     localProjectRuntimeSpy.mockClear()
-    ;(await createTabBarProbeStore()).setState({ worktreesByRepo: {}, projects: [], repos: [] })
+    setSessionTestState(await createTabBarProbeStore(), {
+      worktreesByRepo: {},
+      projects: [],
+      repos: []
+    })
   })
 
   afterEach(() => {

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { useAppStore } from '@/store'
@@ -8,7 +9,7 @@ const LEAF_ID = '11111111-1111-1111-8111-111111111111'
 const PANE_KEY = `pi-tab:${LEAF_ID}`
 
 afterEach(() => {
-  useAppStore.setState(initialAppStoreState, true)
+  setSessionTestState(useAppStore, initialAppStoreState, true)
 })
 
 describe('Pi live session does not spawn a duplicate resume tab', () => {
@@ -30,7 +31,8 @@ describe('Pi live session does not spawn a duplicate resume tab', () => {
       updatedAt: 1,
       origin: 'live'
     }
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       activeWorktreeId: 'wt-1',
       activeTabType: 'editor',
       activeTabId: null,

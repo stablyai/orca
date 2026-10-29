@@ -3,19 +3,15 @@ import {
   noteReactCommitCascadeStoreWrite,
   reactCommitCascadeWriteProbe
 } from '@/lib/react-commit-cascade-store-write-samples'
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from './session-source-write-boundary'
+import type { SessionSourceSetArgs } from './session-source-edits'
 
 /** zustand's two `setState` call shapes, as a union so a wrapper can forward them uncast. */
-export type StoreSetArgs<TState> =
-  | [
-      partial: TState | Partial<TState> | ((state: TState) => TState | Partial<TState>),
-      replace?: false
-    ]
-  | [state: TState | ((state: TState) => TState), replace: true]
+export type StoreSetArgs<TState> = SessionSourceSetArgs<TState>
 
 export function withReactCommitCascadeWriteProbe<TState>(
-  createState: StateCreator<TState, [], []>
-): StateCreator<TState, [], []> {
+  createState: SessionStateCreator<TState>
+): SessionStateCreator<TState> {
   return (set, get, api) => {
     const probe = (write: typeof set): typeof set => {
       const wrapped = (...args: StoreSetArgs<TState>): void => {

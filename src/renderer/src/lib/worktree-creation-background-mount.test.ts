@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
@@ -123,7 +124,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  useAppStore.setState(initialAppStoreState, true)
+  setSessionTestState(useAppStore, initialAppStoreState, true)
 })
 
 describe('a create finishing after the user switched away', () => {

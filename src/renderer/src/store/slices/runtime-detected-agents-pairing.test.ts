@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -191,7 +192,7 @@ describe('runtime detection across a re-pair', () => {
     )
     rpc.status.mockResolvedValue({ capabilities: [], hostPlatform: 'win32' })
     rpc.call.mockResolvedValue(['claude'])
-    store.setState({
+    setSessionTestState(store, {
       repos: [{ ...TEST_REPO, connectionId: 'target', executionHostId: 'runtime:detection-peer' }],
       worktreesByRepo: { [TEST_REPO.id]: [makeWorktree({ id: WORKTREE, repoId: TEST_REPO.id })] }
     })

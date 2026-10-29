@@ -1,10 +1,11 @@
+import { collapseGroupLayoutEdit } from './tab-group-layout-edits'
+import { editSessionSource, type SessionSourceEdit } from '../../session-source-edits'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { TabSplitTarget, TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { activeSurfacePatchMatchesState, buildActiveSurfacePatch } from './tabs-surface'
 import type { TabGroup } from '../../../../../shared/tab-types'
 import {
   buildSplitNode,
-  collapseGroupLayout,
   replaceLeaf
 } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
 import { workspaceRootGroupId } from '../../../../../shared/workspace-layout/workspace-layout-minted-ids'
@@ -19,11 +20,12 @@ type SplitGroupState = Pick<
 
 /** Places `newGroup` beside the target's source group; callers that fill it do so in the same update. */
 export function insertSplitGroup(
-  state: SplitGroupState,
+  edit: SessionSourceEdit<SplitGroupState>,
   worktreeId: string,
   target: TabSplitTarget,
   newGroup: TabGroup
-): SplitGroupState {
+): void {
+  const state = edit.view()
   const { sourceGroupId, splitDirection } = target
   const currentLayout =
     state.layoutByWorktree[worktreeId] ?? ({ type: 'leaf', groupId: sourceGroupId } as const)
@@ -33,19 +35,13 @@ export function insertSplitGroup(
     splitDirection === 'left' || splitDirection === 'right' ? 'horizontal' : 'vertical',
     splitDirection === 'left' || splitDirection === 'up' ? 'first' : 'second'
   )
-  return {
-    groupsByWorktree: {
-      ...state.groupsByWorktree,
-      [worktreeId]: [...(state.groupsByWorktree[worktreeId] ?? []), newGroup]
-    },
-    layoutByWorktree: {
-      ...state.layoutByWorktree,
-      [worktreeId]: replaceLeaf(currentLayout, sourceGroupId, replacement)
-    },
-    activeGroupIdByWorktree:
-      target.activate === false
-        ? state.activeGroupIdByWorktree
-        : { ...state.activeGroupIdByWorktree, [worktreeId]: newGroup.id }
+  edit.set('groupsByWorktree', worktreeId, [
+    ...(state.groupsByWorktree[worktreeId] ?? []),
+    newGroup
+  ])
+  edit.set('layoutByWorktree', worktreeId, replaceLeaf(currentLayout, sourceGroupId, replacement))
+  if (target.activate !== false) {
+    edit.set('activeGroupIdByWorktree', worktreeId, newGroup.id)
   }
 }
 
@@ -74,7 +70,7 @@ export function createTabsGroupActions(
           orderSlot && groups.find((group) => group.tabOrder.includes(orderSlot.tabId))
         if (reserved) {
           groupId = reserved.id
-          return state
+          return undefined
         }
         const tabs = state.unifiedTabsByWorktree[worktreeId] ?? []
         const placement = resolveUnifiedTabCreatePlacement({
@@ -105,27 +101,23 @@ export function createTabsGroupActions(
         }
         // A new root and its first order member must become observable together.
         const nextGroup = { ...group, tabOrder }
-        return {
-          groupsByWorktree: {
-            ...state.groupsByWorktree,
-            [worktreeId]: groups.length
-              ? groups.map((entry) => (entry.id === groupId ? nextGroup : entry))
-              : [nextGroup]
-          },
-          layoutByWorktree: {
-            ...state.layoutByWorktree,
-            [worktreeId]: (orderSlot && state.layoutByWorktree[worktreeId]) || {
-              type: 'leaf',
-              groupId
-            }
-          },
-          activeGroupIdByWorktree: groups.length
-            ? state.activeGroupIdByWorktree
-            : {
-                ...state.activeGroupIdByWorktree,
-                [worktreeId]: groupId
-              }
+        const edit = editSessionSource(state)
+        edit.set(
+          'groupsByWorktree',
+          worktreeId,
+          groups.length
+            ? groups.map((entry) => (entry.id === groupId ? nextGroup : entry))
+            : [nextGroup]
+        )
+        edit.set(
+          'layoutByWorktree',
+          worktreeId,
+          (orderSlot && state.layoutByWorktree[worktreeId]) || { type: 'leaf', groupId }
+        )
+        if (!groups.length) {
+          edit.set('activeGroupIdByWorktree', worktreeId, groupId)
         }
+        return edit.finish()
       })
       return groupId
     },
@@ -133,39 +125,24 @@ export function createTabsGroupActions(
     focusGroup: (worktreeId, groupId) =>
       set((state) => {
         const groupAlreadyFocused = state.activeGroupIdByWorktree[worktreeId] === groupId
-        const nextActiveGroupIdByWorktree = groupAlreadyFocused
-          ? state.activeGroupIdByWorktree
-          : {
-              ...state.activeGroupIdByWorktree,
-              [worktreeId]: groupId
-            }
-        // Only surface tabs of the active workspace; focusing an unseen group must not consume its bell.
-        if (state.activeWorktreeId !== worktreeId) {
-          if (groupAlreadyFocused) {
-            return state
-          }
-          return {
-            activeGroupIdByWorktree: nextActiveGroupIdByWorktree
-          }
+        const edit = editSessionSource(state)
+        if (!groupAlreadyFocused) {
+          edit.set('activeGroupIdByWorktree', worktreeId, groupId)
         }
-        const activeSurfacePatch = buildActiveSurfacePatch(
-          {
-            ...state,
-            activeGroupIdByWorktree: nextActiveGroupIdByWorktree
-          },
-          worktreeId,
-          groupId
-        )
+        if (state.activeWorktreeId !== worktreeId) {
+          return groupAlreadyFocused ? undefined : edit.finish()
+        }
+        const activeSurfacePatch = buildActiveSurfacePatch(edit, worktreeId, groupId)
         if (
           groupAlreadyFocused &&
-          activeSurfacePatchMatchesState(state, worktreeId, activeSurfacePatch)
+          activeSurfacePatchMatchesState(state, worktreeId, {
+            ...edit.view(),
+            ...activeSurfacePatch
+          })
         ) {
-          return state
+          return undefined
         }
-        return {
-          ...(groupAlreadyFocused ? {} : { activeGroupIdByWorktree: nextActiveGroupIdByWorktree }),
-          ...activeSurfacePatch
-        }
+        return edit.finish(activeSurfacePatch)
       }),
 
     closeEmptyGroup: (worktreeId, groupId) => {
@@ -181,51 +158,38 @@ export function createTabsGroupActions(
         const remainingGroups = (current.groupsByWorktree[worktreeId] ?? []).filter(
           (candidate) => candidate.id !== groupId
         )
-        const collapsedState = collapseGroupLayout(
-          current.layoutByWorktree,
-          current.activeGroupIdByWorktree,
-          worktreeId,
-          groupId,
-          remainingGroups[0]?.id ?? null
-        )
-        // Why: drop the dead group's recent-quick-command entry so the map can't grow unbounded as groups open/close.
+        const edit = editSessionSource(current)
+        edit.set('groupsByWorktree', worktreeId, remainingGroups)
+        collapseGroupLayoutEdit(edit, worktreeId, groupId, remainingGroups[0]?.id ?? null)
+        // Retire the closed group's quick-command history.
         const { [groupId]: _droppedRecent, ...remainingRecent } =
           current.recentQuickCommandIdByGroup
-        return {
-          groupsByWorktree: { ...current.groupsByWorktree, [worktreeId]: remainingGroups },
-          layoutByWorktree: collapsedState.layoutByWorktree,
-          activeGroupIdByWorktree: collapsedState.activeGroupIdByWorktree,
+        return edit.finish({
           recentQuickCommandIdByGroup: remainingRecent,
           ...(ownsGlobalSelection(current, worktreeId)
             ? buildActiveSurfacePatch(
-                {
-                  ...current,
-                  groupsByWorktree: {
-                    ...current.groupsByWorktree,
-                    [worktreeId]: remainingGroups
-                  },
-                  layoutByWorktree: collapsedState.layoutByWorktree,
-                  activeGroupIdByWorktree: collapsedState.activeGroupIdByWorktree
-                },
+                edit,
                 worktreeId,
-                collapsedState.activeGroupIdByWorktree[worktreeId] ?? null
+                edit.entry('activeGroupIdByWorktree', worktreeId) ?? null
               )
             : {})
-        }
+        })
       })
       return true
     },
 
     createEmptySplitGroup: (worktreeId, sourceGroupId, direction, opts) => {
       const newGroupId = createBrowserUuid()
-      set((state) =>
+      set((state) => {
+        const edit = editSessionSource(state)
         insertSplitGroup(
-          state,
+          edit,
           worktreeId,
           { sourceGroupId, splitDirection: direction, activate: opts?.activate },
           emptySplitGroup(worktreeId, newGroupId)
         )
-      )
+        return edit.finish()
+      })
       get().recordFeatureInteraction?.('terminal-panes')
       return newGroupId
     }

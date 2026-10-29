@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
 import type {
@@ -21,8 +21,8 @@ export function normalizeNestedRepoScanResult(scan: NestedRepoScanResult): Neste
 }
 
 export function createNestedRepositoryActions(
-  set: Parameters<StateCreator<AppState>>[0],
-  get: Parameters<StateCreator<AppState>>[1]
+  set: Parameters<SessionStateCreator<AppState>>[0],
+  get: Parameters<SessionStateCreator<AppState>>[1]
 ): Pick<RepoSlice, 'scanNestedRepos' | 'cancelNestedRepoScan' | 'importNestedRepos'> {
   return {
     scanNestedRepos: async (path, connectionId, controls) => {

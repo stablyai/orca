@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
 import type * as ConnectionOwnerModule from '@/lib/connection-owner-resolution'
 
@@ -25,7 +26,7 @@ const PATH = '/Users/me/orca/chat-scratch/0123456789abcdef0123456789abcdef/usage
 const initialState = useAppStore.getInitialState()
 
 afterEach(() => {
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   vi.clearAllMocks()
 })
 
@@ -45,7 +46,7 @@ it("opens a local chat visual's page as an editable source tab, read and saved i
 it('keeps user-file access when a previewed symlink escapes the workspace', async () => {
   const filePath = '/repo/docs-link/report.html'
   const openFile = vi.fn()
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     openFile,
     worktreesByRepo: {
       repo: [makeWorktree({ id: 'wt-1', repoId: 'repo', path: '/repo', hostId: 'local' })]

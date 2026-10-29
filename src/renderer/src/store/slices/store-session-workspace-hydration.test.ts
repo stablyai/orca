@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/worktree/types'
@@ -46,7 +47,7 @@ describe('hydrateWorkspaceSession', () => {
     const validWt = 'repo1::/path/wt1'
     const invalidWt = 'repo1::/path/gone'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -91,7 +92,7 @@ describe('hydrateWorkspaceSession', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -140,7 +141,7 @@ describe('hydrateWorkspaceSession', () => {
     const store = createTestStore()
     const stalledWt = 'repo1::/path/wt1'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -172,7 +173,7 @@ describe('hydrateWorkspaceSession', () => {
     const store = createTestStore()
     const stalledWt = 'repo1::/path/wt1'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -206,7 +207,7 @@ describe('hydrateWorkspaceSession', () => {
     const store = createTestStore()
     const staleWt = 'repo1::/path/deleted'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -240,7 +241,7 @@ describe('hydrateWorkspaceSession', () => {
     const store = createTestStore()
     const orphanWt = 'repoGone::/path/wt1'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -270,7 +271,7 @@ describe('hydrateWorkspaceSession', () => {
     const store = createTestStore()
     const validWt = 'repo1::/path/wt1'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -445,7 +446,7 @@ describe('restored folder workspace hydration', () => {
     const worktreeId = 'repo-a::/target'
     const retainedTab = makeTab({ id: 'tab-retained', worktreeId })
     const retiredTab = makeTab({ id: 'tab-retired', worktreeId })
-    store.setState({
+    setSessionTestState(store, {
       repos: [{ ...TEST_REPO, id: 'repo-a', connectionId: 'target-a' }],
       worktreesByRepo: {
         'repo-a': [makeWorktree({ id: worktreeId, repoId: 'repo-a', path: '/target' })]

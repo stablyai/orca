@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it } from 'vitest'
 import { createEditorTabsStore } from './editor-slice-test-harness'
 import { makeWorktree, TEST_REPO } from './worktrees-slice-test-fixtures'
@@ -6,7 +7,7 @@ import { getDefaultSettings } from '../../../../shared/constants'
 // #25467: a project set up on this machine and on a paired server shares one repo id.
 function sharedProjectStore(worktreeHostId: 'local' | undefined, localRepoStamped: boolean) {
   const store = createEditorTabsStore()
-  store.setState({
+  setSessionTestState(store, {
     repos: [
       {
         ...TEST_REPO,

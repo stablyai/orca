@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import {
@@ -104,10 +104,8 @@ export type RecentlyClosedTabsSlice = {
   reopenClosedTab: (worktreeId: string) => boolean
 }
 
-export const createRecentlyClosedTabsSlice: StateCreator<
+export const createRecentlyClosedTabsSlice: SessionStateCreator<
   AppState,
-  [],
-  [],
   RecentlyClosedTabsSlice
 > = (set, get) => ({
   recentlyClosedTerminalTabsByWorktree: {},
@@ -126,7 +124,7 @@ export const createRecentlyClosedTabsSlice: StateCreator<
       const stack = s.recentlyClosedTerminalTabsByWorktree[worktreeId] ?? []
       snapshot = stack[0]
       if (!snapshot) {
-        return s
+        return undefined
       }
       return {
         recentlyClosedTerminalTabsByWorktree: {
@@ -162,7 +160,7 @@ export const createRecentlyClosedTabsSlice: StateCreator<
         const kinds = s.recentlyClosedTabKindsByWorktree[worktreeId] ?? []
         kind = kinds[0]
         if (!kind) {
-          return s
+          return undefined
         }
         return {
           recentlyClosedTabKindsByWorktree: {

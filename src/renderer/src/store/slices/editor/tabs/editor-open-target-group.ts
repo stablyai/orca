@@ -1,5 +1,6 @@
+import type { SessionSourceEdit } from '../../../session-source-edits'
 import type { AppState } from '../../../types'
-import type { Tab, TabGroup, WorkspaceVisibleTabType } from '../../../../../../shared/tab-types'
+import type { Tab, TabGroup } from '../../../../../../shared/tab-types'
 import { editorTabContentTypeForMode, isEditorTabContentType } from './editor-tab-content-type'
 import type { OpenFile } from '../types/open-file'
 import { ownsGlobalSelection } from '../../../global-selection-owner'
@@ -165,21 +166,19 @@ export function resolveEditorLinkOpenPlacement(
 }
 
 export function buildEditorActiveResult(
-  state: Pick<AppState, 'activeFileIdByWorktree' | 'activeTabTypeByWorktree' | 'activeWorktreeId'>,
+  edit: SessionSourceEdit<
+    Pick<AppState, 'activeFileIdByWorktree' | 'activeTabTypeByWorktree' | 'activeWorktreeId'>
+  >,
   worktreeId: string,
   fileId: string
 ): {
   activeFileId?: string
   activeTabType?: 'editor'
-  activeFileIdByWorktree: Record<string, string | null>
-  activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType>
 } {
-  return {
-    // Why: only the on-screen worktree owns the main editor; a background or floating open updates only the per-worktree maps.
-    ...(ownsGlobalSelection(state, worktreeId)
-      ? { activeFileId: fileId, activeTabType: 'editor' as const }
-      : {}),
-    activeFileIdByWorktree: { ...state.activeFileIdByWorktree, [worktreeId]: fileId },
-    activeTabTypeByWorktree: { ...state.activeTabTypeByWorktree, [worktreeId]: 'editor' }
-  }
+  const state = edit.view()
+  edit.set('activeFileIdByWorktree', worktreeId, fileId)
+  edit.set('activeTabTypeByWorktree', worktreeId, 'editor')
+  return ownsGlobalSelection(state, worktreeId)
+    ? { activeFileId: fileId, activeTabType: 'editor' as const }
+    : {}
 }

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -29,12 +30,12 @@ function countingSurfaces(ids: string[]): { surfaces: WorkspaceSurface[]; mapCal
 
 describe('workspace surface ids', () => {
   beforeEach(() => {
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   afterEach(() => {
     cleanup()
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
     vi.restoreAllMocks()
   })
 
@@ -42,7 +43,7 @@ describe('workspace surface ids', () => {
     const repo = makeRepo()
     const first = makeWorktree('alpha', 'Alpha')
     const second = makeWorktree('beta', 'Beta')
-    useAppStore.setState({ worktreesByRepo: { [repo.id]: [first, second] } })
+    setSessionTestState(useAppStore, { worktreesByRepo: { [repo.id]: [first, second] } })
 
     const { result, rerender } = renderHook(() => useTerminalWorkspaceFoundation())
     const initialSurfaces = result.current.workspaceSurfaces
@@ -50,7 +51,7 @@ describe('workspace surface ids', () => {
     const initialIdSet = result.current.workspaceSurfaceIdSet
     expect(initialIds).toEqual([first.id, second.id])
 
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       worktreesByRepo: {
         [repo.id]: [
           { ...first, lastActivityAt: Date.now() },
@@ -64,7 +65,7 @@ describe('workspace surface ids', () => {
     expect(result.current.workspaceSurfaceIds).toBe(initialIds)
     expect(result.current.workspaceSurfaceIdSet).toBe(initialIdSet)
 
-    useAppStore.setState({ worktreesByRepo: { [repo.id]: [first] } })
+    setSessionTestState(useAppStore, { worktreesByRepo: { [repo.id]: [first] } })
     rerender()
     expect(result.current.workspaceSurfaceIds).not.toBe(initialIds)
     expect(result.current.workspaceSurfaceIdSet).not.toBe(initialIdSet)
@@ -151,7 +152,7 @@ describe('workspace surface ids', () => {
     const worktrees = Array.from({ length: 423 }, (_, index) =>
       makeWorktree(`repo-1::/worktree-${index}`, `Workspace ${index}`)
     )
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       worktreesByRepo: { [repo.id]: worktrees },
       activeWorktreeId: worktrees[0].id
     })
@@ -198,7 +199,7 @@ describe('workspace surface ids', () => {
       folderPath: '/remote/orca',
       executionHostId: 'runtime:env-1'
     }
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [localFolder, runtimeFolder],
       activeWorktreeId: 'folder:folder-shared',
       activeWorkspaceExecutionHostId: 'runtime:env-1'
@@ -227,7 +228,7 @@ describe('workspace surface ids', () => {
     const worktrees = Array.from({ length: 20 }, (_, index) =>
       makeWorktree(`wt-${index}`, `Workspace ${index}`)
     )
-    useAppStore.setState({ worktreesByRepo: { [repo.id]: worktrees } })
+    setSessionTestState(useAppStore, { worktreesByRepo: { [repo.id]: worktrees } })
 
     const fires = { surfaceKeyed: 0, idKeyed: 0 }
     renderHook(() => {
@@ -244,7 +245,7 @@ describe('workspace surface ids', () => {
     // Model idle activity/status writes that preserve every workspace ID.
     for (let write = 0; write < 100; write += 1) {
       act(() => {
-        useAppStore.setState({
+        setSessionTestState(useAppStore, {
           worktreesByRepo: {
             [repo.id]: worktrees.map((worktree) => ({ ...worktree, lastActivityAt: write }))
           }

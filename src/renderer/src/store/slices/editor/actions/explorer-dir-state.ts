@@ -23,7 +23,7 @@ export function createExplorerDirState(set: EditorSet, _get: EditorGet): Explore
       set((s) => {
         const current = s.expandedDirs[worktreeId]
         if (!current?.size) {
-          return s
+          return undefined
         }
         return {
           expandedDirs: {
@@ -36,13 +36,13 @@ export function createExplorerDirState(set: EditorSet, _get: EditorGet): Explore
       set((s) => {
         const current = s.expandedDirs[worktreeId]
         if (!current?.size) {
-          return s
+          return undefined
         }
         const next = new Set(
           Array.from(current).filter((expandedDir) => !isPathInsideOrEqual(dirPath, expandedDir))
         )
         if (next.size === current.size) {
-          return s
+          return undefined
         }
         return { expandedDirs: { ...s.expandedDirs, [worktreeId]: next } }
       }),

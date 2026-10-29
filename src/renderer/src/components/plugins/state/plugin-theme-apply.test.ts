@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -67,7 +68,7 @@ beforeEach(() => {
   })
 })
 
-afterEach(() => useAppStore.setState(initialState, true))
+afterEach(() => setSessionTestState(useAppStore, initialState, true))
 
 const darkTerminal: PluginTerminalThemeRegistration = {
   id: `plugin:${pluginKey}/term`,

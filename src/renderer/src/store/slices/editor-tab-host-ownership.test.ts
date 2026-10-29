@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it } from 'vitest'
 import { createEditorTabsStore } from './editor-slice-test-harness'
 import { makeWorktree, TEST_REPO } from './worktrees-slice-test-fixtures'
@@ -15,7 +16,7 @@ describe('editor tabs retain their captured file owner', () => {
     { hostId: 'ssh:linux', runtimeEnvironmentId: 'wsl' }
   ] as const)('keeps $hostId via $runtimeEnvironmentId while another host is focused', (owner) => {
     const store = createEditorTabsStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [{ ...TEST_REPO, id: 'repo-1', path: '/repo', executionHostId: owner.hostId }],
       worktreesByRepo: {
         'repo-1': [
@@ -59,7 +60,7 @@ describe('editor tabs retain their captured file owner', () => {
 describe('editor owners ignore unrelated workspace focus', () => {
   it('captures an unstamped local worktree independently of the focused host', () => {
     const store = createEditorTabsStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [{ ...TEST_REPO, id: 'repo-1', path: '/repo' }],
       worktreesByRepo: {
         'repo-1': [makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo' })]
@@ -79,7 +80,7 @@ describe('editor owners ignore unrelated workspace focus', () => {
 
   function folderStore() {
     const store = createEditorTabsStore()
-    store.setState({
+    setSessionTestState(store, {
       activeWorktreeId: 'folder:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
       settings: { ...getDefaultSettings('/tmp/orca-test'), activeRuntimeEnvironmentId: null },
       folderWorkspaces: [
@@ -139,7 +140,7 @@ describe('editor owners ignore unrelated workspace focus', () => {
     if (!localFolder) {
       throw new Error('Missing folder fixture')
     }
-    store.setState({
+    setSessionTestState(store, {
       folderWorkspaces: [localFolder, { ...localFolder, executionHostId: 'runtime:wsl' }],
       activeWorkspaceExecutionHostId: 'local'
     })
@@ -177,7 +178,7 @@ describe('editor owners ignore unrelated workspace focus', () => {
       provenance.generation.route
     )
 
-    store.setState({
+    setSessionTestState(store, {
       folderWorkspaces: store.getState().folderWorkspaces.map((folder) => ({
         ...folder,
         executionHostId: 'runtime:wsl'

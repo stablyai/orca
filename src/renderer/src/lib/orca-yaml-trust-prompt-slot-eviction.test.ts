@@ -1,5 +1,6 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
+import type { SessionTestStore } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { StoreApi } from 'zustand/vanilla'
 import type { AppState } from '@/store/types'
 import { createUIStore } from '@/store/slices/ui-slice-test-harness'
 import { __resetTrustPromptChainForTests, ensureHooksConfirmed } from './ensure-hooks-confirmed'
@@ -15,11 +16,12 @@ const runtimeEnvironmentTransportCallMock = vi.fn()
 
 // Why: a hand-rolled openModal double would decide the eviction outcome under test.
 function createStateBackedByRealModalSlot(): {
-  store: StoreApi<AppState>
+  store: SessionTestStore<AppState>
   state: AppState
 } {
   const store = createUIStore()
-  store.setState({
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This repos, trustedOrcaHooks fixture intentionally supplies only the state members exercised by this scenario.
+  setSessionTestState(store, {
     repos: [{ id: 'repo-1', displayName: 'Repo One' }],
     trustedOrcaHooks: {}
   } as unknown as Partial<AppState>)

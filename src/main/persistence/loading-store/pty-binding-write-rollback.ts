@@ -1,111 +1,112 @@
+import type {
+  SessionScalarField,
+  SessionUnitReader,
+  SessionPresence,
+  SessionEntry
+} from '../../../shared/session-unit-reader'
 import { isDeepStrictEqual } from 'node:util'
 import { isTerminalLeafId } from '../../../shared/stable-pane-id'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../restoring-sessions/workspace-session-write-rollback'
+import { SESSION_MAP_FIELDS } from '../../../shared/session-change-set'
 
-function restoreBindingSlot(
-  original: Record<string, string> | undefined,
-  staged: Record<string, string> | undefined,
-  current: Record<string, string> | undefined,
-  key: string
-): Record<string, string> | undefined {
-  if (current?.[key] !== staged?.[key] || original?.[key] === staged?.[key]) {
-    return current
-  }
-  const restored = { ...current }
-  const previous = original?.[key]
-  if (previous === undefined) {
-    delete restored[key]
-  } else {
-    restored[key] = previous
-  }
-  return original === undefined && Object.keys(restored).length === 0 ? undefined : restored
-}
+import { rollbackSessionUnit } from '../restoring-sessions/workspace-session-write-rollback'
 
-export function rollbackFailedPtyBinding(
-  original: WorkspaceSessionState,
-  staged: WorkspaceSessionState,
-  current: WorkspaceSessionState,
-  worktreeId: string,
-  tabId: string,
-  leafId: string
-): WorkspaceSessionState {
-  const tab = (session: WorkspaceSessionState) =>
-    session.tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === tabId)
-  const ownerState = (session: WorkspaceSessionState) => {
-    const ownerTab = tab(session)
-    return {
-      createdAt: ownerTab?.createdAt,
-      generation: ownerTab?.generation,
-      worktreeId: ownerTab?.worktreeId,
-      ptyId: isTerminalLeafId(leafId)
-        ? session.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId]
-        : ownerTab?.ptyId,
-      incarnation: session.terminalPtyIncarnationsByPaneKey?.[`${tabId}:${leafId}`]
+/** The inverse reads only the slots owned by the failed publication. */
+export function reducePtyBindingRollback(
+  reader: SessionUnitReader,
+  staged: SessionUnitReader,
+  binding?: { owner: string; tabId: string; leafId: string }
+): void {
+  let originalTabs = binding && staged.unit('tabsByWorktree', binding.owner, 'prior')
+  let originalLayout = binding && staged.unit('terminalLayoutsByTabId', binding.tabId, 'prior')
+  if (binding) {
+    const { owner, tabId, leafId } = binding
+    const tabOf = (source: SessionUnitReader, phase: 'prior' | 'candidate' = 'candidate') =>
+      source.unit('tabsByWorktree', owner, phase).value?.find((row) => row.id === tabId)
+    const stateOf = (source: SessionUnitReader) => {
+      const tab = tabOf(source)
+      return {
+        createdAt: tab?.createdAt,
+        generation: tab?.generation,
+        worktreeId: tab?.worktreeId,
+        ptyId: isTerminalLeafId(leafId)
+          ? source.unit('terminalLayoutsByTabId', tabId).value?.ptyIdsByLeafId?.[leafId]
+          : tab?.ptyId,
+        incarnation: source.unit('terminalPtyIncarnationsByPaneKey', `${tabId}:${leafId}`).value
+      }
     }
-  }
-  // Presentation edits do not replace the binding that must be rolled back.
-  if (!isDeepStrictEqual(ownerState(current), ownerState(staged))) {
-    return current
-  }
-  const stagedTab = tab(staged)
-  const originalLayout = original.terminalLayoutsByTabId[tabId]
-  const stagedLayout = staged.terminalLayoutsByTabId[tabId]
-  let baseline = original
-  if (
-    stagedTab &&
-    (!isDeepStrictEqual(tab(current), stagedTab) ||
-      !isDeepStrictEqual(current.terminalLayoutsByTabId[tabId], stagedLayout))
-  ) {
-    // Keep edited new surfaces structurally valid, without the failed process binding.
-    baseline = {
-      ...original,
-      tabsByWorktree: tab(original)
-        ? original.tabsByWorktree
-        : {
-            ...original.tabsByWorktree,
-            [worktreeId]: [
-              ...(original.tabsByWorktree[worktreeId] ?? []),
-              { ...stagedTab, ptyId: null }
-            ]
-          },
-      terminalLayoutsByTabId:
-        originalLayout || !stagedLayout
-          ? original.terminalLayoutsByTabId
-          : {
-              ...original.terminalLayoutsByTabId,
-              [tabId]: { ...stagedLayout, ptyIdsByLeafId: {} }
-            }
+    if (!isDeepStrictEqual(stateOf(reader), stateOf(staged))) {
+      return
     }
-  }
-  const restored = rollbackWorkspaceSessionAfterFailedAsyncWrite(baseline, staged, current)
-  const layout = restored.terminalLayoutsByTabId[tabId]
-  const currentRoot = current.terminalLayoutsByTabId[tabId]?.root
-  return {
-    ...restored,
-    ...(layout
-      ? {
-          terminalLayoutsByTabId: {
-            ...restored.terminalLayoutsByTabId,
-            [tabId]: {
-              ...layout,
-              // A tree is one value; fieldwise rollback can mix leaf and split node shapes.
-              root: isDeepStrictEqual(currentRoot, stagedLayout?.root) ? layout.root : currentRoot,
-              ptyIdsByLeafId: restoreBindingSlot(
-                originalLayout?.ptyIdsByLeafId,
-                stagedLayout?.ptyIdsByLeafId,
-                layout.ptyIdsByLeafId,
-                leafId
-              )
-            }
-          }
+    const stagedTab = tabOf(staged)
+    const stagedLayout = staged.unit('terminalLayoutsByTabId', tabId).value
+    if (
+      stagedTab &&
+      (!isDeepStrictEqual(tabOf(reader), stagedTab) ||
+        !isDeepStrictEqual(reader.unit('terminalLayoutsByTabId', tabId).value, stagedLayout))
+    ) {
+      if (!tabOf(staged, 'prior')) {
+        originalTabs = {
+          present: true,
+          value: [...(originalTabs?.value ?? []), { ...stagedTab, ptyId: null }]
         }
-      : {}),
-    terminalPtyIncarnationsByPaneKey: restoreBindingSlot(
-      original.terminalPtyIncarnationsByPaneKey,
-      staged.terminalPtyIncarnationsByPaneKey,
-      restored.terminalPtyIncarnationsByPaneKey,
-      `${tabId}:${leafId}`
+      }
+      if (!originalLayout?.value && stagedLayout) {
+        originalLayout = { present: true, value: { ...stagedLayout, ptyIdsByLeafId: {} } }
+      }
+    }
+  }
+  for (const field of SESSION_MAP_FIELDS) {
+    for (const key of staged.changedKeys(field)) {
+      let before: SessionPresence<SessionEntry<typeof field>> = staged.unit(field, key, 'prior')
+      if (binding && field === 'tabsByWorktree' && key === binding.owner && originalTabs) {
+        before = originalTabs
+      }
+      if (
+        binding &&
+        field === 'terminalLayoutsByTabId' &&
+        key === binding.tabId &&
+        originalLayout
+      ) {
+        before = originalLayout
+      }
+      reader.write(
+        field,
+        key,
+        rollbackSessionUnit(before, staged.unit(field, key), reader.unit(field, key))
+      )
+    }
+    if (reader.touches(field) && reader.entryCount(field) === 0) {
+      reader.reconcileField(field, {
+        kind: 'rollback',
+        present: Object.hasOwn(staged.prior, field),
+        ...(Object.hasOwn(staged.prior, field) && staged.prior[field] === undefined
+          ? { valueWhenEmpty: 'undefined' }
+          : {})
+      })
+    }
+  }
+  for (const field of staged.touchedFields()) {
+    if (SESSION_MAP_FIELDS.some((name) => name === field)) {
+      continue
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: declared map fields are excluded above.
+    const key = field as SessionScalarField
+    reader.replace(
+      key,
+      rollbackSessionUnit(staged.field(key, 'prior'), staged.field(key), reader.field(key))
     )
+  }
+
+  if (binding) {
+    const { tabId } = binding
+    const restored = reader.unit('terminalLayoutsByTabId', tabId).value
+    const current = reader.unit('terminalLayoutsByTabId', tabId, 'prior').value
+    const written = staged.unit('terminalLayoutsByTabId', tabId).value
+    if (restored && current && !isDeepStrictEqual(current.root, written?.root)) {
+      reader.write('terminalLayoutsByTabId', tabId, {
+        present: true,
+        value: { ...restored, root: current.root }
+      })
+    }
   }
 }

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -103,7 +104,7 @@ describe('Cmd+J lifted creation actions', () => {
     createWebRuntimeSessionBrowserTabMock.mockResolvedValue(false)
     const store = createTestStore()
     seedActiveWorkspace(store)
-    store.setState({
+    setSessionTestState(store, {
       repos: [{ ...TEST_REPO, executionHostId: 'runtime:owner-runtime' }],
       worktreesByRepo: {
         [TEST_REPO.id]: [
@@ -138,7 +139,7 @@ describe('Cmd+J lifted creation actions', () => {
     createWebRuntimeSessionBrowserTabMock.mockResolvedValue(false)
     const store = createTestStore()
     seedActiveWorkspace(store)
-    store.setState({
+    setSessionTestState(store, {
       repos: [{ ...TEST_REPO, executionHostId: 'local' }],
       worktreesByRepo: {
         [TEST_REPO.id]: [makeWorktree({ id: 'wt-1', repoId: TEST_REPO.id, hostId: 'local' })]
@@ -264,7 +265,7 @@ describe('Cmd+J lifted creation actions', () => {
     createWebRuntimeSessionTerminalMock.mockResolvedValue(false)
     const store = createTestStore()
     seedActiveWorkspace(store)
-    store.setState({
+    setSessionTestState(store, {
       repos: [{ ...TEST_REPO, executionHostId: 'runtime:owner-runtime' }],
       worktreesByRepo: {
         [TEST_REPO.id]: [
@@ -297,7 +298,7 @@ describe('Cmd+J lifted creation actions', () => {
     delete pairedWebFlag.__ORCA_WEB_CLIENT__
     const store = createTestStore()
     seedActiveWorkspace(store)
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { ...TEST_REPO, executionHostId: 'runtime:hub-a' },
         { ...TEST_REPO, executionHostId: 'runtime:hub-b' }
@@ -319,7 +320,7 @@ describe('Cmd+J lifted creation actions', () => {
     createWebRuntimeSessionTerminalMock.mockResolvedValue(false)
     const store = createTestStore()
     seedActiveWorkspace(store)
-    store.setState({
+    setSessionTestState(store, {
       repos: [{ ...TEST_REPO, executionHostId: 'runtime:owner-runtime' }],
       worktreesByRepo: {
         [TEST_REPO.id]: [makeWorktree({ id: 'wt-1', repoId: TEST_REPO.id, hostId: 'local' })]

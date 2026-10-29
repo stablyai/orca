@@ -1,6 +1,8 @@
+import type { SessionTestStore } from '@/lib/test-support/session-source-fixture'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // Use a real editor slice and isolated window/filesystem bridge across autosave suites.
 import { vi } from 'vitest'
-import { createStore, type StoreApi } from 'zustand/vanilla'
+import { createStore } from 'zustand/vanilla'
 import { createEditorSlice } from '@/store/slices/editor'
 import { withEditorBufferRecords } from '@/store/editor-buffer-record-lifecycle'
 import type { AppState } from '@/store'
@@ -94,39 +96,40 @@ export function stubEditorWindow(): ReturnType<typeof vi.fn> {
   return stubEditorWindowWithDisk().fs.writeFile
 }
 
-export function createEditorStore(): StoreApi<AppState> {
+export function createEditorStore() {
   // Use the app’s record middleware so views of one file share a buffer.
-  // oxlint-disable-next-line typescript/no-explicit-any -- a partial store; tests read only the slices it builds.
-  const create = withEditorBufferRecords<any>(
-    (...args: any[]) => ({
-      ...emptyTabLayoutState(),
-      activeWorktreeId: 'wt-1',
-      repos: [],
-      worktreesByRepo: {
-        'repo-1': [{ id: 'wt-1', repoId: 'repo-1', hostId: 'local' }]
-      },
-      detectedWorktreesByRepo: {},
-      runtimeEnvironments: [],
-      runtimeEnvironmentCatalogHydrated: true,
-      removedRuntimeEnvironmentIds: new Set(),
-      sshConnectionStates: {},
-      sshStateByEnvironment: {},
-      settings: {
-        editorAutoSave: true,
-        editorAutoSaveDelayMs: 1000
-      },
-      ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
-    }),
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture initializes only the editor slices under test.
+  const create = withEditorBufferRecords<AppState>(
+    (...args) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture initializes only the editor slices under test.
+      ({
+        ...emptyTabLayoutState(),
+        activeWorktreeId: 'wt-1',
+        repos: [],
+        worktreesByRepo: {
+          'repo-1': [{ id: 'wt-1', repoId: 'repo-1', hostId: 'local' }]
+        },
+        detectedWorktreesByRepo: {},
+        runtimeEnvironments: [],
+        runtimeEnvironmentCatalogHydrated: true,
+        removedRuntimeEnvironmentIds: new Set(),
+        sshConnectionStates: {},
+        sshStateByEnvironment: {},
+        settings: {
+          editorAutoSave: true,
+          editorAutoSaveDelayMs: 1000
+        },
+        ...createEditorSlice(...args)
+      }) as unknown as AppState,
     true
   )
-  // oxlint-disable-next-line typescript/no-explicit-any, typescript/consistent-type-assertions -- SAFETY: as above.
-  return createStore<any>()(create) as unknown as StoreApi<AppState>
+  return createStore<AppState>()(create)
 }
 
 /** Store with a local worktree at /repo and an open, untouched untitled note at /repo/`fileName`. */
-export function createUntitledNoteStore(fileName: string): StoreApi<AppState> {
+export function createUntitledNoteStore(fileName: string) {
   const store = createEditorStore()
-  store.setState({
+  setSessionTestState(store, {
     worktreesByRepo: {
       'repo-1': [makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' })]
     },
@@ -147,7 +150,7 @@ export function createUntitledNoteStore(fileName: string): StoreApi<AppState> {
 }
 
 /** Stamp loaded-file baselines in fixtures; saves without known disk versions are refused. */
-export function withLoadedBaselines<T extends Pick<StoreApi<AppState>, 'getState'>>(
+export function withLoadedBaselines<T extends Pick<SessionTestStore<AppState>, 'getState'>>(
   store: T,
   disk?: FakeEditorDisk
 ): T {

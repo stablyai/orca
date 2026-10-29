@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import {
@@ -377,7 +378,7 @@ describe('fetchReposForAllHosts generation', () => {
   it('invalidates folder path statuses when an all-host repo catalog changes', async () => {
     reposList.mockResolvedValueOnce([{ ...localRepo, path: '/local/changed' }])
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [localRepo],
       folderWorkspacePathStatuses: {
         cached: {
@@ -418,7 +419,7 @@ describe('fetchReposForAllHosts generation', () => {
     store
       .getState()
       .setRuntimeEnvironments([{ id: 'env-1', createdAt: 1, pairingRevision: 2 } as never])
-    store.setState({
+    setSessionTestState(store, {
       repos: [{ ...freshRemoteRepo, executionHostId: 'runtime:env-1' }]
     })
     resolveRepoList({
@@ -457,7 +458,7 @@ describe('fetchReposForAllHosts generation', () => {
     store
       .getState()
       .setRuntimeEnvironments([{ id: 'env-1', createdAt: 1, pairingRevision: 2 } as never])
-    store.setState({
+    setSessionTestState(store, {
       repos: [localRepo, { ...freshRemoteRepo, executionHostId: 'runtime:env-1' }]
     })
     resolveRepoList({

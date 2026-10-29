@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import { getRecentlyClosedTabPosition, pushRecentlyClosedTabKind } from '../../recently-closed-tabs'
@@ -100,18 +101,21 @@ export function createCloseFileAction(
           : undefined
       const cleanUp = (): void => {
         set((s) => {
+          const sourceEdit = editSessionSource(s)
+
           // Switch point: the frame that dropped the tab may have dropped its record already.
           const closedFile =
             s.openFiles.find((f) => f.id === fileId) ??
             (ORCA_LAYOUT_OWNER_IS_MAIN ? preClose : undefined)
-          const newFiles = s.openFiles.filter((f) => !fileIdsToClose.has(f.id))
-          const newEditorDrafts = { ...s.editorDrafts }
+          sourceEdit.sequence('openFiles').filter((f) => !fileIdsToClose.has(f.id))
+          const newFiles = sourceEdit.read('openFiles')
+
           const newMarkdownViewMode = { ...s.markdownViewMode }
           const newMarkdownRichModeSizeOverride = { ...s.markdownRichModeSizeOverride }
           const newEditorViewMode = { ...s.editorViewMode }
           const newEditorCursorLine = { ...s.editorCursorLine }
           for (const id of fileIdsToClose) {
-            delete newEditorDrafts[id]
+            sourceEdit.remove('editorDrafts', id)
             delete newMarkdownViewMode[id]
             delete newMarkdownRichModeSizeOverride[id]
             delete newEditorViewMode[id]
@@ -128,10 +132,7 @@ export function createCloseFileAction(
             (key) =>
               !newFiles.some((file) => file.id === key || file.markdownPreviewSourceFileId === key)
           )
-          const newMarkdownFrontmatterVisible =
-            visibilityKeysToRemove.length > 0
-              ? removeMarkdownVisibilityKeys(s.markdownFrontmatterVisible, visibilityKeysToRemove)
-              : s.markdownFrontmatterVisible
+          sourceEdit.removeKeys('markdownFrontmatterVisible', visibilityKeysToRemove)
           const newMarkdownTableOfContentsVisible =
             visibilityKeysToRemove.length > 0
               ? removeMarkdownVisibilityKeys(
@@ -140,7 +141,6 @@ export function createCloseFileAction(
                 )
               : s.markdownTableOfContentsVisible
           let newActiveId = s.activeFileId
-          const newActiveFileIdByWorktree = { ...s.activeFileIdByWorktree }
 
           if (s.activeFileId && fileIdsToClose.has(s.activeFileId)) {
             const worktreeId = closedFile?.worktreeId ?? s.activeWorktreeId
@@ -155,13 +155,13 @@ export function createCloseFileAction(
             const worktreeFiles = s.openFiles.filter((file) => file.worktreeId === closedWorktreeId)
             const worktreeActiveFileId = s.activeFileIdByWorktree[closedWorktreeId]
             if (worktreeActiveFileId && fileIdsToClose.has(worktreeActiveFileId)) {
-              newActiveFileIdByWorktree[closedWorktreeId] = findAdjacentOpenFileId(
-                worktreeFiles,
-                fileIdsToClose,
-                worktreeActiveFileId
+              sourceEdit.set(
+                'activeFileIdByWorktree',
+                closedWorktreeId,
+                findAdjacentOpenFileId(worktreeFiles, fileIdsToClose, worktreeActiveFileId)
               )
             } else if (s.activeFileId && fileIdsToClose.has(s.activeFileId)) {
-              newActiveFileIdByWorktree[closedWorktreeId] = newActiveId
+              sourceEdit.set('activeFileIdByWorktree', closedWorktreeId, newActiveId)
             }
           }
 
@@ -193,10 +193,13 @@ export function createCloseFileAction(
               : browserTabsForWorktree.length > 0
                 ? 'browser'
                 : 'terminal'
-          const newActiveTabTypeByWorktree = { ...s.activeTabTypeByWorktree }
+
           if (activeWorktreeId && remainingForWorktree.length === 0 && !closesBackgroundFile) {
-            newActiveTabTypeByWorktree[activeWorktreeId] =
+            sourceEdit.set(
+              'activeTabTypeByWorktree',
+              activeWorktreeId,
               browserTabsForWorktree.length > 0 ? 'browser' : 'terminal'
+            )
           }
           // Structured chats have no legacy terminal row to keep their workspace selected.
           const hasRemainingUnifiedTabs =
@@ -264,12 +267,9 @@ export function createCloseFileAction(
             )
           }
 
-          return {
-            openFiles: newFiles,
-            editorDrafts: newEditorDrafts,
+          return sourceEdit.finish({
             editorCursorLine: newEditorCursorLine,
             activeFileId: newActiveId,
-            // Why: if the last editor closes with no browser/terminal surface left, return to the landing state like the terminal/browser close handlers do.
             activeWorktreeId: shouldDeactivateWorktree ? null : s.activeWorktreeId,
             activeBrowserTabId: shouldDeactivateWorktree
               ? null
@@ -277,12 +277,9 @@ export function createCloseFileAction(
                 ? fallbackBrowserTabId
                 : s.activeBrowserTabId,
             activeTabType: newActiveTabType,
-            activeFileIdByWorktree: newActiveFileIdByWorktree,
-            activeTabTypeByWorktree: newActiveTabTypeByWorktree,
             markdownViewMode: newMarkdownViewMode,
             markdownRichModeSizeOverride: newMarkdownRichModeSizeOverride,
             editorViewMode: newEditorViewMode,
-            markdownFrontmatterVisible: newMarkdownFrontmatterVisible,
             markdownTableOfContentsVisible: newMarkdownTableOfContentsVisible,
             tabBarOrderByWorktree: nextTabBarOrderByWorktree,
             pendingEditorReveal: null,
@@ -293,7 +290,7 @@ export function createCloseFileAction(
             recentlyClosedEditorTabsByWorktree: nextRecentlyClosed,
             recentlyClosedTabKindsByWorktree: nextRecentlyClosedKinds,
             editorBufferKeepRequest: opts?.keepEditorBuffer
-          }
+          })
         })
 
         // Eagerly created empty untitled paths are bindable placeholders; delete them after close to avoid disk clutter.

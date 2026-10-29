@@ -26,7 +26,7 @@ export function syncPRChecksStatus(
   connectionId?: string | null,
   executionHostId?: string | null,
   hasRepoOwner = false
-): Partial<AppState> | null {
+): Pick<AppState, 'prCache'> | null {
   const normalized = branch ? normalizeBranchName(branch) : ''
   if (!normalized) {
     return null

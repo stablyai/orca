@@ -1,3 +1,5 @@
+import { webSessionTabsNonSourcePatch } from '../web-session-tabs-sync/source-edit-patch'
+import type { SessionSourceEdit } from '../../store/session-source-edits'
 import type {
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsResult
@@ -70,8 +72,8 @@ export function applyStructuredSessionTabSnapshots(
   const acceptedAgentSessions: { worktreeId: string; sessionId: string }[] = []
   const drawnChatLabels: DrawnChatLabel[] = []
   const settleStructuredSessionMirror = applyWebSessionTabsStorePatch(
-    (state, changedAgentPaneKeys) =>
-      applyLocalStructuredSessionTabSnapshots(
+    (state, changedAgentPaneKeys, sourceEdit) => {
+      const next = applyLocalStructuredSessionTabSnapshots(
         state,
         snapshots,
         owner,
@@ -86,8 +88,11 @@ export function applyStructuredSessionTabSnapshots(
           framesDraw: ORCA_LAYOUT_OWNER_IS_MAIN ? framesDrawWorkspace(state) : undefined,
           onDrawnChatLabel: (change) => drawnChatLabels.push(change)
         },
-        changedAgentPaneKeys
-      ),
+        changedAgentPaneKeys,
+        sourceEdit
+      )
+      return next === state ? undefined : webSessionTabsNonSourcePatch(next)
+    },
     { frames: [] }
   )
   settleStructuredSessionMirror()
@@ -123,7 +128,8 @@ export function applyLocalStructuredSessionTabSnapshots<
   owner = LOCAL_STRUCTURED_SESSION_OWNER,
   now = Date.now(),
   options: StructuredSessionSnapshotApplyOptions = {},
-  changedAgentPaneKeys?: Set<string>
+  changedAgentPaneKeys?: Set<string>,
+  sourceEdit?: SessionSourceEdit<WebSessionTabsSyncState>
 ): State {
   let next = state
   for (const snapshot of snapshots) {
@@ -178,7 +184,8 @@ export function applyLocalStructuredSessionTabSnapshots<
         preserveLocalLayout: true,
         terminalPtyMode: 'local'
       },
-      changedAgentPaneKeys
+      changedAgentPaneKeys,
+      options.framesDraw?.(snapshot.worktree) ? undefined : sourceEdit
     )
     if (options.framesDraw?.(snapshot.worktree)) {
       // Main's frames own this workspace's tabs, so the patch (tab structure only here) is dropped.
@@ -221,4 +228,27 @@ export function applyLocalStructuredSessionTabSnapshots<
   }
   forgetRetiredEpochRepairsOutside(knownWorktreeIds)
   return next
+}
+
+export function applyLocalStructuredSessionTabSnapshotsToEdit<
+  State extends WebSessionTabsSyncState & WorktreeRuntimeOwnerState
+>(
+  sourceEdit: SessionSourceEdit<WebSessionTabsSyncState>,
+  state: State,
+  snapshots: readonly RuntimeMobileSessionTabsResult[],
+  owner = LOCAL_STRUCTURED_SESSION_OWNER,
+  now = Date.now(),
+  options: StructuredSessionSnapshotApplyOptions = {},
+  changedAgentPaneKeys?: Set<string>
+) {
+  const next = applyLocalStructuredSessionTabSnapshots(
+    state,
+    snapshots,
+    owner,
+    now,
+    options,
+    changedAgentPaneKeys,
+    sourceEdit
+  )
+  return next === state ? undefined : webSessionTabsNonSourcePatch(next)
 }

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -21,7 +22,7 @@ import { useAgentMenuObservation, useNewTabAgentMenuRows } from './use-new-tab-a
 const initial = useAppStore.getState()
 afterEach(() => {
   cleanup()
-  useAppStore.setState(initial, true)
+  setSessionTestState(useAppStore, initial, true)
   setLocalRuntimeCapabilitiesForTests(null)
 })
 it('settles ownerless continuation and plus inventory without borrowing agents, then recovers on hydration', async () => {
@@ -54,7 +55,7 @@ it('settles ownerless continuation and plus inventory without borrowing agents, 
     const getStatus = vi.fn()
     Object.assign(window, { api: { runtime: { getStatus } } })
     setLocalRuntimeCapabilitiesForTests(worktreeId.startsWith('folder:') ? null : [CHAT, CLIENT])
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       ...initial,
       settings: { ...getDefaultSettings('/home/me'), experimentalNativeChat: true },
       activeWorktreeId: worktreeId,
@@ -103,7 +104,7 @@ it('settles ownerless continuation and plus inventory without borrowing agents, 
     })
     await act(async () => {
       setLocalRuntimeCapabilitiesForTests([CHAT, CLIENT])
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         folderWorkspaces: [{ ...folder, executionHostId: 'local' }],
         repos: [repo],
         worktreesByRepo: {

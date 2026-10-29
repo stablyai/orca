@@ -1,5 +1,5 @@
 /** How a bump asks to be published; an urgent one skips the feed's coalescing delay. */
-export type ProducerChange = { urgent?: boolean }
+export type ProducerChange = { urgent?: boolean; entities?: readonly string[] }
 
 /** A producer's revision. Listeners hear each bump synchronously, possibly mid-change, so they read later. */
 export class ProducerRevision {

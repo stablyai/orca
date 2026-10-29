@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
@@ -40,7 +41,7 @@ it('retains a runtime-owned SSH project when VM cleanup fails', async () => {
     sshTargetId: runtimeRepo.connectionId
   })
   const store = createTestStore()
-  store.setState({ repos: [runtimeRepo], activeRepoId: runtimeRepo.id })
+  setSessionTestState(store, { repos: [runtimeRepo], activeRepoId: runtimeRepo.id })
 
   await store.getState().removeProject(runtimeRepo.id, {
     hostId: getRepoExecutionHostId(runtimeRepo),
@@ -86,7 +87,7 @@ it('destroys a recipe VM whose managed server holds the project, without asking 
   ])
   ephemeralVmCleanup.mockResolvedValue({ status: 'cleaned', cleanupStatus: 'succeeded' })
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     repos: [vmServerRepo],
     runtimeEnvironments: [vmServer]
   })
@@ -113,7 +114,7 @@ it("retains a recipe VM's managed-server project when VM cleanup fails", async (
     sshTargetId: 'runtime-ssh-runtime-1'
   })
   const store = createTestStore()
-  store.setState({ repos: [vmServerRepo], runtimeEnvironments: [vmServer] })
+  setSessionTestState(store, { repos: [vmServerRepo], runtimeEnvironments: [vmServer] })
 
   await store.getState().removeProject(vmServerRepo.id, {
     hostId: 'runtime:env-vm',
@@ -143,7 +144,7 @@ it('never destroys another VM whose server publishes the same workspace id', asy
   ])
   ephemeralVmCleanup.mockResolvedValue({ status: 'cleaned', cleanupStatus: 'succeeded' })
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     repos: [vmServerRepo],
     runtimeEnvironments: [vmServer],
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: removal reads only each row's id and hostId.
@@ -175,7 +176,7 @@ it("destroys the VM when the renderer's catalog predates the VM's server", async
   ])
   ephemeralVmCleanup.mockResolvedValue({ status: 'cleaned', cleanupStatus: 'succeeded' })
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     repos: [vmServerRepo],
     runtimeEnvironments: [],
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: removal reads only id, hostId and ephemeralVmCheckoutMode.

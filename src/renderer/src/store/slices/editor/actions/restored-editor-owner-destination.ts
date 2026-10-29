@@ -1,3 +1,4 @@
+import type { SessionSourceEdit, OrdinarySourcePartial } from '../../../session-source-edits'
 import type { AppState } from '../../../types'
 import { assertEditorFileOperationCurrent } from '@/lib/editor-file-operation-owner'
 import { buildOwnedEditorFileId } from '../file-ids/editor-file-ids'
@@ -11,7 +12,7 @@ import type {
 export type RestoredEditorOwnerFail = {
   ok: false
   reason: Extract<RestoredEditorOwnerResult, { ok: false }>['reason']
-  patch: Pick<AppState, 'openFiles'> & Partial<Pick<AppState, 'editorBuffers'>>
+  patch: OrdinarySourcePartial<AppState>
 }
 
 export type RestoredEditorOwnerReady = {
@@ -23,12 +24,13 @@ export type RestoredEditorOwnerReady = {
 }
 
 export function resolveRestoredEditorOwnerDestination(
-  s: AppState,
+  edit: SessionSourceEdit<AppState>,
   args: RestoredEditorOwnerMigration
 ): RestoredEditorOwnerFail | RestoredEditorOwnerReady {
+  const s = edit.view()
   const source = s.openFiles.find((file) => file.id === args.fileId)
   if (!source) {
-    return { ok: false, reason: 'stale', patch: { openFiles: s.openFiles } }
+    return { ok: false, reason: 'stale', patch: {} }
   }
 
   try {
@@ -47,7 +49,7 @@ export function resolveRestoredEditorOwnerDestination(
     return {
       ok: false,
       reason: 'owner-changed',
-      patch: writeEditorBuffer(s, args.fileId, { pendingOwnerMigration: undefined })
+      patch: writeEditorBuffer(edit, args.fileId, { pendingOwnerMigration: undefined })
     }
   }
   const operationProvenance = args.targetOperationProvenance
@@ -81,7 +83,7 @@ export function resolveRestoredEditorOwnerDestination(
     return {
       ok: false,
       reason: 'collision',
-      patch: writeEditorBuffer(s, args.fileId, { pendingOwnerMigration: undefined })
+      patch: writeEditorBuffer(edit, args.fileId, { pendingOwnerMigration: undefined })
     }
   }
 

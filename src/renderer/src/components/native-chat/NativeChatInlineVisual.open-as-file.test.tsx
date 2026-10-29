@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -118,7 +119,7 @@ it('previews, edits and saves a paired chat visual on its host, then shows the s
   // The save lands while a read from before it is in flight: the inline copy reads again after it.
   void readNativeChatVisual({ target, sessionId: 'session-1', file: 'usage.html' })
   await waitFor(() => expect(visualReads).toHaveLength(2))
-  useAppStore.setState({ openFiles: [opened] })
+  setSessionTestState(useAppStore, { openFiles: [opened] })
   act(() => {
     window.dispatchEvent(
       new CustomEvent(ORCA_EDITOR_FILE_SAVED_EVENT, { detail: { fileId: 'f1', content: '' } })

@@ -1,3 +1,6 @@
+import type { SessionSourceSet } from '@/store/session-source-edits'
+import { editSessionSource } from '@/store/session-source-edits'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 // An answered subagent ask restores its parent’s older turn-end timestamp. Order switches by observation time, but read unread/state from the pane’s current turn.
@@ -21,8 +24,8 @@ import { tabActivationPatch } from '@/store/slices/tabs/tabs-focus-actions'
 import { getStructuredChatTabNames } from '@/runtime/structured-chat-name-observation'
 
 type TestStore = {
-  getState: () => AppState
-  setState: (state: Partial<AppState> & { testRuntimeOwner?: string | null }) => void
+  getState: () => AppState & { testRuntimeOwner?: string | null }
+  setState: SessionSourceSet<AppState & { testRuntimeOwner?: string | null }>
 }
 
 const mocks = vi.hoisted(() => {
@@ -143,7 +146,7 @@ describe("an answered subagent ask on a settled parent's Activity row", () => {
     mocks.subscribeStatus.mockResolvedValue({ unsubscribe: mocks.unsubscribe })
     vi.spyOn(Date, 'now').mockReturnValue(ANSWERED + 1_000)
     const worktree = makeWorktree()
-    store().setState({
+    setSessionTestState(store(), {
       agentStatusByPaneKey: {},
       acknowledgedAgentsByPaneKey: {},
       activityClearedAtByPaneKey: {},
@@ -164,7 +167,7 @@ describe("an answered subagent ask on a settled parent's Activity row", () => {
   it('keeps the saved native name across focus and follows naming-only updates', async () => {
     const unrelated = { ...structuredTab, id: 'other-tab', entityId: 'other-session' }
     const terminal: Tab = { ...structuredTab, id: 'terminal', contentType: 'terminal' }
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       unifiedTabsByWorktree: { 'wt-1': [structuredTab, unrelated, terminal] },
       groupsByWorktree: {
         'wt-1': [
@@ -201,7 +204,9 @@ describe("an answered subagent ask on a settled parent's Activity row", () => {
       const focus = (current: Tab) =>
         act(() => {
           const state = useAppStore.getState()
-          useAppStore.setState(tabActivationPatch(state, current, 'wt-1', undefined, false))
+          const edit = editSessionSource(state)
+          tabActivationPatch(edit, current, 'wt-1', undefined, false)
+          useAppStore.setState(edit.finish())
         })
       for (let i = 0; i < 2; i += 1) {
         const before = useAppStore.getState().unifiedTabsByWorktree['wt-1'][0]

@@ -1,3 +1,4 @@
+import { replaceSessionSourceFields } from '@/store/session-source-write-boundary'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status-freshness'
@@ -48,12 +49,18 @@ function seedBatchStore() {
     agentType: 'pi',
     startedAt: BASE_TIME - 200
   }
-  store.setState({
-    tabsByWorktree: { 'wt-1': [tab] },
-    retainedAgentsByPaneKey: { [FIRST_PANE]: retained },
-    retentionSuppressedPaneKeys: { [FIRST_PANE]: true },
-    refreshGitHubForWorktreeIfStale: vi.fn().mockResolvedValue(undefined)
-  } as Partial<AppState>)
+  store.setState(
+    replaceSessionSourceFields(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+      {
+        tabsByWorktree: { 'wt-1': [tab] },
+        retainedAgentsByPaneKey: { [FIRST_PANE]: retained },
+        retentionSuppressedPaneKeys: { [FIRST_PANE]: true },
+        refreshGitHubForWorktreeIfStale: vi.fn().mockResolvedValue(undefined)
+      } as Partial<AppState>,
+      'hydration'
+    )
+  )
   return store
 }
 
@@ -151,12 +158,24 @@ describe('setAgentStatuses', () => {
         }
       }
     })
-    sequentialStore.setState({
-      setGeneratedTabTitleFromAgentPrompt: sequentialTitleGeneration
-    } as Partial<AppState>)
-    batchStore.setState({
-      setGeneratedTabTitlesFromAgentPrompts: batchTitleGenerationBulk
-    } as Partial<AppState>)
+    sequentialStore.setState(
+      replaceSessionSourceFields(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+        {
+          setGeneratedTabTitleFromAgentPrompt: sequentialTitleGeneration
+        } as Partial<AppState>,
+        'hydration'
+      )
+    )
+    batchStore.setState(
+      replaceSessionSourceFields(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+        {
+          setGeneratedTabTitlesFromAgentPrompts: batchTitleGenerationBulk
+        } as Partial<AppState>,
+        'hydration'
+      )
+    )
     const updates = makeUpdates()
 
     for (const update of updates) {
@@ -250,11 +269,17 @@ describe('setAgentStatuses', () => {
         return [worktreeId, [makeUnifiedTab({ id: `tab-${index}`, worktreeId, groupId: 'g' })]]
       })
     )
-    store.setState({
-      settings: { ...store.getState().settings, tabAutoGenerateTitle: true },
-      tabsByWorktree
-    } as Partial<AppState>)
-    store.setState({ unifiedTabsByWorktree })
+    store.setState(
+      replaceSessionSourceFields(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+        {
+          settings: { ...store.getState().settings, tabAutoGenerateTitle: true },
+          tabsByWorktree
+        } as Partial<AppState>,
+        'hydration'
+      )
+    )
+    store.setState(replaceSessionSourceFields({ unifiedTabsByWorktree }, 'hydration'))
     const updates: AgentStatusBatchUpdate[] = Array.from({ length: paneCount }, (_, index) => ({
       paneKey: `tab-${index}:11111111-1111-4111-8111-111111111111`,
       payload: {
@@ -412,7 +437,13 @@ describe('setAgentStatuses', () => {
         ]
       })
     )
-    store.setState({ agentStatusByPaneKey: entries } as Partial<AppState>)
+    store.setState(
+      replaceSessionSourceFields(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the Partial<AppState> fixture and intentionally supplies only the scenario's members.
+        { agentStatusByPaneKey: entries } as Partial<AppState>,
+        'hydration'
+      )
+    )
     let publications = 0
     const unsubscribe = store.subscribe(() => {
       publications += 1
@@ -452,7 +483,13 @@ describe('setAgentStatuses', () => {
         timing: { updatedAt: BASE_TIME, stateStartedAt: BASE_TIME }
       })
       // Nested slice actions write real store; replacing it with the folded snapshot would revert those writes.
-      store.setState({ worktreesByRepo: { 'repo-late': [] } } as Partial<AppState>)
+      store.setState(
+        replaceSessionSourceFields(
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the Partial<AppState> fixture and intentionally supplies only the scenario's members.
+          { worktreesByRepo: { 'repo-late': [] } } as Partial<AppState>,
+          'hydration'
+        )
+      )
       return applied
     })
 
@@ -621,12 +658,15 @@ describe('committed agent status changes', () => {
     expect(() =>
       store.getState().updateAgentStatusState((_state, keys) => {
         keys.add(FIRST_PANE)
-        return {
-          agentStatusByPaneKey: {},
-          get editorDrafts(): Record<string, string> {
-            throw new Error('precommit middleware')
-          }
-        }
+        return replaceSessionSourceFields<AppState>(
+          {
+            agentStatusByPaneKey: {},
+            get editorDrafts(): Record<string, string> {
+              throw new Error('precommit middleware')
+            }
+          },
+          'hydration'
+        )
       })
     ).toThrow('precommit middleware')
     expect(store.getState().agentStatusByPaneKey).toBe(before)

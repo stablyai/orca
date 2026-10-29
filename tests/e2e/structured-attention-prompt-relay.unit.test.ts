@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { setSessionTestState } from '../../src/renderer/src/lib/test-support/session-source-fixture'
 // Register preload/store seams before importing their consumers.
 import {
   fixture,
@@ -40,7 +41,7 @@ import { createNotificationDeliveryService } from '../../src/main/notifications/
 import { SESSION } from '../../src/main/runtime/rpc/methods/structured-agent-session-rpc.test-fixture'
 import { makeUnifiedTab, makeWorktree } from '@/store/slices/store-test-helpers'
 import { captureAgentSubjectReads } from '@/attention/agent-subject-read-actions'
-import { useAppStore } from '@/store'
+import { useAppStore, type AppState } from '@/store'
 import { StructuredAgentSessionAttentionBridge } from '@/components/native-chat/StructuredAgentSessionAttentionBridge'
 import type { AgentSessionExecutionLocation } from '../../src/shared/agent-session-record'
 
@@ -77,7 +78,7 @@ describe('Delayed remote prompt delivery', () => {
       }
     )
     transport.away.mockResolvedValue(away)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       activeWorkspaceExecutionHostId: 'runtime:relay-host',
       worktreesByRepo: {
         repo1: [
@@ -194,7 +195,7 @@ describe('Delayed remote prompt delivery', () => {
       }
       if (mode === 'tab/store rerender') {
         act(() =>
-          useAppStore.setState((state) => ({
+          setSessionTestState(useAppStore, (state): Partial<AppState> => ({
             settings: state.settings ? { ...state.settings } : null,
             unifiedTabsByWorktree: {
               ...state.unifiedTabsByWorktree,
@@ -321,7 +322,7 @@ describe('Delayed remote prompt delivery', () => {
       }
       if (mode === 'different target') {
         act(() =>
-          useAppStore.setState((state) => ({
+          setSessionTestState(useAppStore, (state): Partial<AppState> => ({
             unifiedTabsByWorktree: {
               [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE].map((tab) => ({
                 ...tab,
@@ -432,7 +433,7 @@ describe('Remote prompt settlement', () => {
       relay.reconcileStructuredPromptAttention({ scope, sessionId: id, pendingPromptIds: [] })
     )
     transport.away.mockResolvedValue(true)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       activeWorktreeId: 'elsewhere',
       activeWorkspaceExecutionHostId: 'runtime:relay-host',
       worktreesByRepo: {

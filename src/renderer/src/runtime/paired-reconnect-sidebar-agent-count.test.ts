@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // After sleep beyond freshness, reconnect snapshots lacking host status erased client-OSC-owned agent rows despite live PTYs (STA-3107). Preserve rows and decay to idle like local panes. Drive real mirror/sidebar builder with fake clocks; row/tab inventory, not elapsed time, is the oracle.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
@@ -167,7 +168,8 @@ function applyHostSnapshot(
   const state = store.getState()
   const patch = applyFreshWebSessionTabsSnapshot(state, snapshot, ENV, now)
   expect(patch, 'host snapshot must pass the freshness gate').not.toBe(state)
-  store.setState(patch as Partial<AppState>)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test stub supplies only the API members exercised by this scenario.
+  setSessionTestState(store, patch as Partial<AppState>)
 }
 
 /**

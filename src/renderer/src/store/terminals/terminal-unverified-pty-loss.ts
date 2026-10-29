@@ -8,7 +8,7 @@ export function createTerminalUnverifiedPtyLossActions(
     markUnverifiedPtyLoss: (tabId) => {
       set((state) =>
         state.unverifiedPtyLossTabIds[tabId]
-          ? state
+          ? undefined
           : { unverifiedPtyLossTabIds: { ...state.unverifiedPtyLossTabIds, [tabId]: true } }
       )
     }

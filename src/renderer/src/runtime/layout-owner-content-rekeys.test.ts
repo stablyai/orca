@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createTestStore } from '@/store/slices/store-test-helpers'
 import {
@@ -23,7 +24,7 @@ describe('pending content rekeys past the cap', () => {
     const newest = contentRekeyOutcome(['file-64'])
 
     await expect(oldest).resolves.toBe(false)
-    shownContentRekeyPatch(createTestStore().getState(), {})
+    shownContentRekeyPatch(editSessionSource(createTestStore().getState()), {})
     await expect(newest).resolves.toBe(true)
   })
 })

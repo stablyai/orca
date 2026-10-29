@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { PRComment } from '../../../../shared/github/comment-types'
 import { createTestStore, mockApi, resetRemoteRuntimeMocks } from './github-slice-test-harness'
@@ -22,7 +23,7 @@ const reply: PRComment = { ...original, id: 11, body: 'Posted reply' }
 
 function makeStore(comments = [original]) {
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     repos: [{ id: repoId, path: repoPath, displayName: 'Repo', badgeColor: '#000', addedAt: 0 }],
     commentsCache: { [cacheKey]: { data: comments, fetchedAt: 1 } }
   })

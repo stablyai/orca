@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 
 /** Keep text feedback in session memory across sidebar/dialog unmount and failed submits (#22466); clear on delivery/restart. Images remain dialog-owned because unmount must revoke object URLs/blob buffers. */
@@ -16,7 +16,7 @@ export type FeedbackDraftSlice = {
 // All fields are primitives, so sharing defaults cannot mutate another draft.
 const EMPTY_FEEDBACK_DRAFT: FeedbackDraft = { feedback: '', submitAnonymously: false }
 
-export const createFeedbackDraftSlice: StateCreator<AppState, [], [], FeedbackDraftSlice> = (
+export const createFeedbackDraftSlice: SessionStateCreator<AppState, FeedbackDraftSlice> = (
   set
 ) => ({
   feedbackDraft: EMPTY_FEEDBACK_DRAFT,

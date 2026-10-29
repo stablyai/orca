@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type { BrowserTab } from '../../../../shared/browser-workspace-types'
@@ -138,7 +139,7 @@ function hydrateWithRepoScan(
   session: WorkspaceSessionState,
   authoritative = false
 ): void {
-  store.setState({
+  setSessionTestState(store, {
     repos: [{ id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }],
     worktreesByRepo: { repo1: [] },
     detectedWorktreesByRepo: {
@@ -208,7 +209,7 @@ it('keeps chrome when a non-authoritative fallback lists only some of the repo w
     repoId: 'repo1',
     path: '/path/sibling'
   })
-  store.setState({
+  setSessionTestState(store, {
     repos: [{ id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }],
     worktreesByRepo: { repo1: [sibling] },
     detectedWorktreesByRepo: {

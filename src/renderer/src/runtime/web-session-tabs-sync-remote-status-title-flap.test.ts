@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 /** Paired panes receive both client byte-derived status/titles and host snapshot echoes. Proven client ownership must fence stale echoes despite cross-machine clocks; teardown returns authority and host-only states pierce the fence. Drive real mirror/store logic with controlled clocks and assert transition order/count, including generatedLabel and epoch stability. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
@@ -103,7 +104,8 @@ function applyHostSnapshot(
   // The freshness gate must accept every republished frame (monotonic version).
   expect(shouldApplyWebSessionTabsSnapshot(snapshot, ENV)).toBe(true)
   const patch = applyWebSessionTabsSnapshot(state, snapshot, ENV, now)
-  store.setState(patch as Partial<AppState>)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test stub supplies only the API members exercised by this scenario.
+  setSessionTestState(store, patch as Partial<AppState>)
 }
 
 /** Replay paired pty-connection OSC handling with client Date.now(); returns the release pty-connection holds for dispose(). */

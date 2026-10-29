@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type {
@@ -21,10 +21,8 @@ export type OrcaProfilesAuthActions = {
   selectOrcaProfileOrg: (orgId: string) => Promise<SelectOrcaProfileOrgResult | null>
 }
 
-export const createOrcaProfilesAuthActions: StateCreator<
+export const createOrcaProfilesAuthActions: SessionStateCreator<
   AppState,
-  [],
-  [],
   OrcaProfilesAuthActions
 > = (set, get) => {
   let nextConnectAttempt = 0

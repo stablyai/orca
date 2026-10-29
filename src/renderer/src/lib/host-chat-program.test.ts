@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { getDefaultSourceControlAiSettings } from '../../../shared/source-control-ai-settings'
 import { afterEach, assert, beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
@@ -53,7 +54,7 @@ afterEach(() => {
   vi.useRealTimers()
   resetHostStructuredAgentsForTests()
   setLocalRuntimeCapabilitiesForTests(null)
-  useAppStore.setState(initial, true)
+  setSessionTestState(useAppStore, initial, true)
 })
 it('acquires inactive B independently of detection, preserves unknown truth and selected catalog intent', async () => {
   const catalogReply = Promise.withResolvers<unknown>()

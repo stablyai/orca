@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import type { OpenFile } from '../types/open-file'
@@ -26,6 +27,7 @@ export function createOpenUnstagedDiff(
       let editorItemTargetGroupId = options?.targetGroupId
       let editorItemFileId = ''
       set((s) => {
+        const sourceEdit = editSessionSource(s)
         const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(
           s,
           worktreeId,
@@ -37,7 +39,8 @@ export function createOpenUnstagedDiff(
         const targetGroupId =
           resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
         editorItemTargetGroupId = targetGroupId
-        const activeResult = selection === 'none' ? {} : buildEditorActiveResult(s, worktreeId, id)
+        const activeResult =
+          selection === 'none' ? {} : buildEditorActiveResult(sourceEdit, worktreeId, id)
         const existing = s.openFiles.find((f) => f.id === id)
         if (existing) {
           const updatedPreview = isPreview ? existing.isPreview : false
@@ -51,10 +54,10 @@ export function createOpenUnstagedDiff(
             isPreview: updatedPreview,
             runtimeEnvironmentId
           })
-          return {
-            openFiles: s.openFiles.map((f) => (f.id === id ? reopenedDiff : f)),
-            ...activeResult
-          }
+          return sourceEdit
+            .sequence('openFiles')
+            .map((f) => (f.id === id ? reopenedDiff : f))
+            .finish(activeResult)
         }
         const newFile: OpenFile = {
           id,
@@ -77,19 +80,20 @@ export function createOpenUnstagedDiff(
             (file) => file.id === replaceablePreviewId
           )
           if (replaceablePreviewIndex !== -1) {
-            return {
-              openFiles: s.openFiles.map((file, index) =>
-                index === replaceablePreviewIndex ? newFile : file
-              ),
-              ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex], id),
-              ...activeResult
-            }
+            return sourceEdit
+              .sequence('openFiles')
+              .map((file, index) => (index === replaceablePreviewIndex ? newFile : file))
+              .finish({
+                ...removeEditorStateForReplacedPreview(
+                  sourceEdit,
+                  s.openFiles[replaceablePreviewIndex],
+                  id
+                ),
+                ...activeResult
+              })
           }
         }
-        return {
-          openFiles: [...s.openFiles, newFile],
-          ...activeResult
-        }
+        return sourceEdit.sequence('openFiles').append(newFile).finish(activeResult)
       })
       void openWorkspaceEditorItem(
         get(),

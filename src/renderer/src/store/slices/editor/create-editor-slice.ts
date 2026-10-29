@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../../types'
 import type { EditorSlice } from './types/editor-slice'
 import { createEditorDraftState } from './actions/editor-draft-state'
@@ -31,7 +31,7 @@ import { createMarkdownLinkAction } from './actions/markdown-link-action'
 import { createHydrateEditorSession } from './actions/hydrate-editor-session'
 import { createEditorBufferIdentityActions } from './actions/editor-buffer-identity-actions'
 
-export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (set, get) => ({
+export const createEditorSlice: SessionStateCreator<AppState, EditorSlice> = (set, get) => ({
   ...createEditorDraftState(set, get),
   ...createRightSidebarState(set, get),
   ...createExplorerDirState(set, get),

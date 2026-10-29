@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import {
@@ -61,7 +62,7 @@ describe('direct SSH hydration target metadata', () => {
   beforeEach(() => {
     resetSshConfigPassiveSyncForTests()
     onStateChangedHandler = null
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       sshTargetLabels: new Map(),
       removedSshTargetLabels: new Map(),
       sshTargetsHydrated: false,

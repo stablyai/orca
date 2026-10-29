@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -17,7 +18,8 @@ vi.mock('@/store', () => import('./codex-notice-test-harness'))
 const codexTab = { 'wt-1': [{ id: 'tab-1', launchAgent: 'codex' }] }
 
 function resetStore(overrides: Record<string, unknown> = {}): void {
-  noticeTestStore.setState(
+  setSessionTestState(
+    noticeTestStore,
     {
       codexSharedSettingsNoticeSeen: false,
       tabsByWorktree: {},

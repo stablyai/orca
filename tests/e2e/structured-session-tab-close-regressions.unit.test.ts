@@ -1,4 +1,8 @@
 // @vitest-environment happy-dom
+import {
+  setSessionTestState,
+  sessionTestEdit
+} from '../../src/renderer/src/lib/test-support/session-source-fixture'
 
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-types'
@@ -13,7 +17,7 @@ import { resetWebSessionTabsSnapshotFreshnessForTests } from '../../src/renderer
 import { registerSessionTabIpcBridge } from '../../src/renderer/src/hooks/ipc-events/session-tab-ipc-bridge'
 import { registerTerminalUiRoutingIpcBridge } from '../../src/renderer/src/hooks/ipc-events/terminal-ui-routing-ipc-bridge'
 import type { RuntimeClientTarget } from '../../src/shared/runtime-client-target'
-import { applyWebSessionTabsSnapshot } from '../../src/renderer/src/runtime/web-session-tabs-sync/snapshot-api'
+import { applyWebSessionTabsSnapshotsToEdit } from '../../src/renderer/src/runtime/web-session-tabs-sync/snapshot-api'
 import {
   suppressCancelledStructuredSessionTabs,
   retireStructuredAgentSessionTab
@@ -245,7 +249,7 @@ describe('reopened structured session close', () => {
     bridge.runtime = null
     bridge.closeHeld = null
     bridge.pairedClose = null
-    useAppStore.setState(initialStoreState, true)
+    setSessionTestState(useAppStore, initialStoreState, true)
     resetLocalStructuredSessionVersionForTests()
     resetWebSessionTabsSnapshotFreshnessForTests()
     // A close's follow-up re-read can outlive its test, which tears the host down under it.
@@ -412,7 +416,7 @@ describe('in-flight structured session close', () => {
     bridge.rendererSessionCloses = []
     bridge.closeHeld = null
     bridge.pairedClose = null
-    useAppStore.setState(initialStoreState, true)
+    setSessionTestState(useAppStore, initialStoreState, true)
     resetLocalStructuredSessionVersionForTests()
     resetWebSessionTabsSnapshotFreshnessForTests()
     resetWebSessionCloseIntentForTests()
@@ -511,19 +515,26 @@ describe('in-flight structured session close', () => {
       })
       const applyServerFrame = (snapshot: RuntimeMobileSessionTabsResult): void =>
         useAppStore.setState((state) =>
-          applyWebSessionTabsSnapshot(
+          sessionTestEdit(
             state,
-            suppressCancelledStructuredSessionTabs(snapshot, {
-              kind: 'environment',
-              environmentId: SERVER
-            }),
-            SERVER
+            (edit) =>
+              applyWebSessionTabsSnapshotsToEdit(
+                edit,
+                state,
+                [
+                  suppressCancelledStructuredSessionTabs(snapshot, {
+                    kind: 'environment',
+                    environmentId: SERVER
+                  })
+                ],
+                SERVER
+              ) ?? {}
           )
         )
       const strip = (): string[] =>
         (useAppStore.getState().groupsByWorktree[WORKTREE] ?? []).flatMap((group) => group.tabOrder)
       // The server owns the workspace, so its layout is mirrored, never drawn by main's frames.
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         activeWorktreeId: WORKTREE,
         worktreesByRepo: {
           'repo-1': [

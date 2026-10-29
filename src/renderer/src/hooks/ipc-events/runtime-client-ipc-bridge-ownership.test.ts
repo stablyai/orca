@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { subscribeRuntimeEnvironmentFromPreload } from '../../../../preload/runtime-environment-subscriptions'
@@ -15,7 +16,7 @@ const initialState = useAppStore.getState()
 
 beforeEach(() => vi.useFakeTimers())
 afterEach(() => {
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   replaceRuntimeEnvironmentRevisions(initialState.runtimeEnvironments)
   vi.useRealTimers()
   vi.unstubAllGlobals()
@@ -226,7 +227,7 @@ it.each([
     ? [{ worktreeId: 'remote-repo::/a', sortOrder: 5 }]
     : [{ worktreeId: 'remote-repo::/a' }]
   if (input.known) {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [
         {
           id: 'remote-repo',
@@ -348,7 +349,7 @@ it.each(['clients', 'all'] as const)(
 
 it('does not mistake a local repo with the same id for the publishing remote repo', async () => {
   const h = createHarness()
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     repos: [
       {
         id: 'same-repo',

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import {
   WORKTREE_LINKED_ITEMS_RUNTIME_CAPABILITY,
@@ -110,7 +111,7 @@ describe('folder workspace owner-routed mutations', () => {
         result: { folderWorkspace: { ...folderWorkspace, linkedTask, updatedAt: 2 } }
       })
       const store = createTestStore()
-      store.setState({
+      setSessionTestState(store, {
         projectGroups: [{ ...projectGroup, executionHostId: 'runtime:env-owner' }],
         folderWorkspaces: [folderWorkspace]
       })
@@ -140,7 +141,7 @@ describe('folder workspace owner-routed mutations', () => {
     folderWorkspacesUpdate.mockResolvedValue(folderWorkspace)
     folderWorkspacesList.mockResolvedValue([folderWorkspace])
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
       folderWorkspaces: [folderWorkspace]
     })
@@ -155,7 +156,7 @@ describe('folder workspace owner-routed mutations', () => {
     const folderWorkspace = makeFolderWorkspace()
     folderWorkspacesUpdate.mockResolvedValue({ ...folderWorkspace, manualOrder: 9000 })
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
       folderWorkspaces: [folderWorkspace]
     })
@@ -178,7 +179,7 @@ describe('folder workspace owner-routed mutations', () => {
     const folderWorkspace = makeFolderWorkspace()
     folderWorkspacesUpdate.mockResolvedValue({ ...folderWorkspace, comment: 'Ready' })
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-focused' } as never,
       projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
       folderWorkspaces: [folderWorkspace]
@@ -205,7 +206,7 @@ describe('folder workspace owner-routed mutations', () => {
       _meta: { runtimeId: 'runtime-owner' }
     })
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-focused' } as never,
       projectGroups: [{ ...projectGroup, executionHostId: 'runtime:env-owner' }],
       folderWorkspaces: [folderWorkspace]
@@ -246,7 +247,7 @@ describe('folder workspace owner-routed mutations', () => {
           })
       )
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
       folderWorkspaces: [folderWorkspace]
     })
@@ -274,7 +275,7 @@ describe('folder workspace owner-routed mutations', () => {
     const firstStore = createTestStore()
     const secondStore = createTestStore()
     for (const store of [firstStore, secondStore]) {
-      store.setState({
+      setSessionTestState(store, {
         projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
         folderWorkspaces: [folderWorkspace]
       })
@@ -300,7 +301,7 @@ describe('folder workspace owner-routed mutations', () => {
     )
     folderWorkspacesList.mockResolvedValue([{ ...folderWorkspace, isUnread: false, updatedAt: 3 }])
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
       folderWorkspaces: [folderWorkspace]
     })
@@ -327,7 +328,7 @@ describe('folder workspace owner-routed mutations', () => {
     )
     folderWorkspacesList.mockResolvedValue([folderWorkspace])
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
       folderWorkspaces: [folderWorkspace]
     })
@@ -363,7 +364,7 @@ describe('folder workspace owner-routed mutations', () => {
     )
     folderWorkspacesList.mockResolvedValue([localWorkspace])
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
       folderWorkspaces: [localWorkspace, runtimeWorkspace]
     })
@@ -403,7 +404,7 @@ describe('folder workspace owner-routed mutations', () => {
         })
     )
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
       folderWorkspaces: [folderWorkspace]
     })
@@ -411,7 +412,7 @@ describe('folder workspace owner-routed mutations', () => {
     const pendingUpdate = store
       .getState()
       .updateFolderWorkspace(folderWorkspace.id, { lastActivityAt: 10 })
-    store.setState({
+    setSessionTestState(store, {
       folderWorkspaces: [{ ...folderWorkspace, lastActivityAt: 20 }]
     })
     resolveUpdate({ ...folderWorkspace, lastActivityAt: 10, updatedAt: 2 })
@@ -425,7 +426,7 @@ describe('folder workspace owner-routed mutations', () => {
     folderWorkspacesUpdate.mockResolvedValue(null)
     folderWorkspacesList.mockResolvedValue([persisted])
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
       folderWorkspaces: [{ ...persisted, isUnread: false }]
     })
@@ -446,7 +447,7 @@ describe('folder workspace owner-routed mutations', () => {
       updatedAt: 2
     })
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
       folderWorkspaces: [folderWorkspace],
       folderWorkspacePathStatuses: {
@@ -471,7 +472,7 @@ describe('folder workspace owner-routed mutations', () => {
       updatedAt: 2
     })
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
       folderWorkspaces: [folderWorkspace],
       folderWorkspacePathStatuses: {
@@ -495,7 +496,7 @@ describe('folder workspace owner-routed mutations', () => {
     folderWorkspacesDelete.mockResolvedValue(true)
     const store = createTestStore()
     const shutdownWorktreeBrowsers = vi.fn().mockResolvedValue(undefined)
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-focused' } as never,
       projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
       folderWorkspaces: [folderWorkspace],
@@ -521,7 +522,7 @@ describe('folder workspace owner-routed mutations', () => {
     folderWorkspacesDelete.mockResolvedValue(true)
     const store = createTestStore()
     const shutdownWorktreeBrowsers = vi.fn().mockResolvedValue(undefined)
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: null } as never,
       activeWorktreeId: `folder:${localFolder.id}`,
       activeWorkspaceExecutionHostId: 'local',
@@ -553,7 +554,7 @@ describe('folder workspace owner-routed mutations', () => {
       _meta: { runtimeId: 'runtime-owner' }
     })
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-focused' } as never,
       projectGroups: [{ ...projectGroup, executionHostId: 'runtime:env-owner' }],
       folderWorkspaces: [folderWorkspace]
@@ -581,7 +582,7 @@ describe('folder workspace owner-routed mutations', () => {
       _meta: { runtimeId: 'runtime-owner' }
     })
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       activeWorktreeId: `folder:${runtimeFolder.id}`,
       activeWorkspaceExecutionHostId: 'runtime:env-owner',
       settings: { activeRuntimeEnvironmentId: 'env-owner' } as never,

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act, StrictMode, type ReactElement } from 'react'
@@ -145,7 +146,7 @@ describe('ActivityThreadOptionsMenu', () => {
       expect(useAppStore.getState().hideCliCreatedWorkspaces).toBe(false)
       expect(persist).toHaveBeenCalledWith({ agentsHideCliCreatedWorkspaces: true })
     } finally {
-      act(() => useAppStore.setState(originalState))
+      act(() => setSessionTestState(useAppStore, originalState))
       vi.unstubAllGlobals()
     }
   })
@@ -192,7 +193,7 @@ describe('ActivityThreadOptionsMenu', () => {
       const originalState = useAppStore.getState()
       const persist = vi.fn().mockResolvedValue(undefined)
       vi.stubGlobal('api', { ui: { set: persist } })
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         repos: scenario === 'single project' ? [makeRepo()] : [],
         agentsVisibleHostIds: scenario === 'removed host' ? ['ssh:removed-host'] : null,
         agentsFilterRepoIds: scenario === 'removed host' ? [] : ['repo-1'],
@@ -223,7 +224,7 @@ describe('ActivityThreadOptionsMenu', () => {
         expect(persist).toHaveBeenCalledWith({ agentsFilterRepoIds: [] })
         expect(container.querySelector('[data-options-filter-count]')).toBeNull()
       } finally {
-        act(() => useAppStore.setState(originalState))
+        act(() => setSessionTestState(useAppStore, originalState))
         vi.unstubAllGlobals()
       }
     }

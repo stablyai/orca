@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { createWorktreeEventRuntime } from './worktree-event-runtime'
@@ -10,7 +11,7 @@ vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree }))
 const initialState = useAppStore.getState()
 afterEach(() => {
   vi.restoreAllMocks()
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   vi.clearAllMocks()
 })
 

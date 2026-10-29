@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createEditorTabsStore } from './editor-slice-test-harness'
 import { buildHydratedEditorSessionState } from './editor/actions/hydrated-editor-session-state'
@@ -30,7 +31,7 @@ const WT = FLOATING_TERMINAL_WORKTREE_ID
 
 function openFloatingFile(): string {
   const store = createEditorTabsStore()
-  store.setState({
+  setSessionTestState(store, {
     activeWorktreeId: WT,
     groupsByWorktree: { [WT]: [{ id: 'g1', worktreeId: WT, activeTabId: null, tabOrder: [] }] },
     activeGroupIdByWorktree: { [WT]: 'g1' },

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -153,7 +154,7 @@ const TERMINAL = 'terminal-1'
 let main: TabsDrawnFromMain | null = null
 
 async function drawWorktreeFromMain(): Promise<void> {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     worktreesByRepo: { 'repo-1': [makeWorktree({ id: WORKTREE_ID, repoId: 'repo-1' })] },
     tabsByWorktree: {
       [WORKTREE_ID]: [

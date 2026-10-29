@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
@@ -146,7 +147,7 @@ describe('structured agent session launch', () => {
   it('creates the session on the paired server that owns the workspace', async () => {
     const initial = useAppStore.getState()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the catalog fields owner resolution reads are staged.
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [{ id: 'repo-remote', connectionId: null, executionHostId: 'runtime:server-1' }],
       worktreesByRepo: {
         'repo-remote': [
@@ -173,7 +174,10 @@ describe('structured agent session launch', () => {
         [server, 'agentSession.create']
       ])
     } finally {
-      useAppStore.setState({ repos: initial.repos, worktreesByRepo: initial.worktreesByRepo })
+      setSessionTestState(useAppStore, {
+        repos: initial.repos,
+        worktreesByRepo: initial.worktreesByRepo
+      })
     }
   })
 
@@ -183,7 +187,7 @@ describe('structured agent session launch', () => {
     // `repoId::path` names a checkout on this machine and one on the paired server.
     const stageCollidingWorkspace = (): void =>
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the catalog fields owner resolution reads are staged.
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         activeWorktreeId: 'another-workspace',
         worktreesByRepo: {
           'repo-1': [
@@ -193,7 +197,7 @@ describe('structured agent session launch', () => {
         }
       } as unknown as Partial<ReturnType<typeof useAppStore.getState>>)
     const restoreStore = (): void =>
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         activeWorktreeId: initial.activeWorktreeId,
         worktreesByRepo: initial.worktreesByRepo
       })

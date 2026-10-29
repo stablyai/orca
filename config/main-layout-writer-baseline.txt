@@ -2,6 +2,7 @@
 # setters, plus assignments, deletes and object keys that edit session partitions directly.
 # This is a RATCHET: counts may only go DOWN. Layout moves to one runtime owner; do not add
 # writers. Prune after removing writers: pnpm check:layout-writer-ratchets --prune
+# Session-save-cost reaccounts explicit edit/query keys and relocated implementations; no new action authority.
 1 src/main/ipc/pty/ipc/leaf-move.ts
 1 src/main/ipc/pty/pane/pane-owner-replacement.ts
 3 src/main/ipc/pty/pane/stable-owner.ts
@@ -21,35 +22,32 @@
 1 src/main/persistence/loading-store/metadata-lineage-operations.ts
 1 src/main/persistence/loading-store/mobile-tab-selection-persistence.ts
 1 src/main/persistence/loading-store/normalize-loaded-profile-state.ts
-8 src/main/persistence/loading-store/pty-binding-persistence.ts
-10 src/main/persistence/loading-store/pty-binding-session-update.ts
-10 src/main/persistence/loading-store/repo-lifecycle-operations.ts
-10 src/main/persistence/loading-store/session-host-partitions.ts
-9 src/main/persistence/loading-store/session-snapshot-operations.ts
+2 src/main/persistence/loading-store/pty-binding-persistence.ts
+4 src/main/persistence/loading-store/pty-binding-session-update.ts
+1 src/main/persistence/loading-store/repo-lifecycle-operations.ts
+4 src/main/persistence/loading-store/session-host-partitions.ts
+2 src/main/persistence/loading-store/session-publication-resources.ts # session-save-cost: durable root reads in the publication resource owner
+3 src/main/persistence/loading-store/session-publication.ts # session-save-cost: single publish boundary replaces prior partition assignment sites
+6 src/main/persistence/loading-store/session-snapshot-operations.ts
 3 src/main/persistence/loading-store/state-serialization-secret-handling.ts
-4 src/main/persistence/loading-store/workspace-session-snapshot-publication.ts
-4 src/main/persistence/loading-store/workspace-session-terminal-binding-replay.ts
+3 src/main/persistence/loading-store/workspace-session-snapshot-publication.ts
 2 src/main/persistence/loading-store/workspace-session-write-listeners.ts
 2 src/main/persistence/migrating-orcad-catalog/orcad-destination-client-state.ts
-1 src/main/persistence/migrating-orcad-catalog/orcad-destination-workspace-session.ts
 3 src/main/persistence/migrating-orcad-catalog/orcad-dormant-state-records.ts
-2 src/main/persistence/migrating-orcad-catalog/orcad-source-client-subtraction.ts
+1 src/main/persistence/migrating-orcad-catalog/orcad-source-client-subtraction.ts
 1 src/main/persistence/migrating-orcad-catalog/orcad-source-dormant-state.ts
 1 src/main/persistence/migrating-orcad-catalog/orcad-source-scrollback-state.ts
 1 src/main/persistence/migrating-orcad-catalog/orcad-source-workspace-session-eligibility.ts
 3 src/main/persistence/migrating-orcad-catalog/orcad-source-workspace-session-layout.ts
-4 src/main/persistence/migrating-orcad-catalog/orcad-source-workspace-session-subtraction.ts
+2 src/main/persistence/migrating-orcad-catalog/orcad-source-workspace-session-subtraction.ts
 1 src/main/persistence/migrating-orcad-catalog/orcad-source-workspace-session.ts
 2 src/main/persistence/moving-wsl-projects/wsl-move-main-rewrite-stores.ts
 1 src/main/persistence/restoring-sessions/folder-workspace-operations.ts
 1 src/main/persistence/restoring-sessions/invalid-workspace-layout-purge.ts
+2 src/main/persistence/restoring-sessions/persisted-pane-identity-state.ts # session-save-cost: unchanged pane-identity migration relocated from pane-identity-migration.ts
 5 src/main/persistence/restoring-sessions/session-owner-fields.ts
-12 src/main/persistence/restoring-sessions/session-owner-removal.ts
-2 src/main/persistence/restoring-sessions/workspace-pane-normalization.ts
 4 src/main/persistence/terminal-topology/terminal-topology-membership.ts
 1 src/main/persistence/tracking-repos/project-group-operations.ts
-4 src/main/persistence/tracking-repos/repo-worktree-pruning.ts
-3 src/main/persistence/tracking-repos/worktree-identity-migration.ts
 1 src/main/runtime/client-hosted-browser-page-persistence.ts
 1 src/main/runtime/client/runtime-client-state.ts
 1 src/main/runtime/mobile-session-editor-projection.ts
@@ -73,4 +71,4 @@
 2 src/main/runtime/workspaces/workspace-file-session-targets.ts
 1 src/main/ssh/orcad-migration-source-retention.ts
 1 src/main/ssh/targets/ssh-target-id-migration.ts
-2 src/main/terminal-scrollback-snapshots.ts
+2 src/main/terminal-scrollback-snapshot-layout-migration.ts # session-save-cost: unchanged scrollback migration relocated from terminal-scrollback-snapshots.ts

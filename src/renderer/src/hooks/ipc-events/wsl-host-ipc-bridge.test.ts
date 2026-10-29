@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it } from 'vitest'
 import {
   createTestStore,
@@ -56,7 +57,7 @@ describe('selectWslHostsWithVisibleWork', () => {
   it('boots only the focused host at launch when two hosts have saved tabs', () => {
     const store = backgroundWslTabs()
     const debianWorktree = 'debian-repo::/home/me/api'
-    store.setState({
+    setSessionTestState(store, {
       runtimeEnvironments: [
         ...store.getState().runtimeEnvironments,
         {
@@ -96,7 +97,7 @@ describe('selectWslHostsWithVisibleWork', () => {
     expect(selectWslHostsWithVisibleWork(store.getState(), new Set([WSL_WORKTREE]))).toEqual([
       WSL_ENV
     ])
-    store.setState({ tabsByWorktree: {} })
+    setSessionTestState(store, { tabsByWorktree: {} })
     expect(selectWslHostsWithVisibleWork(store.getState(), new Set([WSL_WORKTREE]))).toEqual([])
   })
 })

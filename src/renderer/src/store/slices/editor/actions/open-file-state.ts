@@ -2,6 +2,7 @@ import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import { ownsGlobalSelection } from '../../../global-selection-owner'
 import { EMPTY_EDITOR_BUFFER_VIEW_INDEX } from '../buffers/editor-buffer-views'
+import { editSessionSource } from '@/store/session-source-edits'
 
 export function createOpenFileState(
   set: EditorSet,
@@ -36,11 +37,12 @@ export function createOpenFileState(
     recentlyClosedEditorTabsByWorktree: {},
     // Require explicit worktree so background/floating actions cannot retype main-window selection.
     setActiveTabType: (type, worktreeId) =>
-      set((s) => ({
-        ...(ownsGlobalSelection(s, worktreeId) ? { activeTabType: type } : {}),
-        activeTabTypeByWorktree: worktreeId
-          ? { ...s.activeTabTypeByWorktree, [worktreeId]: type }
-          : s.activeTabTypeByWorktree
-      }))
+      set((s) => {
+        const edit = editSessionSource(s)
+        if (worktreeId) {
+          edit.set('activeTabTypeByWorktree', worktreeId, type)
+        }
+        return edit.finish(ownsGlobalSelection(s, worktreeId) ? { activeTabType: type } : {})
+      })
   }
 }

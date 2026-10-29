@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import {
@@ -46,7 +47,7 @@ describe('agent pane authority', () => {
     store.getState().setAgentStatus(TARGET, { state: 'working', prompt: 'target' })
     store.getState().setAgentStatus(SIBLING, { state: 'working', prompt: 'sibling' })
     store.getState().registerAgentLaunchConfig(TARGET, { agentArgs: '', agentEnv: {} })
-    store.setState({
+    setSessionTestState(store, {
       sleepingAgentSessionsByPaneKey: {
         [TARGET]: {
           paneKey: TARGET,
@@ -161,7 +162,7 @@ describe('agent pane authority', () => {
     const store = createTestStore()
     store.getState().setAgentStatus(TARGET, { state: 'working', prompt: 'target' })
     store.getState().registerAgentLaunchConfig(TARGET, { agentArgs: '', agentEnv: {} })
-    store.setState({
+    setSessionTestState(store, {
       sleepingAgentSessionsByPaneKey: {
         [TARGET]: {
           paneKey: TARGET,
@@ -192,7 +193,7 @@ describe('agent pane authority', () => {
   it('keeps a physical pane routed through chained detaches until its current owner closes', () => {
     const store = createTestStore()
     store.getState().setAgentStatus(SOURCE, { state: 'working', prompt: 'source' })
-    store.setState({
+    setSessionTestState(store, {
       sleepingAgentSessionsByPaneKey: {
         [SOURCE]: {
           paneKey: SOURCE,

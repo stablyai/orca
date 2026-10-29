@@ -1,3 +1,4 @@
+import { applyWebSessionTabsSnapshotsToEdit } from './snapshot-api'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { useAppStore } from '../../store'
@@ -19,7 +20,7 @@ import {
   latestReceivedSessionTabsInventoryFrameByEnvironment,
   nextReceivedSessionTabsFrame
 } from './state'
-import { applyWebSessionTabsSnapshots } from './snapshot-api'
+
 import { applyWebSessionTabsStorePatch } from './store-patch'
 import { isHostMirroredWorktree } from './visibility-types'
 
@@ -128,13 +129,15 @@ export function loadInitialWebSessionTabs({
         (latestReceivedSessionTabsInventoryFrameByEnvironment.get(environmentId) ?? 0) <=
           requestReceivedFrame
       settleHydration = applyWebSessionTabsStorePatch(
-        (state, changedAgentPaneKeys) =>
-          applyWebSessionTabsSnapshots(
+        (state, changedAgentPaneKeys, sourceEdit) =>
+          applyWebSessionTabsSnapshotsToEdit(
+            sourceEdit,
             state,
             freshSnapshots,
             environmentId,
             undefined,
-            changedAgentPaneKeys
+            changedAgentPaneKeys,
+            undefined
           ),
         {
           frames: applicable.map((snapshot, index) => ({

@@ -13,6 +13,7 @@ import { bootWindowFromPartitions } from '../app-shell/startup-window-view.test-
 import { createStoreSessionMockApi } from './slices/store-session-test-harness'
 import { createTestStore } from './slices/store-test-helpers'
 import type { AppState } from './types'
+import { editSessionSource, unwrapSessionSourceWrite } from './session-source-edits'
 import { buildLayoutFrameSlices } from './workspace-layout-frame-slices'
 import { buildLayoutFrameStorePatch } from './workspace-layout-frame-store-patch'
 import {
@@ -67,7 +68,9 @@ function patchFor(
     nameBasedLoadContext()
   )
   const built = buildLayoutFrameSlices({ layouts: { [GIT_KEY]: frame }, facts, view: desktopView })
-  return buildLayoutFrameStorePatch(state, built, [GIT_KEY], ...windowSide)
+  const edit = editSessionSource(state)
+  buildLayoutFrameStorePatch(edit, built, [GIT_KEY], ...windowSide)
+  return unwrapSessionSourceWrite(edit.finish()).partial
 }
 
 function withoutTab(frame: PublishedWorkspaceLayout, tabId: string): PublishedWorkspaceLayout {

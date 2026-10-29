@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import {
@@ -11,7 +12,8 @@ const initialTabsByWorktree = useAppStore.getState().tabsByWorktree
 const initialGetKnownWorktreeById = useAppStore.getState().getKnownWorktreeById
 
 function setStorePartial(partial: Record<string, unknown>): void {
-  useAppStore.setState(partial as Partial<AppState>)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test stub supplies only the API members exercised by this scenario.
+  setSessionTestState(useAppStore, partial as Partial<AppState>)
 }
 
 function markWorktreeKnown(worktreeId: string): void {

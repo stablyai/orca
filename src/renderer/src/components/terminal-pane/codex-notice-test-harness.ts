@@ -1,3 +1,5 @@
+import { withSessionSourceWrites } from '@/store/session-source-write-boundary'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { useStore } from 'zustand'
@@ -6,7 +8,7 @@ import { createStore } from 'zustand/vanilla'
 type NoticeTestState = Record<string, unknown>
 
 /** Stands in for `@/store`: a real zustand store, so selectors re-render and subscribe fires. */
-export const noticeTestStore = createStore<NoticeTestState>()(() => ({}))
+export const noticeTestStore = createStore<NoticeTestState>()(withSessionSourceWrites(() => ({})))
 
 export const useAppStore = Object.assign(
   <T>(selector: (state: NoticeTestState) => T): T => useStore(noticeTestStore, selector),
@@ -33,5 +35,5 @@ export function unmountHooks(): void {
 
 /** Applies a store write and lets the hook re-render before returning. */
 export async function setNoticeState(patch: NoticeTestState): Promise<void> {
-  await act(async () => noticeTestStore.setState(patch))
+  await act(async () => setSessionTestState(noticeTestStore, patch))
 }

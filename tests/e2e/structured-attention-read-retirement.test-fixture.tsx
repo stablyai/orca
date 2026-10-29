@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { setSessionTestState } from '../../src/renderer/src/lib/test-support/session-source-fixture'
 import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { transport } from './__mocks__/structured-attention-read-surfaces'
 import { cleanup } from '@testing-library/react'
@@ -308,7 +309,7 @@ beforeEach(() => {
     }
     return reply.result
   })
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     repos: [TEST_REPO],
     worktreesByRepo: { repo1: [makeWorktree({ id: WORKSPACE, repoId: 'repo1' })] },
     unifiedTabsByWorktree: {

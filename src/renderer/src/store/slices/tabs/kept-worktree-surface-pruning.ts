@@ -44,31 +44,6 @@ function pruneGroup(group: TabGroup, removedIds: ReadonlySet<string>): TabGroup 
   }
 }
 
-/** Rewrites only the kept workspaces' entries, keeping the map's identity when none changes. */
-function pruneEntries<T>(
-  map: Record<string, T>,
-  worktreeIds: ReadonlySet<string>,
-  prune: (value: T) => T | undefined
-): Record<string, T> {
-  let next: Record<string, T> | null = null
-  for (const worktreeId of worktreeIds) {
-    if (!(worktreeId in map)) {
-      continue
-    }
-    const value = prune(map[worktreeId])
-    if (value === map[worktreeId]) {
-      continue
-    }
-    next ??= { ...map }
-    if (value === undefined) {
-      delete next[worktreeId]
-    } else {
-      next[worktreeId] = value
-    }
-  }
-  return next ?? map
-}
-
 function withoutIds<T extends { id: string }>(items: T[], ids: ReadonlySet<string>): T[] {
   return items.some((item) => ids.has(item.id)) ? items.filter((item) => !ids.has(item.id)) : items
 }
@@ -92,36 +67,23 @@ export function createKeptWorktreeSurfacePruners(
     ...removed.fileIds,
     ...removed.browserTabIds
   ])
-  // Why dropped, not repointed: selection derivation falls back to a surviving surface.
-  const dropSelectionOf =
-    <T>(ids: ReadonlySet<string>) =>
-    (map: Record<string, T>): Record<string, T> =>
-      pruneEntries(map, worktreeIds, (value) =>
-        typeof value === 'string' && ids.has(value) ? undefined : value
-      )
+  // A removed selection falls back to a surviving surface.
+  const dropSelectionOf = (ids: ReadonlySet<string>) => (value: string | null) =>
+    typeof value === 'string' && ids.has(value) ? undefined : value
   return {
-    tabs: (map: AppState['tabsByWorktree']) =>
-      pruneEntries(map, worktreeIds, (tabs) => withoutIds(tabs, removed.terminalTabIds)),
-    unifiedTabs: (map: AppState['unifiedTabsByWorktree']) =>
-      pruneEntries(map, worktreeIds, (tabs) => withoutIds(tabs, removedUnifiedIds)),
-    groups: (map: AppState['groupsByWorktree']) =>
-      pruneEntries(map, worktreeIds, (groups) => {
-        const next = groups.map((group) => pruneGroup(group, removedIds))
-        return next.every((group, index) => group === groups[index]) ? groups : next
-      }),
-    tabBarOrder: (map: AppState['tabBarOrderByWorktree']) =>
-      pruneEntries(map, worktreeIds, (order) =>
-        order.some((id) => removedIds.has(id)) ? order.filter((id) => !removedIds.has(id)) : order
-      ),
-    browserTabs: (map: AppState['browserTabsByWorktree']) =>
-      pruneEntries(map, worktreeIds, (tabs) => withoutIds(tabs, removed.browserTabIds)),
-    files: (files: AppState['openFiles']) => withoutIds(files, removed.fileIds),
-    activeTabIds: dropSelectionOf<AppState['activeTabIdByWorktree'][string]>(
-      removed.terminalTabIds
-    ),
-    activeFileIds: dropSelectionOf<AppState['activeFileIdByWorktree'][string]>(removed.fileIds),
-    activeBrowserTabIds: dropSelectionOf<AppState['activeBrowserTabIdByWorktree'][string]>(
-      removed.browserTabIds
-    )
+    tabs: (tabs: AppState['tabsByWorktree'][string]) => withoutIds(tabs, removed.terminalTabIds),
+    unifiedTabs: (tabs: AppState['unifiedTabsByWorktree'][string]) =>
+      withoutIds(tabs, removedUnifiedIds),
+    groups: (groups: AppState['groupsByWorktree'][string]) => {
+      const next = groups.map((group) => pruneGroup(group, removedIds))
+      return next.every((group, index) => group === groups[index]) ? groups : next
+    },
+    tabBarOrder: (order: string[]) =>
+      order.some((id) => removedIds.has(id)) ? order.filter((id) => !removedIds.has(id)) : order,
+    browserTabs: (tabs: AppState['browserTabsByWorktree'][string]) =>
+      withoutIds(tabs, removed.browserTabIds),
+    activeTabIds: dropSelectionOf(removed.terminalTabIds),
+    activeFileIds: dropSelectionOf(removed.fileIds),
+    activeBrowserTabIds: dropSelectionOf(removed.browserTabIds)
   }
 }

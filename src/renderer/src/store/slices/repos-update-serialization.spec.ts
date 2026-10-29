@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
 import type { Repo } from '../../../../shared/repo-types'
@@ -61,7 +62,7 @@ export function registerReposUpdateSerializationTests(): void {
       reposUpdate.mockImplementationOnce(() => firstUpdate.promise)
       reposUpdate.mockImplementationOnce(() => secondUpdate.promise)
       const store = createTestStore()
-      store.setState({ repos: [localRepo] })
+      setSessionTestState(store, { repos: [localRepo] })
 
       const first = store.getState().updateRepo(localRepo.id, { hookSettings: firstHookSettings })
       const second = store.getState().updateRepo(localRepo.id, { hookSettings: secondHookSettings })
@@ -87,7 +88,7 @@ export function registerReposUpdateSerializationTests(): void {
       reposUpdate.mockImplementationOnce(() => slowLocalUpdate.promise)
       reposUpdate.mockResolvedValueOnce(undefined)
       const store = createTestStore()
-      store.setState({ repos: [localRepo, secondRepo] })
+      setSessionTestState(store, { repos: [localRepo, secondRepo] })
 
       const local = store.getState().updateRepo(localRepo.id, { displayName: 'Local slow' })
       const second = store.getState().updateRepo(secondRepo.id, { displayName: 'Second fast' })
@@ -120,7 +121,7 @@ export function registerReposUpdateSerializationTests(): void {
         executionHostId: 'ssh:connection-1'
       }
       const store = createTestStore()
-      store.setState({ repos: [localRepo, sshRepo] })
+      setSessionTestState(store, { repos: [localRepo, sshRepo] })
 
       const local = store
         .getState()
@@ -157,7 +158,7 @@ export function registerReposUpdateSerializationTests(): void {
         reposUpdate.mockRejectedValueOnce(new Error('update failed'))
         reposUpdate.mockResolvedValueOnce(undefined)
         const store = createTestStore()
-        store.setState({ repos: [localRepo] })
+        setSessionTestState(store, { repos: [localRepo] })
 
         const failed = store.getState().updateRepo(localRepo.id, { displayName: 'Failed' })
         const recovered = store.getState().updateRepo(localRepo.id, { displayName: 'Recovered' })
@@ -181,7 +182,7 @@ export function registerReposUpdateSerializationTests(): void {
         externalWorktreeDiscoverySuppressedAt: 123
       }
       const store = createTestStore()
-      store.setState({ repos: [repo] })
+      setSessionTestState(store, { repos: [repo] })
 
       await store.getState().updateRepo(repo.id, {
         externalWorktreeVisibility: null,
@@ -211,7 +212,7 @@ export function registerReposUpdateSerializationTests(): void {
     it('does not apply repo icons that fail shared sanitization', async () => {
       reposUpdate.mockResolvedValueOnce(undefined)
       const store = createTestStore()
-      store.setState({ repos: [localRepo] })
+      setSessionTestState(store, { repos: [localRepo] })
 
       await store.getState().updateRepo(localRepo.id, {
         repoIcon: {

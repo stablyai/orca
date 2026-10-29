@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
@@ -55,7 +56,7 @@ describe('purging a removed runtime’s project groups', () => {
   it('drops the removed server’s groups and folder rows, and keeps every other host’s', () => {
     const store = createTestStore()
     const kept = [group('local-group', 'local'), group('other', toRuntimeExecutionHostId('env-b'))]
-    store.setState({
+    setSessionTestState(store, {
       projectGroups: [...kept, group('stopped', toRuntimeExecutionHostId('env-a'))],
       folderWorkspaces: [
         folder('local-folder', 'local'),
@@ -75,7 +76,7 @@ describe('purging a removed runtime’s project groups', () => {
   it('leaves the state untouched when no group belongs to the removed server', () => {
     const store = createTestStore()
     const projectGroups = [group('local-group', 'local')]
-    store.setState({ projectGroups, folderWorkspaces: [] })
+    setSessionTestState(store, { projectGroups, folderWorkspaces: [] })
     store.getState().purgeStaleRuntimeHostState(['env-a'])
     expect(store.getState().projectGroups).toBe(projectGroups)
   })

@@ -1,3 +1,4 @@
+import type { SessionSourceUpdate } from '../session-source-edits'
 import type {
   RuntimeEnvironmentStatus,
   RuntimeHostStatusSnapshot
@@ -51,7 +52,5 @@ export type RuntimeStatusStoreState = RuntimeStatusSlice &
   >
 
 export type RuntimeStatusStoreSetState = (
-  partial:
-    | Partial<RuntimeStatusStoreState>
-    | ((state: RuntimeStatusStoreState) => Partial<RuntimeStatusStoreState>)
+  partial: SessionSourceUpdate<RuntimeStatusStoreState>
 ) => void

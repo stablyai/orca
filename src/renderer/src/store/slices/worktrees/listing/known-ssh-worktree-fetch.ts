@@ -1,4 +1,5 @@
-import type { StateCreator } from 'zustand'
+import { editSessionSource } from '@/store/session-source-edits'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../../../types'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { DetectedWorktreeListResult } from '../../../../../../shared/worktree/types'
@@ -71,7 +72,7 @@ const inflightKnownSshWorktreeFetches = new Map<
 
 // Deduplicate fallback reads/merges like authoritative scans; concurrent refresh triggers otherwise repeat the same repo/host IPC.
 export async function fetchKnownSshWorktreesForRepo(
-  set: Parameters<StateCreator<AppState, [], [], WorktreeSlice>>[0],
+  set: Parameters<SessionStateCreator<AppState, WorktreeSlice>>[0],
   repoId: string,
   executionHostId: SshExecutionHostId
 ): Promise<DetectedWorktreeListResult | null> {
@@ -88,7 +89,7 @@ export async function fetchKnownSshWorktreesForRepo(
 }
 
 export async function runKnownSshWorktreeFetch(
-  set: Parameters<StateCreator<AppState, [], [], WorktreeSlice>>[0],
+  set: Parameters<SessionStateCreator<AppState, WorktreeSlice>>[0],
   repoId: string,
   executionHostId: SshExecutionHostId
 ): Promise<DetectedWorktreeListResult | null> {
@@ -117,7 +118,7 @@ export async function runKnownSshWorktreeFetch(
       getCurrentDirectSshAuthority(state, executionHostId) ||
       !repoHasExactlyOneExecutionHostOwner(state, repoId, executionHostId, false)
     ) {
-      return state
+      return undefined
     }
     admitted = true
     const setup = getProjectHostSetupForRepoHost(state, repoId, executionHostId)
@@ -148,19 +149,18 @@ export async function runKnownSshWorktreeFetch(
       detected
     )
     if (!worktreesChanged && !detectedChanged) {
-      return state
+      return undefined
     }
-    return {
-      ...(worktreesChanged
-        ? {
-            worktreesByRepo: { ...state.worktreesByRepo, [repoId]: worktrees },
-            sortEpoch: state.sortEpoch + 1
-          }
-        : {}),
+    const edit = editSessionSource(state)
+    if (worktreesChanged) {
+      edit.set('worktreesByRepo', repoId, worktrees)
+    }
+    return edit.finish({
+      ...(worktreesChanged ? { sortEpoch: state.sortEpoch + 1 } : {}),
       ...(detectedChanged
         ? { detectedWorktreesByRepo: { ...state.detectedWorktreesByRepo, [repoId]: detected } }
         : {})
-    }
+    })
   })
   return admitted ? known : null
 }

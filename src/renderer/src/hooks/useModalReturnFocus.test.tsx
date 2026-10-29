@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act, useEffect } from 'react'
@@ -76,7 +77,7 @@ afterEach(async () => {
   latestCaptureReturnFocus = null
   latestSkipReturnFocus = null
   document.body.innerHTML = ''
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     activeWorktreeId: null,
     activeTabType: 'terminal',
     activeTabId: null,
@@ -137,7 +138,7 @@ describe('useModalReturnFocus', () => {
 
   it('captures browser address-bar focus before dialog autofocus moves focus', async () => {
     installAnimationFrameStubs()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       activeWorktreeId: 'wt-1',
       activeTabType: 'browser',
       activeBrowserTabId: 'browser-1',
@@ -182,7 +183,7 @@ describe('useModalReturnFocus', () => {
 
   it('uses the scoped terminal focus helper for terminal surfaces', async () => {
     installAnimationFrameStubs()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       activeWorktreeId: 'wt-1',
       activeTabType: 'terminal',
       activeTabId: 'terminal-global',

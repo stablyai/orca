@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolveEditorModelOwner } from '@/components/editor/editor-model-owner'
 import {
@@ -32,7 +33,7 @@ function runtimeEnvironment(id: string, pairingRevision: number) {
 }
 
 beforeEach(() => {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     repos: [],
     worktreesByRepo: {},
     detectedWorktreesByRepo: {},
@@ -72,7 +73,7 @@ describe('editor file operation owner', () => {
   })
 
   it('uses the explicit worktree owner instead of global runtime focus', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       worktreesByRepo: {
         repo: [
           {
@@ -103,7 +104,7 @@ describe('editor file operation owner', () => {
 
   it('rejects an open tab after the same environment id is re-paired', () => {
     useAppStore.getState().setRuntimeEnvironments([runtimeEnvironment('hub-a', 1)])
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       worktreesByRepo: {
         repo: [
           {
@@ -131,7 +132,7 @@ describe('editor file operation owner', () => {
   })
 
   it('captures and rejects replacement nested SSH connection generations', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       worktreesByRepo: {
         repo: [
           {
@@ -204,7 +205,7 @@ describe('editor file operation owner', () => {
   })
 
   it('rejects a restored external SSH file after its target changes', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [{ id: 'repo', connectionId: 'ssh-replacement' } as never],
       worktreesByRepo: {
         repo: [{ id: worktreeId, repoId: 'repo', path: '/remote/repo' } as never]
@@ -237,7 +238,7 @@ describe('editor file operation owner', () => {
     const folderKey = `folder:${folderWorkspaceId}`
 
     beforeEach(() => {
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         folderWorkspaces: [
           { id: folderWorkspaceId, projectGroupId: 'group-1', connectionId: null } as never
         ],
@@ -263,7 +264,7 @@ describe('editor file operation owner', () => {
     })
 
     it('uses the folder root when a legacy caller passes an empty worktree path', () => {
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         folderWorkspaces: [
           {
             id: folderWorkspaceId,
@@ -289,7 +290,7 @@ describe('editor file operation owner', () => {
         undefined,
         false
       )
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         projectGroups: [
           { id: 'group-1', connectionId: null, executionHostId: 'runtime:hub-a' } as never
         ]
@@ -423,7 +424,7 @@ describe('shared editor owner interpretation', () => {
     'keeps uncaptured models and operations on stamped paired owner %s',
     (hostId) => {
       vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         worktreesByRepo: {
           repo: [
             makeWorktree({
@@ -448,7 +449,7 @@ describe('shared editor owner interpretation', () => {
 
   it('qualifies a same-id folder at capture without letting later focus change model identity', () => {
     const workspace = folderWorkspaceKey('twin')
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [
         makeFolderWorkspace({ id: 'twin', executionHostId: 'local' }),
         makeFolderWorkspace({ id: 'twin', executionHostId: 'runtime:hub-a' })
@@ -477,7 +478,7 @@ describe('shared editor owner interpretation', () => {
 
   it('retains captured model identity while refusing vanished or ambiguous mutation owners', () => {
     const owner = makeWorktree({ id: worktreeId, repoId: 'repo', hostId: 'local' })
-    useAppStore.setState({ worktreesByRepo: { repo: [owner] } })
+    setSessionTestState(useAppStore, { worktreesByRepo: { repo: [owner] } })
     const provenance = captureEditorFileOperationProvenance(
       useAppStore.getState(),
       worktreeId,
@@ -485,7 +486,7 @@ describe('shared editor owner interpretation', () => {
       false
     )
     for (const worktrees of [[], [owner, { ...owner, hostId: 'runtime:hub-a' as const }]]) {
-      useAppStore.setState({ worktreesByRepo: { repo: worktrees } })
+      setSessionTestState(useAppStore, { worktreesByRepo: { repo: worktrees } })
       const state = useAppStore.getState()
       expect(() => assertEditorFileOperationCurrent(state, worktreeId, provenance)).toThrow(
         'Reopen the file'

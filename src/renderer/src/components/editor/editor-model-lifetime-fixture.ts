@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import { vi } from 'vitest'
 import { createEditorModelRegistry } from '@/lib/editor-model-registry'
@@ -25,7 +26,7 @@ export function createModelLifetimeFixture(register = true) {
   Reflect.set(globalThis, 'window', domWindow)
   Reflect.set(domWindow, 'api', api)
   const store = createEditorTabsStore()
-  store.setState({
+  setSessionTestState(store, {
     settings: null,
     detectedWorktreesByRepo: {},
     activeWorkspaceExecutionHostId: null,
@@ -54,7 +55,10 @@ export function createModelLifetimeFixture(register = true) {
   const add = (id: string): { file: OpenFile; model: monaco.editor.ITextModel } => {
     const file = modelLifetimeFile(id)
     const model = modelLifetimeEditorModel(file.filePath, `${id}\n${'x'.repeat(256 * 1024)}`)
-    store.setState({ openFiles: [...store.getState().openFiles, file], activeFileId: id })
+    setSessionTestState(store, {
+      openFiles: [...store.getState().openFiles, file],
+      activeFileId: id
+    })
     return { file, model }
   }
   return { store, bridge, attach, add }

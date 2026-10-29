@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import { createJiraCollectionReadActions } from './jira-collection-read-actions'
 import { createJiraConnectionActions } from './jira-connection-actions'
@@ -8,7 +8,7 @@ import type { JiraSlice } from './jira-slice-contract'
 
 export type { JiraSlice } from './jira-slice-contract'
 
-export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, get) => ({
+export const createJiraSlice: SessionStateCreator<AppState, JiraSlice> = (set, get) => ({
   jiraStatus: { connected: false, viewer: null },
   jiraStatusChecked: false,
   jiraStatusContextKey: null,

@@ -21,7 +21,8 @@ import { getBrowserExtensionMainWindow } from './browser-extension-window-model'
 export type SavedBrowserTabsSource = Pick<
   Store,
   'getWorkspaceSessionHostIds' | 'getWorkspaceSession' | 'onWorkspaceSessionWritten'
->
+> &
+  Partial<Pick<Store, 'getWorkspaceSessionReferences'>>
 
 export type DiscardedBrowserTab = {
   tabId: number
@@ -103,7 +104,35 @@ export function setSavedBrowserTabsSource(next: SavedBrowserTabsSource | null): 
   stopWatchingWrites?.()
   source = next
   stopWatchingWrites =
-    next?.onWorkspaceSessionWritten((hostId) => {
+    next?.onWorkspaceSessionWritten((hostId, partitions) => {
+      if (
+        partitions &&
+        partitions.every((changes) => !changes.fullReplacement) &&
+        next.getWorkspaceSessionReferences
+      ) {
+        for (const changes of partitions) {
+          for (const pageId of changes.pages) {
+            const written =
+              next.getWorkspaceSessionReferences('page', pageId, changes.hostId).length > 0
+            const anywhere =
+              written ||
+              next
+                .getWorkspaceSessionHostIds()
+                .some((host) => next.getWorkspaceSessionReferences?.('page', pageId, host).length)
+            if (written || !anywhere) {
+              unloadedPageIds.delete(pageId)
+            }
+            if (!anywhere) {
+              const assigned = assignedByPageId.get(pageId)
+              if (assigned) {
+                assignedByPageId.delete(pageId)
+                emitDiscardedBrowserTabRemoved(assigned)
+              }
+            }
+          }
+        }
+        return
+      }
       if (unloadedPageIds.size === 0 && assignedByPageId.size === 0) {
         return
       }

@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -95,7 +96,8 @@ beforeEach(() => {
   fileListMock.current = { files: [], loading: false, loadError: null }
   tabSearchMock.calls = []
   tabSearchMock.results = []
-  useAppStore.setState(
+  setSessionTestState(
+    useAppStore,
     { ...useAppStore.getInitialState(), browserDefaultSearchEngine: null } as AppState,
     true
   )

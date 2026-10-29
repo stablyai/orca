@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import React, { act } from 'react'
@@ -65,7 +66,7 @@ function activeAgent(paneKey: string, worktreeId: string): AgentStatusEntry {
 }
 
 beforeEach(() => {
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -82,7 +83,7 @@ afterEach(() => {
   })
   container.remove()
   delete (window as unknown as { api?: unknown }).api
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
 })
 
 describe('RepositoryPane search entries', () => {
@@ -172,7 +173,7 @@ describe('RepositoryPane search entries', () => {
 
   it('warns about live terminals and active tasks before project runtime changes', () => {
     const worktreeId = 'repo-1::/tmp/repo'
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       settingsSearchQuery: 'Example Repo',
       settingsSearchInputQuery: 'Example Repo',
       settings: getDefaultSettings('/tmp'),

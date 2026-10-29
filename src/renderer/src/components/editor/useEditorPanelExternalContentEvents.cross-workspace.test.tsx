@@ -1,9 +1,10 @@
+import type { SessionTestStore } from '@/lib/test-support/session-source-fixture'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 // Workspace-scoped discards must evict every view of the shared record, including other workspaces.
 import { act, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
@@ -12,7 +13,9 @@ import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './editor-autosave'
 import type { DiffContent, FileContent } from './editor-panel-content-types'
 import { useEditorPanelExternalContentEvents } from './useEditorPanelExternalContentEvents'
 
-const storeRef = vi.hoisted((): { current: StoreApi<AppState> | null } => ({ current: null }))
+const storeRef = vi.hoisted((): { current: SessionTestStore<AppState> | null } => ({
+  current: null
+}))
 vi.mock('@/store', () => ({
   useAppStore: { getState: () => storeRef.current!.getState() }
 }))
@@ -69,7 +72,7 @@ afterEach(() => {
 function openInTwoWorkspaces(): { a: OpenFile; b: OpenFile } {
   const store = createEditorStore()
   storeRef.current = store
-  store.setState({
+  setSessionTestState(store, {
     worktreesByRepo: {
       'repo-1': [
         makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }),

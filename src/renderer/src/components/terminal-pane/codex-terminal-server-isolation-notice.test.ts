@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -20,7 +21,8 @@ const openSettingsTarget = vi.fn()
 const codexTab = { 'wt-1': [{ id: 'tab-1', launchAgent: 'codex' }] }
 
 function resetStore(overrides: Record<string, unknown> = {}): void {
-  noticeTestStore.setState(
+  setSessionTestState(
+    noticeTestStore,
     {
       codexTerminalServerIsolationNoticeSeen: false,
       settings: { codexTerminalServerIsolation: true },

@@ -12,7 +12,7 @@ export function createUiFeatureActions(set: UISliceSet, get: UISliceGet): Partia
     markFeatureTipsSeen: (ids) =>
       set((s) => {
         if (ids.length === 0) {
-          return s
+          return undefined
         }
         const current = new Set(s.featureTipsSeenIds)
         let changed = false
@@ -23,7 +23,7 @@ export function createUiFeatureActions(set: UISliceSet, get: UISliceGet): Partia
           }
         }
         if (!changed) {
-          return s
+          return undefined
         }
         const next = [...current]
         window.api.ui.set({ featureTipsSeenIds: next }).catch(console.error)
@@ -38,7 +38,7 @@ export function createUiFeatureActions(set: UISliceSet, get: UISliceGet): Partia
       let persistPromise = Promise.resolve()
       set((s) => {
         if (!s.persistedUIReady) {
-          return s
+          return undefined
         }
         tourProgression = getContextualTourProgressionForFeatureInteraction(s, id)
         const existing = s.featureInteractions[id]

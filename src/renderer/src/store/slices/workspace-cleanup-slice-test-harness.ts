@@ -1,3 +1,4 @@
+import { withSessionSourceTestWrites } from '@/lib/test-support/session-source-test-store'
 import { create } from 'zustand'
 import { vi } from 'vitest'
 import type { AppState } from '../types'
@@ -65,21 +66,23 @@ export function makeState(overrides: Partial<AppState> = {}): AppState {
 
 export function createCleanupTestStore(removeWorktree: ReturnType<typeof vi.fn> = vi.fn()) {
   return create<AppState>()(
-    (...a) =>
-      ({
-        tabsByWorktree: {},
-        ptyIdsByTabId: {},
-        openFiles: [],
-        editorDrafts: {},
-        browserTabsByWorktree: {},
-        retainedAgentsByPaneKey: {},
-        activeWorktreeId: null,
-        agentStatusByPaneKey: {},
-        runtimePaneTitlesByTabId: {},
-        lastVisitedAtByWorktreeId: {},
-        removeWorktree,
-        ...createWorkspaceCleanupSlice(...a)
-      }) as unknown as AppState
+    withSessionSourceTestWrites(
+      (...a) =>
+        ({
+          tabsByWorktree: {},
+          ptyIdsByTabId: {},
+          openFiles: [],
+          editorDrafts: {},
+          browserTabsByWorktree: {},
+          retainedAgentsByPaneKey: {},
+          activeWorktreeId: null,
+          agentStatusByPaneKey: {},
+          runtimePaneTitlesByTabId: {},
+          lastVisitedAtByWorktreeId: {},
+          removeWorktree,
+          ...createWorkspaceCleanupSlice(...a)
+        }) as unknown as AppState
+    )
   )
 }
 

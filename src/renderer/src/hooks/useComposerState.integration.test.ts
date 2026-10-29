@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act, render, renderHook, screen, waitFor } from '@testing-library/react'
@@ -89,7 +90,7 @@ describe('useComposerState integrated lifecycle', () => {
       defaultJiraProject: { id: '20', key: 'REM', name: 'Remote', siteId: 'site-b' }
     }
     const projection = projectHostSetupProjectionFromRepos([localRepo, runtimeRepo])
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [localRepo, runtimeRepo],
       projects: [...projection.projects],
       projectHostSetups: projection.setups.map((setup) => ({
@@ -145,7 +146,7 @@ describe('useComposerState integrated lifecycle', () => {
       configurable: true,
       value: { ...window.api, gh, worktrees: { ...window.api.worktrees, create } }
     })
-    useAppStore.setState(useAppStore.getInitialState(), true)
+    setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
     const repo: Repo = {
       id: 'branch-repo',
       path: '/branch-repo',
@@ -154,7 +155,7 @@ describe('useComposerState integrated lifecycle', () => {
       addedAt: 0
     }
     const projection = projectHostSetupProjectionFromRepos([repo])
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [repo],
       projects: [...projection.projects],
       projectHostSetups: [...projection.setups],
@@ -214,12 +215,12 @@ describe('useComposerState integrated lifecycle', () => {
     } finally {
       view?.unmount()
       setLocalRuntimeCapabilitiesForTests(null)
-      useAppStore.setState(original, true)
+      setSessionTestState(useAppStore, original, true)
     }
   })
 
   it('composes two live composers and exposes the parent-worktree control state', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [],
       projects: [],
       projectGroups: [],

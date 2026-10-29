@@ -9,6 +9,7 @@ import {
 import { fullLayoutFrameBuildPatch } from './workspace-layout-frame-builds'
 import type { LayoutFrameSlices } from '@/store/workspace-layout-frame-slices'
 import type { AppState } from '@/store/types'
+import { editSessionSource } from '@/store/session-source-edits'
 
 const FRAME_SLICES: readonly (keyof LayoutFrameSlices)[] = [
   'tabsByWorktree',
@@ -81,14 +82,13 @@ export function layoutFrameApplyErrors({
     return []
   }
   // The moved tabs the flush selected are selected the same way here, so a wrong one still shows.
-  const built = selectTakenMovedTabs({
-    ...before,
-    ...fullLayoutFrameBuildPatch(before, cache, keys, {
-      keepsTerminalLayout: isTabPaneTreeHeld,
-      newRowFields: (tabId) => rowFieldsTaken.get(tabId) ?? null,
-      held
-    })
+  const edit = editSessionSource(before)
+  fullLayoutFrameBuildPatch(edit, cache, keys, {
+    keepsTerminalLayout: isTabPaneTreeHeld,
+    newRowFields: (tabId) => rowFieldsTaken.get(tabId) ?? null,
+    held
   })
+  const built = selectTakenMovedTabs(edit.view())
   const whole = fullBuilt.length === 0
   const expected: Record<string, unknown> = whole ? { ...built } : recordsOf(built, keys)
   const shown: Record<string, unknown> = whole ? { ...after } : recordsOf(after, keys)

@@ -8,6 +8,7 @@ import type {
 import { resumeRecordFromStatus } from '../../../../../shared/agent-resume-record-from-status'
 import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
 import { findTabForAgentEntry } from './agent-status-pane-key-tab-binding'
+import type { SessionSourceEdit } from '../../session-source-edits'
 
 export function sleepingRecordFromEntry(args: {
   state: AppState
@@ -70,13 +71,13 @@ export function manualSleepCaptureEntry(
 }
 
 export function removeSleepingRecordsReplacedByManualWorktreeSleep(
-  records: Record<string, SleepingAgentSessionRecord>,
+  edit: SessionSourceEdit<AppState>,
   worktreeId: string,
   paneKeys?: readonly string[],
   replacements?: Readonly<Record<string, SleepingAgentSessionRecord>>
-): { records: Record<string, SleepingAgentSessionRecord>; changed: boolean } {
+): boolean {
+  const records = edit.read('sleepingAgentSessionsByPaneKey')
   const allowedPaneKeys = paneKeys ? new Set(paneKeys) : null
-  let next = records
   let changed = false
   for (const [paneKey, record] of Object.entries(records)) {
     if (record.worktreeId !== worktreeId || (allowedPaneKeys && !allowedPaneKeys.has(paneKey))) {
@@ -86,11 +87,8 @@ export function removeSleepingRecordsReplacedByManualWorktreeSleep(
     if (!replacements?.[paneKey] && isDurableSleepingCapture(record)) {
       continue
     }
-    if (next === records) {
-      next = { ...records }
-    }
-    delete next[paneKey]
+    edit.remove('sleepingAgentSessionsByPaneKey', paneKey)
     changed = true
   }
-  return { records: next, changed }
+  return changed
 }

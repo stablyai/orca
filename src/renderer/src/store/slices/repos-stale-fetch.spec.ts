@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { createTestStore, makeLayout, makeTab } from './store-test-helpers'
@@ -109,7 +110,7 @@ export function registerReposStaleFetchTests(): void {
       const { promise: catalog, resolve: resolveCatalog } = Promise.withResolvers<Repo[]>()
       reposList.mockReturnValueOnce(catalog)
       const store = createTestStore()
-      store.setState({ repos: [localRepo] })
+      setSessionTestState(store, { repos: [localRepo] })
 
       const pending = store.getState().fetchRepos(catalogOwner(store))
       await store

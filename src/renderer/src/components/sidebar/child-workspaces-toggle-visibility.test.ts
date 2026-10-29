@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it } from 'vitest'
@@ -41,7 +42,8 @@ const noHover = {
 } as unknown as HoverDocument
 
 function seed(overrides: Partial<AppState> = {}): AppState {
-  useAppStore.setState(
+  setSessionTestState<AppState>(
+    useAppStore,
     {
       ...initialState,
       repos: [repo],
@@ -64,7 +66,7 @@ function target(state: AppState): string | null {
 
 describe('child workspace shortcut follows canonical rendered chips', () => {
   afterEach(() => {
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
     setVisibleWorktreeIds(null)
     setVisibleWorktreeShortcutTargets(null)
   })

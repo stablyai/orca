@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, renderHook, cleanup } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
@@ -6,7 +7,7 @@ import { useQuickOpenInteraction } from './use-quick-open-interaction'
 const initial = useAppStore.getInitialState()
 afterEach(() => {
   cleanup()
-  useAppStore.setState(initial, true)
+  setSessionTestState(useAppStore, initial, true)
 })
 it('revokes dismissal/reopen and workspace-switch/return even without an intervening render', () => {
   useAppStore.setState({ activeModal: 'quick-open', activeWorktreeId: 'wt' })

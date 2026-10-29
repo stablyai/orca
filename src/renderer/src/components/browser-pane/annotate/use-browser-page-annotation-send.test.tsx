@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
@@ -95,7 +96,7 @@ beforeEach(() => {
   state.store = store
   mode = undefined
   resetNotesInFlightForTests()
-  store.setState({
+  setSessionTestState(store, {
     activeGroupIdByWorktree: {},
     openAgentSendPopoverTargetMode: (next) => {
       mode = next

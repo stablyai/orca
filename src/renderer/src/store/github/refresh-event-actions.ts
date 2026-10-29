@@ -1,5 +1,5 @@
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../../../../shared/worktree/hosted-review-links'
-import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import { getHostedReviewCacheKey } from '../slices/hosted-review-cache-identity'
@@ -31,8 +31,8 @@ import {
 import type { WorktreeLookupIndex } from './worktree-refresh'
 
 export const createRefreshEventActions = (
-  set: Parameters<StateCreator<AppState>>[0],
-  get: Parameters<StateCreator<AppState>>[1]
+  set: Parameters<SessionStateCreator<AppState>>[0],
+  get: Parameters<SessionStateCreator<AppState>>[1]
 ): Pick<GitHubSlice, 'applyGitHubPRRefreshEvent'> => ({
   applyGitHubPRRefreshEvent: (event) => {
     // Why: local-repo sidebar refresh routes through the main PR coordinator, so run the same guarded diverged-merged-PR clear.
@@ -241,7 +241,7 @@ export const createRefreshEventActions = (
             prCache: nextPRCache,
             hostedReviewCache: nextHostedReviewCache
           }
-        : s
+        : undefined
     })
     for (const clear of divergedLinkedPRClears) {
       void get().updateWorktreeMeta(clear.worktreeId, CLEARED_HOSTED_REVIEW_SELECTION_UPDATES, {

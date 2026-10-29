@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -36,7 +37,7 @@ Object.defineProperty(domWindow, 'api', { value: api, configurable: true })
 afterEach(cleanup)
 beforeEach(() => {
   seedBrowserLinkTestStore(useAppStore)
-  useAppStore.setState((state) => ({
+  setSessionTestState(useAppStore, (state) => ({
     unifiedTabsByWorktree: {
       [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.map((tab) =>
         tab.id === 'source' ? { ...tab, contentType: 'agent-session' as const } : tab
@@ -94,7 +95,7 @@ it('the button follows a moved source and reuses the exact inactive page', () =>
   })
   showVisual()
   act(() => {
-    useAppStore.setState((state) => ({
+    setSessionTestState(useAppStore, (state) => ({
       unifiedTabsByWorktree: {
         [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.map((tab) =>
           tab.id === 'source' ? { ...tab, groupId: 'b' } : tab

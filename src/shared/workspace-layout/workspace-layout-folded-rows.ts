@@ -1,3 +1,5 @@
+import { SessionUnitIndex } from '../session-unit-index'
+import { SessionUnitReader, readSessionUnit } from '../session-unit-reader'
 // Persist touched legacy duplicates in their loaded form; otherwise closing/moving the canonical claimant can resurrect stale stored rows on the next load.
 
 import type { TerminalTab } from '../terminal-tab-types'
@@ -15,78 +17,80 @@ export function adoptTouchedFoldedRows(
   patched: WorkspaceSessionState,
   loaded: WorkspaceSessionState
 ): WorkspaceSessionState {
-  let adopted = stored
-  for (const [key, rows] of Object.entries(stored.tabsByWorktree ?? {})) {
-    const canonical = readCanonicalPtyOwners(stored, key, rows)
+  const reader = SessionUnitReader.between(stored, patched, new SessionUnitIndex(stored))
+  return reduceTouchedFoldedRows(reader, loaded, Object.keys(stored.tabsByWorktree ?? {}))
+    ? reader.snapshot()
+    : stored
+}
+
+export function reduceTouchedFoldedRows(
+  reader: SessionUnitReader,
+  loaded: WorkspaceSessionState,
+  owners: Iterable<string>
+): boolean {
+  let changed = false
+  for (const key of owners) {
+    const rows = reader.unit('tabsByWorktree', key, 'prior').value ?? []
+    const prior = reader.prior
+    const canonical = readCanonicalPtyOwners(prior, key, rows)
     for (const row of rows) {
       if (canonical.tabIds.has(row.id)) {
         continue
       }
-      const claim = resolveCanonicalPtyClaim(stored, row, canonical)
+      const claim = resolveCanonicalPtyClaim(prior, row, canonical)
       if (claim.kind === 'retained' && claim.releasedPtyIds.size === 0) {
         continue
       }
-      const claimants = ptyIdsOf(stored, row).flatMap(
-        (ptyId) => canonical.tabIdByPtyId.get(ptyId) ?? []
+      const claimants = ptyIdsOf(prior, row).flatMap((pty) => canonical.tabIdByPtyId.get(pty) ?? [])
+      if (
+        ![row.id, ...claimants].some((id) => claimOf(prior, key, id) !== claimOf(reader, key, id))
+      ) {
+        continue
+      }
+      changed = true
+      const loadedRow = loaded.tabsByWorktree?.[key]?.find((candidate) => candidate.id === row.id)
+      const current = reader.unit('tabsByWorktree', key).value ?? []
+      reader.write('tabsByWorktree', key, {
+        present: true,
+        value: current.flatMap((candidate) =>
+          candidate.id !== row.id ? [candidate] : loadedRow ? [loadedRow] : []
+        )
+      })
+      const layout = loaded.terminalLayoutsByTabId?.[row.id]
+      reader.write(
+        'terminalLayoutsByTabId',
+        row.id,
+        layout ? { present: true, value: layout } : { present: false, value: undefined }
       )
-      const touched = [row.id, ...claimants].some(
-        (tabId) => claimOf(stored, key, tabId) !== claimOf(patched, key, tabId)
-      )
-      if (touched) {
-        adopted = withLoadedRow(adopted, loaded, key, row.id)
+      if (!loadedRow && reader.field('activeTabId').value === row.id) {
+        reader.replace('activeTabId', { present: true, value: loaded.activeTabId })
+      }
+      if (!loadedRow && reader.unit('activeTabIdByWorktree', key).value === row.id) {
+        reader.write('activeTabIdByWorktree', key, {
+          present: true,
+          value: loaded.activeTabIdByWorktree?.[key] ?? null
+        })
       }
     }
   }
-  return adopted
+  return changed
 }
 
-function ptyIdsOf(session: WorkspaceSessionState, row: TerminalTab): string[] {
+function ptyIdsOf(session: WorkspaceSessionState | SessionUnitReader, row: TerminalTab): string[] {
   const { owned, orphaned } = readPersistedTerminalPtyIds(session, row)
   return [...owned, ...orphaned]
 }
 
-function claimOf(session: WorkspaceSessionState, key: string, tabId: string): string {
-  const row = session.tabsByWorktree?.[key]?.find((candidate) => candidate.id === tabId)
-  const entry = session.unifiedTabs?.[key]?.some((candidate) => candidate.entityId === tabId)
-  return stableJson({ row: Boolean(row), entry, ptyIds: row ? ptyIdsOf(session, row).sort() : [] })
-}
-
-function withLoadedRow(
-  session: WorkspaceSessionState,
-  loaded: WorkspaceSessionState,
+function claimOf(
+  session: WorkspaceSessionState | SessionUnitReader,
   key: string,
   tabId: string
-): WorkspaceSessionState {
-  const loadedRow = loaded.tabsByWorktree?.[key]?.find((row) => row.id === tabId)
-  const rows = (session.tabsByWorktree[key] ?? []).flatMap((row) =>
-    row.id !== tabId ? [row] : loadedRow ? [loadedRow] : []
+): string {
+  const row = readSessionUnit(session, 'tabsByWorktree', key)?.find(
+    (candidate) => candidate.id === tabId
   )
-  const next: WorkspaceSessionState = {
-    ...session,
-    tabsByWorktree: { ...session.tabsByWorktree, [key]: rows },
-    ...withLoadedLayout(session, loaded, tabId)
-  }
-  if (!loadedRow && next.activeTabId === tabId) {
-    next.activeTabId = loaded.activeTabId
-  }
-  if (!loadedRow && next.activeTabIdByWorktree?.[key] === tabId) {
-    next.activeTabIdByWorktree = {
-      ...next.activeTabIdByWorktree,
-      [key]: loaded.activeTabIdByWorktree?.[key] ?? null
-    }
-  }
-  return next
-}
-
-function withLoadedLayout(
-  session: WorkspaceSessionState,
-  loaded: WorkspaceSessionState,
-  tabId: string
-): Pick<WorkspaceSessionState, 'terminalLayoutsByTabId'> | Record<string, never> {
-  const { [tabId]: stored, ...rest } = session.terminalLayoutsByTabId ?? {}
-  const layout = loaded.terminalLayoutsByTabId?.[tabId]
-  if (!stored && !layout) {
-    return {}
-  }
-  return { terminalLayoutsByTabId: layout ? { ...rest, [tabId]: layout } : rest }
+  const entry = readSessionUnit(session, 'unifiedTabs', key)?.some(
+    (candidate) => candidate.entityId === tabId
+  )
+  return stableJson({ row: Boolean(row), entry, ptyIds: row ? ptyIdsOf(session, row).sort() : [] })
 }

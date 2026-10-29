@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, expect, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
@@ -64,7 +65,8 @@ export function seedState(): void {
     makeWorktree(WT, '/workspace/feature'),
     makeWorktree(BG_WT, '/workspace/background')
   ]
-  useAppStore.setState(
+  setSessionTestState(
+    useAppStore,
     {
       ...initialState,
       repos: [
@@ -112,7 +114,7 @@ export function seedState(): void {
 
 export function seedSleepingRecord(tabId: string, worktreeId: string, sessionId: string): string {
   const paneKey = makePaneKey(tabId, LEAF_ID)
-  useAppStore.setState((s) => ({
+  setSessionTestState(useAppStore, (s) => ({
     sleepingAgentSessionsByPaneKey: {
       ...s.sleepingAgentSessionsByPaneKey,
       [paneKey]: {
@@ -209,7 +211,7 @@ export function installFrameOrderingHarness(options: { fakeTimers?: boolean } = 
 
   afterEach(() => {
     cleanup()
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
     replaceRuntimeEnvironmentRevisions([])
     resetWebSessionTabsSnapshotFreshnessForTests()
     resetHostSessionMirrorHydrationForTests()

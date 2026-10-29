@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // Age mirrored evidence by client receipt time: rendererNow minus hostStamp gains clock skew and makes remote rows immediately stale or permanently fresh. Inject separate host/client clocks. Published freshness verdicts cannot decay during silence; exact repaints must not renew receipt time.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
@@ -91,7 +92,8 @@ function applyHostSnapshot(
   if (patch === state) {
     return false
   }
-  store.setState(patch as Partial<AppState>)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test stub supplies only the API members exercised by this scenario.
+  setSessionTestState(store, patch as Partial<AppState>)
   return true
 }
 

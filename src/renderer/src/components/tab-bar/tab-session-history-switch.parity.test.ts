@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -58,8 +59,8 @@ function row(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
 }
 
 function makeState(): AppState {
-  useAppStore.setState(useAppStore.getInitialState(), true)
-  useAppStore.setState({
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, {
     activeRepoId: 'repo-1',
     activeWorktreeId: WORKTREE_ID,
     repos: [makeRepo()],
@@ -181,7 +182,7 @@ describe('the tab menu offers exactly what the Session History row offers', () =
   })
 
   it("Switch to Chat in the conversation's own folder workspace", () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [
         {
           id: 'folder-1',

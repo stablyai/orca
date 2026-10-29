@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { setSessionTestState } from '../../src/renderer/src/lib/test-support/session-source-fixture'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
@@ -110,7 +111,7 @@ function seedPairedServerWorkspace(): void {
     hostId: 'runtime:server-1',
     runtimeOwnerEnvironmentId: 'server-1'
   }
-  useAppStore.setState({ worktreesByRepo: { 'repo-1': [worktree] } })
+  setSessionTestState(useAppStore, { worktreesByRepo: { 'repo-1': [worktree] } })
 }
 
 /** Nothing of a chat exists on this machine: no tab, launch, record, queued prompt or intent. */
@@ -130,7 +131,7 @@ beforeEach(async () => {
   vi.clearAllMocks()
   mocks.hostPermission.mockResolvedValue({ kind: 'allowed' })
   localStorage.clear()
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     activeWorktreeId: WORKTREE,
     activeWorkspaceExecutionHostId: null,
     unifiedTabsByWorktree: {},
@@ -303,7 +304,7 @@ describe('a structured chat launch on a paired server', () => {
   // The picker shows what create will run: the server's saved selection, not this machine's.
   it('seeds the chat with the selection the admitting server reported', async () => {
     mocks.createSupport.mockResolvedValue({ supported: true, seedOptions: { model: 'opus' } })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       settings: {
         ...useAppStore.getState().settings!,
         nativeChatSessionOptions: { claude: { model: 'sonnet' } }
@@ -379,7 +380,7 @@ describe('a structured chat launch on a paired server', () => {
         )
         expect(settings.agentPermissionDefault).toBe(choice)
         expect(settings.nativeChatPermissionMode).toBe('ask')
-        useAppStore.setState({ settings })
+        setSessionTestState(useAppStore, { settings })
         parsed = { ...parsed, settings: JSON.parse(JSON.stringify(settings)) }
       }
       const actual = await vi.importActual<typeof HostPermission>(

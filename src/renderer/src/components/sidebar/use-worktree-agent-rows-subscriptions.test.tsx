@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -59,13 +60,13 @@ function entry(key: string, worktreeId: string): AgentStatusEntry {
   }
 }
 function patch(update: Partial<AppState>) {
-  act(() => useAppStore.setState(update))
+  act(() => setSessionTestState(useAppStore, update))
 }
 
 beforeEach(() => {
   vi.useFakeTimers()
   vi.setSystemTime(2_000_000)
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     tabsByWorktree: {
       'folder-a': [makeTab({ id: 'tab-a', worktreeId: 'folder-a' })],
       'ssh-b': [makeTab({ id: 'tab-b', worktreeId: 'ssh-b' })]
@@ -91,7 +92,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount())
   container.remove()
-  useAppStore.setState(original, true)
+  setSessionTestState(useAppStore, original, true)
   vi.useRealTimers()
 })
 

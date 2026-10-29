@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
@@ -84,7 +85,7 @@ export function registerReposCatalogNotificationsTests(): void {
 
   function seed(): TestStore {
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       projectGroups: [{ ...group, executionHostId: 'local' }],
       folderWorkspaces: [{ ...folder, executionHostId: 'local' }],
       folderWorkspacePathStatuses: {
@@ -198,7 +199,7 @@ export function registerReposCatalogNotificationsTests(): void {
 
   it('still clears restored folder owners after a successful all-host refresh', async () => {
     const store = seed()
-    store.setState({
+    setSessionTestState(store, {
       restoredRuntimeHostIdByWorkspaceSessionKey: {
         'folder:folder-1': 'runtime:retired',
         unrelated: 'runtime:kept'
@@ -216,7 +217,9 @@ export function registerReposCatalogNotificationsTests(): void {
 
   it('does not publish an all-host refresh whose restored owners need no cleanup', async () => {
     const store = seed()
-    store.setState({ restoredRuntimeHostIdByWorkspaceSessionKey: { unrelated: 'runtime:kept' } })
+    setSessionTestState(store, {
+      restoredRuntimeHostIdByWorkspaceSessionKey: { unrelated: 'runtime:kept' }
+    })
     const initial = store.getState()
     const changed = vi.fn()
     const unsubscribe = store.subscribe(changed)

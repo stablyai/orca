@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import React, { act } from 'react'
@@ -66,7 +67,7 @@ function makeStatus(overrides: Partial<RuntimeStatus>): RuntimeStatus {
 }
 
 function renderWithOwnerStatus(status: RuntimeStatus | null): void {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     repos: [repo],
     projects: [project],
     projectHostSetups: [setup],
@@ -85,7 +86,7 @@ function renderWithOwnerStatus(status: RuntimeStatus | null): void {
 }
 
 beforeEach(() => {
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -96,7 +97,7 @@ afterEach(() => {
     root.unmount()
   })
   container.remove()
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
 })
 
 // Reachable servers with missing renderer graphs previously showed every owned setup Ready (#12350).
@@ -135,7 +136,7 @@ describe('RepositoryHostSetupsSection workspace window availability', () => {
   })
 
   it('does not mark a transport-connected but unavailable runtime setup Ready', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [repo],
       projects: [project],
       projectHostSetups: [setup],

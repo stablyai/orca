@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   issueCacheKey,
@@ -85,7 +86,7 @@ describe('repo cache eviction across host scopes', () => {
     const store = createTestStore()
     const removed = seedEveryHostScope('repo-1', '/repo/one')
     const other = seedEveryHostScope('repo-2', '/repo/two')
-    store.setState({
+    setSessionTestState(store, {
       repos: [{ ...localRow, id: 'repo-1', path: '/repo/one' }],
       workItemsCache: { ...removed.state.workItemsCache, ...other.state.workItemsCache },
       prCache: { ...removed.state.prCache, ...other.state.prCache },
@@ -122,13 +123,13 @@ describe('repo cache eviction across host scopes', () => {
     const ssh = [...Object.values(seeded.keys.ssh), ...seeded.sourceKeys]
 
     const store = createTestStore()
-    store.setState({ repos: [localRow, sshRow], ...seeded.state })
+    setSessionTestState(store, { repos: [localRow, sshRow], ...seeded.state })
     store.getState().evictGitHubRepoCaches('twin', sshRow.path, SSH_HOST)
     expect(cachedKeys(store)).toEqual(expect.arrayContaining(local))
     expect(cachedKeys(store).filter((key) => ssh.includes(key))).toEqual([])
 
     const reverse = createTestStore()
-    reverse.setState({ repos: [localRow, sshRow], ...seeded.state })
+    setSessionTestState(reverse, { repos: [localRow, sshRow], ...seeded.state })
     reverse.getState().evictGitHubRepoCaches('twin', localRow.path, 'local')
     expect(cachedKeys(reverse)).toEqual(expect.arrayContaining(ssh))
     expect(cachedKeys(reverse).filter((key) => local.includes(key))).toEqual([])
@@ -137,7 +138,7 @@ describe('repo cache eviction across host scopes', () => {
   it('without a host, evicts the bucket of the row at the request path', () => {
     const seeded = seedEveryHostScope('twin', localRow.path)
     const store = createTestStore()
-    store.setState({ repos: [localRow, sshRow], ...seeded.state })
+    setSessionTestState(store, { repos: [localRow, sshRow], ...seeded.state })
 
     store.getState().evictGitHubRepoCaches('twin', sshRow.path)
 
@@ -147,7 +148,7 @@ describe('repo cache eviction across host scopes', () => {
   it('an issue-source change on the SSH twin drops its work items and keeps the local twin’s', async () => {
     const seeded = seedEveryHostScope('twin', localRow.path)
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [localRow, sshRow],
       updateRepo: vi.fn().mockResolvedValue(true),
       ...seeded.state

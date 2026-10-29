@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { provideLayoutFrameTerminalPanes } from '@/runtime/layout-frame-terminal-panes'
@@ -35,7 +36,7 @@ function seedQueuedRestart(mainLeafIds: string[]): void {
     terminalTab: (worktreeId, tabId) =>
       worktreeId === 'wt1' && tabId === 'tab-1' ? mainTab(mainLeafIds) : undefined
   })
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the restart reads only this setting.
     settings: { activeRuntimeEnvironmentId: null } as never,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the restart reads only the worktree's id and path.
@@ -76,7 +77,7 @@ function seedQueuedRestart(mainLeafIds: string[]): void {
 describe('an account-switch restart in a layout-owner build', () => {
   beforeEach(() => {
     resetCodexDetachedPaneRestartExecutorForTests()
-    useAppStore.setState(useAppStore.getInitialState(), true)
+    setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
     vi.stubGlobal('window', {
       ...globalThis.window,
       api: {

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
@@ -15,7 +16,7 @@ const initialState = useAppStore.getState()
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const HOST_TAB_ID = 'web-terminal-host-tab'
 
-afterEach(() => useAppStore.setState(initialState, true))
+afterEach(() => setSessionTestState(useAppStore, initialState, true))
 
 function makeRecord(
   worktreeId: string,
@@ -43,7 +44,7 @@ describe.each(['repo-1::/workspace/repo', 'folder:workspace'])('%s', (worktreeId
     { paneKey: `${HOST_TAB_ID}:0`, tabId: undefined }
   ])('preserves an absent host record $paneKey without a catalog owner', ({ paneKey, tabId }) => {
     const record = makeRecord(worktreeId, paneKey, tabId)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { [worktreeId]: [] },
       sleepingAgentSessionsByPaneKey: { [paneKey]: record },
       automaticAgentResumeClaimsByTabId: {},
@@ -62,7 +63,7 @@ describe.each(['repo-1::/workspace/repo', 'folder:workspace'])('%s', (worktreeId
 
   it('still recovers an ordinary terminal record with no preserved tab', () => {
     const record = makeRecord(worktreeId, makePaneKey('local-tab', LEAF_ID), 'local-tab')
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { [worktreeId]: [] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record },
       automaticAgentResumeClaimsByTabId: {},
@@ -81,7 +82,7 @@ describe.each(['repo-1::/workspace/repo', 'folder:workspace'])('%s', (worktreeId
       ...makeRecord(worktreeId, makePaneKey(HOST_TAB_ID, LEAF_ID), HOST_TAB_ID),
       state: 'done' as const
     }
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { [worktreeId]: [] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record },
       automaticAgentResumeClaimsByTabId: {},
@@ -102,7 +103,7 @@ describe.each(['repo-1::/workspace/repo', 'folder:workspace'])('%s', (worktreeId
       capturedAt: 2,
       updatedAt: 2
     }
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       tabsByWorktree: { [worktreeId]: [] },
       sleepingAgentSessionsByPaneKey: {
         [mirrored.paneKey]: mirrored,

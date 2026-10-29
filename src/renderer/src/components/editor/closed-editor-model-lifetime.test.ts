@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -55,7 +56,7 @@ it('keeps a live model and releases only its closed sibling', async () => {
 it('preserves a shared URI until its final file owner closes', async () => {
   const { store, attach, add } = createModelLifetimeFixture()
   const { file, model } = add('shared-a')
-  store.setState({ openFiles: [file, { ...file, id: 'shared-b', readOnly: true }] })
+  setSessionTestState(store, { openFiles: [file, { ...file, id: 'shared-b', readOnly: true }] })
   attach()
   store.getState().closeFile(file.id)
   await Promise.resolve()
@@ -89,7 +90,7 @@ it('protects a reopened URI owner from a pending detach callback', async () => {
   attach()
   store.getState().closeFile(file.id)
   await Promise.resolve()
-  store.setState({ openFiles: [{ ...file, id: 'reopened-new' }] })
+  setSessionTestState(store, { openFiles: [{ ...file, id: 'reopened-new' }] })
   detachView()
   await Promise.resolve()
   expect(model.isDisposed()).toBe(false)
@@ -124,14 +125,14 @@ it('does not replay earlier model-disposal authority after first registry regist
   const { store, bridge, attach } = createModelLifetimeFixture(false)
   const file = modelLifetimeFile('unloaded')
   attach()
-  store.setState({ openFiles: [file] })
+  setSessionTestState(store, { openFiles: [file] })
   store.getState().closeFile(file.id)
   const model = modelLifetimeEditorModel(file.filePath)
   const unregister = bridge.register(monaco)
   try {
     await Promise.resolve()
     expect(model.isDisposed()).toBe(false)
-    store.setState({ openFiles: [file] })
+    setSessionTestState(store, { openFiles: [file] })
     store.getState().closeFile(file.id)
     await Promise.resolve()
     expect(model.isDisposed()).toBe(true)
@@ -173,7 +174,7 @@ it('releases generated closed diff namespaces after detachment and preserves sib
   const modified = modelLifetimeTextModel(paths.modifiedModelPath)
   const live = modelLifetimeTextModel(siblingPaths.originalModelPath)
   const detachView = attachModelLifetimeView(original)
-  store.setState({ openFiles: [file, sibling] })
+  setSessionTestState(store, { openFiles: [file, sibling] })
   attach()
   store.getState().closeFile(file.id)
   await Promise.resolve()
@@ -192,7 +193,7 @@ it('preserves bounded cold-registry rich, preview and PDF caches without loading
   const file = modelLifetimeFile('cold-rich')
   const preview = modelLifetimeFile('cold-preview', 'markdown-preview')
   const sibling = modelLifetimeFile('cold-live')
-  store.setState({ openFiles: [file, preview, sibling] })
+  setSessionTestState(store, { openFiles: [file, preview, sibling] })
   attach()
   scrollTopCache.set(`${file.filePath}:rich`, 10)
   scrollTopCache.set(`${file.filePath}::pane`, 11)
@@ -303,7 +304,9 @@ it('protects a later file reopened by an earlier model disposal in the same batc
   const first = add('first')
   const second = add('second')
   attach()
-  const reopen = first.model.onWillDispose(() => store.setState({ openFiles: [second.file] }))
+  const reopen = first.model.onWillDispose(() =>
+    setSessionTestState(store, { openFiles: [second.file] })
+  )
   try {
     store.getState().closeFile(first.file.id)
     store.getState().closeFile(second.file.id)
@@ -322,7 +325,7 @@ it('preserves new same-URI cache entries installed by a model disposal callback'
   const selection = [new monaco.Selection(2, 1, 2, 3)]
   const pdf = { pageNumber: 3, top: 4, left: 5 }
   const reopen = model.onWillDispose(() => {
-    store.setState({ openFiles: [{ ...file, id: 'new-cache-owner' }] })
+    setSessionTestState(store, { openFiles: [{ ...file, id: 'new-cache-owner' }] })
     scrollTopCache.set(file.filePath, 41)
     scrollTopCache.set(`${file.filePath}::pane`, 42)
     editorSelectionCache.set(file.filePath, selection)
@@ -351,11 +354,11 @@ it('checks model and cache ownership after a diff callback reopens its owner and
   const paths = getDiffViewerMonacoModelPaths({ modelKey: diffFile.id, generationSuffix: '' })
   const original = modelLifetimeTextModel(paths.originalModelPath)
   const modified = modelLifetimeTextModel(paths.modifiedModelPath)
-  store.setState({ openFiles: [editFile, diffFile] })
+  setSessionTestState(store, { openFiles: [editFile, diffFile] })
   attach()
   const scroll = { scrollTop: 1, scrollLeft: 2 }
   const reopen = original.onWillDispose(() => {
-    store.setState({ openFiles: [{ ...editFile, id: 'edit-successor' }, diffFile] })
+    setSessionTestState(store, { openFiles: [{ ...editFile, id: 'edit-successor' }, diffFile] })
     scrollTopCache.set(`${editFile.filePath}::pane`, 71)
     scrollTopCache.set(`${diffFile.id}:preview`, 72)
     scrollTopCache.set(`${diffFile.id}::pane`, 73)
@@ -402,7 +405,7 @@ it.each([false, true])(
     const closed = modelLifetimeFile('closed-check', 'check-details')
     const live = modelLifetimeFile('live-check', 'check-details')
     const ordinary = modelLifetimeFile('ordinary')
-    store.setState({ openFiles: [closed, live, ordinary] })
+    setSessionTestState(store, { openFiles: [closed, live, ordinary] })
     attach()
     seed(closed.id)
     seed(live.id)
@@ -421,14 +424,14 @@ it('sweeps never-mounted close-all and same-ID mode replacements without Monaco'
   const { store, attach } = createModelLifetimeFixture(false)
   const a = modelLifetimeFile('never-a', 'check-details')
   const b = modelLifetimeFile('never-b', 'check-details')
-  store.setState({ openFiles: [a, b] })
+  setSessionTestState(store, { openFiles: [a, b] })
   attach()
   seed(a.id)
   seed(b.id)
-  store.setState({ openFiles: [{ ...a, mode: 'edit' }, b] })
+  setSessionTestState(store, { openFiles: [{ ...a, mode: 'edit' }, b] })
   await Promise.resolve()
   expect([...scrollTopCache.keys()].some((key) => key.startsWith(`${a.id}::`))).toBe(false)
-  store.setState({ openFiles: [] })
+  setSessionTestState(store, { openFiles: [] })
   await Promise.resolve()
   expect(scrollTopCache.size).toBe(0)
 })
@@ -436,11 +439,11 @@ it('sweeps never-mounted close-all and same-ID mode replacements without Monaco'
 it('spares a check ID reopened before the pending flush', async () => {
   const { store, attach } = createModelLifetimeFixture(false)
   const file = modelLifetimeFile('reopened', 'check-details')
-  store.setState({ openFiles: [file] })
+  setSessionTestState(store, { openFiles: [file] })
   attach()
   seed(file.id)
-  store.setState({ openFiles: [] })
-  store.setState({ openFiles: [file] })
+  setSessionTestState(store, { openFiles: [] })
+  setSessionTestState(store, { openFiles: [file] })
   await Promise.resolve()
   expect(scrollTopCache.size).toBe(5)
 })

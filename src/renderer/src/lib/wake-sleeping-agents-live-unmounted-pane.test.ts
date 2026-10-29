@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -115,12 +116,12 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  useAppStore.setState(initialAppStoreState, true)
+  setSessionTestState(useAppStore, initialAppStoreState, true)
 })
 
 describe('background wake of a pane whose PTY the host still holds', () => {
   it('does not resume a second writer onto the live conversation', async () => {
-    useAppStore.setState(unmountedLivePaneState())
+    setSessionTestState(useAppStore, unmountedLivePaneState())
     listedSessions = [
       {
         id: LIVE_PTY_ID,
@@ -138,7 +139,7 @@ describe('background wake of a pane whose PTY the host still holds', () => {
   })
 
   it('declines the resume and keeps the record when the host inventory cannot be read', async () => {
-    useAppStore.setState(unmountedLivePaneState())
+    setSessionTestState(useAppStore, unmountedLivePaneState())
     listSessions.mockRejectedValue(new Error('daemon unreachable'))
 
     expect(await wakeAndSettle()).toBe('blocked')
@@ -148,7 +149,7 @@ describe('background wake of a pane whose PTY the host still holds', () => {
   })
 
   it('still resumes once the host inventory shows the PTY exited', async () => {
-    useAppStore.setState(unmountedLivePaneState())
+    setSessionTestState(useAppStore, unmountedLivePaneState())
 
     expect(await wakeAndSettle()).toBe('resumed')
 
@@ -158,7 +159,7 @@ describe('background wake of a pane whose PTY the host still holds', () => {
   // #21235: the host re-keyed the live PTY onto a new tab, so the record's pane has no layout.
   it('does not resume an agent whose PTY the host moved to another tab', async () => {
     const state = unmountedLivePaneState()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       ...state,
       tabsByWorktree: {
         [WT]: [{ ...state.tabsByWorktree![WT]![0]!, id: 'tab-rekeyed', ptyId: LIVE_PTY_ID }]
@@ -184,7 +185,7 @@ describe('background wake of a pane whose PTY the host still holds', () => {
   })
 
   it('still resumes a dead agent next to a shell spawned for another pane', async () => {
-    useAppStore.setState({ ...unmountedLivePaneState(), terminalLayoutsByTabId: {} })
+    setSessionTestState(useAppStore, { ...unmountedLivePaneState(), terminalLayoutsByTabId: {} })
     listedSessions = [
       {
         id: `${WT}@@sibling-shell`,

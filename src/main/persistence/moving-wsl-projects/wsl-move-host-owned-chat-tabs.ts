@@ -25,23 +25,50 @@ export function hostOwnedChatTabRows(
   next: WorkspaceSessionState,
   workspaceId: string
 ): HostOwnedChatTabRows | null {
-  const priorTabs = frozen.unifiedTabs?.[workspaceId] ?? []
-  const nextChats = (next.unifiedTabs?.[workspaceId] ?? []).filter(isChatTab)
+  const rows = hostOwnedChatOwnerRows(
+    {
+      tabs: frozen.unifiedTabs?.[workspaceId],
+      groups: frozen.tabGroups?.[workspaceId]
+    },
+    {
+      tabs: next.unifiedTabs?.[workspaceId],
+      groups: next.tabGroups?.[workspaceId],
+      layout: next.tabGroupLayouts?.[workspaceId]
+    }
+  )
+  return (
+    rows && {
+      unifiedTabs: { [workspaceId]: rows.tabs },
+      tabGroups: { [workspaceId]: rows.groups },
+      ...(rows.layout ? { tabGroupLayouts: { [workspaceId]: rows.layout } } : {})
+    }
+  )
+}
+
+type ChatOwnerRows = {
+  tabs?: readonly Tab[]
+  groups?: readonly TabGroup[]
+  layout?: NonNullable<WorkspaceSessionState['tabGroupLayouts']>[string]
+}
+
+export function hostOwnedChatOwnerRows(frozen: ChatOwnerRows, next: ChatOwnerRows) {
+  const priorTabs = frozen.tabs ?? []
+  const nextChats = (next.tabs ?? []).filter(isChatTab)
   const priorChatIds = new Set(priorTabs.filter(isChatTab).map((tab) => tab.id))
   const nextChatIds = new Set(nextChats.map((tab) => tab.id))
   if (priorChatIds.size === 0 && nextChatIds.size === 0) {
     return null
   }
-  const priorGroups = frozen.tabGroups?.[workspaceId] ?? []
-  // Why reuse prior groups: the frozen layout names them, so a new group would never render.
+  const priorGroups = frozen.groups ?? []
+  // Frozen layouts name prior groups, so new chats must join those groups.
   const groups =
     priorGroups.length > 0
-      ? placeChatsInPriorGroups(priorGroups, next.tabGroups?.[workspaceId] ?? [], {
+      ? placeChatsInPriorGroups(priorGroups, next.groups ?? [], {
           priorChatIds,
           nextChatIds,
           nextChats
         })
-      : (next.tabGroups?.[workspaceId] ?? []).map((group) => ({
+      : (next.groups ?? []).map((group) => ({
           ...group,
           tabOrder: group.tabOrder.filter((id) => nextChatIds.has(id))
         }))
@@ -55,12 +82,7 @@ export function hostOwnedChatTabRows(
       return groupId === tab.groupId ? tab : { ...tab, groupId }
     })
   ]
-  const nextLayout = priorGroups.length === 0 ? next.tabGroupLayouts?.[workspaceId] : undefined
-  return {
-    unifiedTabs: { [workspaceId]: tabs },
-    tabGroups: { [workspaceId]: groups },
-    ...(nextLayout ? { tabGroupLayouts: { [workspaceId]: nextLayout } } : {})
-  }
+  return { tabs, groups, layout: priorGroups.length === 0 ? next.layout : undefined }
 }
 
 type ChatPlacement = {

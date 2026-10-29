@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { vi, type Mock } from 'vitest'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
@@ -78,7 +79,7 @@ export function installEligibleState(
 ): HibernationShutdownStub {
   const e = entry()
   const runtimeOwnerEnvironmentId = overrides.settings?.activeRuntimeEnvironmentId ?? undefined
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     settings: {
       experimentalAgentHibernation: true,
       agentHibernationIdleMs: DEFAULT_AGENT_HIBERNATION_IDLE_MS

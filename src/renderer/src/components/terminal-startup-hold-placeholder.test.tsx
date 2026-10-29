@@ -1,3 +1,5 @@
+import { withSessionSourceWrites } from '@/store/session-source-write-boundary'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -12,16 +14,18 @@ vi.mock('../store', async () => {
   const groupsByWorktree: Record<string, TabGroup[]> = {}
   const tabsByWorktree: Record<string, TerminalTab[]> = {}
   const unifiedTabsByWorktree: Record<string, Tab[]> = {}
-  const useAppStore = create(() => ({
-    activeGroupIdByWorktree,
-    groupsByWorktree,
-    tabsByWorktree,
-    unifiedTabsByWorktree,
-    consumeSuppressedPtyExit: () => false,
-    focusGroup: () => {},
-    reconcileWorktreeTabModel: () => ({ renderableTabCount: 1 }),
-    setActiveWorktree: () => {}
-  }))
+  const useAppStore = create(
+    withSessionSourceWrites(() => ({
+      activeGroupIdByWorktree,
+      groupsByWorktree,
+      tabsByWorktree,
+      unifiedTabsByWorktree,
+      consumeSuppressedPtyExit: () => false,
+      focusGroup: () => {},
+      reconcileWorktreeTabModel: () => ({ renderableTabCount: 1 }),
+      setActiveWorktree: () => {}
+    }))
+  )
   return { useAppStore }
 })
 vi.mock('./native-chat/use-native-chat-toggle-shortcut', () => ({
@@ -90,7 +94,7 @@ function setTabs(tabIds: string[], activeTabId: string): void {
     activeTabId: `unified-${activeTabId}`,
     tabOrder: tabIds.map((tabId) => `unified-${tabId}`)
   }
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     activeGroupIdByWorktree: { [WORKTREE_ID]: GROUP_ID },
     groupsByWorktree: { [WORKTREE_ID]: [group] },
     tabsByWorktree: { [WORKTREE_ID]: tabIds.map(terminalTab) },

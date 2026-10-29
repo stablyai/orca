@@ -1,4 +1,5 @@
 import type { StoreApi } from 'zustand'
+import type { SessionSourceSet } from '../session-source-edits'
 import type { AppState } from '../types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
@@ -28,7 +29,7 @@ export type LocalAgentInventoryLifecycle = {
 }
 
 export function refreshLocalAgentInventory(
-  set: StoreApi<AppState>['setState'],
+  set: SessionSourceSet<AppState>,
   get: StoreApi<AppState>['getState'],
   lifecycle: LocalAgentInventoryLifecycle,
   worktreeId?: string | null,

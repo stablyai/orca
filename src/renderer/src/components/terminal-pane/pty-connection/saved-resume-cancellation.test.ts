@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
 import type {
@@ -328,7 +329,7 @@ it.each([10, 100])('counts real saved-startup cancellation map work at %i entrie
         }
       })
     )
-    store.setState({
+    setSessionTestState(store, {
       pendingStartupByTabId: counted(population('tab', startup)),
       automaticAgentResumeClaimsByTabId: counted(population('tab', claim)),
       agentLaunchConfigByPaneKey: counted(population('tab:leaf', registration)),

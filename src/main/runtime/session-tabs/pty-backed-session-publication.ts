@@ -19,7 +19,7 @@ import {
 } from '../mobile-session-tab-merge'
 
 export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding {
-  protected abstract markPaneLiveTitlesDirty(): void
+  protected abstract markPaneLiveTitlesDirty(ptyId?: string, paneKey?: string): void
   protected abstract getPtyManualTitle(
     ...args: Parameters<PtyTerminalSummaryMethods['getPtyManualTitle']>
   ): ReturnType<PtyTerminalSummaryMethods['getPtyManualTitle']>
@@ -185,7 +185,7 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
     options: { immediate?: boolean } = {}
   ): void {
     // All visible title/foreground/bind updates pass here; apply phone pane-title rules consistently.
-    this.markPaneLiveTitlesDirty()
+    this.markPaneLiveTitlesDirty(ptyId)
     for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
       const hasPtyBackedTab = snapshot.tabs.some(
         (tab) =>

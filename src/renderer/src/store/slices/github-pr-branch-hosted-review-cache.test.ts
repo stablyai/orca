@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { prChecksCacheSuffix } from '../github/cache-identity'
 import {
@@ -38,7 +39,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const cacheKey = `${repoId}::${branch}`
     const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This hostedReviewCache fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       hostedReviewCache: {
         [hostedReviewCacheKey]: {
           data: {
@@ -107,7 +109,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       mergeable: 'MERGEABLE'
     }
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This hostedReviewCache fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       hostedReviewCache: {
         [hostedReviewCacheKey]: {
           data: newerReview,
@@ -155,7 +158,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     }
     const stalePR = makePR({ number: 12, title: 'Stale PR status' })
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This prCache, hostedReviewCache fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       prCache: {
         [cacheKey]: {
           data: stalePR,
@@ -200,7 +204,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const worktreeId = 'wt-unlinked-event-pr'
     const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This worktreesByRepo, hostedReviewCache, prCache fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       worktreesByRepo: {
         [repoId]: [
           {
@@ -257,7 +262,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     }
 
     try {
-      store.setState({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This hostedReviewCache fixture intentionally supplies only the state members exercised by this scenario.
+      setSessionTestState(store, {
         hostedReviewCache: {
           [hostedReviewCacheKey]: {
             data: existingReview,
@@ -306,7 +312,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const cacheKey = `${repoId}::${branch}`
     const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This hostedReviewCache fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       hostedReviewCache: {
         [hostedReviewCacheKey]: {
           data: {
@@ -384,7 +391,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       mergeable: 'UNKNOWN'
     }
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This hostedReviewCache fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       hostedReviewCache: {
         [hostedReviewCacheKey]: {
           data: gitlabReview,
@@ -429,7 +437,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       'head-oid'
     )}`
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This settings, checksCache fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       settings,
       checksCache: {
         [localChecksCacheKey]: {
@@ -496,7 +505,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const cacheKey = `${repoId}::${branch}`
     const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This hostedReviewCache fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       hostedReviewCache: {
         [hostedReviewCacheKey]: {
           data: null,
@@ -527,7 +537,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const cacheKey = `${repoId}::${branch}`
     const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This hostedReviewCache fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       hostedReviewCache: {
         [hostedReviewCacheKey]: {
           data: null,
@@ -570,7 +581,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       mergeable: 'MERGEABLE'
     }
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This hostedReviewCache fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       hostedReviewCache: {
         [hostedReviewCacheKey]: {
           data: null,
@@ -659,7 +671,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const cacheKey = `${repoId}::${branch}`
     const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This hostedReviewCache fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       hostedReviewCache: {
         [hostedReviewCacheKey]: {
           data: {
@@ -709,7 +722,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       mergeable: 'MERGEABLE' as const
     }
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This hostedReviewCache fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       hostedReviewCache: {
         [hostedReviewCacheKey]: {
           data: gitlabReview,

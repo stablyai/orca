@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import { resolveAutoAckTabTargets } from './agent-auto-ack-targets'
@@ -29,7 +30,7 @@ function seedMixedWorkspace(seed: {
   unreadSubjectKeys: readonly string[]
 }): { store: TestStore } {
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     activeView: 'terminal',
     activeWorktreeId: WORKSPACE,
     activeTabId: TERMINAL_TAB,

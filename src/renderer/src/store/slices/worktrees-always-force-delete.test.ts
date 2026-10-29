@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
@@ -33,7 +34,7 @@ describe.each(['local', 'runtime:env-1'] as const)('consent on %s', (hostId) => 
     const candidate = makeCandidate({ executionHostId: hostId })
     candidate.blockers = approved ? ['live-agent'] : []
     const wt = makeWorktree({ id: candidate.worktreeId, repoId: candidate.repoId, hostId })
-    store.setState({ worktreesByRepo: { [wt.repoId]: [wt] } })
+    setSessionTestState(store, { worktreesByRepo: { [wt.repoId]: [wt] } })
     const gate = deferred<unknown>()
     const local = hostId === 'local'
     if (!local) {
@@ -64,7 +65,7 @@ it.each([undefined, false, true])(
   async (enabled) => {
     const store = createTestStore()
     const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1' })
-    store.setState({
+    setSessionTestState(store, {
       settings: { ...getDefaultSettings('/home/test'), alwaysForceDeleteWorktrees: enabled },
       worktreesByRepo: { [wt.repoId]: [wt] }
     })
@@ -91,7 +92,7 @@ it('applies the preference through the existing remote removal flags', async () 
     hostId: 'runtime:env-1',
     runtimeOwnerEnvironmentId: 'env-1'
   })
-  store.setState({
+  setSessionTestState(store, {
     settings: {
       ...getDefaultSettings('/home/test'),
       activeRuntimeEnvironmentId: 'different-focused-hub',
@@ -122,7 +123,7 @@ it('still reports a failed forced removal instead of treating the workspace as d
   mockApi.worktrees.remove.mockRejectedValue(new Error('Workspace is locked'))
   const store = createTestStore()
   const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1' })
-  store.setState({
+  setSessionTestState(store, {
     settings: { ...getDefaultSettings('/home/test'), alwaysForceDeleteWorktrees: true },
     worktreesByRepo: { [wt.repoId]: [wt] }
   })
@@ -136,7 +137,7 @@ it('still reports a failed forced removal instead of treating the workspace as d
 it('keeps forgetting a disconnected workspace metadata-only when the preference is enabled', async () => {
   const store = createTestStore()
   const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', hostId: 'ssh:offline' })
-  store.setState({
+  setSessionTestState(store, {
     settings: { ...getDefaultSettings('/home/test'), alwaysForceDeleteWorktrees: true },
     worktreesByRepo: { [wt.repoId]: [wt] }
   })
@@ -156,7 +157,7 @@ it('keeps forgetting a disconnected workspace metadata-only when the preference 
 it('deletes a preserved branch with its saved head when the branch preference is enabled', async () => {
   const store = createTestStore()
   const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1' })
-  store.setState({
+  setSessionTestState(store, {
     settings: {
       ...getDefaultSettings('/home/test'),
       alwaysForceDeletePreservedBranches: true
@@ -181,7 +182,7 @@ it('deletes a preserved branch with its saved head when the branch preference is
 it('keeps a recoverable branch when automatic deletion fails', async () => {
   const store = createTestStore()
   const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1' })
-  store.setState({
+  setSessionTestState(store, {
     settings: {
       ...getDefaultSettings('/home/test'),
       alwaysForceDeletePreservedBranches: true
@@ -207,7 +208,7 @@ it('routes automatic branch deletion through the owner runtime', async () => {
     hostId: 'runtime:env-1',
     runtimeOwnerEnvironmentId: 'env-1'
   })
-  store.setState({
+  setSessionTestState(store, {
     settings: {
       ...getDefaultSettings('/home/test'),
       alwaysForceDeletePreservedBranches: true

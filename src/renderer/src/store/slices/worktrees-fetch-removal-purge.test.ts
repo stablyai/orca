@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import {
@@ -56,7 +57,8 @@ describe('fetchWorktrees', () => {
     })
 
     worktreeListMock.mockResolvedValue([surviving])
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This worktreesByRepo, sortEpoch, rightSidebarTabByWorktree fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       worktreesByRepo: { repo1: [removed, surviving] },
       sortEpoch: 7,
       rightSidebarTabByWorktree: {
@@ -79,7 +81,7 @@ describe('fetchWorktrees', () => {
       stateHistory: [],
       terminalResumeEligible: false as const
     }
-    store.setState({
+    setSessionTestState(store, {
       tabsByWorktree: {
         [removed.id]: [
           {
@@ -124,7 +126,8 @@ describe('fetchWorktrees', () => {
     })
 
     worktreeListMock.mockResolvedValue([surviving])
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This worktreesByRepo, sortEpoch, rightSidebarTabByWorktree fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       worktreesByRepo: { repo1: [removed, surviving] },
       sortEpoch: 7,
       rightSidebarTabByWorktree: {
@@ -143,7 +146,8 @@ describe('fetchWorktrees', () => {
     expect(store.getState().rightSidebarTabByWorktree).toEqual({ [surviving.id]: 'pr-checks' })
 
     // A shape-valid plugin panel tab also survives the purge.
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This rightSidebarTabByWorktree fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       rightSidebarTabByWorktree: {
         [surviving.id]: 'plugin:orca-samples.my-plugin/dashboard' as never
       }
@@ -168,7 +172,10 @@ describe('fetchWorktrees', () => {
     })
 
     worktreeListMock.mockResolvedValue([surviving])
-    store.setState({ worktreesByRepo: { repo1: [removed, surviving] } } as Partial<AppState>)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This worktreesByRepo fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
+      worktreesByRepo: { repo1: [removed, surviving] }
+    } as Partial<AppState>)
     await store.getState().updateWorktreeMeta(removed.id, { linkedBitbucketPR: 101 })
     await store.getState().updateWorktreeMeta(surviving.id, { linkedAzureDevOpsPR: 202 })
 
@@ -203,7 +210,8 @@ describe('fetchWorktrees', () => {
     mockApi.worktrees.listDetected
       .mockResolvedValueOnce(previousDetected)
       .mockResolvedValueOnce(makeDetectedResult('repo1', [visible]))
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This worktreesByRepo, detectedWorktreesByRepo, sortEpoch fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       worktreesByRepo: { repo1: [visible] },
       detectedWorktreesByRepo: { repo1: previousDetected },
       sortEpoch: 7,
@@ -262,7 +270,8 @@ describe('fetchWorktrees', () => {
     mockApi.worktrees.listDetected.mockImplementationOnce(async (args) =>
       qualifyDetectedResult(args, makeDetectedResult('repo1', [surviving]))
     )
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This repos, worktreesByRepo, detectedWorktreesByRepo fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       repos: [
         {
           id: 'repo1',
@@ -321,7 +330,8 @@ describe('fetchWorktrees', () => {
       .mockResolvedValueOnce(hiddenDetected)
       .mockResolvedValueOnce(makeDetectedResult('repo1', [visible]))
       .mockResolvedValueOnce(recreatedDetected)
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This repos, hasHydratedWorktreePurge, worktreesByRepo fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -346,7 +356,8 @@ describe('fetchWorktrees', () => {
     mockApi.worktrees.listDetected.mockImplementationOnce(async (args) =>
       qualifyDetectedResult(args, makeDetectedResult(args.repoId, []))
     )
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This repos, hasHydratedWorktreePurge fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       repos: [
         {
           id: 'local-repo',
@@ -393,7 +404,8 @@ describe('fetchWorktrees', () => {
     mockApi.worktrees.listDetected.mockImplementationOnce(async (args) =>
       qualifyDetectedResult(args, makeDetectedResult('repo1', [surviving]))
     )
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This worktreesByRepo, detectedWorktreesByRepo, tabsByWorktree fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       worktreesByRepo: { repo1: [] },
       detectedWorktreesByRepo: {
         repo1: makeDetectedResult('repo1', [], {
@@ -447,7 +459,8 @@ describe('fetchWorktrees', () => {
         source: 'metadata-fallback'
       })
     )
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This worktreesByRepo, sortEpoch, rightSidebarTabByWorktree fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       worktreesByRepo: { repo1: [missingFromFallback, fallback] },
       sortEpoch: 7,
       rightSidebarTabByWorktree: {
@@ -484,7 +497,8 @@ describe('fetchWorktrees', () => {
         source: 'metadata-fallback'
       })
     )
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This worktreesByRepo, sortEpoch, rightSidebarTabByWorktree fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       worktreesByRepo: { repo1: [existing] },
       sortEpoch: 7,
       rightSidebarTabByWorktree: { [existing.id]: 'search' as never }
@@ -502,7 +516,8 @@ describe('fetchWorktrees', () => {
     const store = createTestStore()
 
     worktreeListMock.mockResolvedValue([])
-    store.setState({ worktreesByRepo: {}, sortEpoch: 7 } as Partial<AppState>)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This worktreesByRepo, sortEpoch fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, { worktreesByRepo: {}, sortEpoch: 7 } as Partial<AppState>)
 
     await store.getState().fetchWorktrees('repo1')
 

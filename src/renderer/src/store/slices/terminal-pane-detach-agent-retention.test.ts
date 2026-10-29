@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { collectRetainedAgentsOnDisappear } from '@/components/dashboard/useRetainedAgents'
@@ -212,7 +213,7 @@ describe('detach completed split pane → sidebar retention', () => {
     const store = createDetachStore()
     const EXTRA_TAB = 'tab-extra'
     const extraPaneKey = makePaneKey(EXTRA_TAB, LEAF)
-    store.setState({
+    setSessionTestState(store, {
       tabsByWorktree: {
         [WORKTREE_ID]: [
           ...(store.getState().tabsByWorktree[WORKTREE_ID] ?? []),

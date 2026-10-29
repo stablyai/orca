@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../../types'
 import type {
   Tab,
@@ -191,6 +191,6 @@ export type TabsSlice = {
   ) => void
 }
 
-type TabsStateCreator = StateCreator<AppState, [], [], TabsSlice>
+type TabsStateCreator = SessionStateCreator<AppState, TabsSlice>
 export type TabsSliceSet = Parameters<TabsStateCreator>[0]
 export type TabsSliceGet = Parameters<TabsStateCreator>[1]

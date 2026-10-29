@@ -3,6 +3,7 @@ import { TEST_LEAF_1, TEST_LEAF_2 } from '../persistence-session-fixtures'
 import { collectLayoutLeafIdsInOrder } from '../restoring-sessions/terminal-layout-normalization'
 import { ProfileStateWriterError } from '../profile-state/profile-state-writer-errors'
 import { fixture } from './profile-state-delayed-authority-fixture'
+import { editPublishedFixture } from './session-publication-test-fixture'
 
 export function registerPtyBindingCreatedSurfaceRollbackTests(): void {
   it.each(['tab title', 'pane title', 'new sibling'] as const)(
@@ -20,33 +21,35 @@ export function registerPtyBindingCreatedSurfaceRollbackTests(): void {
       const gate = authority.pause()
       const rejected = expect(store.persistPtyBinding(binding)).rejects.toThrow('disk refused')
       await gate.started.promise
-      const session = store.getWorkspaceSession()
-      const tab = session.tabsByWorktree[binding.worktreeId].find(
-        (candidate) => candidate.id === binding.tabId
-      )
-      if (!tab) {
-        throw new Error('binding did not create its terminal row')
-      }
-      const layout = session.terminalLayoutsByTabId[binding.tabId]
-      if (edit === 'tab title') {
-        tab.customTitle = 'new title'
-      } else if (edit === 'pane title') {
-        layout.titlesByLeafId = { [binding.leafId]: 'new title' }
-      } else {
-        layout.root = {
-          type: 'split',
-          direction: 'horizontal',
-          first: { type: 'leaf', leafId: binding.leafId },
-          second: { type: 'leaf', leafId: TEST_LEAF_2 }
+      let expectedRoot
+      editPublishedFixture(store, (session) => {
+        const tab = session.tabsByWorktree[binding.worktreeId].find(
+          (candidate) => candidate.id === binding.tabId
+        )
+        if (!tab) {
+          throw new Error('binding did not create its terminal row')
         }
-        layout.ptyIdsByLeafId = { ...layout.ptyIdsByLeafId, [TEST_LEAF_2]: 'sibling-pty' }
-        session.terminalPtyIncarnationsByPaneKey = {
-          ...session.terminalPtyIncarnationsByPaneKey,
-          [`${binding.tabId}:${TEST_LEAF_2}`]: 'sibling-incarnation'
+        const layout = session.terminalLayoutsByTabId[binding.tabId]
+        if (edit === 'tab title') {
+          tab.customTitle = 'new title'
+        } else if (edit === 'pane title') {
+          layout.titlesByLeafId = { [binding.leafId]: 'new title' }
+        } else {
+          layout.root = {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: binding.leafId },
+            second: { type: 'leaf', leafId: TEST_LEAF_2 }
+          }
+          layout.ptyIdsByLeafId = { ...layout.ptyIdsByLeafId, [TEST_LEAF_2]: 'sibling-pty' }
+          session.terminalPtyIncarnationsByPaneKey = {
+            ...session.terminalPtyIncarnationsByPaneKey,
+            [`${binding.tabId}:${TEST_LEAF_2}`]: 'sibling-incarnation'
+          }
+          tab.ptyId = 'sibling-pty'
         }
-        tab.ptyId = 'sibling-pty'
-      }
-      const expectedRoot = structuredClone(layout.root)
+        expectedRoot = structuredClone(layout.root)
+      })
       gate.finish.reject(
         new ProfileStateWriterError('test-disk-failure', 'disk refused', 'known-failure')
       )
@@ -100,19 +103,22 @@ export function registerPtyBindingCreatedSurfaceRollbackTests(): void {
       })
     ).rejects.toThrow('disk refused')
     await gate.started.promise
-    const layout = store.getWorkspaceSession().terminalLayoutsByTabId[binding.tabId]
-    if (!layout.root) {
-      throw new Error('binding did not create its layout')
-    }
     const laterLeaf = '33333333-3333-4333-8333-333333333333'
-    layout.root = {
-      type: 'split',
-      direction: 'horizontal',
-      first: layout.root,
-      second: { type: 'leaf', leafId: laterLeaf }
-    }
-    layout.ptyIdsByLeafId = { ...layout.ptyIdsByLeafId, [laterLeaf]: 'later-sibling-pty' }
-    const expectedRoot = structuredClone(layout.root)
+    let expectedRoot
+    editPublishedFixture(store, (session) => {
+      const layout = session.terminalLayoutsByTabId[binding.tabId]
+      if (!layout.root) {
+        throw new Error('binding did not create its layout')
+      }
+      layout.root = {
+        type: 'split',
+        direction: 'horizontal',
+        first: layout.root,
+        second: { type: 'leaf', leafId: laterLeaf }
+      }
+      layout.ptyIdsByLeafId = { ...layout.ptyIdsByLeafId, [laterLeaf]: 'later-sibling-pty' }
+      expectedRoot = structuredClone(layout.root)
+    })
     gate.finish.reject(
       new ProfileStateWriterError('test-disk-failure', 'disk refused', 'known-failure')
     )

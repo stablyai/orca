@@ -1,5 +1,7 @@
+import { withSessionSourceTestWrites } from '@/lib/test-support/session-source-test-store'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createStore, type StoreApi } from 'zustand/vanilla'
+import { createStore } from 'zustand/vanilla'
 import { createEditorSlice } from '@/store/slices/editor'
 import type { AppState } from '@/store'
 import {
@@ -44,27 +46,33 @@ type WindowStub = {
   }
 }
 
-function createEditorStore(): StoreApi<AppState> {
+function createEditorStore() {
   // oxlint-disable-next-line typescript/no-explicit-any, typescript/consistent-type-assertions -- SAFETY: a partial store; tests read only the slices it builds.
-  return createStore<any>()((...args: any[]) => ({
-    ...emptyTabLayoutState(),
-    activeWorktreeId: 'wt-1',
-    settings: {
-      editorAutoSave: true,
-      editorAutoSaveDelayMs: 1000
-    },
-    repos: [],
-    worktreesByRepo: {
-      'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }]
-    },
-    detectedWorktreesByRepo: {},
-    runtimeEnvironments: [],
-    runtimeEnvironmentCatalogHydrated: true,
-    removedRuntimeEnvironmentIds: new Set(),
-    sshConnectionStates: new Map(),
-    sshStateByEnvironment: new Map(),
-    ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
-  })) as unknown as StoreApi<AppState>
+  return createStore<AppState>()(
+    withSessionSourceTestWrites(
+      (...args) =>
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial store; tests read only the slices it builds.
+        ({
+          ...emptyTabLayoutState(),
+          activeWorktreeId: 'wt-1',
+          settings: {
+            editorAutoSave: true,
+            editorAutoSaveDelayMs: 1000
+          },
+          repos: [],
+          worktreesByRepo: {
+            'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }]
+          },
+          detectedWorktreesByRepo: {},
+          runtimeEnvironments: [],
+          runtimeEnvironmentCatalogHydrated: true,
+          removedRuntimeEnvironmentIds: new Set(),
+          sshConnectionStates: new Map(),
+          sshStateByEnvironment: new Map(),
+          ...createEditorSlice(...args)
+        }) as unknown as AppState
+    )
+  )
 }
 
 async function requestDirtyFileSave(): Promise<void> {
@@ -219,7 +227,7 @@ describe('attachEditorAutosaveController', () => {
 
     const store = createEditorStore()
     const workspaceKey = folderWorkspaceKey('folder-workspace-1')
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {},
       folderWorkspaces: [
         makeFolderWorkspace({
@@ -318,7 +326,7 @@ describe('attachEditorAutosaveController', () => {
     const store = createEditorStore()
     const workspaceId = 'folder-workspace-runtime'
     const workspaceKey = folderWorkspaceKey(workspaceId)
-    store.setState({
+    setSessionTestState(store, {
       settings: {
         editorAutoSave: true,
         editorAutoSaveDelayMs: 1000,
@@ -404,7 +412,7 @@ describe('attachEditorAutosaveController', () => {
     } satisfies WindowStub)
 
     const store = createEditorStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: {
         editorAutoSave: true,
         editorAutoSaveDelayMs: 1000,
@@ -604,7 +612,7 @@ describe('attachEditorAutosaveController', () => {
     } satisfies WindowStub)
 
     const store = createEditorStore()
-    store.setState(makeSessionReadyState())
+    setSessionTestState(store, makeSessionReadyState())
     store.getState().openFile({
       filePath: '/repo/file.md',
       relativePath: 'file.md',
@@ -645,7 +653,7 @@ describe('attachEditorAutosaveController', () => {
     } satisfies WindowStub)
 
     const store = createEditorStore()
-    store.setState(makeSessionReadyState())
+    setSessionTestState(store, makeSessionReadyState())
     store.getState().openFile({
       filePath: '/repo/file.md',
       relativePath: 'file.md',
@@ -709,7 +717,8 @@ describe('attachEditorAutosaveController', () => {
       expect(openFileScans).toBe(1)
       openFileScans = 0
 
-      store.setState({ activeWorktreeId: 'wt-2' } as Partial<AppState>)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This activeWorktreeId fixture intentionally supplies only the state members exercised by this scenario.
+      setSessionTestState(store, { activeWorktreeId: 'wt-2' } as Partial<AppState>)
       expect(openFileScans).toBe(0)
 
       store.getState().setEditorDraft('/repo/file.ts', 'edited')

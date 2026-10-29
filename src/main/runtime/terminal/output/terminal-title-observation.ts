@@ -48,7 +48,7 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
   ): PtyLaneMailboxTarget | null
   protected abstract clearAgentPromptCorrelationForPty(ptyId: string): void
   protected abstract collectAgentStatusPaneKeysForPty(ptyId: string): Set<string>
-  protected abstract markPaneLiveTitlesDirty(): void
+  protected abstract markPaneLiveTitlesDirty(ptyId?: string, paneKey?: string): void
 
   observeClaudeTerminalEvidence(ptyId: string, evidence: ClaudeTerminalEvidence): void {
     if (!this.onClaudeTerminalEvidence || this.ptysById.get(ptyId)?.connectionId) {
@@ -311,7 +311,7 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       leaf.waitBlockedAt = null
       leaf.tailWaitState = undefined
     }
-    this.markPaneLiveTitlesDirty()
+    this.markPaneLiveTitlesDirty(ptyId)
     this.reconcileAgentStatusForEndedProcessFn?.(this.collectAgentStatusPaneKeysForPty(ptyId))
     this.primeWaitBlockedBaselineFromSeededTail(ptyId)
   }

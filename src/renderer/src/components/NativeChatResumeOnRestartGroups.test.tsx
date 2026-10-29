@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act } from 'react'
@@ -32,7 +33,7 @@ function render(props: React.ComponentProps<typeof Harness>): void {
 
 beforeEach(() => {
   onToggleSpy.mockReset()
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
   container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
@@ -42,7 +43,7 @@ afterEach(() => {
   act(() => root.unmount())
   vi.restoreAllMocks()
   container.remove()
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
 })
 
 const LOCAL_TREE = [
@@ -175,7 +176,7 @@ it('lists every offered chat exactly once, even with one workspace id on two hos
   const remote: ExecutionHostId = 'ssh:build-server'
   const candidates = seedTree()
   const remoteParent = worktree('parent', { hostId: remote, instanceId: 'instance-remote' })
-  useAppStore.setState((state) => ({
+  setSessionTestState(useAppStore, (state) => ({
     worktreesByRepo: { 'repo-1': [...state.worktreesByRepo['repo-1']!, remoteParent] }
   }))
   const twin = candidate('on-remote', remoteParent)
@@ -213,7 +214,7 @@ it('names a git worktree the store does not know by its folder, not its repo-qua
 
 it('disambiguates only colliding unknown folders with linear display work on render', () => {
   const known = worktree('main', { displayName: 'Configured', hostId: 'local' })
-  useAppStore.setState({ worktreesByRepo: { 'repo-1': [known] } })
+  setSessionTestState(useAppStore, { worktreesByRepo: { 'repo-1': [known] } })
   const controls = [
     candidate('known', known),
     candidate('unique', worktree('blobfish-2')),
@@ -282,7 +283,7 @@ it('disambiguates only colliding unknown folders with linear display work on ren
   expect(onToggleSpy).toHaveBeenCalledExactlyOnceWith('lost-1', false)
   render({ candidates: unknown.slice(0, 2) })
   const hydrated = { ...known, id: unknown[0]!.workspaceId, displayName: 'Resolved' }
-  act(() => useAppStore.setState({ worktreesByRepo: { 'repo-1': [known, hydrated] } }))
+  act(() => setSessionTestState(useAppStore, { worktreesByRepo: { 'repo-1': [known, hydrated] } }))
   expect(nodeBox('Resolved')).not.toBeNull()
   expect(itemOf(nodeBox('main')).querySelector('[title]')).toBeNull()
   expect(container.querySelector('[aria-label^="Select all chats in main ("]')).toBeNull()
@@ -326,7 +327,7 @@ it.each([
 it('lists every chat when workspace lineage loops', () => {
   const a = worktree('a')
   const b = worktree('b')
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     settings: getDefaultSettings(''),
     worktreesByRepo: { 'repo-1': [a, b] },
     worktreeLineageById: { [a.id]: lineage(a, b), [b.id]: lineage(b, a) }

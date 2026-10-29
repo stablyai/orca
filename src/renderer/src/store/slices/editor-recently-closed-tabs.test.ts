@@ -1,4 +1,5 @@
-import type { StoreApi } from 'zustand/vanilla'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
+import type { SessionTestStore } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import {
   createEditorStore,
@@ -54,7 +55,7 @@ function withCountedEntityIdReads(tabs: readonly Tab[], onRead: () => void): Tab
 
 describe('createEditorSlice recently closed editor tabs', () => {
   function openMirroredEditor(
-    store: StoreApi<AppState>,
+    store: SessionTestStore<AppState>,
     filePath: string,
     preview = false
   ): string {
@@ -225,7 +226,8 @@ describe('createEditorSlice recently closed editor tabs', () => {
       // A layout-owner build draws the tabs from main's frames.
       await main.settle()
       let reads = 0
-      store.setState({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This unifiedTabsByWorktree fixture intentionally supplies only the state members exercised by this scenario.
+      setSessionTestState(store, {
         unifiedTabsByWorktree: {
           'wt-1': withCountedEntityIdReads(
             store.getState().unifiedTabsByWorktree['wt-1'] ?? [],
@@ -258,7 +260,8 @@ describe('createEditorSlice recently closed editor tabs', () => {
 
   it('reactivates the live tab when a stale reopen id targets an already-open file', async () => {
     const store = createEditorTabsStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This worktreesByRepo fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       worktreesByRepo: {
         'repo-1': [
           { id: 'wt-1', repoId: 'repo-1', path: '/repo' },

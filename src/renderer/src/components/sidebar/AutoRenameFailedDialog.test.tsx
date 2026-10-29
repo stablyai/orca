@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act, useState } from 'react'
@@ -143,7 +144,7 @@ describe('AutoRenameFailedDialog dismissal', () => {
       })
       const save = Promise.withResolvers<void>()
       updateMeta.mockReturnValue(save.promise)
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         updateWorktreeMeta: realUpdateWorktreeMeta,
         worktreesByRepo: { repo1: [worktree] },
         fetchWorktrees: vi.fn().mockResolvedValue(false)

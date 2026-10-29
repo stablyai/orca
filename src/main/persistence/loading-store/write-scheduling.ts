@@ -34,6 +34,7 @@ type WriteSchedulingOperationsRuntime = Pick<
   | 'ptyBindingGenerations'
   | 'layoutEditorViews'
   | 'state'
+  | 'durableMutationPhase'
 >
 
 const writeSchedulingOperationsContext = Symbol('WriteSchedulingOperations')
@@ -96,7 +97,9 @@ export function scheduleSave(
   writtenHostId?: ExecutionHostId
 ): void {
   const { runtime, writes } = owner[writeSchedulingOperationsContext]
-  notifyWorkspaceSessionWritten(runtime, dirtyDomains, writtenHostId)
+  if (runtime.durableMutationPhase === null) {
+    notifyWorkspaceSessionWritten(runtime, dirtyDomains, writtenHostId, writtenHostId !== undefined)
+  }
   for (const listener of runtime.stateWriteListeners) {
     listener(dirtyDomains)
   }

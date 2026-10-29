@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -49,7 +50,7 @@ function localMoveOwner(worktreeId: string | undefined): EditorMoveOwner {
 
 describe('remapOpenEditorTabsForPathChange', () => {
   beforeEach(async () => {
-    useAppStore.setState(useAppStore.getInitialState(), true)
+    setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
     main = await drawTabsFromMain(useAppStore)
   })
 
@@ -200,7 +201,7 @@ describe('remapOpenEditorTabsForPathChange', () => {
   it('leaves a same-path tab on a different execution host untouched', async () => {
     // Same paths on distinct SSH owners are different files; connA rename must preserve connB drafts/tabs.
     const state = useAppStore.getState()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [
         { id: 'repoA', connectionId: 'connA' },
         { id: 'repoB', connectionId: 'connB' }

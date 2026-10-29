@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
 import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
@@ -47,7 +48,7 @@ describe('editor save queue: closed saving view, record changes', () => {
     const { saved } = await startHeldSave()
     const before = h.recordOf('A')
     // Changing both workspace hosts rekeys the record while retaining its views.
-    h.store.setState({
+    setSessionTestState(h.store, {
       worktreesByRepo: {
         'repo-1': [closedViewWorktree('wt-1', 'ssh:box'), closedViewWorktree('wt-2', 'ssh:box')]
       }
@@ -65,8 +66,8 @@ describe('editor save queue: closed saving view, record changes', () => {
   })
 
   it('a queued save skips a stale-connection view for a current one', async () => {
-    h.store.setState({ openFiles: [] })
-    h.store.setState({
+    setSessionTestState(h.store, { openFiles: [] })
+    setSessionTestState(h.store, {
       openFiles: [
         closedViewTab('A', 'wt-1'),
         { ...closedViewTab('old', 'wt-2'), operationProvenance: STALE_PROVENANCE },
@@ -87,8 +88,8 @@ describe('editor save queue: closed saving view, record changes', () => {
   })
 
   it("moves a detached peer's baseline to the write, keeping its edits", async () => {
-    h.store.setState({ openFiles: [] })
-    h.store.setState({
+    setSessionTestState(h.store, { openFiles: [] })
+    setSessionTestState(h.store, {
       openFiles: [
         { ...closedViewTab('A', 'wt-1'), isDirty: true },
         { ...closedViewTab('B', 'wt-2'), isDirty: true }
@@ -111,7 +112,7 @@ describe('editor save queue: closed saving view, record changes', () => {
     h.type('A', 'edit')
     const { saved } = await startHeldSave()
     // A no-prompt removal closes both views and keeps the dirty record.
-    h.store.setState({
+    setSessionTestState(h.store, {
       openFiles: [],
       editorBufferKeepRequest: { viewIds: new Set(['A', 'B']), notice: 1 }
     })
@@ -123,8 +124,8 @@ describe('editor save queue: closed saving view, record changes', () => {
   })
 
   it('marks the record clean when only a read-only view is left', async () => {
-    h.store.setState({ openFiles: [] })
-    h.store.setState({
+    setSessionTestState(h.store, { openFiles: [] })
+    setSessionTestState(h.store, {
       openFiles: [closedViewTab('A', 'wt-1'), { ...closedViewTab('log', 'wt-2'), readOnly: true }]
     })
     h.type('A', 'edit')
@@ -139,8 +140,10 @@ describe('editor save queue: closed saving view, record changes', () => {
   })
 
   it('a read-only view still never becomes dirty', () => {
-    h.store.setState({ openFiles: [] })
-    h.store.setState({ openFiles: [{ ...closedViewTab('log', 'wt-1'), readOnly: true }] })
+    setSessionTestState(h.store, { openFiles: [] })
+    setSessionTestState(h.store, {
+      openFiles: [{ ...closedViewTab('log', 'wt-1'), readOnly: true }]
+    })
     h.store.getState().markFileDirty('log', true, { written: true })
     expect(h.view('log').isDirty).toBe(false)
   })

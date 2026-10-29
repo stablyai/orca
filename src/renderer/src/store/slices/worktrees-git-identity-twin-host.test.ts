@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { resetHostedReviewLinkMutationGenerationForTests } from './worktrees'
@@ -33,7 +34,7 @@ function storeWith(...rows: Partial<Worktree>[]) {
   const worktrees = rows.map((row) =>
     makeWorktree({ id, repoId: 'repo1', path: '/srv/ai-tools', ...row })
   )
-  store.setState({ worktreesByRepo: { repo1: worktrees } })
+  setSessionTestState(store, { worktreesByRepo: { repo1: worktrees } })
   return store
 }
 
@@ -172,7 +173,7 @@ describe('a twin review-clear tombstone after the sibling goes away', () => {
     store.getState().updateWorktreeGitIdentity(id, { branch: 'refs/heads/b2' }, 'ssh:box-b')
     await vi.waitFor(() => expect(mockApi.worktrees.updateMeta).toHaveBeenCalledTimes(1))
     const [, remote] = store.getState().worktreesByRepo.repo1
-    store.setState({ worktreesByRepo: { repo1: [remote] } })
+    setSessionTestState(store, { worktreesByRepo: { repo1: [remote] } })
 
     store.getState().updateWorktreeGitIdentity(id, { branch: 'refs/heads/b3' }, 'ssh:box-b')
 
@@ -298,7 +299,7 @@ describe('review-clear tombstones are always keyed by the copy', () => {
 
   it("add the publishing server's provenance to a partially stamped SSH row", () => {
     const store = storeWith({ hostId: 'ssh:x', branch: 'refs/heads/a1', linkedPR: 1 })
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         {
           id: 'repo1',
@@ -328,7 +329,7 @@ describe('review-clear tombstones are always keyed by the copy', () => {
 
   it("follow a runtime row's own host, not its repo's, when provenance is backfilled", () => {
     const store = storeWith({ hostId: 'runtime:env-b', branch: 'refs/heads/a1', linkedPR: 1 })
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         {
           id: 'repo1',
@@ -358,7 +359,7 @@ describe('review-clear tombstones are always keyed by the copy', () => {
 
   it("never give a local copy a paired server's provenance", () => {
     const store = storeWith({ hostId: 'local', branch: 'refs/heads/a1', linkedPR: 1 })
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         {
           id: 'repo1',

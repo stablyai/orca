@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act } from 'react'
@@ -56,7 +57,7 @@ function addRemoteWorkspace(environmentId: string): void {
   const state = useAppStore.getState()
   const repoId = `repo-${environmentId}`
   const path = `/remote/${environmentId}`
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     repos: [
       ...state.repos,
       {
@@ -84,7 +85,7 @@ function addRemoteWorkspace(environmentId: string): void {
 function removeRemoteWorkspaces(environmentIds: string[]): void {
   const repoIds = new Set(environmentIds.map((environmentId) => `repo-${environmentId}`))
   const state = useAppStore.getState()
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     repos: state.repos.filter((repo) => !repoIds.has(repo.id)) as never,
     worktreesByRepo: Object.fromEntries(
       Object.entries(state.worktreesByRepo).filter(([repoId]) => !repoIds.has(repoId))
@@ -94,7 +95,7 @@ function removeRemoteWorkspaces(environmentIds: string[]): void {
 
 function removeAllWorktrees(): void {
   const state = useAppStore.getState()
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     worktreesByRepo: Object.fromEntries(
       Object.keys(state.worktreesByRepo).map((repoId) => [repoId, []])
     ) as never
@@ -137,7 +138,7 @@ async function flushPromises(): Promise<void> {
 }
 
 function seedRemoteWorkspace(environmentId = 'env-1'): void {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     settings: {
       ...getDefaultSettings('/tmp/orca-workspaces'),
       activeRuntimeEnvironmentId: environmentId

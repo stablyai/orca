@@ -9,7 +9,6 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session-st
 import type { DurableProfileStateMutation } from '../loading-store/store-runtime-state'
 import { isWslMoveWorkspaceSessionFrozen } from '../moving-wsl-projects/wsl-move-scope-guard'
 import { findWorktreeIdForTab } from '../restoring-sessions/pane-identity-migration'
-import { writeRestorable } from './restorable-write'
 import {
   moveRecordKey,
   rekeyPaneProfileRecords,
@@ -17,7 +16,7 @@ import {
 } from './terminal-leaf-move'
 import type { TerminalTopologyCommitContext } from './terminal-topology-commit'
 import { keepFrozen } from './layout-command-commit'
-import { assignWorkspaceSessionPartition } from './terminal-topology-membership'
+import { writeRestorableSession } from './terminal-topology-membership'
 
 export type DuplicatePtyPaneTransfer = {
   worktreeId: string
@@ -121,14 +120,15 @@ export function repairDuplicatePtyPanesMutation(
       return { value: 0, persist: false }
     }
     const restores = plans.map(({ hostId, session, transfers }) =>
-      writeRestorable(
-        () => context.getSession(hostId),
-        (value) => context.markDirty(assignWorkspaceSessionPartition(context.state, hostId, value)),
+      writeRestorableSession(
+        context.state,
+        hostId,
         keepFrozen(
           hostId,
           transfers.filter((move) => moved.has(move)).reduce(rekeyPaneSessionRecords, session),
           context
-        )
+        ),
+        context.markDirty
       )
     )
     for (const move of moved) {

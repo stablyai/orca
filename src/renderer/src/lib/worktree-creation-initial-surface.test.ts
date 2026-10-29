@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
@@ -70,7 +71,7 @@ describe('initial surface during worktree creation', () => {
   })
 
   it('shows the creation panel instead of an empty workspace when the row is opened early', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       activeView: 'tasks',
       activePendingCreationId: null,
       worktreesByRepo: { 'repo-1': [makeWorktree({ id: 'wt-1', repoId: 'repo-1' })] },

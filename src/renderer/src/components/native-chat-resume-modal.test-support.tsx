@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act } from 'react'
 import { toast } from 'sonner'
 import { createRoot, type Root } from 'react-dom/client'
@@ -206,7 +207,7 @@ export function createResumeModalFixture(rpc: Mock<RestartRpc>, statusStream: Re
     _resetNativeChatRestartOffer()
     consumeNativeChatResumeOnRestartDialogRequest()
     vi.mocked(toast).mockClear()
-    useAppStore.setState(useAppStore.getInitialState(), true)
+    setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
     useAppStore.setState({
       settings: { ...getDefaultSettings(''), experimentalNativeChat: true },
       updateSettings: async (changes) => {
@@ -223,7 +224,7 @@ export function createResumeModalFixture(rpc: Mock<RestartRpc>, statusStream: Re
   afterEach(() => {
     act(() => root.unmount())
     container.remove()
-    useAppStore.setState(useAppStore.getInitialState(), true)
+    setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
     _resetNativeChatRestartOffer()
     consumeNativeChatResumeOnRestartDialogRequest()
   })

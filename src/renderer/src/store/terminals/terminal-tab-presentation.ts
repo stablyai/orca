@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
@@ -33,7 +34,7 @@ export function createTerminalTabPresentationActions(
         if (result.runtimeGraphChanged) {
           scheduleRuntimeGraphSync()
         }
-        return result.patch ?? state
+        return result.patch ?? undefined
       })
     },
     updateTabTitles: (updates) => {
@@ -45,14 +46,14 @@ export function createTerminalTabPresentationActions(
         if (result.runtimeGraphChanged) {
           scheduleRuntimeGraphSync()
         }
-        return result.patch ?? state
+        return result.patch ?? undefined
       })
     },
     setAiVaultTabTitle: (tabId, aiVaultTitle) => {
       set((s) => {
         const ownerWorktreeId = getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
         if (!ownerWorktreeId) {
-          return s
+          return undefined
         }
         const tabs = s.tabsByWorktree[ownerWorktreeId] ?? []
         const current = tabs.find((tab) => tab.id === tabId)
@@ -61,10 +62,11 @@ export function createTerminalTabPresentationActions(
           current?.aiVaultTitle?.sessionId === aiVaultTitle?.sessionId &&
           current?.aiVaultTitle?.title === aiVaultTitle?.title
         if (!current || sameTitle) {
-          return s
+          return undefined
         }
         const ownerTabs = tabs.map((tab) => (tab.id === tabId ? { ...tab, aiVaultTitle } : tab))
-        const nextTabsByWorktree = { ...s.tabsByWorktree, [ownerWorktreeId]: ownerTabs }
+        const edit = editSessionSource(s).set('tabsByWorktree', ownerWorktreeId, ownerTabs)
+        const nextTabsByWorktree = edit.read('tabsByWorktree')
         const unifiedTabs = s.unifiedTabsByWorktree[ownerWorktreeId] ?? []
         const nextUnifiedTabs = unifiedTabs.map((tab) =>
           tab.contentType === 'terminal' && tab.entityId === tabId ? { ...tab, aiVaultTitle } : tab
@@ -73,13 +75,7 @@ export function createTerminalTabPresentationActions(
           ownerWorktreeId
         ])
         scheduleRuntimeGraphSync()
-        return {
-          tabsByWorktree: nextTabsByWorktree,
-          unifiedTabsByWorktree: {
-            ...s.unifiedTabsByWorktree,
-            [ownerWorktreeId]: nextUnifiedTabs
-          }
-        }
+        return edit.set('unifiedTabsByWorktree', ownerWorktreeId, nextUnifiedTabs).finish()
       })
     },
     setGeneratedTabTitleFromAgentPrompt: (paneKey, prompt, options) => {
@@ -107,7 +103,7 @@ export function createTerminalTabPresentationActions(
         if (result.runtimeGraphChanged) {
           scheduleRuntimeGraphSync()
         }
-        return result.patch ?? latestState
+        return result.patch ?? undefined
       })
     },
     setGeneratedTabTitlesFromAgentPrompts: (updates) => {
@@ -119,27 +115,27 @@ export function createTerminalTabPresentationActions(
         if (result.runtimeGraphChanged) {
           scheduleRuntimeGraphSync()
         }
-        return result.patch ?? state
+        return result.patch ?? undefined
       })
     },
     clearTabLaunchAgent: (tabId) => {
       set((s) => {
         const ownerWorktreeId = getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
         if (!ownerWorktreeId) {
-          return s
+          return undefined
         }
         const tabs = s.tabsByWorktree[ownerWorktreeId] ?? []
         const tabIndex = tabs.findIndex((t) => t.id === tabId)
         const currentTab = tabs[tabIndex]
         if (!currentTab?.launchAgent) {
-          return s
+          return undefined
         }
         const { launchAgent: _launchAgent, ...tabWithoutLaunchAgent } = currentTab
         void _launchAgent
         const nextTabs = [...tabs]
         nextTabs[tabIndex] = tabWithoutLaunchAgent
         scheduleRuntimeGraphSync()
-        return { tabsByWorktree: { ...s.tabsByWorktree, [ownerWorktreeId]: nextTabs } }
+        return editSessionSource(s).set('tabsByWorktree', ownerWorktreeId, nextTabs).finish({})
       })
     },
     setRuntimePaneTitle: (tabId, paneId, title) => {
@@ -147,10 +143,10 @@ export function createTerminalTabPresentationActions(
         const currentByPane = s.runtimePaneTitlesByTabId[tabId] ?? {}
         const prevTitle = currentByPane[paneId]
         if (prevTitle === title) {
-          return s
+          return undefined
         }
         if (prevTitle && isDecorativeAgentTitleFrameChange(prevTitle, title)) {
-          return s
+          return undefined
         }
         // Why: re-sort hookless title changes only when their activity classification changes.
         const classificationChanged =
@@ -174,7 +170,7 @@ export function createTerminalTabPresentationActions(
       set((s) => {
         const currentByPane = s.runtimePaneTitlesByTabId[tabId]
         if (!currentByPane || !(paneId in currentByPane)) {
-          return s
+          return undefined
         }
         const prevTitle = currentByPane[paneId]
         const nextByPane = { ...currentByPane }

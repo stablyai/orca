@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
@@ -113,7 +114,7 @@ function seedPanes(panes: SeededPane[]): void {
       ...(pane.sessionId === null ? {} : { providerSession: providerSession(pane) })
     }
   }
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     settings: {
       ...getDefaultSettings('/home/dev'),
       claudeManagedAccounts: [account('acct-a', FOLDER_A), account('acct-b', FOLDER_B)]

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import {
@@ -28,7 +29,7 @@ function parkAndExpire(environmentId: string, tabId: string): void {
   // Accumulate live rows so tab-death pruning cannot hide the teardown-only retention case.
   const state = useAppStore.getState()
   const published = state.tabsByWorktree[WORKTREE_ID] ?? []
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     ptyIdsByTabId: {},
     tabsByWorktree: {
       [WORKTREE_ID]: [
@@ -61,7 +62,7 @@ describe('host-mirror handle-gap verdicts across environment teardown', () => {
   afterEach(() => {
     resetHostMirrorHandleGapWaitsForTests()
     clearRuntimeEnvironmentConnectionGenerationsForTests()
-    useAppStore.setState(initialAppStoreState, true)
+    setSessionTestState(useAppStore, initialAppStoreState, true)
     vi.useRealTimers()
   })
 
@@ -82,7 +83,7 @@ describe('host-mirror handle-gap verdicts across environment teardown', () => {
   // As with clearHostSessionMirrorHydration, re-pair replaces evidence without canceling recovery; bounded waiters must survive and replay.
   it('leaves a parked waiter alone, cancelling only the verdicts', () => {
     const replay = vi.fn()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       ptyIdsByTabId: {},
       tabsByWorktree: {
         [WORKTREE_ID]: [

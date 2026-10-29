@@ -1,3 +1,5 @@
+import type { SessionSourceSet } from '@/store/session-source-edits'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 // Refused creates publish no host session; bridge launch failures into tab/workspace rows until retry or closure.
@@ -22,7 +24,7 @@ import type { AppState } from '@/store/types'
 
 type TestStore = {
   getState: () => AppState
-  setState: (state: Partial<AppState> & { testRuntimeOwner?: string | null }) => void
+  setState: SessionSourceSet<AppState & { testRuntimeOwner?: string | null }>
 }
 
 const mocks = vi.hoisted(() => {
@@ -310,7 +312,7 @@ describe('a chat whose start failed', () => {
     mocks.subscribeStatus.mockResolvedValue({ unsubscribe: mocks.unsubscribe })
     mocks.retryIntent.mockImplementation((prior: StructuredAgentSessionLaunchIntent) => prior)
     mocks.restoreIntent.mockReturnValue(intent)
-    store().setState({
+    setSessionTestState(store(), {
       agentStatusByPaneKey: {},
       acknowledgedAgentsByPaneKey: {},
       retainedAgentsByPaneKey: {},
@@ -380,7 +382,7 @@ describe('a chat whose start failed', () => {
     (host) => {
       for (const remove of ['close', 'purge']) {
         const tab = { ...structuredTab, executionHostId: host }
-        store().setState({ unifiedTabsByWorktree: { [WORKTREE_ID]: [tab] } })
+        setSessionTestState(store(), { unifiedTabsByWorktree: { [WORKTREE_ID]: [tab] } })
         const owner = getStructuredAgentSessionReadOwner(SESSION_ID, null, host ?? '')
         const send = owner.trackSend('unknown')
         send.issue()
@@ -430,7 +432,7 @@ describe('a chat whose start failed', () => {
     await failStart()
     expect(rows()).toHaveLength(1)
 
-    act(() => store().setState({ unifiedTabsByWorktree: { [WORKTREE_ID]: [] } }))
+    act(() => setSessionTestState(store(), { unifiedTabsByWorktree: { [WORKTREE_ID]: [] } }))
     await flush()
 
     expect(rows()).toEqual([])

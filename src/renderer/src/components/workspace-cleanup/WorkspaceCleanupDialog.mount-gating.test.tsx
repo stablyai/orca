@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -75,7 +76,7 @@ async function closeDialog(): Promise<void> {
 }
 
 function seedStore(scanWorkspaceCleanup: AppState['scanWorkspaceCleanup']): void {
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   useAppStore.setState({
     activeModal: 'none',
     workspaceCleanupScan: emptyScan(1),
@@ -102,7 +103,7 @@ describe('WorkspaceCleanupDialog mount gating', () => {
   afterEach(async () => {
     await act(async () => root.unmount())
     document.body.replaceChildren()
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
     vi.clearAllTimers()
     vi.useRealTimers()
   })

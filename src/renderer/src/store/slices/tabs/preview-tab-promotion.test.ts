@@ -1,3 +1,5 @@
+import { createStore } from 'zustand/vanilla'
+import { withSessionSourceWrites } from '@/store/session-source-write-boundary'
 // host_not_owned routes twin-workspace promotion to the window copy, matching window-owned preview behavior.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab } from '../../../../../shared/tab-types'
@@ -52,17 +54,14 @@ function previewTab(id: string): Tab {
 }
 
 function promote(id: string): Tab {
-  let tabs: AppState['unifiedTabsByWorktree'] = { [WT]: [previewTab(id)] }
-  const set = (
-    update: (
-      state: Pick<AppState, 'unifiedTabsByWorktree'>
-    ) => Partial<Pick<AppState, 'unifiedTabsByWorktree'>>
-  ): void => {
-    tabs = update({ unifiedTabsByWorktree: tabs }).unifiedTabsByWorktree ?? tabs
-  }
+  const store = createStore<Pick<AppState, 'unifiedTabsByWorktree'>>()(
+    withSessionSourceWrites<Pick<AppState, 'unifiedTabsByWorktree'>>(() => ({
+      unifiedTabsByWorktree: { [WT]: [previewTab(id)] }
+    }))
+  )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked sender and owner lookup read nothing from the state.
-  promotePreviewTabsThroughLayoutOwner({} as AppState, set, [{ id, worktreeId: WT }])
-  return tabs[WT]![0]!
+  promotePreviewTabsThroughLayoutOwner({} as AppState, store.setState, [{ id, worktreeId: WT }])
+  return store.getState().unifiedTabsByWorktree[WT]![0]!
 }
 
 describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)(

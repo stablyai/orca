@@ -1,3 +1,4 @@
+import { setSessionTestState } from '../../src/renderer/src/lib/test-support/session-source-fixture'
 import '../../src/renderer/src/store/slices/terminal-hydration-store-test-bootstrap'
 import { describe, expect, it, vi } from 'vitest'
 import { applyPtyBinding } from '../../src/main/persistence/loading-store/pty-binding-session-update'
@@ -42,7 +43,7 @@ describe.each(['repo1::/repo1', FOLDER_KEY])('binding crash hydration for %s', (
           ? { tabsByWorktree: { [worktreeId]: [makeTab({ id: TAB_ID, worktreeId, ptyId: null })] } }
           : {})
       }
-      applyPtyBinding(
+      const boundSession = applyPtyBinding(
         { worktreeId, tabId: TAB_ID, leafId: LEAF_ID, ptyId, incarnationId: INCARNATION_ID },
         persisted,
         worktreeId,
@@ -50,9 +51,9 @@ describe.each(['repo1::/repo1', FOLDER_KEY])('binding crash hydration for %s', (
       )
 
       // A crash leaves only the binding transaction; no renderer snapshot can fill its gaps.
-      const restoredSession = structuredClone(persisted)
+      const restoredSession = structuredClone(boundSession)
       const store = createTestStore()
-      store.setState({
+      setSessionTestState(store, {
         repos: [TEST_REPO],
         worktreesByRepo: {
           repo1: [makeWorktree({ id: 'repo1::/repo1', repoId: 'repo1', path: '/repo1' })]

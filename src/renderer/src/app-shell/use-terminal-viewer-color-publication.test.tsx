@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
@@ -38,7 +39,7 @@ describe('useTerminalViewerColorPublication', () => {
 
   afterEach(() => {
     vi.clearAllMocks()
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
     _resetTerminalViewAttributesPublisherForTest()
   })
 

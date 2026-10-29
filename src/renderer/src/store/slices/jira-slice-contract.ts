@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { CacheEntry } from '../github/cache-model'
 import type { AppState } from '../types'
 import type {
@@ -75,7 +75,7 @@ export type JiraSlice = {
   patchJiraIssue: (issueKey: string, patch: Partial<JiraIssue>, options?: JiraPatchOptions) => void
 }
 
-type JiraStateCreator = StateCreator<AppState, [], [], JiraSlice>
+type JiraStateCreator = SessionStateCreator<AppState, JiraSlice>
 
 export type JiraSliceSet = Parameters<JiraStateCreator>[0]
 export type JiraSliceGet = Parameters<JiraStateCreator>[1]

@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import type {
   BrowserSlice,
   BrowserSliceGet,
@@ -37,11 +38,13 @@ export function createBrowserCloseActions(
         let docPageIdsToRelease: string[] = []
         let activeBrowserWorktreeIdToNotify: string | null = null
         set((current) => {
+          const sourceEdit = editSessionSource(current)
+
           const s = drawn ? withDrawnBrowserPages(current, drawn) : current
           // Main's frame already dropped a drawn tab's record.
           let owningWorktreeId: string | null = drawn?.worktreeId ?? null
           let closedWorkspace: BrowserWorkspace | null = drawn?.record ?? null
-          const nextBrowserTabsByWorktree: Record<string, BrowserWorkspace[]> = {}
+
           for (const [worktreeId, tabs] of Object.entries(s.browserTabsByWorktree)) {
             const removedTab = tabs.find((tab) => tab.id === tabId) ?? null
             const filtered = tabs.filter((tab) => tab.id !== tabId)
@@ -50,16 +53,20 @@ export function createBrowserCloseActions(
               closedWorkspace = removedTab
             }
             if (filtered.length > 0) {
-              nextBrowserTabsByWorktree[worktreeId] = filtered
+              if (filtered.length !== tabs.length) {
+                sourceEdit.set('browserTabsByWorktree', worktreeId, filtered)
+              }
+            } else {
+              sourceEdit.remove('browserTabsByWorktree', worktreeId)
             }
           }
           if (!owningWorktreeId || !closedWorkspace) {
-            return current
+            return undefined
           }
 
           const closedPages = s.browserPagesByWorkspace[tabId] ?? []
-          const nextBrowserPagesByWorkspace = { ...s.browserPagesByWorkspace }
-          delete nextBrowserPagesByWorkspace[tabId]
+
+          sourceEdit.remove('browserPagesByWorkspace', tabId)
           const nextBrowserAnnotationsByPageId = { ...s.browserAnnotationsByPageId }
           const nextBrowserAnnotationMarkerIdsByPageId = { ...s.browserAnnotationMarkerIdsByPageId }
           const nextBrowserCertificateFailuresByPageId = {
@@ -79,21 +86,23 @@ export function createBrowserCloseActions(
                 const handle = s.remoteBrowserPageHandlesByPageId[page.id]
                 return handle ? [{ worktreeId: page.worktreeId, handle }] : []
               })
-          const nextRemoteBrowserPageHandlesByPageId = {
-            ...s.remoteBrowserPageHandlesByPageId
-          }
+
           for (const page of closedPages) {
-            delete nextRemoteBrowserPageHandlesByPageId[page.id]
+            sourceEdit.remove('remoteBrowserPageHandlesByPageId', page.id)
           }
 
-          const remainingBrowserTabs = nextBrowserTabsByWorktree[owningWorktreeId] ?? []
-          const nextActiveBrowserTabIdByWorktree = { ...s.activeBrowserTabIdByWorktree }
-          if (nextActiveBrowserTabIdByWorktree[owningWorktreeId] === tabId) {
+          const remainingBrowserTabs =
+            sourceEdit.read('browserTabsByWorktree')[owningWorktreeId] ?? []
+
+          if (sourceEdit.read('activeBrowserTabIdByWorktree')[owningWorktreeId] === tabId) {
             const neighborId = pickNeighbor(s.tabBarOrderByWorktree[owningWorktreeId] ?? [], tabId)
-            nextActiveBrowserTabIdByWorktree[owningWorktreeId] =
+            sourceEdit.set(
+              'activeBrowserTabIdByWorktree',
+              owningWorktreeId,
               (neighborId && remainingBrowserTabs.some((tab) => tab.id === neighborId)
                 ? neighborId
                 : remainingBrowserTabs[0]?.id) ?? null
+            )
           }
 
           const nextTabBarOrder = {
@@ -108,7 +117,7 @@ export function createBrowserCloseActions(
           if (isActiveTabInOwningWorktree) {
             activeBrowserWorktreeIdToNotify = owningWorktreeId
           }
-          const nextActiveTabTypeByWorktree = { ...s.activeTabTypeByWorktree }
+
           let nextActiveTabType = s.activeTabType
           if (remainingBrowserTabs.length === 0) {
             const fallbackTabType = getFallbackTabTypeForWorktree(
@@ -116,7 +125,7 @@ export function createBrowserCloseActions(
               s.openFiles,
               s.tabsByWorktree
             )
-            nextActiveTabTypeByWorktree[owningWorktreeId] = fallbackTabType
+            sourceEdit.set('activeTabTypeByWorktree', owningWorktreeId, fallbackTabType)
             if (isActiveTabInOwningWorktree && s.activeTabType === 'browser') {
               nextActiveTabType = fallbackTabType
             }
@@ -164,28 +173,23 @@ export function createBrowserCloseActions(
             [...closedPageIds, tabId]
           )
 
-          return {
-            browserTabsByWorktree: nextBrowserTabsByWorktree,
-            browserPagesByWorkspace: nextBrowserPagesByWorkspace,
+          return sourceEdit.finish({
             activeBrowserTabId:
               s.activeBrowserTabId === tabId
-                ? (nextActiveBrowserTabIdByWorktree[owningWorktreeId] ?? null)
+                ? (sourceEdit.read('activeBrowserTabIdByWorktree')[owningWorktreeId] ?? null)
                 : s.activeBrowserTabId,
-            activeBrowserTabIdByWorktree: nextActiveBrowserTabIdByWorktree,
             tabBarOrderByWorktree: nextTabBarOrder,
             activeTabType: nextActiveTabType,
             pendingAddressBarFocusByPageId: nextPendingAddressBarFocusByPageId,
             pendingAddressBarFocusByTabId: nextPendingAddressBarFocusByTabId,
-            activeTabTypeByWorktree: nextActiveTabTypeByWorktree,
             recentlyClosedBrowserTabsByWorktree: nextRecentlyClosedBrowserTabsByWorktree,
             recentlyClosedTabKindsByWorktree: nextRecentlyClosedTabKindsByWorktree,
             recentlyClosedBrowserPagesByWorkspace: nextRecentlyClosedBrowserPagesByWorkspace,
-            remoteBrowserPageHandlesByPageId: nextRemoteBrowserPageHandlesByPageId,
             browserCertificateFailuresByPageId: nextBrowserCertificateFailuresByPageId,
             browserAudioMutedTabIds: omitRecordKeys(s.browserAudioMutedTabIds, [tabId]),
             browserAnnotationsByPageId: nextBrowserAnnotationsByPageId,
             browserAnnotationMarkerIdsByPageId: nextBrowserAnnotationMarkerIdsByPageId
-          }
+          })
         })
 
         for (const remotePage of remotePagesToClose) {
@@ -281,24 +285,16 @@ export function createBrowserCloseActions(
         destroyWorkspaceWebviews(browserPagesByWorkspace, workspace.id)
       }
       set((s) => {
-        const removedWorktreeIds = [worktreeId]
-        const nextBrowserTabsByWorktree = omitRecordKeys(
-          s.browserTabsByWorktree,
-          removedWorktreeIds
-        )
-        const nextActiveBrowserTabIdByWorktree = omitRecordKeys(
-          s.activeBrowserTabIdByWorktree,
-          removedWorktreeIds
-        )
+        const edit = editSessionSource(s)
+        edit.remove('browserTabsByWorktree', worktreeId)
+        edit.remove('activeBrowserTabIdByWorktree', worktreeId)
         // Why: reset the global browser surface only when the shut-down worktree is the active one AND had tabs.
         const shouldResetGlobalBrowser = s.activeWorktreeId === worktreeId && hadBrowserTabs
-        return {
-          browserTabsByWorktree: nextBrowserTabsByWorktree,
-          activeBrowserTabIdByWorktree: nextActiveBrowserTabIdByWorktree,
-          ...(shouldResetGlobalBrowser
+        return edit.finish(
+          shouldResetGlobalBrowser
             ? { activeBrowserTabId: null, activeTabType: 'terminal' as const }
-            : {})
-        }
+            : {}
+        )
       })
     }
   }

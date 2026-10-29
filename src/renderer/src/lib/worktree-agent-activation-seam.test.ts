@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { getDefaultSettings } from '../../../shared/constants'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import path from 'node:path'
@@ -180,7 +181,7 @@ function stubInventory(args?: {
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   layoutApplyTestTransport.reset()
 })
 
@@ -188,7 +189,7 @@ describe('worktree agent activation seam', () => {
   it('keeps a projected chat-only workspace terminal-free', async () => {
     const worktree = makeWorktree()
     const groupId = 'chat-group'
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       ...baseState(),
       unifiedTabsByWorktree: {
         [worktree.id]: [
@@ -232,7 +233,10 @@ describe('worktree agent activation seam', () => {
     const worktree = makeWorktree()
     const livePtyId = `${worktree.id}@@live-codex`
     // Restored with no tabs: frames draw this workspace.
-    useAppStore.setState({ ...baseState(), unifiedTabsByWorktree: { [worktree.id]: [] } })
+    setSessionTestState(useAppStore, {
+      ...baseState(),
+      unifiedTabsByWorktree: { [worktree.id]: [] }
+    })
     stubInventory({ livePtyId })
     // A switch-on build shows the adopted terminal from main's frame.
     layoutApplyTestTransport.answerWith('apply')
@@ -258,7 +262,7 @@ describe('worktree agent activation seam', () => {
 
   it('spawns a fallback when the workspace has no agent', async () => {
     const worktree = makeWorktree()
-    useAppStore.setState(baseState())
+    setSessionTestState(useAppStore, baseState())
     stubInventory()
 
     expect(activateAndRevealWorktree(worktree.id)).toEqual({ primaryTabId: null })
@@ -271,7 +275,7 @@ describe('worktree agent activation seam', () => {
 
   it('re-seeds an explicitly activated workspace with a closed terminal tombstone', async () => {
     const worktree = makeWorktree()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       ...baseState(),
       // An empty row is persisted after the user closes the last terminal.
       tabsByWorktree: { [worktree.id]: [] }
@@ -289,7 +293,7 @@ describe('worktree agent activation seam', () => {
 
   it('does not race an explicitly promised surface with a fallback terminal', async () => {
     const worktree = makeWorktree()
-    useAppStore.setState(baseState())
+    setSessionTestState(useAppStore, baseState())
     stubInventory()
 
     expect(activateAndRevealWorktree(worktree.id, { providesInitialSurface: true })).toEqual({
@@ -304,7 +308,7 @@ describe('worktree agent activation seam', () => {
   it('still seeds a usable pane when the census cannot prove who owns a live PTY', async () => {
     const worktree = makeWorktree()
     const livePtyId = `${worktree.id}@@live-codex`
-    useAppStore.setState(baseState())
+    setSessionTestState(useAppStore, baseState())
     stubInventory({ livePtyId, unverifiableCensus: true })
 
     expect(activateAndRevealWorktree(worktree.id)).toEqual({ primaryTabId: null })
@@ -317,7 +321,7 @@ describe('worktree agent activation seam', () => {
 
   it('does not spawn before a structured chat tab hydrates', async () => {
     const worktree = makeWorktree()
-    useAppStore.setState(baseState())
+    setSessionTestState(useAppStore, baseState())
     const { runtimeCall, listSessions } = stubInventory({ structured: true })
 
     expect(activateAndRevealWorktree(worktree.id)).toEqual({ primaryTabId: null })
@@ -338,7 +342,7 @@ describe('worktree agent activation seam', () => {
 
   it('does not authorize client-side recovery for a paired-runtime-owned workspace', async () => {
     const worktree = makeWorktree()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       ...baseState(),
       worktreesByRepo: { [worktree.repoId]: [{ ...worktree, hostId: 'runtime:env-1' }] }
     })
@@ -351,7 +355,7 @@ describe('worktree agent activation seam', () => {
 
   it('blocks seeding while detached and allows activation once the SSH target is connected', async () => {
     const worktree = makeWorktree()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       ...baseState(),
       worktreesByRepo: { [worktree.repoId]: [{ ...worktree, hostId: 'ssh:box' }] },
       sshConnectionStates: new Map([
@@ -394,7 +398,7 @@ describe('worktree agent activation seam', () => {
       capturedAt: 1,
       updatedAt: 1
     }
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       ...baseState(),
       worktreesByRepo: { [worktree.repoId]: [{ ...worktree, hostId: 'ssh:box' }] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }

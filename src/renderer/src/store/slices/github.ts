@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import type { GitHubSlice as GitHubSliceContract } from '../github/slice-types'
 import {
@@ -26,11 +26,7 @@ import { createRefreshEventActions } from '../github/refresh-event-actions'
 import { createRefreshSweepActions } from '../github/refresh-sweep-actions'
 export type GitHubSlice = GitHubSliceContract
 
-export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (
-  set,
-  get,
-  store
-) => ({
+export const createGitHubSlice: SessionStateCreator<AppState, GitHubSlice> = (set, get, store) => ({
   prCache: {},
   issueCache: {},
   checksCache: {},
@@ -71,7 +67,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (
         state.status !== token.status ||
         state.updatedAt !== token.updatedAt
       ) {
-        return s
+        return undefined
       }
       const nextStates = { ...s.prRefreshStates }
       delete nextStates[cacheKey]

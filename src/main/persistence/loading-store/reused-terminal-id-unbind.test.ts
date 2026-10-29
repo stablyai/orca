@@ -44,8 +44,8 @@ function savedSession(stamp: string | null): WorkspaceSessionState {
   }
 }
 
-function bindNewTerminal(session: WorkspaceSessionState): void {
-  applyPtyBinding(
+function bindNewTerminal(session: WorkspaceSessionState): WorkspaceSessionState {
+  return applyPtyBinding(
     {
       worktreeId: WORKTREE,
       tabId: 'new-tab',
@@ -70,9 +70,9 @@ function panesBinding(session: WorkspaceSessionState, ptyId: string): string[] {
 describe('a spawn commit binding a reused terminal id (switch on)', () => {
   it('unbinds the id from a saved pane stamped with another incarnation, in the same write', () => {
     switchState.on = true
-    const session = savedSession('inc-before-restart')
+    let session = savedSession('inc-before-restart')
 
-    bindNewTerminal(session)
+    session = bindNewTerminal(session)
 
     expect(panesBinding(session, 'pty-3')).toEqual([`new-tab:${NEW_LEAF}`])
     expect(session.terminalPtyIncarnationsByPaneKey).toEqual({ [`new-tab:${NEW_LEAF}`]: 'inc-now' })
@@ -87,10 +87,10 @@ describe('a spawn commit binding a reused terminal id (switch on)', () => {
 
   it('leaves every saved binding as it was for a spawn of an id no pane names', () => {
     switchState.on = true
-    const session = savedSession('inc-before-restart')
+    let session = savedSession('inc-before-restart')
     const before = structuredClone(session)
 
-    applyPtyBinding(
+    session = applyPtyBinding(
       {
         worktreeId: WORKTREE,
         tabId: 'new-tab',
@@ -115,7 +115,7 @@ describe('a spawn commit binding a reused terminal id (switch on)', () => {
 
   it('moves the tab row to the pane still bound when the stale pane is a split of the same tab', () => {
     switchState.on = true
-    const session = savedSession('inc-before-restart')
+    let session = savedSession('inc-before-restart')
     session.terminalLayoutsByTabId['saved-tab'] = {
       root: {
         type: 'split',
@@ -128,7 +128,7 @@ describe('a spawn commit binding a reused terminal id (switch on)', () => {
       ptyIdsByLeafId: { [SAVED_LEAF]: 'pty-3' }
     }
 
-    applyPtyBinding(
+    session = applyPtyBinding(
       {
         worktreeId: WORKTREE,
         tabId: 'saved-tab',
@@ -150,9 +150,9 @@ describe('a spawn commit binding a reused terminal id (switch on)', () => {
 
   it('leaves a pane stamped with the same incarnation bound', () => {
     switchState.on = true
-    const session = savedSession('inc-now')
+    let session = savedSession('inc-now')
 
-    bindNewTerminal(session)
+    session = bindNewTerminal(session)
 
     expect(panesBinding(session, 'pty-3').sort()).toEqual(
       [`new-tab:${NEW_LEAF}`, `saved-tab:${SAVED_LEAF}`].sort()
@@ -162,9 +162,9 @@ describe('a spawn commit binding a reused terminal id (switch on)', () => {
   // Legacy saves lack incarnation proof, so they cannot establish an ID was reused.
   it('leaves an unstamped saved binding alone', () => {
     switchState.on = true
-    const session = savedSession(null)
+    let session = savedSession(null)
 
-    bindNewTerminal(session)
+    session = bindNewTerminal(session)
 
     expect(panesBinding(session, 'pty-3').sort()).toEqual(
       [`new-tab:${NEW_LEAF}`, `saved-tab:${SAVED_LEAF}`].sort()
@@ -173,9 +173,9 @@ describe('a spawn commit binding a reused terminal id (switch on)', () => {
 
   it('changes nothing with the switch off', () => {
     switchState.on = false
-    const session = savedSession('inc-before-restart')
+    let session = savedSession('inc-before-restart')
 
-    bindNewTerminal(session)
+    session = bindNewTerminal(session)
 
     expect(panesBinding(session, 'pty-3').sort()).toEqual(
       [`new-tab:${NEW_LEAF}`, `saved-tab:${SAVED_LEAF}`].sort()

@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../store'
@@ -29,14 +30,19 @@ type DegradedStartupRecoveryArgs = {
 
 // Reconnect normally drains pending maps; clear on failure so ready UI cannot retain phantom dead PTYs (#1158).
 function forceWorkspaceSessionReady(): void {
-  useAppStore.setState({
-    workspaceSessionReady: true,
-    pendingReconnectWorktreeIds: [],
-    pendingReconnectTabByWorktree: {},
-    pendingReconnectPtyIdByTabId: {},
-    // Release activation gate even on degraded boot or fallback terminals never seed.
-    terminalStartupRestorationReady: true
-  })
+  useAppStore.setState((sourceState) =>
+    editSessionSource(sourceState)
+      .removeKeys(
+        'pendingReconnectPtyIdByTabId',
+        Object.keys(sourceState.pendingReconnectPtyIdByTabId)
+      )
+      .finish({
+        workspaceSessionReady: true,
+        pendingReconnectWorktreeIds: [],
+        pendingReconnectTabByWorktree: {},
+        terminalStartupRestorationReady: true
+      })
+  )
 }
 
 function announceDegradedStartup(): void {

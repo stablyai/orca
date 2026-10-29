@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // Removing a paired-server project while that server is unreachable (STA-9705).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
@@ -64,7 +65,7 @@ async function answer(args: RuntimeEnvironmentCallRequest): Promise<unknown> {
 function seedRemoteProject(): ReturnType<typeof createTestStore> {
   const store = createTestStore()
   const worktree = makeWorktree({ id: 'app::/home/me/app', repoId: 'app', hostId: 'runtime:env-1' })
-  store.setState({ repos: [remoteRepo], worktreesByRepo: { app: [worktree] } })
+  setSessionTestState(store, { repos: [remoteRepo], worktreesByRepo: { app: [worktree] } })
   return store
 }
 

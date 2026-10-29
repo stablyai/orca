@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act } from 'react'
@@ -164,7 +165,8 @@ async function flushEffects(): Promise<void> {
 }
 
 async function renderPalette(overrides: Partial<AppState>): Promise<void> {
-  useAppStore.setState({
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+  setSessionTestState(useAppStore, {
     activeModal: 'worktree-palette',
     activeWorktreeId: null,
     repos: [makeRepo()],
@@ -202,7 +204,7 @@ describe('WorktreeJumpPalette', () => {
     activateAndRevealWorkspace.mockReset().mockReturnValue({ primaryTabId: null })
     activateWorkspaceTabPaletteResult.mockReset().mockReturnValue({ status: 'activated' })
     vi.mocked(toast.error).mockClear()
-    useAppStore.setState(initialAppState, true)
+    setSessionTestState(useAppStore, initialAppState, true)
     testContainer = document.createElement('div')
     document.body.appendChild(testContainer)
     testRoot = createRoot(testContainer)
@@ -213,7 +215,7 @@ describe('WorktreeJumpPalette', () => {
       testRoot.unmount()
     })
     document.body.replaceChildren()
-    useAppStore.setState(initialAppState, true)
+    setSessionTestState(useAppStore, initialAppState, true)
   })
 
   it('lists actual folder workspaces with no repositories or active terminals', async () => {
@@ -342,11 +344,11 @@ describe('WorktreeJumpPalette', () => {
   it('refreshes the folder catalog while the palette is open', async () => {
     await renderPalette({ repos: [], worktreesByRepo: {}, folderWorkspaces: [] })
     await act(async () => {
-      useAppStore.setState({ folderWorkspaces: [makeFolderWorkspace()] })
+      setSessionTestState(useAppStore, { folderWorkspaces: [makeFolderWorkspace()] })
     })
     expect(getWorktreeRows()).toHaveLength(1)
     expect(getWorktreeRows()[0]).toContain('Design workspace')
-    await act(async () => useAppStore.setState({ folderWorkspaces: [] }))
+    await act(async () => setSessionTestState(useAppStore, { folderWorkspaces: [] }))
     expect(getWorktreeRows()).toEqual([])
   })
 

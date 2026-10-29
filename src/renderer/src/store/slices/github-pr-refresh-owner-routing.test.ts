@@ -1,3 +1,5 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
+import { withSessionSourceTestWrites } from '@/lib/test-support/session-source-test-store'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import { createGitHubSlice } from './github'
@@ -47,11 +49,13 @@ function resetRuntimeMocks(): void {
 
 function createTestStore() {
   return create<AppState>()(
-    (...a) =>
-      ({
-        ...createGitHubSlice(...a),
-        ...createHostedReviewSlice(...a)
-      }) as AppState
+    withSessionSourceTestWrites(
+      (...a) =>
+        ({
+          ...createGitHubSlice(...a),
+          ...createHostedReviewSlice(...a)
+        }) as AppState
+    )
   )
 }
 
@@ -112,7 +116,8 @@ function seed(
   store: ReturnType<typeof createTestStore>,
   state: Pick<AppState, 'repos' | 'worktreesByRepo'> & Partial<AppState>
 ): void {
-  store.setState({
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+  setSessionTestState(store, {
     settings: { activeRuntimeEnvironmentId: null } as AppState['settings'],
     groupBy: 'pr-status',
     worktreeCardProperties: ['status'],

@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
@@ -48,7 +49,8 @@ describe('landing preflight under an unverifiable host probe', () => {
   beforeEach(() => {
     invalidate.mockClear()
     refresh.mockClear()
-    useAppStore.setState(
+    setSessionTestState(
+      useAppStore,
       {
         ...initialState,
         settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: ENVIRONMENT_ID },
@@ -62,7 +64,7 @@ describe('landing preflight under an unverifiable host probe', () => {
 
   afterEach(() => {
     cleanup()
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   it('keeps preflight state when a ready host answers an unverifiable probe', () => {

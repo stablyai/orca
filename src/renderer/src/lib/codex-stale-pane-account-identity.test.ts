@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
@@ -25,7 +26,7 @@ describe('stale Codex panes are decided by account id, not label', () => {
 
   beforeEach(() => {
     clearRuntimeCompatibilityCacheForTests()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       settings: null as never,
       tabsByWorktree: {
         wt1: [

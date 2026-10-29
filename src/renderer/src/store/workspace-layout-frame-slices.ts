@@ -1,3 +1,4 @@
+import { editSessionSource } from './session-source-edits'
 // Build main-owned frame slices through Serializer/restore builders (E2a); global selection stays window-owned, remote server workspaces mirror-owned. Sleeping/closed records, default marks and startup reattach remain outside frames.
 
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
@@ -271,10 +272,9 @@ export function buildLayoutFrameSlices({
     // A frame redraws the window's own selection: one it never made stays none.
     { unchosenStaysUnset: true }
   )
-  const editorTabs = {
-    ...tabs,
-    ...migrateHydratedEditorTabsAndGroups(tabs, editor.editorFileIdMigrationsByWorktree)
-  }
+  const edit = editSessionSource(tabs)
+  migrateHydratedEditorTabsAndGroups(edit, editor.editorFileIdMigrationsByWorktree)
+  const editorTabs = edit.view()
   return {
     tabsByWorktree: rows.tabsByWorktree,
     terminalLayoutsByTabId,

@@ -20,6 +20,8 @@ export type PrimaryStateWriteOperationsRuntime = Pick<
   | 'protectedSecrets'
   | 'quitFlushStarted'
   | 'state'
+  | 'terminalScrollbackSnapshotStorage'
+  | 'retainedScrollbackRefsByMigrationId'
   | 'writeGeneration'
   | 'writeTimer'
   | 'writesFrozen'

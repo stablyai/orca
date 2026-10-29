@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { createTerminalGitHubPRLinkDetector } from '../../../../shared/terminal-github-pr-link-detector'
@@ -61,7 +62,7 @@ function setup() {
     configurable: true,
     value: { forBranch: branchLookup }
   })
-  store.setState({
+  setSessionTestState(store, {
     repos: [{ id: 'repo', path: '/repo', displayName: 'Orca', addedAt: 0, badgeColor: '' }],
     worktreesByRepo: {
       repo: [makeWorktree({ id: workspaceId, repoId: 'repo', linkedPR: 7 })]
@@ -99,7 +100,7 @@ function setup() {
     }
   }
   function closePane() {
-    store.setState({
+    setSessionTestState(store, {
       tabsByWorktree: {
         [workspaceId]: [
           makeTerminalTab({ id: 'tab-2', worktreeId: workspaceId, ptyId: 'pty-tab-2' })

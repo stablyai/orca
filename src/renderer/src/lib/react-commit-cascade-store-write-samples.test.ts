@@ -1,3 +1,4 @@
+import { withSessionSourceWrites } from '@/store/session-source-write-boundary'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { create } from 'zustand'
 import { withReactCommitCascadeWriteProbe } from '../store/react-commit-cascade-write-probe'
@@ -109,7 +110,9 @@ describe('disarmed cost', () => {
 
   it('captures no stack across a write flood with no cascade', () => {
     const useFloodStore = create<{ ticks: number }>()(
-      withReactCommitCascadeWriteProbe(() => ({ ticks: 0 }))
+      withSessionSourceWrites<{ ticks: number }>(
+        withReactCommitCascadeWriteProbe(() => ({ ticks: 0 }))
+      )
     )
     let captures = 0
     errorWithCapture.captureStackTrace = (target, boundary) => {

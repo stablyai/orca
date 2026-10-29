@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -151,7 +152,8 @@ async function flushEffects(): Promise<void> {
 }
 
 async function renderPalette(overrides: Partial<AppState>): Promise<void> {
-  useAppStore.setState({
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+  setSessionTestState(useAppStore, {
     activeModal: 'worktree-palette',
     activeWorktreeId: null,
     repos: [makeRepo()],
@@ -234,7 +236,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     setCommandQuery = null
     setCommandSelection = null
     activateWorkspaceTabPaletteResult.mockClear()
-    useAppStore.setState(initialAppState, true)
+    setSessionTestState(useAppStore, initialAppState, true)
     testContainer = document.createElement('div')
     document.body.appendChild(testContainer)
     testRoot = createRoot(testContainer)
@@ -245,7 +247,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
       testRoot.unmount()
     })
     document.body.replaceChildren()
-    useAppStore.setState(initialAppState, true)
+    setSessionTestState(useAppStore, initialAppState, true)
   })
 
   it('leads the empty-query list with the recent section', async () => {
@@ -326,7 +328,8 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
 
     // Narrowing away the first page must expose later ranked rows rather than an empty section.
     await act(async () => {
-      useAppStore.setState({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+      setSessionTestState(useAppStore, {
         unifiedTabsByWorktree: {
           'wt-many': (useAppStore.getState().unifiedTabsByWorktree['wt-many'] ?? []).filter(
             (tab) => !before.includes(tab.id)
@@ -508,7 +511,8 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     await flushEffects()
 
     await act(async () => {
-      useAppStore.setState({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+      setSessionTestState(useAppStore, {
         tabsByWorktree: hydrated.tabsByWorktree,
         unifiedTabsByWorktree: hydrated.unifiedTabsByWorktree
       } as Partial<AppState>)
@@ -552,7 +556,8 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     await flushEffects()
 
     await act(async () => {
-      useAppStore.setState({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+      setSessionTestState(useAppStore, {
         tabsByWorktree: hydrated.tabsByWorktree,
         unifiedTabsByWorktree: hydrated.unifiedTabsByWorktree
       } as Partial<AppState>)
@@ -593,7 +598,10 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     })
     await flushEffects()
     await act(async () => {
-      useAppStore.setState({ tabsByWorktree: hydrated.tabsByWorktree } as Partial<AppState>)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+      setSessionTestState(useAppStore, {
+        tabsByWorktree: hydrated.tabsByWorktree
+      } as Partial<AppState>)
     })
     await flushEffects()
     expect(getTabRowIds()).toEqual(['tab-beta', 'tab-alpha'])
@@ -616,7 +624,10 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getTabRowIds()).toEqual(['tab-beta'])
 
     await act(async () => {
-      useAppStore.setState({ tabsByWorktree: hydrated.tabsByWorktree } as Partial<AppState>)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+      setSessionTestState(useAppStore, {
+        tabsByWorktree: hydrated.tabsByWorktree
+      } as Partial<AppState>)
     })
     await flushEffects()
 
@@ -672,7 +683,8 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getTabRowIds()).toEqual(['tab-beta', 'tab-alpha'])
 
     await act(async () => {
-      useAppStore.setState({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This agentStatusByPaneKey fixture intentionally supplies only the state members exercised by this scenario.
+      setSessionTestState(useAppStore, {
         agentStatusByPaneKey: {
           [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'blocked', Date.now())
         }
@@ -693,11 +705,13 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
 
     // The retained palette clears queries after the snapshot effect; reopening must not freeze an old query’s subset.
     await act(async () => {
-      useAppStore.setState({ activeModal: undefined } as Partial<AppState>)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This activeModal fixture intentionally supplies only the state members exercised by this scenario.
+      setSessionTestState(useAppStore, { activeModal: undefined } as Partial<AppState>)
     })
     await flushEffects()
     await act(async () => {
-      useAppStore.setState({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This activeModal fixture intentionally supplies only the state members exercised by this scenario.
+      setSessionTestState(useAppStore, {
         activeModal: 'worktree-palette'
       } as Partial<AppState>)
     })

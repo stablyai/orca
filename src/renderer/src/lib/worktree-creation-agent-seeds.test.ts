@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { resetHookCommandDelayedDeliveryForTests } from './hook-command-delayed-delivery'
@@ -40,7 +41,8 @@ function setTabs(
   tabs: { id: string; launchAgent?: string; viewMode?: 'terminal' | 'chat' }[],
   runtimeOwnerEnvironmentId?: string
 ): void {
-  useAppStore.setState({
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This tabsByWorktree, terminalLayoutsByTabId, agentStatusByPaneKey fixture intentionally supplies only the state members exercised by this scenario.
+  setSessionTestState(useAppStore, {
     tabsByWorktree: { 'wt-1': tabs },
     terminalLayoutsByTabId: {},
     agentStatusByPaneKey: {},
@@ -98,7 +100,8 @@ beforeEach(() => {
 
 afterEach(() => {
   resetHookCommandDelayedDeliveryForTests()
-  useAppStore.setState({
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This tabsByWorktree, unifiedTabsByWorktree, getKnownWorktreeById fixture intentionally supplies only the state members exercised by this scenario.
+  setSessionTestState(useAppStore, {
     tabsByWorktree: initialTabsByWorktree,
     unifiedTabsByWorktree: initialUnifiedTabsByWorktree,
     getKnownWorktreeById: initialGetKnownWorktreeById,

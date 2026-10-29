@@ -1,3 +1,5 @@
+import { editSessionSource } from '@/store/session-source-edits'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import { useAppStore } from '@/store'
@@ -59,7 +61,7 @@ function watchInvariant(): { notifications: () => number; stop: () => void } {
 
 describe('editor buffer records', () => {
   beforeEach(() => {
-    useAppStore.setState(useAppStore.getInitialState(), true)
+    setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
   })
 
   it('creates a record when a tab opens and deletes it when the tab closes', () => {
@@ -180,7 +182,7 @@ describe('editor buffer records', () => {
   })
 
   it('seeds a record for an externally written tab from the tab, never from defaults', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       openFiles: [
         {
           id: 'seeded',
@@ -204,7 +206,7 @@ describe('editor buffer records', () => {
   it("adopts a host republish of a mirrored tab's buffer state, as remote session sync writes it", () => {
     const id = openEditTab()
     const republish = (mirroredFromRuntimeSession: true | undefined): void =>
-      useAppStore.setState((state) => {
+      setSessionTestState(useAppStore, (state) => {
         const openFiles = state.openFiles.map((file) =>
           file.id === id ? { ...file, isDirty: !file.isDirty, mirroredFromRuntimeSession } : file
         )
@@ -242,12 +244,14 @@ describe('editor buffer records', () => {
         editorBuffers: {},
         ...EMPTY_EDITOR_BUFFER_VIEW_INDEX,
         dirtyMirrorOnly: () =>
-          set((s) => ({
-            openFiles: s.openFiles.map((file) => ({ ...file, isDirty: true }))
-          }))
+          set((s) => {
+            const edit = editSessionSource(s)
+            edit.sequence('openFiles').map((file) => ({ ...file, isDirty: true }))
+            return edit.finish()
+          })
       }))
     )
-    store.setState({ openFiles: [...store.getState().openFiles] })
+    setSessionTestState(store, { openFiles: [...store.getState().openFiles] })
 
     expect(() => store.getState().dirtyMirrorOnly()).toThrow(/"isDirty" of a/)
     expect(store.getState().openFiles[0]?.isDirty).toBe(false)

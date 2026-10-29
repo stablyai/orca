@@ -21,6 +21,14 @@ const MIN_SIDEBAR_WIDTH = 220
 
 export function preserveStringArrayIdentity<T extends string>(
   current: readonly T[] | null,
+  next: T[]
+): T[]
+export function preserveStringArrayIdentity<T extends string>(
+  current: readonly T[] | null,
+  next: T[] | null
+): T[] | null
+export function preserveStringArrayIdentity<T extends string>(
+  current: readonly T[] | null,
   next: T[] | null
 ): T[] | null {
   if (!current || !next) {

@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -146,7 +147,8 @@ async function flushEffects(): Promise<void> {
 }
 
 async function renderPalette(overrides: Partial<AppState>): Promise<void> {
-  useAppStore.setState({
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+  setSessionTestState(useAppStore, {
     activeModal: 'worktree-palette',
     activeWorktreeId: null,
     repos: [makeRepo()],
@@ -197,7 +199,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     setCommandQuery = null
     activateWorkspaceTabPaletteResult.mockClear()
-    useAppStore.setState(initialAppState, true)
+    setSessionTestState(useAppStore, initialAppState, true)
     testContainer = document.createElement('div')
     document.body.appendChild(testContainer)
     testRoot = createRoot(testContainer)
@@ -208,7 +210,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
       testRoot.unmount()
     })
     document.body.replaceChildren()
-    useAppStore.setState(initialAppState, true)
+    setSessionTestState(useAppStore, initialAppState, true)
   })
 
   it('excludes the current editor tab — no agent ladder can lift it out of "you are here"', async () => {
@@ -289,7 +291,10 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getTabRowIds()).toEqual(['tab-beta'])
 
     await act(async () => {
-      useAppStore.setState({ unreadTerminalTabs: { 'term-alpha': true } } as Partial<AppState>)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This unreadTerminalTabs fixture intentionally supplies only the state members exercised by this scenario.
+      setSessionTestState(useAppStore, {
+        unreadTerminalTabs: { 'term-alpha': true }
+      } as Partial<AppState>)
     })
     await flushEffects()
 
@@ -312,7 +317,8 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getTabRowIds()).toContain('tab-alpha')
 
     await act(async () => {
-      useAppStore.setState({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This unreadTerminalTabs, agentStatusByPaneKey fixture intentionally supplies only the state members exercised by this scenario.
+      setSessionTestState(useAppStore, {
         unreadTerminalTabs: {},
         agentStatusByPaneKey: {
           [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'working', Date.now())
@@ -344,7 +350,8 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getTabRowIds()).toContain('tab-alpha')
 
     await act(async () => {
-      useAppStore.setState({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This agentStatusByPaneKey fixture intentionally supplies only the state members exercised by this scenario.
+      setSessionTestState(useAppStore, {
         agentStatusByPaneKey: {
           [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'done', Date.now())
         }

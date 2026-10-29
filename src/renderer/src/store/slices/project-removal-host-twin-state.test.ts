@@ -1,3 +1,5 @@
+import type { AppState } from '@/store/types'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 /** Same repo/path IDs can belong to two hosts; removing remote copy must preserve local shells, tabs and dirty drafts. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerPendingEditorFlush } from '@/components/editor/editor-pending-flush'
@@ -148,7 +150,7 @@ function seedTwins(): ReturnType<typeof createTestStore> {
   const store = createTestStore()
   const localFileId = '/work/same/local.ts'
   const remoteFileId = 'editor:remote-file'
-  store.setState({
+  setSessionTestState(store, {
     repos: [localRow, remoteRow],
     worktreesByRepo: {
       [PROJECT_ID]: [
@@ -233,7 +235,7 @@ describe('removing a remote project keeps its local twin', () => {
       const store = seedTwins()
       const exclusive = `${PROJECT_ID}::/work/exclusive`
       const exclusiveFile = '/work/exclusive/note.ts'
-      store.setState((s) => ({
+      setSessionTestState(store, (s): Partial<AppState> => ({
         worktreesByRepo: {
           [PROJECT_ID]: [
             ...(s.worktreesByRepo[PROJECT_ID] ?? []),
@@ -249,7 +251,9 @@ describe('removing a remote project keeps its local twin', () => {
       const unregister = ['editor:remote-file', exclusiveFile].map((id) =>
         registerPendingEditorFlush(id, () => {
           flushed.push(id)
-          store.setState((s) => ({ editorDrafts: { ...s.editorDrafts, [id]: `late ${id}` } }))
+          setSessionTestState(store, (s): Partial<AppState> => ({
+            editorDrafts: { ...s.editorDrafts, [id]: `late ${id}` }
+          }))
         })
       )
       try {
@@ -317,7 +321,7 @@ describe('removing a remote project keeps its local twin', () => {
       workspace: browserWorkspace(id),
       pages: [{ ...browserWorkspace(id), workspaceId: id, browserRuntimeEnvironmentId }]
     })
-    store.setState((s) => ({
+    setSessionTestState(store, (s): Partial<AppState> => ({
       recentlyClosedBrowserTabsByWorktree: {
         [WORKTREE_ID]: [
           closedBrowser('closed-remote', 'env-b'),
@@ -353,7 +357,7 @@ describe('removing a remote project keeps its local twin', () => {
     }))
     // Opened while the host call was pending, so the pre-call snapshot cannot see it.
     onRepoRemoved = () =>
-      store.setState((s) => ({
+      setSessionTestState(store, (s): Partial<AppState> => ({
         unifiedTabsByWorktree: {
           [WORKTREE_ID]: [
             ...(s.unifiedTabsByWorktree[WORKTREE_ID] ?? []),
@@ -383,7 +387,7 @@ describe('removing a remote project keeps its local twin', () => {
     const store = createTestStore()
     const sshRow: Repo = { ...localRow, connectionId: 'target-1', executionHostId: 'ssh:target-1' }
     const sshPtyId = toAppSshPtyId('target-1', 'relay-1')
-    store.setState({
+    setSessionTestState(store, {
       repos: [localRow, sshRow, remoteRow],
       worktreesByRepo: {
         [PROJECT_ID]: [
@@ -480,7 +484,7 @@ describe('removing a remote project keeps its local twin', () => {
     const sshRow: Repo = { ...localRow, connectionId: 'target-1', executionHostId: 'ssh:target-1' }
     const sharedPtyId = toAppSshPtyId('target-1', 'relay-shared')
     const otherWorktreeId = 'other-repo::/work/other'
-    store.setState({
+    setSessionTestState(store, {
       repos: [localRow, sshRow],
       worktreesByRepo: {
         [PROJECT_ID]: [
@@ -511,7 +515,7 @@ describe('removing a remote project keeps its local twin', () => {
       workspace: browserWorkspace(id),
       pages: [{ ...browserWorkspace(id), workspaceId: id, browserRuntimeEnvironmentId }]
     })
-    store.setState((s) => ({
+    setSessionTestState(store, (s): Partial<AppState> => ({
       // Stamped local, but one pane runs on the surviving runtime: it is not only local's.
       tabsByWorktree: {
         [WORKTREE_ID]: [
@@ -581,7 +585,7 @@ describe('removing a remote project keeps its local twin', () => {
 
   it('leaves no selection naming the removed host after its last editor closes', async () => {
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [localRow, remoteRow],
       worktreesByRepo: {
         [PROJECT_ID]: [
@@ -613,7 +617,7 @@ describe('removing a remote project keeps its local twin', () => {
 
   it('leaves the focused workspace’s active surface alone when a background twin is removed', async () => {
     const store = seedTwins()
-    store.setState({
+    setSessionTestState(store, {
       activeWorktreeId: 'other-repo::/work/other',
       activeTabType: 'agent-session',
       activeTabTypeByWorktree: { 'other-repo::/work/other': 'agent-session' }
@@ -629,7 +633,7 @@ describe('removing a remote project keeps its local twin', () => {
 
   it('keeps a tab that gained a surviving pane during removal and stops its removed pane', async () => {
     const store = seedTwins()
-    store.setState((s) => ({
+    setSessionTestState(store, (s): Partial<AppState> => ({
       unifiedTabsByWorktree: {
         [WORKTREE_ID]: (s.unifiedTabsByWorktree[WORKTREE_ID] ?? []).filter(
           (tab) => tab.id !== 'tab-remote'
@@ -642,7 +646,7 @@ describe('removing a remote project keeps its local twin', () => {
       }
     }))
     onRepoRemoved = () =>
-      store.setState((s) => ({
+      setSessionTestState(store, (s): Partial<AppState> => ({
         ptyIdsByTabId: { ...s.ptyIdsByTabId, 'tab-local': ['pty-local', remotePtyId] }
       }))
 
@@ -674,7 +678,7 @@ describe('removing a remote project keeps its local twin', () => {
     })
     // Like a snapshot reducer: the tab goes, its agent rows stay.
     onRepoRemoved = () =>
-      store.setState((s) => ({
+      setSessionTestState(store, (s): Partial<AppState> => ({
         tabsByWorktree: {
           [WORKTREE_ID]: (s.tabsByWorktree[WORKTREE_ID] ?? []).filter(
             (tab) => tab.id !== 'tab-remote'
@@ -696,7 +700,7 @@ describe('removing a remote project keeps its local twin', () => {
     const store = seedTwins()
     // The other copy's removal and a host frame both land while this call is pending.
     onRepoRemoved = () =>
-      store.setState((s) => ({
+      setSessionTestState(store, (s): Partial<AppState> => ({
         worktreesByRepo: {
           [PROJECT_ID]: (s.worktreesByRepo[PROJECT_ID] ?? []).filter(
             (row) => row.hostId !== LOCAL_HOST
@@ -723,7 +727,7 @@ describe('removing a remote project keeps its local twin', () => {
     const store = createTestStore()
     const otherKey = worktreeWorkspaceKey('other-repo::/work/other')
     const otherRepo: Repo = { ...localRow, id: 'other-repo', path: '/work/other' }
-    store.setState({
+    setSessionTestState(store, {
       repos: [remoteRow, otherRepo],
       worktreesByRepo: {
         [PROJECT_ID]: [makeWorktree({ id: WORKTREE_ID, repoId: PROJECT_ID, hostId: REMOTE_HOST })]

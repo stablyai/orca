@@ -3,6 +3,8 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { workspaceRootGroupId } from '../../../../shared/workspace-layout/workspace-layout-minted-ids'
+import type { SessionSourceEdit } from '../session-source-edits'
+import type { AppState } from '../types'
 
 export function findTabAndWorktree(
   tabsByWorktree: Record<string, Tab[]>,
@@ -58,29 +60,23 @@ export function findTabByEntityInGroup(
 }
 
 export function ensureGroup(
-  groupsByWorktree: Record<string, TabGroup[]>,
-  activeGroupIdByWorktree: Record<string, string>,
+  edit: SessionSourceEdit<Pick<AppState, 'groupsByWorktree' | 'activeGroupIdByWorktree'>>,
   worktreeId: string,
   preferredGroupId?: string
-): {
-  group: TabGroup
-  groupsByWorktree: Record<string, TabGroup[]>
-  activeGroupIdByWorktree: Record<string, string>
-} {
+): TabGroup {
+  const groupsByWorktree = edit.read('groupsByWorktree')
   const existing =
     groupsByWorktree[worktreeId]?.find((group) => group.id === preferredGroupId) ??
     groupsByWorktree[worktreeId]?.[0]
   if (existing) {
-    return { group: existing, groupsByWorktree, activeGroupIdByWorktree }
+    return existing
   }
-  // Switch point: the root group id main and the Loader mint for a workspace with no group.
+  // Main and the loader mint the same root for a workspace with no group.
   const groupId = ORCA_LAYOUT_OWNER_IS_MAIN ? workspaceRootGroupId(worktreeId) : createBrowserUuid()
   const group: TabGroup = { id: groupId, worktreeId, activeTabId: null, tabOrder: [] }
-  return {
-    group,
-    groupsByWorktree: { ...groupsByWorktree, [worktreeId]: [group] },
-    activeGroupIdByWorktree: { ...activeGroupIdByWorktree, [worktreeId]: groupId }
-  }
+  edit.set('groupsByWorktree', worktreeId, [group])
+  edit.set('activeGroupIdByWorktree', worktreeId, groupId)
+  return group
 }
 
 /** Pick the nearest neighbor in visual order (right first, then left). */
@@ -217,10 +213,11 @@ export function dedupeEditorTabsWithinGroups(tabs: Tab[]): {
 
 /** Patch one tab; return null if absent so callers can return {} to Zustand. */
 export function patchTab(
-  tabsByWorktree: Record<string, Tab[]>,
+  edit: SessionSourceEdit<Pick<AppState, 'unifiedTabsByWorktree'>>,
   tabId: string,
   patch: Partial<Tab>
-): { unifiedTabsByWorktree: Record<string, Tab[]> } | null {
+) {
+  const tabsByWorktree = edit.read('unifiedTabsByWorktree')
   const found = findTabAndWorktree(tabsByWorktree, tabId)
   if (!found) {
     return null
@@ -233,10 +230,9 @@ export function patchTab(
   }
   const { worktreeId } = found
   const tabs = tabsByWorktree[worktreeId] ?? []
-  return {
-    unifiedTabsByWorktree: {
-      ...tabsByWorktree,
-      [worktreeId]: tabs.map((t) => (t.id === tabId ? { ...t, ...patch } : t))
-    }
-  }
+  return edit.set(
+    'unifiedTabsByWorktree',
+    worktreeId,
+    tabs.map((t) => (t.id === tabId ? { ...t, ...patch } : t))
+  )
 }

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
@@ -127,7 +128,7 @@ describe('createBrowserSlice runtime guard', () => {
 
   it('does not notify the local browser manager when selecting tabs under runtime', () => {
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: settingsWithRuntime('env-1'),
       // The client stamps a server's rows on arrival; focus alone never names the owner.
       worktreesByRepo: {

@@ -1,4 +1,5 @@
-import type { StateCreator } from 'zustand'
+import { editSessionSource } from '@/store/session-source-edits'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -22,24 +23,11 @@ import type { ProjectRemovalFailure, RepoSlice } from '../repos/repo-state'
 import { mergeProjectCompatibilityForHostRepoChange } from '../repos/repo-catalog-identity'
 import { applyProjectGroupDeleteCascade } from './project-group-removal-state'
 import { adoptFromEndpoint } from '../adopt-from-endpoint'
-import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
-
-function notifyProjectGroupOnOtherHost(): void {
-  toast.error(
-    translate('auto.store.slices.repos.moveToGroupOtherHost', 'Could not move project to group'),
-    {
-      description: translate(
-        'auto.store.slices.repos.moveToGroupOtherHostDesc',
-        'The computer this project runs on does not have this group. A project can only join groups saved on its own computer.'
-      )
-    }
-  )
-}
+import { notifyProjectGroupOnOtherHost } from './project-group-owner-notice'
 
 export function createProjectGroupMutationActions(
-  set: Parameters<StateCreator<AppState>>[0],
-  get: Parameters<StateCreator<AppState>>[1]
+  set: Parameters<SessionStateCreator<AppState>>[0],
+  get: Parameters<SessionStateCreator<AppState>>[1]
 ): Pick<
   RepoSlice,
   | 'createProjectGroup'
@@ -80,12 +68,12 @@ export function createProjectGroupMutationActions(
                 existing.id === ownedGroup.id && getProjectGroupHostId(existing) === ownerHostId
             )
           ) {
-            return s
+            return undefined
           }
-          return {
-            projectGroups: [...s.projectGroups, ownedGroup],
-            folderWorkspacePathStatuses: {}
-          }
+          return editSessionSource(s)
+            .sequence('projectGroups')
+            .append(ownedGroup)
+            .finish({ folderWorkspacePathStatuses: {} })
         })
         return ownedGroup
       } catch (err) {
@@ -117,12 +105,14 @@ export function createProjectGroupMutationActions(
           return false
         }
         const ownedGroup = adoptFromEndpoint(target, { kind: 'projectGroup', row: updated })
-        set((s) => ({
-          projectGroups: s.projectGroups.map((group) =>
-            projectGroupMatchesOwnerHost(group, groupId, ownerHostId) ? ownedGroup : group
-          ),
-          folderWorkspacePathStatuses: {}
-        }))
+        set((s) =>
+          editSessionSource(s)
+            .sequence('projectGroups')
+            .map((group) =>
+              projectGroupMatchesOwnerHost(group, groupId, ownerHostId) ? ownedGroup : group
+            )
+            .finish({ folderWorkspacePathStatuses: {} })
+        )
         return true
       } catch (err) {
         console.error('Failed to update project group:', err)
@@ -290,18 +280,18 @@ export function createProjectGroupMutationActions(
         const ownedMoved = adoptFromEndpoint(target, { kind: 'repo', row: moved })
         const movedHostId = getRepoExecutionHostId(ownedMoved)
         set((s) => {
-          const nextRepos = s.repos.map((candidate) =>
-            isSameRepoRow(candidate, repo) ? ownedMoved : candidate
-          )
-          return {
-            repos: nextRepos,
+          const sourceEdit = editSessionSource(s)
+            .sequence('repos')
+            .map((candidate) => (isSameRepoRow(candidate, repo) ? ownedMoved : candidate))
+          const nextRepos = sourceEdit.read('repos')
+          return sourceEdit.finish({
             ...mergeProjectCompatibilityForHostRepoChange({
               previous: { projects: s.projects, projectHostSetups: s.projectHostSetups },
               nextRepos,
               hostId: movedHostId
             }),
             folderWorkspacePathStatuses: {}
-          }
+          })
         })
         // Why: hosts store an unknown group id as "no group" and still return the row (#13699).
         if (groupId && (moved.projectGroupId ?? null) !== groupId) {

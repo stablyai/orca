@@ -1,3 +1,4 @@
+import { invalidateShutdownReconnectPty } from '../recovery/shutdown-reconnect-fact-index'
 import { OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory } from './pty-controller-inventory-refresh'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { indexFloatingSnapshotPtyBindings } from '../../floating-snapshot-pty-bindings'
@@ -58,12 +59,14 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
         }
         if (pty) {
           pty.connected = true
+          invalidateShutdownReconnectPty(this, pty.ptyId)
           pty.disconnectedAt = null
           this.markPtyLivenessLive(ptyId)
           this.refreshPtyForegroundAgent(ptyId)
         }
       } else if (pty && !this.leafExistsForPty(ptyId)) {
         pty.connected = false
+        invalidateShutdownReconnectPty(this, pty.ptyId)
         pty.disconnectedAt ??= Date.now()
       }
     }
@@ -114,6 +117,7 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     this.advancePtyLifecycleGeneration(ptyId)
     this.pairedRendererSessionOwnedPtyIds.delete(ptyId)
     this.ptysById.delete(ptyId)
+    invalidateShutdownReconnectPty(this, ptyId)
     this.pendingPtyHandleReplacementFences.delete(ptyId)
     this.recentPtyOutputById.delete(ptyId)
     this.setupCompletionTokenByPtyId.delete(ptyId)
@@ -168,6 +172,9 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
       } else {
         next.set(leaf.ptyId, [leaf])
       }
+    }
+    for (const ptyId of new Set([...this.leavesByPtyId.keys(), ...next.keys()])) {
+      invalidateShutdownReconnectPty(this, ptyId)
     }
     this.leavesByPtyId = next
   }

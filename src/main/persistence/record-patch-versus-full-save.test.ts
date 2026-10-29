@@ -50,6 +50,17 @@ const patches = vi.hoisted(() => {
 vi.mock('../../shared/workspace-layout/workspace-layout-record-patch', async (importOriginal) => {
   const actual = await importOriginal<typeof RecordPatch>()
   return {
+    ...actual,
+    patchSessionUnits: (reader, before, full, domain) => {
+      actual.patchSessionUnits(reader, before, full, domain)
+      patches.calls.push({
+        hostId: patches.hostIds.shift() ?? LOCAL_EXECUTION_HOST_ID,
+        stored: reader.prior,
+        before,
+        full,
+        patched: reader.snapshot()
+      })
+    },
     patchStoredSession: (
       stored: WorkspaceSessionState,
       before: WorkspaceSessionState,

@@ -1,77 +1,53 @@
+import { SessionUnitIndex } from '../../shared/session-unit-index'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { parsePaneKey } from '../../shared/stable-pane-id'
+import { SessionUnitReader } from '../../shared/session-unit-reader'
 
-// Renderer snapshots omit runtime-owned fields; Store must preserve them, including before-unload writes.
-function unionWriteOnceDefaultTerminalTabsApplied(
-  next: WorkspaceSessionState,
-  prior: WorkspaceSessionState | null | undefined
-): WorkspaceSessionState {
-  const priorMarks = prior?.defaultTerminalTabsAppliedByWorktreeId
-  if (!priorMarks || Object.keys(priorMarks).length === 0) {
-    return next
+/** Renderer omissions preserve host fields; explicit containers retain their existing meaning. */
+export function reduceRuntimeAuthoredSessionFields(
+  reader: SessionUnitReader,
+  owners: Iterable<string>,
+  panes: Iterable<string>
+): void {
+  reader.admitFields()
+  for (const owner of owners) {
+    const prior = reader.unit('defaultTerminalTabsAppliedByWorktreeId', owner, 'prior')
+    if (prior.present && !reader.unit('defaultTerminalTabsAppliedByWorktreeId', owner).present) {
+      reader.write('defaultTerminalTabsAppliedByWorktreeId', owner, prior)
+    }
   }
-  const nextMarks = next.defaultTerminalTabsAppliedByWorktreeId
-  const merged = { ...priorMarks, ...nextMarks }
-  if (nextMarks && Object.keys(merged).length === Object.keys(nextMarks).length) {
-    return next
-  }
-  return { ...next, defaultTerminalTabsAppliedByWorktreeId: merged }
-}
-
-/** Preserve omitted incarnations on unchanged bindings or restart loses older-daemon generation proof (#30486). */
-function keepPtyIncarnationsForUnchangedBindings(
-  next: WorkspaceSessionState,
-  prior: WorkspaceSessionState | null | undefined
-): WorkspaceSessionState {
-  const priorIncarnations = prior?.terminalPtyIncarnationsByPaneKey
-  if (!prior || !priorIncarnations) {
-    return next
-  }
-  const incoming = next.terminalPtyIncarnationsByPaneKey
-  // Incoming writes may supply incarnations for only some panes.
-  const kept: Record<string, string> = {}
-  for (const [paneKey, incarnationId] of Object.entries(priorIncarnations)) {
-    const parsed = parsePaneKey(paneKey)
-    if (!parsed || (incoming && Object.hasOwn(incoming, paneKey))) {
+  for (const pane of panes) {
+    const parsed = parsePaneKey(pane)
+    if (!parsed || reader.unit('terminalPtyIncarnationsByPaneKey', pane).present) {
       continue
     }
-    const bindingOf = (session: WorkspaceSessionState): string | undefined =>
-      session.terminalLayoutsByTabId?.[parsed.tabId]?.ptyIdsByLeafId?.[parsed.leafId]
-    const priorPtyId = bindingOf(prior)
-    if (priorPtyId !== undefined && bindingOf(next) === priorPtyId) {
-      kept[paneKey] = incarnationId
+    const incarnation = reader.unit('terminalPtyIncarnationsByPaneKey', pane, 'prior')
+    if (!incarnation.present) {
+      continue
+    }
+    const prior = reader.unit('terminalLayoutsByTabId', parsed.tabId, 'prior').value
+      ?.ptyIdsByLeafId?.[parsed.leafId]
+    const candidate = reader.unit('terminalLayoutsByTabId', parsed.tabId).value?.ptyIdsByLeafId?.[
+      parsed.leafId
+    ]
+    if (prior !== undefined && prior === candidate) {
+      reader.write('terminalPtyIncarnationsByPaneKey', pane, incarnation)
     }
   }
-  return Object.keys(kept).length > 0
-    ? { ...next, terminalPtyIncarnationsByPaneKey: { ...kept, ...incoming } }
-    : next
 }
 
 export function preserveRuntimeAuthoredWorkspaceSessionFields(
   next: WorkspaceSessionState,
   prior: WorkspaceSessionState | null | undefined
 ): WorkspaceSessionState {
-  let result = next
-  if (
-    next.clientHostedBrowserPagesByWorktree === undefined &&
-    prior?.clientHostedBrowserPagesByWorktree !== undefined
-  ) {
-    result = {
-      ...result,
-      clientHostedBrowserPagesByWorktree: prior.clientHostedBrowserPagesByWorktree
-    }
+  if (!prior) {
+    return next
   }
-  // Renderer saves omit main-owned close records.
-  if (
-    next.closedTerminalTabTombstonesByTabId === undefined &&
-    prior?.closedTerminalTabTombstonesByTabId !== undefined
-  ) {
-    result = {
-      ...result,
-      closedTerminalTabTombstonesByTabId: prior.closedTerminalTabTombstonesByTabId
-    }
-  }
-  // Union write-once markers or omitted renderer maps would respawn defaults on every attach.
-  result = keepPtyIncarnationsForUnchangedBindings(result, prior)
-  return unionWriteOnceDefaultTerminalTabsApplied(result, prior)
+  const reader = SessionUnitReader.between(prior, next, new SessionUnitIndex(prior))
+  reduceRuntimeAuthoredSessionFields(
+    reader,
+    Object.keys(prior.defaultTerminalTabsAppliedByWorktreeId ?? {}),
+    Object.keys(prior.terminalPtyIncarnationsByPaneKey ?? {})
+  )
+  return reader.snapshot()
 }

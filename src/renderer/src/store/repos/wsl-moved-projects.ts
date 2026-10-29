@@ -6,7 +6,7 @@
  * The host's own rows carry the same project ids, so a workspace counts as moved only when it is
  * not one the catalog lists: a listed worktree or folder of that id is the host's.
  */
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '../session-source-write-boundary'
 import type { AppState } from '../types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
@@ -24,7 +24,7 @@ import { selectFolderWorkspaces, selectWorktreesByRepo } from '../workspace-reco
 type MovedCatalog = Pick<AppState, 'wslMovedProjects' | 'worktreesByRepo' | 'folderWorkspaces'>
 
 export async function fetchWslMovedProjects(
-  set: Parameters<StateCreator<AppState>>[0]
+  set: Parameters<SessionStateCreator<AppState>>[0]
 ): Promise<void> {
   const list = window.api?.repos?.listWslMoved
   if (typeof list !== 'function') {
@@ -33,7 +33,9 @@ export async function fetchWslMovedProjects(
   try {
     const projects = await list()
     set((state) =>
-      sameMovedProjects(state.wslMovedProjects, projects) ? state : { wslMovedProjects: projects }
+      sameMovedProjects(state.wslMovedProjects, projects)
+        ? undefined
+        : { wslMovedProjects: projects }
     )
   } catch (error) {
     // Without the list the moved chats stay hidden, as before this entry existed; nothing breaks.

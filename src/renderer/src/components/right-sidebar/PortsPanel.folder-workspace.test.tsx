@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { cleanup, render, screen } from '@testing-library/react'
@@ -48,13 +49,13 @@ const scan: WorkspacePortScanResult = {
 
 afterEach(() => {
   cleanup()
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
 })
 
 describe('Ports panel for a folder workspace on a managed SSH server', () => {
   it('shows the SSH forwards and the server listeners, not "No workspace selected"', () => {
     const scanKey = `${workspacePortRuntimeTargetKey({ kind: 'environment', environmentId: 'env-a' })}:all`
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [folderWorkspace],
       activeWorktreeId: 'folder:f1',
       activeWorkspaceExecutionHostId: 'runtime:env-a',

@@ -1,3 +1,4 @@
+import { editSessionSource } from '../../../session-source-edits'
 import { cancelActiveWorktreeRemoval } from '@/store/active-worktree-deselection-intent'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
@@ -29,51 +30,48 @@ export function createSetActiveWorktree(
   get: WorktreeSliceGet
 ): WorktreeSlice['setActiveWorktree'] {
   return (worktreeId, executionHostId, options) => {
-    const stateTransition = options?.stateTransition?.(get())
     const createdTabIds = new Set(options?.createdTabIds)
     // A tab its caller just created is not asleep: its first bind is new work, not a wake.
     const isWakeable = (tab: { id: string }): boolean => !createdTabIds.has(tab.id)
-    if (stateTransition && !stateTransition.activate) {
-      if (Object.keys(stateTransition.patch).length > 0) {
-        set(stateTransition.patch)
-      }
-      return false
-    }
-    if (!worktreeId) {
-      cancelActiveWorktreeRemoval()
-    }
     const workspaceScope = worktreeId ? parseWorkspaceKey(worktreeId) : null
-    if (worktreeId && shouldDeferActivationTerminalPrep()) {
-      markInputQuietSchedulerInput()
-    }
-
-    if (get().activeWorktreeId !== worktreeId) {
-      moveFocusToRendererBeforeFocusedWebviewHidden()
-    }
     let shouldPrepareTerminalTabs = false
     let shouldTagTerminalTabs = false
+    let activated = true
     set((current) => {
-      const transitioned = stateTransition ? { ...current, ...stateTransition.patch } : current
+      const edit = editSessionSource(current)
+      const stateTransition = options?.stateTransition?.(current, edit)
+      if (stateTransition && !stateTransition.activate) {
+        activated = false
+        return edit.changed || Object.keys(stateTransition.patch).length
+          ? edit.finish(stateTransition.patch)
+          : undefined
+      }
+      if (!worktreeId) {
+        cancelActiveWorktreeRemoval()
+      }
+      if (worktreeId && shouldDeferActivationTerminalPrep()) {
+        markInputQuietSchedulerInput()
+      }
+
+      if (current.activeWorktreeId !== worktreeId) {
+        moveFocusToRendererBeforeFocusedWebviewHidden()
+      }
       const reconciliation = worktreeId
-        ? projectWorktreeTabModelReconciliation(transitioned, worktreeId)
+        ? projectWorktreeTabModelReconciliation(edit, worktreeId, undefined, stateTransition?.patch)
         : null
-      const reconciliationChanged = Boolean(
-        reconciliation && Object.keys(reconciliation.patch).length > 0
-      )
-      const s =
-        reconciliation && reconciliationChanged
-          ? { ...transitioned, ...reconciliation.patch }
-          : transitioned
+      const reconciliationChanged =
+        edit.changed || Boolean(reconciliation && Object.keys(reconciliation.patch).length > 0)
+      const s = edit.view({ ...stateTransition?.patch, ...reconciliation?.patch })
       const reconciledActiveTabId = reconciliation?.activeRenderableTabId ?? null
       if (!worktreeId) {
-        return {
+        return edit.finish({
           ...stateTransition?.patch,
           activeWorktreeId: null,
           activeWorkspaceKey: null,
           activeWorkspaceExecutionHostId: null,
           // Why: clearing/activating a worktree must dismiss the background-creation panel so the user isn't stranded on it.
           activePendingCreationId: null
-        }
+        })
       }
 
       const nextActiveWorkspaceKey = isWorkspaceKey(worktreeId)
@@ -116,15 +114,10 @@ export function createSetActiveWorktree(
           : stateTransition
             ? (worktree?.repoId ?? s.activeRepoId)
             : s.activeRepoId
-      const tabsByWorktreeUpdate =
-        allDead && worktreeId != null
-          ? markWorktreeTabsForActivationSpawn(s, worktreeId, { isWakeable, bumpGeneration: true })
-          : {}
-
-      const nextActiveTabTypeByWorktree =
-        s.activeTabTypeByWorktree[worktreeId] === activeTabType
-          ? s.activeTabTypeByWorktree
-          : { ...s.activeTabTypeByWorktree, [worktreeId]: activeTabType }
+      if (allDead && worktreeId != null) {
+        markWorktreeTabsForActivationSpawn(edit, worktreeId, { isWakeable, bumpGeneration: true })
+      }
+      const activeTabTypeChanged = s.activeTabTypeByWorktree[worktreeId] !== activeTabType
       const hasStateChange =
         s.activeWorktreeId !== worktreeId ||
         s.activeWorkspaceKey !== nextActiveWorkspaceKey ||
@@ -136,7 +129,7 @@ export function createSetActiveWorktree(
         s.activeTabType !== activeTabType ||
         s.rightSidebarExplorerView !== restoredRightSidebarExplorerView ||
         s.activeTabId !== activeTabId ||
-        nextActiveTabTypeByWorktree !== s.activeTabTypeByWorktree ||
+        activeTabTypeChanged ||
         nextEverActivated !== s.everActivatedWorktreeIds ||
         nextActiveRepoId !== s.activeRepoId ||
         allDead ||
@@ -144,10 +137,13 @@ export function createSetActiveWorktree(
         stateTransition !== undefined
       if (!hasStateChange) {
         // Why: preserve the root Zustand reference on a no-op re-activation so session persistence/runtime sync don't fan out.
-        return s
+        return undefined
       }
 
-      return {
+      if (activeTabTypeChanged) {
+        edit.set('activeTabTypeByWorktree', worktreeId, activeTabType)
+      }
+      return edit.finish({
         ...stateTransition?.patch,
         ...reconciliation?.patch,
         activeRepoId: nextActiveRepoId,
@@ -158,13 +154,15 @@ export function createSetActiveWorktree(
         activeFileId,
         activeBrowserTabId,
         activeTabType,
-        activeTabTypeByWorktree: nextActiveTabTypeByWorktree,
         rightSidebarExplorerView: restoredRightSidebarExplorerView,
         activeTabId,
-        everActivatedWorktreeIds: nextEverActivated,
-        ...tabsByWorktreeUpdate
-      }
+        everActivatedWorktreeIds: nextEverActivated
+      })
     })
+
+    if (!activated) {
+      return false
+    }
 
     // Activation explicitly wakes (null only clears selection for sleep); clear intent after remount-generation update so waiting panes connect once.
     clearWorktreeSleepIntent(worktreeId)
@@ -174,21 +172,23 @@ export function createSetActiveWorktree(
         pendingActivationTerminalPrepCancels.delete(worktreeId)
         set((s) => {
           if (s.activeWorktreeId !== worktreeId) {
-            return s
+            return undefined
           }
           const tabs = s.tabsByWorktree[worktreeId] ?? []
           const wakeable = tabs.filter(isWakeable)
           if (wakeable.length === 0) {
-            return s
+            return undefined
           }
           const allDead = wakeable.every((tab) => !tabHasLivePty(s.ptyIdsByTabId, tab.id))
           if (!allDead && !shouldTagTerminalTabs) {
-            return s
+            return undefined
           }
-          return markWorktreeTabsForActivationSpawn(s, worktreeId, {
+          const edit = editSessionSource(s)
+          markWorktreeTabsForActivationSpawn(edit, worktreeId, {
             isWakeable,
             bumpGeneration: allDead
           })
+          return edit.finish()
         })
       }
 

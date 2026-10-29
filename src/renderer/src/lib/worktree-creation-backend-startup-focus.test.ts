@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as MountedTerminalTabRegistryModule from '@/runtime/mounted-terminal-tab-registry'
 import type { PreloadApi } from '../../../preload/api-types'
@@ -70,7 +71,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
-  useAppStore.setState(initialAppStoreState, true)
+  setSessionTestState(useAppStore, initialAppStoreState, true)
 })
 
 describe('a local agent create watched to completion', () => {

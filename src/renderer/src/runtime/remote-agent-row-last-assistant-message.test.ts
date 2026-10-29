@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // Client OSC ownership once discarded mirrored lastAssistantMessage, which only host hooks know (#12906/STA-3596). OSC writes lack that field, so wholesale client precedence blanked every paired row. Drive real mirror/store/sidebar builder and assert entry.lastAssistantMessage, the field both row renderers consume.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
@@ -130,7 +131,8 @@ function applyHostSnapshot(
   vi.setSystemTime(now)
   const state = store.getState()
   const patch = applyFreshWebSessionTabsSnapshot(state, snapshot, ENV, now)
-  store.setState(patch as Partial<AppState>)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test stub supplies only the API members exercised by this scenario.
+  setSessionTestState(store, patch as Partial<AppState>)
   return patch !== state
 }
 

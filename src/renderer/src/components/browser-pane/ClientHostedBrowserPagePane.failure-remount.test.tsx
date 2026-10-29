@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -170,7 +171,7 @@ function seedStore(): void {
     loadError: null,
     createdAt: 1
   }
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     browserPagesByWorkspace: { 'workspace-a': [page] },
     browserTabsByWorktree: { 'worktree-a': [workspace] },
     browserCertificateFailuresByPageId: {},

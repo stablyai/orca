@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { vi, type Mock } from 'vitest'
 import { getDefaultSettings } from '../../../../../shared/constants'
 import type { AppState } from '../../types'
@@ -115,7 +116,7 @@ export function createAttentionStore(options?: {
       return true
     }
   )
-  store.setState({
+  setSessionTestState(store, {
     repos: [{ ...TEST_REPO, executionHostId: 'local' }],
     worktreesByRepo: {
       repo1: [
@@ -166,7 +167,7 @@ export function addLiveTerminalTab(
   })
   const ptyId = `pty-${tabId}`
   const s = store.getState()
-  store.setState({
+  setSessionTestState(store, {
     tabsByWorktree: {
       ...s.tabsByWorktree,
       [worktreeId]: [

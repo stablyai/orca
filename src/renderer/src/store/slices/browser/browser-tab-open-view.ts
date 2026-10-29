@@ -1,3 +1,4 @@
+import type { SessionSourceEdit, OrdinarySourcePartial } from '@/store/session-source-edits'
 import type { CreateBrowserTabOptions } from './browser-slice-contract'
 import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
 import {
@@ -11,11 +12,12 @@ import { ownsGlobalSelection } from '../../global-selection-owner'
 // the address-bar focus a blank New Tab asks for; a layout-owner build writes it once drawn.
 export function browserTabOpenView(
   s: AppState,
+  edit: SessionSourceEdit<AppState>,
   worktreeId: string,
   browserTab: BrowserWorkspace,
   page: BrowserPage,
   options: CreateBrowserTabOptions | undefined
-): Partial<AppState> {
+): OrdinarySourcePartial<AppState> {
   const workspaceId = browserTab.id
   // Without this tab: a frame may already have drawn its record.
   const existingTabs = (s.browserTabsByWorktree[worktreeId] ?? []).filter(
@@ -45,22 +47,21 @@ export function browserTabOpenView(
     (options?.focusAddressBar ??
       (page.url === 'about:blank' || page.url === ORCA_BROWSER_BLANK_URL))
 
+  edit.set(
+    'activeBrowserTabIdByWorktree',
+    worktreeId,
+    shouldActivate ? workspaceId : (s.activeBrowserTabIdByWorktree[worktreeId] ?? null)
+  )
+  if (shouldActivate) {
+    edit.set('activeTabTypeByWorktree', worktreeId, 'browser')
+  }
   return {
     tabBarOrderByWorktree: {
       ...s.tabBarOrderByWorktree,
       [worktreeId]: nextTabBarOrder
     },
     activeBrowserTabId: shouldUpdateGlobalActiveSurface ? workspaceId : s.activeBrowserTabId,
-    activeBrowserTabIdByWorktree: {
-      ...s.activeBrowserTabIdByWorktree,
-      [worktreeId]: shouldActivate
-        ? workspaceId
-        : (s.activeBrowserTabIdByWorktree[worktreeId] ?? null)
-    },
     activeTabType: shouldUpdateGlobalActiveSurface ? 'browser' : s.activeTabType,
-    activeTabTypeByWorktree: shouldActivate
-      ? { ...s.activeTabTypeByWorktree, [worktreeId]: 'browser' }
-      : s.activeTabTypeByWorktree,
     pendingAddressBarFocusByPageId: shouldFocusAddressBar
       ? {
           ...s.pendingAddressBarFocusByPageId,

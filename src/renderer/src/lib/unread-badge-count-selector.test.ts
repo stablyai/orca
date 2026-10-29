@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { createTabsSliceMockApi } from '@/store/slices/tabs-slice-test-harness'
 import {
@@ -45,7 +46,7 @@ function makeProjectGroup(overrides: Partial<ProjectGroup> = {}): ProjectGroup {
 
 function createStoreOnOtherWorktree(): TestStore {
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     repos: [{ ...TEST_REPO, executionHostId: 'local' }],
     worktreesByRepo: {
       repo1: [
@@ -61,7 +62,7 @@ function createStoreOnOtherWorktree(): TestStore {
 function addTerminalTab(store: TestStore, worktreeId: string): string {
   const unifiedTab = store.getState().createUnifiedTab(worktreeId, 'terminal')
   const tabs = store.getState().tabsByWorktree[worktreeId] ?? []
-  store.setState({
+  setSessionTestState(store, {
     tabsByWorktree: {
       ...store.getState().tabsByWorktree,
       [worktreeId]: [...tabs, makeTab({ id: unifiedTab.entityId, worktreeId })]
@@ -144,21 +145,24 @@ describe('Dock unread count against the sidebar (#23363)', () => {
     const store = createStoreOnOtherWorktree()
     const selectCount = createUnreadBadgeCountSelector()
     const folderWorkspace = makeFolderWorkspace()
-    store.setState({ projectGroups: [makeProjectGroup()], folderWorkspaces: [folderWorkspace] })
+    setSessionTestState(store, {
+      projectGroups: [makeProjectGroup()],
+      folderWorkspaces: [folderWorkspace]
+    })
     expect(selectCount(store.getState())).toBe(0)
 
-    store.setState({ folderWorkspaces: [{ ...folderWorkspace, isUnread: true }] })
+    setSessionTestState(store, { folderWorkspaces: [{ ...folderWorkspace, isUnread: true }] })
     expect(selectCount(store.getState())).toBe(0)
     const key = folderWorkspaceKey(folderWorkspace.id)
     const tabId = addTerminalTab(store, key)
     raiseAttention(store, key, tabId)
     expect(selectCount(store.getState())).toBe(1)
-    store.setState({ tabsByWorktree: {} })
+    setSessionTestState(store, { tabsByWorktree: {} })
     expect(selectCount(store.getState())).toBe(0)
     const chat = store.getState().createUnifiedTab(key, 'agent-session', { id: 'folder-chat' })
     raiseAttention(store, key, chat.id)
     expect(selectCount(store.getState())).toBe(1)
-    store.setState({ folderWorkspaces: [{ ...folderWorkspace, isUnread: false }] })
+    setSessionTestState(store, { folderWorkspaces: [{ ...folderWorkspace, isUnread: false }] })
     expect(selectCount(store.getState())).toBe(0)
   })
 
@@ -173,7 +177,7 @@ describe('Dock unread count against the sidebar (#23363)', () => {
     })
     expect(selectCount(store.getState())).toBe(1)
 
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {
         repo1: store
           .getState()
@@ -189,10 +193,12 @@ describe('Dock unread count against the sidebar (#23363)', () => {
     const store = createTestStore()
     const selectCount = createUnreadBadgeCountSelector()
     const row = makeWorktree({ id: BELL_WORKTREE, repoId: 'repo1', isUnread: true })
-    store.setState({ worktreesByRepo: { repo1: [row, row] } })
+    setSessionTestState(store, { worktreesByRepo: { repo1: [row, row] } })
     expect(selectCount(store.getState())).toBe(1)
 
-    store.setState({ worktreesByRepo: { repo1: [row, { ...row, hostId: 'ssh:remote' }] } })
+    setSessionTestState(store, {
+      worktreesByRepo: { repo1: [row, { ...row, hostId: 'ssh:remote' }] }
+    })
     expect(selectCount(store.getState())).toBe(1)
   })
 
@@ -205,17 +211,17 @@ describe('Dock unread count against the sidebar (#23363)', () => {
       isUnread: true,
       creatorProvenance: { kind: 'paired-device', deviceId: 'phone' }
     })
-    store.setState({ worktreesByRepo: { repo1: [row] } })
+    setSessionTestState(store, { worktreesByRepo: { repo1: [row] } })
     expect(selectCount(store.getState())).toBe(1)
     store.setState({ hideWorkspacesFromOtherDevices: true })
     expect(selectCount(store.getState())).toBe(0)
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: { repo1: [{ ...row, creatorProvenance: { kind: 'host' } }] }
     })
     expect(selectCount(store.getState())).toBe(1)
-    store.setState({ worktreesByRepo: { repo1: [row] } })
+    setSessionTestState(store, { worktreesByRepo: { repo1: [row] } })
     expect(selectCount(store.getState())).toBe(0)
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: { repo1: [{ ...row, runtimeOwnerEnvironmentId: 'unpaired-env' }] }
     })
     expect(selectCount(store.getState())).toBe(1)
@@ -226,7 +232,7 @@ describe('Dock unread count against the sidebar (#23363)', () => {
       const store = createStoreOnOtherWorktree()
       const selectCount = createUnreadBadgeCountSelector()
       const folderWorkspace = makeFolderWorkspace({ connectionId: 'ssh-1' })
-      store.setState({
+      setSessionTestState(store, {
         projectGroups: [makeProjectGroup({ connectionId: 'ssh-1' })],
         folderWorkspaces: [folderWorkspace]
       })
@@ -244,7 +250,7 @@ describe('Dock unread count against the sidebar (#23363)', () => {
     it('recounts when a project group or repo changes which host a flagged row is on', () => {
       const store = createStoreOnOtherWorktree()
       const selectCount = createUnreadBadgeCountSelector()
-      store.setState({
+      setSessionTestState(store, {
         projectGroups: [makeProjectGroup()],
         folderWorkspaces: [makeFolderWorkspace({ isUnread: true })]
       })
@@ -262,17 +268,17 @@ describe('Dock unread count against the sidebar (#23363)', () => {
       store.getState().setVisibleWorkspaceHostIds(['local'])
       expect(selectCount(store.getState())).toBe(2)
 
-      store.setState({ projectGroups: [makeProjectGroup({ connectionId: 'ssh-1' })] })
+      setSessionTestState(store, { projectGroups: [makeProjectGroup({ connectionId: 'ssh-1' })] })
       expect(selectCount(store.getState())).toBe(1)
 
-      store.setState({ repos: [{ ...TEST_REPO, connectionId: 'ssh-1' }] })
+      setSessionTestState(store, { repos: [{ ...TEST_REPO, connectionId: 'ssh-1' }] })
       expect(selectCount(store.getState())).toBe(0)
     })
 
     it('narrows host visibility without adding a same-id count', () => {
       const store = createTestStore()
       const selectCount = createUnreadBadgeCountSelector()
-      store.setState({
+      setSessionTestState(store, {
         repos: [{ ...TEST_REPO, executionHostId: 'local' }],
         worktreesByRepo: {
           repo1: [

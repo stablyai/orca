@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { vi } from 'vitest'
 import {
   registerLivePaneManager,
@@ -12,7 +13,7 @@ class MockResizeObserver {
 
 /** Minimal window/ResizeObserver globals the hook touches, plus a clean layout store. */
 export function installGlobalEffectsTestWindow(): void {
-  useAppStore.setState({ terminalLayoutsByTabId: {} })
+  setSessionTestState(useAppStore, { terminalLayoutsByTabId: {} })
   ;(globalThis as unknown as { window: unknown }).window = {
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),

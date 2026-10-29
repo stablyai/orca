@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { cleanup, renderHook } from '@testing-library/react'
@@ -22,7 +23,7 @@ let updateWorktreesMeta: ReturnType<typeof vi.fn<AppState['updateWorktreesMeta']
 
 beforeEach(() => {
   updateWorktreesMeta = vi.fn<AppState['updateWorktreesMeta']>(() => Promise.resolve())
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     worktreesByRepo: { repo: [local, hosted] },
     folderWorkspaces: [],
     workspaceStatuses: [{ id: 'in-progress', label: 'In progress' }],

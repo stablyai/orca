@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
@@ -88,7 +89,7 @@ export function registerReposProjectGroupsDeleteTests(): void {
       }
       projectGroupsDelete.mockResolvedValue(true)
       const store = createTestStore()
-      store.setState({
+      setSessionTestState(store, {
         projectGroups: [projectGroup, childGroup, siblingGroup],
         folderWorkspaces: [childWorkspace],
         repos: [
@@ -119,7 +120,7 @@ export function registerReposProjectGroupsDeleteTests(): void {
       const serverGroup = { ...projectGroup, executionHostId: 'runtime:env-1' as const }
       const groupedRepo = { ...remoteRepo, projectGroupId: projectGroup.id }
       const store = createTestStore()
-      store.setState({
+      setSessionTestState(store, {
         settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
         projectGroups: [serverGroup],
         repos: [groupedRepo]
@@ -142,7 +143,7 @@ export function registerReposProjectGroupsDeleteTests(): void {
       projectGroupsDelete.mockResolvedValue(true)
       const groupedRepo = { ...remoteRepo, id: 'direct', projectGroupId: projectGroup.id }
       const store = createTestStore()
-      store.setState({
+      setSessionTestState(store, {
         projectGroups: [projectGroup],
         repos: [groupedRepo]
       })
@@ -172,7 +173,7 @@ export function registerReposProjectGroupsDeleteTests(): void {
       const siblingRepo = { ...remoteRepo, id: 'sibling', projectGroupId: null }
       projectGroupsDelete.mockResolvedValue(true)
       const store = createTestStore()
-      store.setState({
+      setSessionTestState(store, {
         projectGroups: [projectGroup, childGroup],
         repos: [
           { ...remoteRepo, id: 'direct', projectGroupId: projectGroup.id },
@@ -215,7 +216,7 @@ export function registerReposProjectGroupsDeleteTests(): void {
       }
       projectGroupsDelete.mockResolvedValue(true)
       const store = createTestStore()
-      store.setState({
+      setSessionTestState(store, {
         projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
         repos: [localRepo, sshRepo],
         settings: { activeRuntimeEnvironmentId: null } as never
@@ -249,7 +250,7 @@ export function registerReposProjectGroupsDeleteTests(): void {
       projectGroupsDelete.mockResolvedValue(false)
       const groupedRepo = { ...remoteRepo, id: 'direct', projectGroupId: projectGroup.id }
       const store = createTestStore()
-      store.setState({
+      setSessionTestState(store, {
         projectGroups: [projectGroup],
         repos: [groupedRepo]
       })
@@ -284,7 +285,7 @@ export function registerReposProjectGroupsDeleteTests(): void {
       }
       projectGroupsDelete.mockResolvedValue(true)
       const store = createTestStore()
-      store.setState({
+      setSessionTestState(store, {
         projectGroups: [projectGroup, childGroup],
         repos: [
           { ...remoteRepo, id: 'direct', projectGroupId: projectGroup.id },

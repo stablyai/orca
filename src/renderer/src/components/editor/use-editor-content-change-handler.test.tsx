@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, renderHook, cleanup } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
@@ -6,7 +7,7 @@ import { useEditorContentChangeHandler } from './use-editor-content-change-handl
 
 afterEach(() => {
   cleanup()
-  useAppStore.setState({ openFiles: [], editorDrafts: {} })
+  setSessionTestState(useAppStore, { openFiles: [], editorDrafts: {} })
 })
 
 it('does not recreate a draft when a pending editor detaches after its tab was closed', () => {

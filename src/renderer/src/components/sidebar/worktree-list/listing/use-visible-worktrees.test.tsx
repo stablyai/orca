@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -29,12 +30,12 @@ const initialState = useAppStore.getInitialState()
 
 describe('useVisibleSidebarWorktrees', () => {
   beforeEach(() => {
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   afterEach(() => {
     cleanup()
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   it('keeps the pure filtering functions available through the sidebar module', async () => {
@@ -48,7 +49,7 @@ describe('useVisibleSidebarWorktrees', () => {
     const local = makeWorktree('shared', 'Local workspace', { hostId: 'local' })
     const ssh = makeWorktree('shared', 'SSH workspace', { hostId: 'ssh:box' })
     const repo = makeRepo()
-    useAppStore.setState({ worktreesByRepo: { [repo.id]: [local, ssh] } })
+    setSessionTestState(useAppStore, { worktreesByRepo: { [repo.id]: [local, ssh] } })
 
     const { result } = renderHook(() =>
       useVisibleSidebarWorktrees({
@@ -83,7 +84,7 @@ describe('useVisibleSidebarWorktrees', () => {
     const local = makeWorktree('shared', 'Local workspace', { hostId: 'local' })
     const ssh = makeWorktree('shared', 'SSH workspace', { hostId: 'ssh:box' })
     const repo = makeRepo()
-    useAppStore.setState({ worktreesByRepo: { [repo.id]: [local, ssh] } })
+    setSessionTestState(useAppStore, { worktreesByRepo: { [repo.id]: [local, ssh] } })
 
     const { result } = renderHook(() =>
       useVisibleSidebarWorktrees({
@@ -115,7 +116,7 @@ describe('useVisibleSidebarWorktrees', () => {
   it('does not rescan every worktree when a settings write leaves the focused host unchanged', () => {
     const repo = makeRepo()
     const worktree = makeWorktree('alpha', 'Alpha workspace', { hostId: 'local' })
-    useAppStore.setState({ worktreesByRepo: { [repo.id]: [worktree] } })
+    setSessionTestState(useAppStore, { worktreesByRepo: { [repo.id]: [worktree] } })
 
     const baseArgs = {
       filterState: {
@@ -168,7 +169,7 @@ describe('useVisibleSidebarWorktrees', () => {
   it('does not rescan visible worktrees for chat-tab writes when sleeping workspaces are shown', () => {
     const repo = makeRepo()
     const worktree = makeWorktree('alpha', 'Alpha workspace')
-    useAppStore.setState({ worktreesByRepo: { [repo.id]: [worktree] } })
+    setSessionTestState(useAppStore, { worktreesByRepo: { [repo.id]: [worktree] } })
     computeVisibleWorktreesCalls.count = 0
 
     renderHook(() =>
@@ -195,7 +196,7 @@ describe('useVisibleSidebarWorktrees', () => {
     )
     const callsAfterFirstRender = computeVisibleWorktreesCalls.count
 
-    act(() => useAppStore.setState({ unifiedTabsByWorktree: { [worktree.id]: [] } }))
+    act(() => setSessionTestState(useAppStore, { unifiedTabsByWorktree: { [worktree.id]: [] } }))
 
     expect(computeVisibleWorktreesCalls.count).toBe(callsAfterFirstRender)
   })

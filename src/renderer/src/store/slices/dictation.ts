@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import type { DictationState, SpeechModelState } from '../../../../shared/speech-types'
 
@@ -31,11 +31,11 @@ function resolveModelStates(
     : next
 }
 
-export const createDictationSlice: StateCreator<AppState, [], [], DictationSlice> = (set) => {
+export const createDictationSlice: SessionStateCreator<AppState, DictationSlice> = (set) => {
   const setModelStates = (states: SpeechModelState[]): void => {
     set((prev) => {
       const modelStates = resolveModelStates(prev.modelStates, states)
-      return modelStates === prev.modelStates ? prev : { modelStates }
+      return modelStates === prev.modelStates ? undefined : { modelStates }
     })
   }
 

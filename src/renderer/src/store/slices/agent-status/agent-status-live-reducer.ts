@@ -10,14 +10,16 @@ import { removePaneKeys } from './agent-status-pane-keyed-records'
 import type { AgentStatusLiveEntryBuild } from './agent-status-live-entry-builder'
 import { agentProviderSessionsEqual } from '../../../../../shared/agent-session-resume'
 import { liveResumeRecordChange } from '../../../../../shared/agent-resume-record-from-status'
+import type { SessionSourceEdit, OrdinarySourcePartial } from '../../session-source-edits'
 
 export type AgentStatusLiveUpdateReduction = {
-  patch: Partial<AppState>
+  patch: OrdinarySourcePartial<AppState>
   /** Rows the cap dropped, so freshness can move its cached minimum without a full rescan. */
   evictedEntries: AgentStatusEntry[]
 }
 
 export function reduceAgentStatusLiveUpdate(
+  edit: SessionSourceEdit<AppState>,
   state: AppState,
   build: AgentStatusLiveEntryBuild,
   updatedAt: number
@@ -47,7 +49,6 @@ export function reduceAgentStatusLiveUpdate(
   if (nextRetainedAgents !== state.retainedAgentsByPaneKey) {
     delete nextRetainedAgents[paneKey]
   }
-  let nextSleepingAgentSessions = state.sleepingAgentSessionsByPaneKey
   let nextLaunchConfigs = state.agentLaunchConfigByPaneKey
   if (
     registryMatched &&
@@ -74,13 +75,9 @@ export function reduceAgentStatusLiveUpdate(
   }
   const recordChange = liveResumeRecordChange(existingSleepingRecord, liveRecoveryRecord)
   if (recordChange === 'clear') {
-    nextSleepingAgentSessions = { ...state.sleepingAgentSessionsByPaneKey }
-    delete nextSleepingAgentSessions[paneKey]
+    edit.remove('sleepingAgentSessionsByPaneKey', paneKey)
   } else if (recordChange) {
-    nextSleepingAgentSessions = {
-      ...state.sleepingAgentSessionsByPaneKey,
-      [paneKey]: recordChange.set
-    }
+    edit.set('sleepingAgentSessionsByPaneKey', paneKey, recordChange.set)
   }
   const previousLive = state.agentStatusByPaneKey
   const nextLive = { ...previousLive, [paneKey]: entry }
@@ -104,13 +101,14 @@ export function reduceAgentStatusLiveUpdate(
         evictedEntries.push(evictedEntry)
       }
     }
-    nextSleepingAgentSessions = removePaneKeys(nextSleepingAgentSessions, evicted)
+    for (const paneKey of evicted) {
+      edit.remove('sleepingAgentSessionsByPaneKey', paneKey)
+    }
     nextLaunchConfigs = removePaneKeys(nextLaunchConfigs, evicted)
   }
-  const patch: Partial<AppState> = {
+  const patch = {
     agentStatusByPaneKey: nextLive,
     retainedAgentsByPaneKey: nextRetainedAgents,
-    sleepingAgentSessionsByPaneKey: nextSleepingAgentSessions,
     agentLaunchConfigByPaneKey: nextLaunchConfigs,
     migrationUnsupportedByPtyId: migrationUnsupported.next,
     retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,

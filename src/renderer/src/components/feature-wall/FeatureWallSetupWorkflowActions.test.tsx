@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act } from 'react'
@@ -50,7 +51,7 @@ describe('setup guide workflow actions', () => {
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
     vi.useRealTimers()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       activeModal: 'none',
       modalData: {},
       activeWorktreeId: null,
@@ -95,7 +96,7 @@ describe('setup guide workflow actions', () => {
   it('opens the workspace composer with setup-guide tour context from Multi-task', async () => {
     vi.useFakeTimers()
     const requestContextualTour = vi.fn()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       activeModal: 'none',
       modalData: {},
       repos: [makeRepo('repo-1')],

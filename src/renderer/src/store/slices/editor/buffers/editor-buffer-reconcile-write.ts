@@ -1,3 +1,4 @@
+import { editSessionSource, type SessionSourceEdit } from '../../../session-source-edits'
 import type { OpenFile } from '../types/open-file'
 import {
   EDITOR_BUFFER_FIELDS,
@@ -20,13 +21,17 @@ type Drafts = Record<string, string>
 
 export class ReconcileWrite {
   records: EditorBufferRecords
-  drafts: Drafts
+  get drafts(): Readonly<Drafts> {
+    return this.sourceEdit.read('editorDrafts')
+  }
   kept: EditorBufferKeptRecords
   readonly mirrors = new Map<string, EditorBufferRecord>()
 
-  constructor(private readonly input: EditorBufferReconcileState) {
+  constructor(
+    private readonly input: EditorBufferReconcileState,
+    readonly sourceEdit: SessionSourceEdit<EditorBufferReconcileState> = editSessionSource(input)
+  ) {
     this.records = input.editorBuffers
-    this.drafts = input.editorDrafts
     this.kept = input.editorBufferKept
   }
 
@@ -52,11 +57,10 @@ export class ReconcileWrite {
     if (this.drafts[viewId] === side.draft) {
       return
     }
-    this.drafts = this.drafts === this.input.editorDrafts ? { ...this.drafts } : this.drafts
     if (side.draft === undefined) {
-      delete this.drafts[viewId]
+      this.sourceEdit.remove('editorDrafts', viewId)
     } else {
-      this.drafts[viewId] = side.draft
+      this.sourceEdit.set('editorDrafts', viewId, side.draft)
     }
   }
 

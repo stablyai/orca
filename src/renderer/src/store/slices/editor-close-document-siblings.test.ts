@@ -1,4 +1,5 @@
-import type { StoreApi } from 'zustand/vanilla'
+import type { SessionTestStore } from '@/lib/test-support/session-source-fixture'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -21,7 +22,7 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 
-const live = vi.hoisted((): { store: StoreApi<AppState> | null } => ({ store: null }))
+const live = vi.hoisted((): { store: SessionTestStore<AppState> | null } => ({ store: null }))
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => {
@@ -33,7 +34,7 @@ vi.mock('@/store', () => ({
   }
 }))
 
-let store: StoreApi<AppState>
+let store: SessionTestStore<AppState>
 let file: OpenFile
 let main: TabsDrawnFromMain | null = null
 
@@ -76,7 +77,7 @@ afterEach(() => {
 
 function addSibling(overrides: Partial<OpenFile> = {}): OpenFile {
   const sibling = { ...file, id: 'duplicate-record', ...overrides }
-  store.setState({ openFiles: [...store.getState().openFiles, sibling] })
+  setSessionTestState(store, { openFiles: [...store.getState().openFiles, sibling] })
   store.getState().createUnifiedTab(sibling.worktreeId, 'editor', {
     id: 'duplicate-tab',
     entityId: sibling.id,
@@ -166,7 +167,7 @@ describe('closing duplicate document records', () => {
     (draft) => {
       const sibling = addSibling({ isDirty: draft === undefined })
       if (draft !== undefined) {
-        store.setState({ editorDrafts: { [sibling.id]: draft } })
+        setSessionTestState(store, { editorDrafts: { [sibling.id]: draft } })
       }
       store.getState().closeFile(file.id)
       expect(store.getState().openFiles).toEqual([sibling])
@@ -238,7 +239,7 @@ describe('closing duplicate document records', () => {
         }
       }
     }
-    store.setState({
+    setSessionTestState(store, {
       openFiles: [file, { ...file, id: 'duplicate-record' }],
       worktreesByRepo: {},
       runtimeEnvironments: []
@@ -267,10 +268,10 @@ describe('closing duplicate document records', () => {
       const deletePath = vi.fn(async () => {})
       vi.stubGlobal('window', { api: { fs: { stat, deletePath } } })
       file = { ...file, isUntitled: true }
-      store.setState({ openFiles: [file] })
+      setSessionTestState(store, { openFiles: [file] })
       const sibling = addSibling({ isDirty: draft === undefined })
       if (draft !== undefined) {
-        store.setState({ editorDrafts: { [sibling.id]: draft } })
+        setSessionTestState(store, { editorDrafts: { [sibling.id]: draft } })
       }
       // Switch on: the files go once main's frame dropped their tabs.
       const drawn = await mainHoldsStore()
@@ -289,7 +290,7 @@ describe('closing duplicate document records', () => {
       const stat = vi.fn(async () => ({ size: 0, isDirectory: false, mtime: 0 }))
       const deletePath = vi.fn(async () => {})
       vi.stubGlobal('window', { api: { fs: { stat, deletePath } } })
-      store.setState({
+      setSessionTestState(store, {
         openFiles: [{ ...file, isUntitled: true }],
         editorDrafts: { [file.id]: '' }
       })
@@ -319,7 +320,7 @@ describe('closing duplicate document records', () => {
       )
       const deletePath = vi.fn(async () => {})
       vi.stubGlobal('window', { api: { fs: { stat, deletePath } } })
-      store.setState({ openFiles: [{ ...file, isUntitled: true }] })
+      setSessionTestState(store, { openFiles: [{ ...file, isUntitled: true }] })
       if (action === 'closeFile') {
         store.getState().closeFile(file.id)
       } else {
@@ -365,7 +366,7 @@ describe('closing duplicate document records', () => {
         await writeFile(targetPath, '')
         file = { ...file, filePath: targetPath, relativePath: 'untitled.md', isUntitled: true }
         if (view === 'external-ssh') {
-          store.setState({
+          setSessionTestState(store, {
             repos: store.getState().repos.map((repo) => ({ ...repo, connectionId: 'same-ssh' })),
             sshConnectionStates: new Map([
               [
@@ -391,7 +392,7 @@ describe('closing duplicate document records', () => {
             )
           }
         }
-        store.setState({ openFiles: [file] })
+        setSessionTestState(store, { openFiles: [file] })
         const overrides: Partial<OpenFile> = { isDirty: true }
         if (view === 'other-workspace') {
           overrides.worktreeId = 'folder:overlapping-workspace'
@@ -413,7 +414,7 @@ describe('closing duplicate document records', () => {
           }
         }
         const sibling = addSibling(overrides)
-        store.setState({ editorDrafts: { [sibling.id]: 'unsaved sibling text' } })
+        setSessionTestState(store, { editorDrafts: { [sibling.id]: 'unsaved sibling text' } })
         store.getState().closeFile(file.id)
         await new Promise<void>((resolve) => setImmediate(resolve))
         await Promise.all(deletions)

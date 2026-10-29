@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WorktreeMetaPersistModule from '../worktrees/metadata/worktree-meta-persist'
 import { makeFolderWorkspace, makeWorktree } from '../worktrees-slice-test-fixtures'
@@ -47,7 +48,7 @@ const flushPresenceCheck = async (): Promise<void> => {
 }
 
 function seedSameIdFolders(store: AttentionStore, unread: { local: boolean; ssh: boolean }) {
-  store.setState({
+  setSessionTestState(store, {
     folderWorkspaces: [
       makeFolderWorkspace({ executionHostId: 'local', isUnread: unread.local }),
       makeFolderWorkspace({ executionHostId: 'ssh:remote', isUnread: unread.ssh })
@@ -58,7 +59,7 @@ function seedSameIdFolders(store: AttentionStore, unread: { local: boolean; ssh:
 describe('arrival without a terminal or chat on screen', () => {
   it('reads a restart flag on a workspace with no tabs, but not from Settings', () => {
     const { store, persists } = createAttentionStore()
-    store.setState({
+    setSessionTestState(store, {
       activeView: 'settings',
       worktreesByRepo: {
         repo1: [makeWorktree({ id: WS_A, repoId: 'repo1', path: '/path/a', isUnread: true })]
@@ -121,7 +122,7 @@ describe('presence evidence', () => {
     let away = false
     const { store, persists } = createAttentionStore({ desktopAway: () => away })
     const pane = addLiveTerminalTab(store, WS_A, 'tab-a1')
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {
         repo1: [makeWorktree({ id: WS_A, repoId: 'repo1', path: '/path/a', isUnread: true })]
       }
@@ -214,7 +215,7 @@ describe('hosts and groups', () => {
 
   it('a folder row with no host of its own marks and persists under its project group’s host', () => {
     const { store, persists } = createAttentionStore()
-    store.setState({
+    setSessionTestState(store, {
       projectGroups: [
         {
           id: 'group-1',
@@ -244,7 +245,7 @@ describe('hosts and groups', () => {
   it('a runtime host purge keeps the surviving host row’s manual unread', () => {
     const { store, persists } = createAttentionStore()
     const key = folderWorkspaceKey('folder-1')
-    store.setState({
+    setSessionTestState(store, {
       folderWorkspaces: [
         makeFolderWorkspace({ executionHostId: 'local', isUnread: true }),
         makeFolderWorkspace({ executionHostId: 'runtime:env-1', isUnread: true })

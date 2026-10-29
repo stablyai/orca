@@ -1,8 +1,9 @@
+import type { SessionTestStore } from '@/lib/test-support/session-source-fixture'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store'
 import type { OpenFile, PendingEditorReveal } from '@/store/slices/editor'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
@@ -25,7 +26,9 @@ type MonacoProps = {
   onSave: (content: string) => void
 }
 
-const storeRef = vi.hoisted((): { current: StoreApi<AppState> | null } => ({ current: null }))
+const storeRef = vi.hoisted((): { current: SessionTestStore<AppState> | null } => ({
+  current: null
+}))
 const monacoMounts = vi.hoisted((): { current: MonacoProps[] } => ({ current: [] }))
 const retries = vi.hoisted((): { current: (() => void)[] } => ({ current: [] }))
 
@@ -69,10 +72,10 @@ const ENTRY: GitStatusEntry = {
 
 let root: Root | null = null
 
-function setup(): { store: StoreApi<AppState>; view: OpenFile; review: OpenFile } {
+function setup(): { store: SessionTestStore<AppState>; view: OpenFile; review: OpenFile } {
   const store = createEditorStore()
   storeRef.current = store
-  store.setState({
+  setSessionTestState(store, {
     worktreesByRepo: {
       'repo-1': [
         makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }),
@@ -111,7 +114,7 @@ type RenderOptions = {
 }
 
 function render(
-  store: StoreApi<AppState>,
+  store: SessionTestStore<AppState>,
   review: OpenFile,
   diskText: string,
   options: RenderOptions = {}

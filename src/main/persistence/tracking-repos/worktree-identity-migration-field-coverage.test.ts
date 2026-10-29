@@ -212,8 +212,14 @@ describe('migrateWorktreeIdentity worktree-reference coverage', () => {
         ...REFERENCE_FIXTURES[field]
       }
       expect([...collectWorkspaceSessionWorktreeOwners(session, CANDIDATES)]).toEqual([OLD])
-      migrateWorktreeIdentity(persistedState(session), OLD, NEW)
-      expect([...collectWorkspaceSessionWorktreeOwners(session, CANDIDATES)]).toEqual([NEW])
+      const state = persistedState(session)
+      const before = structuredClone(session)
+      freeze(session)
+      migrateWorktreeIdentity(state, OLD, NEW)
+      expect([
+        ...collectWorkspaceSessionWorktreeOwners(state.workspaceSession, CANDIDATES)
+      ]).toEqual([NEW])
+      expect(session).toEqual(before)
     })
   }
 
@@ -223,8 +229,12 @@ describe('migrateWorktreeIdentity worktree-reference coverage', () => {
       ...getDefaultWorkspaceSession(),
       ...REFERENCE_FIXTURES.clientHostedBrowserPagesByWorktree
     }
-    migrateWorktreeIdentity(persistedState(session), OLD, NEW)
-    expect(session.clientHostedBrowserPagesByWorktree?.[NEW]?.[0]?.workspaceId).toBe(NEW)
+    const state = persistedState(session)
+    freeze(session)
+    migrateWorktreeIdentity(state, OLD, NEW)
+    expect(state.workspaceSession.clientHostedBrowserPagesByWorktree?.[NEW]?.[0]?.workspaceId).toBe(
+      NEW
+    )
   })
 
   it('migrates host partitions, not just the local blob', () => {
@@ -234,7 +244,21 @@ describe('migrateWorktreeIdentity worktree-reference coverage', () => {
     }
     const state = persistedState(getDefaultWorkspaceSession())
     state.workspaceSessionsByHostId = { 'ssh:target': hostSession }
+    freeze(hostSession)
     expect(migrateWorktreeIdentity(state, OLD, NEW)).toBe(true)
-    expect(hostSession.closedTerminalTabTombstonesByTabId?.['tab-1']?.worktreeId).toBe(NEW)
+    expect(
+      state.workspaceSessionsByHostId?.['ssh:target']?.closedTerminalTabTombstonesByTabId?.['tab-1']
+        ?.worktreeId
+    ).toBe(NEW)
+    expect(hostSession.closedTerminalTabTombstonesByTabId?.['tab-1']?.worktreeId).toBe(OLD)
   })
 })
+
+function freeze(value: unknown): void {
+  if (value && typeof value === 'object') {
+    for (const child of Object.values(value)) {
+      freeze(child)
+    }
+    Object.freeze(value)
+  }
+}

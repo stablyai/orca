@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -47,7 +48,7 @@ function installThreads(count: number, prompt = 'Task PROJECT ☃ progress'): st
       stateHistory: []
     }
   }
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     agentStatusByPaneKey: entries,
     retainedAgentsByPaneKey: {},
     migrationUnsupportedByPtyId: {},

@@ -1,3 +1,5 @@
+import { isSessionUnitView, type SessionUnitView } from '../session-unit-reader'
+import type { SessionMapField } from '../session-change-set'
 // Stored pane data uses leaf IDs within tabs and full pane keys in records; remint repeated IDs before loading into the partition-wide leaf map.
 
 import { isPaneSleepRecord, type SleepingAgentSessionRecord } from '../agent-session-resume'
@@ -97,14 +99,29 @@ function loadLeaf(
 /** The first pane in tab order keeps a repeated leaf ID; later panes receive fresh IDs and their own records. Carry records naming no pane unchanged. */
 export function loadLeaves(
   model: WorkspaceLayoutModel,
-  stored: { session: WorkspaceSessionState; layouts: ReadonlyMap<string, TerminalLayoutSnapshot> },
+  stored: {
+    session: WorkspaceSessionState | SessionUnitView
+    layouts: ReadonlyMap<string, TerminalLayoutSnapshot>
+    selected?: ReadonlyMap<SessionMapField, ReadonlySet<string>>
+  },
   beside: { view: DesktopLayoutView; facts: LayoutContentFacts; carried: CarriedSessionFields },
   context: WorkspaceLayoutLoadContext
 ): void {
-  const records: PaneRecords = {
-    sleeping: { ...stored.session.sleepingAgentSessionsByPaneKey },
-    incarnations: { ...stored.session.terminalPtyIncarnationsByPaneKey }
-  }
+  const records: PaneRecords = isSessionUnitView(stored.session)
+    ? {
+        sleeping: stored.session.map(
+          'sleepingAgentSessionsByPaneKey',
+          stored.selected?.get('sleepingAgentSessionsByPaneKey') ?? []
+        ),
+        incarnations: stored.session.map(
+          'terminalPtyIncarnationsByPaneKey',
+          stored.selected?.get('terminalPtyIncarnationsByPaneKey') ?? []
+        )
+      }
+    : {
+        sleeping: { ...stored.session.sleepingAgentSessionsByPaneKey },
+        incarnations: { ...stored.session.terminalPtyIncarnationsByPaneKey }
+      }
   const seen = new Set<string>()
   for (const { workspace, tab } of terminalTabsInOrder(model)) {
     const layout = stored.layouts.get(tab.entityId)!
@@ -177,11 +194,16 @@ export function unbindDuplicateTerminals(model: WorkspaceLayoutModel): void {
 /** Apply legacy surface tombstones as retirements, then stop writing them. */
 export function applyLegacySurfaceTombstones(
   model: WorkspaceLayoutModel,
-  session: WorkspaceSessionState,
-  carried: CarriedSessionFields
+  session: WorkspaceSessionState | SessionUnitView,
+  carried: CarriedSessionFields,
+  selected?: ReadonlySet<string>
 ): WorkspaceLayoutModel {
   let next = model
-  const tombstones = Object.values(session.terminalSurfaceTombstonesByPaneKey ?? {})
+  const tombstones = Object.values(
+    isSessionUnitView(session)
+      ? session.map('terminalSurfaceTombstonesByPaneKey', selected ?? [])
+      : (session.terminalSurfaceTombstonesByPaneKey ?? {})
+  )
   for (const tombstone of tombstones) {
     const retired = retireExitedSurface(next, {
       ...tombstone,

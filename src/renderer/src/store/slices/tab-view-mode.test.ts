@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // Paired-server view-mode toggles stay window-owned; local frame-owned coverage: workspace-layout-frame-held-tabs.test.ts.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { AppState } from '../types'
@@ -32,10 +33,11 @@ const WT = 'repo1::/tmp/feature'
 function seedTwoLeafTabs(store: ReturnType<typeof createTestStore>): void {
   const left = makeUnifiedTab({ id: 'left-tab', worktreeId: WT, groupId: 'g-left' })
   const right = makeUnifiedTab({ id: 'right-tab', worktreeId: WT, groupId: 'g-right' })
-  store.setState({
+  setSessionTestState(store, {
     worktreesByRepo: { repo1: [makeRuntimeOwnedWorktree({ id: WT, repoId: 'repo1' })] }
   })
-  store.setState({
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+  setSessionTestState(store, {
     unifiedTabsByWorktree: { [WT]: [left, right] },
     groupsByWorktree: {
       [WT]: [
@@ -111,7 +113,8 @@ describe('tab view mode', () => {
 
     beforeEach(() => {
       const tabId = store.getState().createTab(WT).id
-      store.setState({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+      setSessionTestState(store, {
         unifiedTabsByWorktree: {
           [WT]: [
             ...store.getState().unifiedTabsByWorktree[WT].filter((tab) => tab.id !== tabId),

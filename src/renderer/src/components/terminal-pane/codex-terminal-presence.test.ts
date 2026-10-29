@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { noticeTestStore } from './codex-notice-test-harness'
 import { whenCodexTerminalAppears } from './codex-terminal-presence'
@@ -6,7 +7,8 @@ vi.mock('@/store', () => import('./codex-notice-test-harness'))
 
 describe('whenCodexTerminalAppears', () => {
   beforeEach(() => {
-    noticeTestStore.setState(
+    setSessionTestState(
+      noticeTestStore,
       { tabsByWorktree: {}, agentStatusByPaneKey: {}, paneForegroundAgentByPaneKey: {} },
       true
     )
@@ -23,14 +25,14 @@ describe('whenCodexTerminalAppears', () => {
     const onAppear = vi.fn()
     whenCodexTerminalAppears(onAppear)
 
-    noticeTestStore.setState(patch)
-    noticeTestStore.setState({ tabsByWorktree: { 'wt-2': [{ launchAgent: 'codex' }] } })
+    setSessionTestState(noticeTestStore, patch)
+    setSessionTestState(noticeTestStore, { tabsByWorktree: { 'wt-2': [{ launchAgent: 'codex' }] } })
 
     expect(onAppear).toHaveBeenCalledTimes(1)
   })
 
   it('calls back at once when a Codex terminal already exists', () => {
-    noticeTestStore.setState({ tabsByWorktree: { 'wt-1': [{ launchAgent: 'codex' }] } })
+    setSessionTestState(noticeTestStore, { tabsByWorktree: { 'wt-1': [{ launchAgent: 'codex' }] } })
     const onAppear = vi.fn()
     whenCodexTerminalAppears(onAppear)
     expect(onAppear).toHaveBeenCalledTimes(1)
@@ -39,7 +41,7 @@ describe('whenCodexTerminalAppears', () => {
   it('ignores other agents', () => {
     const onAppear = vi.fn()
     whenCodexTerminalAppears(onAppear)
-    noticeTestStore.setState({
+    setSessionTestState(noticeTestStore, {
       tabsByWorktree: { 'wt-1': [{ launchAgent: 'claude' }] },
       agentStatusByPaneKey: { 'tab-1:leaf': { agentType: 'claude' } },
       paneForegroundAgentByPaneKey: { 'tab-1:leaf': { agent: 'opencode' } }
@@ -50,7 +52,7 @@ describe('whenCodexTerminalAppears', () => {
   it('stops watching once unsubscribed', () => {
     const onAppear = vi.fn()
     whenCodexTerminalAppears(onAppear)()
-    noticeTestStore.setState({ tabsByWorktree: { 'wt-1': [{ launchAgent: 'codex' }] } })
+    setSessionTestState(noticeTestStore, { tabsByWorktree: { 'wt-1': [{ launchAgent: 'codex' }] } })
     expect(onAppear).not.toHaveBeenCalled()
   })
 })

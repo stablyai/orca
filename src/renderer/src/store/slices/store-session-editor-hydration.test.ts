@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
@@ -34,7 +35,7 @@ describe('hydrateEditorSession', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -205,7 +206,7 @@ describe('hydrateEditorSession', () => {
     const wt = 'repo1::/path/wt1'
     const sharedPath = '/path/wt1/README.md'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -271,7 +272,7 @@ describe('hydrateEditorSession', () => {
     const runtimeFileId = ownedEditorFileId(filePath, wt, runtimeEnvironmentId)
     const groupId = 'group-same-path-owners'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -387,7 +388,7 @@ describe('hydrateEditorSession', () => {
     const filePath = '/path/wt1/src/app.ts'
     const runtimeEnvironmentId = 'runtime-1'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -587,7 +588,7 @@ describe('hydrateEditorSession', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -646,7 +647,7 @@ describe('hydrateEditorSession', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -679,7 +680,7 @@ describe('hydrateEditorSession', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -722,7 +723,7 @@ describe('hydrateEditorSession', () => {
     const validWt = 'repo1::/path/wt1'
     const deletedWt = 'repo1::/path/gone'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],

@@ -1,3 +1,4 @@
+import { editSessionSource, type SessionSourceEdit } from '@/store/session-source-edits'
 import { runAsAutomaticDeselection } from '@/store/active-worktree-deselection-intent'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { AppState } from '../../../types'
@@ -21,34 +22,22 @@ export function createMarkWorktreeVisited(
 ): WorktreeSlice['markWorktreeVisited'] {
   return (worktreeId, visitedAt, executionHostId) => {
     set((s) => {
-      const lastVisitedAtByWorktreeId = stampWorktreeVisit(
-        s,
-        worktreeId,
-        visitedAt,
-        executionHostId
-      )
-      return lastVisitedAtByWorktreeId === s.lastVisitedAtByWorktreeId
-        ? s
-        : { lastVisitedAtByWorktreeId }
+      const edit = editSessionSource(s)
+      stampWorktreeVisit(edit, worktreeId, visitedAt, executionHostId)
+      return edit.changed ? edit.finish() : undefined
     })
   }
 }
 
-type WorktreeVisitStampState = Pick<
-  AppState,
-  | 'lastVisitedAtByWorktreeId'
-  | 'activeWorktreeId'
-  | 'activeWorkspaceExecutionHostId'
-  | 'getKnownWorktreeById'
->
-
-/** Returns the visit map with `worktreeId` stamped, or the same map when the stamp would not advance. */
+/** Extends the accepted edit only when this focus timestamp advances. */
 export function stampWorktreeVisit(
-  s: WorktreeVisitStampState,
+  edit: SessionSourceEdit<AppState>,
   worktreeId: string,
   visitedAt?: number,
-  executionHostId?: ExecutionHostId
-): AppState['lastVisitedAtByWorktreeId'] {
+  executionHostId?: ExecutionHostId,
+  selection?: Pick<AppState, 'activeWorktreeId' | 'activeWorkspaceExecutionHostId'>
+): void {
+  const s = edit.view(selection)
   // Cmd+J needs user-focus recency independent of PTY activity; racing CLI/IPC timestamps must not regress (cmd-j-empty-query-ordering.md).
   const now = visitedAt ?? Date.now()
   const ownerHostId =
@@ -61,12 +50,9 @@ export function stampWorktreeVisit(
       hostId: ownerHostId
     }) ?? 0
   if (!(now > prev)) {
-    return s.lastVisitedAtByWorktreeId
+    return
   }
-  return {
-    ...s.lastVisitedAtByWorktreeId,
-    [getWorktreeVisitKey(worktreeId, ownerHostId)]: now
-  }
+  edit.set('lastVisitedAtByWorktreeId', getWorktreeVisitKey(worktreeId, ownerHostId), now)
 }
 
 export function createPruneLastVisitedTimestamps(
@@ -97,34 +83,26 @@ export function createPruneLastVisitedTimestamps(
           result.worktrees.forEach(addValidWorktree)
         }
       }
-      let changed = false
-      const next: Record<string, number> = {}
-      for (const [key, ts] of Object.entries(s.lastVisitedAtByWorktreeId)) {
+      const edit = editSessionSource(s)
+      for (const key of Object.keys(s.lastVisitedAtByWorktreeId)) {
         const id = getWorktreeIdFromVisitKey(key)
         const repoId = getRepoIdFromWorktreeId(id)
         const repoIds = validIdsByRepo.get(repoId)
         if (!repoIds) {
           // Repo not yet hydrated (e.g. SSH not connected). Keep the entry.
-          next[key] = ts
           continue
         }
         // Legacy bare keys remain valid when any host still publishes the id;
         // qualified keys must match the exact host-qualified row.
-        if (getWorktreeIdFromVisitKey(key) === key ? repoIds.has(id) : validVisitKeys.has(key)) {
-          next[key] = ts
-        } else {
-          changed = true
+        if (!(getWorktreeIdFromVisitKey(key) === key ? repoIds.has(id) : validVisitKeys.has(key))) {
+          edit.remove('lastVisitedAtByWorktreeId', key)
         }
       }
       const patch: {
-        lastVisitedAtByWorktreeId?: Record<string, number>
         activeWorktreeId?: null
         activeWorkspaceKey?: null
         activeWorkspaceExecutionHostId?: null
       } = {}
-      if (changed) {
-        patch.lastVisitedAtByWorktreeId = next
-      }
       // Web localStorage lacks main’s stale-pointer GC; clear active worktrees only after their repo proves them gone or phantom workspaces survive.
       const activeId = s.activeWorktreeId
       if (activeId) {
@@ -141,7 +119,7 @@ export function createPruneLastVisitedTimestamps(
           patch.activeWorkspaceExecutionHostId = null
         }
       }
-      return Object.keys(patch).length > 0 ? patch : s
+      return edit.changed || Object.keys(patch).length > 0 ? edit.finish(patch) : undefined
     })
   }
   return () => runAsAutomaticDeselection(prune)
@@ -155,19 +133,14 @@ export function createSeedActiveWorktreeLastVisitedIfMissing(
     set((s) => {
       const id = s.activeWorktreeId
       if (!id) {
-        return s
+        return undefined
       }
       const hostId = s.activeWorkspaceExecutionHostId ?? s.getKnownWorktreeById(id)?.hostId
       const key = getWorktreeVisitKey(id, hostId)
       if (getWorktreeVisitTimestamp(s.lastVisitedAtByWorktreeId, { id, hostId }) != null) {
-        return s
+        return undefined
       }
-      return {
-        lastVisitedAtByWorktreeId: {
-          ...s.lastVisitedAtByWorktreeId,
-          [key]: Date.now()
-        }
-      }
+      return editSessionSource(s).set('lastVisitedAtByWorktreeId', key, Date.now()).finish({})
     })
   }
 }

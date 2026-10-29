@@ -1,4 +1,5 @@
-import type { StateCreator } from 'zustand'
+import { replaceSessionSourceFields } from '@/store/session-source-write-boundary'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { runtimeTargetForOwnerEnvironment } from '../../runtime/runtime-client-target'
@@ -21,8 +22,8 @@ import { reuseEqualRecordMap } from '../slices/repo-identity-reconcile'
 import { getFolderWorkspaceUpdateCoordinator } from './folder-workspace-mutations'
 
 export function createFolderWorkspaceCatalogActions(
-  set: Parameters<StateCreator<AppState>>[0],
-  get: Parameters<StateCreator<AppState>>[1]
+  set: Parameters<SessionStateCreator<AppState>>[0],
+  get: Parameters<SessionStateCreator<AppState>>[1]
 ): Pick<RepoSlice, 'fetchFolderWorkspaces' | 'fetchFolderWorkspacesForAllHosts'> {
   // Why: folder workspaces are owned through their project groups; merge each host's folder slice against them.
   const applyCatalog = (
@@ -35,7 +36,7 @@ export function createFolderWorkspaceCatalogActions(
     let applied = false
     set((current) => {
       if (!isHostCatalogFenceCurrent(get, fence)) {
-        return current
+        return undefined
       }
       applied = true
       getFolderWorkspaceUpdateCoordinator(get).recordCatalogReplacement(
@@ -51,12 +52,15 @@ export function createFolderWorkspaceCatalogActions(
         current.projectGroups
       )
       if (arrayElementsUnchanged(folderWorkspaces, current.folderWorkspaces)) {
-        return current
+        return undefined
       }
-      return {
-        folderWorkspaces,
-        folderWorkspacePathStatuses: {}
-      }
+      return replaceSessionSourceFields(
+        {
+          folderWorkspaces,
+          folderWorkspacePathStatuses: {}
+        },
+        'catalog'
+      )
     })
     return applied
   }
@@ -103,8 +107,8 @@ export function createFolderWorkspaceCatalogActions(
           )
           return restoredRuntimeHostIdByWorkspaceSessionKey ===
             s.restoredRuntimeHostIdByWorkspaceSessionKey
-            ? s
-            : { restoredRuntimeHostIdByWorkspaceSessionKey }
+            ? undefined
+            : replaceSessionSourceFields({ restoredRuntimeHostIdByWorkspaceSessionKey }, 'catalog')
         })
       }
       try {

@@ -1,3 +1,4 @@
+import type { SessionSourceEdit } from '@/store/session-source-edits'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
 import type { AppState } from '@/store/types'
@@ -60,21 +61,17 @@ export function markVisited(
 
 /** Recency stamps as markVisited writes them after activation: resolved against the post-activation selection. */
 function stampActivationVisits(
-  current: AppState,
+  edit: SessionSourceEdit<AppState>,
   worktreeId: string,
   previousActive: PreviousActive,
   nextHostId: ExecutionHostId | null
-): AppState['lastVisitedAtByWorktreeId'] {
-  const visitState = {
-    lastVisitedAtByWorktreeId: current.lastVisitedAtByWorktreeId,
-    activeWorktreeId: worktreeId,
-    activeWorkspaceExecutionHostId: nextHostId,
-    getKnownWorktreeById: current.getKnownWorktreeById
-  }
+): void {
   for (const stamp of visitStampsFor(worktreeId, previousActive, nextHostId)) {
-    visitState.lastVisitedAtByWorktreeId = stampWorktreeVisit(visitState, ...stamp)
+    stampWorktreeVisit(edit, stamp[0], stamp[1], stamp[2], {
+      activeWorktreeId: worktreeId,
+      activeWorkspaceExecutionHostId: nextHostId
+    })
   }
-  return visitState.lastVisitedAtByWorktreeId
 }
 
 // A de-duplicated append returns the whole input state; spreading it would undo the fresh visit stamps.
@@ -103,22 +100,17 @@ export function buildActivationStateTransition(
   // History replay moves the index instead of visiting anew.
   const recordsHistory = stampsVisit && !state.isNavigatingHistory
   return {
-    stateTransition: (current) => ({
-      activate: true,
-      patch: {
-        ...(repoId !== null ? { activeRepoId: repoId } : {}),
-        ...(stampsVisit
-          ? {
-              lastVisitedAtByWorktreeId: stampActivationVisits(
-                current,
-                worktreeId,
-                previousActive,
-                nextHostId
-              )
-            }
-          : {}),
-        ...(recordsHistory ? historyPatch(appendHistoryEntry(current, worktreeId)) : {})
+    stateTransition: (current, edit) => {
+      if (stampsVisit) {
+        stampActivationVisits(edit, worktreeId, previousActive, nextHostId)
       }
-    })
+      return {
+        activate: true,
+        patch: {
+          ...(repoId !== null ? { activeRepoId: repoId } : {}),
+          ...(recordsHistory ? historyPatch(appendHistoryEntry(current, worktreeId)) : {})
+        }
+      }
+    }
   }
 }

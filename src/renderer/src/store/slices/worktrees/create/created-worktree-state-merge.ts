@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { appliedWorktreeCatalogVersionPatch } from '../listing/worktree-catalog-version-state'
@@ -39,39 +40,36 @@ export function applyCreatedWorktree(
     if (!merged) {
       nextWorktrees.push(createdWorktree)
     }
-    return {
-      // Why: a listing scanned before this create must not be applied after it.
-      ...appliedWorktreeCatalogVersionPatch(s, repoId, hostId, result.catalogVersion),
-      worktreesByRepo: {
-        ...s.worktreesByRepo,
-        [repoId]: nextWorktrees
-      },
-      ...(result.workspaceLineage
-        ? {
-            workspaceLineageByChildKey: {
-              ...s.workspaceLineageByChildKey,
-              [result.workspaceLineage.childWorkspaceKey]: result.workspaceLineage
+    return editSessionSource(s)
+      .set('worktreesByRepo', repoId, nextWorktrees)
+      .finish({
+        ...appliedWorktreeCatalogVersionPatch(s, repoId, hostId, result.catalogVersion),
+        ...(result.workspaceLineage
+          ? {
+              workspaceLineageByChildKey: {
+                ...s.workspaceLineageByChildKey,
+                [result.workspaceLineage.childWorkspaceKey]: result.workspaceLineage
+              }
             }
-          }
-        : {}),
-      ...(result.lineage
-        ? {
-            worktreeLineageById: {
-              ...s.worktreeLineageById,
-              [result.lineage.worktreeId]: result.lineage
+          : {}),
+        ...(result.lineage
+          ? {
+              worktreeLineageById: {
+                ...s.worktreeLineageById,
+                [result.lineage.worktreeId]: result.lineage
+              }
             }
-          }
-        : {}),
-      ...(result.initialBaseStatus
-        ? {
-            baseStatusByWorktreeId: {
-              ...s.baseStatusByWorktreeId,
-              [result.worktree.id]:
-                s.baseStatusByWorktreeId[result.worktree.id] ?? result.initialBaseStatus
+          : {}),
+        ...(result.initialBaseStatus
+          ? {
+              baseStatusByWorktreeId: {
+                ...s.baseStatusByWorktreeId,
+                [result.worktree.id]:
+                  s.baseStatusByWorktreeId[result.worktree.id] ?? result.initialBaseStatus
+              }
             }
-          }
-        : {}),
-      sortEpoch: s.sortEpoch + 1
-    }
+          : {}),
+        sortEpoch: s.sortEpoch + 1
+      })
   })
 }

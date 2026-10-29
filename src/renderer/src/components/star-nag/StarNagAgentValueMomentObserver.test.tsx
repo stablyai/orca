@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, Profiler } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -87,7 +88,7 @@ describe('StarNagAgentValueMomentObserver', () => {
 
   beforeEach(() => {
     vi.useFakeTimers()
-    useAppStore.setState(useAppStore.getInitialState(), true)
+    setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
     useAppStore.setState({ agentStatusByPaneKey: {}, agentStatusEpoch: 0 })
     agentValueMoment = vi.fn().mockResolvedValue({ status: 'ready', mode: 'gh' })
     showAgentValueMoment = vi.fn().mockResolvedValue(undefined)
@@ -101,7 +102,7 @@ describe('StarNagAgentValueMomentObserver', () => {
     container?.remove()
     root = null
     container = null
-    useAppStore.setState(useAppStore.getInitialState(), true)
+    setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
     vi.useRealTimers()
   })
 

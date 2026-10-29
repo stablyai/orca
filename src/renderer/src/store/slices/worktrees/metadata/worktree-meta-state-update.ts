@@ -1,3 +1,4 @@
+import { editSessionSource } from '@/store/session-source-edits'
 import type { WorktreeMetaBatchUpdate } from '../../worktree-helpers'
 import type { WorktreeSliceGet } from '../listing/worktree-slice-types'
 import {
@@ -21,7 +22,9 @@ export function buildWorktreeMetaStateUpdate(
 ) {
   const worktreesByRepo = selectWorktreesByRepo(s)
   const detectedWorktreesByRepo = selectDetectedWorktreesByRepo(s)
-  const nextWorktrees = applyWorktreeUpdates(worktreesByRepo, worktreeId, updates, executionHostId)
+  const edit = editSessionSource(s)
+  applyWorktreeUpdates(edit, worktreeId, updates, executionHostId)
+  const nextWorktrees = edit.read('worktreesByRepo')
   const nextDetectedWorktrees = applyDetectedWorktreeUpdates(
     detectedWorktreesByRepo,
     worktreeId,
@@ -51,7 +54,7 @@ export function buildWorktreeMetaStateUpdate(
     !cacheKey &&
     !prCacheKey
   ) {
-    return s
+    return undefined
   }
 
   const nextHostedReviewCache =
@@ -72,10 +75,8 @@ export function buildWorktreeMetaStateUpdate(
       })()
     : prCache
 
-  return {
-    ...(nextWorktrees !== worktreesByRepo
-      ? { worktreesByRepo: nextWorktrees, sortEpoch: s.sortEpoch + 1 }
-      : {}),
+  return edit.finish({
+    ...(nextWorktrees !== worktreesByRepo ? { sortEpoch: s.sortEpoch + 1 } : {}),
     ...(nextDetectedWorktrees !== detectedWorktreesByRepo
       ? { detectedWorktreesByRepo: nextDetectedWorktrees }
       : {}),
@@ -83,5 +84,5 @@ export function buildWorktreeMetaStateUpdate(
       ? { hostedReviewCache: nextHostedReviewCache }
       : {}),
     ...(nextPRCache !== prCache ? { prCache: nextPRCache } : {})
-  }
+  })
 }

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type {
@@ -45,7 +46,7 @@ const TAB_ID = 'tab-ssh'
 const PTY_ID = 'ssh:target-a@@pty-1'
 
 function seedSshTab(): void {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     repos: [
       {
         id: 'repo-ssh',
@@ -145,7 +146,7 @@ async function createHarness(
 }
 
 beforeEach(() => {
-  useAppStore.setState(originalStore, true)
+  setSessionTestState(useAppStore, originalStore, true)
 })
 
 afterEach(async () => {
@@ -154,7 +155,7 @@ afterEach(async () => {
   }
   await settle()
   vi.restoreAllMocks()
-  useAppStore.setState(originalStore, true)
+  setSessionTestState(useAppStore, originalStore, true)
   vi.unstubAllGlobals()
 })
 

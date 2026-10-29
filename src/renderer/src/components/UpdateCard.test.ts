@@ -1,4 +1,6 @@
-import { createStore, type StoreApi } from 'zustand/vanilla'
+import type { SessionTestStore } from '@/lib/test-support/session-source-fixture'
+import { withSessionSourceTestWrites } from '@/lib/test-support/session-source-test-store'
+import { createStore } from 'zustand/vanilla'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultUIState } from '../../../shared/constants'
 import type { ChangelogData, UpdateStatus } from '../../../shared/update-status-types'
@@ -10,13 +12,19 @@ import {
   isUpdateCardVisible
 } from './maintenance/update-card/update-card-visibility'
 
-function createTestStore(): StoreApi<AppState> {
+function createTestStore() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return createStore<any>()((...args: any[]) => ({
-    repos: [],
-    rightSidebarWidth: 280,
-    ...createUISlice(...(args as Parameters<typeof createUISlice>))
-  })) as unknown as StoreApi<AppState>
+  return createStore<AppState>()(
+    withSessionSourceTestWrites(
+      (...args) =>
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+        ({
+          repos: [],
+          rightSidebarWidth: 280,
+          ...createUISlice(...args)
+        }) as unknown as AppState
+    )
+  )
 }
 
 const RICH_CHANGELOG: ChangelogData = {
@@ -29,7 +37,7 @@ const RICH_CHANGELOG: ChangelogData = {
   releasesBehind: 3
 }
 
-function setState(store: StoreApi<AppState>, status: UpdateStatus): void {
+function setState(store: SessionTestStore<AppState>, status: UpdateStatus): void {
   store.getState().setUpdateStatus(status)
 }
 

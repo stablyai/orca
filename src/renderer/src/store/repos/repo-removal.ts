@@ -1,6 +1,7 @@
+import { editSessionSource } from '@/store/session-source-edits'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import { runEnclosingWorktreeRemoval } from '@/store/active-worktree-deselection-intent'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { getWorktreeIdFromVisitKey, getWorktreeVisitKey } from '@/lib/worktree-visit-recency'
@@ -89,8 +90,8 @@ export function countOpenRepoTerminalTabs(
 }
 
 export function createRepoRemovalActions(
-  set: Parameters<StateCreator<AppState>>[0],
-  get: Parameters<StateCreator<AppState>>[1]
+  set: Parameters<SessionStateCreator<AppState>>[0],
+  get: Parameters<SessionStateCreator<AppState>>[1]
 ): Pick<RepoSlice, 'removeProject'> {
   const actions: Pick<RepoSlice, 'removeProject'> = {
     removeProject: async (projectId, options) => {
@@ -233,14 +234,14 @@ export function createRepoRemovalActions(
         get().clearLocalDetectedAgentContextsForProjects(localAgentContextProjectIds)
 
         set((s) => {
-          const nextWorktrees = { ...s.worktreesByRepo }
-          const remainingWorktrees = (nextWorktrees[projectId] ?? []).filter(
+          const edit = editSessionSource(s)
+          const remainingWorktrees = (s.worktreesByRepo[projectId] ?? []).filter(
             (worktree) => !worktreeBelongsToHost(worktree, ownerHostId)
           )
           if (remainingWorktrees.length > 0) {
-            nextWorktrees[projectId] = remainingWorktrees
+            edit.set('worktreesByRepo', projectId, remainingWorktrees)
           } else {
-            delete nextWorktrees[projectId]
+            edit.remove('worktreesByRepo', projectId)
           }
           const nextDetectedWorktrees = { ...s.detectedWorktreesByRepo }
           const detected = nextDetectedWorktrees[projectId]
@@ -259,12 +260,10 @@ export function createRepoRemovalActions(
           const removedVisitKeys = new Set(
             worktreeIds.map((worktreeId) => getWorktreeVisitKey(worktreeId, ownerHostId))
           )
-          const nextRepos = s.repos.filter(
-            (r) => !repoMatchesHostIdentity(r, projectId, ownerHostId)
-          )
+          edit.sequence('repos').filter((r) => !repoMatchesHostIdentity(r, projectId, ownerHostId))
+          const nextRepos = edit.read('repos')
           // Without sibling ownership, remove all timestamps including unhydrated SSH entries; otherwise keep cleanup host-scoped.
           const repoIdFullyRemoved = !nextRepos.some((r) => r.id === projectId)
-          let nextLastVisitedAtByWorktreeId = s.lastVisitedAtByWorktreeId
           for (const id of Object.keys(s.lastVisitedAtByWorktreeId)) {
             const rawId = getWorktreeIdFromVisitKey(id)
             if (
@@ -272,16 +271,12 @@ export function createRepoRemovalActions(
               (!ownerHostId && worktreeIdSet.has(rawId)) ||
               (repoIdFullyRemoved && getRepoIdFromWorktreeId(rawId) === projectId)
             ) {
-              if (nextLastVisitedAtByWorktreeId === s.lastVisitedAtByWorktreeId) {
-                nextLastVisitedAtByWorktreeId = { ...s.lastVisitedAtByWorktreeId }
-              }
-              delete nextLastVisitedAtByWorktreeId[id]
+              edit.remove('lastVisitedAtByWorktreeId', id)
             }
           }
           const survivingRepoIds = new Set(nextRepos.map((r) => r.id))
           const removedRepoIds = s.repos.filter((r) => !survivingRepoIds.has(r.id)).map((r) => r.id)
-          return {
-            repos: nextRepos,
+          return edit.finish({
             // Why: drop removed repos' sparse-preset maps so they don't outlive the repo for the whole session.
             ...omitSparsePresetsForRepos(s, removedRepoIds),
             ...mergeProjectCompatibilityForHostRepoChange({
@@ -292,9 +287,7 @@ export function createRepoRemovalActions(
             activeRepoId: s.activeRepoId === projectId ? null : s.activeRepoId,
             ...twinSelectionPatch(s, twins.twinHostIds, ownerHostId),
             filterRepoIds: s.filterRepoIds.filter((id) => id !== projectId),
-            worktreesByRepo: nextWorktrees,
             detectedWorktreesByRepo: nextDetectedWorktrees,
-            lastVisitedAtByWorktreeId: nextLastVisitedAtByWorktreeId,
             folderWorkspacePathStatuses: {},
             sortEpoch: s.sortEpoch + 1,
             // Why: removing the last repo must reset activeView + clear activeWorktreeId so App renders Landing, not an empty settings/terminal pane.
@@ -307,7 +300,7 @@ export function createRepoRemovalActions(
                   activeRepoId: null
                 }
               : {})
-          }
+          })
         })
       } catch (err) {
         console.error('Failed to remove repo:', err)

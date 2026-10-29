@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { makePaneKey } from '../../../shared/stable-pane-id'
@@ -26,7 +27,7 @@ const PANE_KEY = makePaneKey('tab-1', LEAF_ID)
 afterEach(() => {
   mocks.layoutOwnerIsMain = false
   mocks.launch.mockClear()
-  useAppStore.setState(initialAppStoreState, true)
+  setSessionTestState(useAppStore, initialAppStoreState, true)
 })
 
 const record: SleepingAgentSessionRecord = {
@@ -43,7 +44,7 @@ const record: SleepingAgentSessionRecord = {
 
 // No binding can mean main cleared a reattaching terminal, or that its agent died in place.
 function retiredBindingState(): void {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     activeWorktreeId: 'wt-1',
     activeTabType: 'terminal',
     activeTabId: 'tab-1',

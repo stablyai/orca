@@ -120,7 +120,7 @@ export function profileListByHostUpdate(
   >,
   profiles: BrowserSessionProfile[],
   hostId: ExecutionHostId = getBrowserSettingsHostId(state)
-): Partial<BrowserSlice> {
+) {
   return {
     ...(getBrowserSettingsHostId(state) === hostId ? { browserSessionProfiles: profiles } : {}),
     browserSessionProfilesByHostId: {
@@ -135,7 +135,7 @@ export function listedProfilesByHostUpdate(
   state: AppState,
   profiles: BrowserSessionProfile[],
   hostId: ExecutionHostId
-): Partial<BrowserSlice> {
+) {
   const isUnlisted = (profileId: string | null | undefined): boolean =>
     !!profileId && !profiles.some((profile) => profile.id === profileId)
   const update = profileListByHostUpdate(state, profiles, hostId)
@@ -180,8 +180,8 @@ export function browserImportStateForHostUpdate(
   state: AppState,
   hostId: ExecutionHostId,
   browserSessionImportState: BrowserSlice['browserSessionImportState']
-): Partial<BrowserSlice> {
-  return getBrowserSettingsHostId(state) === hostId ? { browserSessionImportState } : state
+) {
+  return getBrowserSettingsHostId(state) === hostId ? { browserSessionImportState } : undefined
 }
 
 export function getFallbackTabTypeForWorktree(

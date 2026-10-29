@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act, renderHook } from '@testing-library/react'
@@ -155,13 +156,13 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   vi.unstubAllGlobals()
 })
 
 describe('file explorer deletion owner provenance', () => {
   it('routes a HUB-owned SSH delete through the HUB and never local SSH', async () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       settings: { activeRuntimeEnvironmentId: 'different-hub' } as never,
       repos: [
         makeRepo({
@@ -200,7 +201,7 @@ describe('file explorer deletion owner provenance', () => {
   })
 
   it('fails closed when the same SSH worktree is projected by two HUBs', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [],
       worktreesByRepo: {
         [LOCAL_REPO_ID]: [
@@ -214,7 +215,7 @@ describe('file explorer deletion owner provenance', () => {
   })
 
   it('routes a HUB-owned SSH rename through the HUB and never local SSH', async () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       settings: { activeRuntimeEnvironmentId: 'different-hub' } as never,
       repos: [
         makeRepo({
@@ -249,7 +250,7 @@ describe('file explorer deletion owner provenance', () => {
   })
 
   it('fails a rename closed when the same SSH worktree is projected by two HUBs', async () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [],
       worktreesByRepo: {
         [LOCAL_REPO_ID]: [
@@ -272,7 +273,7 @@ describe('file explorer deletion owner provenance', () => {
   })
 
   it('fails a cached rename closed when ownership changed after listing', async () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [
         makeRepo({
           id: LOCAL_REPO_ID,
@@ -290,7 +291,7 @@ describe('file explorer deletion owner provenance', () => {
       environmentId: 'hub-a',
       executionHostId: 'ssh:hub-private-target'
     })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       worktreesByRepo: {
         [LOCAL_REPO_ID]: [makeWorktree('ssh:hub-private-target', 'hub-b')]
       }
@@ -310,14 +311,14 @@ describe('file explorer deletion owner provenance', () => {
   })
 
   it('fails a cached rename closed when the HUB switches its nested SSH target', async () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [],
       worktreesByRepo: {
         [LOCAL_REPO_ID]: [makeWorktree('ssh:direct-target', 'hub-a')]
       }
     })
     const listingOwner = getFileExplorerOperationOwner(LOCAL_WORKTREE_ID)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       worktreesByRepo: {
         [LOCAL_REPO_ID]: [makeWorktree('ssh:jump-target', 'hub-a')]
       }
@@ -338,7 +339,7 @@ describe('file explorer deletion owner provenance', () => {
 
   it('fails a cached runtime node closed after SSH ownership hydration changes', async () => {
     const workspaceId = folderWorkspaceKey(FOLDER_ID)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       settings: { activeRuntimeEnvironmentId: 'focused-env' } as never,
       folderWorkspaces: [folderWorkspace()],
       projectGroups: [{ ...projectGroup(), executionHostId: 'runtime:focused-env' }],
@@ -352,7 +353,7 @@ describe('file explorer deletion owner provenance', () => {
       environmentId: 'focused-env',
       executionHostId: 'runtime:focused-env'
     })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       projectGroups: [
         { ...projectGroup(), connectionId: SSH_ID, executionHostId: `ssh:${SSH_ID}` }
       ],
@@ -385,7 +386,7 @@ describe('file explorer deletion owner provenance', () => {
   })
 
   it('fails closed when an exact worktree ID belongs to multiple hosts', async () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: duplicateHostRepos(),
       worktreesByRepo: {
         [LOCAL_REPO_ID]: [makeWorktree('local'), makeWorktree(`ssh:${SSH_ID}`)]
@@ -404,7 +405,7 @@ describe('file explorer deletion owner provenance', () => {
   })
 
   it('does not pop the batch confirm for an unresolved-owner multi-select', async () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: duplicateHostRepos(),
       worktreesByRepo: {
         [LOCAL_REPO_ID]: [makeWorktree('local'), makeWorktree(`ssh:${SSH_ID}`)]
@@ -440,7 +441,7 @@ describe('file explorer deletion owner provenance', () => {
   })
 
   it('keeps an explicit local worktree local when duplicate repo IDs include SSH', async () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       settings: { activeRuntimeEnvironmentId: 'focused-env' } as never,
       repos: duplicateHostRepos(),
       worktreesByRepo: { [LOCAL_REPO_ID]: [makeWorktree('local')] }
@@ -463,7 +464,7 @@ describe('file explorer deletion owner provenance', () => {
   })
 
   it('permanently deletes a paired-server worktree through its stamped runtime', async () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       settings: { activeRuntimeEnvironmentId: 'web-server-b' } as never,
       repos: [
         makeRepo({

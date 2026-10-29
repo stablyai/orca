@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRuntimeDetectedAgentsTestStore as createTestStore } from './runtime-detected-agents.test-fixture'
 import { makeWorktree, TEST_REPO } from './worktrees-slice-test-fixtures'
@@ -145,7 +146,7 @@ describe('workspace agent detection on a host without workspace-scoped detection
     async (_label, action) => {
       serveHost({ hostPlatform: 'win32', scoped: false })
       const store = createTestStore()
-      store.setState({
+      setSessionTestState(store, {
         repos: [
           { ...TEST_REPO, connectionId: 'server-ssh-target', executionHostId: 'runtime:env-1' }
         ],

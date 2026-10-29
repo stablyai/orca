@@ -1,3 +1,4 @@
+import type { SessionSourceSet } from '@/store/session-source-edits'
 import type { AppState } from '../types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { EditorBufferKeepRequest } from '../slices/editor/buffers/editor-buffer-kept'
@@ -50,7 +51,7 @@ export function collectRemovedHostTwins(
 /** Close attributed surfaces through normal actions; retain unknown/mixed state rather than lose survivor data. File closes keepEditorBuffer so dirty records survive tab removal. */
 export function closeRemovedHostTwinState(
   get: () => AppState,
-  set: (patch: (state: AppState) => Partial<AppState>) => void,
+  set: SessionSourceSet<AppState>,
   twins: RemovedHostTwins,
   preCall: RemovedHostTwins,
   keepEditorBuffer?: EditorBufferKeepRequest

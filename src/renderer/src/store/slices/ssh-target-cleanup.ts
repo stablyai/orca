@@ -1,3 +1,9 @@
+import {
+  editSessionSource,
+  type SessionSourceEdit,
+  type OrdinarySourcePartial,
+  type SessionSourceWrite
+} from '../session-source-edits'
 import type { AppState } from '../types'
 import type { SshTarget, SshTargetSummary } from '../../../../shared/ssh-types'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
@@ -74,16 +80,6 @@ function isRemovedSshTargetTabSession(
   return targetTabIds.has(tabId) || isSshTargetSessionId(sessionId, targetId)
 }
 
-// Why: each returns undefined when nothing was removed, so the patch only carries changed fields.
-function filterRecordIfChanged<T>(
-  record: Record<string, T>,
-  keep: (key: string, value: T) => boolean
-): Record<string, T> | undefined {
-  const entries = Object.entries(record)
-  const kept = entries.filter(([key, value]) => keep(key, value))
-  return kept.length === entries.length ? undefined : Object.fromEntries(kept)
-}
-
 function omitKey<T>(record: Record<string, T>, key: string): Record<string, T> | undefined {
   if (!Object.hasOwn(record, key)) {
     return undefined
@@ -102,33 +98,13 @@ function filterIfChanged<T>(items: T[], keep: (item: T) => boolean): T[] | undef
   return next.length === items.length ? undefined : next
 }
 
-function omitRemovedSshTargetTabSessions(
-  sessions: Record<string, string>,
-  targetId: string,
-  targetTabIds: Set<string>
-): Record<string, string> | undefined {
-  return filterRecordIfChanged(
-    sessions,
-    (tabId, sessionId) => !isRemovedSshTargetTabSession(tabId, sessionId, targetId, targetTabIds)
-  )
-}
-
 function clearSshTargetTabPtyState(
-  state: AppState,
+  edit: SessionSourceEdit<AppState>,
   targetId: string,
   targetTabIds: Set<string>
-): Pick<
-  AppState,
-  | 'tabsByWorktree'
-  | 'ptyIdsByTabId'
-  | 'lastKnownRelayPtyIdByTabId'
-  | 'pendingPaneAccountRestarts'
-  | 'codexRestartNoticeByPtyId'
-> & { changed: boolean } {
+): OrdinarySourcePartial<AppState> & { changed: boolean } {
+  const state = edit.view()
   const unboundTabIds = new Set<string>()
-  const nextLastKnownRelayPtyIdByTabId = {
-    ...state.lastKnownRelayPtyIdByTabId
-  }
   const nextPendingPaneAccountRestarts = {
     ...state.pendingPaneAccountRestarts
   }
@@ -149,11 +125,15 @@ function clearSshTargetTabPtyState(
       if (!shouldClearTab) {
         continue
       }
-      if (!tab.ptyId && ptyIds.length === 0 && nextLastKnownRelayPtyIdByTabId[tab.id] == null) {
+      if (
+        !tab.ptyId &&
+        ptyIds.length === 0 &&
+        edit.entry('lastKnownRelayPtyIdByTabId', tab.id) == null
+      ) {
         continue
       }
       unboundTabIds.add(tab.id)
-      delete nextLastKnownRelayPtyIdByTabId[tab.id]
+      edit.remove('lastKnownRelayPtyIdByTabId', tab.id)
       for (const ptyId of ptyIds) {
         delete nextPendingPaneAccountRestarts[ptyId]
         delete nextCodexRestartNoticeByPtyId[ptyId]
@@ -161,10 +141,9 @@ function clearSshTargetTabPtyState(
     }
   }
 
+  unbindTerminalTabPtys(edit, unboundTabIds)
   return {
     changed: unboundTabIds.size > 0,
-    ...unbindTerminalTabPtys(state, unboundTabIds),
-    lastKnownRelayPtyIdByTabId: nextLastKnownRelayPtyIdByTabId,
     pendingPaneAccountRestarts: nextPendingPaneAccountRestarts,
     codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId
   }
@@ -173,28 +152,33 @@ function clearSshTargetTabPtyState(
 export function buildRemovedSshTargetCleanupPatch(
   state: AppState,
   targetId: string
-): Partial<AppState> | null {
+): SessionSourceWrite<AppState> | null {
+  const edit = editSessionSource(state)
   const targetTabIds = collectSshTargetTerminalTabIds(state, targetId)
   const { changed: tabPtyChanged, ...tabPtyPatch } = clearSshTargetTabPtyState(
-    state,
+    edit,
     targetId,
     targetTabIds
   )
-  const patch: Partial<AppState> = tabPtyChanged ? tabPtyPatch : {}
-  const assign = <K extends keyof AppState>(key: K, value: AppState[K] | undefined): void => {
+  const patch: OrdinarySourcePartial<AppState> = tabPtyChanged ? tabPtyPatch : {}
+  const assign = <K extends keyof OrdinarySourcePartial<AppState>>(
+    key: K,
+    value: OrdinarySourcePartial<AppState>[K] | undefined
+  ): void => {
     if (value !== undefined) {
       patch[key] = value
     }
   }
-  assign(
-    'deferredSshSessionIdsByTabId',
-    omitRemovedSshTargetTabSessions(state.deferredSshSessionIdsByTabId, targetId, targetTabIds)
-  )
-  // Reconnect maps count as orphan-sweep liveness; removed targets must not leave dead tabs pinned (#9911).
-  assign(
-    'pendingReconnectPtyIdByTabId',
-    omitRemovedSshTargetTabSessions(state.pendingReconnectPtyIdByTabId, targetId, targetTabIds)
-  )
+  for (const [tabId, sessionId] of Object.entries(state.deferredSshSessionIdsByTabId)) {
+    if (isRemovedSshTargetTabSession(tabId, sessionId, targetId, targetTabIds)) {
+      edit.remove('deferredSshSessionIdsByTabId', tabId)
+    }
+  }
+  for (const [tabId, sessionId] of Object.entries(state.pendingReconnectPtyIdByTabId)) {
+    if (isRemovedSshTargetTabSession(tabId, sessionId, targetId, targetTabIds)) {
+      edit.remove('pendingReconnectPtyIdByTabId', tabId)
+    }
+  }
   assign(
     'deferredSshReconnectTargets',
     filterIfChanged(state.deferredSshReconnectTargets, (id) => id !== targetId)
@@ -213,9 +197,9 @@ export function buildRemovedSshTargetCleanupPatch(
     omitKey(state.unrestoredPortForwardsByConnection, targetId)
   )
   assign('detectedPortsByConnection', omitKey(state.detectedPortsByConnection, targetId))
-  assign('sshConnectionStates', withoutMapKey(state.sshConnectionStates, targetId))
+  edit.remove('sshConnectionStates', targetId)
   assign('sshTargetLabels', withoutMapKey(state.sshTargetLabels, targetId))
   // Deleted registration generations cannot become valid again; re-add issues a fresh ID.
   assign('sshTargetGenerations', withoutMapKey(state.sshTargetGenerations, targetId))
-  return Object.keys(patch).length > 0 ? patch : null
+  return edit.changed || Object.keys(patch).length > 0 ? edit.finish(patch) : null
 }

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -129,7 +130,7 @@ it('global owner: bounded controlled edits, failed/same selection and no-op save
   if (!settings) {
     throw new Error('Missing settings')
   }
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     localDetectedAgentIdsByContext: { host: ['claude', 'codex'] },
     repos: Array.from({ length: 32 }, (_, i) => ({
       id: `repo-${i}`,

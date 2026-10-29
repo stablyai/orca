@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // Full main-model saves change legacy partition restoration; patch only touched records (L104, record-patch-versus-full-save.test.ts).
 
 import { describe, expect, it, vi } from 'vitest'
@@ -23,7 +24,7 @@ createStoreSessionMockApi()
 /** The terminal tabs a window restoring `session` shows, in tab-bar order. */
 function restoredTabs(session: WorkspaceSessionState): string[][] {
   const store = createTestStore()
-  store.setState({
+  setSessionTestState(store, {
     repos: [
       { id: 'repo-1', path: '/Users/dev/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
     ],

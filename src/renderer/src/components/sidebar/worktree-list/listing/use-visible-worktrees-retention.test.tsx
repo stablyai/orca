@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { StrictMode, Suspense, startTransition, useEffect } from 'react'
@@ -41,7 +42,7 @@ const args: Parameters<typeof useVisibleSidebarWorktrees>[0] = {
 }
 
 function setPtyBound(bound: boolean): void {
-  act(() => useAppStore.setState({ ptyIdsByTabId: { [tab.id]: bound ? [ptyId] : [] } }))
+  act(() => setSessionTestState(useAppStore, { ptyIdsByTabId: { [tab.id]: bound ? [ptyId] : [] } }))
 }
 
 function visibleIds(result: ReturnType<typeof useVisibleSidebarWorktrees>): string[] {
@@ -52,8 +53,8 @@ describe('useVisibleSidebarWorktrees sleeping retention', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
-    useAppStore.setState(initialState, true)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, initialState, true)
+    setSessionTestState(useAppStore, {
       worktreesByRepo: { [repo.id]: [worktree] },
       tabsByWorktree: { [worktree.id]: [tab] },
       ptyIdsByTabId: { [tab.id]: [ptyId] }
@@ -63,16 +64,16 @@ describe('useVisibleSidebarWorktrees sleeping retention', () => {
   afterEach(() => {
     cleanup()
     forgetWorktreeSleepIntent(worktree.id)
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
     vi.useRealTimers()
   })
 
   it('retains a newly added active row missing from the cached sort order', () => {
-    useAppStore.setState({ worktreesByRepo: {} })
+    setSessionTestState(useAppStore, { worktreesByRepo: {} })
     const { result } = renderHook(() => useVisibleSidebarWorktrees({ ...args, sortedIds: [] }))
     expect(visibleIds(result.current)).toEqual([])
 
-    act(() => useAppStore.setState({ worktreesByRepo: { [repo.id]: [worktree] } }))
+    act(() => setSessionTestState(useAppStore, { worktreesByRepo: { [repo.id]: [worktree] } }))
     expect(visibleIds(result.current)).toEqual([worktree.id])
     setPtyBound(false)
     expect(visibleIds(result.current)).toEqual([worktree.id])
@@ -171,9 +172,9 @@ describe('useVisibleSidebarWorktrees sleeping retention', () => {
 
   it('forgets removed current worktrees even when their cached sort ID remains', () => {
     const { result } = renderHook(() => useVisibleSidebarWorktrees(args))
-    act(() => useAppStore.setState({ worktreesByRepo: {} }))
+    act(() => setSessionTestState(useAppStore, { worktreesByRepo: {} }))
     setPtyBound(false)
-    act(() => useAppStore.setState({ worktreesByRepo: { [repo.id]: [worktree] } }))
+    act(() => setSessionTestState(useAppStore, { worktreesByRepo: { [repo.id]: [worktree] } }))
     expect(visibleIds(result.current)).toEqual([])
     expect(vi.getTimerCount()).toBe(0)
   })
@@ -212,7 +213,9 @@ describe('useVisibleSidebarWorktrees sleeping retention', () => {
 
   it('sweeps a row whose last terminal tab closed without a grace window', () => {
     const { result } = renderHook(() => useVisibleSidebarWorktrees(args))
-    act(() => useAppStore.setState({ tabsByWorktree: { [worktree.id]: [] }, ptyIdsByTabId: {} }))
+    act(() =>
+      setSessionTestState(useAppStore, { tabsByWorktree: { [worktree.id]: [] }, ptyIdsByTabId: {} })
+    )
     expect(visibleIds(result.current)).toEqual([])
   })
 })

@@ -1,3 +1,4 @@
+import { readSessionOperation } from '../loading-store/session-operation'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { hasClosedTerminalTabRecord } from '../../../shared/closed-terminal-tab-tombstones'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -30,8 +31,7 @@ import type {
 } from '../loading-store/store-runtime-state'
 import type { SessionHostPartitionOperations } from '../loading-store/session-host-partitions'
 import { planTerminalLeafMove, writeMovedLeafProfileRecords } from './terminal-leaf-move'
-import { writeRestorable } from './restorable-write'
-import { assignWorkspaceSessionPartition } from './terminal-topology-membership'
+import { writeRestorableSession } from './terminal-topology-membership'
 import {
   commitLayoutCommand,
   commitLayoutCommandsAcrossPartitions,
@@ -109,7 +109,7 @@ export function admitPane(
         }
         return commitPaneChange(
           hostId,
-          admitPaneToSession(hostId, context.getSession(hostId), admission),
+          admitPaneToSession(hostId, readSessionOperation(context.state, hostId), admission),
           context
         )
       }
@@ -132,7 +132,7 @@ export function withdrawPane(
       () =>
         commitPaneChange(
           hostId,
-          withdrawPaneFromSession(hostId, context.getSession(hostId), pane),
+          withdrawPaneFromSession(hostId, readSessionOperation(context.state, hostId), pane),
           context
         )
     ),
@@ -250,17 +250,22 @@ function commitLeafMove(
 ): DurableProfileStateMutation<TerminalLeafMoveResult> {
   const { state } = context
   const planned = planTerminalLeafMove(
-    context.hostIds().map((hostId) => ({ hostId, session: context.getSession(hostId) })),
+    context.hostIds().map((hostId) => ({
+      hostId,
+      session: context.getSession(hostId),
+      prepared: readSessionOperation(context.state, hostId)
+    })),
     request
   )
   if (planned.sessions.length === 0) {
     return { value: planned.result, persist: false }
   }
-  const restores = planned.sessions.map(({ hostId, session }) =>
-    writeRestorable(
-      () => context.getSession(hostId),
-      (value) => context.markDirty(assignWorkspaceSessionPartition(state, hostId, value)),
-      keepFrozen(hostId, session, context)
+  const restores = planned.sessions.map(({ hostId, session, prepared }) =>
+    writeRestorableSession(
+      state,
+      hostId,
+      keepFrozen(hostId, prepared ?? session, context),
+      context.markDirty
     )
   )
   restores.push(...writeMovedLeafProfileRecords(request, context))
@@ -278,10 +283,11 @@ function commitPaneChange<T>(
   if (!change.session) {
     return { value: change.value, persist: false }
   }
-  const restore = writeRestorable(
-    () => context.getSession(hostId),
-    (value) => context.markDirty(assignWorkspaceSessionPartition(context.state, hostId, value)),
-    keepFrozen(hostId, change.session, context)
+  const restore = writeRestorableSession(
+    context.state,
+    hostId,
+    keepFrozen(hostId, change.prepared ?? change.session, context),
+    context.markDirty
   )
   return { value: change.value, rollback: restore }
 }

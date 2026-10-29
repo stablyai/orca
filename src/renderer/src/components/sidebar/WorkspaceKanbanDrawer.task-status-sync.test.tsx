@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import React, { act } from 'react'
@@ -229,7 +230,7 @@ function renderDrawer(item: Worktree, enabled = true, statusBarVisible = true): 
   const updateWorktreeMeta = vi.fn()
   const updateWorktreesMeta = vi.fn()
   const recordFeatureInteraction = vi.fn()
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     repos: [repo()],
     worktreesByRepo: { 'repo-a': [item] },
     activeWorktreeId: item.id,

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { preserveRuntimeAuthoredWorkspaceSessionFields } from '../../../main/persistence/runtime-authored-workspace-session-fields'
@@ -26,7 +27,7 @@ describe('defaultTerminalTabsAppliedByWorktreeId persist round-trip', () => {
 
   afterEach(() => {
     vi.useRealTimers()
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   it('keeps the marker through mark, persist patch, omitted snapshot, and hydration', () => {

@@ -1,5 +1,5 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 import { workItemsCacheKey } from '../github/cache-identity'
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
@@ -10,6 +10,7 @@ import { createFallbackProxy } from '../../web/preload-api/web-fallback-api'
 import {
   installReposRuntimeRoutingHarness,
   localRepo,
+  ownerOf,
   orcaProfileFindProjectProfiles,
   projectGroupsMoveProject,
   projectsSetupExistingFolder,
@@ -38,7 +39,6 @@ vi.mock('sonner', () => ({
 
 installReposRuntimeRoutingHarness()
 
-const ownerOf = (repo: Repo) => ({ hostId: getRepoExecutionHostId(repo) })
 // Ingest stamps every server row; an unstamped row is this app's own.
 const serverRepo: Repo = { ...remoteRepo, executionHostId: 'runtime:env-1' }
 
@@ -158,7 +158,7 @@ describe('repo slice runtime routing', () => {
       _meta: { runtimeId: 'runtime-remote' }
     })
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       repos: [serverRepo]
     })
@@ -179,7 +179,7 @@ describe('repo slice runtime routing', () => {
   it('updates SSH-owned repos through local IPC even when a runtime is focused', async () => {
     reposUpdate.mockResolvedValue({ ...sshRepo, displayName: 'SSH Renamed' })
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       repos: [sshRepo]
     })
@@ -609,7 +609,7 @@ describe('repo slice runtime routing', () => {
       _meta: { runtimeId: 'runtime-remote' }
     })
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       repos: [{ ...remoteRepo, executionHostId: 'runtime:env-1' }]
     })
@@ -653,7 +653,7 @@ describe('repo slice runtime routing', () => {
       _meta: { runtimeId: 'runtime-remote' }
     })
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       repos: [serverRepo],
       activeRepoId: remoteRepo.id
@@ -678,7 +678,7 @@ describe('repo slice runtime routing', () => {
   it('removes SSH-owned repos through local IPC even when a runtime is focused', async () => {
     const store = createTestStore()
     const worktreeId = `${sshRepo.id}::/home/orca/wt`
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       repos: [sshRepo],
       activeRepoId: sshRepo.id,
@@ -699,7 +699,7 @@ describe('repo slice runtime routing', () => {
     const store = createTestStore()
     const sshWorktreeId = `${sshRepo.id}::/home/orca/wt`
     const localWorktreeId = `${localRepo.id}::/local/wt`
-    store.setState({
+    setSessionTestState(store, {
       repos: [sshRepo, localRepo],
       activeRepoId: sshRepo.id,
       lastVisitedAtByWorktreeId: {
@@ -726,7 +726,7 @@ describe('repo slice runtime routing', () => {
     const store = createTestStore()
     const remoteWorktreeId = `${remoteRepo.id}::/srv/orca/wt`
     const localWorktreeId = `${localRepo.id}::/local/wt`
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       repos: [serverRepo, localRepo],
       activeRepoId: remoteRepo.id,
@@ -754,7 +754,7 @@ describe('repo slice runtime routing', () => {
 
   it('evicts GitHub caches for removed repos using repo id and legacy path keys', async () => {
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [localRepo],
       workItemsInvalidationNonce: 2,
       workItemsCache: {
@@ -788,7 +788,7 @@ describe('repo slice runtime routing', () => {
     })
     const store = createTestStore()
     const worktreeId = `${remoteRepo.id}::/remote/wt`
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       repos: [serverRepo],
       worktreesByRepo: {
@@ -823,7 +823,7 @@ describe('repo slice runtime routing', () => {
       repoId: localRepo.id,
       path: '/local/hidden'
     })
-    store.setState({
+    setSessionTestState(store, {
       repos: [localRepo],
       worktreesByRepo: { [localRepo.id]: [] },
       detectedWorktreesByRepo: {
@@ -866,7 +866,7 @@ describe('repo slice runtime routing', () => {
       _meta: { runtimeId: 'runtime-remote' }
     })
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       repos: [localRepo, remoteRepo]
     })

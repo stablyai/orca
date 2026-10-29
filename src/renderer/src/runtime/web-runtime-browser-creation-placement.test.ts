@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as SnapshotModule from './web-runtime-session-snapshot'
 import { useAppStore } from '../store'
@@ -144,7 +145,7 @@ describe('paired browser creation placement', () => {
   })
 
   it('stages the store Group New Browser Tab command before its first await', async () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       browserDefaultUrl: 'about:blank',
       repos: [
         {
@@ -196,7 +197,7 @@ describe('paired browser creation placement', () => {
 
   it('fills an empty group structurally without adoption recording a visit', async () => {
     const state = useAppStore.getState()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       groupsByWorktree: {
         [WT]: [
           ...state.groupsByWorktree[WT]!,

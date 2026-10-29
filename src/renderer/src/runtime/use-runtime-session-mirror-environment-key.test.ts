@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act, cleanup, renderHook } from '@testing-library/react'
@@ -61,7 +62,8 @@ function makeProjectGroup(executionHostId: ProjectGroup['executionHostId']): Pro
 }
 
 function seedMirrorState(): void {
-  useAppStore.setState(
+  setSessionTestState(
+    useAppStore,
     {
       ...initialState,
       settings: {
@@ -94,7 +96,7 @@ describe('useRuntimeSessionMirrorEnvironmentKeys', () => {
 
   afterEach(() => {
     cleanup()
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   it('does not rescan remote ownership for unrelated store writes or parent renders', () => {
@@ -113,7 +115,7 @@ describe('useRuntimeSessionMirrorEnvironmentKeys', () => {
         ]
       ])
     )
-    useAppStore.setState({ repos, worktreesByRepo })
+    setSessionTestState(useAppStore, { repos, worktreesByRepo })
     const hook = renderHook(() => useRuntimeSessionMirrorEnvironmentKeys())
     const initialCallCount = getMirrorTargets.mock.calls.length
 
@@ -225,7 +227,7 @@ describe('useRuntimeSessionMirrorEnvironmentKeys', () => {
     const hook = renderHook(() => useRuntimeSessionMirrorEnvironmentKeys())
 
     expect(hook.result.current.environmentKey).toBe('')
-    act(() => useAppStore.setState(change(useAppStore.getState())))
+    act(() => setSessionTestState(useAppStore, change(useAppStore.getState())))
 
     expect(hook.result.current.environmentKey).toBe('env-b\u0001runtime-b\u00012\u0001201')
     expect(getMirrorTargets).toHaveBeenCalledTimes(2)

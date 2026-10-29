@@ -1,3 +1,4 @@
+import type { SessionTestStore } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, useRef } from 'react'
 import { cleanup, renderHook } from '@testing-library/react'
@@ -11,9 +12,8 @@ import type { GitHubListRestoreWrite } from './task-page-github-list-scroll-rest
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { AppState } from '@/store/types'
-import type { StoreApi } from 'zustand/vanilla'
 
-const holders = vi.hoisted((): { store: StoreApi<AppState> | null } => ({ store: null }))
+const holders = vi.hoisted((): { store: SessionTestStore<AppState> | null } => ({ store: null }))
 const mocks = vi.hoisted(() => ({ createIssue: vi.fn(), workItem: vi.fn() }))
 vi.mock('@/store/index', async () => {
   const { useStore } = await import('zustand')

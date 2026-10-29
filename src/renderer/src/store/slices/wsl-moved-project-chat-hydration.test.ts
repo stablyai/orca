@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type { Tab } from '../../../../shared/tab-types'
@@ -76,7 +77,7 @@ function movedSession(): WorkspaceSessionState {
 function hydrate(store: ReturnType<typeof createTestStore>, session: WorkspaceSessionState) {
   // The host's same-id repo is known and listed; without the moved keys the degraded rule would
   // keep the unlisted local worktree whole.
-  store.setState({
+  setSessionTestState(store, {
     repos: [
       {
         id: 'repo1',
@@ -125,7 +126,7 @@ it("never treats a paired host's partition as the moved local workspace", () => 
 it("lists the moved chats under their project, and never the host's listed worktree", () => {
   const store = createTestStore()
   hydrate(store, movedSession())
-  store.setState({
+  setSessionTestState(store, {
     worktreesByRepo: {
       repo1: [makeWorktree({ id: ON_HOST, repoId: 'repo1', path: '/home/dev/repo1' })]
     },

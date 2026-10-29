@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import React from 'react'
 import recordings from '../../../../shared/fixtures/source-control-launch-recordings.json'
 import { normalizeSourceControlActionLaunchPreferences } from '../../../../shared/source-control-ai-actions'
@@ -64,7 +65,7 @@ describe('CommitMessageAiPane', () => {
 
   afterEach(() => {
     cleanup()
-    useAppStore.setState(originalState, true)
+    setSessionTestState(useAppStore, originalState, true)
   })
 
   it('renders only the opt-in control before the feature is enabled', () => {

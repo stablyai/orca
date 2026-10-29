@@ -73,7 +73,7 @@ export function purgeExpandedDirsSubtrees(
   useAppStore.setState((state) => {
     const current = state.expandedDirs[worktreeId]
     if (!current) {
-      return state
+      return undefined
     }
 
     const next = new Set<string>()
@@ -87,7 +87,7 @@ export function purgeExpandedDirsSubtrees(
     }
 
     if (!changed) {
-      return state
+      return undefined
     }
 
     return { expandedDirs: { ...state.expandedDirs, [worktreeId]: next } }
@@ -104,6 +104,6 @@ export function clearStalePendingReveal(deletedPath: string): void {
     ) {
       return { pendingExplorerReveal: null }
     }
-    return state
+    return undefined
   })
 }

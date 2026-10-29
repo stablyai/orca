@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import type {
@@ -14,8 +14,8 @@ import { applyRowPatch, optimisticFieldValueFromMutation } from './project-cache
 import { githubProjectHost } from '../../../../shared/github/project-identity'
 
 export function createProjectFieldActions(
-  set: Parameters<StateCreator<AppState>>[0],
-  get: Parameters<StateCreator<AppState>>[1]
+  set: Parameters<SessionStateCreator<AppState>>[0],
+  get: Parameters<SessionStateCreator<AppState>>[1]
 ): Pick<GitHubSlice, 'updateProjectFieldValue' | 'clearProjectFieldValue'> {
   // Serialize each field so rapid board moves reach GitHub in user order.
   type FieldWrite = {

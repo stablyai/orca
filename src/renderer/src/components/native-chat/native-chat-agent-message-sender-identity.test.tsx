@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -153,21 +154,22 @@ beforeEach(() => {
     live: true,
     activations: 0
   })
-  useAppStore.setState(
+  setSessionTestState(
+    useAppStore,
     { ...initial, activeWorktreeId: RECIPIENT, activeWorkspaceExecutionHostId: 'local' },
     true
   )
 })
 afterEach(() => {
   cleanup()
-  useAppStore.setState(initial, true)
+  setSessionTestState(useAppStore, initial, true)
   feeds.clear()
 })
 
 it('uses the recipient host when identical session text is published by two hosts', () => {
   publish('local', [summary(ROOT)])
   publish('remote', [summary(ROOT)])
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     activeWorkspaceExecutionHostId: 'runtime:remote',
     unifiedTabsByWorktree: {
       [SENDER]: [tab(ROOT, 'Remote sender', 'runtime:remote'), tab(ROOT, 'Wrong host')]
@@ -178,7 +180,7 @@ it('uses the recipient host when identical session text is published by two host
 })
 
 it('shows a chat sender by its current rename', () => {
-  useAppStore.setState({ unifiedTabsByWorktree: { [SENDER]: [tab(ROOT, '')] } })
+  setSessionTestState(useAppStore, { unifiedTabsByWorktree: { [SENDER]: [tab(ROOT, '')] } })
   const feed = feeds.get('local')!
   const status = feed.snapshot
   expect(feed.names.has(ROOT)).toBe(false)
@@ -205,7 +207,7 @@ it.each([false, true])(
       sortOrder: 0,
       createdAt: 0
     }
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       agentStatusByPaneKey: { [PANE]: row() },
       tabsByWorktree: { [SENDER]: [terminal] }
     })
@@ -213,7 +215,7 @@ it.each([false, true])(
     render(<NativeChatAgentMessageSenders from={from} chatWorktreeId={RECIPIENT} queued={queued} />)
     expect(screen.getByRole('button', { name: 'Original sender' })).toBeInTheDocument()
     act(() => {
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         agentStatusByPaneKey: { [PANE]: row({ key: 'session_id', id: 'provider-b' }) },
         tabsByWorktree: { [SENDER]: [{ ...terminal, customTitle: 'Renamed B' }] }
       })

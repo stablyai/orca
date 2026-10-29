@@ -3,20 +3,22 @@ import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
 import { findTabAndWorktree } from '../tab-group-state'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { locateTerminalTab } from '../../terminals/terminal-tab-location'
+import type { SessionSourceEdit } from '../../session-source-edits'
 
 /** Mirror host-tracked fields onto terminal rows: reconciliation derives unified fields there and recovery reads row ownership, so unified-only writes revert or remount hidden chat. */
 export function patchTerminalTabRow(
-  tabsByWorktree: Record<string, TerminalTab[]>,
+  edit: SessionSourceEdit<Pick<AppState, 'tabsByWorktree'>>,
   tabId: string,
   patch: Partial<Pick<TerminalTab, 'isPinned' | 'viewMode'>>
-): Partial<Pick<AppState, 'tabsByWorktree'>> {
+) {
+  const tabsByWorktree = edit.read('tabsByWorktree')
   const location = locateTerminalTab(tabsByWorktree, tabId)
   if (!location) {
-    return {}
+    return null
   }
   const nextTabs = tabsByWorktree[location.worktreeId].slice()
   nextTabs[location.index] = { ...location.tab, ...patch }
-  return { tabsByWorktree: { ...tabsByWorktree, [location.worktreeId]: nextTabs } }
+  return edit.set('tabsByWorktree', location.worktreeId, nextTabs)
 }
 
 // Mirror terminal pins so reconnect/peers retain them; dynamic import avoids a static store-to-runtime dependency.

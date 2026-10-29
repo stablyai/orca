@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { Profiler } from 'react'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
@@ -80,14 +81,14 @@ vi.stubGlobal('window', testWindow)
 beforeEach(() => {
   vi.clearAllMocks()
   Object.assign(window, { api })
-  useAppStore.setState(initial, true)
-  useAppStore.setState({
+  setSessionTestState(useAppStore, initial, true)
+  setSessionTestState(useAppStore, {
     folderWorkspaces: [makeFolderWorkspace({ id: 'workspace', folderPath: '/repo' })]
   })
 })
 afterEach(() => {
   cleanup()
-  useAppStore.setState(initial, true)
+  setSessionTestState(useAppStore, initial, true)
   Object.assign(window, { api: originalApi })
 })
 function hasPropertyKey<T extends object>(target: T, key: PropertyKey): key is keyof T {
@@ -121,7 +122,7 @@ function seedChats(size: number) {
       activeTabId: id === 'first' ? 'chat-0' : `chat-${size - 1}`
     })
   )
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     unifiedTabsByWorktree: { [workspace]: tabs },
     groupsByWorktree: { [workspace]: groups },
     activeGroupIdByWorktree: { [workspace]: 'first' }
@@ -164,7 +165,7 @@ it.each([10, 100])(
     await act(async () => {
       useAppStore.getState().setTabLabel('chat-1', 'Hidden title')
       useAppStore.getState().pinTab('chat-1', { recordInteraction: false })
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         groupsByWorktree: { [workspace]: [useAppStore.getState().groupsByWorktree[workspace][0]] }
       })
     })
@@ -263,7 +264,7 @@ it.each([10, 100])(
     )
     const folder = `folder:folder-${size - 1}`
     const git = `repo-${size - 1}::/git/${size - 1}`
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       folderWorkspaces: folders,
       projectGroups: groups,
       repos,
@@ -310,7 +311,7 @@ it.each([10, 100])(
     for (const replacement of replacements) {
       work.lookups = 0
       identity.mockClear()
-      await act(async () => useAppStore.setState(replacement))
+      await act(async () => setSessionTestState(useAppStore, replacement))
       expect(identity).toHaveBeenCalledTimes(2)
       expect(work.lookups).toBeGreaterThan(0)
       // Two shown buttons; existing folder candidates/groups and git lookups are linear in records.
@@ -322,7 +323,7 @@ it.each([10, 100])(
         })
       )
       expect(screen.queryAllByRole('button')).toHaveLength(expected.length)
-      await act(async () => useAppStore.setState(restore))
+      await act(async () => setSessionTestState(useAppStore, restore))
       expect(screen.getAllByRole('button')).toHaveLength(2)
     }
     identity.mockClear()

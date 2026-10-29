@@ -175,6 +175,16 @@ export function prepareWebSessionTabsSnapshotBrowser(
     if (replacedOpenFileCount === 0 && mirroredOpenFiles.length === 0) {
       return state.openFiles
     }
+    if (batchContext?.sourceEdit) {
+      return batchContext.sourceEdit
+        .sequence('openFiles')
+        .filterAppend(
+          (file) => !(file.worktreeId === worktreeId && isReplacedOpenFile(file)),
+          mirroredOpenFiles,
+          sameOpenFiles
+        )
+        .read('openFiles')
+    }
     const retained = state.openFiles.filter(
       (file) => !(file.worktreeId === worktreeId && isReplacedOpenFile(file))
     )

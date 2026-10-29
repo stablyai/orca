@@ -1,3 +1,4 @@
+import type { SessionSourceEdit } from '../../session-source-edits'
 import type { AppState } from '../../types'
 import { toVisibleTabType } from '../../../../../shared/tab-types'
 import type { WorkspaceVisibleTabType } from '../../../../../shared/tab-types'
@@ -124,42 +125,20 @@ export function deriveActiveSurfaceForWorktree(
 }
 
 export function buildActiveSurfacePatch(
-  state: ActiveSurfaceSourceState,
+  edit: SessionSourceEdit<ActiveSurfaceSourceState>,
   worktreeId: string,
   preferredGroupId?: string | null
-): Pick<
-  AppState,
-  | 'activeBrowserTabId'
-  | 'activeBrowserTabIdByWorktree'
-  | 'activeFileId'
-  | 'activeFileIdByWorktree'
-  | 'activeTabId'
-  | 'activeTabIdByWorktree'
-  | 'activeTabType'
-  | 'activeTabTypeByWorktree'
-> {
-  const derived = deriveActiveSurfaceForWorktree(state, worktreeId, preferredGroupId)
+): Pick<AppState, 'activeBrowserTabId' | 'activeFileId' | 'activeTabId' | 'activeTabType'> {
+  const derived = deriveActiveSurfaceForWorktree(edit.view(), worktreeId, preferredGroupId)
+  edit.set('activeBrowserTabIdByWorktree', worktreeId, derived.activeBrowserTabId)
+  edit.set('activeFileIdByWorktree', worktreeId, derived.activeFileId)
+  edit.set('activeTabIdByWorktree', worktreeId, derived.activeTabId)
+  edit.set('activeTabTypeByWorktree', worktreeId, derived.activeTabType)
   return {
     activeBrowserTabId: derived.activeBrowserTabId,
-    activeBrowserTabIdByWorktree: {
-      ...state.activeBrowserTabIdByWorktree,
-      [worktreeId]: derived.activeBrowserTabId
-    },
     activeFileId: derived.activeFileId,
-    activeFileIdByWorktree: {
-      ...state.activeFileIdByWorktree,
-      [worktreeId]: derived.activeFileId
-    },
     activeTabId: derived.activeTabId,
-    activeTabIdByWorktree: {
-      ...state.activeTabIdByWorktree,
-      [worktreeId]: derived.activeTabId
-    },
-    activeTabType: derived.activeTabType,
-    activeTabTypeByWorktree: {
-      ...state.activeTabTypeByWorktree,
-      [worktreeId]: derived.activeTabType
-    }
+    activeTabType: derived.activeTabType
   }
 }
 

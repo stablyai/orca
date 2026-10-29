@@ -1,4 +1,5 @@
-import type { StateCreator } from 'zustand'
+import { replaceSessionSourceFields } from '@/store/session-source-write-boundary'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import { runtimeTargetForOwnerEnvironment } from '../../runtime/runtime-client-target'
 import type { FetchedProjectGroupCatalog } from './project-group-catalog'
@@ -16,8 +17,8 @@ import {
 } from './project-group-catalog'
 
 export function createProjectGroupCatalogActions(
-  set: Parameters<StateCreator<AppState>>[0],
-  get: Parameters<StateCreator<AppState>>[1]
+  set: Parameters<SessionStateCreator<AppState>>[0],
+  get: Parameters<SessionStateCreator<AppState>>[1]
 ): Pick<RepoSlice, 'fetchProjectGroups' | 'fetchProjectGroupsForAllHosts'> {
   const applyCatalog = (catalog: FetchedProjectGroupCatalog, fence: HostCatalogFence): void => {
     if (!isHostCatalogFenceCurrent(get, fence)) {
@@ -25,16 +26,19 @@ export function createProjectGroupCatalogActions(
     }
     set((s) => {
       if (!isHostCatalogFenceCurrent(get, fence)) {
-        return s
+        return undefined
       }
       const { projectGroups } = mergeFetchedProjectGroupCatalog(catalog, s.projectGroups)
       if (arrayElementsUnchanged(projectGroups, s.projectGroups)) {
-        return s
+        return undefined
       }
-      return {
-        projectGroups,
-        folderWorkspacePathStatuses: {}
-      }
+      return replaceSessionSourceFields(
+        {
+          projectGroups,
+          folderWorkspacePathStatuses: {}
+        },
+        'catalog'
+      )
     })
   }
 

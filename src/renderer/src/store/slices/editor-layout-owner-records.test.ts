@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 // Main frames draw editor tabs; opens carry view data for diff/preview/conflict in layout-owner builds.
@@ -30,8 +31,9 @@ const SIBLING = 'repo-a::/repo-a-2'
 let main: TabsDrawnFromMain
 
 beforeEach(async () => {
-  useAppStore.setState(useAppStore.getInitialState(), true)
-  useAppStore.setState(
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
+  setSessionTestState(
+    useAppStore,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial catalog with only the fields editor opens and frames read.
     {
       activeWorktreeId: WT,
@@ -159,7 +161,7 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('editor records under frames, layout-o
     await main.settle()
     const diffTab = useAppStore.getState().unifiedTabsByWorktree[WT]![0]!
     // A conflict review's selected file has no tab of its own.
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       openFiles: [
         ...useAppStore.getState().openFiles,
         {
@@ -484,7 +486,7 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('open files renamed on disk, layout-ow
     openEdit(WT, '/repo-a/b.ts', 'b.ts')
     await main.settle()
     // A conflict review's selected file has no tab: main's answer rekeys it.
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       openFiles: [
         ...useAppStore.getState().openFiles,
         {

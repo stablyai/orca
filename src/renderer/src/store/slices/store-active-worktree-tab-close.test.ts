@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import {
@@ -310,7 +311,7 @@ describe('setActiveWorktree', () => {
     const first = store.getState().createTab(wt)
     store.getState().updateTabTitle(first.id, 'Claude Code')
     const tabsByWorktree = store.getState().tabsByWorktree
-    store.setState((state) => ({
+    setSessionTestState(store, (state) => ({
       unifiedTabsByWorktree: {
         ...state.unifiedTabsByWorktree,
         [wt]: state.unifiedTabsByWorktree[wt].map((tab) =>
@@ -528,7 +529,7 @@ describe('setActiveWorktree', () => {
       activate: false
     })
     await settled()
-    store.setState({ activeBrowserTabIdByWorktree: { [backgroundWt]: closing.id } })
+    setSessionTestState(store, { activeBrowserTabIdByWorktree: { [backgroundWt]: closing.id } })
     // Main loads the window's edited layout, as it would from a saved session.
     main?.close()
     main = await drawTabsFromMain(store)
@@ -559,7 +560,7 @@ describe('setActiveWorktree', () => {
       activate: false
     })
     await settled()
-    store.setState({
+    setSessionTestState(store, {
       unifiedTabsByWorktree: {},
       activeBrowserTabId: closing.id,
       activeBrowserTabIdByWorktree: { [wt]: closing.id }

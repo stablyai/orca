@@ -44,7 +44,7 @@ export function createEditorBufferIdentityActions(
             retired: true
           }
         }
-        return detached ? { editorBufferDetached: detached } : s
+        return detached ? { editorBufferDetached: detached } : undefined
       }),
 
     releaseKeptEditorBuffers: (notice) =>
@@ -53,7 +53,7 @@ export function createEditorBufferIdentityActions(
           ([, entry]) => entry.notice === notice
         )
         if (released.length === 0) {
-          return s
+          return undefined
         }
         const editorBufferKept = { ...s.editorBufferKept }
         for (const [recordId] of released) {
@@ -68,7 +68,7 @@ export function createEditorBufferIdentityActions(
           entry.viewIds.some((id) => viewIds.includes(id))
         )
         if (settled.length === 0) {
-          return s
+          return undefined
         }
         const editorBufferKept = { ...s.editorBufferKept }
         for (const [recordId, entry] of settled) {

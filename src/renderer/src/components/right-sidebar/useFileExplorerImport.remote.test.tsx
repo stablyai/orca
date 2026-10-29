@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -115,7 +116,7 @@ describe('file explorer OS file drops on remote workspaces', () => {
     )
     const view = render(<Explorer worktreeId="wt-ssh" root={SSH_ROOT} />)
     dropFile(view.getByTestId('src'))
-    useAppStore.setState({ sshConnectionStates: sshConnectionStatesAt(4) })
+    setSessionTestState(useAppStore, { sshConnectionStates: sshConnectionStatesAt(4) })
     await act(async () => finish({ paths: ['/Users/me/Desktop/shot.png'], failures: [] }))
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalledTimes(1))
     expect(mocks.importPaths).not.toHaveBeenCalled()
@@ -128,7 +129,7 @@ describe('file explorer OS file drops on remote workspaces', () => {
       () => new Promise<PreparedDroppedPaths>((resolve) => (finish = resolve))
     )
     // A disconnected SSH host has no connection generation to pin the upload to.
-    useAppStore.setState({ sshConnectionStates: new Map() })
+    setSessionTestState(useAppStore, { sshConnectionStates: new Map() })
     const view = render(<Explorer worktreeId="wt-ssh" root={SSH_ROOT} />)
     dropFile(view.getByTestId('src'))
     expect(mocks.toastError).not.toHaveBeenCalled()

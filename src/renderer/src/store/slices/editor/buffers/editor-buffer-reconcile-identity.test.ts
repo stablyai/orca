@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
@@ -32,7 +33,7 @@ const view = (id: string) => state().openFiles.find((file) => file.id === id)
 const recordOf = (id: string) => state().editorBufferIdOf[id]
 
 beforeEach(() => {
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
 })
 
 afterEach(() => {
@@ -54,7 +55,7 @@ describe('a retired runtime', () => {
   })
 
   it("quarantines the old machine's views with their draft, apart from the replacement", () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       openFiles: [runtimeTab('old1', { isDirty: true }), runtimeTab('old2', { isDirty: true })],
       editorDrafts: { old1: 'old edits', old2: 'old edits' }
     })
@@ -66,7 +67,7 @@ describe('a retired runtime', () => {
     expect(recordOf('old2')).toBe('detached:old1')
     expect(state().editorBufferDetached.old2?.retired).toBe(true)
 
-    useAppStore.setState((s) => ({ openFiles: [...s.openFiles, runtimeTab('new')] }))
+    setSessionTestState(useAppStore, (s) => ({ openFiles: [...s.openFiles, runtimeTab('new')] }))
     expect(recordOf('new')).not.toBe(recordOf('old1'))
     expect(view('new')?.isDirty).toBe(false)
     expect(state().editorDrafts.new).toBeUndefined()
@@ -76,17 +77,17 @@ describe('a retired runtime', () => {
   })
 
   it('never merges, even with an identical draft or a later route change', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       openFiles: [runtimeTab('old', { isDirty: true })],
       editorDrafts: { old: 'same' }
     })
     retire()
-    useAppStore.setState((s) => ({
+    setSessionTestState(useAppStore, (s) => ({
       openFiles: [...s.openFiles, runtimeTab('new', { isDirty: true })],
       editorDrafts: { ...s.editorDrafts, new: 'same' }
     }))
     state().reconcileEditorBufferIdentities()
-    useAppStore.setState({ repos: [] })
+    setSessionTestState(useAppStore, { repos: [] })
 
     expect(recordOf('old')).toBe('detached:old')
     expect(recordOf('new')).not.toBe('detached:old')
@@ -94,7 +95,7 @@ describe('a retired runtime', () => {
   })
 
   it('a view of another environment is left alone', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       openFiles: [runtimeTab('other', { runtimeEnvironmentId: 'env-2', isDirty: true })],
       editorDrafts: { other: 'edits' }
     })
@@ -110,7 +111,7 @@ describe('SSH identity through the record index', () => {
     tab(id, { externalSshTargetId: 'target', worktreeId: `wt-${id}`, ...patch })
 
   it('two workspaces on one runtime-in-SSH file share a record, and its edits', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       openFiles: [
         sshTab('w1', { runtimeEnvironmentId: 'env' }),
         sshTab('w2', { runtimeEnvironmentId: 'env' })
@@ -125,7 +126,7 @@ describe('SSH identity through the record index', () => {
   })
 
   it('keeps direct SSH, another target and another runtime on the target apart', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       openFiles: [
         sshTab('nested', { runtimeEnvironmentId: 'env' }),
         sshTab('direct', { runtimeEnvironmentId: null }),
@@ -139,7 +140,7 @@ describe('SSH identity through the record index', () => {
   })
 
   it('keeps an SSH file apart from the local file with the same path', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       worktreesByRepo: {
         'repo-1': [makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' })]
       },
@@ -166,10 +167,10 @@ describe('scale', () => {
       })
     })
     const resolutions = vi.mocked(editorBufferIdentityOf)
-    useAppStore.setState({ worktreesByRepo: { 'repo-1': worktrees } })
+    setSessionTestState(useAppStore, { worktreesByRepo: { 'repo-1': worktrees } })
     resolutions.mockClear()
 
-    expect(() => useAppStore.setState({ openFiles: tabs })).not.toThrow()
+    expect(() => setSessionTestState(useAppStore, { openFiles: tabs })).not.toThrow()
     expect(resolutions).toHaveBeenCalledTimes(tabs.length)
     expect(Object.keys(state().editorBuffers)).toHaveLength(FILES)
     for (const viewIds of Object.values(state().editorBufferViews)) {
@@ -191,7 +192,7 @@ describe('scale', () => {
     )
 
     // One more tab resolves only itself.
-    useAppStore.setState((s) => ({
+    setSessionTestState(useAppStore, (s) => ({
       openFiles: [...s.openFiles, tab('late', { worktreeId: 'wt-3', filePath: '/repo/f0.ts' })]
     }))
     expect(resolutions).toHaveBeenCalledTimes(1)

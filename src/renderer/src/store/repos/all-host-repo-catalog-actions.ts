@@ -1,4 +1,5 @@
-import type { StateCreator } from 'zustand'
+import { replaceSessionSourceFields } from '@/store/session-source-write-boundary'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
 import { applyManualRepoOrder } from '../../../../shared/manual-repo-order'
@@ -39,8 +40,8 @@ import {
 } from './wsl-moved-repo-ui-retention'
 
 export function createAllHostRepoCatalogActions(
-  set: Parameters<StateCreator<AppState>>[0],
-  get: Parameters<StateCreator<AppState>>[1]
+  set: Parameters<SessionStateCreator<AppState>>[0],
+  get: Parameters<SessionStateCreator<AppState>>[1]
 ): Pick<RepoSlice, 'fetchReposForAllHosts'> {
   return {
     fetchReposForAllHosts: async (options) => {
@@ -65,7 +66,7 @@ export function createAllHostRepoCatalogActions(
         set((s) => {
           // Why: skip a catalog whose env was tombstoned mid-load (removed), not one merely absent from the not-yet-hydrated saved list (#8881).
           if (isRemovedRuntimeHostId(catalog.hostId, s.removedRuntimeEnvironmentIds)) {
-            return s
+            return undefined
           }
           const result = mergeFetchedRepoCatalog(catalog, s.repos)
           const reconciliation = reconcileSupersededSshRepos(result.repos, s)
@@ -86,18 +87,21 @@ export function createAllHostRepoCatalogActions(
           hostRepos = finalizedRepos.filter(
             (repo) => getRepoExecutionHostId(repo) === result.hostId
           )
-          return {
-            repos: finalizedRepos,
-            pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
-            ...reconcileFetchedCatalogWorktreeState(s, catalog, finalizedRepos),
-            ...mergedProjectCompatibility,
-            ...(arrayElementsUnchanged(finalizedRepos, s.repos)
-              ? {}
-              : { folderWorkspacePathStatuses: {} }),
-            activeRepoId: s.activeRepoId,
-            filterRepoIds: s.filterRepoIds,
-            setupScriptPromptDismissedRepoIds: s.setupScriptPromptDismissedRepoIds
-          }
+          return replaceSessionSourceFields(
+            {
+              repos: finalizedRepos,
+              pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
+              ...reconcileFetchedCatalogWorktreeState(s, catalog, finalizedRepos),
+              ...mergedProjectCompatibility,
+              ...(arrayElementsUnchanged(finalizedRepos, s.repos)
+                ? {}
+                : { folderWorkspacePathStatuses: {} }),
+              activeRepoId: s.activeRepoId,
+              filterRepoIds: s.filterRepoIds,
+              setupScriptPromptDismissedRepoIds: s.setupScriptPromptDismissedRepoIds
+            },
+            'catalog'
+          )
         })
         // Why: keep the safe-auto fork sync (as fetchRepos does) so cold-start, which now routes here, still updates safe-auto forks.
         scheduleSafeAutoForkSync(hostRepos)
@@ -187,7 +191,7 @@ export function createAllHostRepoCatalogActions(
           if (visibilityDefaults !== undefined && isCurrent(fence)) {
             set((state) =>
               isRemovedRuntimeHostId(hostId, state.removedRuntimeEnvironmentIds)
-                ? state
+                ? undefined
                 : {
                     worktreeVisibilityDefaultsByHost: {
                       ...state.worktreeVisibilityDefaultsByHost,

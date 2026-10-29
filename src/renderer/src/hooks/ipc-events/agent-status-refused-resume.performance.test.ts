@@ -1,3 +1,5 @@
+import { isSessionSourceOracleActive } from '@/lib/test-support/session-source-oracle'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
 import type {
   AgentStatusIpcPayload,
@@ -60,11 +62,13 @@ it.each([10, 100])(
       new Proxy(entries, {
         ownKeys(target) {
           const keys = Reflect.ownKeys(target)
-          copied += keys.length
+          if (!isSessionSourceOracleActive()) {
+            copied += keys.length
+          }
           return keys
         }
       })
-    store.setState({
+    setSessionTestState(store, {
       agentStatusByPaneKey: countMap(
         Object.fromEntries(
           Array.from({ length: size }, (_, index) => {

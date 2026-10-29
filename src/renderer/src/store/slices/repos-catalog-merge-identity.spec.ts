@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
@@ -124,7 +125,7 @@ export function registerReposCatalogMergeIdentityTests(): void {
 
     it('keeps the same folderWorkspaces array (and entries) when a refetch changes nothing', async () => {
       const store = createTestStore()
-      store.setState({ projectGroups: [{ ...projectGroup, executionHostId: 'local' }] })
+      setSessionTestState(store, { projectGroups: [{ ...projectGroup, executionHostId: 'local' }] })
 
       await store.getState().fetchFolderWorkspaces(catalogOwner(store))
       const first = store.getState().folderWorkspaces
@@ -159,7 +160,7 @@ export function registerReposCatalogMergeIdentityTests(): void {
 
     it('appends new folder workspaces without disturbing existing order', async () => {
       const store = createTestStore()
-      store.setState({ projectGroups: [{ ...projectGroup, executionHostId: 'local' }] })
+      setSessionTestState(store, { projectGroups: [{ ...projectGroup, executionHostId: 'local' }] })
 
       await store.getState().fetchFolderWorkspaces(catalogOwner(store))
       const firstEntry = store.getState().folderWorkspaces[0]
@@ -178,7 +179,7 @@ export function registerReposCatalogMergeIdentityTests(): void {
 
     it('drops entries that vanish from the fetched catalog', async () => {
       const store = createTestStore()
-      store.setState({ projectGroups: [{ ...projectGroup, executionHostId: 'local' }] })
+      setSessionTestState(store, { projectGroups: [{ ...projectGroup, executionHostId: 'local' }] })
 
       projectGroupsList.mockImplementation(async () => [clone(secondProjectGroup)])
       await store.getState().fetchProjectGroups(catalogOwner(store))
@@ -190,7 +191,7 @@ export function registerReposCatalogMergeIdentityTests(): void {
 
     it('treats a nested linkedTask change as a change', async () => {
       const store = createTestStore()
-      store.setState({ projectGroups: [{ ...projectGroup, executionHostId: 'local' }] })
+      setSessionTestState(store, { projectGroups: [{ ...projectGroup, executionHostId: 'local' }] })
 
       await store.getState().fetchFolderWorkspaces(catalogOwner(store))
       const first = store.getState().folderWorkspaces
@@ -236,7 +237,7 @@ export function registerReposCatalogMergeIdentityTests(): void {
 
     it('keeps cached path statuses when a folder-workspace refetch changes nothing', async () => {
       const store = createTestStore()
-      store.setState({ projectGroups: [{ ...projectGroup, executionHostId: 'local' }] })
+      setSessionTestState(store, { projectGroups: [{ ...projectGroup, executionHostId: 'local' }] })
       await store.getState().fetchFolderWorkspaces(catalogOwner(store))
       store.setState({ folderWorkspacePathStatuses: cachedPathStatuses })
 
@@ -247,7 +248,7 @@ export function registerReposCatalogMergeIdentityTests(): void {
 
     it('clears cached path statuses when a folder workspace path changes', async () => {
       const store = createTestStore()
-      store.setState({ projectGroups: [{ ...projectGroup, executionHostId: 'local' }] })
+      setSessionTestState(store, { projectGroups: [{ ...projectGroup, executionHostId: 'local' }] })
       await store.getState().fetchFolderWorkspaces(catalogOwner(store))
       store.setState({ folderWorkspacePathStatuses: cachedPathStatuses })
 

@@ -1,4 +1,5 @@
-import type { StateCreator } from 'zustand'
+import type { OrdinarySourcePartial } from '../session-source-edits'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
@@ -31,8 +32,8 @@ import {
 } from './work-item-routing'
 
 export const createCheckActions = (
-  set: Parameters<StateCreator<AppState>>[0],
-  get: Parameters<StateCreator<AppState>>[1]
+  set: Parameters<SessionStateCreator<AppState>>[0],
+  get: Parameters<SessionStateCreator<AppState>>[1]
 ): Pick<GitHubSlice, 'fetchPRChecks' | 'fetchPRCheckDetails'> => ({
   fetchPRChecks: async (
     repoPath,
@@ -170,7 +171,7 @@ export const createCheckActions = (
         return checks
       }
       set((s) => {
-        const nextState: Partial<AppState> = {
+        const nextState: OrdinarySourcePartial<AppState> = {
           checksCache: withBoundedCacheEntry(s.checksCache, cacheKey, {
             data: checks,
             fetchedAt: Date.now(),

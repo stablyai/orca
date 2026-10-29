@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { getDefaultSettings } from '../../../shared/constants'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -97,12 +98,12 @@ function seedState(worktree: ReturnType<typeof makeCreatedAgentWorktree>): void 
     refreshGitHubForWorktreeIfStale: vi.fn(),
     revealWorktreeInSidebar: vi.fn()
   }
-  useAppStore.setState(state)
+  setSessionTestState(useAppStore, state)
 }
 
 function seedSleepingRecord(worktreeId: string, sessionId: string): string {
   const paneKey = makePaneKey(WEB_TAB_ID, LEAF_ID)
-  useAppStore.setState((s) => ({
+  setSessionTestState(useAppStore, (s) => ({
     sleepingAgentSessionsByPaneKey: {
       ...s.sleepingAgentSessionsByPaneKey,
       [paneKey]: {
@@ -124,7 +125,7 @@ function seedSleepingRecord(worktreeId: string, sessionId: string): string {
 }
 
 function retractMirroredTab(worktreeId: string): void {
-  useAppStore.setState({ tabsByWorktree: { [worktreeId]: [] } })
+  setSessionTestState(useAppStore, { tabsByWorktree: { [worktreeId]: [] } })
 }
 
 function connectRuntime(runtimeId: string): void {
@@ -147,7 +148,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  useAppStore.setState(initialAppStoreState, true)
+  setSessionTestState(useAppStore, initialAppStoreState, true)
   resetHostSessionMirrorHydrationForTests()
   clearRuntimeEnvironmentConnectionGenerationsForTests()
 })
@@ -179,7 +180,7 @@ describe('parked mirrored-pane resume replay', () => {
     resumeSleepingAgentSessionsForWorktree(worktree.id)
 
     // The host answered: the PTY is still attached to the mirrored pane.
-    useAppStore.setState({ ptyIdsByTabId: { [WEB_TAB_ID]: ['pty-host-old-1'] } })
+    setSessionTestState(useAppStore, { ptyIdsByTabId: { [WEB_TAB_ID]: ['pty-host-old-1'] } })
     markHostSessionMirrorHydrated(RUNTIME_ENV_ID)
 
     const after = useAppStore.getState()

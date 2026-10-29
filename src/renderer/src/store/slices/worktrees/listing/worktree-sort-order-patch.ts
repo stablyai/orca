@@ -1,3 +1,4 @@
+import type { SessionSourceEdit, OrdinarySourcePartial } from '../../../session-source-edits'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorktreeSortOrderUpdate } from '../../../../../../shared/worktree/sort-order-update'
 import type { AppState } from '../../../types'
@@ -5,14 +6,15 @@ import { worktreeHostMatchOptions, worktreeMatchesHost } from './worktree-host-o
 
 /** Apply host order saves via sortOrderEpoch; sortEpoch would schedule another live Smart save (#27268). */
 export function patchWorktreeSortOrders(
-  state: AppState,
+  edit: SessionSourceEdit<AppState>,
   repoId: string,
   hostId: ExecutionHostId,
   sortOrders: readonly WorktreeSortOrderUpdate[]
-): Pick<AppState, 'worktreesByRepo' | 'sortOrderEpoch'> | AppState {
+): OrdinarySourcePartial<AppState> | undefined {
+  const state = edit.view()
   const current = state.worktreesByRepo[repoId]
   if (!current || sortOrders.length === 0) {
-    return state
+    return undefined
   }
   const sortOrderById = new Map(sortOrders.map((entry) => [entry.worktreeId, entry.sortOrder]))
   const matchOptions = worktreeHostMatchOptions(state, repoId, hostId)
@@ -30,12 +32,11 @@ export function patchWorktreeSortOrders(
     changed = true
     return { ...worktree, sortOrder }
   })
-  return changed
-    ? {
-        worktreesByRepo: { ...state.worktreesByRepo, [repoId]: next },
-        sortOrderEpoch: state.sortOrderEpoch + 1
-      }
-    : state
+  if (!changed) {
+    return undefined
+  }
+  edit.set('worktreesByRepo', repoId, next)
+  return { sortOrderEpoch: state.sortOrderEpoch + 1 }
 }
 
 /** False when a published row is missing here, so the listing needs a refetch rather than a patch. */

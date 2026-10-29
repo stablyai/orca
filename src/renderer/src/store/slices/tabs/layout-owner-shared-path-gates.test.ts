@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTabsSliceMockApi } from '../tabs-slice-test-harness'
 import { createTestStore, makeTab } from '../store-test-helpers'
@@ -30,7 +31,7 @@ describe('shared tab paths in a layout-owner build', () => {
       sortOrder: 0,
       createdAt: 1
     }
-    store.setState({
+    setSessionTestState(store, {
       unifiedTabsByWorktree: { [WT]: [entry] },
       groupsByWorktree: {
         [WT]: [{ id: 'g-1', worktreeId: WT, activeTabId: entry.id, tabOrder: [entry.id] }]
@@ -53,7 +54,7 @@ describe('shared tab paths in a layout-owner build', () => {
   // A row's ptyId is the window's own field (the frame merge keeps it), so reconnect sets only that.
   it('reconnect advertises restored terminals and changes only each row ptyId', async () => {
     const rows = { [WT]: [makeTab({ id: 'tab-1', worktreeId: WT, ptyId: null })] }
-    store.setState({
+    setSessionTestState(store, {
       tabsByWorktree: rows,
       terminalLayoutsByTabId: {},
       pendingReconnectWorktreeIds: [WT],

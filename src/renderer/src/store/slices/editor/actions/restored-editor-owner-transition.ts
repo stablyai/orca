@@ -1,3 +1,4 @@
+import type { OrdinarySourcePartial } from '../../../session-source-edits'
 import type { ActiveWorktreeStateTransition } from '../../worktree-helpers'
 import type { TabGroup } from '../../../../../../shared/tab-types'
 import type { AppState } from '../../../types'
@@ -36,8 +37,8 @@ export function buildRestoredEditorOwnerTransition(
   /** The group main was asked to append to (layout-owner build). */
   proposedTargetGroupId?: string
 ): ActiveWorktreeStateTransition {
-  return (s) => {
-    const destination = resolveRestoredEditorOwnerDestination(s, args)
+  return (s, edit) => {
+    const destination = resolveRestoredEditorOwnerDestination(edit, args)
     if (!destination.ok) {
       assignResult({ ok: false, reason: destination.reason })
       return destination.reason === 'stale'
@@ -123,133 +124,134 @@ export function buildRestoredEditorOwnerTransition(
           updatedTargetGroup
         ]
 
-    const nextUnifiedTabsByWorktree = { ...s.unifiedTabsByWorktree }
-    nextUnifiedTabsByWorktree[sourceWorktreeId] = (
-      nextUnifiedTabsByWorktree[sourceWorktreeId] ?? []
-    ).filter((tab) => !movedTabIds.has(tab.id))
-    nextUnifiedTabsByWorktree[targetWorktreeId] = [
-      // Why: a leftover target tab carrying a migrated id would duplicate the id that destinationOrder keeps only once.
-      ...(nextUnifiedTabsByWorktree[targetWorktreeId] ?? []).filter(
-        (tab) => !mappedMovedTabIdSet.has(tab.id)
-      ),
-      ...movedTabs.map((tab) => ({
-        ...tab,
-        id: tabIdMigration.get(tab.id) ?? tab.id,
-        entityId: migrations.get(tab.entityId) ?? tab.entityId,
-        groupId: targetGroupId,
-        worktreeId: targetWorktreeId,
-        ...(tab.executionHostId ? { executionHostId: args.targetExecutionHostId } : {})
-      }))
-    ]
-
-    const nextGroupsByWorktree = {
-      ...s.groupsByWorktree,
-      [sourceWorktreeId]: sourceGroupState.groups,
-      [targetWorktreeId]: nextTargetGroups
-    }
-    const nextLayoutByWorktree = { ...s.layoutByWorktree }
-    if (sourceGroupState.layout) {
-      nextLayoutByWorktree[sourceWorktreeId] = sourceGroupState.layout
-    } else {
-      delete nextLayoutByWorktree[sourceWorktreeId]
-    }
-    if (targetGroups.length === 0 || !nextLayoutByWorktree[targetWorktreeId]) {
-      nextLayoutByWorktree[targetWorktreeId] = { type: 'leaf', groupId: targetGroupId }
-    }
-
-    const nextActiveFileIdByWorktree = { ...s.activeFileIdByWorktree }
-    const sourceActiveFileId = nextActiveFileIdByWorktree[sourceWorktreeId]
-    if (sourceActiveFileId && movedFileIds.has(sourceActiveFileId)) {
-      nextActiveFileIdByWorktree[sourceWorktreeId] =
-        s.openFiles.find(
-          (file) => !movedFileIds.has(file.id) && file.worktreeId === sourceWorktreeId
-        )?.id ?? null
-    }
-    nextActiveFileIdByWorktree[targetWorktreeId] = newFileId
-    const nextTabBarOrderByWorktree = { ...s.tabBarOrderByWorktree }
-    nextTabBarOrderByWorktree[sourceWorktreeId] = (
-      nextTabBarOrderByWorktree[sourceWorktreeId] ?? []
-    ).filter((id) => !movedFileIds.has(id) && !movedTabIds.has(id))
-    nextTabBarOrderByWorktree[targetWorktreeId] = [
-      ...(nextTabBarOrderByWorktree[targetWorktreeId] ?? []).filter(
-        (id) => !mappedMovedTabBarIds.includes(id)
-      ),
-      ...mappedMovedTabBarIds
-    ]
-    const nextActiveGroupIdByWorktree = { ...s.activeGroupIdByWorktree }
-    if (sourceGroupState.groups.length > 0) {
-      const previousActiveGroupId = nextActiveGroupIdByWorktree[sourceWorktreeId]
-      nextActiveGroupIdByWorktree[sourceWorktreeId] = sourceGroupState.groups.some(
-        (group) => group.id === previousActiveGroupId
+    let tabState: OrdinarySourcePartial<AppState>
+    if (sourceWorktreeId === targetWorktreeId) {
+      tabState = rekeyRestoredEditorTabsInPlace(
+        edit,
+        targetWorktreeId,
+        migrations,
+        tabIdMigration,
+        args.targetExecutionHostId
       )
-        ? previousActiveGroupId
-        : sourceGroupState.groups[0].id
     } else {
-      delete nextActiveGroupIdByWorktree[sourceWorktreeId]
+      edit.set(
+        'unifiedTabsByWorktree',
+        sourceWorktreeId,
+        (edit.read('unifiedTabsByWorktree')[sourceWorktreeId] ?? []).filter(
+          (tab) => !movedTabIds.has(tab.id)
+        )
+      )
+      edit.set('unifiedTabsByWorktree', targetWorktreeId, [
+        // Why: a leftover target tab carrying a migrated id would duplicate the id that destinationOrder keeps only once.
+        ...(edit.read('unifiedTabsByWorktree')[targetWorktreeId] ?? []).filter(
+          (tab) => !mappedMovedTabIdSet.has(tab.id)
+        ),
+        ...movedTabs.map((tab) => ({
+          ...tab,
+          id: tabIdMigration.get(tab.id) ?? tab.id,
+          entityId: migrations.get(tab.entityId) ?? tab.entityId,
+          groupId: targetGroupId,
+          worktreeId: targetWorktreeId,
+          ...(tab.executionHostId ? { executionHostId: args.targetExecutionHostId } : {})
+        }))
+      ])
+
+      edit.set('groupsByWorktree', sourceWorktreeId, sourceGroupState.groups)
+      edit.set('groupsByWorktree', targetWorktreeId, nextTargetGroups)
+
+      if (sourceGroupState.layout) {
+        edit.set('layoutByWorktree', sourceWorktreeId, sourceGroupState.layout)
+      } else {
+        edit.remove('layoutByWorktree', sourceWorktreeId)
+      }
+      if (targetGroups.length === 0 || !edit.read('layoutByWorktree')[targetWorktreeId]) {
+        edit.set('layoutByWorktree', targetWorktreeId, { type: 'leaf', groupId: targetGroupId })
+      }
+
+      const sourceActiveFileId = edit.read('activeFileIdByWorktree')[sourceWorktreeId]
+      if (sourceActiveFileId && movedFileIds.has(sourceActiveFileId)) {
+        edit.set(
+          'activeFileIdByWorktree',
+          sourceWorktreeId,
+          s.openFiles.find(
+            (file) => !movedFileIds.has(file.id) && file.worktreeId === sourceWorktreeId
+          )?.id ?? null
+        )
+      }
+      edit.set('activeFileIdByWorktree', targetWorktreeId, newFileId)
+      const nextTabBarOrderByWorktree = { ...s.tabBarOrderByWorktree }
+      nextTabBarOrderByWorktree[sourceWorktreeId] = (
+        nextTabBarOrderByWorktree[sourceWorktreeId] ?? []
+      ).filter((id) => !movedFileIds.has(id) && !movedTabIds.has(id))
+      nextTabBarOrderByWorktree[targetWorktreeId] = [
+        ...(nextTabBarOrderByWorktree[targetWorktreeId] ?? []).filter(
+          (id) => !mappedMovedTabBarIds.includes(id)
+        ),
+        ...mappedMovedTabBarIds
+      ]
+
+      if (sourceGroupState.groups.length > 0) {
+        const previousActiveGroupId = edit.read('activeGroupIdByWorktree')[sourceWorktreeId]
+        edit.set(
+          'activeGroupIdByWorktree',
+          sourceWorktreeId,
+          sourceGroupState.groups.some((group) => group.id === previousActiveGroupId)
+            ? previousActiveGroupId
+            : sourceGroupState.groups[0].id
+        )
+      } else {
+        edit.remove('activeGroupIdByWorktree', sourceWorktreeId)
+      }
+      edit.set('activeGroupIdByWorktree', targetWorktreeId, targetGroupId)
+      edit.set('activeTabTypeByWorktree', targetWorktreeId, 'editor')
+      tabState = { tabBarOrderByWorktree: nextTabBarOrderByWorktree }
     }
-    nextActiveGroupIdByWorktree[targetWorktreeId] = targetGroupId
-    const tabState =
-      sourceWorktreeId === targetWorktreeId
-        ? rekeyRestoredEditorTabsInPlace(
-            s,
-            targetWorktreeId,
-            migrations,
-            tabIdMigration,
-            args.targetExecutionHostId
-          )
-        : {
-            activeFileIdByWorktree: nextActiveFileIdByWorktree,
-            activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
-            activeTabTypeByWorktree: {
-              ...s.activeTabTypeByWorktree,
-              [targetWorktreeId]: 'editor' as const
-            },
-            groupsByWorktree: nextGroupsByWorktree,
-            layoutByWorktree: nextLayoutByWorktree,
-            tabBarOrderByWorktree: nextTabBarOrderByWorktree,
-            unifiedTabsByWorktree: nextUnifiedTabsByWorktree
+
+    edit.sequence('openFiles').map((file) =>
+      file.id === source.id
+        ? {
+            ...file,
+            id: newFileId,
+            worktreeId: targetWorktreeId,
+            relativePath: args.targetRelativePath,
+            runtimeEnvironmentId: args.targetRuntimeEnvironmentId,
+            externalSshTargetId,
+            operationProvenance,
+            pendingOwnerMigration: undefined,
+            mirroredFromRuntimeSession: undefined
           }
+        : file.markdownPreviewSourceFileId === source.id
+          ? {
+              ...file,
+              id: previewIdMigrations.get(file.id) ?? file.id,
+              worktreeId: targetWorktreeId,
+              relativePath: args.targetRelativePath,
+              runtimeEnvironmentId: args.targetRuntimeEnvironmentId,
+              externalSshTargetId,
+              operationProvenance,
+              markdownPreviewSourceFileId: newFileId,
+              pendingOwnerMigration: undefined,
+              mirroredFromRuntimeSession: undefined
+            }
+          : file
+    )
+    edit.replace('editorDrafts', rekeyFileIdRecord(s.editorDrafts, migrations), 'order')
+    edit.replace(
+      'markdownFrontmatterVisible',
+      rekeyFileIdRecord(s.markdownFrontmatterVisible, migrations),
+      'order'
+    )
 
     assignResult({ ok: true, fileId: newFileId })
     return {
       patch: {
-        openFiles: s.openFiles.map((file) =>
-          file.id === source.id
-            ? {
-                ...file,
-                id: newFileId,
-                worktreeId: targetWorktreeId,
-                relativePath: args.targetRelativePath,
-                runtimeEnvironmentId: args.targetRuntimeEnvironmentId,
-                externalSshTargetId,
-                operationProvenance,
-                pendingOwnerMigration: undefined,
-                mirroredFromRuntimeSession: undefined
-              }
-            : file.markdownPreviewSourceFileId === source.id
-              ? {
-                  ...file,
-                  id: previewIdMigrations.get(file.id) ?? file.id,
-                  worktreeId: targetWorktreeId,
-                  relativePath: args.targetRelativePath,
-                  runtimeEnvironmentId: args.targetRuntimeEnvironmentId,
-                  externalSshTargetId,
-                  operationProvenance,
-                  markdownPreviewSourceFileId: newFileId,
-                  pendingOwnerMigration: undefined,
-                  mirroredFromRuntimeSession: undefined
-                }
-              : file
-        ),
         ...rekeyEditorBuffers(s, s.openFiles, migrations, 'carry', () => ({
           pendingOwnerMigration: undefined
         })),
-        editorDrafts: rekeyFileIdRecord(s.editorDrafts, migrations),
         editorCursorLine: rekeyFileIdRecord(s.editorCursorLine, migrations),
         markdownViewMode: rekeyFileIdRecord(s.markdownViewMode, migrations),
         markdownRichModeSizeOverride: rekeyFileIdRecord(s.markdownRichModeSizeOverride, migrations),
         editorViewMode: rekeyFileIdRecord(s.editorViewMode, migrations),
-        markdownFrontmatterVisible: rekeyFileIdRecord(s.markdownFrontmatterVisible, migrations),
         markdownTableOfContentsVisible: rekeyFileIdRecord(
           s.markdownTableOfContentsVisible,
           migrations

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTestStore, makeWorktree, makeTab, makeLayout } from './store-test-helpers'
@@ -27,7 +28,7 @@ describe('removeProject cascade', () => {
     const wt1 = 'repo1::/path/wt1'
     const wt2 = 'repo1::/path/wt2'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -98,7 +99,7 @@ describe('restartCodexTabs', () => {
     const store = createTestStore()
     const wt1 = 'repo1::/path/wt1'
 
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],

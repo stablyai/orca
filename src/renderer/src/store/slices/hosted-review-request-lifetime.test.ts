@@ -1,3 +1,4 @@
+import { withSessionSourceTestWrites } from '@/lib/test-support/session-source-test-store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
@@ -26,22 +27,24 @@ type TestState = Pick<
 >
 
 function makeStore(runtime = false) {
-  return create<TestState>()((...args) => ({
-    settings: null,
-    repos: [
-      {
-        id: 'repo',
-        path: '/repo',
-        displayName: 'Repo',
-        badgeColor: 'blue',
-        addedAt: 1,
-        ...(runtime ? { executionHostId: 'runtime:env-1' } : {})
-      }
-    ],
-    prCache: {},
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This harness provides every state field read by the hosted-review slice.
-    ...createHostedReviewSlice(...(args as Parameters<typeof createHostedReviewSlice>))
-  }))
+  return create<TestState>()(
+    withSessionSourceTestWrites<TestState>((...args) => ({
+      settings: null,
+      repos: [
+        {
+          id: 'repo',
+          path: '/repo',
+          displayName: 'Repo',
+          badgeColor: 'blue',
+          addedAt: 1,
+          ...(runtime ? { executionHostId: 'runtime:env-1' } : {})
+        }
+      ],
+      prCache: {},
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This harness provides every state field read by the hosted-review slice.
+      ...createHostedReviewSlice(...(args as unknown as Parameters<typeof createHostedReviewSlice>))
+    }))
+  )
 }
 
 function review(number: number): HostedReviewInfo {

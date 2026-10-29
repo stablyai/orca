@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 import type { AppState } from '../types'
@@ -309,7 +310,7 @@ describe('createSettingsSlice runtime switching', () => {
 
   it('preserves existing host state while loading the selected environment', async () => {
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
       repos: [
         {
@@ -450,7 +451,7 @@ describe('createSettingsSlice runtime switching', () => {
   it('does not close host-owned mirrored resources when a paired web client switches servers', async () => {
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
       repos: [
         {
@@ -518,7 +519,7 @@ describe('createSettingsSlice runtime switching', () => {
 
   it('keeps the previous host live terminal and browser resources intact on switch (multi-host keepalive)', async () => {
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
       repos: [
         {
@@ -611,7 +612,7 @@ describe('createSettingsSlice runtime switching', () => {
 
   it('allows switching focus while editor tabs have unsaved state', async () => {
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
       openFiles: [
         {
@@ -642,7 +643,7 @@ describe('createSettingsSlice runtime switching', () => {
       new Error('Remote Orca runtime closed the connection.')
     )
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
       repos: [{ id: 'repo-env-1', path: '/env-1/repo', displayName: 'Env 1' } as never],
       openFiles: [],
@@ -683,7 +684,7 @@ describe('createSettingsSlice runtime switching', () => {
       _meta: { runtimeId: 'runtime-old' }
     })
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
       repos: [{ id: 'repo-env-1', path: '/env-1/repo', displayName: 'Env 1' } as never],
       openFiles: []

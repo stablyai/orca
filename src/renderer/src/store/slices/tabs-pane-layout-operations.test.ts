@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
@@ -44,7 +45,7 @@ describe('TabsSlice', () => {
 
   describe('setTabGroupSplitRatio', () => {
     it('updates the persisted ratio for the targeted split node', () => {
-      store.setState({
+      setSessionTestState(store, {
         layoutByWorktree: {
           [WT]: {
             type: 'split',
@@ -74,7 +75,7 @@ describe('TabsSlice', () => {
     })
 
     it('keeps state identity when the ratio is unchanged', () => {
-      store.setState({
+      setSessionTestState(store, {
         layoutByWorktree: {
           [WT]: {
             type: 'split',

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { defaultScopeHost } from '@/lib/default-creation-host'
@@ -31,7 +32,7 @@ function setLaunchAgentOnFirstTab(launchAgent: TuiAgent): void {
   if (!tab) {
     throw new Error('expected a seeded tab')
   }
-  useAppStore.setState({ tabsByWorktree: { wt1: [{ ...tab, launchAgent }, ...rest] } })
+  setSessionTestState(useAppStore, { tabsByWorktree: { wt1: [{ ...tab, launchAgent }, ...rest] } })
 }
 
 describe('markLiveCodexSessionsForRestart', () => {
@@ -46,7 +47,7 @@ describe('markLiveCodexSessionsForRestart', () => {
     runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
       return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
     })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       // Reset remote selection so later local panes stay in their intended switch lane.
       settings: null as never,
       tabsByWorktree: {
@@ -126,7 +127,7 @@ describe('markLiveCodexSessionsForRestart', () => {
   })
 
   it('marks every live Codex split pane and ignores non-Codex panes', async () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       tabsByWorktree: {
         wt1: [
           {
@@ -245,7 +246,7 @@ describe('markLiveCodexSessionsForRestart', () => {
   })
 
   it('still marks a confirmed Codex pane when another pane is unreachable', async () => {
-    useAppStore.setState({ ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-stale'] } })
+    setSessionTestState(useAppStore, { ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-stale'] } })
     vi.mocked(window.api.pty.inspectProcess).mockImplementation(async (ptyId) => {
       if (ptyId === 'pty-stale') {
         throw new Error('terminal_gone')
@@ -369,7 +370,7 @@ describe('markLiveCodexSessionsForRestart', () => {
   })
 
   it('inspects remote runtime PTYs on the server their id names', async () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       tabsByWorktree: {
         wt1: [
@@ -431,7 +432,7 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
     panes: { ptyId: string; worktreeId?: string; shellOverride?: string }[],
     worktreePaths: Record<string, string> = {}
   ): void {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       settings: { activeRuntimeEnvironmentId: null } as never,
       worktreesByRepo: {
         repo1: [
@@ -504,7 +505,8 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
   })
 
   afterEach(() => {
-    useAppStore.setState({ settings: null as never, worktreesByRepo: {} as never })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test supplies only the preload API members exercised by its scenario.
+    setSessionTestState(useAppStore, { settings: null as never, worktreesByRepo: {} as never })
     if (originalWindow) {
       ;(globalThis as { window: typeof window }).window = originalWindow
     } else {
@@ -812,7 +814,7 @@ describe('markRestoredStaleCodexSessionsForRestart', () => {
 
   beforeEach(() => {
     clearRuntimeCompatibilityCacheForTests()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       tabsByWorktree: {
         wt1: [
           {

@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import type { RepoSlice } from '../repos/repo-state'
 import { createRepoCatalogActions } from '../repos/repo-catalog-actions'
@@ -18,7 +18,7 @@ import { createRepoUpdateActions } from '../repos/repo-update'
 import { createRepoOrderingActions } from '../repos/repo-ordering'
 import { fetchWslMovedProjects } from '../repos/wsl-moved-projects'
 
-export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, get) => {
+export const createRepoSlice: SessionStateCreator<AppState, RepoSlice> = (set, get) => {
   const repoCatalogActions = createRepoCatalogActions(set, get)
   const runtimeRepoCatalogActions = createRuntimeRepoCatalogActions(set, get)
   const allHostRepoCatalogActions = createAllHostRepoCatalogActions(set, get)
@@ -45,7 +45,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     folderWorkspacePathStatuses: {},
     floatingWorkspacePath: null,
     setFloatingWorkspacePath: (path) =>
-      set((s) => (s.floatingWorkspacePath === path ? s : { floatingWorkspacePath: path })),
+      set((s) => (s.floatingWorkspacePath === path ? undefined : { floatingWorkspacePath: path })),
     activeRepoId: null,
     reposFetchGeneration: 0,
     pendingSshRepoReadoptions: [],

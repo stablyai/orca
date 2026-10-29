@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, it, expect, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTabsSliceMockApi } from '../tabs-slice-test-harness'
@@ -27,7 +28,7 @@ function hydrateFixtureStore(): { store: Store; workspaceIds: string[] } {
   expect(fixture.workspaceIds).toHaveLength(HYDRATED_WORKSPACE_COUNT)
   expect(fixture.tabCount).toBe(HYDRATED_TAB_COUNT)
   const store = createTestStore()
-  store.setState(fixture.state)
+  setSessionTestState(store, fixture.state)
   return { store, workspaceIds: fixture.workspaceIds }
 }
 
@@ -130,7 +131,7 @@ describe('whole-session workspace tab-model reconciliation', () => {
     const { store, workspaceIds } = hydrateFixtureStore()
     const openFiles = store.getState().openFiles
     let scans = 0
-    store.setState({
+    setSessionTestState(store, {
       openFiles: new Proxy(openFiles, {
         get(target, property, receiver) {
           if (property === 'filter') {

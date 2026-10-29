@@ -1,11 +1,11 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-contract'
 import type { AgentAttentionUnreadWrite } from '@/attention/agent-attention-policy'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { AppState } from '../../types'
 
-export type WorkspaceAttentionSet = Parameters<StateCreator<AppState>>[0]
-export type WorkspaceAttentionGet = Parameters<StateCreator<AppState>>[1]
+export type WorkspaceAttentionSet = Parameters<SessionStateCreator<AppState>>[0]
+export type WorkspaceAttentionGet = Parameters<SessionStateCreator<AppState>>[1]
 
 export type OnScreenAttentionTarget = { worktreeId: string | null; tabId: string }
 

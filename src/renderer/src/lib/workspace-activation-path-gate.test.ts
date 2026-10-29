@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
@@ -58,7 +59,7 @@ const folderWorkspace: FolderWorkspace = {
 async function seedFolderWorkspace(
   status: { exists: true } | { exists: false; reason: FolderWorkspacePathStatusReason }
 ): Promise<void> {
-  store.setState({
+  setSessionTestState(store, {
     projectGroups: [projectGroup],
     folderWorkspaces: [folderWorkspace],
     activeWorktreeId: null,
@@ -79,7 +80,7 @@ async function seedFolderWorkspace(
 
 describe('Cmd/Ctrl+1-9 folder-workspace path gate (#10716)', () => {
   beforeEach(() => {
-    store.setState(store.getInitialState(), true)
+    setSessionTestState(store, store.getInitialState(), true)
     mocks.toastError.mockClear()
     vi.stubGlobal('window', {
       api: { folderWorkspaces: { getPathStatus: mocks.getPathStatus } }
@@ -118,7 +119,7 @@ describe('Cmd/Ctrl+1-9 folder-workspace path gate (#10716)', () => {
     'keeps the selected %s host on a folder sidebar reveal',
     async (executionHostId) => {
       await seedFolderWorkspace({ exists: true })
-      store.setState({
+      setSessionTestState(store, {
         folderWorkspaces: [
           {
             ...folderWorkspace,
@@ -147,7 +148,7 @@ describe('Cmd/Ctrl+1-9 folder-workspace path gate (#10716)', () => {
     'reveals the %s catalog owner when an unrelated server is focused',
     async (executionHostId, connectionId) => {
       await seedFolderWorkspace({ exists: true })
-      store.setState({
+      setSessionTestState(store, {
         projectGroups: [{ ...projectGroup, connectionId }],
         settings: {
           ...getDefaultSettings('/tmp'),
@@ -171,7 +172,7 @@ describe('Cmd/Ctrl+1-9 folder-workspace path gate (#10716)', () => {
     async (executionHostId) => {
       await seedFolderWorkspace({ exists: true })
       const workspaceKey = folderWorkspaceKey(folderWorkspace.id)
-      store.setState({
+      setSessionTestState(store, {
         folderWorkspaces: [
           { ...folderWorkspace, executionHostId: 'local' },
           { ...folderWorkspace, executionHostId: 'runtime:builder', folderPath: '/srv/project' }
@@ -214,7 +215,7 @@ describe('Cmd/Ctrl+1-9 folder-workspace path gate (#10716)', () => {
       await seedFolderWorkspace({ exists: false, reason: 'missing' })
       const worktreeId = folderWorkspaceKey(folderWorkspace.id)
       const tab = { ...makeUnifiedTab('tab-1', worktreeId, 'entity-1', 'Research'), contentType }
-      store.setState({
+      setSessionTestState(store, {
         unifiedTabsByWorktree: { [worktreeId]: [tab] },
         groupsByWorktree: { [worktreeId]: [makeGroup(worktreeId, [tab.id])] },
         browserTabsByWorktree: {

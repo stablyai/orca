@@ -1,4 +1,5 @@
 // Removed servers can never receive held closes; discard them immediately, including removals while app was closed, rather than waiting 30 days.
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
@@ -91,7 +92,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   vi.useRealTimers()
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   replaceRuntimeEnvironmentRevisions([])
   resetDeferredPeerChecksForTests()
   resetWebSessionCloseReplaysForTests()

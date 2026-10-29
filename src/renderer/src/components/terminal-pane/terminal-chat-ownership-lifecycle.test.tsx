@@ -1,3 +1,5 @@
+import { withSessionSourceWrites } from '@/store/session-source-write-boundary'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { useEffect, useState } from 'react'
@@ -47,15 +49,15 @@ vi.mock('../../store', async () => {
       return
     }
     mocks.state.terminalLayoutsByTabId = { ...mocks.state.terminalLayoutsByTabId, [id]: layout }
-    useAppStore.setState({ terminalLayoutsByTabId: mocks.state.terminalLayoutsByTabId })
+    setSessionTestState(useAppStore, { terminalLayoutsByTabId: mocks.state.terminalLayoutsByTabId })
   }
   mocks.state.setTabViewMode = (_id, mode) => {
     mocks.state.unifiedTabsByWorktree = {
       wt: [{ ...mocks.state.unifiedTabsByWorktree.wt[0], viewMode: mode }]
     }
-    useAppStore.setState({ unifiedTabsByWorktree: mocks.state.unifiedTabsByWorktree })
+    setSessionTestState(useAppStore, { unifiedTabsByWorktree: mocks.state.unifiedTabsByWorktree })
   }
-  const useAppStore = create(() => mocks.state)
+  const useAppStore = create(withSessionSourceWrites(() => mocks.state))
   return { useAppStore }
 })
 vi.mock('@/runtime/web-runtime-terminal-buffer-actions', () => ({

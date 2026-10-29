@@ -1,8 +1,9 @@
 import {
-  applyWebSessionTabsSnapshotOperations,
+  applyWebSessionTabsSnapshotOperationsToEdit,
   decideWebSessionTabsSnapshotOperations,
   type WebSessionTabsSnapshotOperation
 } from './snapshot-api'
+
 import { applyWebSessionTabsStorePatch } from './store-patch'
 import type { VisibilityResumeBatch } from './visibility-resume-types'
 
@@ -15,8 +16,8 @@ export function applyVisibilityResumeRepairs(
   }
   const decided = decideWebSessionTabsSnapshotOperations(operations)
   const settle = applyWebSessionTabsStorePatch(
-    (state, changedAgentPaneKeys) =>
-      applyWebSessionTabsSnapshotOperations(state, decided, changedAgentPaneKeys),
+    (state, changedAgentPaneKeys, sourceEdit) =>
+      applyWebSessionTabsSnapshotOperationsToEdit(sourceEdit, state, decided, changedAgentPaneKeys),
     {
       frames: decided.map(({ environmentId, snapshot, decision }) => ({
         environmentId,

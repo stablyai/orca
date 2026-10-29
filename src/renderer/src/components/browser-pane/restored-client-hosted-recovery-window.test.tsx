@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -63,7 +64,7 @@ function runtimeStatusMap(
 }
 
 function seedStore(options: { restored: boolean; environment: EnvironmentReachability }): void {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     remoteBrowserPageHandlesByPageId: options.restored
       ? {
           [PAGE_ID]: {
@@ -128,7 +129,7 @@ describe('restored client-hosted recovery window', () => {
   afterEach(() => {
     cleanup()
     vi.useRealTimers()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       remoteBrowserPageHandlesByPageId: {},
       runtimeStatusByEnvironmentId: new Map()
     })
@@ -210,7 +211,7 @@ describe('restored client-hosted recovery window', () => {
     expect(noticeShown()).toBe(true)
 
     act(() => {
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         remoteBrowserPageHandlesByPageId: {
           [PAGE_ID]: { environmentId: ENVIRONMENT_ID, remotePageId: 'remote-page-a' }
         }
@@ -225,7 +226,7 @@ describe('restored client-hosted recovery window', () => {
     const view = renderPane()
     act(() => vi.advanceTimersByTime(RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS))
     act(() => {
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         remoteBrowserPageHandlesByPageId: {
           [PAGE_ID]: { environmentId: ENVIRONMENT_ID, remotePageId: 'remote-page-a' }
         }
@@ -234,7 +235,7 @@ describe('restored client-hosted recovery window', () => {
     expect(noticeShown()).toBe(false)
 
     act(() => {
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         remoteBrowserPageHandlesByPageId: {
           [PAGE_ID]: {
             environmentId: ENVIRONMENT_ID,

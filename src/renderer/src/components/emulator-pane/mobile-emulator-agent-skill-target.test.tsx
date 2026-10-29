@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -45,7 +46,7 @@ function EmulatorSetup(): React.JSX.Element {
 
 beforeEach(() => {
   Object.assign(window, { api: { platform: { get: () => ({ platform: 'win32' }) } } })
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     settings: getDefaultSettings('/tmp'),
     activeRepoId: null,
     activeWorktreeId: null,
@@ -105,7 +106,7 @@ for (const surface of ['guide', 'settings'] as const) {
 
     it('keeps an unserved SSH owner unsupported instead of using the local transport fallback', async () => {
       const worktree = makeWorktree({ id: 'repo::/remote', repoId: 'repo', hostId: 'ssh:box' })
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         activeRepoId: 'repo',
         activeWorktreeId: worktree.id,
         activeWorkspaceExecutionHostId: 'ssh:box',
@@ -134,7 +135,7 @@ for (const surface of ['guide', 'settings'] as const) {
         repoId: 'repo',
         hostId: 'runtime:paired'
       })
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         activeWorktreeId: worktree.id,
         activeWorkspaceExecutionHostId: 'runtime:paired',
         worktreesByRepo: { repo: [worktree] }
@@ -155,7 +156,7 @@ for (const surface of ['guide', 'settings'] as const) {
     it('retains the repair gate when its selected runtime belongs to the active project', () => {
       const path = String.raw`\\wsl.localhost\Debian\home\alice\repo`
       const worktree = makeWorktree({ id: 'repo::/missing', repoId: 'repo', hostId: 'local', path })
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         activeRepoId: 'repo',
         activeWorktreeId: worktree.id,
         activeWorkspaceExecutionHostId: 'local',
@@ -172,7 +173,7 @@ for (const surface of ['guide', 'settings'] as const) {
       async (kind) => {
         const path = String.raw`\\wsl.localhost\Ubuntu\home\alice\repo`
         const worktree = makeWorktree({ id: 'repo::/local', repoId: 'repo', hostId: 'local', path })
-        useAppStore.setState({
+        setSessionTestState(useAppStore, {
           activeRepoId: 'repo',
           activeWorktreeId: worktree.id,
           activeWorkspaceExecutionHostId: 'local',
@@ -180,7 +181,7 @@ for (const surface of ['guide', 'settings'] as const) {
           worktreesByRepo: { repo: [worktree] }
         })
         if (kind === 'folder') {
-          useAppStore.setState({
+          setSessionTestState(useAppStore, {
             activeWorktreeId: 'folder:wsl',
             folderWorkspaces: [
               makeFolderWorkspace({

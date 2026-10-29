@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { projectViewCacheKey } from '../github/cache-identity'
 import {
@@ -25,7 +26,8 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
 
   it('routes project table fetches through the board source, not the focused server', async () => {
     const store = createTestStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This settings fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' }
     } as Partial<AppState>)
     runtimeEnvironmentCall.mockResolvedValueOnce({
@@ -87,7 +89,8 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
 
   it('keeps GitHub project view caches separate for runtime and local sources', async () => {
     const store = createTestStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This settings fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' }
     } as Partial<AppState>)
     runtimeEnvironmentCall.mockResolvedValueOnce({
@@ -252,7 +255,8 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       'runtime:env-project',
       'ghe.example:8443'
     )
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This settings, projectViewCache fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-focused' },
       projectViewCache: {
         [cacheKey]: {
@@ -339,7 +343,8 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       undefined,
       'runtime:env-project'
     )
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This settings, repos, projectViewCache fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-focused' },
       repos: [],
       projectViewCache: {
@@ -418,7 +423,8 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
   it('optimistically patches a project field and rolls back an ok:false result', async () => {
     const store = createTestStore()
     const cacheKey = projectViewCacheKey('organization', 'acme', 1, 'view-1')
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This settings, projectViewCache fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: null },
       projectViewCache: {
         [cacheKey]: {

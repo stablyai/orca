@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -72,8 +73,9 @@ beforeEach(() => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test-only window.api shim
   ;(window as any).api = { pty: { getCwd: getCwdMock } }
 
-  useAppStore.setState(initialAppState, true)
-  useAppStore.setState({
+  setSessionTestState(useAppStore, initialAppState, true)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test supplies only the preload API members exercised by its scenario.
+  setSessionTestState(useAppStore, {
     activeWorktreeId: PARENT_ID,
     worktreesByRepo: { [REPO_ID]: [parentWorktree, childWorktree] },
     repos: [repo],
@@ -85,7 +87,7 @@ beforeEach(() => {
 afterEach(() => {
   roots.splice(0).forEach((root) => act(() => root.unmount()))
   document.body.replaceChildren()
-  useAppStore.setState(initialAppState, true)
+  setSessionTestState(useAppStore, initialAppState, true)
   vi.useRealTimers()
 })
 
@@ -120,7 +122,10 @@ describe('useChecksPanelTerminalWorktree', () => {
   })
 
   it('does not poll remote-runtime terminals', async () => {
-    useAppStore.setState({ ptyIdsByTabId: { 'tab-1': ['remote:host:pty-1'] } } as Partial<AppState>)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
+      ptyIdsByTabId: { 'tab-1': ['remote:host:pty-1'] }
+    } as Partial<AppState>)
 
     await renderHook(parentWorktree)
     await flushMicrotasks()
@@ -205,7 +210,10 @@ describe('useChecksPanelTerminalWorktree', () => {
     expect(latest?.worktree).toBe(childWorktree)
 
     await act(async () => {
-      useAppStore.setState({ ptyIdsByTabId: { 'tab-1': ['pty-2'] } } as Partial<AppState>)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+      setSessionTestState(useAppStore, {
+        ptyIdsByTabId: { 'tab-1': ['pty-2'] }
+      } as Partial<AppState>)
     })
     await flushMicrotasks()
 
@@ -215,7 +223,8 @@ describe('useChecksPanelTerminalWorktree', () => {
   })
 
   it('does not poll an SSH terminal (its cwd is on the relay host)', async () => {
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       ptyIdsByTabId: { 'tab-1': ['ssh:target-1@@pty-9'] }
     } as Partial<AppState>)
 
@@ -243,7 +252,8 @@ describe('useChecksPanelTerminalWorktree', () => {
       path: '/runtime-repo/app',
       hostId: 'local'
     })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       worktreesByRepo: { [REPO_ID]: [parentWorktree], [RUNTIME_REPO_ID]: [localOnRuntime] },
       repos: [repo, runtimeRepo]
     } as Partial<AppState>)
@@ -271,7 +281,8 @@ describe('useChecksPanelTerminalWorktree', () => {
       repoId: SSH_REPO_ID,
       path: SSH_PATH
     })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       worktreesByRepo: { [REPO_ID]: [parentWorktree, childWorktree], [SSH_REPO_ID]: [sshWorktree] },
       repos: [repo, sshRepo]
     } as Partial<AppState>)

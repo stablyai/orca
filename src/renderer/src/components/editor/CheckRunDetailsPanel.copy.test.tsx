@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -443,7 +444,7 @@ describe('mounted store-driven details refresh', () => {
   const original = useAppStore.getState()
   afterEach(() => {
     cleanup()
-    useAppStore.setState(original, true)
+    setSessionTestState(useAppStore, original, true)
     scrollTopCache.clear()
     vi.restoreAllMocks()
   })
@@ -454,7 +455,7 @@ describe('mounted store-driven details refresh', () => {
     const failed = { ...base.jobs[0], id: null, name: 'same-name' }
     const success = { ...failed, conclusion: 'success', logTail: null }
     const payload = { ...base, jobs: [success, failed] }
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       openFiles: [],
       repos: fixture.repos,
       worktreesByRepo: fixture.worktreesByRepo
@@ -507,7 +508,7 @@ describe('mounted store-driven details refresh', () => {
         ]
       }))
     }
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       openFiles: [],
       repos: fixture.repos,
       worktreesByRepo: fixture.worktreesByRepo
@@ -581,7 +582,7 @@ describe('mounted store-driven details refresh', () => {
             reject = fail
           })
       )
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         openFiles: [],
         repos: fixture.repos,
         worktreesByRepo: fixture.worktreesByRepo,

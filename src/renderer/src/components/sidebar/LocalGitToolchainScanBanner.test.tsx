@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act } from 'react'
@@ -65,7 +66,7 @@ describe('LocalGitToolchainScanBanner', () => {
     })
     repos = [makeRepo('web-app'), makeRepo('api-server')]
     vi.mocked(toast.success).mockClear()
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   afterEach(async () => {
@@ -77,11 +78,11 @@ describe('LocalGitToolchainScanBanner', () => {
       value: originalUserAgent,
       configurable: true
     })
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   it('shows one banner instead of a per-repo marker for an Xcode license failure', async () => {
-    useAppStore.setState({ repos, detectedWorktreesByRepo: blockedListings() })
+    setSessionTestState(useAppStore, { repos, detectedWorktreesByRepo: blockedListings() })
 
     const container = await render()
 
@@ -92,7 +93,7 @@ describe('LocalGitToolchainScanBanner', () => {
   })
 
   it('rescans every blocked repo when the window regains focus and confirms recovery', async () => {
-    useAppStore.setState({ repos, detectedWorktreesByRepo: blockedListings() })
+    setSessionTestState(useAppStore, { repos, detectedWorktreesByRepo: blockedListings() })
     const fetchWorktrees = vi
       .spyOn(useAppStore.getState(), 'fetchWorktrees')
       .mockImplementation(async () => true)
@@ -110,7 +111,7 @@ describe('LocalGitToolchainScanBanner', () => {
   })
 
   it('keeps the success toast back while any repo is still blocked', async () => {
-    useAppStore.setState({ repos, detectedWorktreesByRepo: blockedListings() })
+    setSessionTestState(useAppStore, { repos, detectedWorktreesByRepo: blockedListings() })
     const fetchWorktrees = vi
       .spyOn(useAppStore.getState(), 'fetchWorktrees')
       .mockImplementation(async (repoId: string) => repoId === 'web-app')
@@ -129,7 +130,7 @@ describe('LocalGitToolchainScanBanner', () => {
       makeRepo('ssh-repo', { connectionId: 'conn-1' }),
       makeRepo('runtime-repo', { executionHostId: 'runtime:env-1' })
     ]
-    useAppStore.setState({ repos, detectedWorktreesByRepo: blockedListings() })
+    setSessionTestState(useAppStore, { repos, detectedWorktreesByRepo: blockedListings() })
 
     const container = await render()
 
@@ -142,7 +143,7 @@ describe('LocalGitToolchainScanBanner', () => {
       value: 'Mozilla/5.0 (X11; Linux x86_64)',
       configurable: true
     })
-    useAppStore.setState({ repos, detectedWorktreesByRepo: blockedListings() })
+    setSessionTestState(useAppStore, { repos, detectedWorktreesByRepo: blockedListings() })
 
     const container = await render()
 

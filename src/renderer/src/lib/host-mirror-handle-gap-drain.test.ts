@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status'
@@ -21,7 +22,7 @@ const initialAppStoreState = useAppStore.getState()
 
 function seedRows(): void {
   // Seed the PTY binding held at park time: production cannot park an unbound pane, whose verdict refuses to answer.
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     ptyIdsByTabId: {},
     tabsByWorktree: {
       [WORKTREE_ID]: [
@@ -48,7 +49,7 @@ function seedRows(): void {
 
 /** The host publishes both panes' PTY handles on one frame: both waiters come due together. */
 function publishBothHandles(): void {
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     ptyIdsByTabId: {
       [FIRST_TAB_ID]: [`remote:${ENVIRONMENT_ID}@@term_1`],
       [SECOND_TAB_ID]: [`remote:${ENVIRONMENT_ID}@@term_2`]
@@ -70,7 +71,7 @@ describe('host-mirror handle-gap drain', () => {
     vi.restoreAllMocks()
     resetHostMirrorHandleGapWaitsForTests()
     clearRuntimeEnvironmentConnectionGenerationsForTests()
-    useAppStore.setState(initialAppStoreState, true)
+    setSessionTestState(useAppStore, initialAppStoreState, true)
     vi.useRealTimers()
   })
 
@@ -108,7 +109,9 @@ describe('host-mirror handle-gap drain', () => {
     })
     parkUntilHostMirrorHandleLands(ENVIRONMENT_ID, WORKTREE_ID, FIRST_TAB_ID, () => {
       // Re-enter through subscribed tab/PTY slices; clearSleepingAgentSession alone would be filtered out.
-      useAppStore.setState({ tabsByWorktree: { ...useAppStore.getState().tabsByWorktree } })
+      setSessionTestState(useAppStore, {
+        tabsByWorktree: { ...useAppStore.getState().tabsByWorktree }
+      })
     })
     parkUntilHostMirrorHandleLands(ENVIRONMENT_ID, WORKTREE_ID, SECOND_TAB_ID, siblingReplay)
 
@@ -123,7 +126,7 @@ describe('host-mirror handle-gap drain', () => {
   it('does not release on retraction evidence a mid-drain adoption has already made stale', () => {
     const adoptedReplay = vi.fn()
     const ADOPTING_WORKTREE_ID = 'repo-1::/workspace/adopted'
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       tabsByWorktree: {
         [ADOPTING_WORKTREE_ID]: [
           makeTerminalTab({ id: FIRST_TAB_ID, worktreeId: ADOPTING_WORKTREE_ID, title: 'one' }),
@@ -144,7 +147,7 @@ describe('host-mirror handle-gap drain', () => {
     parkUntilHostMirrorHandleLands(ENVIRONMENT_ID, WORKTREE_ID, SECOND_TAB_ID, adoptedReplay)
 
     // The absent second tab reads as retracted; adoption above invalidates that snapshot before release.
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       ptyIdsByTabId: { [FIRST_TAB_ID]: [`remote:${ENVIRONMENT_ID}@@term_1`] }
     })
 

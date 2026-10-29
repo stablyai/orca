@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import { createTestStore } from './store-test-helpers'
@@ -24,7 +25,7 @@ describe('repo add/catalog races', () => {
     reposAdd.mockResolvedValue({ repo: localRepo })
     const existing = { ...localRepo, executionHostId: 'local' as const }
     const store = createTestStore()
-    store.setState({ repos: [existing] })
+    setSessionTestState(store, { repos: [existing] })
 
     await expect(store.getState().addRepoPath(localRepo.path)).resolves.toEqual(existing)
 
@@ -39,7 +40,7 @@ describe('repo add/catalog races', () => {
       executionHostId: 'runtime:env-1'
     }
     const store = createTestStore()
-    store.setState({ repos: [runtimeSibling] })
+    setSessionTestState(store, { repos: [runtimeSibling] })
 
     await store.getState().addRepoPath(localRepo.path)
 

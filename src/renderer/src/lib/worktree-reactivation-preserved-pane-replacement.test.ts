@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { getDefaultSettings } from '../../../shared/constants'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -114,7 +115,7 @@ function seedHuskTab(
 
 function seedSleepingRecord(worktreeId: string, sessionId: string): void {
   const paneKey = makePaneKey(HUSK_TAB_ID, LEAF_ID)
-  useAppStore.setState((s) => ({
+  setSessionTestState(useAppStore, (s) => ({
     sleepingAgentSessionsByPaneKey: {
       ...s.sleepingAgentSessionsByPaneKey,
       [paneKey]: {
@@ -135,7 +136,7 @@ function seedSleepingRecord(worktreeId: string, sessionId: string): void {
 }
 
 afterEach(() => {
-  useAppStore.setState(initialAppStoreState, true)
+  setSessionTestState(useAppStore, initialAppStoreState, true)
   resetHostSessionMirrorHydrationForTests()
 })
 
@@ -145,7 +146,7 @@ describe('preserved-pane replacement contract on workspace activation', () => {
     const state = baseState(worktree)
     // Hibernation cleared the pane's PTY binding: the husk cannot resume in place.
     seedHuskTab(state, worktree.id, null)
-    useAppStore.setState(state)
+    setSessionTestState(useAppStore, state)
     seedSleepingRecord(worktree.id, 'codex-session-A')
 
     activateAndRevealWorktree(worktree.id)
@@ -177,7 +178,7 @@ describe('preserved-pane replacement contract on workspace activation', () => {
     const state = baseState(worktree)
     seedHuskTab(state, worktree.id, 'pty-live-1')
     state.ptyIdsByTabId = { [HUSK_TAB_ID]: ['pty-live-1'] }
-    useAppStore.setState(state)
+    setSessionTestState(useAppStore, state)
     seedSleepingRecord(worktree.id, 'codex-session-B')
 
     activateAndRevealWorktree(worktree.id)
@@ -228,7 +229,7 @@ describe('preserved-pane replacement contract on workspace activation', () => {
     }
     state.activeTabIdByWorktree = { [worktree.id]: 'other-tab-1' }
     state.activeTabTypeByWorktree = { [worktree.id]: 'terminal' }
-    useAppStore.setState(state)
+    setSessionTestState(useAppStore, state)
     seedSleepingRecord(worktree.id, 'codex-session-D')
 
     activateAndRevealWorktree(worktree.id)
@@ -251,7 +252,7 @@ describe('preserved-pane replacement contract on workspace activation', () => {
     seedHuskTab(state, worktree.id, 'pty-old-1')
     state.activeTabIdByWorktree = { [worktree.id]: HUSK_TAB_ID }
     state.activeTabTypeByWorktree = { [worktree.id]: 'terminal' }
-    useAppStore.setState(state)
+    setSessionTestState(useAppStore, state)
     seedSleepingRecord(worktree.id, 'codex-session-C')
 
     activateAndRevealWorktree(worktree.id)
@@ -299,9 +300,9 @@ describe('preserved-pane replacement contract on workspace activation', () => {
         ptyIdsByLeafId: { [LEAF_ID]: 'pty-old-1' }
       } as never
     }
-    useAppStore.setState(state)
+    setSessionTestState(useAppStore, state)
     const paneKey = makePaneKey(webTabId, LEAF_ID)
-    useAppStore.setState((s) => ({
+    setSessionTestState(useAppStore, (s) => ({
       sleepingAgentSessionsByPaneKey: {
         ...s.sleepingAgentSessionsByPaneKey,
         [paneKey]: {
@@ -358,9 +359,9 @@ describe('preserved-pane replacement contract on workspace activation', () => {
         ptyIdsByLeafId: { [LEAF_ID]: 'pty-old-1' }
       } as never
     }
-    useAppStore.setState(state)
+    setSessionTestState(useAppStore, state)
     const paneKey = makePaneKey(webTabId, LEAF_ID)
-    useAppStore.setState((s) => ({
+    setSessionTestState(useAppStore, (s) => ({
       sleepingAgentSessionsByPaneKey: {
         ...s.sleepingAgentSessionsByPaneKey,
         [paneKey]: {

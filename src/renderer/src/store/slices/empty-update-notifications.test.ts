@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
@@ -73,7 +74,9 @@ describe('empty store updates', () => {
     before.recordClientHostedBrowserCloseIntents([])
     before.clearClientHostedBrowserCloseIntents('missing', [])
     mutateDiffComments(store.setState, 'missing', () => null)
-    store.setState((state) => browserImportStateForHostUpdate(state, 'runtime:other', null))
+    setSessionTestState(store, (state) =>
+      browserImportStateForHostUpdate(state, 'runtime:other', null)
+    )
 
     expect(store.getState()).toBe(before)
     expect(listener).not.toHaveBeenCalled()

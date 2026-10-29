@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type {
   WorkspaceSpaceAnalysis,
   WorkspaceSpaceScanProgress,
@@ -91,7 +91,7 @@ function isWorkspaceSpaceScanCancelled(error: unknown): boolean {
   return message.includes('workspace space scan cancelled') || message.includes('was cancelled')
 }
 
-export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], WorkspaceSpaceSlice> = (
+export const createWorkspaceSpaceSlice: SessionStateCreator<AppState, WorkspaceSpaceSlice> = (
   set,
   get
 ) => ({
@@ -106,7 +106,7 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
         state.workspaceSpaceScanProgress?.scanId !== progress.scanId &&
         !state.workspaceSpaceScanning
       ) {
-        return state
+        return undefined
       }
       const sameScan = state.workspaceSpaceScanProgress?.scanId === progress.scanId
       const previousMeasurements = sameScan ? state.workspaceSpaceMeasurements : []
@@ -133,7 +133,7 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
                 updatedAt: Date.now()
               }
             }
-          : state
+          : undefined
       )
     }
     return cancelled
@@ -230,7 +230,7 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
         nextMeasurements.length === state.workspaceSpaceMeasurements.length &&
         nextAnalysis === state.workspaceSpaceAnalysis
       ) {
-        return state
+        return undefined
       }
       return {
         workspaceSpaceAnalysis: nextAnalysis,

@@ -1,10 +1,11 @@
-import type { StoreApi } from 'zustand/vanilla'
+import type { SessionTestStore } from '@/lib/test-support/session-source-fixture'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import type { OpenFile } from './editor'
 import { createEditorTabsStore } from './editor-slice-test-harness'
 
-const live = vi.hoisted((): { store: StoreApi<AppState> | null } => ({ store: null }))
+const live = vi.hoisted((): { store: SessionTestStore<AppState> | null } => ({ store: null }))
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => {
@@ -16,7 +17,7 @@ vi.mock('@/store', () => ({
   }
 }))
 
-let store: StoreApi<AppState>
+let store: SessionTestStore<AppState>
 let file: OpenFile
 
 beforeEach(() => {
@@ -43,7 +44,7 @@ afterEach(() => {
 // A clean same-owner twin of `file`, shown in its own tab.
 function addPinnedSibling(): OpenFile {
   const sibling = { ...file, id: 'duplicate-record' }
-  store.setState({ openFiles: [...store.getState().openFiles, sibling] })
+  setSessionTestState(store, { openFiles: [...store.getState().openFiles, sibling] })
   store.getState().createUnifiedTab(sibling.worktreeId, 'editor', {
     id: 'duplicate-tab',
     entityId: sibling.id,

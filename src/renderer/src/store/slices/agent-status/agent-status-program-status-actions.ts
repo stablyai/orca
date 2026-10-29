@@ -21,7 +21,7 @@ export function createAgentStatusProgramStatusActions(
           !existing ||
           programStatusFacetsEqual(existing.programStatus, programStatus ?? undefined)
         ) {
-          return s
+          return undefined
         }
         changed = true
         changedPaneKeys.add(paneKey)

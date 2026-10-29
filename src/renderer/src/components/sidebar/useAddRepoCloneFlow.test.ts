@@ -1,3 +1,5 @@
+import { applySessionTestUpdate } from '@/lib/test-support/session-source-fixture'
+import type { SessionSourceUpdate } from '@/store/session-source-edits'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactModule from 'react'
 import type { Repo } from '../../../../shared/repo-types'
@@ -56,8 +58,8 @@ vi.mock('@/store', () => {
     (selector: (state: typeof mocks.storeState) => unknown) => selector(mocks.storeState),
     {
       getState: () => mocks.storeState,
-      setState: (next: Partial<typeof mocks.storeState>) => {
-        Object.assign(mocks.storeState, next)
+      setState: (next: SessionSourceUpdate<typeof mocks.storeState>) => {
+        Object.assign(mocks.storeState, applySessionTestUpdate(mocks.storeState, next))
       }
     }
   )

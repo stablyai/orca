@@ -1,5 +1,6 @@
+import { withSessionSourceTestWrites } from '@/lib/test-support/session-source-test-store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createStore, type StoreApi } from 'zustand/vanilla'
+import { createStore } from 'zustand/vanilla'
 import { createEditorSlice } from '@/store/slices/editor'
 import type { AppState } from '@/store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
@@ -11,23 +12,29 @@ import { withLoadedBaselines } from './editor-autosave-controller-test-fixture'
 
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => null }))
 
-function createEditorStore(): StoreApi<AppState> {
+function createEditorStore() {
   // oxlint-disable-next-line typescript/consistent-type-assertions, typescript/no-explicit-any -- SAFETY: the editor save path reads only the slice and fields built here.
-  return createStore<any>()((...args: any[]) => ({
-    ...emptyTabLayoutState(),
-    settings: { editorAutoSave: false },
-    repos: [],
-    worktreesByRepo: {
-      'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }]
-    },
-    detectedWorktreesByRepo: {},
-    runtimeEnvironments: [],
-    runtimeEnvironmentCatalogHydrated: true,
-    removedRuntimeEnvironmentIds: new Set(),
-    sshConnectionStates: new Map(),
-    sshStateByEnvironment: new Map(),
-    ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
-  })) as unknown as StoreApi<AppState>
+  return createStore<AppState>()(
+    withSessionSourceTestWrites(
+      (...args) =>
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the editor save path reads only the slice and fields built here.
+        ({
+          ...emptyTabLayoutState(),
+          settings: { editorAutoSave: false },
+          repos: [],
+          worktreesByRepo: {
+            'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }]
+          },
+          detectedWorktreesByRepo: {},
+          runtimeEnvironments: [],
+          runtimeEnvironmentCatalogHydrated: true,
+          removedRuntimeEnvironmentIds: new Set(),
+          sshConnectionStates: new Map(),
+          sshStateByEnvironment: new Map(),
+          ...createEditorSlice(...args)
+        }) as unknown as AppState
+    )
+  )
 }
 
 async function saveDirtyFiles(): Promise<void> {

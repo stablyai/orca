@@ -1,3 +1,5 @@
+import { editSessionSource, type SessionSourceSet } from '@/store/session-source-edits'
+import { withSessionSourceWrites } from '@/store/session-source-write-boundary'
 import { vi } from 'vitest'
 import type { WindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
 
@@ -23,7 +25,7 @@ export type TabBarProbeState = {
 export type TabBarProbeStore = {
   (selector: (state: TabBarProbeState) => unknown): unknown
   getState: () => TabBarProbeState
-  setState: (partial: Partial<TabBarProbeState>) => void
+  setState: SessionSourceSet<TabBarProbeState>
 }
 
 const noop = (): void => {}
@@ -34,23 +36,25 @@ export async function createTabBarProbeStore(): Promise<TabBarProbeStore> {
   const globals = globalThis as Record<string, unknown>
   if (!globals[globalKey]) {
     const { create } = await import('zustand')
-    globals[globalKey] = create<TabBarProbeState>(() => ({
-      settings: null,
-      persistedUIReady: true,
-      mobileEmulatorTabIntroDismissed: true,
-      gitStatusByWorktree: {},
-      unifiedTabsByWorktree: {},
-      activeGroupIdByWorktree: {},
-      activeRepoId: null,
-      activeWorktreeId: null,
-      projects: [],
-      repos: [],
-      worktreesByRepo: {},
-      sshConnectionStates: new Map(),
-      pinTab: noop,
-      unpinTab: noop,
-      toggleTabViewMode: noop
-    }))
+    globals[globalKey] = create<TabBarProbeState>()(
+      withSessionSourceWrites<TabBarProbeState>(() => ({
+        settings: null,
+        persistedUIReady: true,
+        mobileEmulatorTabIntroDismissed: true,
+        gitStatusByWorktree: {},
+        unifiedTabsByWorktree: {},
+        activeGroupIdByWorktree: {},
+        activeRepoId: null,
+        activeWorktreeId: null,
+        projects: [],
+        repos: [],
+        worktreesByRepo: {},
+        sshConnectionStates: new Map(),
+        pinTab: noop,
+        unpinTab: noop,
+        toggleTabViewMode: noop
+      }))
+    )
   }
   return globals[globalKey] as TabBarProbeStore
 }
@@ -154,5 +158,9 @@ export const TAB_BAR_PROBE_PROPS = {
 
 /** One fresh `worktreesByRepo` identity, exactly as a worktree write publishes it. */
 export function pushWorktreeWrite(store: TabBarProbeStore, tick: number): void {
-  store.setState({ worktreesByRepo: { 'repo-1': [{ id: `wt-${tick}`, repoId: 'repo-1' }] } })
+  store.setState(
+    editSessionSource(store.getState())
+      .set('worktreesByRepo', 'repo-1', [{ id: `wt-${tick}`, repoId: 'repo-1' }])
+      .finish()
+  )
 }

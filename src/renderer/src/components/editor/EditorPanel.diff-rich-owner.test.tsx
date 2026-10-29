@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -47,7 +48,7 @@ function file(overrides: Partial<OpenFile>): OpenFile {
 describe('Rich Editor from a diff', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
@@ -56,7 +57,7 @@ describe('Rich Editor from a diff', () => {
   afterEach(async () => {
     await act(async () => root.unmount())
     document.body.replaceChildren()
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   it('sets the mode on an existing scoped source tab without changing the same-path owner', async () => {
@@ -65,7 +66,7 @@ describe('Rich Editor from a diff', () => {
     const target = file({ ...owner, id: targetId })
     const other = file({ worktreeId: 'wt-other' })
     const diff = file({ ...owner, id: 'diff-target', mode: 'diff', diffSource: 'unstaged' })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       openFiles: [other, target, diff],
       activeFileId: diff.id,
       activeWorktreeId: owner.worktreeId,
@@ -87,7 +88,7 @@ describe('Rich Editor from a diff', () => {
     const owner = { worktreeId: 'wt-target', runtimeEnvironmentId: 'runtime-target' }
     const other = file({ worktreeId: 'wt-other' })
     const diff = file({ ...owner, id: 'diff-target', mode: 'diff', diffSource: 'unstaged' })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       openFiles: [other, diff],
       activeFileId: diff.id,
       activeWorktreeId: owner.worktreeId,

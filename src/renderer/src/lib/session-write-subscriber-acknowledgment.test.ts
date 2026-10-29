@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore, type AppState } from '@/store'
 import {
@@ -26,7 +27,7 @@ describe('session write acknowledgments', () => {
     dispose?.()
     dispose = undefined
     vi.useRealTimers()
-    useAppStore.setState(initial, true)
+    setSessionTestState(useAppStore, initial, true)
   })
 
   function setup() {

@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 
 /** A pending request to confirm closing a pinned tab. `onConfirm` runs the
@@ -17,10 +17,8 @@ export type PinnedTabCloseConfirmSlice = {
   dismissPinnedTabClose: () => void
 }
 
-export const createPinnedTabCloseConfirmSlice: StateCreator<
+export const createPinnedTabCloseConfirmSlice: SessionStateCreator<
   AppState,
-  [],
-  [],
   PinnedTabCloseConfirmSlice
 > = (set, get) => {
   const queuedRequests: PinnedTabCloseConfirmRequest[] = []

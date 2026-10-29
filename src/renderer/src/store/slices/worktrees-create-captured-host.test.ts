@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -37,7 +38,7 @@ describe('background creation host capture', () => {
         result: { worktree },
         _meta: { runtimeId: 'runtime-remote' }
       })
-      store.setState({
+      setSessionTestState(store, {
         settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'env-other' },
         repos: [],
         worktreesByRepo: { repo1: [] }
@@ -70,7 +71,7 @@ describe('background creation host capture', () => {
     const store = createTestStore()
     const response = Promise.withResolvers<unknown>()
     runtimeEnvironmentCall.mockReturnValue(response.promise)
-    store.setState({
+    setSessionTestState(store, {
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'env-1' },
       repos: [],
       worktreesByRepo: { repo1: [] }
@@ -109,7 +110,7 @@ describe('background creation host capture', () => {
         result: { worktree },
         _meta: { runtimeId: 'runtime-remote' }
       })
-      store.setState({ repos: [], worktreesByRepo: { repo1: [] } })
+      setSessionTestState(store, { repos: [], worktreesByRepo: { repo1: [] } })
       const automationProvenanceRequest = {
         automationId: 'automation-1',
         automationRunId: 'run-1',
@@ -135,7 +136,7 @@ describe('background creation host capture', () => {
   // #18097: the unresolved-owner sentinel must not ride the direct-SSH fallback onto this machine.
   it('refuses a create whose captured owner is the unresolved-owner sentinel', async () => {
     const store = createTestStore()
-    store.setState({ repos: [], worktreesByRepo: { repo1: [] } })
+    setSessionTestState(store, { repos: [], worktreesByRepo: { repo1: [] } })
     const createWorktree = store.getState().createWorktree
     const args: Parameters<typeof createWorktree> = ['repo1', 'feature']
     args[25] = { executionHostId: 'runtime:unresolved-owner' }

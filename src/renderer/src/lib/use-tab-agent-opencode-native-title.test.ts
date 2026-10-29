@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act, createElement } from 'react'
@@ -81,8 +82,8 @@ describe('OpenCode native title tab identity', () => {
     latestAgent = undefined
     getForegroundProcess.mockReset()
     clearTabLaunchAgent.mockReset()
-    useAppStore.setState(initialAppState, true)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, initialAppState, true)
+    setSessionTestState(useAppStore, {
       activeTabId: 'other-tab',
       ptyIdsByTabId: { 'opencode-tab': ['pty-opencode'] },
       agentStatusByPaneKey: {},
@@ -104,7 +105,7 @@ describe('OpenCode native title tab identity', () => {
       root = null
     }
     document.body.replaceChildren()
-    useAppStore.setState(initialAppState, true)
+    setSessionTestState(useAppStore, initialAppState, true)
     window.api = originalApi
   })
 
@@ -292,7 +293,7 @@ describe('OpenCode native title tab identity', () => {
     const paneKey = makePaneKey('opencode-tab', FOCUSED_LEAF_ID)
 
     await act(async () => {
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         ptyIdsByTabId: { 'opencode-tab': ['pty-opencode', 'pty-sibling'] },
         terminalLayoutsByTabId: { 'opencode-tab': splitLayout() },
         sleepingAgentSessionsByPaneKey: { [paneKey]: sleepingClaudeRecord(paneKey) }

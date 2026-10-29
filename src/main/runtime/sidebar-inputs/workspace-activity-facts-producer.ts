@@ -58,6 +58,10 @@ export class WorkspaceActivityFactsProducer {
     return { revision: this.revision.value, facts: Object.fromEntries(this.facts) }
   }
 
+  read(worktreeId: string): WorkspaceActivityFacts | undefined {
+    return this.facts.get(worktreeId)
+  }
+
   /** Re-reads the workspace's surfaces; the runtime calls this per publication. */
   refreshWorkspace(worktreeId: string): void {
     this.publish(worktreeId, this.deps.readSurfaces(worktreeId))
@@ -199,7 +203,7 @@ export class WorkspaceActivityFactsProducer {
       }
       this.facts.set(worktreeId, next)
     }
-    this.revision.bump()
+    this.revision.bump({ entities: [worktreeId] })
   }
 
   // One deadline for the earliest lease; a renewed lease only moves later, so an early fire re-arms.

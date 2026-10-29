@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, render, cleanup, fireEvent } from '@testing-library/react'
@@ -135,7 +136,7 @@ describe('RepositorySourceControlAiActionRows', () => {
         configurable: true,
         value: { preflight: { detectAgents } }
       })
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         repos: [{ ...TEST_REPO, id: 'repo-1' }],
         settings: {
           ...settings,
@@ -375,7 +376,7 @@ it.each([1, 10])(
       defaultTuiAgent: 'codex',
       disabledTuiAgents: ['claude']
     })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       settings: {
         ...settings,
         experimentalNativeChat: false,

@@ -1,3 +1,4 @@
+import { withSessionSourceWrites } from '@/store/session-source-write-boundary'
 /** @vitest-environment happy-dom */
 // Why first: react-dom below reads __REACT_DEVTOOLS_GLOBAL_HOOK__ at module
 // evaluation. The shim has no imports of its own, so unlike the observer it
@@ -36,12 +37,14 @@ const CASCADE_TICKS = REACT_COMMIT_CASCADE_NOTICE_LIMIT + 5
 type CascadeState = { ticks: number; bump: () => void }
 
 const useCascadeStore = create<CascadeState>()(
-  withReactCommitCascadeWriteProbe((set) => ({
-    ticks: 0,
-    bump: () => {
-      set({ ticks: useCascadeStore.getState().ticks + 1 })
-    }
-  }))
+  withSessionSourceWrites<CascadeState>(
+    withReactCommitCascadeWriteProbe((set) => ({
+      ticks: 0,
+      bump: () => {
+        set({ ticks: useCascadeStore.getState().ticks + 1 })
+      }
+    }))
+  )
 )
 
 // Only synchronous layout-effect loops throw #185; passive effects leave pendingLanes zero at commit and only console.error.

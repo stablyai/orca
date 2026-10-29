@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 /** Gate worktree subscriptions behind the Windows shell menu so unrelated poll/status writes cannot rerender every tab strip. */
@@ -66,7 +67,11 @@ describe('TabBar worktree-write gate (non-Windows client)', () => {
     probeWindowsCapabilities.hostPlatform = 'darwin'
     tabBarSurfaceRenders.count = 0
     localProjectRuntimeSpy.mockClear()
-    ;(await createTabBarProbeStore()).setState({ worktreesByRepo: {}, projects: [], repos: [] })
+    setSessionTestState(await createTabBarProbeStore(), {
+      worktreesByRepo: {},
+      projects: [],
+      repos: []
+    })
   })
 
   afterEach(() => {

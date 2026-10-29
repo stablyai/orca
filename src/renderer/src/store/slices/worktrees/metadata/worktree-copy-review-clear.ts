@@ -1,3 +1,5 @@
+import type { SessionSourceEdit } from '../../../session-source-edits'
+import type { AppState } from '../../../types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -38,13 +40,13 @@ export type WorktreeCopyClear = {
 
 /** Clears branch-scoped review context on the one copy `copy` names, stamped or not. */
 export function clearCopyReviewLinks(
-  byRepo: Record<string, Worktree[]>,
+  edit: SessionSourceEdit<Pick<AppState, 'worktreesByRepo'>>,
   worktreeId: string,
   copy: Pick<WorktreeCopyClear, 'owner' | 'rowOwner'>
-): Record<string, Worktree[]> {
+): void {
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   let changed = false
-  const next = byRepo[repoId]?.map((row) => {
+  const next = edit.entry('worktreesByRepo', repoId)?.map((row) => {
     const rowOwner = worktreeCopyOwnerKey(row)
     if (row.id !== worktreeId || (rowOwner !== copy.owner && rowOwner !== copy.rowOwner)) {
       return row
@@ -55,7 +57,9 @@ export function clearCopyReviewLinks(
       ...normalizeWorkspaceAttachmentUpdate(row, CLEARED_HOSTED_REVIEW_LINK_UPDATES)
     }
   })
-  return changed && next ? { ...byRepo, [repoId]: next } : byRepo
+  if (changed && next) {
+    edit.set('worktreesByRepo', repoId, next)
+  }
 }
 
 export function reviewClearTombstoneKey(worktreeId: string, owner: string): string {

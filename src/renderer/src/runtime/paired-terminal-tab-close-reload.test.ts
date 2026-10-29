@@ -1,4 +1,5 @@
 // Persist unheard paired closes across reload or the next host snapshot restores closed tabs forever (STA-6224).
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { parseWorkspaceSession } from '../../../shared/workspace-session-schema'
@@ -74,7 +75,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   resetWebSessionCloseReplaysForTests()
   replaceRuntimeEnvironmentRevisions([])
 })
@@ -108,7 +109,7 @@ describe('a held paired-host close across a reload', () => {
     resetWebSessionTabsSyncTestState()
     resetWebSessionCloseReplaysForTests()
     replaceRuntimeEnvironmentRevisions([])
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
     const parsed = parseWorkspaceSession(saved)
     expect(parsed.ok).toBe(true)
     if (!parsed.ok) {

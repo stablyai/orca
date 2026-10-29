@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
@@ -51,7 +52,7 @@ describe('editor save queue: one autosave timer per record across its views', ()
 
   // Use the real middleware to join same-file views by identity.
   const share = (views: OpenFile[]): void => {
-    store.setState({ openFiles: views })
+    setSessionTestState(store, { openFiles: views })
     const recordIds = new Set(views.map((open) => store.getState().editorBufferIdOf[open.id]))
     expect(recordIds.size).toBe(1)
   }
@@ -73,7 +74,7 @@ describe('editor save queue: one autosave timer per record across its views', ()
     vi.useFakeTimers()
     disk = stubEditorWindowWithDisk(createFakeEditorDisk({ [PATH]: '' }))
     store = createEditorStore()
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {
         'repo-1': [
           makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }),

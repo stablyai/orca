@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import {
@@ -54,7 +55,7 @@ export function registerReposRuntimeProjectGroupTests(): void {
         _meta: { runtimeId: 'runtime-remote' }
       })
       const store = createTestStore()
-      store.setState({
+      setSessionTestState(store, {
         settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
         repos: [localOrca]
       })

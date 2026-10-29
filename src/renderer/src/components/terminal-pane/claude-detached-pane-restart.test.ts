@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { provideLayoutFrameTerminalPanes } from '@/runtime/layout-frame-terminal-panes'
@@ -18,7 +19,7 @@ function seedClaudePane(
   overrides: Partial<Pick<AgentStatusEntry, 'state' | 'providerSession'>> = {}
 ): void {
   const paneKey = makePaneKey('tab-1', LEAF_ID)
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     tabsByWorktree: {
       wt1: [
         {
@@ -76,7 +77,7 @@ describe('detached Claude account-move restart', () => {
 
   beforeEach(() => {
     resetCodexDetachedPaneRestartExecutorForTests()
-    useAppStore.setState(useAppStore.getInitialState(), true)
+    setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
     // Why: switch on, a restart binds only into a pane main's layout holds.
     provideLayoutFrameTerminalPanes({
       holdsTerminalPane: () => false,

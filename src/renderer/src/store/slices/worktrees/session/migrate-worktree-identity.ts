@@ -16,7 +16,7 @@ export function createMigrateWorktreeIdentity(
     migrateHugeRepoWarningDismissal(oldWorktreeId, newWorktreeId)
     set((s) => {
       const patch = buildWorktreeRenameState(s, oldWorktreeId, newWorktreeId)
-      return Object.keys(patch).length > 0 ? patch : s
+      return Object.keys(patch).length > 0 ? patch : undefined
     })
     migrateHostedReviewLinkMutationGeneration(oldWorktreeId, newWorktreeId)
   }

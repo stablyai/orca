@@ -1,3 +1,4 @@
+import type * as WorkspaceSessionModule from '@/lib/workspace-session'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import type { ProjectMovePauseResponse } from '../../../../shared/project-move-pause'
@@ -30,7 +31,10 @@ vi.mock('@/lib/worktree-sleep-intent', () => ({
   markWorktreeSleepIntent: vi.fn(),
   withWorktreeSleepTeardown: (_id: string, action: () => Promise<void>) => action()
 }))
-vi.mock('@/lib/workspace-session', () => ({ buildWorkspaceSessionPayload: mocks.payload }))
+vi.mock('@/lib/workspace-session', async (importOriginal) => ({
+  ...(await importOriginal<typeof WorkspaceSessionModule>()),
+  buildWorkspaceSessionPayload: mocks.payload
+}))
 vi.mock('@/lib/workspace-session-host-persistence', () => ({
   persistWorkspaceSessionByHost: mocks.persist
 }))

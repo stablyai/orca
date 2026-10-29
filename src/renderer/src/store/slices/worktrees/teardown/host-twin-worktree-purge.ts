@@ -1,3 +1,4 @@
+import type { SessionSourceEdit, OrdinarySourcePartial } from '../../../session-source-edits'
 import type { AppState } from '../../../types'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -137,11 +138,13 @@ export function collectHostTwinPurgeScopes(
  * buckets, raw-id module stores and surfaces with no host evidence stay: they may be the twin's.
  */
 export function buildHostTwinPurgeState(
-  s: AppState,
+  edit: SessionSourceEdit<AppState>,
   hostId: ExecutionHostId,
   twinHostIds: ReadonlyMap<string, readonly ExecutionHostId[]>,
+  priorPatch: OrdinarySourcePartial<AppState> = {},
   changedPaneKeys?: Set<string>
-): Partial<AppState> {
+): OrdinarySourcePartial<AppState> {
+  const s = edit.view(priorPatch)
   const twinIds = new Set(twinHostIds.keys())
   const removed = collectRemovedHostTwinState(s, twinIds, hostId, twinHostIds)
   const canonical = (worktreeId: string) =>
@@ -200,10 +203,16 @@ export function buildHostTwinPurgeState(
   }
   const editorBufferKeepRequest = noticeRemovedUnsavedFiles(s, doomed.removedFileIds)
   const omitters = createWorktreePurgeOmitters(s, new Set(), doomed)
+  const prefixKeys = [
+    ...new Set([
+      ...Object.keys(s.sleepingAgentSessionsByPaneKey ?? {}),
+      ...Object.keys(s.agentLaunchConfigByPaneKey ?? {})
+    ])
+  ].filter((paneKey) => {
+    const sep = paneKey.indexOf(':')
+    return sep > 0 && doomed.doomedTabIds.has(paneKey.slice(0, sep))
+  })
   const tabPrefixedSleeping = {
-    sleepingAgentSessionsByPaneKey: omitters.omitByPaneKeyTabPrefix(
-      s.sleepingAgentSessionsByPaneKey
-    ),
     agentLaunchConfigByPaneKey: omitters.omitByPaneKeyTabPrefix(s.agentLaunchConfigByPaneKey)
   }
   // Why SSH only: a record whose tab is gone names its host just by connection; null is ambiguous.
@@ -215,7 +224,7 @@ export function buildHostTwinPurgeState(
         ? [paneKey]
         : []
   )
-  const layout = removeWorktreeLayout(s, {
+  const layout = removeWorktreeLayout(edit, {
     worktreeIds: new Set(),
     tabIds: doomed.doomedTabIds,
     activeFileCleared: s.activeFileId != null && removed.fileIds.has(s.activeFileId),
@@ -234,21 +243,24 @@ export function buildHostTwinPurgeState(
     ((s.activeTabId != null && removed.terminalTabIds.has(s.activeTabId)) ||
       (s.activeFileId != null && removed.fileIds.has(s.activeFileId)) ||
       (s.activeBrowserTabId != null && removed.browserTabIds.has(s.activeBrowserTabId)) ||
-      (layout.groupsByWorktree[active] ?? []).some(
+      (edit.entry('groupsByWorktree', active) ?? []).some(
         (group, index) => group.activeTabId !== s.groupsByWorktree[active]?.[index]?.activeTabId
       ))
   return {
     editorBufferKeepRequest,
     ...layout,
     // Why: a group may now show a surviving tab of another kind, so selection is derived again.
-    ...(selectionRemoved ? buildActiveSurfacePatch({ ...s, ...layout }, active) : {}),
+    ...(selectionRemoved ? buildActiveSurfacePatch(edit, active) : {}),
     ...buildWorktreePurgeSurfacePatch(
-      s,
+      edit,
       omitters,
-      doomed.doomedTabIds,
+      doomed,
       {
         ...tabPrefixedSleeping,
-        ...omitSleepingAgentSessionsForWorktrees(tabPrefixedSleeping, new Set(), sshRecordPaneKeys)
+        ...omitSleepingAgentSessionsForWorktrees(edit, new Set(), [
+          ...prefixKeys,
+          ...sshRecordPaneKeys
+        ])
       },
       changedPaneKeys
     ),

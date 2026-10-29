@@ -1,3 +1,4 @@
+import { replaceSessionSourceFields } from '@/store/session-source-write-boundary'
 import '../assets/main.css'
 
 import ReactDOM from 'react-dom/client'
@@ -97,13 +98,13 @@ async function renderFixture(id: string, theme: ComponentFixtureTheme): Promise<
   markComponentFixtureState('loading')
   const target = freshRoot()
   // Why replace: each fixture starts from the same seeded store, even in a reused page.
-  useAppStore.setState(baseStoreState, true)
+  useAppStore.setState(replaceSessionSourceFields(baseStoreState, 'hydration'), true)
   useAppStore.setState({ settings: { ...defaultSettings, theme } })
   applyTheme(theme)
   try {
     const entry = await loadComponentFixture(id)
     if (entry.fixture.store) {
-      useAppStore.setState(entry.fixture.store)
+      useAppStore.setState(replaceSessionSourceFields(entry.fixture.store, 'hydration'))
     }
     entry.fixture.setup?.()
     target.render(

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { persistGitHubCacheChanges } from '../github/cache-persistence'
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
@@ -66,7 +67,7 @@ describe.each(['manual', 'coordinator'] as const)('%s rejected PR cache results'
       confirmedContainedHeadOid: 'contained-head'
     })
     const cachedReview = hostedReviewInfoFromGitHubPRInfo(cachedPR)
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: repoId, path: repoPath, displayName: 'repo', badgeColor: '', addedAt: 1, kind: 'git' }
       ],

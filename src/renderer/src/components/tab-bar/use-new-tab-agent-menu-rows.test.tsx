@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -172,7 +173,7 @@ beforeEach(() => {
     .mockReset()
     .mockReturnValue({ detectedIds: ['claude', 'codex', 'opencode', 'gemini'] })
   setLocalRuntimeCapabilitiesForTests([CHAT, CLIENT, CATALOG])
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     ...initial,
     activeWorktreeId: 'one',
     settings: {
@@ -297,7 +298,7 @@ it('shares real answer preparation at N and 10N across candidates, owners and se
           const ids = counted(inventory)
           mocks.detection.mockReturnValue({ detectedIds: ids })
           mocks.program.mockReset()
-          useAppStore.setState({
+          setSessionTestState(useAppStore, {
             repos: [TEST_REPO],
             worktreesByRepo: { [TEST_REPO.id]: worktrees },
             detectedWorktreesByRepo: {},
@@ -566,7 +567,7 @@ it('preserves per-agent published answers and direct route inputs across context
     for (const folder of [false, true]) {
       const worktreeId = folder ? 'folder:f1' : 'one'
       act(() =>
-        useAppStore.setState({
+        setSessionTestState(useAppStore, {
           activeWorktreeId: worktreeId,
           activeWorkspaceExecutionHostId: host,
           worktreesByRepo: {

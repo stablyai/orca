@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, createElement } from 'react'
 import { describe, expect, it, vi } from 'vitest'
@@ -48,7 +49,7 @@ it('keeps the pure file list functions available through the hook module', () =>
 describe('useRuntimeFileListForWorktree', () => {
   it('settles a Windows folder listing failure and recovers after reopening', async () => {
     const workspaceKey = folderWorkspaceKey('folder-workspace-1')
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [makeFolderWorkspace({ folderPath: 'C:\\fixture', connectionId: null })],
       projectGroups: [makeProjectGroup({ parentPath: 'C:\\fixture', connectionId: null })],
       repos: [],
@@ -83,7 +84,8 @@ describe('useRuntimeFileListForWorktree', () => {
     const states: RuntimeFileListState[] = []
     const workspaceKey = folderWorkspaceKey('folder-workspace-1')
 
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [],
       projectGroups: [],
       repos: [],
@@ -99,7 +101,8 @@ describe('useRuntimeFileListForWorktree', () => {
     expect(listRuntimeFilesMock).not.toHaveBeenCalled()
 
     await act(async () => {
-      useAppStore.setState({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+      setSessionTestState(useAppStore, {
         folderWorkspaces: [makeFolderWorkspace({ connectionId: 'ssh-1' })],
         projectGroups: [makeProjectGroup({ connectionId: 'ssh-1' })],
         repos: [],
@@ -137,7 +140,8 @@ describe('useRuntimeFileListForWorktree', () => {
       Array.from({ length: QUICK_OPEN_LISTING_MAX_RESULTS }, (_, i) => `src/file-${i}.ts`)
     )
 
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [makeFolderWorkspace({ connectionId: 'ssh-1' })],
       projectGroups: [makeProjectGroup({ connectionId: 'ssh-1' })],
       repos: [],
@@ -158,7 +162,8 @@ describe('useRuntimeFileListForWorktree', () => {
   it('routes paired folder workspace queries to the owning runtime', async () => {
     vi.useFakeTimers()
     const workspaceKey = folderWorkspaceKey('folder-workspace-1')
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       settings: { ...initialAppState.settings, activeRuntimeEnvironmentId: 'env-1' },
       folderWorkspaces: [
         makeFolderWorkspace({ connectionId: null, executionHostId: 'runtime:env-1' })
@@ -198,7 +203,8 @@ describe('useRuntimeFileListForWorktree', () => {
   it('cancels the in-flight scan with the same request token on unmount (#7721)', async () => {
     const workspaceKey = folderWorkspaceKey('folder-workspace-1')
 
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [makeFolderWorkspace({ connectionId: 'ssh-1' })],
       projectGroups: [makeProjectGroup({ connectionId: 'ssh-1' })],
       repos: [],
@@ -226,7 +232,8 @@ describe('useRuntimeFileListForWorktree', () => {
     const workspaceKey = folderWorkspaceKey('folder-workspace-1')
     listRuntimeFilesMock.mockReturnValue(new Promise<string[]>(() => {}))
 
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [makeFolderWorkspace({ connectionId: 'ssh-1' })],
       projectGroups: [makeProjectGroup({ connectionId: 'ssh-1' })],
       repos: [],
@@ -261,7 +268,8 @@ describe('useRuntimeFileListForWorktree', () => {
 
   it('does not restart the scan when unrelated ownership metadata changes', async () => {
     const workspaceKey = folderWorkspaceKey('folder-workspace-1')
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [makeFolderWorkspace({ connectionId: 'ssh-1' })],
       projectGroups: [makeProjectGroup({ connectionId: 'ssh-1' })],
       repos: [],
@@ -272,7 +280,8 @@ describe('useRuntimeFileListForWorktree', () => {
     await waitForListRuntimeFilesCall()
 
     await act(async () => {
-      useAppStore.setState({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+      setSessionTestState(useAppStore, {
         repos: [
           {
             id: 'unrelated-repo',
@@ -572,7 +581,8 @@ describe('useRuntimeFileListForWorktree', () => {
 
   it('keeps the local listing across query changes without restarting it', async () => {
     const workspaceKey = folderWorkspaceKey('folder-workspace-1')
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [makeFolderWorkspace()],
       projectGroups: [makeProjectGroup()],
       repos: [],
@@ -689,7 +699,10 @@ it('merges an eligible recent beyond the local empty-query inventory cap', async
   vi.useFakeTimers()
   try {
     const workspace = makeFolderWorkspace()
-    useAppStore.setState({ folderWorkspaces: [workspace], projectGroups: [makeProjectGroup()] })
+    setSessionTestState(useAppStore, {
+      folderWorkspaces: [workspace],
+      projectGroups: [makeProjectGroup()]
+    })
     const states: RuntimeFileListState[] = []
     listRuntimeFilesMock.mockImplementation((_context, args) =>
       Promise.resolve(

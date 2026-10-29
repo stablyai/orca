@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -47,7 +48,8 @@ beforeEach(() => {
     configurable: true,
     value: { fs: desktopFs, shell: { pathExists: vi.fn().mockResolvedValue(true) } }
   })
-  useAppStore.setState(
+  setSessionTestState(
+    useAppStore,
     {
       ...initialState,
       // Focus is on the desktop; the selected repo lives on a managed host.
@@ -72,7 +74,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   Reflect.deleteProperty(window, 'api')
 })
 
@@ -107,7 +109,7 @@ it('inspects and creates a managed-host repo config on that host, never the desk
 
 it('keeps a desktop repo on the desktop while a managed host is focused', async () => {
   const desktopRepo: Repo = { ...repo, executionHostId: 'local' }
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'host-a' },
     repos: [desktopRepo],
     worktreesByRepo: {

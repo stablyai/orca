@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 // Mock only IPC: mocked listing shapes previously hid loss of all local filter results (#21423).
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
@@ -77,7 +78,7 @@ function seedWorkspaces(): void {
     repos: [],
     worktreesByRepo: {}
   }
-  useAppStore.setState(workspaces)
+  setSessionTestState(useAppStore, workspaces)
 }
 
 async function settle(): Promise<void> {
@@ -93,7 +94,7 @@ function renderNameFilter(activeWorktreeId: string) {
 }
 
 beforeEach(() => {
-  useAppStore.setState(initialAppState, true)
+  setSessionTestState(useAppStore, initialAppState, true)
   listRuntimeFilesMock.mockReset().mockResolvedValue(['packages/app/package.json', 'src/main.ts'])
   cancelRuntimeFileListMock.mockReset()
   searchRuntimeFilePathsMock.mockReset().mockResolvedValue({ files: [], truncated: false })
@@ -102,7 +103,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
-  useAppStore.setState(initialAppState, true)
+  setSessionTestState(useAppStore, initialAppState, true)
 })
 
 describe('useFileExplorerNameFilter over the real runtime listing', () => {

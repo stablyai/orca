@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -47,7 +48,7 @@ describe('PortsStatusSegment render stability', () => {
   let consoleError: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
-    useAppStore.setState(useAppStore.getInitialState(), true)
+    setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)

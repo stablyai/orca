@@ -1,3 +1,5 @@
+import { withSessionSourceWrites } from '@/store/session-source-write-boundary'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 /** @vitest-environment happy-dom */
 import { act, StrictMode } from 'react'
 import type * as ReactModule from 'react'
@@ -30,23 +32,25 @@ vi.mock('react', async () => {
 
 vi.mock('../../store', async () => {
   const { create } = await import('zustand')
-  const useAppStore = create(() => ({
-    activeGroupIdByWorktree: {} as Record<string, string | undefined>,
-    groupsByWorktree: {} as Record<string, TabGroup[]>,
-    pendingStartupByTabId: {} as Record<string, unknown>,
-    ptyIdsByTabId: {} as Record<string, string[]>,
-    runtimeStatusByEnvironmentId: new Map<string, unknown>(),
-    runtimePaneTitlesByTabId: {} as Record<string, Record<number, string>>,
-    settings: {} as Record<string, unknown>,
-    sleepingAgentSessionsByPaneKey: {} as Record<string, unknown>,
-    tabsByWorktree: {} as Record<string, TerminalTab[]>,
-    terminalLayoutsByTabId: {} as Record<string, unknown>,
-    unifiedTabsByWorktree: {} as Record<string, Tab[]>,
-    consumeSuppressedPtyExit: () => false,
-    focusGroup: () => {},
-    reconcileWorktreeTabModel: () => ({ renderableTabCount: 2 }),
-    setActiveWorktree: () => {}
-  }))
+  const useAppStore = create(
+    withSessionSourceWrites(() => ({
+      activeGroupIdByWorktree: {} as Record<string, string | undefined>,
+      groupsByWorktree: {} as Record<string, TabGroup[]>,
+      pendingStartupByTabId: {} as Record<string, unknown>,
+      ptyIdsByTabId: {} as Record<string, string[]>,
+      runtimeStatusByEnvironmentId: new Map<string, unknown>(),
+      runtimePaneTitlesByTabId: {} as Record<string, Record<number, string>>,
+      settings: {} as Record<string, unknown>,
+      sleepingAgentSessionsByPaneKey: {} as Record<string, unknown>,
+      tabsByWorktree: {} as Record<string, TerminalTab[]>,
+      terminalLayoutsByTabId: {} as Record<string, unknown>,
+      unifiedTabsByWorktree: {} as Record<string, Tab[]>,
+      consumeSuppressedPtyExit: () => false,
+      focusGroup: () => {},
+      reconcileWorktreeTabModel: () => ({ renderableTabCount: 2 }),
+      setActiveWorktree: () => {}
+    }))
+  )
   return { useAppStore }
 })
 
@@ -78,11 +82,7 @@ vi.mock('./terminal-parked-tab-watchers', async () => {
       if (args.parkedTabIds.size === 0) {
         return
       }
-      ;(
-        useAppStore as unknown as {
-          setState: (update: (state: ParkingStoreState) => Partial<ParkingStoreState>) => void
-        }
-      ).setState((state) => ({
+      setSessionTestState(useAppStore, (state) => ({
         tabsByWorktree: {
           ...state.tabsByWorktree,
           [args.worktreeId]: state.tabsByWorktree[args.worktreeId].map((tab) => ({
@@ -116,16 +116,7 @@ import TerminalPaneOverlayLayer from './TerminalPaneOverlayLayer'
 const TAB_IDS = ['tab-a', 'tab-b'] as const
 const GROUP_ID = 'group-a'
 
-type ParkingStoreState = {
-  groupsByWorktree: Record<string, TabGroup[]>
-  tabsByWorktree: Record<string, TerminalTab[]>
-  unifiedTabsByWorktree: Record<string, Tab[]>
-}
-
-const parkingStore = useAppStore as unknown as {
-  getState: () => ParkingStoreState
-  setState: (partial: Record<string, unknown>) => void
-}
+const parkingStore = useAppStore
 
 function terminalTab(id: string): TerminalTab {
   return {
@@ -187,7 +178,7 @@ describe('TerminalPaneOverlayLayer cold-park pre-gate loop', () => {
     harness.renderedParkedSets.length = 0
     const tabs = TAB_IDS.map(terminalTab)
     const unifiedTabs = TAB_IDS.map(unifiedTerminalTab)
-    parkingStore.setState({
+    setSessionTestState(parkingStore, {
       activeGroupIdByWorktree: { [harness.worktreeId]: GROUP_ID },
       groupsByWorktree: {
         [harness.worktreeId]: [
@@ -233,7 +224,7 @@ describe('TerminalPaneOverlayLayer cold-park pre-gate loop', () => {
     const settledSyncCalls = harness.syncCalls
     const state = parkingStore.getState()
     act(() => {
-      parkingStore.setState({
+      setSessionTestState(parkingStore, {
         tabsByWorktree: {
           ...state.tabsByWorktree,
           [harness.worktreeId]: state.tabsByWorktree[harness.worktreeId].map((tab) =>
@@ -253,7 +244,7 @@ describe('TerminalPaneOverlayLayer cold-park pre-gate loop', () => {
     const beforePendingSpawnSyncCalls = harness.syncCalls
     const pendingSpawnState = parkingStore.getState()
     act(() => {
-      parkingStore.setState({
+      setSessionTestState(parkingStore, {
         tabsByWorktree: {
           ...pendingSpawnState.tabsByWorktree,
           [harness.worktreeId]: pendingSpawnState.tabsByWorktree[harness.worktreeId].map((tab) =>
@@ -267,7 +258,7 @@ describe('TerminalPaneOverlayLayer cold-park pre-gate loop', () => {
     const beforeTabOrderSyncCalls = harness.syncCalls
     const tabOrderState = parkingStore.getState()
     act(() => {
-      parkingStore.setState({
+      setSessionTestState(parkingStore, {
         tabsByWorktree: {
           ...tabOrderState.tabsByWorktree,
           [harness.worktreeId]: tabOrderState.tabsByWorktree[harness.worktreeId].toReversed()
@@ -279,7 +270,7 @@ describe('TerminalPaneOverlayLayer cold-park pre-gate loop', () => {
     const beforeActiveTabChangeSyncCalls = harness.syncCalls
     const activeTabState = parkingStore.getState()
     act(() => {
-      parkingStore.setState({
+      setSessionTestState(parkingStore, {
         groupsByWorktree: {
           ...activeTabState.groupsByWorktree,
           [harness.worktreeId]: activeTabState.groupsByWorktree[harness.worktreeId].map(
@@ -297,7 +288,7 @@ describe('TerminalPaneOverlayLayer cold-park pre-gate loop', () => {
     const groupState = parkingStore.getState()
     const nextGroupId = 'group-b'
     act(() => {
-      parkingStore.setState({
+      setSessionTestState(parkingStore, {
         groupsByWorktree: {
           ...groupState.groupsByWorktree,
           [harness.worktreeId]: [

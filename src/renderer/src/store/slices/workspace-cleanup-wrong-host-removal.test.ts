@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 /** Cleanup must delete the confirmed host’s same-ID workspace (STA-4343). Transport fakes delete real per-host directories; assert one survives and one is gone across local/SSH/runtime and active-host controls so inert or indiscriminate deletion cannot pass. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import * as fs from 'node:fs'
@@ -362,7 +363,7 @@ describe('STA-4343 wrong-host cleanup removal (git worktree identity)', () => {
       }
     } as Partial<AppState>)
     mockApi.worktrees.remove.mockImplementationOnce(async () => {
-      store.setState({
+      setSessionTestState(store, {
         worktreesByRepo: { repo1: [original, arriving] },
         detectedWorktreesByRepo: {
           repo1: {

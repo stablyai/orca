@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createTestStore,
@@ -549,7 +550,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     const refreshGitHubForWorktreeIfStale = vi.fn()
     const observeAgentHookCompletionForNotification = vi.fn()
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       workspaceSessionReady: true,
       repos: [{ ...TEST_REPO, connectionId: null, executionHostId: 'local' }],
       worktreesByRepo: {

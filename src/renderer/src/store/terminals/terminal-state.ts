@@ -1,3 +1,4 @@
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { ClosedTerminalTabTombstonesByTabId } from '../../../../shared/closed-terminal-tab-tombstones'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type {
@@ -21,7 +22,6 @@ import type {
   AutomaticAgentResumeClaim,
   CodexRestartNotice
 } from './terminal-contracts'
-import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { TerminalActions } from './terminal-actions'
 import type { AgentPaneLaunchRequest } from '../../../../shared/agent-pane-launch-request'
@@ -138,8 +138,8 @@ export type TerminalState = {
 }
 export type TerminalSlice = TerminalState & TerminalActions & PairedTerminalTabCloseIntentSlice
 
-export type TerminalStoreSet = Parameters<StateCreator<AppState, [], [], AppState>>[0]
-export type TerminalStoreGet = Parameters<StateCreator<AppState, [], [], AppState>>[1]
+export type TerminalStoreSet = Parameters<SessionStateCreator<AppState, AppState>>[0]
+export type TerminalStoreGet = Parameters<SessionStateCreator<AppState, AppState>>[1]
 
 export type TerminalPaneStart = { status: PaneStartStatus; reason?: string }
 /** `ptyGeneration` tells two starts under one terminal id apart (a daemon session id is reused). */

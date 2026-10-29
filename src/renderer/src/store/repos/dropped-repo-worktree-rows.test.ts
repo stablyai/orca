@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import type { DetectedWorktreeListResult } from '../../../../shared/worktree/types'
@@ -127,7 +128,7 @@ describe('a fetched catalog that drops a repo registration', () => {
 
     const fetching = store.getState().fetchRuntimeEnvironmentRepos('env-1')
     // The add lands after the request went out, so the answer cannot list it.
-    store.setState((s) => ({
+    setSessionTestState(store, (s) => ({
       repos: [...s.repos, serverRepo('added', '/srv/added')],
       worktreesByRepo: { ...s.worktreesByRepo, added: [serverRow('added', '/srv/added')] }
     }))

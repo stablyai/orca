@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
@@ -65,7 +66,7 @@ export function registerReposProjectGroupCreateRaceTests(): void {
       }
     })
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: {
         ...getDefaultSettings('/test'),
         activeRuntimeEnvironmentId: runtimeEnvironmentId
@@ -155,7 +156,7 @@ export function registerReposProjectGroupCreateRaceTests(): void {
   it('recognizes an unstamped local group without conflating an SSH catalog row', async () => {
     const { store, created, ownerHostId } = setup(null)
     const sshGroup = { ...projectGroup, connectionId: 'server' }
-    store.setState({ projectGroups: [sshGroup, refreshedGroup] })
+    setSessionTestState(store, { projectGroups: [sshGroup, refreshedGroup] })
     const state = store.getState()
     const pendingCreate = state.createProjectGroup('Platform', ownerHostId)
     created.resolve(projectGroup)
@@ -166,7 +167,7 @@ export function registerReposProjectGroupCreateRaceTests(): void {
   it('does not suppress a local group whose ID matches a direct SSH group', async () => {
     const { store, created, ownerHostId } = setup(null)
     const sshGroup = { ...projectGroup, connectionId: 'server' }
-    store.setState({ projectGroups: [sshGroup] })
+    setSessionTestState(store, { projectGroups: [sshGroup] })
     const pendingCreate = store.getState().createProjectGroup('Platform', ownerHostId)
     created.resolve(projectGroup)
     await pendingCreate

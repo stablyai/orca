@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, cleanup, render } from '@testing-library/react'
 import { useCallback } from 'react'
@@ -46,7 +47,8 @@ function seed(chats: number, workspaces: number, terminalsPerWorkspace: number) 
     workspaces,
     terminalsPerWorkspace
   )
-  useAppStore.setState(
+  setSessionTestState(
+    useAppStore,
     {
       ...initial,
       folderWorkspaces,
@@ -94,7 +96,7 @@ afterEach(() => {
   cleanup()
   drafts.clearNativeChatComposerDraftsForTests()
   resetStructuredAgentSessionStatusFeedsForTests()
-  useAppStore.setState(initial, true)
+  setSessionTestState(useAppStore, initial, true)
   Object.assign(window, { api: originalApi })
 })
 
@@ -166,7 +168,7 @@ it.each(
   const terminals = counted({ ...state.tabsByWorktree }, 'terminal')
   reads.terminal = reads.unified = 0
   await act(async () =>
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       unifiedTabsByWorktree: replacement,
       tabsByWorktree: terminals,
       activeWorktreeId: workspace(1)

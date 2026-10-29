@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Worktree } from '../../../shared/worktree/types'
 import { useAppStore } from '@/store'
@@ -9,7 +10,7 @@ vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS
 const initialAppStoreState = useAppStore.getState()
 
 afterEach(() => {
-  useAppStore.setState(initialAppStoreState, true)
+  setSessionTestState(useAppStore, initialAppStoreState, true)
   vi.useRealTimers()
 })
 
@@ -40,7 +41,7 @@ describe('switching workspaces with the sidebar-inputs switch on', () => {
     vi.useFakeTimers({ now: 50_000, toFake: ['Date'] })
     const shells = worktree('shells')
     const next = worktree('next')
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [
         { id: 'repo-1', path: '/workspace/repo', displayName: 'repo', badgeColor: '', addedAt: 0 }
       ],

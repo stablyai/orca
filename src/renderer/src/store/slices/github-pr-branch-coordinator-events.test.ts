@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../../../../shared/worktree/hosted-review-links'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { _clearGitHubPRRefreshStartedEntriesForTest } from '../github/request-coordination'
@@ -156,7 +157,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       })
       return worktree
     })
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
       worktreesByRepo: { [repoId]: worktrees }
     } as unknown as Partial<AppState>)
@@ -209,7 +211,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       })
       return worktree
     })
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
       worktreesByRepo: { [repoId]: worktrees }
     } as unknown as Partial<AppState>)
@@ -304,7 +307,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const worktreeId = 'repo-1::/same/path'
     const cacheKey = `${repoId}::${branch}`
     const updateWorktreeMeta = vi.fn()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
       worktreesByRepo: {
         [repoId]: [
@@ -365,7 +369,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const worktreeId = 'repo-1::/same/path'
     const cacheKey = `ssh:ssh-1::${repoId}::${branch}`
     const updateWorktreeMeta = vi.fn()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       repos: [
         {
           id: repoId,
@@ -488,7 +493,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
         if (options?.shouldApply && !options.shouldApply(current)) {
           return
         }
-        store.setState((state) => ({
+        setSessionTestState(store, (state) => ({
           worktreesByRepo: {
             ...state.worktreesByRepo,
             [repoId]: (state.worktreesByRepo[repoId] ?? []).map((worktree) =>
@@ -498,7 +503,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
         }))
       }
     )
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
       worktreesByRepo: { [repoId]: [worktreeA, worktreeB] },
       updateWorktreeMeta
@@ -556,7 +562,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       const cachedPR = makePR({ number: 12, state, title: 'Visible event PR' })
       const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
 
-      store.setState({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This prCache, hostedReviewCache fixture intentionally supplies only the state members exercised by this scenario.
+      setSessionTestState(store, {
         prCache: {
           [cacheKey]: {
             data: cachedPR,
@@ -612,7 +619,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       headSha: 'merged-head'
     })
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       worktreesByRepo: {
         [repoId]: [
           makePRRefreshWorktree({
@@ -712,7 +720,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       headSha: 'merged-head'
     })
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(store, {
       worktreesByRepo: testCase.worktreesByRepo,
       prCache: {
         [cacheKey]: {

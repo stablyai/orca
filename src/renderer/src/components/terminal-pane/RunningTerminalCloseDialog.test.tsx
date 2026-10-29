@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -63,7 +64,7 @@ function getCheckbox(): HTMLButtonElement {
 
 describe('RunningTerminalCloseDialog', () => {
   beforeEach(() => {
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
     // Keep time monotonic because the singleton store retains guard deadlines between tests.
     clock += 10_000
     vi.spyOn(Date, 'now').mockImplementation(() => clock)
@@ -81,7 +82,7 @@ describe('RunningTerminalCloseDialog', () => {
       }
     })
     document.body.innerHTML = ''
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   it('names the tab so a background close is not ambiguous', async () => {

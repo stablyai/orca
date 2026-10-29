@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
@@ -82,7 +83,7 @@ beforeEach(() => {
 
 afterEach(() => {
   registerWorkspaceHttpLinkBrowserOpener(null)
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   vi.unstubAllGlobals()
 })
 
@@ -123,7 +124,7 @@ describe('floating file links preserve main-window selection', () => {
 
   it('opens the plain-click file action in the floating editor even when a project has the file open', async () => {
     const filePath = '/project/readme.md'
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       openFiles: [
         {
           id: filePath,

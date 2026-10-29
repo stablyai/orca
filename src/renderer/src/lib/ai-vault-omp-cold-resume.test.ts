@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
 import { createTestStore, makeTab } from '@/store/slices/store-test-helpers'
@@ -7,7 +8,8 @@ import { buildAiVaultResumeStartupForWorktree } from './ai-vault-resume-command'
 describe('AI Vault OMP cold resume', () => {
   it('keeps the custom session store after the resumed process reports its id', () => {
     const store = createTestStore()
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This activeRepoId, activeWorktreeId, folderWorkspaces fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       activeRepoId: 'repo-1',
       activeWorktreeId: 'wt-1',
       folderWorkspaces: [],

@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { cleanup, screen, waitFor } from '@testing-library/react'
 import { render } from './native-chat-tooltip-test-harness'
@@ -47,7 +48,7 @@ beforeEach(() => {
   vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
   readFile.mockResolvedValue({ content: 'AA==', isBinary: true, mimeType: 'image/png' })
   vi.stubGlobal('api', { ...window.api, fs: { ...window.api?.fs, readFile } })
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     ...useAppStore.getInitialState(),
     ...nativeChatFanoutFixture(0, 1, 1),
     activeWorktreeId: null,
@@ -60,7 +61,7 @@ afterEach(() => {
   cleanup()
   restoreViewport()
   resetLocalImageSrcStateForTests()
-  useAppStore.setState(original, true)
+  setSessionTestState(useAppStore, original, true)
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
   readFile.mockReset()

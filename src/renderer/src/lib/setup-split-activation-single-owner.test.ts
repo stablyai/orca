@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store'
@@ -225,7 +226,7 @@ async function activateFirstTime(worktreeId: string): Promise<void> {
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
 })
 
 describe('old-host split of an unmounted tab, then first activation', () => {
@@ -233,7 +234,7 @@ describe('old-host split of an unmounted tab, then first activation', () => {
     const worktree = makeWorktree()
     const primaryPtyId = `${worktree.id}@@primary`
     const setupPtyId = `${worktree.id}@@setup`
-    useAppStore.setState(baseState())
+    setSessionTestState(useAppStore, baseState())
     const host = stubHost(primaryPtyId, setupPtyId)
     registerTerminalPresentationIpcBridge([])
     seedRevealedPrimaryTab(worktree.id, primaryPtyId)
@@ -270,8 +271,8 @@ describe('old-host split of an unmounted tab, then first activation', () => {
         const worktree = makeWorktree()
         const primaryPtyId = `${worktree.id}@@primary-${run}`
         const setupPtyId = `${worktree.id}@@setup-${run}`
-        useAppStore.setState(initialState, true)
-        useAppStore.setState(baseState())
+        setSessionTestState(useAppStore, initialState, true)
+        setSessionTestState(useAppStore, baseState())
         const host = stubHost(primaryPtyId, setupPtyId)
         registerTerminalPresentationIpcBridge([])
         seedRevealedPrimaryTab(worktree.id, primaryPtyId)
@@ -291,7 +292,7 @@ describe('old-host split of an unmounted tab, then first activation', () => {
 
   it('rejects a split into a tab it lacks without switching to that workspace', () => {
     const worktree = makeWorktree()
-    useAppStore.setState({ ...baseState(), activeWorktreeId: null })
+    setSessionTestState(useAppStore, { ...baseState(), activeWorktreeId: null })
     const host = stubHost(`${worktree.id}@@primary`, `${worktree.id}@@setup`)
     registerTerminalPresentationIpcBridge([])
 

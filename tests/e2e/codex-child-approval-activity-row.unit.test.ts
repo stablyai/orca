@@ -1,4 +1,8 @@
 // @vitest-environment happy-dom
+import {
+  setSessionTestState,
+  type SessionTestStore
+} from '../../src/renderer/src/lib/test-support/session-source-fixture'
 
 // Round-trip subagent approval through the real translator/journal/status/activity pipeline; answering must preserve done time and read state.
 
@@ -36,10 +40,7 @@ import {
 import { countActivityUnread } from '../../src/renderer/src/components/activity/useActivityUnreadCount'
 import { useAgentPaneThreads } from '../../src/renderer/src/components/activity/use-agent-pane-threads'
 
-type TestStore = {
-  getState: () => AppState
-  setState: (state: Partial<AppState> & { testRuntimeOwner?: string | null }) => void
-}
+type TestStore = SessionTestStore<AppState & { testRuntimeOwner?: string | null }>
 
 const mocks = vi.hoisted(() => {
   const hoisted: { store: TestStore | null; subscribeStatus: Mock; unsubscribe: Mock } = {
@@ -104,7 +105,7 @@ beforeEach(async () => {
   mocks.subscribeStatus.mockResolvedValue({ unsubscribe: mocks.unsubscribe })
   root = await mkdtemp(join(tmpdir(), 'orca-codex-child-approval-'))
   const worktree = makeWorktree()
-  store().setState({
+  setSessionTestState(store(), {
     agentStatusByPaneKey: {},
     acknowledgedAgentsByPaneKey: {},
     activityClearedAtByPaneKey: {},

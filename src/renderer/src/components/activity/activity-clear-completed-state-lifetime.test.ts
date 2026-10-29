@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { makeOpenFile } from '../../store/slices/store-session-test-harness'
@@ -59,7 +60,7 @@ function clearWithOpenDraft(clear: boolean = true) {
     responsePreview: '',
     events: []
   }
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     openFiles: [makeOpenFile({ id: fileId, worktreeId: 'wt-1' })],
     retainedAgentsByPaneKey: { [paneKey]: retained },
     agentStatusByPaneKey: { [paneKey]: retained.entry }
@@ -92,14 +93,14 @@ async function collectRetiredState(): Promise<void> {
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   vi.stubGlobal('window', { api: { agentStatus: { dropPersistedBatch } } })
 })
 
 afterEach(() => {
   feedback.release()
   flushPendingClearCompletedEvictions()
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   vi.clearAllMocks()
   vi.useRealTimers()
   vi.unstubAllGlobals()

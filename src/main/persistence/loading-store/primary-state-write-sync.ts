@@ -1,3 +1,5 @@
+import { sessionPublication } from './session-publication'
+import { profileStateWriterFailureOutcome } from '../profile-state/profile-state-writer-errors'
 import { writeSelectiveProfileState } from './profile-state-selective-write'
 import type { PrimaryStateWriteOperationsContext } from './primary-state-write-context'
 import {
@@ -8,6 +10,31 @@ import {
 export function writeToDiskSync(
   context: PrimaryStateWriteOperationsContext,
   opts: { expectedGeneration?: number } = {}
+): boolean {
+  const { runtime } = context
+  const publication = sessionPublication(runtime.state)
+  const refs = publication.captureRefs(runtime.dirtyProfileStateDomains)
+  try {
+    const written = writeToDiskSyncCaptured(context, opts)
+    publication.finishRefs(
+      refs,
+      written ? 'committed' : 'failed',
+      runtime.terminalScrollbackSnapshotStorage,
+      runtime.retainedScrollbackRefsByMigrationId
+    )
+    return written
+  } catch (error) {
+    publication.finishRefs(
+      refs,
+      profileStateWriterFailureOutcome(error) === 'indeterminate' ? 'indeterminate' : 'failed'
+    )
+    throw error
+  }
+}
+
+function writeToDiskSyncCaptured(
+  context: PrimaryStateWriteOperationsContext,
+  opts: { expectedGeneration?: number }
 ): boolean {
   const { runtime, serialization } = context
   if (runtime.fatalMutationError) {

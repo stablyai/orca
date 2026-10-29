@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { Tab, TabGroup } from '../../../shared/tab-types'
@@ -63,7 +64,7 @@ async function drawFromMain(): Promise<{
       }))
     ])
   )
-  store.setState({
+  setSessionTestState(store, {
     activeWorktreeId: mockStoreState.activeWorktreeId,
     activeWorkspaceExecutionHostId: mockStoreState.activeWorkspaceExecutionHostId,
     // One repo per row, so same-id rows on two hosts stay apart.

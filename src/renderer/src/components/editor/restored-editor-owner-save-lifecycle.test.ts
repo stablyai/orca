@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -29,8 +30,9 @@ function deferred(): { promise: Promise<{ ok: true }>; resolve: () => void } {
 }
 
 function seed(filePath = FILE_PATH): string {
-  useAppStore.setState(useAppStore.getInitialState(), true)
-  useAppStore.setState({
+  setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+  setSessionTestState(useAppStore, {
     activeWorktreeId: SOURCE,
     settings: { editorAutoSave: true, editorAutoSaveDelayMs: 250 },
     repos: [
@@ -166,7 +168,7 @@ describe('restored editor owner save lifecycle', () => {
       null
     )
     await Promise.resolve()
-    useAppStore.setState((state) => ({
+    setSessionTestState(useAppStore, (state): Partial<AppState> => ({
       worktreesByRepo: { ...state.worktreesByRepo, 'repo-b': [] }
     }))
 
@@ -182,7 +184,8 @@ describe('restored editor owner save lifecycle', () => {
 
   it('fails closed when a folder root changes during save quiescence', async () => {
     const oldId = seed('/notes/todo.md')
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test controls the the declared fixture domain fixture and intentionally supplies only the scenario's members.
+    setSessionTestState(useAppStore, {
       folderWorkspaces: [
         {
           id: 'notes',
@@ -208,7 +211,7 @@ describe('restored editor owner save lifecycle', () => {
       null
     )
     await Promise.resolve()
-    useAppStore.setState((state) => ({
+    setSessionTestState(useAppStore, (state): Partial<AppState> => ({
       folderWorkspaces: state.folderWorkspaces.map((workspace) => ({
         ...workspace,
         folderPath: '/renamed-notes'
@@ -227,7 +230,7 @@ describe('restored editor owner save lifecycle', () => {
 
   it('fails closed when direct-SSH authority reconnects during save quiescence', async () => {
     const oldId = seed()
-    useAppStore.setState((state) => ({
+    setSessionTestState(useAppStore, (state): Partial<AppState> => ({
       repos: state.repos.map((repo) =>
         repo.id === 'repo-b'
           ? { ...repo, connectionId: 'ssh-1', executionHostId: 'ssh:ssh-1' }

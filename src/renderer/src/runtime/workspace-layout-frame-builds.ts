@@ -1,13 +1,11 @@
 // Full builds read window view/facts through save/Loader; workspace builds use store records. Both run restore builders only for named workspaces, merging records via workspace-layout-frame-store-patch.
 
 import type { AppState } from '@/store/types'
+import type { SessionSourceEdit, OrdinarySourcePartial } from '@/store/session-source-edits'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { WorkspaceLayoutCache } from '@/store/workspace-layout-cache'
 import { buildLayoutFrameSlices } from '@/store/workspace-layout-frame-slices'
-import {
-  buildLayoutFrameStorePatch,
-  terminalLayoutsPatch
-} from '@/store/workspace-layout-frame-store-patch'
+import { buildLayoutFrameStorePatch } from '@/store/workspace-layout-frame-store-patch'
 import { terminalLayoutsWithFrameBindings } from './workspace-layout-frame-bindings'
 import type { HeldDrawnTabs } from '@/store/workspace-layout-frame-held-tabs'
 import { layoutViewAndFactsOfStore } from '@/store/workspace-layout-frame-store-view'
@@ -29,26 +27,24 @@ export type LayoutFrameBuildHolds = {
   held: HeldDrawnTabs
 }
 
-export type LayoutFrameBuildPatch = Partial<AppState>
-
 /** A bucket, not a host: the view read-back routes the workspaces a build skips here. */
 const OTHER_WORKSPACES: ExecutionHostId = 'runtime:frame-sync-other-workspaces'
 
 function patchFromSlices(
-  state: AppState,
+  edit: SessionSourceEdit<AppState>,
   cache: WorkspaceLayoutCache,
   keys: readonly string[],
   { view, facts }: { view: DesktopLayoutView; facts: LayoutContentFacts },
   holds: LayoutFrameBuildHolds
-): LayoutFrameBuildPatch {
+): void {
   const built = buildLayoutFrameSlices({
     layouts: Object.fromEntries(keys.map((key) => [key, cache[key]!])),
     // A tab this window asked main to open draws with the window's facts for it.
     facts: withPendingTabFacts(facts, keys),
     view
   })
-  return buildLayoutFrameStorePatch(
-    state,
+  buildLayoutFrameStorePatch(
+    edit,
     built,
     keys,
     holds.keepsTerminalLayout,
@@ -59,11 +55,13 @@ function patchFromSlices(
 
 /** Full build repairs restored legacy shapes on startup, reopened streams and newly seen workspaces. */
 export function fullLayoutFrameBuildPatch(
-  state: AppState,
+  edit: SessionSourceEdit<AppState>,
   cache: WorkspaceLayoutCache,
   keys: readonly string[],
-  holds: LayoutFrameBuildHolds
-): LayoutFrameBuildPatch {
+  holds: LayoutFrameBuildHolds,
+  priorPatch: OrdinarySourcePartial<AppState> = {}
+): void {
+  const state = edit.view(priorPatch)
   const built = new Set(keys)
   const own = splitWorkspaceSessionByHost(buildWorkspaceSessionPayload(state), (key) =>
     built.has(key) ? LOCAL_EXECUTION_HOST_ID : OTHER_WORKSPACES
@@ -73,16 +71,17 @@ export function fullLayoutFrameBuildPatch(
     own,
     nameBasedLoadContext()
   )
-  return patchFromSlices(state, cache, keys, { view: desktopView, facts }, holds)
+  patchFromSlices(edit, cache, keys, { view: desktopView, facts }, holds)
 }
 
 export function workspaceLayoutFrameBuildPatch(
-  state: AppState,
+  edit: SessionSourceEdit<AppState>,
   cache: WorkspaceLayoutCache,
   keys: readonly string[],
-  holds: LayoutFrameBuildHolds
-): LayoutFrameBuildPatch {
-  return patchFromSlices(state, cache, keys, layoutViewAndFactsOfStore(state, keys), holds)
+  holds: LayoutFrameBuildHolds,
+  priorPatch: OrdinarySourcePartial<AppState> = {}
+): void {
+  patchFromSlices(edit, cache, keys, layoutViewAndFactsOfStore(edit.view(priorPatch), keys), holds)
 }
 
 /** What one flush builds; `rebound` tabs whose bindings only a build shows join `workspaceBuilt`. */
@@ -94,31 +93,22 @@ export type LayoutFrameFlushBuilds = {
 
 /** One flush's builds as one store patch: each build reads the store as the one before left it. */
 export function layoutFrameFlushPatch(
-  state: AppState,
+  edit: SessionSourceEdit<AppState>,
   cache: WorkspaceLayoutCache,
   { fullBuilt, workspaceBuilt, rebound }: LayoutFrameFlushBuilds,
-  holds: LayoutFrameBuildHolds
-): LayoutFrameBuildPatch {
-  let patch: LayoutFrameBuildPatch =
-    fullBuilt.length > 0 ? fullLayoutFrameBuildPatch(state, cache, fullBuilt, holds) : {}
-  if (rebound.size > 0) {
-    let layouts = { ...state, ...patch }.terminalLayoutsByTabId
-    for (const [key, tabIds] of rebound) {
-      const layout = cache[key]
-      const next = layout && terminalLayoutsWithFrameBindings(layouts, key, layout, tabIds)
-      if (next) {
-        layouts = next
-      } else {
-        workspaceBuilt.push(key)
-      }
+  holds: LayoutFrameBuildHolds,
+  priorPatch: OrdinarySourcePartial<AppState> = {}
+): void {
+  if (fullBuilt.length > 0) {
+    fullLayoutFrameBuildPatch(edit, cache, fullBuilt, holds, priorPatch)
+  }
+  for (const [key, tabIds] of rebound) {
+    const layout = cache[key]
+    if (!layout || !terminalLayoutsWithFrameBindings(edit, key, layout, tabIds)) {
+      workspaceBuilt.push(key)
     }
-    patch = { ...patch, ...terminalLayoutsPatch({ ...state, ...patch }, layouts) }
   }
   if (workspaceBuilt.length > 0) {
-    patch = {
-      ...patch,
-      ...workspaceLayoutFrameBuildPatch({ ...state, ...patch }, cache, workspaceBuilt, holds)
-    }
+    workspaceLayoutFrameBuildPatch(edit, cache, workspaceBuilt, holds, priorPatch)
   }
-  return patch
 }

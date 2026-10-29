@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { isLocalBrowserPageOwner } from './browser'
 import type { AppState } from '../types'
@@ -48,7 +49,7 @@ describe('createBrowserSlice runtime guard', () => {
 
   it('uses the target worktree host default profile when creating a browser tab', () => {
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: null } as AppState['settings'],
       repos: [
         {
@@ -98,7 +99,7 @@ describe('createBrowserSlice runtime guard', () => {
 
   it('routes browser bridge ownership from the workspace instead of Active Server', () => {
     const store = createTestStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'windows-2' } as AppState['settings'],
       repos: [
         {

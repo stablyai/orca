@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createTestStore,
@@ -21,7 +22,8 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
     const branch = 'feature/test'
     const worktreeId = 'wt-1'
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This repos, worktreesByRepo, worktreeCardProperties fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
       worktreesByRepo: {
         'repo-1': [
@@ -71,7 +73,8 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
       skippedReason: 'validation-denied'
     })
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This repos, worktreesByRepo fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
       worktreesByRepo: {
         'repo-1': [
@@ -104,7 +107,8 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
     const worktreeId = 'wt-merged-behind-fallback'
     mockApi.gh.enqueuePRRefresh.mockResolvedValueOnce({ kind: 'queued' })
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This repos, worktreesByRepo, prCache fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
       worktreesByRepo: {
         [repoId]: [
@@ -153,7 +157,8 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
     mockApi.gh.enqueuePRRefresh.mockResolvedValueOnce({ kind: 'fallback' })
     mockApi.gh.refreshPRNow.mockResolvedValueOnce({ kind: 'no-pr', fetchedAt: 1 })
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This repos, worktreesByRepo fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
       worktreesByRepo: {
         'repo-1': [
@@ -191,7 +196,8 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     mockApi.gh.enqueuePRRefresh.mockRejectedValueOnce(error)
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This repos, worktreesByRepo, worktreeCardProperties fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
       worktreesByRepo: {
         'repo-1': [
@@ -229,7 +235,8 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
     const worktreeId = 'wt-1'
     const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This repos, worktreesByRepo, worktreeCardProperties fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
       worktreesByRepo: {
         [repoId]: [
@@ -284,7 +291,8 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
     const branch = 'feature/test'
     const worktreeId = 'wt-1'
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This repos, groupBy, worktreeCardProperties fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
       groupBy: 'repo',
       worktreeCardProperties: ['comment'],
@@ -317,7 +325,8 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
     const branch = 'feature/test'
     const worktreeId = 'wt-1'
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This repos, groupBy, worktreeCardProperties fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
       groupBy: 'repo',
       worktreeCardProperties: ['comment'],
@@ -351,7 +360,8 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
     const branch = 'feature/test'
     const worktreeId = 'wt-1'
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This repos, groupBy, worktreeCardProperties fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
       groupBy: 'repo',
       worktreeCardProperties: ['issue'],
@@ -389,7 +399,8 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
     const branch = 'feature/test'
     const worktreeId = 'wt-1'
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This repos, groupBy, sshConnectionStates fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       repos: [
         {
           id: 'repo-1',
@@ -437,7 +448,8 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
     const branch = 'feature/test'
     const worktreeId = 'wt-1'
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This repos, groupBy, worktreeCardProperties fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
       groupBy: 'repo',
       worktreeCardProperties: ['comment'],
@@ -493,7 +505,8 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
       true
     )
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This settings, repos, groupBy fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
       repos: [
         {
@@ -564,7 +577,8 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
     const repoPath = '/runtime/repo'
     const branch = 'feature/owner-runtime'
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This settings, repos fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       settings: null,
       repos: [
         {
@@ -605,7 +619,8 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
     const repoPath = '/ssh/repo'
     const branch = 'feature/ssh-owner'
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This settings, repos fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       settings: { activeRuntimeEnvironmentId: 'env-focused' } as AppState['settings'],
       repos: [
         {
@@ -646,7 +661,8 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
     const branch = 'feature/cached-pr'
     const worktreeId = 'wt-cached-pr'
 
-    store.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This repos, groupBy, worktreesByRepo fixture intentionally supplies only the state members exercised by this scenario.
+    setSessionTestState(store, {
       repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
       groupBy: 'pr-status',
       worktreesByRepo: {

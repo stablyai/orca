@@ -1,3 +1,5 @@
+import { replaceSessionSourceFields } from '@/store/session-source-write-boundary'
+import { editSessionSource } from '@/store/session-source-edits'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from './browser-slice-contract'
@@ -53,7 +55,10 @@ export function createBrowserHydrationActions(
           validWorktreeIds.add(folderWorkspaceKey(workspace.id))
         }
         addAdditionalValidWorkspaceKeys(validWorktreeIds, options)
-        return projectHydratedBrowserSession(s, session, validWorktreeIds)
+        return replaceSessionSourceFields(
+          projectHydratedBrowserSession(s, session, validWorktreeIds),
+          'hydration'
+        )
       })
 
       const state = get()
@@ -91,15 +96,12 @@ export function createBrowserHydrationActions(
                 sessionProfileId: profileId,
                 sessionPartition: sessionPartition ?? null
               }
-              return {
-                browserTabsByWorktree: {
-                  ...s.browserTabsByWorktree,
-                  [worktreeId]: updatedTabs
-                }
-              }
+              return editSessionSource(s)
+                .set('browserTabsByWorktree', worktreeId, updatedTabs)
+                .finish({})
             }
           }
-          return s
+          return undefined
         })
       // Switch point: main switches the tab's profile; its frame shows the change.
       const tab = ORCA_LAYOUT_OWNER_IS_MAIN

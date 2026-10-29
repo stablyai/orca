@@ -43,7 +43,7 @@ export function installSavedResumeStartupCancellation(session: ConnectPanePtySes
     if (ownsPaneStartup && claim && claim === session.savedStartupAutomaticClaim) {
       useAppStore.setState((current) => {
         if (current.automaticAgentResumeClaimsByTabId[session.deps.tabId] !== claim) {
-          return current
+          return undefined
         }
         const next = { ...current.automaticAgentResumeClaimsByTabId }
         delete next[session.deps.tabId]
@@ -72,7 +72,7 @@ export function installSavedResumeStartupCancellation(session: ConnectPanePtySes
       if (seeded?.source === source) {
         useAppStore.getState().updateAgentStatusState((current, changedPaneKeys) => {
           if (current.agentStatusByPaneKey[session.cacheKey] !== seeded.entry) {
-            return current
+            return undefined
           }
           const next = { ...current.agentStatusByPaneKey }
           changedPaneKeys.add(session.cacheKey)

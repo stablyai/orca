@@ -26,7 +26,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
     setContextualToursAutoEligible: (eligible) =>
       set((s) => {
         if (s.contextualToursAutoEligible === eligible) {
-          return s
+          return undefined
         }
         if (typeof window !== 'undefined') {
           window.api.ui.set({ contextualToursAutoEligible: eligible }).catch(console.error)
@@ -36,13 +36,13 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
     setContextualToursOnboardingVisible: (visible) =>
       set((s) =>
         s.contextualToursOnboardingVisible === visible
-          ? s
+          ? undefined
           : { contextualToursOnboardingVisible: visible }
       ),
     setContextualToursBlockingSurfaceVisible: (visible) =>
       set((s) =>
         s.contextualToursBlockingSurfaceVisible === visible
-          ? s
+          ? undefined
           : { contextualToursBlockingSurfaceVisible: visible }
       ),
     requestContextualTour: (id, source, wasFeaturePreviouslyInteracted, options) =>
@@ -62,7 +62,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
         })
         if (decision.kind !== 'start') {
           if (s.contextualTourNavigationInteractionSnapshot[id] === undefined) {
-            return s
+            return undefined
           }
           const { [id]: _consumed, ...remainingNavigationSnapshot } =
             s.contextualTourNavigationInteractionSnapshot
@@ -95,23 +95,25 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
           s.activeContextualTourSource !== source ||
           s.activeContextualTourSourceDetached
         ) {
-          return s
+          return undefined
         }
-        return s.activeContextualTourSuppressed ? s : { activeContextualTourSuppressed: true }
+        return s.activeContextualTourSuppressed
+          ? undefined
+          : { activeContextualTourSuppressed: true }
       }),
     detachContextualTourSource: (id, source) =>
       set((s) => {
         if (s.activeContextualTourId !== id || s.activeContextualTourSource !== source) {
-          return s
+          return undefined
         }
         return s.activeContextualTourSourceDetached
-          ? s
+          ? undefined
           : { activeContextualTourSourceDetached: true }
       }),
     advanceContextualTour: () =>
       set((s) => {
         if (!s.activeContextualTourId) {
-          return s
+          return undefined
         }
         const tour = getContextualTour(s.activeContextualTourId)
         const nextStepIndex = getNextVisibleContextualTourStepIndex({
@@ -129,12 +131,12 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
         ) {
           return { activeContextualTourStepIndex: s.activeContextualTourStepIndex + 1 }
         }
-        return s
+        return undefined
       }),
     regressContextualTour: () =>
       set((s) => {
         if (!s.activeContextualTourId) {
-          return s
+          return undefined
         }
         const previousStepIndex = getPreviousVisibleContextualTourStepIndex({
           tour: getContextualTour(s.activeContextualTourId),
@@ -142,7 +144,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
           targetExists: hasContextualTourTarget
         })
         if (previousStepIndex === null) {
-          return s
+          return undefined
         }
         return { activeContextualTourStepIndex: previousStepIndex }
       }),
@@ -157,7 +159,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
       }
       set((s) => {
         if (id && s.activeContextualTourId !== id) {
-          return s
+          return undefined
         }
         return {
           activeContextualTourId: null,
@@ -181,7 +183,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
       }
       set((s) => {
         if (id && s.activeContextualTourId !== id) {
-          return s
+          return undefined
         }
         return {
           activeContextualTourId: null,
@@ -199,7 +201,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
         const activeTourId = s.activeContextualTourId
         const tourId = id ?? activeTourId
         if (!tourId || (id && activeTourId !== id)) {
-          return s
+          return undefined
         }
         const alreadyShown = s.contextualToursSeenIds.includes(tourId)
         return {
@@ -216,7 +218,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
     markContextualToursSeen: (ids) =>
       set((s) => {
         if (ids.length === 0) {
-          return s
+          return undefined
         }
         const current = new Set(s.contextualToursSeenIds)
         let changed = false
@@ -227,7 +229,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
           }
         }
         if (!changed) {
-          return s
+          return undefined
         }
         const next = [...current]
         if (typeof window !== 'undefined') {

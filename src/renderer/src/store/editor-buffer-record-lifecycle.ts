@@ -1,3 +1,12 @@
+import { withSessionSourceWrites, type SessionStateCreator } from './session-source-write-boundary'
+import {
+  editSessionSource,
+  unwrapSessionSourceWrite,
+  type SessionSourcePartial,
+  type OrdinarySourcePartial,
+  type SessionSourceWrite
+} from './session-source-edits'
+import { composeSessionSourceWrites } from './session-source-compose'
 import type { StateCreator } from 'zustand'
 import {
   editorBufferMirrorMismatch,
@@ -32,16 +41,12 @@ const NO_KEPT = {}
 /** Reconcile views/records atomically with openFiles identity/membership; same-file views join by identity rules and unreferenced records retire. Write fields via writeEditorBuffer; checkInvariant rejects mirror drift. */
 function reconcileEditorBuffers<TState extends EditorBufferStoreState>(
   state: TState,
-  requested: TState | Partial<TState>,
+  requested: SessionSourcePartial<TState>,
   checkInvariant: boolean,
   scheduleRejoin: () => void
-): TState | Partial<TState> {
-  const keepRequest = requested.editorBufferKeepRequest
-  let write = requested
-  if (Object.hasOwn(write, 'editorBufferKeepRequest')) {
-    write = { ...write }
-    delete write.editorBufferKeepRequest
-  }
+): SessionSourcePartial<TState> {
+  const { partial: write } = unwrapSessionSourceWrite(requested)
+  const keepRequest = write.editorBufferKeepRequest
   const openFiles = write.openFiles ?? state.openFiles
   const records = write.editorBuffers ?? state.editorBuffers
   const drafts = write.editorDrafts ?? state.editorDrafts
@@ -74,7 +79,7 @@ function reconcileEditorBuffers<TState extends EditorBufferStoreState>(
     ) {
       scheduleRejoin()
     }
-    return write
+    return requested
   }
   const routeState: EditorBufferRouteState = { ...state, ...write }
   const input = {
@@ -88,18 +93,25 @@ function reconcileEditorBuffers<TState extends EditorBufferStoreState>(
   }
   // Rejoin only on identity passes: clean-then-clear-draft settlement must not adopt another draft between steps.
   const rejoin = Object.hasOwn(write, 'editorBufferIdentityRevision')
+  const sourceEdit = editSessionSource(input)
   const result = reconcileEditorBufferRecords(
     input,
     (file) => editorBufferIdForFile(file, routeState),
     keepRequest && { ...keepRequest, drafts: state.editorDrafts ?? NO_DRAFTS },
-    rejoin
+    rejoin,
+    sourceEdit
   )
-  const changed: Partial<EditorBufferState> = {}
+  const changed: Partial<Omit<EditorBufferState, 'editorDrafts' | 'openFiles'>> = {}
+  if (Object.hasOwn(write, 'editorBufferKeepRequest')) {
+    changed.editorBufferKeepRequest = undefined
+  }
+  let changedFiles: typeof openFiles | undefined
   const mirrors = result.viewMirrors
   if (mirrors.size > 0) {
-    changed.openFiles = openFiles.map((file) => showEditorBufferView(file, mirrors.get(file.id)))
+    sourceEdit.sequence('openFiles').map((file) => showEditorBufferView(file, mirrors.get(file.id)))
+    changedFiles = sourceEdit.read('openFiles')
   }
-  const next = reconciledEditorBufferState(result, changed.openFiles ?? openFiles)
+  const next = reconciledEditorBufferState(result, changedFiles ?? openFiles)
   if (!rejoin && isEditorBufferRejoinDue(next)) {
     scheduleRejoin()
   }
@@ -108,9 +120,6 @@ function reconcileEditorBuffers<TState extends EditorBufferStoreState>(
   }
   if (next.editorBuffers !== state.editorBuffers) {
     changed.editorBuffers = next.editorBuffers
-  }
-  if (next.editorDrafts !== input.editorDrafts) {
-    changed.editorDrafts = next.editorDrafts
   }
   if (next.editorBufferIdOf !== state.editorBufferIdOf) {
     changed.editorBufferIdOf = next.editorBufferIdOf
@@ -124,11 +133,21 @@ function reconcileEditorBuffers<TState extends EditorBufferStoreState>(
   if (next.editorBufferKept !== input.editorBufferKept) {
     changed.editorBufferKept = next.editorBufferKept
   }
-  if (Object.keys(changed).length === 0) {
-    return write
+  const sourceChanged = sourceEdit.changed
+  const sourceWrite = sourceEdit.finish()
+  if (Object.keys(changed).length === 0 && !sourceChanged) {
+    return requested
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every key in `changed` is an EditorBufferState field TState extends, holding that field's type.
-  return { ...write, ...(changed as Partial<TState>) }
+  return composeSessionSourceWrites(
+    [
+      requested,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: changed excludes both session-source fields in EditorBufferState.
+      changed as OrdinarySourcePartial<TState>,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: sourceEdit writes the same editor fields TState extends.
+      sourceWrite as SessionSourceWrite<TState>
+    ],
+    true
+  )
 }
 
 /** Every view of a shared record holds the same `editorDrafts` entry. */
@@ -172,10 +191,10 @@ export function assertEditorBufferInvariant(state: EditorBufferState): void {
 }
 
 export function withEditorBufferRecords<TState extends EditorBufferStoreState>(
-  createState: StateCreator<TState, [], []>,
+  createState: SessionStateCreator<TState>,
   checkInvariant: boolean = import.meta.env.DEV
-): StateCreator<TState, [], []> {
-  return (set, get, api) => {
+): StateCreator<TState, [], [['orca/session-source', never]]> {
+  return withSessionSourceWrites(createState, import.meta.env.DEV, (api) => {
     let rejoinQueued = false
     const scheduleRejoin = (): void => {
       if (rejoinQueued) {
@@ -191,27 +210,7 @@ export function withEditorBufferRecords<TState extends EditorBufferStoreState>(
         api.setState(bump as Partial<TState>)
       })
     }
-    const wrap = (write: typeof set): typeof set => {
-      const wrapped = (
-        partial: TState | Partial<TState> | ((state: TState) => TState | Partial<TState>),
-        replace?: boolean
-      ): void => {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: forwards the caller's own partial/replace pair; with replace=true the updater still yields a full state.
-        ;(write as (next: (state: TState) => TState | Partial<TState>, replace?: boolean) => void)(
-          (state) =>
-            reconcileEditorBuffers(
-              state,
-              typeof partial === 'function' ? partial(state) : partial,
-              checkInvariant,
-              scheduleRejoin
-            ),
-          replace
-        )
-      }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: one implementation serves both zustand setState overloads.
-      return wrapped as typeof set
-    }
-    api.setState = wrap(api.setState)
-    return createState(wrap(set), get, api)
-  }
+    return (state, requested) =>
+      reconcileEditorBuffers(state, requested, checkInvariant, scheduleRejoin)
+  })
 }

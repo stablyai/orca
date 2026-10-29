@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { createPane } from '../pty-connection-test-pane-fixtures'
@@ -194,7 +195,9 @@ it.each(['missing', 'admitted', 'prepared'] as const)(
       updatedAt: 20
     }
     const previousRecords = useAppStore.getState().sleepingAgentSessionsByPaneKey
-    useAppStore.setState({ sleepingAgentSessionsByPaneKey: { [record.paneKey]: record } })
+    setSessionTestState(useAppStore, {
+      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
+    })
     try {
       const startup: ColdRestoreAgentResumeStartup = {
         command: 'codex resume C',
@@ -260,7 +263,7 @@ it.each(['missing', 'admitted', 'prepared'] as const)(
       expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
       expect(window.api.pty.write).not.toHaveBeenCalled()
     } finally {
-      useAppStore.setState({ sleepingAgentSessionsByPaneKey: previousRecords })
+      setSessionTestState(useAppStore, { sleepingAgentSessionsByPaneKey: previousRecords })
       await restoreTerminalTestGlobals()
     }
   }

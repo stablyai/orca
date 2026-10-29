@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WorktreeMetaPersistModule from '../worktrees/metadata/worktree-meta-persist'
 import { makeFolderWorkspace, makeWorktree } from '../worktrees-slice-test-fixtures'
@@ -411,7 +412,7 @@ describe('agent completions', () => {
 describe('manual, inbound and restart', () => {
   it('Mark as unread / read on host A of two same-id host rows', async () => {
     const { store, persists } = createAttentionStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         {
           id: 'repo1',
@@ -479,7 +480,7 @@ describe('manual, inbound and restart', () => {
       }
     })
 
-    store.setState(rowsWith(false))
+    setSessionTestState(store, rowsWith(false))
     expect(observe(store, persists)).toMatchInlineSnapshot(`
       [
         "rows a@local:read:1000 b@local:read:0 sortEpoch=1",
@@ -503,7 +504,7 @@ describe('manual, inbound and restart', () => {
     `)
 
     typeInPane(store, pane)
-    store.setState(rowsWith(true))
+    setSessionTestState(store, rowsWith(true))
     expect(observe(store, persists)).toMatchInlineSnapshot(`
       [
         "rows a@local:UNREAD:1000 b@local:read:0 sortEpoch=2",
@@ -517,7 +518,7 @@ describe('manual, inbound and restart', () => {
 
   it('restart: persisted flags with no markers, worktree and folder Dock count', () => {
     const { store, persists } = createAttentionStore()
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {
         repo1: [makeWorktree({ id: WS_A, repoId: 'repo1', path: '/path/a', isUnread: true })]
       },
@@ -588,7 +589,7 @@ describe('manual, inbound and restart', () => {
 
   it('folder Dock counts flag AND live tab marker; a completion marker alone does not count', () => {
     const { store, persists } = createAttentionStore()
-    store.setState({
+    setSessionTestState(store, {
       projectGroups: [
         {
           id: 'group-1',
@@ -639,7 +640,7 @@ describe('manual, inbound and restart', () => {
 describe('hot-path no-ops keep the store reference', () => {
   it('a keystroke on a read workspace and a repeat bell notify nobody', () => {
     const { store, persists } = createAttentionStore({ experimental: true })
-    store.setState({ folderWorkspaces: [makeFolderWorkspace()] })
+    setSessionTestState(store, { folderWorkspaces: [makeFolderWorkspace()] })
     const pane = addLiveTerminalTab(store, WS_A, 'tab-a1')
     const folderPane = addLiveTerminalTab(store, folderWorkspaceKey('folder-1'), 'tab-f1')
     let notifications = 0

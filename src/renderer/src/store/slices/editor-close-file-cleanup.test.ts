@@ -1,4 +1,5 @@
-import type { StoreApi } from 'zustand/vanilla'
+import type { SessionTestStore } from '@/lib/test-support/session-source-fixture'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import {
@@ -97,8 +98,8 @@ describe('createEditorSlice untitled cleanup routing', () => {
     vi.unstubAllGlobals()
   })
 
-  function seedRemoteWorktree(store: StoreApi<AppState>): void {
-    store.setState({
+  function seedRemoteWorktree(store: SessionTestStore<AppState>): void {
+    setSessionTestState(store, {
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'env-1' },
       repos: [
         {
@@ -231,7 +232,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
 
   it('closeFile does not delete when worktree ownership metadata is missing', async () => {
     const store = createEditorStore()
-    store.setState({
+    setSessionTestState(store, {
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'env-1' },
       repos: [],
       worktreesByRepo: {}
@@ -459,7 +460,7 @@ describe('createEditorSlice editor drafts', () => {
   it('falls back to a browser tab when closing the last editor in the active worktree', () => {
     const store = createEditorStore()
 
-    store.setState({
+    setSessionTestState(store, {
       browserTabsByWorktree: {
         'wt-1': [
           {
@@ -515,7 +516,7 @@ describe('createEditorSlice editor drafts', () => {
   it('falls back to a browser tab when closing all editors in the active worktree', () => {
     const store = createEditorStore()
 
-    store.setState({
+    setSessionTestState(store, {
       browserTabsByWorktree: {
         'wt-1': [
           {
@@ -598,7 +599,7 @@ describe('closeFile host mirroring', () => {
 
   it('notifies the host for mirrored editors removed by close all in the active worktree', () => {
     const store = createEditorTabsStore()
-    store.setState({ worktreesByRepo: pairedServerWorktrees })
+    setSessionTestState(store, { worktreesByRepo: pairedServerWorktrees })
     const a = store.getState().openFile({
       filePath: '/repo/a.ts',
       relativePath: 'a.ts',
@@ -615,7 +616,7 @@ describe('closeFile host mirroring', () => {
       mode: 'edit',
       mirroredFromRuntimeSession: true
     })
-    store.setState({
+    setSessionTestState(store, {
       unifiedTabsByWorktree: {
         'wt-1': [mirroredEditorUnifiedTab('host-tab-a', a, 'wt-1')],
         'wt-2': [mirroredEditorUnifiedTab('host-tab-b', b, 'wt-2')]
@@ -639,7 +640,7 @@ describe('closeFile host mirroring', () => {
 
   it('notifies the host for every mirrored editor when close all has no active worktree', () => {
     const store = createEditorTabsStore()
-    store.setState({ activeWorktreeId: null, worktreesByRepo: pairedServerWorktrees })
+    setSessionTestState(store, { activeWorktreeId: null, worktreesByRepo: pairedServerWorktrees })
     const a = store.getState().openFile({
       filePath: '/repo/a.ts',
       relativePath: 'a.ts',
@@ -656,7 +657,7 @@ describe('closeFile host mirroring', () => {
       mode: 'edit',
       mirroredFromRuntimeSession: true
     })
-    store.setState({
+    setSessionTestState(store, {
       unifiedTabsByWorktree: {
         'wt-1': [mirroredEditorUnifiedTab('host-tab-a', a, 'wt-1')],
         'wt-2': [mirroredEditorUnifiedTab('host-tab-b', b, 'wt-2')]

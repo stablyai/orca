@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import React, { act } from 'react'
@@ -119,7 +120,7 @@ beforeEach(() => {
   headerState.current = null
   updateWorktreeMeta = vi.fn<AppState['updateWorktreeMeta']>(() => Promise.resolve({ ok: true }))
   setWorkspaceStatuses = vi.fn<(statuses: WorkspaceStatusDefinition[]) => void>()
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     repos: [makeRepo('repo-r'), makeRepo('repo-l')],
     worktreesByRepo: { 'repo-r': [hostCard], 'repo-l': [localCard] },
     updateWorktreeMeta,
@@ -189,7 +190,7 @@ describe('WorkspaceKanbanDrawer paired host columns', () => {
 
   it('never rewrites a host card whose own host still defines the removed column id', () => {
     const hostTodoCard = { ...hostCard, id: 'repo-r::/repo-r/todo', workspaceStatus: 'todo' }
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       worktreesByRepo: {
         'repo-r': [hostTodoCard],
         'repo-l': [{ ...localCard, workspaceStatus: 'todo' }]

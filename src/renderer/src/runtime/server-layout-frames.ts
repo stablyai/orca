@@ -1,3 +1,4 @@
+import type { SessionSourceSet } from '@/store/session-source-edits'
 // Capable paired main draws workspace layout from frames, with exactly one writer at a time (H5). Gate mirror on snapshot; stream loss returns ownership with a fresh snapshot. session.tabs still supplies handles/status. Hand desktop-only editors over before gating.
 
 import { useAppStore } from '@/store'
@@ -35,7 +36,7 @@ import {
 
 type FramesStore = {
   getState: () => AppState
-  setState: (patch: Partial<AppState>) => void
+  setState: SessionSourceSet<AppState>
   subscribe: (listener: (state: AppState) => void) => () => void
 }
 

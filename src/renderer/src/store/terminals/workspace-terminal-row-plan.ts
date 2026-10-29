@@ -1,3 +1,4 @@
+import { editSessionSource } from '../session-source-edits'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
@@ -59,15 +60,14 @@ export function buildWorkspaceTerminalRowPlan(
     )
   )
 
+  const sleepingEdit = editSessionSource({ sleepingAgentSessionsByPaneKey })
   // Dropped rows never reach retirement, so remove their otherwise-stranded sleeping records.
   for (const [, hydration] of rowHydrationByWorktree) {
     for (const tabId of [...hydration.subsumedTabIds, ...hydration.invalidTabIds]) {
-      sleepingAgentSessionsByPaneKey = removeSleepingAgentSessionsForTab(
-        sleepingAgentSessionsByPaneKey,
-        tabId
-      )
+      removeSleepingAgentSessionsForTab(sleepingEdit, tabId)
     }
   }
+  sleepingAgentSessionsByPaneKey = sleepingEdit.read('sleepingAgentSessionsByPaneKey')
   // Released leaves transferred to canonical rows and must not retain a duplicate sleeping owner.
   const releasedPaneKeys = new Set<string>(
     [...releasedPtyIdsByTabId].flatMap(([tabId, releasedPtyIds]) =>

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -27,7 +28,7 @@ function seedManualOrderedRows(count: number): Worktree[] {
       manualOrder: 100_000 - index
     })
   )
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     sortBy: 'smart',
     worktreesByRepo: { [REPO_ID]: worktrees }
   })
@@ -56,7 +57,7 @@ function manualOrderedIds(): readonly string[] {
 
 describe('sidebar manual-order drop', () => {
   beforeEach(() => {
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
     updateMeta.mockClear()
     toastInfo.mockClear()
     Object.assign(window, { api: { worktrees: { updateMeta } } })
@@ -64,7 +65,7 @@ describe('sidebar manual-order drop', () => {
 
   afterEach(() => {
     cleanup()
-    useAppStore.setState(initialState, true)
+    setSessionTestState(useAppStore, initialState, true)
   })
 
   it('moves the dragged row past its neighbor in the store', async () => {

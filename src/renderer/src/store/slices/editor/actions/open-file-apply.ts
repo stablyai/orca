@@ -1,3 +1,4 @@
+import type { SessionSourceEdit, OrdinarySourcePartial } from '../../../session-source-edits'
 import { toast } from 'sonner'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
@@ -39,12 +40,13 @@ export type OpenFileApplyScratch = {
 }
 
 export function applyOpenFileToState(
-  s: AppState,
+  edit: SessionSourceEdit<AppState>,
   file: Omit<OpenFile, 'id' | 'isDirty'>,
   options: OpenFileOptions | undefined,
   scratch: OpenFileApplyScratch,
   linkIntent: EditorOpenLinkIntent | null = null
-): Partial<AppState> | AppState {
+): OrdinarySourcePartial<AppState> | null {
+  const s = edit.view()
   const worktreeId = file.worktreeId
   let operationProvenance = file.operationProvenance
   if (!operationProvenance && file.mode === 'edit' && file.readOnly !== true) {
@@ -91,7 +93,7 @@ export function applyOpenFileToState(
     linkIntent && resolveEditorLinkOpenPlacement(s, worktreeId, linkIntent, id, file.mode)
   if (linkPlacement?.kind === 'refused') {
     scratch.refused = true
-    return s
+    return null
   }
   scratch.editorItemFileId = id
   const isPreview = resolveEditorPreviewIntent(s, options?.preview)
@@ -103,7 +105,7 @@ export function applyOpenFileToState(
   const targetGroupId = resolveEditorOpenTargetGroupId(s, worktreeId, requestedGroupId) ?? undefined
   scratch.editorItemTargetGroupId = targetGroupId
   const activeResult =
-    options?.selection === 'none' ? {} : buildEditorActiveResult(s, worktreeId, id)
+    options?.selection === 'none' ? {} : buildEditorActiveResult(edit, worktreeId, id)
   if (existing) {
     const updatedPreview = isPreview ? existing.isPreview : false
     const nextExternalSshTargetId = file.externalSshTargetId ?? existing.externalSshTargetId
@@ -143,44 +145,41 @@ export function applyOpenFileToState(
     if (!needsExistingUpdate) {
       return activeResult
     }
-    return {
-      openFiles: s.openFiles.map((f) =>
-        f.id === id
-          ? {
-              ...f,
-              relativePath: file.relativePath,
-              worktreeId: file.worktreeId,
-              language: file.language,
-              runtimeEnvironmentId,
-              externalSshTargetId: nextExternalSshTargetId,
-              terminalArtifactGrantId: nextGrantId,
-              operationProvenance: refreshExternalSshProvenance
-                ? operationProvenance
-                : f.operationProvenance,
-              mode: file.mode,
-              diffSource: file.diffSource,
-              branchCompare: file.branchCompare,
-              commitCompare: file.commitCompare,
-              branchOldPath: file.branchOldPath,
-              combinedAlternate: file.combinedAlternate,
-              combinedAreaFilter: file.combinedAreaFilter,
-              commitEntriesSnapshot: file.commitEntriesSnapshot,
-              conflict: file.conflict,
-              skippedConflicts: file.skippedConflicts,
-              conflictReview: file.conflictReview,
-              isPreview: updatedPreview,
-              fileContentReloadNonce,
-              readOnly: nextReadOnly,
-              liveTail: nextLiveTail
-            }
-          : f
-      ),
-      ...activeResult
-    }
+    edit.sequence('openFiles').map((f) =>
+      f.id === id
+        ? {
+            ...f,
+            relativePath: file.relativePath,
+            worktreeId: file.worktreeId,
+            language: file.language,
+            runtimeEnvironmentId,
+            externalSshTargetId: nextExternalSshTargetId,
+            terminalArtifactGrantId: nextGrantId,
+            operationProvenance: refreshExternalSshProvenance
+              ? operationProvenance
+              : f.operationProvenance,
+            mode: file.mode,
+            diffSource: file.diffSource,
+            branchCompare: file.branchCompare,
+            commitCompare: file.commitCompare,
+            branchOldPath: file.branchOldPath,
+            combinedAlternate: file.combinedAlternate,
+            combinedAreaFilter: file.combinedAreaFilter,
+            commitEntriesSnapshot: file.commitEntriesSnapshot,
+            conflict: file.conflict,
+            skippedConflicts: file.skippedConflicts,
+            conflictReview: file.conflictReview,
+            isPreview: updatedPreview,
+            fileContentReloadNonce,
+            readOnly: nextReadOnly,
+            liveTail: nextLiveTail
+          }
+        : f
+    )
+    return activeResult
   }
 
   // Why: scope preview replacement to worktreeId + targetGroupId so link clicks in group B don't evict group A's previews.
-  let newFiles = s.openFiles
   if (isPreview) {
     const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
     const existingPreviewIdx = s.openFiles.findIndex((f) => f.id === replaceablePreviewId)
@@ -188,15 +187,13 @@ export function applyOpenFileToState(
       const replacedPreview = s.openFiles[existingPreviewIdx]
       // Why: reuse the shared eviction helper so per-file cursor/draft/visibility cleanup stays in one place.
       const {
-        editorDrafts: nextEditorDrafts,
         editorCursorLine: nextEditorCursorLine,
         markdownViewMode: nextMarkdownViewMode,
         markdownRichModeSizeOverride: nextMarkdownRichModeSizeOverride,
         editorViewMode: nextEditorViewMode,
-        markdownFrontmatterVisible: nextMarkdownFrontmatterVisible,
         markdownTableOfContentsVisible: nextMarkdownTableOfContentsVisible
-      } = removeEditorStateForReplacedPreview(s, replacedPreview, id)
-      newFiles = s.openFiles.map((f, i) =>
+      } = removeEditorStateForReplacedPreview(edit, replacedPreview, id)
+      edit.sequence('openFiles').map((f, i) =>
         i === existingPreviewIdx
           ? {
               ...file,
@@ -247,13 +244,10 @@ export function applyOpenFileToState(
         )
       }
       return {
-        openFiles: newFiles,
-        editorDrafts: nextEditorDrafts,
         editorCursorLine: nextEditorCursorLine,
         markdownViewMode: nextMarkdownViewMode,
         markdownRichModeSizeOverride: nextMarkdownRichModeSizeOverride,
         editorViewMode: nextEditorViewMode,
-        markdownFrontmatterVisible: nextMarkdownFrontmatterVisible,
         markdownTableOfContentsVisible: nextMarkdownTableOfContentsVisible,
         recentlyClosedEditorTabsByWorktree: nextRecentlyClosed,
         recentlyClosedTabKindsByWorktree: nextRecentlyClosedKinds,
@@ -283,19 +277,13 @@ export function applyOpenFileToState(
     tabBarUpdate.tabBarOrderByWorktree = { ...s.tabBarOrderByWorktree, [worktreeId]: base }
   }
 
-  return {
-    openFiles: [
-      ...newFiles,
-      {
-        ...file,
-        id,
-        isDirty: false,
-        isPreview: isPreview || undefined,
-        runtimeEnvironmentId,
-        operationProvenance
-      }
-    ],
-    ...tabBarUpdate,
-    ...activeResult
-  }
+  edit.sequence('openFiles').append({
+    ...file,
+    id,
+    isDirty: false,
+    isPreview: isPreview || undefined,
+    runtimeEnvironmentId,
+    operationProvenance
+  })
+  return { ...tabBarUpdate, ...activeResult }
 }

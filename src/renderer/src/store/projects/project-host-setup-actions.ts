@@ -1,4 +1,5 @@
-import type { StateCreator } from 'zustand'
+import { editSessionSource, type SessionSourceEdit } from '@/store/session-source-edits'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
 import type {
@@ -26,9 +27,23 @@ import {
   upsertProjectHostSetup
 } from './project-host-routing'
 
+function upsertRepo(
+  edit: SessionSourceEdit<Pick<AppState, 'repos'>>,
+  repo: Repo,
+  hostId: string
+): void {
+  if (edit.read('repos').some((entry) => repoMatchesHostIdentity(entry, repo.id, hostId))) {
+    edit
+      .sequence('repos')
+      .map((entry) => (repoMatchesHostIdentity(entry, repo.id, hostId) ? repo : entry))
+  } else {
+    edit.sequence('repos').append(repo)
+  }
+}
+
 export function createProjectHostSetupActions(
-  set: Parameters<StateCreator<AppState>>[0],
-  get: Parameters<StateCreator<AppState>>[1]
+  set: Parameters<SessionStateCreator<AppState>>[0],
+  get: Parameters<SessionStateCreator<AppState>>[1]
 ): Pick<
   RepoSlice,
   | 'setupProjectExistingFolder'
@@ -70,22 +85,16 @@ export function createProjectHostSetupActions(
         })
         const project = normalizeProjectRow(result.project)
         set((s) => {
-          const nextRepos = s.repos.some((entry) =>
-            repoMatchesHostIdentity(entry, repo.id, repoHostId)
-          )
-            ? s.repos.map((entry) =>
-                repoMatchesHostIdentity(entry, repo.id, repoHostId) ? repo : entry
-              )
-            : [...s.repos, repo]
+          const edit = editSessionSource(s)
+          upsertRepo(edit, repo, repoHostId)
           const nextProjects = s.projects.some((entry) => entry.id === project.id)
             ? s.projects.map((entry) => (entry.id === project.id ? project : entry))
             : [...s.projects, project]
           const nextSetups = upsertProjectHostSetup(s.projectHostSetups, setup)
-          return {
-            repos: nextRepos,
+          return edit.finish({
             projects: nextProjects,
             projectHostSetups: nextSetups
-          }
+          })
         })
         toast.success(translate('auto.store.slices.repos.8bb3ad7935', 'Project added'), {
           description: repo.displayName
@@ -165,20 +174,18 @@ export function createProjectHostSetupActions(
         const repo = result.repo
           ? adoptFromEndpoint(target, { kind: 'repo', row: result.repo })
           : undefined
-        const repoHostId = repo ? getRepoExecutionHostId(repo) : null
-        set((s) => ({
-          repos: repo
-            ? s.repos.some((entry) => repoMatchesHostIdentity(entry, repo.id, repoHostId!))
-              ? s.repos.map((entry) =>
-                  repoMatchesHostIdentity(entry, repo.id, repoHostId!) ? repo : entry
-                )
-              : [...s.repos, repo]
-            : s.repos,
-          projects: s.projects.some((entry) => entry.id === project.id)
-            ? s.projects.map((entry) => (entry.id === project.id ? project : entry))
-            : [...s.projects, project],
-          projectHostSetups: upsertProjectHostSetup(s.projectHostSetups, setup)
-        }))
+        set((s) => {
+          const edit = editSessionSource(s)
+          if (repo) {
+            upsertRepo(edit, repo, getRepoExecutionHostId(repo))
+          }
+          return edit.finish({
+            projects: s.projects.some((entry) => entry.id === project.id)
+              ? s.projects.map((entry) => (entry.id === project.id ? project : entry))
+              : [...s.projects, project],
+            projectHostSetups: upsertProjectHostSetup(s.projectHostSetups, setup)
+          })
+        })
         return { ...result, project, repo, setup }
       } catch (err) {
         console.error('Failed to update project host setup:', err)
@@ -220,22 +227,24 @@ export function createProjectHostSetupActions(
           const projectHostSetups = s.projectHostSetups.filter(
             (setup) => !isSameProjectHostSetup(setup, removedSetup)
           )
-          const repos =
-            repo && repoHostId
-              ? s.repos.filter((entry) => !repoMatchesHostIdentity(entry, repo.id, repoHostId))
-              : s.repos
+          const edit = editSessionSource(s)
+          if (repo && repoHostId) {
+            edit
+              .sequence('repos')
+              .filter((entry) => !repoMatchesHostIdentity(entry, repo.id, repoHostId))
+          }
+          const repos = edit.read('repos')
           const projects =
             repo && !projectHostSetups.some((setup) => setup.projectId === result.project.id)
               ? s.projects.filter((project) => project.id !== result.project.id)
               : s.projects
           const survivingRepoIds = new Set(repos.map((r) => r.id))
           const removedRepoIds = s.repos.filter((r) => !survivingRepoIds.has(r.id)).map((r) => r.id)
-          return {
-            repos,
+          return edit.finish({
             projects,
             projectHostSetups,
             ...omitSparsePresetsForRepos(s, removedRepoIds)
-          }
+          })
         })
         return { ...result, repo }
       } catch (err) {

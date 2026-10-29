@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand'
+import type { SessionStateCreator } from '@/store/session-source-write-boundary'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -9,7 +9,7 @@ import { settingsForGitHubRepoOwner } from './work-item-routing'
 import { selectWorktreesByRepo } from '../workspace-record-selectors'
 
 export const createStaleWorktreeRefreshActions = (
-  get: Parameters<StateCreator<AppState>>[1]
+  get: Parameters<SessionStateCreator<AppState>>[1]
 ): Pick<GitHubSlice, 'refreshGitHubForWorktreeIfStale'> => ({
   // Why: activation is the strongest freshness signal; route through the coordinator to keep coalescing/rate-limit guards.
   refreshGitHubForWorktreeIfStale: (worktreeId) => {

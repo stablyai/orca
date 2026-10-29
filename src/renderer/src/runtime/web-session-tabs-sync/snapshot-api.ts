@@ -1,3 +1,5 @@
+import { webSessionTabsNonSourcePatch } from './source-edit-patch'
+import type { SessionSourceEdit } from '../../store/session-source-edits'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import type {
   WebSessionTabsBatchContext,
@@ -17,16 +19,18 @@ export function applyWebSessionTabsSnapshot(
   environmentId: string,
   now = Date.now(),
   options?: WebSessionTabsSnapshotApplyOptions,
-  changedAgentPaneKeys?: Set<string>
+  changedAgentPaneKeys?: Set<string>,
+  sourceEdit?: SessionSourceEdit<WebSessionTabsSyncState>
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
-  if (changedAgentPaneKeys) {
+  if (changedAgentPaneKeys || sourceEdit) {
     return applyWebSessionTabsSnapshots(
       state,
       [snapshot],
       environmentId,
       now,
       changedAgentPaneKeys,
-      options
+      options,
+      sourceEdit
     )
   }
   return applyWebSessionTabsSnapshotWithContext(
@@ -43,8 +47,19 @@ export function createWebSessionTabsSnapshotPatch(
   snapshot: RuntimeMobileSessionTabsResult,
   environmentId: string
 ) {
-  return (state: WebSessionTabsSyncState, keys: Set<string>) =>
-    applyWebSessionTabsSnapshot(state, snapshot, environmentId, undefined, undefined, keys)
+  return (
+    state: WebSessionTabsSyncState,
+    keys: Set<string>,
+    sourceEdit: SessionSourceEdit<WebSessionTabsSyncState>
+  ) =>
+    applyWebSessionTabsSnapshotsToEdit(
+      sourceEdit,
+      state,
+      [snapshot],
+      environmentId,
+      undefined,
+      keys
+    )
 }
 
 export function applyWebSessionTabsSnapshots(
@@ -53,11 +68,13 @@ export function applyWebSessionTabsSnapshots(
   environmentId: string,
   now = Date.now(),
   changedAgentPaneKeys?: Set<string>,
-  options?: WebSessionTabsSnapshotApplyOptions
+  options?: WebSessionTabsSnapshotApplyOptions,
+  sourceEdit?: SessionSourceEdit<WebSessionTabsSyncState>
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
   const nextState = { ...state }
   const batchContext: WebSessionTabsBatchContext = {
     changedAgentPaneKeys,
+    sourceEdit,
     agentPaneKeysByTabId: null,
     changedRecords: new Set(),
     openFilesIndex: null
@@ -135,7 +152,8 @@ export function decideWebSessionTabsSnapshotOperations(
 export function applyWebSessionTabsSnapshotOperations(
   state: WebSessionTabsSyncState,
   operations: readonly DecidedWebSessionTabsSnapshotOperation[],
-  changedAgentPaneKeys?: Set<string>
+  changedAgentPaneKeys?: Set<string>,
+  sourceEdit?: SessionSourceEdit<WebSessionTabsSyncState>
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
   let nextState = state
   let mergedPatch: Partial<WebSessionTabsSyncState> = {}
@@ -149,7 +167,8 @@ export function applyWebSessionTabsSnapshotOperations(
       environmentId,
       undefined,
       undefined,
-      changedAgentPaneKeys
+      changedAgentPaneKeys,
+      sourceEdit
     )
     if (patch === nextState) {
       continue
@@ -158,4 +177,40 @@ export function applyWebSessionTabsSnapshotOperations(
     nextState = { ...nextState, ...patch }
   }
   return Object.keys(mergedPatch).length === 0 ? state : mergedPatch
+}
+
+export function applyWebSessionTabsSnapshotsToEdit(
+  sourceEdit: SessionSourceEdit<WebSessionTabsSyncState>,
+  state: WebSessionTabsSyncState,
+  snapshots: readonly RuntimeMobileSessionTabsResult[],
+  environmentId: string,
+  now = Date.now(),
+  changedAgentPaneKeys?: Set<string>,
+  options?: WebSessionTabsSnapshotApplyOptions
+) {
+  const patch = applyWebSessionTabsSnapshots(
+    state,
+    snapshots,
+    environmentId,
+    now,
+    changedAgentPaneKeys,
+    options,
+    sourceEdit
+  )
+  return patch === state ? undefined : webSessionTabsNonSourcePatch(patch)
+}
+
+export function applyWebSessionTabsSnapshotOperationsToEdit(
+  sourceEdit: SessionSourceEdit<WebSessionTabsSyncState>,
+  state: WebSessionTabsSyncState,
+  operations: readonly DecidedWebSessionTabsSnapshotOperation[],
+  changedAgentPaneKeys?: Set<string>
+) {
+  const patch = applyWebSessionTabsSnapshotOperations(
+    state,
+    operations,
+    changedAgentPaneKeys,
+    sourceEdit
+  )
+  return patch === state ? undefined : webSessionTabsNonSourcePatch(patch)
 }

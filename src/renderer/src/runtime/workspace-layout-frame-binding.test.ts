@@ -1,3 +1,5 @@
+import { observeOrdinarySessionSourceWrites } from '@/lib/test-support/session-source-oracle'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
@@ -100,10 +102,12 @@ async function boot() {
   await settle()
   check.forgetBuilds()
   const send = async (layout: PublishedWorkspaceLayout, asSnapshot = false): Promise<void> => {
+    const stop = asSnapshot ? () => {} : observeOrdinarySessionSourceWrites(store)
     stream.onFrame!(
       asSnapshot ? frames.snapshot({ [GIT_KEY]: layout }) : frames.records(GIT_KEY, layout)
     )
     await settle()
+    stop()
   }
   return { store, sync, first, send }
 }
@@ -194,7 +198,7 @@ describe('a frame that changes only panes’ terminal bindings', () => {
   it('writes nothing to the store when the store already shows those bindings', async () => {
     const { store, sync, first, send } = await boot()
     const layout = store.getState().terminalLayoutsByTabId['tab-shell']!
-    store.setState({
+    setSessionTestState(store, {
       terminalLayoutsByTabId: {
         ...store.getState().terminalLayoutsByTabId,
         'tab-shell': {

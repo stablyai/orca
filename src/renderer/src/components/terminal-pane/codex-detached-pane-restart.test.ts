@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { registerRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
@@ -58,7 +59,7 @@ function seedQueuedRestart(
   opts: { leafId?: string | null; layoutRoot?: 'leaf' | 'none' } = {}
 ): void {
   const leafId = opts.leafId === undefined ? LEAF_ID : opts.leafId
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     settings: getDefaultSettings('/home/dev'),
     worktreesByRepo: {
       repo1: [{ id: 'wt1', path: '/Users/dev/code/orca' }]
@@ -103,7 +104,7 @@ describe('codex detached pane restart executor', () => {
 
   beforeEach(() => {
     resetCodexDetachedPaneRestartExecutorForTests()
-    useAppStore.setState(useAppStore.getInitialState(), true)
+    setSessionTestState(useAppStore, useAppStore.getInitialState(), true)
     // Why: switch on, a restart binds only into a pane main's layout holds.
     mainFramePanes = [{ leafId: LEAF_ID, ptyId: OLD_PTY }]
     provideLayoutFrameTerminalPanes({
@@ -360,7 +361,7 @@ describe('codex detached pane restart executor', () => {
       { leafId: LEAF_ID, ptyId: OLD_PTY },
       { leafId: SIBLING_LEAF, ptyId: 'wt1@@sibling' }
     ]
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       ptyIdsByTabId: { 'tab-1': [OLD_PTY, 'wt1@@sibling'] },
       terminalLayoutsByTabId: {
         'tab-1': {
@@ -454,7 +455,7 @@ describe('codex detached pane restart executor', () => {
     await vi.waitFor(() => expect(window.api.pty.spawn).toHaveBeenCalledTimes(1))
     const state = useAppStore.getState()
     const notice = state.codexRestartNoticeByPtyId[OLD_PTY]
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       tabsByWorktree: {
         wt1: [{ ...state.tabsByWorktree.wt1![0]!, generation: 1, ptyId: 'wt1@@successor' }]
       },

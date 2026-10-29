@@ -16,6 +16,7 @@ import type { TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { copyOnWriteRecord } from '../copy-on-write-record'
 import { removeTabsAttention } from '../slices/workspace-attention/subject-attention-transitions'
 import { settleAttentionRemovedBy } from '../slices/workspace-attention/attention-removal-follow-up'
+import { editSessionSource } from '../session-source-edits'
 
 export function commitTerminalShutdownState({
   exitGuardPtyIds,
@@ -42,22 +43,23 @@ export function commitTerminalShutdownState({
 }): void {
   settleAttentionRemovedBy(set, get, () =>
     set((state) => {
-      const tabsByWorktree = keepIdentifiers
-        ? state.tabsByWorktree
-        : {
-            ...state.tabsByWorktree,
-            [worktreeId]: (state.tabsByWorktree[worktreeId] ?? []).map((tab, index) =>
-              clearTransientTerminalState(tab, index)
-            )
-          }
+      const edit = editSessionSource(state)
+      if (!keepIdentifiers) {
+        edit.set(
+          'tabsByWorktree',
+          worktreeId,
+          (state.tabsByWorktree[worktreeId] ?? []).map((tab, index) =>
+            clearTransientTerminalState(tab, index)
+          )
+        )
+      }
       // Use copy-on-write for already-exited workspaces; churning ptyIdsByTabId invalidates whole-map selectors and every sidebar live-PTY memo.
-      const ptyIdsByTabId = copyOnWriteRecord(state.ptyIdsByTabId)
       for (const tab of tabs) {
         // Why `!== undefined`: an absent key is not an empty array, and the spread this
         // replaces created the key. Only an already-empty entry can be skipped.
         const current = state.ptyIdsByTabId[tab.id]
         if (current === undefined || current.length > 0) {
-          ptyIdsByTabId.set(tab.id, [])
+          edit.set('ptyIdsByTabId', tab.id, [])
         }
       }
       const suppressedPtyExitIds = copyOnWriteRecord(state.suppressedPtyExitIds)
@@ -88,8 +90,6 @@ export function commitTerminalShutdownState({
       const pendingIssueCommandSplitByTabId = copyOnWriteRecord(
         state.pendingIssueCommandSplitByTabId
       )
-      const terminalLayoutsByTabId = copyOnWriteRecord(state.terminalLayoutsByTabId)
-      const lastKnownRelayPtyIdByTabId = copyOnWriteRecord(state.lastKnownRelayPtyIdByTabId)
       const lastTerminalInputAtByPaneKey = copyOnWriteRecord(state.lastTerminalInputAtByPaneKey)
 
       for (const tab of tabs) {
@@ -102,53 +102,47 @@ export function commitTerminalShutdownState({
         }
         if (!keepIdentifiers) {
           runtimePaneTitlesByTabId.delete(tab.id)
-          lastKnownRelayPtyIdByTabId.delete(tab.id)
+          edit.remove('lastKnownRelayPtyIdByTabId', tab.id)
           const layout = state.terminalLayoutsByTabId[tab.id]
           // Why the emptiness check: replacing an already-empty map with a fresh {} is
           // the same value with a new identity.
           if (layout?.ptyIdsByLeafId && Object.keys(layout.ptyIdsByLeafId).length > 0) {
-            terminalLayoutsByTabId.set(tab.id, { ...layout, ptyIdsByLeafId: {} })
+            edit.set('terminalLayoutsByTabId', tab.id, { ...layout, ptyIdsByLeafId: {} })
           }
         }
       }
 
-      return {
-        tabsByWorktree,
-        ptyIdsByTabId: ptyIdsByTabId.read(),
-        lastKnownRelayPtyIdByTabId: lastKnownRelayPtyIdByTabId.read(),
+      return edit.finish({
         runtimePaneTitlesByTabId: runtimePaneTitlesByTabId.read(),
         suppressedPtyExitIds: suppressedPtyExitIds.read(),
         pendingPtyShutdownIds: pendingPtyShutdownIds.read(),
         pendingPaneAccountRestarts: pendingPaneAccountRestarts.read(),
         codexRestartNoticeByPtyId: codexRestartNoticeByPtyId.read(),
         pendingIssueCommandSplitByTabId: pendingIssueCommandSplitByTabId.read(),
-        terminalLayoutsByTabId: terminalLayoutsByTabId.read(),
         ...removeTabsAttention(
           state,
           tabs.map((tab) => tab.id)
         ),
         lastTerminalInputAtByPaneKey: lastTerminalInputAtByPaneKey.read()
-      }
+      })
     })
   )
 
   if (keepIdentifiers) {
     set((state) => {
-      const base =
-        shutdownReason === 'manual-sleep'
-          ? removeSleepingRecordsReplacedByManualWorktreeSleep(
-              state.sleepingAgentSessionsByPaneKey,
-              worktreeId,
-              sleepingPaneKeys,
-              sleepingAgentSessionRecords
-            ).records
-          : state.sleepingAgentSessionsByPaneKey
-      return {
-        sleepingAgentSessionsByPaneKey: {
-          ...base,
-          ...sleepingAgentSessionRecords
-        }
+      const edit = editSessionSource(state)
+      if (shutdownReason === 'manual-sleep') {
+        removeSleepingRecordsReplacedByManualWorktreeSleep(
+          edit,
+          worktreeId,
+          sleepingPaneKeys,
+          sleepingAgentSessionRecords
+        )
       }
+      for (const [paneKey, record] of Object.entries(sleepingAgentSessionRecords)) {
+        edit.set('sleepingAgentSessionsByPaneKey', paneKey, record)
+      }
+      return edit.finish()
     })
   } else {
     get().clearSleepingAgentSessionsByWorktree(worktreeId)

@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { I18nextProvider } from 'react-i18next'
@@ -36,7 +37,7 @@ function NoticeProbe(): null {
 }
 
 beforeEach(async () => {
-  useAppStore.setState(initialAppState, true)
+  setSessionTestState(useAppStore, initialAppState, true)
   usePluginLanguagePackStore.setState(initialPluginLanguagePackState, true)
   subscribeToMacosTccPromptNotice.mockClear()
   toastWarning.mockClear()
@@ -48,7 +49,7 @@ afterEach(async () => {
     await act(async () => root?.unmount())
     root = null
   }
-  useAppStore.setState(initialAppState, true)
+  setSessionTestState(useAppStore, initialAppState, true)
   usePluginLanguagePackStore.setState(initialPluginLanguagePackState, true)
 })
 

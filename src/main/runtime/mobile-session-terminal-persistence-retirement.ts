@@ -1,3 +1,10 @@
+import { SessionUnitIndex } from '../../shared/session-unit-index'
+import {
+  SessionUnitReader,
+  selectSessionUnits,
+  type SessionUnitSelection
+} from '../../shared/session-unit-reader'
+import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import type { WorkspaceVisibleTabType } from '../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import {
@@ -6,8 +13,11 @@ import {
   type RetiredTerminalSurface
 } from './mobile-session-terminal-retirement'
 import { retireLeavesFromTerminalLayout } from '../../shared/terminal-layout-leaf-retirement'
-import { rebaseWorkspaceSessionTerminalMembership } from './workspace-session-terminal-membership-authority'
-import { advanceTerminalTopologyRevision } from '../persistence/terminal-topology/terminal-topology-membership'
+import {
+  reduceSessionTerminalMembership,
+  reduceSessionIncarnationMembership
+} from './workspace-session-terminal-membership-authority'
+import { getDefaultWorkspaceSession } from '../../shared/constants'
 
 function visibleTypeForContentType(
   contentType: string | undefined
@@ -37,220 +47,215 @@ function layoutContainsLeaf(
 }
 
 function recordTerminalSurfaceRetirement(
-  session: WorkspaceSessionState,
+  reader: SessionUnitReader,
   surface: RetiredTerminalSurface,
   paneKey: string
-): WorkspaceSessionState {
-  const terminalPtyIncarnationsByPaneKey = {
-    ...session.terminalPtyIncarnationsByPaneKey
+): void {
+  for (const field of [
+    'terminalPtyIncarnationsByPaneKey',
+    'terminalSurfaceTombstonesByPaneKey'
+  ] as const) {
+    if (!reader.hasField(field)) {
+      reader.replace(field, { present: true, value: {} })
+    }
+    reader.write(field, paneKey, { present: false, value: undefined })
   }
-  delete terminalPtyIncarnationsByPaneKey[paneKey]
-  const terminalSurfaceTombstonesByPaneKey = {
-    ...session.terminalSurfaceTombstonesByPaneKey
-  }
-  delete terminalSurfaceTombstonesByPaneKey[paneKey]
-  return advanceTerminalTopologyRevision(
-    {
-      ...session,
-      terminalPtyIncarnationsByPaneKey,
-      terminalSurfaceTombstonesByPaneKey
-    },
-    surface.worktreeId
-  )
+  const repo = getRepoIdFromWorktreeId(surface.worktreeId)
+  reader.write('terminalTopologyRevisionByRepoId', repo, {
+    present: true,
+    value: (reader.unit('terminalTopologyRevisionByRepoId', repo).value ?? 0) + 1
+  })
 }
 
 export function retireTerminalSurfaceFromPersistence(
   session: WorkspaceSessionState,
   surface: RetiredTerminalSurface
 ): WorkspaceSessionState {
-  const paneKey = `${surface.parentTabId}:${surface.leafId}`
-  const boundIncarnationId = session.terminalPtyIncarnationsByPaneKey?.[paneKey]
-  if (surface.incarnationId && boundIncarnationId && boundIncarnationId !== surface.incarnationId) {
-    return session
-  }
-  const persistedTabs = session.tabsByWorktree[surface.worktreeId] ?? []
-  const persistedTab = persistedTabs.find((tab) => tab.id === surface.parentTabId)
-  const layout = session.terminalLayoutsByTabId?.[surface.parentTabId]
-  const exactLeafInLayout = Boolean(layout && layoutContainsLeaf(layout.root, surface.leafId))
-  const leafPtyId = exactLeafInLayout ? layout?.ptyIdsByLeafId?.[surface.leafId] : undefined
-  if (leafPtyId && leafPtyId !== surface.ptyId) {
-    return session
-  }
+  const reader = new SessionUnitReader(session, new SessionUnitIndex(session))
+  reader.admitFields(true)
+  reduceTerminalSurfaceRetirement(reader, surface)
+  return reader.snapshot()
+}
 
-  const isLegacyFinalSurface = !layout && persistedTab?.ptyId === surface.ptyId
-  if (!exactLeafInLayout && !isLegacyFinalSurface) {
-    // Tombstone the absent exact leaf; tab.ptyId may name a live sibling and cannot justify parent removal.
-    return recordTerminalSurfaceRetirement(session, surface, paneKey)
+/** The requested owner/tab/pane identities remain available even when no row exists. */
+export function reduceTerminalSurfaceRetirement(
+  reader: SessionUnitReader,
+  surface: RetiredTerminalSurface
+): void {
+  const owner = surface.worktreeId,
+    tabId = surface.parentTabId,
+    paneKey = `${tabId}:${surface.leafId}`
+  const boundIncarnation = reader.unit('terminalPtyIncarnationsByPaneKey', paneKey).value
+  if (surface.incarnationId && boundIncarnation && boundIncarnation !== surface.incarnationId) {
+    return
   }
-
+  const rows = reader.unit('tabsByWorktree', owner).value ?? []
+  const tab = rows.find((row) => row.id === tabId)
+  const layout = reader.unit('terminalLayoutsByTabId', tabId).value
+  const exactLeaf = Boolean(layout && layoutContainsLeaf(layout.root, surface.leafId))
+  const leafPty = exactLeaf ? layout?.ptyIdsByLeafId?.[surface.leafId] : undefined
+  if (leafPty && leafPty !== surface.ptyId) {
+    return
+  }
+  if (!exactLeaf && !(!layout && tab?.ptyId === surface.ptyId)) {
+    recordTerminalSurfaceRetirement(reader, surface, paneKey)
+    return
+  }
   const nextLayout =
-    exactLeafInLayout && layout
-      ? retireLeavesFromTerminalLayout(layout, new Set([surface.leafId]))
-      : null
+    exactLeaf && layout ? retireLeavesFromTerminalLayout(layout, new Set([surface.leafId])) : null
   const removeParent = !nextLayout
-  const nextTabsForWorktree = removeParent
-    ? persistedTabs.filter((tab) => tab.id !== surface.parentTabId)
-    : persistedTabs.map((tab) =>
-        tab.id === surface.parentTabId
+  const nextRows = removeParent
+    ? rows.filter((row) => row.id !== tabId)
+    : rows.map((row) =>
+        row.id === tabId
           ? {
-              ...tab,
+              ...row,
               ptyId:
                 nextLayout.ptyIdsByLeafId?.[nextLayout.activeLeafId ?? ''] ??
                 Object.values(nextLayout.ptyIdsByLeafId ?? {})[0] ??
                 null
             }
-          : tab
+          : row
       )
-  const terminalLayoutsByTabId = { ...session.terminalLayoutsByTabId }
-  if (nextLayout) {
-    terminalLayoutsByTabId[surface.parentTabId] = nextLayout
-  } else {
-    delete terminalLayoutsByTabId[surface.parentTabId]
-  }
-
-  const unifiedTabsForWorktree = session.unifiedTabs?.[surface.worktreeId] ?? []
-  const unifiedTabs = session.unifiedTabs
-    ? {
-        ...session.unifiedTabs,
-        [surface.worktreeId]: removeParent
-          ? unifiedTabsForWorktree.filter(
-              (tab) => tab.id !== surface.parentTabId && tab.entityId !== surface.parentTabId
-            )
-          : unifiedTabsForWorktree
-      }
-    : undefined
-  const validTopLevelIds = new Set((unifiedTabs?.[surface.worktreeId] ?? []).map((tab) => tab.id))
-  for (const tab of nextTabsForWorktree) {
-    validTopLevelIds.add(tab.id)
-  }
-  const persistedGroups = session.tabGroups?.[surface.worktreeId]
-  const repairedGroups = repairMobileSessionTabGroupsAfterRetirement(
-    persistedGroups,
-    validTopLevelIds
+  reader.write('tabsByWorktree', owner, { present: true, value: nextRows })
+  reader.write(
+    'terminalLayoutsByTabId',
+    tabId,
+    nextLayout ? { present: true, value: nextLayout } : { present: false, value: undefined }
   )
-  const tabGroups = session.tabGroups
-    ? {
-        ...session.tabGroups,
-        [surface.worktreeId]: (repairedGroups ?? []).map((group) => ({
-          ...group,
-          worktreeId: surface.worktreeId
-        }))
-      }
-    : undefined
-  const retainedGroupIds = new Set(repairedGroups?.map((group) => group.id) ?? [])
-  const repairedGroupLayout = pruneTabGroupLayoutAfterRetirement(
-    session.tabGroupLayouts?.[surface.worktreeId],
-    retainedGroupIds
-  )
-  const tabGroupLayouts = session.tabGroupLayouts ? { ...session.tabGroupLayouts } : undefined
-  if (tabGroupLayouts) {
-    if (repairedGroupLayout) {
-      tabGroupLayouts[surface.worktreeId] = repairedGroupLayout
-    } else {
-      delete tabGroupLayouts[surface.worktreeId]
-    }
+  const unified = reader.unit('unifiedTabs', owner).value ?? []
+  const nextUnified = removeParent
+    ? unified.filter((tab) => tab.id !== tabId && tab.entityId !== tabId)
+    : unified
+  if (reader.hasField('unifiedTabs')) {
+    reader.write('unifiedTabs', owner, { present: true, value: nextUnified })
   }
-
-  const previousActiveTabId = session.activeTabIdByWorktree?.[surface.worktreeId]
-  const activeTabStillExists = previousActiveTabId && validTopLevelIds.has(previousActiveTabId)
-  const nextActiveTabId =
-    (activeTabStillExists ? previousActiveTabId : undefined) ??
-    repairedGroups?.find(
-      (group) => group.id === session.activeGroupIdByWorktree?.[surface.worktreeId]
-    )?.activeTabId ??
-    repairedGroups?.[0]?.activeTabId ??
-    [...validTopLevelIds][0] ??
+  const validIds = new Set([...nextUnified.map((tab) => tab.id), ...nextRows.map((tab) => tab.id)])
+  const groups = repairMobileSessionTabGroupsAfterRetirement(
+    reader.unit('tabGroups', owner).value,
+    validIds
+  )
+  if (reader.hasField('tabGroups')) {
+    reader.write('tabGroups', owner, {
+      present: true,
+      value: (groups ?? []).map((group) => ({ ...group, worktreeId: owner }))
+    })
+  }
+  const groupLayout = pruneTabGroupLayoutAfterRetirement(
+    reader.unit('tabGroupLayouts', owner).value,
+    new Set(groups?.map((group) => group.id) ?? [])
+  )
+  if (reader.hasField('tabGroupLayouts')) {
+    reader.write(
+      'tabGroupLayouts',
+      owner,
+      groupLayout ? { present: true, value: groupLayout } : { present: false, value: undefined }
+    )
+  }
+  const priorActive = reader.unit('activeTabIdByWorktree', owner).value
+  const active =
+    (priorActive && validIds.has(priorActive) ? priorActive : undefined) ??
+    groups?.find((group) => group.id === reader.unit('activeGroupIdByWorktree', owner).value)
+      ?.activeTabId ??
+    groups?.[0]?.activeTabId ??
+    [...validIds][0] ??
     null
-  const activeTabIdByWorktree = {
-    ...session.activeTabIdByWorktree,
-    [surface.worktreeId]: nextActiveTabId
-  }
-  const activeTabTypeByWorktree = { ...session.activeTabTypeByWorktree }
-  const activeUnifiedTab = unifiedTabs?.[surface.worktreeId]?.find(
-    (tab) => tab.id === nextActiveTabId
-  )
-  const nextActiveType = visibleTypeForContentType(activeUnifiedTab?.contentType)
-  if (nextActiveType) {
-    activeTabTypeByWorktree[surface.worktreeId] = nextActiveType
-  } else if (!nextActiveTabId) {
-    delete activeTabTypeByWorktree[surface.worktreeId]
-  }
-  const activeGroupIdByWorktree = { ...session.activeGroupIdByWorktree }
-  const nextActiveGroupId =
-    repairedGroups?.find((group) => group.tabOrder.includes(nextActiveTabId ?? ''))?.id ??
-    repairedGroups?.[0]?.id
-  if (nextActiveGroupId) {
-    activeGroupIdByWorktree[surface.worktreeId] = nextActiveGroupId
-  } else {
-    delete activeGroupIdByWorktree[surface.worktreeId]
-  }
-  const remoteSessionIdsByTabId = { ...session.remoteSessionIdsByTabId }
-  if (removeParent) {
-    delete remoteSessionIdsByTabId[surface.parentTabId]
-  } else if (remoteSessionIdsByTabId[surface.parentTabId] === surface.ptyId) {
-    remoteSessionIdsByTabId[surface.parentTabId] =
-      nextLayout?.ptyIdsByLeafId?.[nextLayout.activeLeafId ?? ''] ??
-      Object.values(nextLayout?.ptyIdsByLeafId ?? {})[0] ??
-      ''
-    if (!remoteSessionIdsByTabId[surface.parentTabId]) {
-      delete remoteSessionIdsByTabId[surface.parentTabId]
+  reader.write('activeTabIdByWorktree', owner, { present: true, value: active })
+  const type = visibleTypeForContentType(nextUnified.find((tab) => tab.id === active)?.contentType)
+  if (reader.hasField('activeTabTypeByWorktree')) {
+    if (type) {
+      reader.write('activeTabTypeByWorktree', owner, { present: true, value: type })
+    } else if (!active) {
+      reader.write('activeTabTypeByWorktree', owner, { present: false, value: undefined })
     }
   }
-  return recordTerminalSurfaceRetirement(
-    {
-      ...session,
-      activeTabId:
-        session.activeTabId === surface.parentTabId ? nextActiveTabId : session.activeTabId,
-      tabsByWorktree: {
-        ...session.tabsByWorktree,
-        [surface.worktreeId]: nextTabsForWorktree
-      },
-      terminalLayoutsByTabId,
-      activeTabIdByWorktree,
-      ...(unifiedTabs ? { unifiedTabs } : {}),
-      ...(tabGroups ? { tabGroups } : {}),
-      ...(tabGroupLayouts ? { tabGroupLayouts } : {}),
-      ...(session.activeGroupIdByWorktree ? { activeGroupIdByWorktree } : {}),
-      ...(session.activeTabTypeByWorktree ? { activeTabTypeByWorktree } : {}),
-      ...(session.remoteSessionIdsByTabId ? { remoteSessionIdsByTabId } : {})
-    },
-    surface,
-    paneKey
-  )
+  const activeGroup =
+    groups?.find((group) => group.tabOrder.includes(active ?? ''))?.id ?? groups?.[0]?.id
+  if (reader.hasField('activeGroupIdByWorktree')) {
+    reader.write(
+      'activeGroupIdByWorktree',
+      owner,
+      activeGroup ? { present: true, value: activeGroup } : { present: false, value: undefined }
+    )
+  }
+  const remote = reader.unit('remoteSessionIdsByTabId', tabId).value
+  if (reader.hasField('remoteSessionIdsByTabId')) {
+    if (removeParent) {
+      reader.write('remoteSessionIdsByTabId', tabId, { present: false, value: undefined })
+    } else if (remote === surface.ptyId) {
+      const remaining =
+        nextLayout?.ptyIdsByLeafId?.[nextLayout.activeLeafId ?? ''] ??
+        Object.values(nextLayout?.ptyIdsByLeafId ?? {})[0]
+      reader.write(
+        'remoteSessionIdsByTabId',
+        tabId,
+        remaining ? { present: true, value: remaining } : { present: false, value: undefined }
+      )
+    }
+  }
+  if (reader.field('activeTabId').value === tabId) {
+    reader.replace('activeTabId', { present: true, value: active })
+  }
+  recordTerminalSurfaceRetirement(reader, surface, paneKey)
 }
 
 export function sanitizeWorkspaceSessionTerminalRetirements(
   incoming: WorkspaceSessionState,
   prior: WorkspaceSessionState | undefined
 ): WorkspaceSessionState {
+  const base = prior ?? getDefaultWorkspaceSession()
+  const reader = SessionUnitReader.between(base, incoming, new SessionUnitIndex(base))
+  reader.admitFields(true)
+  reduceSessionTerminalRetirements(reader, selectSessionUnits(reader, [], true))
+  return reader.snapshot()
+}
+
+export function reduceSessionTerminalRetirements(
+  reader: SessionUnitReader,
+  selection: SessionUnitSelection,
+  fencedRevisions?: ReadonlyMap<string, number>
+): void {
   if (
-    !prior?.terminalSurfaceTombstonesByPaneKey &&
-    !incoming.terminalSurfaceTombstonesByPaneKey &&
-    !prior?.terminalTopologyRevisionByRepoId
+    !reader.policy('terminalSurfaceTombstonesByPaneKey', 'prior') &&
+    !reader.policy('terminalSurfaceTombstonesByPaneKey') &&
+    !reader.policy('terminalTopologyRevisionByRepoId', 'prior')
   ) {
-    return incoming
+    return
   }
-  const bindings = {
-    ...prior?.terminalPtyIncarnationsByPaneKey,
-    ...incoming.terminalPtyIncarnationsByPaneKey
+  const panes = new Set([
+    ...reader.index.keys('terminalSurfaceTombstonesByPaneKey'),
+    ...reader.keys('terminalSurfaceTombstonesByPaneKey')
+  ])
+  for (const pane of panes) {
+    const prior = reader.unit('terminalSurfaceTombstonesByPaneKey', pane, 'prior').value
+    const incoming = reader.unit('terminalSurfaceTombstonesByPaneKey', pane).value
+    const tombstone = incoming ?? prior
+    if (!tombstone) {
+      continue
+    }
+    const binding = reader.unit('terminalPtyIncarnationsByPaneKey', pane)
+    if (!binding.present) {
+      reader.write(
+        'terminalPtyIncarnationsByPaneKey',
+        pane,
+        reader.unit('terminalPtyIncarnationsByPaneKey', pane, 'prior')
+      )
+    }
+    reduceTerminalSurfaceRetirement(reader, tombstone)
+    reader.write('terminalSurfaceTombstonesByPaneKey', pane, { present: false, value: undefined })
   }
-  const tombstones = {
-    ...prior?.terminalSurfaceTombstonesByPaneKey,
-    ...incoming.terminalSurfaceTombstonesByPaneKey
-  }
-  const hasLegacyTombstones = Object.keys(tombstones).length > 0
-  let next: WorkspaceSessionState = {
-    ...incoming,
-    terminalPtyIncarnationsByPaneKey: hasLegacyTombstones
-      ? bindings
-      : incoming.terminalPtyIncarnationsByPaneKey,
-    terminalSurfaceTombstonesByPaneKey: tombstones
-  }
-  for (const tombstone of Object.values(tombstones)) {
-    next = retireTerminalSurfaceFromPersistence(next, tombstone)
-  }
-  return rebaseWorkspaceSessionTerminalMembership(
-    { ...next, terminalSurfaceTombstonesByPaneKey: {} },
-    prior
+  // Retirement consumes the complete policy field, even when its selected domain is empty.
+  reader.replace('terminalSurfaceTombstonesByPaneKey', { present: true, value: {} })
+  const rebased = reduceSessionTerminalMembership(
+    reader,
+    selection.get('tabsByWorktree') ?? [],
+    selection.get('terminalTopologyRevisionByRepoId') ?? [],
+    fencedRevisions
   )
+  if (rebased) {
+    reduceSessionIncarnationMembership(
+      reader,
+      selection.get('terminalPtyIncarnationsByPaneKey') ?? []
+    )
+  }
 }

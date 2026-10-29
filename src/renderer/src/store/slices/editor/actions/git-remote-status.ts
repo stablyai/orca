@@ -24,7 +24,7 @@ export function createGitRemoteStatus(
     setUpstreamStatus: (worktreeId, status) =>
       set((s) => {
         if (areUpstreamStatusesEqual(s.remoteStatusesByWorktree[worktreeId], status)) {
-          return s
+          return undefined
         }
         return {
           remoteStatusesByWorktree: {

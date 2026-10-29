@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { observeSessionSourceOracle } from '../../lib/test-support/session-source-oracle'
 import type { AppState } from '../types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { createRepoSlice } from './repos'
@@ -55,6 +56,7 @@ import { createWorkspaceAttentionSlice } from './workspace-attention/workspace-a
 import '@/i18n/i18n'
 import { withEditorBufferRecords } from '../editor-buffer-record-lifecycle'
 import { makeWorktree, TEST_REPO } from './worktrees-slice-test-fixtures'
+import { replaceSessionSourceFields } from '../session-source-write-boundary'
 export { makeWorktree, TEST_REPO } from './worktrees-slice-test-fixtures'
 export {
   makeTab,
@@ -66,7 +68,7 @@ export {
 
 export function createTestStore() {
   // Why the record middleware: views of one file share a record only through it, as in the app.
-  return create<AppState>()(
+  const store = create<AppState>()(
     withEditorBufferRecords<AppState>(
       (...a) => ({
         ...createRepoSlice(...a),
@@ -122,6 +124,8 @@ export function createTestStore() {
       true
     )
   )
+  observeSessionSourceOracle(store)
+  return store
 }
 
 export function seedStore(
@@ -129,10 +133,15 @@ export function seedStore(
   state: Partial<AppState>
 ): void {
   // Centralize fixture to keep cascade suites within max-lines limits without suppressing growth checks.
-  store.setState({
-    repos: [{ ...TEST_REPO, executionHostId: 'local' }],
-    ...state
-  })
+  store.setState(
+    replaceSessionSourceFields(
+      {
+        repos: [{ ...TEST_REPO, executionHostId: 'local' }],
+        ...state
+      },
+      'hydration'
+    )
+  )
 }
 
 export function makeRuntimeOwnedWorktree(

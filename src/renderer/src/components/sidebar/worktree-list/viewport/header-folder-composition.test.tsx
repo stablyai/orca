@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -22,7 +23,7 @@ const initial = useAppStore.getInitialState()
 const originalApi = Object.getOwnPropertyDescriptor(window, 'api')
 afterEach(() => {
   cleanup()
-  useAppStore.setState(initial, true)
+  setSessionTestState(useAppStore, initial, true)
   if (originalApi) {
     Object.defineProperty(window, 'api', originalApi)
   } else {
@@ -31,7 +32,7 @@ afterEach(() => {
 })
 
 it('composes real dispatched headers, current repo gates and folder cache refresh without unrelated viewport work', async () => {
-  useAppStore.setState(initial, true)
+  setSessionTestState(useAppStore, initial, true)
   const group = {
     ...createProjectGroup({
       name: 'Repo',
@@ -64,7 +65,7 @@ it('composes real dispatched headers, current repo gates and folder cache refres
     [repo.id, repo],
     [nested.id, nested]
   ])
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     repos: [repo, nested],
     projectGroups,
     folderWorkspaces,
@@ -240,7 +241,7 @@ it('composes real dispatched headers, current repo gates and folder cache refres
   const settled = viewportRenders
   for (let index = 0; index < 10; index++) {
     act(() =>
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         sshConnectionStates: new Map([['B', ssh(index % 2 ? 'connected' : 'disconnected', 'B')]])
       })
     )
@@ -261,7 +262,7 @@ it('composes real dispatched headers, current repo gates and folder cache refres
   expect(viewportRenders).toBe(settled)
   exists = true
   await act(async () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       sshConnectionStates: new Map([['nested-A', ssh('connected', 'nested-A')]])
     })
   })
@@ -287,7 +288,7 @@ it('composes real dispatched headers, current repo gates and folder cache refres
 })
 
 it('keeps empty requests inert, deduplicates owner routes and still fetches null snapshots', () => {
-  useAppStore.setState(initial, true)
+  setSessionTestState(useAppStore, initial, true)
   const group = {
     ...createProjectGroup({
       name: 'Folder',
@@ -319,7 +320,7 @@ it('keeps empty requests inert, deduplicates owner routes and still fetches null
   const settled = renders
   for (let index = 0; index < 10; index++) {
     act(() =>
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         sshConnectionStates: new Map([[`outside-${index}`, ssh('connected')]])
       })
     )
@@ -339,9 +340,13 @@ it('keeps empty requests inert, deduplicates owner routes and still fetches null
     { force: true, runtimeEnvironmentId: 'A' }
   )
   expect(fetch).toHaveBeenCalledTimes(2)
-  act(() => useAppStore.setState({ projectGroups: [{ ...group, executionHostId: 'runtime:A' }] }))
+  act(() =>
+    setSessionTestState(useAppStore, {
+      projectGroups: [{ ...group, executionHostId: 'runtime:A' }]
+    })
+  )
   expect(fetch).toHaveBeenCalledTimes(3)
   rerender(empty)
-  act(() => useAppStore.setState({ projectGroups: [], sshConnectionStates: new Map() }))
+  act(() => setSessionTestState(useAppStore, { projectGroups: [], sshConnectionStates: new Map() }))
   expect(fetch).toHaveBeenCalledTimes(3)
 })

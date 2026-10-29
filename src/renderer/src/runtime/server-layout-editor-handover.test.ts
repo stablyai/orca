@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type * as ResolveOwnerModule from '@/lib/resolve-owner'
@@ -162,7 +163,7 @@ function seedEditorTab(
   executionHostId: ExecutionHostId
 ): void {
   const id = ownedEditorFileId(filePath, worktreeId, undefined)
-  store.setState({
+  setSessionTestState(store, {
     openFiles: [
       ...store.getState().openFiles,
       {
@@ -294,7 +295,7 @@ describe('a desktop-only editor tab when the server’s frames take its workspac
     const store = mirroredStore()
     const { tabId } = openDesktopFile(store, FILE_PATH)
     const desktopGroup = 'desktop-only-group'
-    store.setState({
+    setSessionTestState(store, {
       groupsByWorktree: {
         [WT]: (store.getState().groupsByWorktree[WT] ?? []).map((group) => ({
           ...group,
@@ -537,7 +538,7 @@ describe('a desktop-only editor tab when the server’s frames take its workspac
 
   it('saves a handed-over file through the server, never this machine’s disk', async () => {
     const store = mirroredStore()
-    store.setState({
+    setSessionTestState(store, {
       repos: [{ ...TEST_REPO, id: 'repo', path: '/worktree', executionHostId: RUNTIME_HOST }],
       worktreesByRepo: {
         repo: [makeWorktree({ id: WT, repoId: 'repo', path: '/worktree', hostId: RUNTIME_HOST })]

@@ -14,6 +14,7 @@ import { saveSourceControlAiActionRecipeForTarget } from './source-control/ai/re
 import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { useAppStore } from '@/store'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY as SURFACE } from '../../../../shared/agent-launch-runtime-capability'
 import {
@@ -70,7 +71,7 @@ export function mountSourceDialog(
   }
   settings.sourceControlAi!.actions = { resolveConflicts: global }
   const repo = { ...TEST_REPO, sourceControlAi: { actionOverrides: { resolveConflicts: own } } }
-  useAppStore.setState({
+  setSessionTestState(useAppStore, {
     settings,
     repos: [repo],
     detectedAgentIds: ['claude', 'codex'],
@@ -89,7 +90,7 @@ export function mountSourceDialog(
             useAppStore.setState((state) => ({ settings: { ...state.settings!, ...patch } }))
           },
           updateRepo: async (id, patch) => {
-            useAppStore.setState((state) => ({
+            setSessionTestState(useAppStore, (state) => ({
               repos: state.repos.map((row) =>
                 row.id === id
                   ? {

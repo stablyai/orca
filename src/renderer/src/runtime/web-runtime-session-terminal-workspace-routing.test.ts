@@ -43,9 +43,15 @@ vi.mock('../store', () => ({
 vi.mock('./web-session-tabs-sync/tracking-lifecycle', () => ({
   acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot
 }))
-vi.mock('./web-session-tabs-sync/snapshot-api', () => ({
-  applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot
-}))
+vi.mock('./web-session-tabs-sync/snapshot-api', async () => {
+  const { mockWebSessionTabsSnapshotsToEdit } = await import('./web-runtime-session-test-harness')
+  return {
+    applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot,
+    applyWebSessionTabsSnapshotsToEdit: mockWebSessionTabsSnapshotsToEdit(
+      mocks.applyWebSessionTabsSnapshot
+    )
+  }
+})
 vi.mock('./web-session-tabs-sync/tracking-decisions', () => ({
   decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot
 }))

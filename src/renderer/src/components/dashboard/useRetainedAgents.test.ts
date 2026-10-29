@@ -1,3 +1,5 @@
+import type { AppState } from '@/store/types'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -13,12 +15,12 @@ import { collectRetainedAgentsOnDisappear, useRetainedAgentsSync } from './useRe
 const initialAppState = useAppStore.getInitialState()
 
 beforeEach(() => {
-  useAppStore.setState(initialAppState, true)
+  setSessionTestState(useAppStore, initialAppState, true)
   resetAgentPaneAuthorityAliasesForTests()
 })
 
 afterEach(() => {
-  useAppStore.setState(initialAppState, true)
+  setSessionTestState(useAppStore, initialAppState, true)
   resetAgentPaneAuthorityAliasesForTests()
 })
 
@@ -271,7 +273,7 @@ describe('useRetainedAgentsSync', () => {
     )
     const retainAgents = vi.fn()
     const pruneRetainedAgents = vi.fn()
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [repo],
       worktreesByRepo: { [repo.id]: worktrees },
       tabsByWorktree,
@@ -287,7 +289,7 @@ describe('useRetainedAgentsSync', () => {
 
     const changedWorktreeId = 'wt-173'
     act(() => {
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         tabsByWorktree: {
           ...tabsByWorktree,
           [changedWorktreeId]: [
@@ -313,7 +315,7 @@ describe('useRetainedAgentsSync', () => {
     const worktree = makeWorktree()
     const paneKey = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
     const row = makeAgentRow({ paneKey, state: 'done' })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [repo],
       worktreesByRepo: { [repo.id]: [worktree] },
       tabsByWorktree: {
@@ -328,7 +330,7 @@ describe('useRetainedAgentsSync', () => {
     })
 
     act(() => {
-      useAppStore.setState((state) => ({
+      setSessionTestState(useAppStore, (state): Partial<AppState> => ({
         tabsByWorktree: {
           [worktree.id]: [
             {
@@ -360,7 +362,7 @@ describe('useRetainedAgentsSync', () => {
     const worktree = makeWorktree()
     const paneKey = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
     const row = makeAgentRow({ paneKey, state: 'done' })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [repo],
       worktreesByRepo: { [repo.id]: [worktree] },
       tabsByWorktree: { [worktree.id]: [row.tab] },
@@ -375,7 +377,7 @@ describe('useRetainedAgentsSync', () => {
 
     // Why: model both teardown writes landing before the next retention effect runs.
     act(() => {
-      useAppStore.setState((state) => ({
+      setSessionTestState(useAppStore, (state): Partial<AppState> => ({
         tabsByWorktree: { [worktree.id]: [] },
         agentStatusByPaneKey: {},
         recentlyClosedAgentStatusTabIds: { [row.tab.id]: true },
@@ -398,7 +400,7 @@ describe('useRetainedAgentsSync', () => {
     const sourcePaneKey = makePaneKey(sourceTab.id, leafId)
     const targetPaneKey = makePaneKey(targetTab.id, leafId)
     const row = makeAgentRow({ paneKey: sourcePaneKey, state: 'done' })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       repos: [repo],
       worktreesByRepo: { [repo.id]: [worktree] },
       tabsByWorktree: { [worktree.id]: [sourceTab, targetTab] },

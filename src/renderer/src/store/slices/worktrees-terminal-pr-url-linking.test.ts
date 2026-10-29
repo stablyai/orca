@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HostedReviewInfo, HostedReviewForBranchArgs } from '../../../../shared/hosted-review'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
@@ -67,7 +68,7 @@ describe('worktree remote runtime mutations', () => {
         remoteUrl: 'https://github.com/acme/orca.git'
       }
     })
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
       ],
@@ -124,7 +125,7 @@ describe('worktree remote runtime mutations', () => {
       linkedPR: null,
       suppressedGitHubPR: 42
     })
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
       ],
@@ -156,7 +157,7 @@ describe('worktree remote runtime mutations', () => {
         branchName: 'feature/pr-link'
       }
     })
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
       ],
@@ -203,7 +204,7 @@ describe('worktree remote runtime mutations', () => {
         branchName: 'feature/pr-link'
       }
     })
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
       ],
@@ -218,7 +219,7 @@ describe('worktree remote runtime mutations', () => {
     for (let i = 0; i < 20; i++) {
       await Promise.resolve()
     }
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: {
         repo1: [{ ...wt, linkedPR: null, suppressedGitHubPR: 42 }]
       }
@@ -245,7 +246,7 @@ describe('worktree remote runtime mutations', () => {
         branchName: 'feature/pr-link'
       }
     })
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
       ],
@@ -308,7 +309,7 @@ describe('worktree remote runtime mutations', () => {
         branchName: 'feature/pr-link'
       }
     })
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
       ],
@@ -325,7 +326,7 @@ describe('worktree remote runtime mutations', () => {
       await Promise.resolve()
     }
 
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: { repo1: [{ ...wt, linkedPR: 7 }] }
     })
 
@@ -363,7 +364,7 @@ describe('worktree remote runtime mutations', () => {
       path: '/worktrees/orca',
       branch: 'refs/heads/feature/pr-link'
     })
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
       ],
@@ -385,7 +386,7 @@ describe('worktree remote runtime mutations', () => {
       prNumber: 42
     })
 
-    store.setState({
+    setSessionTestState(store, {
       worktreesByRepo: { repo1: [{ ...wt, linkedPR: 7 }] }
     })
 
@@ -418,7 +419,7 @@ describe('worktree remote runtime mutations', () => {
         remoteUrl: 'https://github.com/acme/orca.git'
       }
     })
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
       ],
@@ -452,7 +453,7 @@ describe('worktree remote runtime mutations', () => {
       branch: 'refs/heads/feature/pr-link'
     })
     mockApi.worktrees.resolvePrBase.mockResolvedValueOnce({ baseBranch: 'main' })
-    store.setState({
+    setSessionTestState(store, {
       repos: [
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
       ],

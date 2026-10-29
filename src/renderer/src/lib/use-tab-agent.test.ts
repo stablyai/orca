@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act, createElement } from 'react'
@@ -550,8 +551,8 @@ describe('useTabAgent', () => {
     latestHookAgent = undefined
     getForegroundProcess.mockReset()
     clearTabLaunchAgent.mockReset()
-    useAppStore.setState(initialAppState, true)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, initialAppState, true)
+    setSessionTestState(useAppStore, {
       ptyIdsByTabId: { 'tab-1': ['pty-1'] },
       agentStatusByPaneKey: {},
       terminalLayoutsByTabId: {},
@@ -571,13 +572,13 @@ describe('useTabAgent', () => {
       act(() => root.unmount())
     })
     document.body.replaceChildren()
-    useAppStore.setState(initialAppState, true)
+    setSessionTestState(useAppStore, initialAppState, true)
     window.api = originalApi
   })
 
   it('never probes the foreground process', async () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       terminalLayoutsByTabId: {
         'tab-1': {
           root: { type: 'leaf', leafId: LEAF_ID },
@@ -601,7 +602,7 @@ describe('useTabAgent', () => {
 
   it('does not clear launch identity while the live hook row persists at a shell title', async () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       terminalLayoutsByTabId: {
         'tab-1': {
           root: { type: 'leaf', leafId: LEAF_ID },
@@ -623,7 +624,7 @@ describe('useTabAgent', () => {
 
   it('clears launch identity when a previously observed hook row drops at a shell title', async () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       terminalLayoutsByTabId: {
         'tab-1': {
           root: { type: 'leaf', leafId: LEAF_ID },
@@ -668,7 +669,7 @@ describe('useTabAgent', () => {
 
   it('treats paired runtime PTYs as remote-like for completed hook fallback', async () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       ptyIdsByTabId: { 'tab-1': ['remote:web-env-1@@terminal-1'] },
       agentStatusByPaneKey: {
         [paneKey]: completedAgentStatus(paneKey)
@@ -688,7 +689,7 @@ describe('useTabAgent', () => {
 
   it('does not let a split-tab fallback PTY suppress missing-layout hook identity', async () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       ptyIdsByTabId: { 'tab-1': ['pty-shell', 'pty-agent'] },
       terminalLayoutsByTabId: {},
       agentStatusByPaneKey: {
@@ -708,7 +709,7 @@ describe('useTabAgent', () => {
 
   it('does not use completed sibling hook status as focused launch lifecycle evidence', async () => {
     const siblingPaneKey = makePaneKey('tab-1', SECOND_LEAF_ID)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       ptyIdsByTabId: { 'tab-1': ['pty-focus', 'pty-sibling'] },
       terminalLayoutsByTabId: { 'tab-1': twoPaneLayout() },
       agentStatusByPaneKey: {
@@ -731,7 +732,7 @@ describe('useTabAgent', () => {
   it('does not clear remote launch identity when the hook row drops at a shell title', async () => {
     const remotePtyId = 'remote:web-env-1@@terminal-1'
     const paneKey = makePaneKey('tab-1', LEAF_ID)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       ptyIdsByTabId: { 'tab-1': [remotePtyId] },
       terminalLayoutsByTabId: {
         'tab-1': {
@@ -762,7 +763,7 @@ describe('useTabAgent', () => {
   it('does not clear launch identity while a sibling hook row is still live', async () => {
     const focusedPaneKey = makePaneKey('tab-1', LEAF_ID)
     const siblingPaneKey = makePaneKey('tab-1', SECOND_LEAF_ID)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       ptyIdsByTabId: { 'tab-1': ['pty-focus', 'pty-sibling'] },
       terminalLayoutsByTabId: { 'tab-1': twoPaneLayout() },
       agentStatusByPaneKey: {
@@ -817,7 +818,7 @@ describe('useTabAgent', () => {
 
   it('does not treat a layout-less multi-pane completed row as focused exit evidence', async () => {
     const siblingPaneKey = makePaneKey('tab-1', SECOND_LEAF_ID)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       ptyIdsByTabId: { 'tab-1': ['pty-focus', 'pty-sibling'] },
       terminalLayoutsByTabId: {},
       agentStatusByPaneKey: {
@@ -838,7 +839,7 @@ describe('useTabAgent', () => {
       expandedLeafId: null,
       ptyIdsByLeafId: { [LEAF_ID]: 'pty-1' }
     }
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       terminalLayoutsByTabId: { 'tab-1': boundLayout },
       agentStatusByPaneKey: { [paneKey]: workingAgentStatus(paneKey) }
     })
@@ -848,7 +849,7 @@ describe('useTabAgent', () => {
 
     // Respawn can replace PTY, drop hook and show shell in one commit; old-generation observations must not clear new launch intent.
     await act(async () => {
-      useAppStore.setState({
+      setSessionTestState(useAppStore, {
         terminalLayoutsByTabId: {
           'tab-1': { ...boundLayout, ptyIdsByLeafId: { [LEAF_ID]: 'pty-2' } }
         },

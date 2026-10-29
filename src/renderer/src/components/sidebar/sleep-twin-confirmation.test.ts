@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, describe, expect, it } from 'vitest'
 import { resetHostTwinModuleStores } from '@/store/host-twin-state-projection.test-fixture'
 import { createHostTwinFixture, type HostTwinFixture } from '@/store/host-twin.test-fixture'
@@ -53,7 +54,7 @@ describe('the twin copies a sleep also reaches', () => {
 
   it('names nothing for a workspace only one host publishes', () => {
     const f = twin()
-    f.store.setState((s) => ({
+    setSessionTestState(f.store, (s) => ({
       worktreesByRepo: {
         [f.projectId]: (s.worktreesByRepo[f.projectId] ?? []).filter(
           (worktree) => worktree.hostId === f.local.hostId

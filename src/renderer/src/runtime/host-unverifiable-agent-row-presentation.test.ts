@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 /**
  * STA-12043, client half: once a restored host starts a new shell in a pane, it publishes the old
  * run's row as unverifiable. The paired client must replace its copy of the old Done with no tab
@@ -95,7 +96,8 @@ describe('a host row published unverifiable after a cold restore', () => {
       })
     }
 
-    store.setState(
+    setSessionTestState(
+      store,
       applyFreshWebSessionTabsSnapshot(
         store.getState(),
         hostSnapshot(1, { updatedAt: T0 }),
@@ -106,7 +108,8 @@ describe('a host row published unverifiable after a cold restore', () => {
     expect(tabStatus()).toBe('done')
 
     vi.setSystemTime(T0 + 60_000)
-    store.setState(
+    setSessionTestState(
+      store,
       applyFreshWebSessionTabsSnapshot(
         store.getState(),
         hostSnapshot(2, { updatedAt: T0 + 30_000, restoredUnconfirmed: true }),

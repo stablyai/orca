@@ -8,7 +8,7 @@ export function createTerminalDisownedPtySourceActions(
     markPtySourceDisowned: (ptyId) => {
       set((state) =>
         state.disownedPtyIds[ptyId]
-          ? state
+          ? undefined
           : { disownedPtyIds: { ...state.disownedPtyIds, [ptyId]: true } }
       )
     }

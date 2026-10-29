@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { defaultScopeHost } from '@/lib/default-creation-host'
@@ -25,7 +26,7 @@ describe('spurious shell readings on Codex-launched panes', () => {
 
   function seedPane(args: { ptyId?: string; launchAgent?: 'codex' } = {}): void {
     const ptyId = args.ptyId ?? 'pty-1'
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       settings: null as never,
       tabsByWorktree: {
         wt1: [

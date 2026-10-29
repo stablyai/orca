@@ -1,3 +1,4 @@
+import { editSessionSource } from '../session-source-edits'
 import { warnIfZCodeCannotOpenSession } from '@/components/terminal-pane/zcode-missing-tui-notice'
 import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -61,21 +62,18 @@ export function createTerminalTabCreationActions(
       const split = options?.split
       const splitGroupId = split ? createBrowserUuid() : undefined
       set((current) => {
-        const s =
-          split && splitGroupId
-            ? {
-                ...current,
-                ...insertSplitGroup(
-                  current,
-                  worktreeId,
-                  split,
-                  emptySplitGroup(worktreeId, splitGroupId)
-                )
-              }
-            : current
+        const edit = editSessionSource(current)
+        if (split && splitGroupId) {
+          insertSplitGroup(edit, worktreeId, split, emptySplitGroup(worktreeId, splitGroupId))
+        }
+        const s = edit.view()
         const requestedGroupId = splitGroupId ?? targetGroupId
         const orphanTerminalIds = getOrphanTerminalIds(s, worktreeId)
-        const orphanCleanupPatch = buildOrphanTerminalCleanupPatch(s, worktreeId, orphanTerminalIds)
+        const orphanCleanupPatch = buildOrphanTerminalCleanupPatch(
+          edit,
+          worktreeId,
+          orphanTerminalIds
+        )
         const existing = (s.tabsByWorktree[worktreeId] ?? []).filter(
           (entry) => !orphanTerminalIds.has(entry.id)
         )
@@ -160,16 +158,14 @@ export function createTerminalTabCreationActions(
           s.groupsByWorktree[worktreeId]?.some((group) => group.id === requestedGroupId)
             ? requestedGroupId
             : undefined
-        const { group, groupsByWorktree, activeGroupIdByWorktree } = ensureGroup(
-          s.groupsByWorktree,
-          s.activeGroupIdByWorktree,
+        const group = ensureGroup(
+          edit,
           worktreeId,
           validTargetGroupId ?? s.activeGroupIdByWorktree[worktreeId]
         )
-        const nextActiveGroupIdByWorktree =
-          shouldActivate && validTargetGroupId
-            ? { ...activeGroupIdByWorktree, [worktreeId]: validTargetGroupId }
-            : activeGroupIdByWorktree
+        if (shouldActivate && validTargetGroupId) {
+          edit.set('activeGroupIdByWorktree', worktreeId, validTargetGroupId)
+        }
         const existingUnifiedTabs = s.unifiedTabsByWorktree[worktreeId] ?? []
         const existingTerminalTab = findTabByEntityInGroup(
           s.unifiedTabsByWorktree,
@@ -178,7 +174,7 @@ export function createTerminalTabCreationActions(
           id,
           'terminal'
         )
-        const groupsForWorktree = groupsByWorktree[worktreeId] ?? []
+        const groupsForWorktree = edit.entry('groupsByWorktree', worktreeId) ?? []
         const cleanedGroups =
           orphanTerminalIds.size === 0
             ? groupsForWorktree
@@ -228,7 +224,7 @@ export function createTerminalTabCreationActions(
         const nextRecent = shouldActivate
           ? pushRecentTabId(sanitizeRecentTabIds(group.recentTabIds, nextGroupOrder), unifiedTab.id)
           : sanitizeRecentTabIds(cleanedTargetGroup.recentTabIds, nextGroupOrder)
-        const cleanedActiveTabIdForWorktree = orphanCleanupPatch.activeTabIdByWorktree[worktreeId]
+        const cleanedActiveTabIdForWorktree = edit.entry('activeTabIdByWorktree', worktreeId)
         const cleanedGroupActiveTabId =
           cleanedTargetGroup.activeTabId && !orphanTerminalIds.has(cleanedTargetGroup.activeTabId)
             ? cleanedTargetGroup.activeTabId
@@ -236,47 +232,42 @@ export function createTerminalTabCreationActions(
         const nextActiveTabIdForWorktree = shouldActivate
           ? tab.id
           : (cleanedActiveTabIdForWorktree ?? cleanedGroupActiveTabId ?? tab.id)
-        return {
+        edit.set('tabsByWorktree', worktreeId, [...existing, tab])
+        edit.set(
+          'unifiedTabsByWorktree',
+          worktreeId,
+          existingTerminalTab ? existingUnifiedTabs : [...existingUnifiedTabs, unifiedTab]
+        )
+        edit.set(
+          'groupsByWorktree',
+          worktreeId,
+          updateGroup(cleanedGroups, {
+            ...cleanedTargetGroup,
+            activeTabId: shouldActivate
+              ? unifiedTab.id
+              : (cleanedGroupActiveTabId ?? unifiedTab.id),
+            tabOrder: nextGroupOrder,
+            recentTabIds: nextRecent
+          })
+        )
+        edit.set(
+          'layoutByWorktree',
+          worktreeId,
+          edit.entry('layoutByWorktree', worktreeId) ?? { type: 'leaf', groupId: group.id }
+        )
+        edit.set('activeTabIdByWorktree', worktreeId, nextActiveTabIdForWorktree)
+        edit.set('ptyIdsByTabId', tab.id, options?.initialPtyId ? [options.initialPtyId] : [])
+        edit.set(
+          'terminalLayoutsByTabId',
+          tab.id,
+          singlePaneLayoutSnapshot(initialLeafId, options?.initialPtyId)
+        )
+        return edit.finish({
           ...orphanCleanupPatch,
-          tabsByWorktree: {
-            ...orphanCleanupPatch.tabsByWorktree,
-            [worktreeId]: [...existing, tab]
-          },
-          // Why: publish the unified tab atomically with the runtime tab so a transient legacy mount can't race the split host.
-          unifiedTabsByWorktree: {
-            ...s.unifiedTabsByWorktree,
-            [worktreeId]: existingTerminalTab
-              ? existingUnifiedTabs
-              : [...existingUnifiedTabs, unifiedTab]
-          },
-          groupsByWorktree: {
-            ...groupsByWorktree,
-            [worktreeId]: updateGroup(cleanedGroups, {
-              ...cleanedTargetGroup,
-              activeTabId: shouldActivate
-                ? unifiedTab.id
-                : (cleanedGroupActiveTabId ?? unifiedTab.id),
-              tabOrder: nextGroupOrder,
-              recentTabIds: nextRecent
-            })
-          },
-          activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
-          layoutByWorktree: {
-            ...s.layoutByWorktree,
-            [worktreeId]: s.layoutByWorktree[worktreeId] ?? { type: 'leaf', groupId: group.id }
-          },
           activeTabId:
             shouldActivate && ownsGlobalSelection(s, worktreeId)
               ? tab.id
               : orphanCleanupPatch.activeTabId,
-          activeTabIdByWorktree: {
-            ...orphanCleanupPatch.activeTabIdByWorktree,
-            [worktreeId]: nextActiveTabIdForWorktree
-          },
-          ptyIdsByTabId: {
-            ...orphanCleanupPatch.ptyIdsByTabId,
-            [tab.id]: options?.initialPtyId ? [options.initialPtyId] : []
-          },
           pendingStartupByTabId: options?.pendingStartup
             ? {
                 ...orphanCleanupPatch.pendingStartupByTabId,
@@ -288,12 +279,8 @@ export function createTerminalTabCreationActions(
                 ...orphanCleanupPatch.automaticAgentResumeClaimsByTabId,
                 [tab.id]: options.automaticResumeClaim
               }
-            : orphanCleanupPatch.automaticAgentResumeClaimsByTabId,
-          terminalLayoutsByTabId: {
-            ...orphanCleanupPatch.terminalLayoutsByTabId,
-            [tab.id]: singlePaneLayoutSnapshot(initialLeafId, options?.initialPtyId)
-          }
-        }
+            : orphanCleanupPatch.automaticAgentResumeClaimsByTabId
+        })
       })
       // Switch point: main writes the tab under these ids before any later command names it.
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {

@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { makeTab, makeUnifiedTab } from './store-session-test-harness'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
@@ -34,7 +35,7 @@ it("keeps a moved project's chat workspace through the startup purge, and purges
     groupId: 'group-1',
     contentType: 'agent-session'
   })
-  store.setState({
+  setSessionTestState(store, {
     repos: [repoA],
     wslMovedProjects: [
       { kind: 'repo', id: 'moved', displayName: 'Moved', path: '/moved', distro: 'Ubuntu' }

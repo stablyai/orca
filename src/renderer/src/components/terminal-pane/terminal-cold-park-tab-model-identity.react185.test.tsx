@@ -1,3 +1,5 @@
+import { withSessionSourceWrites } from '@/store/session-source-write-boundary'
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 /** @vitest-environment happy-dom */
 /** Unchanged park-state dispatches can inherit another component’s pending cascade and get blamed for React #185. Title writes must still recheck watcher coverage, but only changed verdicts should dispatch (react-update-depth-attribution.ts). */
 import { act, useEffect, useState, StrictMode } from 'react'
@@ -17,23 +19,25 @@ const harness = vi.hoisted(() => ({
 
 vi.mock('../../store', async () => {
   const { create } = await import('zustand')
-  const useAppStore = create(() => ({
-    activeGroupIdByWorktree: {} as Record<string, string | undefined>,
-    groupsByWorktree: {} as Record<string, TabGroup[]>,
-    pendingStartupByTabId: {} as Record<string, unknown>,
-    ptyIdsByTabId: {} as Record<string, string[]>,
-    runtimeStatusByEnvironmentId: new Map<string, unknown>(),
-    runtimePaneTitlesByTabId: {} as Record<string, Record<number, string>>,
-    settings: {} as Record<string, unknown>,
-    sleepingAgentSessionsByPaneKey: {} as Record<string, unknown>,
-    tabsByWorktree: {} as Record<string, TerminalTab[]>,
-    terminalLayoutsByTabId: {} as Record<string, unknown>,
-    unifiedTabsByWorktree: {} as Record<string, Tab[]>,
-    consumeSuppressedPtyExit: () => false,
-    focusGroup: () => {},
-    reconcileWorktreeTabModel: () => ({ renderableTabCount: 2 }),
-    setActiveWorktree: () => {}
-  }))
+  const useAppStore = create(
+    withSessionSourceWrites(() => ({
+      activeGroupIdByWorktree: {} as Record<string, string | undefined>,
+      groupsByWorktree: {} as Record<string, TabGroup[]>,
+      pendingStartupByTabId: {} as Record<string, unknown>,
+      ptyIdsByTabId: {} as Record<string, string[]>,
+      runtimeStatusByEnvironmentId: new Map<string, unknown>(),
+      runtimePaneTitlesByTabId: {} as Record<string, Record<number, string>>,
+      settings: {} as Record<string, unknown>,
+      sleepingAgentSessionsByPaneKey: {} as Record<string, unknown>,
+      tabsByWorktree: {} as Record<string, TerminalTab[]>,
+      terminalLayoutsByTabId: {} as Record<string, unknown>,
+      unifiedTabsByWorktree: {} as Record<string, Tab[]>,
+      consumeSuppressedPtyExit: () => false,
+      focusGroup: () => {},
+      reconcileWorktreeTabModel: () => ({ renderableTabCount: 2 }),
+      setActiveWorktree: () => {}
+    }))
+  )
   return { useAppStore }
 })
 
@@ -75,10 +79,7 @@ type ParkingStoreState = {
   unifiedTabsByWorktree: Record<string, Tab[]>
 }
 
-const parkingStore = useAppStore as unknown as {
-  getState: () => ParkingStoreState
-  setState: (partial: unknown) => void
-}
+const parkingStore = useAppStore
 
 function terminalTab(id: string): TerminalTab {
   return {
@@ -107,7 +108,7 @@ function unifiedTerminalTab(id: string): Tab {
 
 /** An ordinary runtime title publication: re-mints tabsByWorktree, changes no park input. */
 function publishRuntimeTitle(revision: number): void {
-  parkingStore.setState((state: ParkingStoreState) => ({
+  setSessionTestState(parkingStore, (state: ParkingStoreState) => ({
     tabsByWorktree: {
       ...state.tabsByWorktree,
       [harness.worktreeId]: state.tabsByWorktree[harness.worktreeId].map((tab) => ({
@@ -163,7 +164,7 @@ describe('cold-park effect vs. unrelated commit cascade', () => {
     harness.renderedParkedSets.length = 0
     const tabs = TAB_IDS.map(terminalTab)
     const unifiedTabs = TAB_IDS.map(unifiedTerminalTab)
-    parkingStore.setState({
+    setSessionTestState(parkingStore, {
       activeGroupIdByWorktree: { [harness.worktreeId]: GROUP_ID },
       groupsByWorktree: {
         [harness.worktreeId]: [

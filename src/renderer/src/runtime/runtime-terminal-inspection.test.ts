@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { inspectRuntimeTerminalProcess, sendRuntimePtyInput } from './runtime-terminal-inspection'
 import { recordRuntimeTerminalInputForPtyId } from './runtime-terminal-input-recording'
@@ -72,7 +73,7 @@ describe('runtime terminal owner routing', () => {
         }
       }
     })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       settings: { experimentalAgentHibernation: true } as never,
       terminalLayoutsByTabId: {},
       lastTerminalInputAtByPaneKey: {}
@@ -80,7 +81,7 @@ describe('runtime terminal owner routing', () => {
   })
 
   it('records runtime input markers even before hibernation is enabled', () => {
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       settings: { experimentalAgentHibernation: false } as never,
       terminalLayoutsByTabId: {
         'tab-1': {
@@ -176,7 +177,7 @@ describe('runtime terminal owner routing', () => {
       _meta: { runtimeId: string }
     }>()
     runtimeCall.mockReturnValue(pendingSend.promise)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       terminalLayoutsByTabId: {
         'tab-1': {
           root: { type: 'leaf', leafId: LEAF_ID },
@@ -191,7 +192,7 @@ describe('runtime terminal owner routing', () => {
 
     expect(sendRuntimePtyInput('remote:env-1@@terminal-1', 'x', 'driving')).toBe(true)
     const nextLeafId = '22222222-2222-4222-8222-222222222222'
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       terminalLayoutsByTabId: {
         'tab-2': {
           root: { type: 'leaf', leafId: nextLeafId },
@@ -306,7 +307,7 @@ describe('runtime terminal owner routing', () => {
       result: { send: { handle: 'terminal-1', accepted: true, bytesWritten: 1 } },
       _meta: { runtimeId: 'runtime-1' }
     })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       settings: { experimentalAgentHibernation: true } as never,
       terminalLayoutsByTabId: {
         'tab-1': {
@@ -333,7 +334,7 @@ describe('runtime terminal owner routing', () => {
       result: { send: { handle: 'terminal-1', accepted: false, bytesWritten: 0 } },
       _meta: { runtimeId: 'runtime-1' }
     })
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       settings: { experimentalAgentHibernation: true } as never,
       terminalLayoutsByTabId: {
         'tab-1': {
@@ -385,7 +386,7 @@ describe('runtime terminal owner routing', () => {
         return Reflect.ownKeys(target)
       }
     })
-    useAppStore.setState({ terminalLayoutsByTabId: observedLayouts })
+    setSessionTestState(useAppStore, { terminalLayoutsByTabId: observedLayouts })
 
     recordRuntimeTerminalInputForPtyId('pty-0', 10_000)
     expect({ layoutEnumerations, leafEnumerations }).toEqual({

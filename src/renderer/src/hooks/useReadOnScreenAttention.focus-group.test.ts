@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 // @vitest-environment happy-dom
 
 import { act, cleanup, renderHook } from '@testing-library/react'
@@ -27,7 +28,7 @@ const CHAT_SUBJECT = structuredAgentSessionPaneKey(CHAT_TAB, CHAT_SESSION)
 describe('useReadOnScreenAttention focus-group transitions', () => {
   beforeEach(() => {
     vi.spyOn(document, 'hasFocus').mockReturnValue(true)
-    useAppStore.setState({
+    setSessionTestState(useAppStore, {
       activeView: 'terminal',
       activeWorktreeId: WORKSPACE,
       activeTabId: TERMINAL_TAB,

@@ -1,4 +1,5 @@
 // Expired held close must reveal its hidden tab on the arriving snapshot, even unchanged, without waiting for another host publication.
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PAIRED_TERMINAL_TAB_CLOSE_INTENT_MAX_AGE_MS } from '../../../shared/paired-terminal-tab-close-intent'
 import { useAppStore, type AppState } from '@/store'
@@ -50,7 +51,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   vi.useRealTimers()
-  useAppStore.setState(initialState, true)
+  setSessionTestState(useAppStore, initialState, true)
   resetWebSessionCloseReplaysForTests()
   resetWebSessionTabsSyncTestState()
   replaceRuntimeEnvironmentRevisions([])

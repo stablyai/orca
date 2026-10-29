@@ -1,9 +1,10 @@
+import { editSessionSource } from '../../../session-source-edits'
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { forgetCombinedDiffViewsForWorktrees } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { removeDeleteStatesForWorktreeIds } from './worktree-delete-state'
-import { removeWorktreeVisitEntries } from '@/lib/worktree-visit-recency'
+import { worktreeVisitKeysForTargets } from '@/lib/worktree-visit-recency'
 import { forgetAmbiguousOwnerWarnings } from '@/lib/ambiguous-owner-warning'
 import { omitRecordKeys } from './record-key-omission'
 import { removeWorktreeLayout } from '../../tabs/worktree-layout-lifecycle'
@@ -28,9 +29,12 @@ export function applyRemoveWorktreeSuccessState(
     const worktreeIds = [worktreeId]
     const omitByWorktree = <T>(m: Record<string, T> | undefined) => omitRecordKeys(m, worktreeIds)
     const omitByTabId = <T>(m: Record<string, T> | undefined) => omitRecordKeys(m, tabIds)
-    const nextWorktreesByRepo = { ...s.worktreesByRepo }
-    for (const repoId of Object.keys(nextWorktreesByRepo)) {
-      nextWorktreesByRepo[repoId] = nextWorktreesByRepo[repoId].filter((w) => w.id !== worktreeId)
+    const edit = editSessionSource(s)
+    for (const [repoId, rows] of Object.entries(s.worktreesByRepo)) {
+      const next = rows.filter((w) => w.id !== worktreeId)
+      if (next.length !== rows.length) {
+        edit.set('worktreesByRepo', repoId, next)
+      }
     }
     // Why: clean up per-file editor state for the removed worktree so stale drafts/view modes don't accumulate.
     const removedFileIds = new Set<string>()
@@ -49,14 +53,23 @@ export function applyRemoveWorktreeSuccessState(
       ? s.openFiles.some((f) => f.id === s.activeFileId && f.worktreeId === worktreeId)
       : false
     const removedActiveWorktree = s.activeWorktreeId === worktreeId
-    return {
+    edit.removeKeys('localOnlyScrollbackByTabId', tabIds)
+    edit.removeKeys('defaultTerminalTabsAppliedByWorktreeId', worktreeIds)
+    edit.removeKeys('editorDrafts', removedFileIds)
+    edit.removeKeys('markdownFrontmatterVisible', removedFileIds)
+    edit.removeKeys(
+      'lastVisitedAtByWorktreeId',
+      worktreeVisitKeysForTargets(s.lastVisitedAtByWorktreeId, [
+        { id: worktreeId, hostId: executionHostId }
+      ])
+    )
+    return edit.finish({
       editorBufferKeepRequest,
-      ...removeWorktreeLayout(s, {
+      ...removeWorktreeLayout(edit, {
         worktreeIds: new Set(worktreeIds),
         tabIds,
         activeFileCleared
       }),
-      worktreesByRepo: nextWorktreesByRepo,
       worktreeLineageById: omitByWorktree(s.worktreeLineageById),
       workspaceLineageByChildKey: omitRecordKeys(s.workspaceLineageByChildKey, [
         worktreeWorkspaceKey(worktreeId)
@@ -66,7 +79,6 @@ export function applyRemoveWorktreeSuccessState(
       nativeChatLaunchPromptByTabId: omitByTabId(s.nativeChatLaunchPromptByTabId),
       nativeChatLaunchDraftByTabId: omitByTabId(s.nativeChatLaunchDraftByTabId),
       unverifiedPtyLossTabIds: omitByTabId(s.unverifiedPtyLossTabIds),
-      localOnlyScrollbackByTabId: omitByTabId(s.localOnlyScrollbackByTabId),
       // Why: closeTab deletes these per-tab maps but removeWorktree missed them, leaking a split pane's expand flags.
       expandedPaneByTabId: omitByTabId(s.expandedPaneByTabId),
       canExpandPaneByTabId: omitByTabId(s.canExpandPaneByTabId),
@@ -82,9 +94,6 @@ export function applyRemoveWorktreeSuccessState(
       recentlyClosedTerminalTabsByWorktree: omitByWorktree(s.recentlyClosedTerminalTabsByWorktree),
       // Why: a deleted worktree's tabs can never be reopened; purge the kind list with the snapshot stacks above.
       recentlyClosedTabKindsByWorktree: omitByWorktree(s.recentlyClosedTabKindsByWorktree),
-      defaultTerminalTabsAppliedByWorktreeId: omitByWorktree(
-        s.defaultTerminalTabsAppliedByWorktreeId
-      ),
       activeWorktreeId: removedActiveWorktree ? null : s.activeWorktreeId,
       activeWorkspaceExecutionHostId: removedActiveWorktree
         ? null
@@ -93,11 +102,9 @@ export function applyRemoveWorktreeSuccessState(
       recentlyClosedBrowserTabsByWorktree: omitByWorktree(s.recentlyClosedBrowserTabsByWorktree),
       rightSidebarExplorerViewByWorktree: omitByWorktree(s.rightSidebarExplorerViewByWorktree),
       pendingReconnectTabByWorktree: omitByWorktree(s.pendingReconnectTabByWorktree),
-      editorDrafts: omitByFileId(s.editorDrafts),
       markdownViewMode: omitByFileId(s.markdownViewMode),
       markdownRichModeSizeOverride: omitByFileId(s.markdownRichModeSizeOverride),
       editorViewMode: omitByFileId(s.editorViewMode),
-      markdownFrontmatterVisible: omitByFileId(s.markdownFrontmatterVisible),
       editorCursorLine: omitByFileId(s.editorCursorLine),
       explorerDisplayRootByWorktree: omitByWorktree(s.explorerDisplayRootByWorktree),
       showDotfilesByWorktree: omitByWorktree(s.showDotfilesByWorktree),
@@ -120,14 +127,9 @@ export function applyRemoveWorktreeSuccessState(
       everActivatedWorktreeIds: s.everActivatedWorktreeIds.has(worktreeId)
         ? new Set([...s.everActivatedWorktreeIds].filter((id) => id !== worktreeId))
         : s.everActivatedWorktreeIds,
-      lastVisitedAtByWorktreeId: removeWorktreeVisitEntries(
-        s.lastVisitedAtByWorktreeId,
-        new Set(worktreeIds),
-        executionHostId
-      ),
       // Provider-session events can reinsert worktree-scoped sleep records after terminal shutdown while teardown awaits (#24784).
-      ...omitSleepingAgentSessionsForWorktrees(s, new Set(worktreeIds)),
+      ...omitSleepingAgentSessionsForWorktrees(edit, new Set(worktreeIds)),
       sortEpoch: s.sortEpoch + 1
-    }
+    })
   })
 }

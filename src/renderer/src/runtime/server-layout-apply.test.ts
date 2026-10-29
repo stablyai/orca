@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type * as ResolveOwnerModule from '@/lib/resolve-owner'
@@ -389,7 +390,7 @@ describe('a layout intent for a workspace a server’s frames draw', () => {
         toGroupId: HOST_GROUP,
         index: 0
       })
-      store.setState({
+      setSessionTestState(store, {
         groupsByWorktree: {
           ...store.getState().groupsByWorktree,
           [WT]: (store.getState().groupsByWorktree[WT] ?? []).map((group) => ({
@@ -451,7 +452,7 @@ describe('a layout intent for a workspace a server’s frames draw', () => {
   // A desktop close the server refuses (a pinned tab): the window dropped it, the frames bring it back.
   it('draws a tab the window closed again when its close is refused', async () => {
     const { store } = await drawnByServer()
-    store.setState({
+    setSessionTestState(store, {
       groupsByWorktree: {
         ...store.getState().groupsByWorktree,
         [WT]: (store.getState().groupsByWorktree[WT] ?? []).map((group) => ({
@@ -507,7 +508,7 @@ describe('a move routed to a server among tabs this desktop holds alone', () => 
     const extra = order
       .filter((id) => !rows.some((tab) => tab.id === id))
       .map((id) => ({ ...rows[0]!, id, entityId: id }))
-    store.setState({
+    setSessionTestState(store, {
       unifiedTabsByWorktree: { [WT]: [...rows, ...extra] },
       groupsByWorktree: {
         [WT]: store

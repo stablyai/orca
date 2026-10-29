@@ -1,3 +1,6 @@
+import { SessionUnitIndex } from '../../shared/session-unit-index'
+import { SessionUnitReader } from '../../shared/session-unit-reader'
+import { parsePaneKey } from '../../shared/stable-pane-id'
 import type { Tab, TabGroup } from '../../shared/tab-types'
 import type {
   TerminalLayoutSnapshot,
@@ -43,6 +46,13 @@ function rebaseLayout(
   if (!candidate || !layoutHasSameMembership(candidate, current)) {
     return current
   }
+  if (
+    Object.entries(current.ptyIdsByLeafId ?? {}).every(
+      ([leafId, ptyId]) => candidate.ptyIdsByLeafId?.[leafId] === ptyId
+    )
+  ) {
+    return candidate
+  }
   return {
     ...candidate,
     // Renderer metadata may move; PTY bindings remain host-authoritative.
@@ -61,7 +71,7 @@ function terminalUnifiedTabMatches(tab: Tab, terminalTabIds: ReadonlySet<string>
 }
 
 function rebaseUnifiedTabs(
-  candidate: readonly Tab[],
+  candidate: Tab[],
   current: readonly Tab[],
   terminalTabIds: ReadonlySet<string>
 ): Tab[] {
@@ -80,14 +90,14 @@ function rebaseUnifiedTabs(
       result.push(tab)
     }
   }
-  return result
+  return result.length === candidate.length &&
+    result.every((tab, index) => tab === candidate[index])
+    ? candidate
+    : result
 }
 
-function rebaseTabGroups(
-  groups: readonly TabGroup[],
-  validTabIds: ReadonlySet<string>
-): TabGroup[] {
-  return groups.flatMap((group) => {
+function rebaseTabGroups(groups: TabGroup[], validTabIds: ReadonlySet<string>): TabGroup[] {
+  const result = groups.flatMap((group) => {
     const tabOrder = group.tabOrder.filter((tabId) => validTabIds.has(tabId))
     if (tabOrder.length === 0) {
       return []
@@ -96,6 +106,13 @@ function rebaseTabGroups(
     const activeTabId =
       group.activeTabId && tabIds.has(group.activeTabId) ? group.activeTabId : (tabOrder[0] ?? null)
     const recentTabIds = group.recentTabIds?.filter((tabId) => tabIds.has(tabId))
+    if (
+      tabOrder.length === group.tabOrder.length &&
+      activeTabId === group.activeTabId &&
+      (!group.recentTabIds || recentTabIds?.length === group.recentTabIds.length)
+    ) {
+      return [group]
+    }
     return [
       {
         ...group,
@@ -106,46 +123,12 @@ function rebaseTabGroups(
       }
     ]
   })
+  return result.length === groups.length && result.every((group, index) => group === groups[index])
+    ? groups
+    : result
 }
 
-function rebaseIncarnationBindings(
-  session: WorkspaceSessionState,
-  prior: WorkspaceSessionState
-): Record<string, string> | undefined {
-  const terminalTabIds = new Set(
-    Object.values(session.tabsByWorktree).flatMap((tabs) => tabs.map((tab) => tab.id))
-  )
-  const allowedPaneKeys = new Set<string>()
-  for (const tabId of terminalTabIds) {
-    const layout = session.terminalLayoutsByTabId[tabId]
-    if (!layout) {
-      continue
-    }
-    const leafIds = new Set<string>()
-    collectLeafIds(layout.root, leafIds)
-    for (const leafId of leafIds) {
-      allowedPaneKeys.add(`${tabId}:${leafId}`)
-    }
-  }
-  const merged = {
-    ...session.terminalPtyIncarnationsByPaneKey,
-    ...prior.terminalPtyIncarnationsByPaneKey
-  }
-  const retained = Object.fromEntries(
-    Object.entries(merged).filter(([paneKey]) => {
-      const separator = paneKey.lastIndexOf(':')
-      if (separator < 1) {
-        return false
-      }
-      const tabId = paneKey.slice(0, separator)
-      return session.terminalLayoutsByTabId[tabId]
-        ? allowedPaneKeys.has(paneKey)
-        : terminalTabIds.has(tabId)
-    })
-  )
-  return Object.keys(retained).length > 0 ? retained : undefined
-}
-
+/** Full ingress enumerates the domain; incremental admissions call the same owner kernel. */
 export function rebaseWorkspaceSessionTerminalMembership(
   incoming: WorkspaceSessionState,
   prior: WorkspaceSessionState | undefined
@@ -153,115 +136,178 @@ export function rebaseWorkspaceSessionTerminalMembership(
   if (!prior?.terminalTopologyRevisionByRepoId) {
     return incoming
   }
-  const terminalTopologyRevisionByRepoId = { ...incoming.terminalTopologyRevisionByRepoId }
-  for (const [repoId, revision] of Object.entries(prior.terminalTopologyRevisionByRepoId)) {
-    terminalTopologyRevisionByRepoId[repoId] = Math.max(
-      revision,
-      terminalTopologyRevisionByRepoId[repoId] ?? 0
-    )
-  }
-  const tabsByWorktree = { ...incoming.tabsByWorktree }
-  const incomingTerminalLayoutsByTabId = incoming.terminalLayoutsByTabId ?? {}
-  const priorTerminalLayoutsByTabId = prior.terminalLayoutsByTabId ?? {}
-  const terminalLayoutsByTabId = { ...incomingTerminalLayoutsByTabId }
-  const unifiedTabs = { ...incoming.unifiedTabs }
-  const tabGroups = { ...incoming.tabGroups }
-  const tabGroupLayouts = { ...incoming.tabGroupLayouts }
-  const activeTabIdByWorktree = { ...incoming.activeTabIdByWorktree }
-  let includeUnifiedTabs = incoming.unifiedTabs !== undefined
-  let includeTabGroups = incoming.tabGroups !== undefined
-  let includeTabGroupLayouts = incoming.tabGroupLayouts !== undefined
-  let rebasedMembership = false
-  const worktreeIds = new Set([
+  const reader = SessionUnitReader.between(prior, incoming, new SessionUnitIndex(prior))
+  const owners = new Set([
     ...Object.keys(prior.tabsByWorktree),
     ...Object.keys(incoming.tabsByWorktree)
   ])
-  for (const worktreeId of worktreeIds) {
-    const repoId = getRepoIdFromWorktreeId(worktreeId)
-    const revision = terminalTopologyRevisionByRepoId[repoId] ?? 0
-    const priorRevision = prior.terminalTopologyRevisionByRepoId[repoId] ?? 0
-    const incomingRevision = incoming.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
-    if (revision <= 0 || incomingRevision > priorRevision) {
+  const rebased = reduceSessionTerminalMembership(
+    reader,
+    owners,
+    Object.keys(prior.terminalTopologyRevisionByRepoId)
+  )
+  if (rebased) {
+    reduceSessionIncarnationMembership(
+      reader,
+      new Set([
+        ...Object.keys(prior.terminalPtyIncarnationsByPaneKey ?? {}),
+        ...Object.keys(incoming.terminalPtyIncarnationsByPaneKey ?? {})
+      ])
+    )
+  }
+  return reader.snapshot()
+}
+
+export function reduceSessionTerminalMembership(
+  reader: SessionUnitReader,
+  owners: Iterable<string>,
+  repos: Iterable<string>,
+  fencedRevisions?: ReadonlyMap<string, number>
+): boolean {
+  if (reader.policy('terminalTopologyRevisionByRepoId', 'prior')) {
+    reader.reconcileField('terminalTopologyRevisionByRepoId', {
+      kind: 'output',
+      present: true,
+      explicitEmpty: true
+    })
+  }
+  const ownerList = [...owners]
+  const repoList = [...repos]
+  const supplied = new Map(
+    [...new Set([...repoList, ...ownerList.map(getRepoIdFromWorktreeId)])].map((repo) => [
+      repo,
+      reader.unit('terminalTopologyRevisionByRepoId', repo).value ?? 0
+    ])
+  )
+  for (const repo of repoList) {
+    const before = reader.unit('terminalTopologyRevisionByRepoId', repo, 'prior')
+    if (!before.present) {
       continue
     }
-    rebasedMembership = true
-    const currentTabs = prior.tabsByWorktree[worktreeId] ?? []
-    const candidateTabsById = new Map(
-      (incoming.tabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])
-    )
-    const terminalTabIds = new Set(currentTabs.map((tab) => tab.id))
-    const tabs = currentTabs.map((current) => {
-      const candidate = candidateTabsById.get(current.id)
-      return candidate ? { ...candidate, ptyId: current.ptyId } : current
-    })
-    for (const candidate of incoming.tabsByWorktree[worktreeId] ?? []) {
-      if (!terminalTabIds.has(candidate.id)) {
-        delete terminalLayoutsByTabId[candidate.id]
-      }
-    }
-    for (const tabId of terminalTabIds) {
-      const layout = rebaseLayout(
-        incomingTerminalLayoutsByTabId[tabId],
-        priorTerminalLayoutsByTabId[tabId]
+    reader.write('terminalTopologyRevisionByRepoId', repo, {
+      present: true,
+      value: Math.max(
+        before.value,
+        reader.unit('terminalTopologyRevisionByRepoId', repo).value ?? 0
       )
-      if (layout) {
-        terminalLayoutsByTabId[tabId] = layout
-      } else {
-        delete terminalLayoutsByTabId[tabId]
+    })
+  }
+  let rebased = false
+  for (const owner of ownerList) {
+    const repo = getRepoIdFromWorktreeId(owner)
+    const priorRevision = fencedRevisions
+      ? (fencedRevisions.get(repo) ?? 0)
+      : (reader.unit('terminalTopologyRevisionByRepoId', repo, 'prior').value ?? 0)
+    // Compare the supplied revision, before max-union, to the captured host authority.
+    const suppliedRevision = supplied.get(repo) ?? 0
+    if (priorRevision <= 0 || suppliedRevision > priorRevision) {
+      continue
+    }
+    rebased = true
+    const candidateRows = reader.unit('tabsByWorktree', owner).value
+    const currentTabs = reader.unit('tabsByWorktree', owner, 'prior').value ?? []
+    const candidates = new Map((candidateRows ?? []).map((tab) => [tab.id, tab]))
+    const ids = new Set(currentTabs.map((tab) => tab.id))
+    const rows = currentTabs.map((current) => {
+      const candidate = candidates.get(current.id)
+      return candidate
+        ? candidate.ptyId === current.ptyId
+          ? candidate
+          : { ...candidate, ptyId: current.ptyId }
+        : current
+    })
+    for (const candidate of candidateRows ?? []) {
+      if (!ids.has(candidate.id)) {
+        reader.write('terminalLayoutsByTabId', candidate.id, { present: false, value: undefined })
       }
     }
-    const rebasedUnifiedTabs = rebaseUnifiedTabs(
-      incoming.unifiedTabs?.[worktreeId] ?? [],
-      prior.unifiedTabs?.[worktreeId] ?? [],
-      terminalTabIds
+    for (const tabId of ids) {
+      const layout = rebaseLayout(
+        reader.unit('terminalLayoutsByTabId', tabId).value,
+        reader.unit('terminalLayoutsByTabId', tabId, 'prior').value
+      )
+      reader.write(
+        'terminalLayoutsByTabId',
+        tabId,
+        layout ? { present: true, value: layout } : { present: false, value: undefined }
+      )
+    }
+    const entries = rebaseUnifiedTabs(
+      reader.unit('unifiedTabs', owner).value ?? [],
+      reader.unit('unifiedTabs', owner, 'prior').value ?? [],
+      ids
     )
-    if (includeUnifiedTabs || rebasedUnifiedTabs.length > 0) {
-      unifiedTabs[worktreeId] = rebasedUnifiedTabs
-      includeUnifiedTabs = true
+    if (reader.hasField('unifiedTabs') || entries.length) {
+      reader.write('unifiedTabs', owner, { present: true, value: entries })
     }
-    const validTabIds = new Set([...terminalTabIds, ...rebasedUnifiedTabs.map((tab) => tab.id)])
-    const rebasedGroups = rebaseTabGroups(
-      incoming.tabGroups?.[worktreeId] ?? prior.tabGroups?.[worktreeId] ?? [],
-      validTabIds
+    const validIds = new Set([...ids, ...entries.map((tab) => tab.id)])
+    const groups = rebaseTabGroups(
+      reader.unit('tabGroups', owner).value ?? reader.unit('tabGroups', owner, 'prior').value ?? [],
+      validIds
     )
-    if (includeTabGroups || rebasedGroups.length > 0) {
-      tabGroups[worktreeId] = rebasedGroups
-      includeTabGroups = true
+    if (reader.hasField('tabGroups') || groups.length) {
+      reader.write('tabGroups', owner, { present: true, value: groups })
     }
-    const rebasedGroupLayout = pruneTabGroupLayoutAfterRetirement(
-      incoming.tabGroupLayouts?.[worktreeId] ?? prior.tabGroupLayouts?.[worktreeId],
-      new Set(rebasedGroups.map((group) => group.id))
+    const groupLayout = pruneTabGroupLayoutAfterRetirement(
+      reader.unit('tabGroupLayouts', owner).value ??
+        reader.unit('tabGroupLayouts', owner, 'prior').value,
+      new Set(groups.map((group) => group.id))
     )
-    if (rebasedGroupLayout) {
-      tabGroupLayouts[worktreeId] = rebasedGroupLayout
-      includeTabGroupLayouts = true
-    } else {
-      delete tabGroupLayouts[worktreeId]
+    reader.write(
+      'tabGroupLayouts',
+      owner,
+      groupLayout ? { present: true, value: groupLayout } : { present: false, value: undefined }
+    )
+    if (!validIds.has(reader.unit('activeTabIdByWorktree', owner).value ?? '')) {
+      const priorActive = reader.unit('activeTabIdByWorktree', owner, 'prior').value
+      reader.write('activeTabIdByWorktree', owner, {
+        present: true,
+        value:
+          (priorActive && validIds.has(priorActive)
+            ? priorActive
+            : (groups[0]?.activeTabId ?? rows[0]?.id)) ?? null
+      })
     }
-    if (!validTabIds.has(activeTabIdByWorktree[worktreeId] ?? '')) {
-      activeTabIdByWorktree[worktreeId] =
-        (prior.activeTabIdByWorktree?.[worktreeId] &&
-        validTabIds.has(prior.activeTabIdByWorktree[worktreeId] ?? '')
-          ? prior.activeTabIdByWorktree[worktreeId]
-          : (rebasedGroups[0]?.activeTabId ?? tabs[0]?.id)) ?? null
-    }
-    tabsByWorktree[worktreeId] = tabs
+    reader.write('tabsByWorktree', owner, {
+      present: true,
+      value:
+        candidateRows &&
+        candidateRows.length === rows.length &&
+        rows.every((row, i) => row === candidateRows[i])
+          ? candidateRows
+          : rows
+    })
   }
-  const next: WorkspaceSessionState = {
-    ...incoming,
-    terminalTopologyRevisionByRepoId,
-    ...(rebasedMembership
-      ? {
-          tabsByWorktree,
-          terminalLayoutsByTabId,
-          activeTabIdByWorktree,
-          ...(includeUnifiedTabs ? { unifiedTabs } : {}),
-          ...(includeTabGroups ? { tabGroups } : {}),
-          ...(includeTabGroupLayouts ? { tabGroupLayouts } : {})
-        }
-      : {})
+  return rebased
+}
+
+export function reduceSessionIncarnationMembership(
+  reader: SessionUnitReader,
+  panes: Iterable<string>
+): void {
+  for (const pane of panes) {
+    const parsed = parsePaneKey(pane)
+    if (!parsed) {
+      reader.write('terminalPtyIncarnationsByPaneKey', pane, { present: false, value: undefined })
+      continue
+    }
+    const layout = reader.unit('terminalLayoutsByTabId', parsed.tabId).value
+    const leaves = new Set<string>()
+    collectLeafIds(layout?.root ?? null, leaves)
+    const allowed = layout
+      ? leaves.has(parsed.leafId)
+      : reader.terminalOccurrenceCount(parsed.tabId) > 0
+    const prior = reader.unit('terminalPtyIncarnationsByPaneKey', pane, 'prior')
+    const candidate = reader.unit('terminalPtyIncarnationsByPaneKey', pane)
+    reader.write(
+      'terminalPtyIncarnationsByPaneKey',
+      pane,
+      allowed ? (prior.present ? prior : candidate) : { present: false, value: undefined }
+    )
   }
-  return rebasedMembership
-    ? { ...next, terminalPtyIncarnationsByPaneKey: rebaseIncarnationBindings(next, prior) }
-    : next
+  reader.reconcileField('terminalPtyIncarnationsByPaneKey', {
+    kind: 'replacement',
+    present: true,
+    valueWhenEmpty: 'undefined'
+  })
 }

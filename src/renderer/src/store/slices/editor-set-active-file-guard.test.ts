@@ -1,9 +1,9 @@
-import type { StoreApi } from 'zustand/vanilla'
+import type { SessionTestStore } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import { createEditorTabsStore } from './editor-slice-test-harness'
 
-const live = vi.hoisted((): { store: StoreApi<AppState> | null } => ({ store: null }))
+const live = vi.hoisted((): { store: SessionTestStore<AppState> | null } => ({ store: null }))
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => {
@@ -16,7 +16,7 @@ vi.mock('@/store', () => ({
 }))
 
 const GHOST_ID = 'editor:ghost-pane'
-let store: StoreApi<AppState>
+let store: SessionTestStore<AppState>
 let fileId: string
 
 beforeEach(() => {

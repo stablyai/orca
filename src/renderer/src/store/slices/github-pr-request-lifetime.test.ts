@@ -1,3 +1,4 @@
+import { setSessionTestState } from '@/lib/test-support/session-source-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PRRefreshOutcome } from '../../../../shared/github/pull-request-refresh-types'
 import { inflightPRRequests, prRequestGenerations } from '../github/request-coordination'
@@ -49,7 +50,7 @@ describe('pull-request lookup ownership after newer settlement', () => {
         return request.promise
       }
       if (route === 'runtime') {
-        store.setState({
+        setSessionTestState(store, {
           repos: [
             {
               id: 'runtime-repo',

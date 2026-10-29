@@ -1,5 +1,7 @@
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+import type { SessionSourceEdit } from '../session-source-edits'
+import type { AppState } from '../types'
 
 export function getPendingActivationSpawnCount(value: boolean | number | undefined): number {
   if (value === true) {
@@ -44,22 +46,23 @@ export function resolvePrimaryLayoutPtyId(layout: TerminalLayoutSnapshot): strin
   return activePtyId ?? Object.values(ptyIdsByLeafId)[0] ?? null
 }
 
-export function withTerminalTabPtyId(
-  tabsByWorktree: Record<string, TerminalTab[]>,
+export function setTerminalTabPtyId(
+  edit: SessionSourceEdit<AppState>,
   tabId: string,
   ptyId: string | null
-): Record<string, TerminalTab[]> {
+): void {
+  const tabsByWorktree = edit.read('tabsByWorktree')
   for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
     const index = tabs.findIndex((tab) => tab.id === tabId)
     if (index === -1) {
       continue
     }
     if (tabs[index]?.ptyId === ptyId) {
-      return tabsByWorktree
+      return
     }
     const nextTabs = [...tabs]
     nextTabs[index] = { ...nextTabs[index]!, ptyId }
-    return { ...tabsByWorktree, [worktreeId]: nextTabs }
+    edit.set('tabsByWorktree', worktreeId, nextTabs)
+    return
   }
-  return tabsByWorktree
 }
