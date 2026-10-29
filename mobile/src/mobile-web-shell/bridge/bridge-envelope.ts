@@ -234,6 +234,12 @@ const BridgeHostMessageSchema = z.union([
     type: z.literal('connectionPath'),
     connection: BridgeConnectionSnapshotSchema
   }),
+  z.object({
+    v: versionSchema,
+    type: z.literal('storage'),
+    key: z.string().min(1).max(PAGE_STORAGE_MAX_KEY_CHARS).refine(isPageStorageKey),
+    value: z.string().max(PAGE_STORAGE_MAX_VALUE_CHARS).nullable()
+  }),
   // Back names no destination; only the native stack knows what screen lies beneath.
   z.object({ v: versionSchema, type: z.literal(BRIDGE_BACK_FRAME) }),
   // One press on the shell's key rail. Sent only to a page granted the rail, which knows the frame.

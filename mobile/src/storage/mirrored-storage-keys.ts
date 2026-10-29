@@ -1,4 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { notifyMirroredKey, type MirroredWriteSource } from './mirrored-key-listeners'
+
+export { notifyMirroredKey, subscribeMirroredKey } from './mirrored-key-listeners'
 
 // Shell init is synchronous, so mirror stored keys in memory; page-reachable writes must use persistMirrored.
 // Null records a known removal, distinct from an unhydrated key.
@@ -74,19 +77,6 @@ export async function readMirroredKeyOrStore(key: string): Promise<string | null
   return held === undefined ? AsyncStorage.getItem(key) : held
 }
 
-type MirroredWriteSource = 'persisted' | 'page'
-type MirroredKeyListener = (value: string | null, source: MirroredWriteSource) => void
-const keyListeners = new Map<string, Set<MirroredKeyListener>>()
-
-export function subscribeMirroredKey(key: string, listener: MirroredKeyListener): () => void {
-  const forKey = keyListeners.get(key) ?? new Set<MirroredKeyListener>()
-  keyListeners.set(key, forKey)
-  forKey.add(listener)
-  return () => {
-    forKey.delete(listener)
-  }
-}
-
 function note(key: string, value: string | null, source: MirroredWriteSource): void {
   writeCount += 1
   const owner = owners.get(key)
@@ -94,9 +84,7 @@ function note(key: string, value: string | null, source: MirroredWriteSource): v
     owner.writtenAt = writeCount
     mirror.set(key, value)
   }
-  for (const listener of keyListeners.get(key) ?? []) {
-    listener(value, source)
-  }
+  notifyMirroredKey(key, value, source)
 }
 
 // Mirror only accepted writes; page stores can refuse route keys or oversized values, and callers need the refusal.

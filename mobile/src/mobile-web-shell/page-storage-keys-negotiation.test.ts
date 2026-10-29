@@ -20,6 +20,21 @@ function lastInit(posted: readonly string[]): Record<string, unknown> {
 }
 
 describe('negotiated page storage keys across page and shell versions', () => {
+  it('pushes a storage change only to a page whose ready named the key', () => {
+    const key = 'orca:markdownTextScale'
+    const older = harness({ storage: STORAGE })
+    older.host.receive(clientFrame({ type: 'ready' }))
+    older.host.publishStorageUpdate(key, '1.5')
+    expect(older.frames().some((frame) => frame.type === 'storage')).toBe(false)
+
+    const current = harness({ storage: STORAGE })
+    current.host.receive(JSON.stringify(createPageReadyFrame()))
+    current.host.publishStorageUpdate(key, '1.5')
+    expect(current.frames().filter((frame) => frame.type === 'storage')).toEqual([
+      expect.objectContaining({ key, value: '1.5' })
+    ])
+  })
+
   it('reads a malformed storageKeys list as none rather than refusing the ready', () => {
     const bridge = harness({ storage: STORAGE })
     bridge.host.receive(clientFrame({ type: 'ready', storageKeys: [SPLIT_KEY, 7] }))

@@ -20,6 +20,8 @@ import type { BridgeSafeAreaInsets } from './bridge/bridge-safe-area-insets'
 import type { BridgeFoldDivision } from './bridge/bridge-fold-division'
 import type { BridgeHapticsKind } from './bridge/bridge-haptics-notify'
 import { createBridgeHost, type BridgeHost } from './bridge-host'
+import { subscribeMirroredKey } from '../storage/mirrored-storage-keys'
+import { MARKDOWN_TEXT_SCALE_KEY } from '../storage/preferences'
 import type { BridgeSessionBack } from './bridge-host-back'
 import type { BridgeNavigateBackOutcome } from './bridge-host-contract'
 import type { BridgeNativeVerb } from './bridge/bridge-native-verbs'
@@ -221,6 +223,16 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       mounted.host.publishPageGeometry(args.pageGeometry)
     }
   }, [buildId, client, sessionId, snapshot, args.pageGeometry])
+
+  useLayoutEffect(() => {
+    const mounted = hostRef.current
+    if (mounted === null || mounted.sessionId !== sessionId) {
+      return
+    }
+    return subscribeMirroredKey(MARKDOWN_TEXT_SCALE_KEY, (value) => {
+      mounted.host.publishStorageUpdate(MARKDOWN_TEXT_SCALE_KEY, value)
+    })
+  }, [buildId, client, sessionId, snapshot])
 
   // A rebuilt host already starts from the latest scheme; this re-sends init when it changes under a live page.
   const colorScheme = args.colorScheme

@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react'
-import { loadMarkdownTextScale, saveMarkdownTextScale } from '../storage/preferences'
-import { snapMarkdownTextScale } from './markdown-text-scales'
+import { subscribeMirroredKey } from '../storage/mirrored-storage-keys'
+import {
+  loadMarkdownTextScale,
+  MARKDOWN_TEXT_SCALE_KEY,
+  saveMarkdownTextScale
+} from '../storage/preferences'
+import { MARKDOWN_TEXT_SCALES, snapMarkdownTextScale } from './markdown-text-scales'
 
 // One module store so every Markdown surface (file preview, session tab) shows the same size.
 let current = 1
@@ -22,6 +27,13 @@ function ensureLoaded() {
     return
   }
   loadStarted = true
+  subscribeMirroredKey(MARKDOWN_TEXT_SCALE_KEY, (value) => {
+    const parsed = Number(value)
+    if (MARKDOWN_TEXT_SCALES.some((scale) => scale === parsed) && parsed !== current) {
+      current = parsed
+      listeners.forEach((listener) => listener())
+    }
+  })
   void loadMarkdownTextScale().then((saved) => {
     // A pick made while the load was in flight is newer than what the load read.
     if (!changedByUser && saved !== current) {
@@ -41,7 +53,9 @@ function subscribe(listener: () => void) {
 function commitTextScale(scale: number) {
   const snapped = snapMarkdownTextScale(scale)
   setCurrent(snapped)
-  void saveMarkdownTextScale(snapped)
+  saveMarkdownTextScale(snapped).catch(() => {
+    // Keep the optimistic scale when persistence is unavailable.
+  })
 }
 
 export function useMarkdownTextScale(): {
