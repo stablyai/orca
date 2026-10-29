@@ -69,6 +69,10 @@ export class RuntimeBinaryMessageRouter {
     }
   }
 
+  hasHandlers(connectionId: string): boolean {
+    return this.terminalHandlers.has(connectionId) || this.rawHandlers.has(connectionId)
+  }
+
   deleteConnection(connectionId: string): void {
     this.terminalHandlers.delete(connectionId)
     this.rawHandlers.delete(connectionId)

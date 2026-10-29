@@ -1,7 +1,6 @@
 import { PHONE_RELAY_CONNECT_BUDGET_MS } from '../../../shared/remote-runtime/recipe-vm-wake'
 import { verifyRelayedGitHubAuthority } from './relay-github-authority'
 import { createRelayedBrowserTab } from './relayed-browser-tab-create'
-import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../shared/github/work-item-target'
 import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { randomUUID } from 'node:crypto'
 import type { RpcRequest } from '../rpc/core'
@@ -21,6 +20,7 @@ import { DelegatedPhoneGrantCache } from './delegated-phone-grant-cache'
 import { localHostedBrowserPageRequest } from './hosted-browser-page-route'
 import type { MobileDesktopRelayHost, MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import { RELAYED_STREAM_CARRIERS } from './relayed-stream-carriers'
+import { relayedStreamRefusal } from './relayed-client-stream-admission'
 import {
   declareRelayedPhoneCapabilities,
   relayedPhoneCapabilities,
@@ -74,93 +74,77 @@ export class MobileDesktopRelay {
     request: { id: string; method: string },
     frame: string
   ): void {
-    if (RELAYED_STREAM_CARRIERS.get(request.method) === 'phone-binary-frames') {
-      phone.reply(
-        failure(
-          request.id,
-          'forbidden',
-          `Method '${request.method}' is driven by binary frames, which the desktop does not relay`
-        )
-      )
+    const carrier = RELAYED_STREAM_CARRIERS.get(request.method)
+    const refusal = relayedStreamRefusal(
+      request.method,
+      carrier,
+      phone,
+      this.linksOf(phone.connectionId).map(({ replies }) => replies)
+    )
+    if (refusal) {
+      phone.reply(failure(request.id, refusal.code, refusal.message))
       return
     }
     const link = this.linkFor(phone, environmentId, request.method)
     link.replies.noteForwarded(request.id, {
+      carrier,
       browserScreencast:
         request.method === 'status.get'
           ? () => Boolean(this.options.hosts.browserHostClientId?.(environmentId))
           : undefined
     })
-    link.opened.then(
-      async ({ socket, hostToken, host }) => {
-        // An opening link may already have ended and answered; never send its request late.
+    link.whenOpen(async ({ socket, hostToken, host }) => {
+      // An opening link may already have ended and answered; never send its request late.
+      if (!this.isCurrent(link)) {
+        return
+      }
+      const outgoing = withRelayedLaunchChatDefault(
+        rewriteRelayedPhoneRequest(frame, phone.deviceToken, hostToken),
+        request.method,
+        this.options.nativeChatDefault
+      )
+      try {
+        if (request.method === 'status.get') {
+          await this.options.prepareBrowserHost?.(host)
+        }
+        if (
+          request.method === 'browser.tabCreate' &&
+          (await createRelayedBrowserTab({
+            hosts: this.options.hosts,
+            prepareBrowserHost: this.options.prepareBrowserHost,
+            link,
+            frame: outgoing,
+            socket,
+            isCurrent: () => this.isCurrent(link),
+            timeoutMs: RELAY_CONNECT_TIMEOUT_MS
+          }))
+        ) {
+          return
+        }
+        const verification = verifyRelayedGitHubAuthority({
+          method: request.method,
+          frame: outgoing,
+          socket,
+          replies: link.replies,
+          isCurrent: () => this.isCurrent(link),
+          timeoutMs: RELAY_CONNECT_TIMEOUT_MS
+        })
+        if (verification) {
+          await verification
+        }
         if (!this.isCurrent(link)) {
           return
         }
-        const outgoing = withRelayedLaunchChatDefault(
-          rewriteRelayedPhoneRequest(frame, phone.deviceToken, hostToken),
-          request.method,
-          this.options.nativeChatDefault
-        )
-        try {
-          if (request.method === 'status.get') {
-            await this.options.prepareBrowserHost?.(host)
-          }
-          if (
-            request.method === 'browser.tabCreate' &&
-            (await createRelayedBrowserTab({
-              hosts: this.options.hosts,
-              prepareBrowserHost: this.options.prepareBrowserHost,
-              link,
-              frame: outgoing,
-              socket,
-              isCurrent: () => this.isCurrent(link),
-              timeoutMs: RELAY_CONNECT_TIMEOUT_MS
-            }))
-          ) {
-            return
-          }
-          const verification = verifyRelayedGitHubAuthority({
-            method: request.method,
-            frame: outgoing,
-            socket,
-            replies: link.replies,
-            isCurrent: () => this.isCurrent(link),
-            timeoutMs: RELAY_CONNECT_TIMEOUT_MS
-          })
-          if (verification) {
-            await verification
-          }
-          if (!this.isCurrent(link)) {
-            return
-          }
-        } catch (error) {
-          if (this.isCurrent(link)) {
-            const reply = link.replies.text(
-              failure(
-                request.id,
-                request.method === 'browser.tabCreate' ||
-                  request.method === 'status.get' ||
-                  (error instanceof Error && error.message === GITHUB_EXACT_OPERATION_UNSUPPORTED)
-                  ? 'remote_runtime_unavailable'
-                  : 'runtime_source_mismatch',
-                error instanceof Error
-                  ? error.message
-                  : 'Unable to confirm the executing Orca server.'
-              )
-            )
-            if (reply) {
-              phone.reply(reply)
-            }
-          }
-          return
+      } catch (error) {
+        if (this.isCurrent(link)) {
+          link.replyPreflightFailure(request, error)
         }
-        if (!socket.send(outgoing)) {
-          this.endLink(link, unavailable('The server connection could not take the request.'))
-        }
-      },
-      () => {}
-    )
+        return
+      }
+      if (!socket.send(outgoing)) {
+        this.endLink(link, unavailable('The server connection could not take the request.'))
+      }
+    })
   }
 
   /** Mirrors a phone's capability update to every server socket that phone has open. */
@@ -188,6 +172,24 @@ export class MobileDesktopRelay {
         () => {}
       )
     }
+  }
+
+  /** Whether a relayed multiplex owns this connection's client binary frames. */
+  carriesClientStreams(connectionId: string): boolean {
+    return this.linksOf(connectionId).some(({ replies }) => replies.carriesClientStreams())
+  }
+
+  /** Forwards a client frame unchanged when a relayed multiplex owns the connection; false leaves it local. */
+  forwardClientBinary(connectionId: string, bytes: Uint8Array<ArrayBufferLike>): boolean {
+    const link = this.linksOf(connectionId).find(({ replies }) => replies.carriesClientStreams())
+    if (!link) {
+      return false
+    }
+    // Swallow frames before the link opens: the server registers no stream yet, and clients wait for `ready`.
+    if (link.ready && this.isCurrent(link) && !link.ready.socket.sendBinary(bytes)) {
+      this.endLink(link, unavailable('The server connection could not take terminal input.'))
+    }
+    return true
   }
 
   closePhoneConnection(connectionId: string): void {
@@ -275,8 +277,12 @@ export class MobileDesktopRelay {
           onText: (plaintext) => link.deliverText(plaintext, grant.token),
           onBinary: (bytes) => {
             const frame = link.replies.binary(bytes)
-            if (frame) {
-              phone.sendBinary(frame)
+            // A multiplex frame lost on the way to its client desyncs that stream; only a reconnect resyncs it.
+            if (frame && phone.sendBinary(frame) === false && link.replies.carriesClientStreams()) {
+              this.endLink(
+                link,
+                unavailable('The client connection could not take terminal output.')
+              )
             }
           },
           onClose: (error) => this.endLink(link, error)
@@ -296,6 +302,10 @@ export class MobileDesktopRelay {
       }
       throw error
     }
+  }
+
+  private linksOf(connectionId: string): RelayLink[] {
+    return [...this.links.values()].filter((link) => link.phone.connectionId === connectionId)
   }
 
   private isCurrent(link: RelayLink): boolean {

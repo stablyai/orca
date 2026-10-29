@@ -1,3 +1,4 @@
+import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../shared/github/work-item-target'
 import type { RemoteRuntimePassthroughSocket } from '../../../shared/remote-runtime/remote-runtime-passthrough-socket'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
@@ -10,6 +11,7 @@ import {
   recipeVmWakeIntentFor
 } from '../../../shared/remote-runtime/recipe-vm-wake'
 import type { MobileDesktopRelayHost, MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
+import type { RelayedStreamCaller } from './relayed-client-stream-admission'
 import { RelayedPhoneReplies } from './relayed-phone-frames'
 
 export type OpenedRelayLink = {
@@ -19,7 +21,7 @@ export type OpenedRelayLink = {
 }
 
 /** A phone, or a paired desktop/web client relayed under runtime.client-relay.v1; the server sees both as phones. */
-export type RelayedPhone = {
+export type RelayedPhone = RelayedStreamCaller & {
   connectionId: string
   deviceId: string
   deviceToken: string
@@ -34,6 +36,8 @@ export class RelayLink {
   readonly abortController = new AbortController()
   readonly replies: RelayedPhoneReplies
   readonly opened: Promise<OpenedRelayLink>
+  // The settled link. Requests sent after opening use it synchronously; client binary waits for it.
+  ready: OpenedRelayLink | null = null
 
   constructor(
     readonly environmentId: string,
@@ -43,6 +47,35 @@ export class RelayLink {
   ) {
     this.replies = new RelayedPhoneReplies(allocateStreamId)
     this.opened = open(this)
+    this.opened.then(
+      (opened) => (this.ready = opened),
+      () => {}
+    )
+  }
+
+  /** Answers a request that failed its pre-send checks, unless the link has already answered it. */
+  replyPreflightFailure(request: { id: string; method: string }, error: unknown): void {
+    const code =
+      request.method === 'browser.tabCreate' ||
+      request.method === 'status.get' ||
+      (error instanceof Error && error.message === GITHUB_EXACT_OPERATION_UNSUPPORTED)
+        ? 'remote_runtime_unavailable'
+        : 'runtime_source_mismatch'
+    const message =
+      error instanceof Error ? error.message : 'Unable to confirm the executing Orca server.'
+    const reply = this.replies.text(failure(request.id, code, message))
+    if (reply) {
+      this.phone.reply(reply)
+    }
+  }
+
+  /** Runs `send` now once open, else after opening; queued sends keep their order. */
+  whenOpen(send: (opened: OpenedRelayLink) => void | Promise<void>): void {
+    if (this.ready) {
+      void send(this.ready)
+      return
+    }
+    this.opened.then(send, () => {})
   }
 
   /** Whether this link's preparation has returned, fixing the pairing it opens on: a re-pair after

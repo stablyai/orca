@@ -8,6 +8,7 @@ import {
 import { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import { openRemoteRuntimeWebSocket } from './requests/remote-runtime-request-websocket'
 import { closeRemoteRuntimeSocket } from './remote-runtime-socket-close'
+import { isRemoteRuntimeBinaryFrameWithinLimit } from './remote-runtime-memory-limits'
 import {
   startRemoteRuntimeSocketLiveness,
   type RemoteRuntimeSocketLivenessOptions
@@ -17,6 +18,8 @@ import { RemoteRuntimeSubscriptionOutbound } from './requests/remote-runtime-sub
 export type RemoteRuntimePassthroughSocket = {
   /** Queues one plaintext RPC frame; false when the socket can no longer carry it. */
   send: (plaintext: string) => boolean
+  /** Queues one plaintext binary frame on the socket's own bounded binary queue; false when it cannot be carried. */
+  sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => boolean
   close: () => void
 }
 
@@ -165,6 +168,12 @@ export function openRemoteRuntimePassthroughSocket(
         send: (plaintext) =>
           state === 'ready' && ws.readyState === WebSocket.OPEN
             ? outbound.enqueueRequest(ws, handshake.channel.sealText(plaintext))
+            : false,
+        sendBinary: (bytes) =>
+          isRemoteRuntimeBinaryFrameWithinLimit(bytes) &&
+          state === 'ready' &&
+          ws.readyState === WebSocket.OPEN
+            ? outbound.enqueueBinary(ws, Buffer.from(handshake.channel.sealBinary(bytes)))
             : false,
         close: () => end(null)
       })
