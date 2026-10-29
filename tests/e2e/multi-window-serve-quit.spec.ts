@@ -67,7 +67,7 @@ test('serve Quit closes retained desktop and worker windows while the runtime st
         item.click()
       })
       const worker = await opened
-      await expect(worker.locator('[data-worktree-sidebar]')).toBeVisible()
+      await expect(worker.getByRole('button', { name: 'Settings', exact: true })).toBeVisible()
       workers.push(worker)
     }
     const windows = await app.evaluate(({ BrowserWindow }) =>

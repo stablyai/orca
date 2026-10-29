@@ -180,6 +180,9 @@ test('opens independent project windows from File and keeps terminals alive when
       []
     )
 
+    await expect
+      .poll(() => first!.evaluate(async () => (await window.api.ui.get()).filterRepoIds))
+      .toEqual([ids.firstRepo])
     await first.evaluate(() => window.api.ui.recordFeatureInteraction('terminal-tabs'))
     expect(await first.evaluate(async () => (await window.api.ui.get()).filterRepoIds)).toEqual([
       ids.firstRepo
