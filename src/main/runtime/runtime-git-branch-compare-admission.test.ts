@@ -65,6 +65,24 @@ describe('RuntimeGitDiffCommands branch-compare admission', () => {
     })
   })
 
+  it('forwards caller abort signal into the git provider', async () => {
+    const commands = makeCommands()
+    const controller = new AbortController()
+
+    await commands.getRuntimeGitBranchCompare(
+      'id:wt-1',
+      'origin/main',
+      'interactive',
+      controller.signal
+    )
+
+    expect(mocks.getBranchCompare).toHaveBeenCalledWith('C:\\repo', 'origin/main', {
+      wslDistro: 'Ubuntu',
+      admissionTier: 'interactive',
+      signal: controller.signal
+    })
+  })
+
   it('refuses an SSH execution host without running git here', async () => {
     const commands = makeCommands({ executionHostId: 'ssh:conn-1' })
 
