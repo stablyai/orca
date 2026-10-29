@@ -1,6 +1,5 @@
 import { useAppStore } from '@/store'
 import { reserveStructuredLaunchSlot } from './structured-agent-session-launch-surface'
-import type { TuiAgent } from '../../../shared/tui-agent'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import {
   abandonStructuredAgentSessionLaunchIntent,
@@ -164,7 +163,7 @@ function promptOwner(options: StructuredAgentLaunchOptions): { callerKeepsText?:
 
 function joinStructuredLaunchState(
   existing: StructuredLaunchState,
-  agent: TuiAgent,
+  agent: string,
   options: StructuredAgentLaunchOptions
 ): StructuredLaunchStateResult | undefined {
   // A re-delivery of the same action shares the text it staged, so it is sent once.
@@ -200,7 +199,7 @@ function joinStructuredLaunchState(
 
 function structuredAgentLaunchState(
   worktreeId: string,
-  agent: TuiAgent,
+  agent: string,
   options: StructuredAgentLaunchOptions
 ): StructuredLaunchStateResult {
   const identity = structuredLaunchIdentity(worktreeId, agent, options)
@@ -285,7 +284,7 @@ export function cancelStructuredAgentLaunch(worktreeId: string, sessionId: strin
 
 export function startStructuredAgentLaunch(
   worktreeId: string,
-  agent: TuiAgent,
+  agent: string,
   options: StructuredAgentLaunchOptions
 ): StructuredAgentLaunchResult {
   const { state, caller, joined } = structuredAgentLaunchState(worktreeId, agent, options)

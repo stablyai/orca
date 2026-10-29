@@ -1,5 +1,4 @@
-import { isTuiAgent } from '../../../../../shared/tui-agent-config'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
+import { isStructuredAgentId } from '../../../../../shared/agent-session-provider-handle'
 import type {
   StructuredAgentSessionFirstMessage,
   StructuredAgentSessionResumeSource
@@ -47,7 +46,7 @@ export type StructuredAgentLaunchPersistedRecord = {
   sessionId: string
   // Older records lack host because chats could only launch locally then; restore them as local.
   executionHostId: ExecutionHostId
-  agent: TuiAgent
+  agent: string
   lifecycle: StructuredAgentLaunchPersistedLifecycle
   clientOperationId: string
   payloadFingerprint: string
@@ -134,7 +133,7 @@ export function validRecord(value: unknown): value is Omit<
       (typeof executionHostId === 'string' && parseExecutionHostId(executionHostId) !== null)) &&
     typeof sessionId === 'string' &&
     sessionId.length > 0 &&
-    isTuiAgent(agent) &&
+    isStructuredAgentId(agent) &&
     (lifecycle === 'pending' || lifecycle === 'visibility-unknown' || lifecycle === 'failed') &&
     typeof clientOperationId === 'string' &&
     typeof payloadFingerprint === 'string' &&

@@ -153,3 +153,8 @@ ci-shards/
 /.build/windows-native-benchmark/
 
 .local/static-analysis-research/
+
+!docs/test-cases/
+!docs/test-cases/hermes-external-acp.md
+!docs/development/
+!docs/development/external-acp.md

@@ -72,6 +72,10 @@ vi.mock('@/i18n/i18n', () => ({
 }))
 
 vi.mock('@/lib/agent-catalog', () => ({
+  getAgentCatalog: () => [
+    { id: 'codex', label: 'Codex' },
+    { id: 'claude', label: 'Claude' }
+  ],
   getAgentLabel: (agent: string) => (agent === 'codex' ? 'Codex' : 'Claude')
 }))
 

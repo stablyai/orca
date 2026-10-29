@@ -1,5 +1,4 @@
 import type { StructuredLaunchSurfaceAddress } from './agent-session/launch/structured-agent-session-launch-record'
-import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   createStructuredAgentSessionId,
   structuredAgentSessionCreateParams,
@@ -41,7 +40,7 @@ export type StructuredAgentSessionLaunchIntent = {
   /** Fix/persist execution host when launch begins; same workspace IDs on other hosts must never alter ownership. */
   executionHostId: ExecutionHostId
   target: RuntimeClientTarget
-  agent: TuiAgent
+  agent: string
   params: StructuredAgentSessionCreateParams
   createMessageSupport?: boolean
   createPrepared?: true
@@ -59,7 +58,7 @@ type LaunchSeed = Readonly<Record<string, string>> | undefined
 function launchSeedOptions(
   state: ReturnType<typeof useAppStore.getState>,
   owner: Pick<StructuredAgentSessionLaunchIntent, 'target'>,
-  agent: TuiAgent,
+  agent: string,
   hostSeedOptions: LaunchSeed
 ): { seedOptions?: Readonly<Record<string, string>> } {
   const seedOptions =
@@ -83,7 +82,7 @@ function structuredAgentSessionOwnerTarget(
 /** Use routed executionHostId or require exactly one catalog owner; never choose a launch host by fallback. */
 export function createStructuredAgentSessionLaunchIntent(
   worktreeId: string,
-  agent: TuiAgent,
+  agent: string,
   executionHostId?: ExecutionHostId,
   resumeFrom?: StructuredAgentSessionResumeSource,
   hostSeedOptions?: LaunchSeed,
@@ -116,7 +115,7 @@ export function createStructuredAgentSessionLaunchIntent(
 function buildStructuredAgentSessionLaunchIntent(
   worktreeId: string,
   owner: Pick<StructuredAgentSessionLaunchIntent, 'executionHostId' | 'target'>,
-  agent: TuiAgent,
+  agent: string,
   sessionId: string,
   resumeFrom: StructuredAgentSessionResumeSource | undefined,
   hostSeedOptions: LaunchSeed
@@ -160,7 +159,7 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
   worktreeId: string
   executionHostId: ExecutionHostId
   sessionId: string
-  agent: TuiAgent
+  agent: string
   clientOperationId: string
   payloadFingerprint: string
   expectedRuntimeFence: number | null

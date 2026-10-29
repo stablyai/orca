@@ -1,4 +1,3 @@
-import type { TuiAgent } from '../../../shared/tui-agent'
 import { structuredLaunchesHoldingIdentity } from './agent-session/launch/structured-agent-session-launch-holders'
 import {
   structuredLaunchIdentity,
@@ -9,7 +8,7 @@ import {
 /** Whether a chat for this pair is being created here: its own first create, or an adoption. */
 export function getStructuredAgentLaunchStatus(
   worktreeId: string,
-  agent: TuiAgent
+  agent: string
 ): StructuredAgentLaunchStatus {
   // Any launch holding an identity for this pair, adopted conversations included, is starting here.
   // A failed chat is not, nor an unconfirmed or retried blank one: a new launch opens its own chat.

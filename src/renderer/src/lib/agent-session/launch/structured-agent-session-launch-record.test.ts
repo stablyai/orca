@@ -33,3 +33,8 @@ describe('a persisted create opening message', () => {
     expect(validRecord({ ...record, firstMessage: { ...record.firstMessage, body } })).toBe(false)
   })
 })
+
+it('restores an external ACP launch without a terminal catalog entry', () => {
+  expect(validRecord({ ...record, agent: 'team-agent', sessionId: 'team-agent_123' })).toBe(true)
+  expect(validRecord({ ...record, agent: '' })).toBe(false)
+})

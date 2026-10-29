@@ -1,3 +1,4 @@
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { useRuntimeFileListForWorktree } from '../quick-open-file-list'
@@ -235,7 +236,9 @@ function TabBarCreateEntrySession({
       if (onLaunchAgentOption) {
         onLaunchAgentOption(selectedOption.option)
       } else {
-        onLaunchAgent?.(selectedOption.option.agent)
+        if (isTuiAgent(selectedOption.option.agent)) {
+          onLaunchAgent?.(selectedOption.option.agent)
+        }
       }
       onDidOpenEntry?.()
       return

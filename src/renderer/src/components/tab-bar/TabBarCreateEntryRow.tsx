@@ -1,3 +1,4 @@
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import React from 'react'
 import {
   FilePlus,
@@ -197,7 +198,12 @@ function getActionPresentation(
   if (option.kind === 'agent') {
     return {
       detail: [option.option.label, option.option.reason].filter(Boolean).join(' · '),
-      icon: <AgentIcon agent={option.option.agent} size={14} />,
+      icon: (
+        <AgentIcon
+          agent={isTuiAgent(option.option.agent) ? option.option.agent : undefined}
+          size={14}
+        />
+      ),
       label:
         labelOverride ??
         translate('auto.components.tab.bar.TabBarCreateEntry.b27864279e', 'Launch agent'),

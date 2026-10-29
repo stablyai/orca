@@ -2,7 +2,6 @@
 
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { Tab } from '../../../shared/tab-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
 import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-session-chat-label'
 import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
 import { useAppStore } from '@/store'
@@ -14,7 +13,7 @@ export type AgentSessionTabOpen = {
   worktreeId: string
   executionHostId: ExecutionHostId
   sessionId: string
-  agent: TuiAgent
+  agent: string
   targetGroupId?: string
   afterTabId?: string
   activate: boolean

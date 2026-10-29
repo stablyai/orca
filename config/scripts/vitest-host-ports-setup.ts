@@ -6,7 +6,7 @@ import { setAppEnvironment, type AppEnvironment } from '../../src/shared/app-env
 import { setSecretStore } from '../../src/shared/secret-store'
 
 // The harness owns its directory even when a suite replaces the fs module.
-const { mkdtempSync, rmSync } = process.getBuiltinModule('fs')
+const { mkdtempSync, rmSync, writeFileSync } = process.getBuiltinModule('fs')
 
 // Install benign host ports before tests; production correctly throws before entry installs them, while suites can override defaults afterward.
 
@@ -22,6 +22,10 @@ afterAll(() => {
     rmSync(userData, { recursive: true, force: true })
   }
 })
+
+const externalAcpFixture = join(userDataPath(), 'external-acp.json')
+writeFileSync(externalAcpFixture, JSON.stringify({ version: 1, agents: [] }), { mode: 0o600 })
+process.env.ORCA_EXTERNAL_ACP_CONFIG = externalAcpFixture
 
 // Return ciphertext distinct from input so forgotten sealing cannot pass.
 const SEAL_PREFIX = 'vitest-sealed:'

@@ -5,6 +5,7 @@ import {
   type StructuredAgentCommandSettings,
   type StructuredAgentResolutionOperation
 } from '../native-chat/structured-agent-command-resolution'
+import { isTuiAgent } from '../../shared/tui-agent-config'
 // Launch from durable record values for the working directory, pinned account and resume session.
 
 import { delimiter } from 'node:path'
@@ -102,6 +103,10 @@ export function resolveAcpLaunchCommand(
     dataDirectory: string | null
   }
 ): string {
+  if (!isTuiAgent(spec.agent)) {
+    return spec.command
+  }
+  const agent = spec.agent
   const homePath = env.HOME ?? env.USERPROFILE ?? options.homePath ?? homedir()
   const pathEnv = [env.PATH ?? env.Path, ...spec.installDirectories({ env, homePath })]
     .filter((entry): entry is string => Boolean(entry))
@@ -109,7 +114,7 @@ export function resolveAcpLaunchCommand(
   const settings = spec.ignoreAgentCommandSetting ? {} : (options.commandSettings ?? {})
   const resolve = (searchPath: string) =>
     resolveStructuredAgentCommand(
-      spec.agent,
+      agent,
       settings,
       { pathEnv: searchPath, homePath },
       {
@@ -118,7 +123,7 @@ export function resolveAcpLaunchCommand(
       }
     )
   const { managedRuntime } = spec
-  if (!managedRuntime || hasExplicitTuiLaunchCommand(settings, spec.agent)) {
+  if (!managedRuntime || hasExplicitTuiLaunchCommand(settings, agent)) {
     return resolve(pathEnv)
   }
   const pin = managedRuntime.pin()
@@ -212,7 +217,7 @@ export function acpStructuredLaunchPart(
       visuals !== null,
       deps.probeVersion
     )
-    if (launchVersion.status === 'tooOld') {
+    if (launchVersion.status === 'tooOld' && isTuiAgent(spec.agent)) {
       throw AgentCliInstallationError.tooOld(spec.agent, launchVersion)
     }
     const skill = visuals
