@@ -266,6 +266,21 @@ export async function removeClaudeProviderAccount(
   return window.api.claudeAccounts.remove({ accountId })
 }
 
+export async function setClaudeAutoSwitch(
+  target: RuntimeClientTarget,
+  enabled: boolean
+): Promise<ClaudeRateLimitAccountsState> {
+  if (target.kind === 'environment') {
+    return callRuntimeRpc<ClaudeRateLimitAccountsState>(
+      target,
+      'accounts.setClaudeAutoSwitch',
+      { enabled },
+      { timeoutMs: REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS }
+    )
+  }
+  return window.api.claudeAccounts.setAutoSwitch({ enabled })
+}
+
 export async function removeCodexProviderAccount(
   target: RuntimeClientTarget,
   accountId: string

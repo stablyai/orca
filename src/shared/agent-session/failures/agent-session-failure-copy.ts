@@ -77,6 +77,9 @@ export const AGENT_SESSION_FAILURE_COPY = {
     "This chat's history is in another Claude account. Switch back to that account to continue it.",
   claudeAccountFolderMissing: CLAUDE_PROFILE_MISSING_MESSAGE,
   claudeAccountSetupFailed: CLAUDE_PROFILE_SETUP_FAILED_MESSAGE,
+  claudeAccountUnknown: 'That Claude account is no longer saved. Choose another account.',
+  claudeAccountWslUnsupported:
+    "That Claude account is in WSL and can't run here. Choose another account.",
   agentCommandNotRunnable:
     "{{agent}}'s Command in Settings → Agents must start with a program Orca can find. Variables, pipes and other shell syntax aren't supported; use the Environment setting for variables. Change it or reset it.",
   runtimeNotInstalled:

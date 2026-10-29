@@ -43,7 +43,7 @@ export type CodexAccountAction =
   | `remove:${string}`
   | `select:${string}`
 
-export type ClaudeAccountAction = CodexAccountAction
+export type ClaudeAccountAction = CodexAccountAction | 'auto-switch'
 
 export type RemoveAccountTarget = {
   id: string

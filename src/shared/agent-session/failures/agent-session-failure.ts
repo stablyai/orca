@@ -19,6 +19,7 @@ import {
   readAgentSessionRefusalReference,
   type AgentSessionRefusalReference
 } from './agent-session-wire-refusals'
+import { CLAUDE_CHOSEN_ACCOUNT_FAILURE_KINDS } from './claude-chosen-account-failure-kinds'
 
 /** One per situation with its own honest next step; a new one needs copy before it compiles. */
 export const AGENT_SESSION_FAILURE_KINDS = [
@@ -35,9 +36,7 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'accountSwitchInProgress',
   'managedAccountUnsupported',
   'launchFolderMissing',
-  'historyInOtherAccount',
-  'claudeAccountFolderMissing',
-  'claudeAccountSetupFailed',
+  ...CLAUDE_CHOSEN_ACCOUNT_FAILURE_KINDS,
   'agentCommandNotRunnable',
   'runtimeNotInstalled',
   /** The agent refuses Full access while it runs as root. */

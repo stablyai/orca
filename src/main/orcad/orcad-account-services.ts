@@ -12,6 +12,7 @@ import type {
 import type { ClaudeStatusLineRateLimits } from '../../shared/claude-statusline-rate-limits'
 import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
 import { createProviderAccountServices } from '../providers/accounts/provider-account-services'
+import { createClaudeUsagePollingSwitch } from '../claude-accounts/claude-usage-polling-policy'
 import { createCodexRuntimeHomeLaunchPreparation } from '../codex/codex-runtime-home-launch-preparation'
 import { createCodexSessionResumeLaunchPreparation } from '../codex/codex-session-resume-launch-preparation'
 import { prepareCodexAiVaultSessionResume } from '../codex/codex-ai-vault-session-resume'
@@ -65,8 +66,14 @@ export function createOrcadAccountServices(args: {
   const services = createProviderAccountServices(store, {
     setClaudeStatusLineListener: args.setClaudeStatusLineListener
   })
-  // Refresh usage on demand through list/subscribe rather than starting a background poller.
+  // Headless auto-switch needs readings even without a window requesting them.
+  const polling = createClaudeUsagePollingSwitch(services.rateLimits, () => store.getSettings())
+  polling.apply()
+  const unsubscribePolling = store.onSettingsChanged((updates) => {
+    polling.apply(updates)
+  })
   args.registerCleanup(() => {
+    unsubscribePolling()
     services.rateLimits.stop()
     args.setClaudeStatusLineListener(null)
   })

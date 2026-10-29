@@ -191,6 +191,7 @@ export function buildDefaultSettings(args: {
     activeCodexManagedAccountIdsByRuntime: { host: null, wsl: {} },
     claudeManagedAccounts: [],
     activeClaudeManagedAccountId: null,
+    claudeAutoSwitchEnabled: false,
     terminalScopeHistoryByWorktree: true,
     terminalHiddenViewParking: true,
     // Default-on kill switches use !== false so older persisted settings retain behavior.

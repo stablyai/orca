@@ -5,6 +5,7 @@ import type {
 } from '../../../shared/managed-account-types'
 import {
   fetchProviderAccountsSnapshot,
+  setClaudeAutoSwitch,
   watchProviderAccounts,
   type ProviderAccountsSnapshot
 } from './runtime-provider-accounts-client'
@@ -15,6 +16,7 @@ import {
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 
 const LOCAL = { kind: 'local' } as const
+const REMOTE = { kind: 'environment', environmentId: 'env-1' } as const
 
 function emptyClaudeState(): ClaudeRateLimitAccountsState {
   return { accounts: [], activeAccountId: null, activeAccountIdsByRuntime: { host: null, wsl: {} } }
@@ -52,6 +54,7 @@ const codexListLocal = vi.fn()
 const claudeSelectLocal = vi.fn()
 const codexSelectLocal = vi.fn()
 const claudeRemoveLocal = vi.fn()
+const claudeSetAutoSwitchLocal = vi.fn()
 const codexRemoveLocal = vi.fn()
 const unsubscribe = vi.fn()
 
@@ -69,6 +72,7 @@ beforeEach(() => {
     claudeSelectLocal,
     codexSelectLocal,
     claudeRemoveLocal,
+    claudeSetAutoSwitchLocal,
     codexRemoveLocal,
     unsubscribe
   ]) {
@@ -95,7 +99,8 @@ beforeEach(() => {
       claudeAccounts: {
         list: claudeListLocal,
         select: claudeSelectLocal,
-        remove: claudeRemoveLocal
+        remove: claudeRemoveLocal,
+        setAutoSwitch: claudeSetAutoSwitchLocal
       },
       codexAccounts: {
         list: codexListLocal,
@@ -208,5 +213,23 @@ describe('fetchProviderAccountsSnapshot', () => {
       codex: { activeAccountId: 'codex-remote-local' }
     })
     await expect(local).resolves.toMatchObject({ codex: { activeAccountId: null } })
+  })
+})
+
+describe('provider account mutations', () => {
+  it('turns automatic Claude switching on where the accounts live', async () => {
+    claudeSetAutoSwitchLocal.mockResolvedValue(emptyClaudeState())
+    runtimeEnvironmentCall.mockReturnValue({ id: 'call', ok: true, result: emptyClaudeState() })
+
+    await setClaudeAutoSwitch(LOCAL, true)
+    await setClaudeAutoSwitch(REMOTE, false)
+
+    expect(claudeSetAutoSwitchLocal).toHaveBeenCalledWith({ enabled: true })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledOnce()
+    expect(runtimeEnvironmentCall.mock.calls[0]?.[0]).toMatchObject({
+      selector: 'env-1',
+      method: 'accounts.setClaudeAutoSwitch',
+      params: { enabled: false }
+    })
   })
 })

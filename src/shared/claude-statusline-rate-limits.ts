@@ -18,6 +18,10 @@ export type ClaudeStatusLineRateLimits = {
   configDir: string | null
   fiveHour: ClaudeStatusLineWindow | null
   sevenDay: ClaudeStatusLineWindow | null
+  /** Hook pane key, attached after parse. The parser itself does not return it. */
+  paneKey?: string
+  /** Account the proxy bills when it differs from the spawn folder. */
+  billingAccountId?: string
 }
 
 function finiteNumber(value: unknown): number | undefined {
@@ -47,6 +51,15 @@ function parseWindow(value: unknown): ClaudeStatusLineWindow | null {
     ...(utilization !== undefined ? { utilization } : {}),
     resets_at: resetsAt
   }
+}
+
+/** Hook pane key on the raw statusline body. The rate-limit parser does not return it. */
+export function claudeStatusLinePaneKey(body: unknown): string | undefined {
+  if (typeof body !== 'object' || body === null || !('paneKey' in body)) {
+    return undefined
+  }
+  const paneKey = body.paneKey
+  return typeof paneKey === 'string' && paneKey.length > 0 ? paneKey : undefined
 }
 
 /** Parse managed statusline form data; null means no usable rate-limit windows. */

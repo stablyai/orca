@@ -1,6 +1,7 @@
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
 import { unregisterPty } from '../../../memory/pty-registry'
 import { forgetCodexPaneAccount } from '../../../codex/codex-pane-account-registry'
+import { forgetClaudePaneAccount } from '../../../claude-accounts/claude-pane-account-registry'
 import { openCodeHookService } from '../../../opencode/hook-service'
 import { piTitlebarExtensionService } from '../../../pi/titlebar-extension-service'
 import { agentHookServer } from '../../../agent-hooks/server'
@@ -35,6 +36,7 @@ export function clearProviderPtyState(
     agentSessionOwners.release(id)
     // Persisted launch-account identity survives reconnectable disconnects, but real teardown must prevent reuse.
     forgetCodexPaneAccount(id)
+    forgetClaudePaneAccount(id)
   }
   // Release agent overlay/hook state even on teardown paths outside the local process table.
   openCodeHookService.clearPty(id)

@@ -86,6 +86,9 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'claudeAccountFolderMissing',
     /** The selected Claude account's folder could not be set up. */
     'claudeAccountSetupFailed',
+    /** A launch named a Claude account no saved account explains, or a WSL one where only a host one runs. */
+    'claudeAccountUnknown',
+    'claudeAccountWslUnsupported',
     /** Settings → Agents → Command names no program this host can run. */
     'agentCommandNotRunnable',
     /** The runtime Orca installs for the agent is not installed on this host. */
@@ -168,10 +171,8 @@ export type AgentSessionRefusalReason<C extends AgentSessionWireRefusalCode> =
 /** A reason under any code, for a reader that keys words on the name alone. */
 export type AgentSessionAnyRefusalReason = AgentSessionRefusalReason<AgentSessionWireRefusalCode>
 
-type RewindFacts = {
-  /** Which rewind check refused. */
-  rewindReason?: AgentSessionRewindReason
-}
+/** Which rewind check refused. */
+type RewindFacts = { rewindReason?: AgentSessionRewindReason }
 
 type PromptFacts = {
   /** The revision the host actually holds. */
@@ -183,7 +184,6 @@ type PromptFacts = {
 type NoFacts = Record<never, never>
 
 export type AgentSessionConversationOwner = { sessionId: string; workspaceId: string }
-
 type ConversationOwnerFacts = { owner?: AgentSessionConversationOwner }
 
 /** The facts a code carries beside its reason. */

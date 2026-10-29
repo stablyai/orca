@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto'
 
 import {
   CLAUDE_STATUSLINE_PATHNAME,
+  claudeStatusLinePaneKey,
   parseClaudeStatusLineBody
 } from '../../../shared/claude-statusline-rate-limits'
 import { mergeAgentHookRequestHeaders } from '../../../shared/agent-hook-listener/hook-envelope'
@@ -119,7 +120,8 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
         if (pathname === CLAUDE_STATUSLINE_PATHNAME) {
           const statusLineEvent = parseClaudeStatusLineBody(body)
           if (statusLineEvent) {
-            this.onClaudeStatusLine?.(statusLineEvent)
+            const paneKey = claudeStatusLinePaneKey(body)
+            this.onClaudeStatusLine?.(paneKey ? { ...statusLineEvent, paneKey } : statusLineEvent)
           }
           res.writeHead(204)
           res.end()

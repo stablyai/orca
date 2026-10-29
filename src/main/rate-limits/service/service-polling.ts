@@ -55,7 +55,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
 
   protected shouldBackgroundPoll(): boolean {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) {
-      return false
+      return this.pollWithoutWindow
     }
     // UI-only polling pauses while inactive to save CLI/API budget; activation refreshes it.
     if (!this.mainWindow.isVisible() || this.mainWindow.isMinimized()) {

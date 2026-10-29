@@ -1,4 +1,4 @@
-import { LOCAL_COMMAND_FLAGS, type CommandSpec } from '../args'
+import { GLOBAL_FLAGS, LOCAL_COMMAND_FLAGS, type CommandSpec } from '../args'
 
 // Terminal login lets headless hosts manage accounts without the desktop login UI.
 export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
@@ -44,6 +44,22 @@ export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...LOCAL_COMMAND_FLAGS, 'agent', 'account'],
     notes: [
       'Deletes credentials and conversation data in the managed profile. Stop its running agents first. System credentials are never removed.'
+    ]
+  },
+  {
+    path: ['account', 'auto-switch'],
+    summary: 'Turn automatic Claude account switching before a usage limit on or off',
+    usage:
+      'orca account auto-switch --agent claude (--on | --off) [--environment <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'agent', 'on', 'off'],
+    notes: [
+      'Writes the host setting behind Settings › Accounts › Claude › "Switch accounts before a usage limit" (accounts.setClaudeAutoSwitch). Default off.',
+      'With --environment the setting is written on that paired Orca server, whose accounts the switch then rotates.',
+      'Lines: 5-hour window 95 %, weekly and Fable-weekly windows 90 %; the switch applies to the next Claude started.'
+    ],
+    examples: [
+      'orca account auto-switch --agent claude --on',
+      'orca account auto-switch --agent claude --on --environment macstudio'
     ]
   }
 ]

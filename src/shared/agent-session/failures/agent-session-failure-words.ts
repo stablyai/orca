@@ -167,6 +167,9 @@ const FAILURE_SENTENCES = {
   historyInOtherAccount: (_context, _fact, _surface, say) => say('historyInOtherAccount'),
   claudeAccountFolderMissing: (_context, _fact, _surface, say) => say('claudeAccountFolderMissing'),
   claudeAccountSetupFailed: (_context, _fact, _surface, say) => say('claudeAccountSetupFailed'),
+  claudeAccountUnknown: (_context, _fact, _surface, say) => say('claudeAccountUnknown'),
+  claudeAccountWslUnsupported: (_context, _fact, _surface, say) =>
+    say('claudeAccountWslUnsupported'),
   agentCommandNotRunnable: namingAgent('agentCommandNotRunnable'),
   runtimeNotInstalled: namingAgent('runtimeNotInstalled'),
   fullAccessAsRoot: namingAgent('fullAccessAsRoot'),

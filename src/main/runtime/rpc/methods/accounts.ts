@@ -1,4 +1,5 @@
 import { defineMethod, defineStreamingMethod, type RpcContext } from '../core'
+import { CLAUDE_ACCOUNT_POLICY_METHODS } from './accounts-claude-policy'
 import type { OrcadFeature } from '../orcad-feature-readiness'
 import { rpcCallerOperationKey } from '../rpc-caller-identity'
 import { HostAccountSignInFlows } from '../../host-account-sign-in-flows'
@@ -149,6 +150,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
         movesRunningSessions: params.movesRunningSessions
       })
   }),
+  ...CLAUDE_ACCOUNT_POLICY_METHODS,
   defineMethod({
     name: 'accounts.selectCodex',
     permission: 'accounts-admin',

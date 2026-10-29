@@ -110,3 +110,15 @@ export function isStaleClaudeUsageWindow(
     incoming.usedPercent < previous.usedPercent
   )
 }
+
+/** Reject idle snapshots and retain object identity for unchanged usage. */
+export function keepNewerClaudeUsageWindow(
+  incoming: RateLimitWindow | null,
+  current: RateLimitWindow | null | undefined,
+  now: number
+): RateLimitWindow | null {
+  if (!incoming || isStaleClaudeUsageWindow(current, incoming, now)) {
+    return null
+  }
+  return isSameClaudeUsageWindow(current ?? null, incoming) ? (current ?? null) : incoming
+}

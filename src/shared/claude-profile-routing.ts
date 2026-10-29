@@ -12,3 +12,9 @@ export const CLAUDE_PROFILE_MISSING_MESSAGE =
 
 export const CLAUDE_PROFILE_SETUP_FAILED_MESSAGE =
   'The selected Claude account could not be set up. Try again or choose another account.'
+
+/** A chosen-account launch named an id no saved account explains; callers match on the string. */
+export const CLAUDE_ACCOUNT_UNKNOWN_MESSAGE = 'claude_account_unknown'
+
+/** A chosen-account launch named a WSL account, which host launches cannot run. */
+export const CLAUDE_ACCOUNT_WSL_UNSUPPORTED_MESSAGE = 'claude_account_wsl_unsupported'

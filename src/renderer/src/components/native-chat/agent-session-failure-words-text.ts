@@ -14,6 +14,7 @@ import { PROVIDER_EXIT_PIECES } from './agent-session-provider-exit-words-text'
 import { PROVIDER_RETRY_PIECES } from './agent-session-provider-retry-words-text'
 import { USAGE_LIMIT_PIECES } from './agent-session-usage-limit-words-text'
 import { START_FAILURE_PIECES } from './agent-session-start-failure-words-text'
+import { CHOSEN_ACCOUNT_FAILURE_PIECES } from './agent-session-chosen-account-words-text'
 
 // The pieces a refusal notice says too keep the notice's keys, so each has one translation.
 const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopyValues) => string> =
@@ -103,21 +104,7 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         'components.native-chat.failureWords.launchFolderMissing',
         COPY.launchFolderMissing
       ),
-    historyInOtherAccount: () =>
-      translate(
-        'components.native-chat.failureWords.historyInOtherAccount',
-        COPY.historyInOtherAccount
-      ),
-    claudeAccountFolderMissing: () =>
-      translate(
-        'components.native-chat.failureWords.claudeAccountFolderMissing',
-        COPY.claudeAccountFolderMissing
-      ),
-    claudeAccountSetupFailed: () =>
-      translate(
-        'components.native-chat.failureWords.claudeAccountSetupFailed',
-        COPY.claudeAccountSetupFailed
-      ),
+    ...CHOSEN_ACCOUNT_FAILURE_PIECES,
     agentCommandNotRunnable: (values) =>
       translate(
         'components.native-chat.failureWords.agentCommandNotRunnable',

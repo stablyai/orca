@@ -41,6 +41,7 @@ export abstract class RateLimitServiceState {
   // Async Keychain/desktop DB probing belongs in fetch cycles, never synchronous construction.
   protected cursorAuthConfigured = false
   protected openCodeGoApiKeyConfigured = false
+  protected pollWithoutWindow = false
   protected pollInterval: number = DEFAULT_POLL_MS
   protected timer: ReturnType<typeof setInterval> | null = null
   protected deferredStartupRefreshTimer: ReturnType<typeof setTimeout> | null = null
@@ -111,6 +112,8 @@ export abstract class RateLimitServiceState {
   protected geminiCliOAuthEnabledResolver: GeminiCliOAuthEnabledResolver | null = null
   protected antigravityUsageEnabledResolver: AntigravityUsageEnabledResolver | null = null
   protected inactiveClaudeAccountsResolver: (() => InactiveClaudeAccountInfo[]) | null = null
+  // Why: statusline posts name a folder, not an account; the account layer answers which managed account owns it.
+  protected liveClaudeAccountResolver: ((configDir: string) => string | null) | null = null
   protected inactiveCodexAccountsResolver: (() => InactiveCodexAccountInfo[]) | null = null
   protected networkProxySettingsResolver: (() => NetworkProxySettings) | null = null
   protected inactiveClaudeCache = new Map<string, ProviderRateLimits>()

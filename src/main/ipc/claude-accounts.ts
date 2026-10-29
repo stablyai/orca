@@ -28,4 +28,7 @@ export function registerClaudeAccountHandlers(claudeAccounts: ClaudeAccountServi
         ? claudeAccounts.selectAccountForTarget(args.accountId, args)
         : claudeAccounts.selectAccount(args.accountId)
   )
+  ipcMain.handle('claudeAccounts:setAutoSwitch', (_event, args: { enabled: boolean }) =>
+    claudeAccounts.setAutoSwitch(args.enabled)
+  )
 }

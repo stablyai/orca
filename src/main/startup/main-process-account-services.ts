@@ -15,6 +15,17 @@ import { agentHookServer } from '../agent-hooks/server'
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
 import { browserManager } from '../browser/browser-manager'
 import { prewarmStructuredAgentModelCatalogs } from '../runtime/structured-agent-model-catalog-wiring'
+import { getRuntimeDesktopSurface } from '../runtime/runtime-desktop-surface'
+import { translateMain } from '../i18n/main-i18n'
+import type {
+  ClaudeAutoSwitchedEvent,
+  ClaudePaneAssignedEvent
+} from '../../shared/managed-account-types'
+import { claudeAccountShortLabel } from '../claude-accounts/claude-account-short-label'
+import {
+  onClaudePaneAssigned,
+  type ClaudePaneAssignedNotice
+} from '../claude-accounts/claude-pane-account-registry'
 import { mainProcessState as state } from './main-process-state'
 
 // Settings that change which account or binary a new chat's agent runs under.
@@ -54,7 +65,51 @@ export function initializeMainProcessAccountServices(): void {
   })
   const services = createProviderAccountServices(store, {
     codexAccountLifecycle: { onHostSystemDefaultSelected: state.codexSessionMigration.requestRun },
-    setClaudeStatusLineListener: (listener) => agentHookServer.setClaudeStatusLineListener(listener)
+    setClaudeStatusLineListener: (listener) =>
+      agentHookServer.setClaudeStatusLineListener(listener),
+    onClaudeAutoSwitched: ({ from, to, target, ...accountSnapshot }) => {
+      const switched: ClaudeAutoSwitchedEvent = {
+        ...accountSnapshot,
+        fromAccountId: from.id,
+        toAccountId: to.id,
+        target
+      }
+      state.mainWindow?.webContents.send('claudeAccounts:autoSwitched', switched)
+      if (!store.getSettings().notifications.enabled) {
+        return
+      }
+      getRuntimeDesktopSurface().showNotification({
+        title: translateMain('accounts.claude.autoSwitchedTitle', 'Claude account switched'),
+        body: translateMain(
+          'accounts.claude.autoSwitchedBody',
+          '{{from}} is near its usage limit. New Claude sessions start on {{to}}.',
+          { from: from.email, to: to.email }
+        )
+      })
+    }
+  })
+  const paneAssignedEvent = (notice: ClaudePaneAssignedNotice): ClaudePaneAssignedEvent => {
+    const accounts = store.getSettings().claudeManagedAccounts
+    const emails = accounts.map((account) => account.email)
+    const account = notice.accountId
+      ? accounts.find((candidate) => candidate.id === notice.accountId)
+      : undefined
+    const email = account?.email ?? ''
+    return {
+      ptyId: notice.ptyId,
+      paneKey: notice.paneKey,
+      accountId: notice.accountId,
+      email,
+      label:
+        notice.accountId === null
+          ? ''
+          : email
+            ? claudeAccountShortLabel(email, emails)
+            : notice.accountId.slice(0, 8)
+    }
+  }
+  onClaudePaneAssigned((notice) => {
+    state.mainWindow?.webContents.send('claudeAccounts:paneAssigned', paneAssignedEvent(notice))
   })
   state.rateLimits = services.rateLimits
   state.codexRuntimeHome = services.codexRuntimeHome

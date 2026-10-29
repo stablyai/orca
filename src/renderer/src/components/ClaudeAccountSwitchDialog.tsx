@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -18,8 +18,15 @@ import {
   subscribeClaudeAccountSwitchPrompt,
   type ClaudeAccountSwitchPrompt
 } from '@/lib/claude-account-switch-sessions'
+import { followClaudeAutoSwitch } from '@/lib/claude-auto-switch-follow'
 
 export default function ClaudeAccountSwitchDialog(): React.JSX.Element | null {
+  // Why here: a switch Orca makes before a usage limit asks, or restarts, through this same question.
+  useEffect(
+    () =>
+      window.api.claudeAccounts.onAutoSwitched((switched) => void followClaudeAutoSwitch(switched)),
+    []
+  )
   const prompt = useSyncExternalStore(
     subscribeClaudeAccountSwitchPrompt,
     getClaudeAccountSwitchPrompt,

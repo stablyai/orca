@@ -1,5 +1,7 @@
 import type {
   ClaudeAccountSelectionChange,
+  ClaudeAutoSwitchedEvent,
+  ClaudePaneAssignedEvent,
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
 } from '../../shared/managed-account-types'
@@ -64,6 +66,9 @@ export type ClaudeAccountsApi = {
     wslDistro?: string | null
   }) => Promise<ClaudeRateLimitAccountsState>
   onSelectedElsewhere?: (callback: (change: ClaudeAccountSelectionChange) => void) => () => void
+  setAutoSwitch: (args: { enabled: boolean }) => Promise<ClaudeRateLimitAccountsState>
+  onAutoSwitched: (callback: (switched: ClaudeAutoSwitchedEvent) => void) => () => void
+  onPaneAssigned: (callback: (assigned: ClaudePaneAssignedEvent) => void) => () => void
 }
 
 export type GrokAccountsApi = {

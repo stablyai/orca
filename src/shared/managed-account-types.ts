@@ -128,6 +128,14 @@ export type ClaudeRateLimitAccountsState = {
   systemDefaultHome?: string
   /** An older Orca's copy-based switching once wrote an account's login into System default. */
   systemDefaultMayBeCopied?: boolean
+  /** Whether this host switches accounts before a usage limit; absent from older hosts. */
+  autoSwitchEnabled?: boolean
+  /** Live sessions billed to each account. Absent from older hosts. */
+  assignedSessions?: { accountId: string; count: number }[]
+  /** Every live pane and the account it bills. */
+  paneAccounts?: ClaudePaneAccountSnapshot[]
+  /** Panes whose billed account differs from the folder they were spawned in. */
+  paneAssignments?: { ptyId: string; accountId: string }[]
 }
 
 /** A Claude switch made over runtime RPC, e.g. from the phone. */
@@ -136,6 +144,37 @@ export type ClaudeAccountSelectionChange = {
   before: { state: ClaudeRateLimitAccountsState; accountId: string | null }
   after: { state: ClaudeRateLimitAccountsState; accountId: string | null }
 }
+
+/** One live Claude pane and the account its next request bills. */
+export type ClaudePaneAccountSnapshot = {
+  ptyId: string
+  paneKey: string | null
+  accountId: string
+  /** Email local-part, or `local@domain` when two accounts share a local-part. */
+  label: string
+  email: string
+}
+
+/** Pushed when a pane's billed account changes, including when the pane is gone (`accountId` null). */
+export type ClaudePaneAssignedEvent = {
+  ptyId: string
+  paneKey: string | null
+  accountId: string | null
+  label: string
+  email: string
+}
+
+/** Orca moved Claude to another account before a usage limit, so running sessions can follow. */
+export type ClaudeAutoSwitchedEvent = {
+  /** The accounts at the switch, so following it waits on no read another switch could overtake. */
+  accounts: ClaudeManagedAccountSummary[]
+  fromAccountId: string
+  toAccountId: string
+  target: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }
+} & Pick<
+  ClaudeRateLimitAccountsState,
+  'systemDefaultHome' | 'systemDefaultEmail' | 'systemDefaultOrganizationUuid' | 'paneAssignments'
+>
 
 export type ClaudeManagedAccountRuntimeSelection = {
   host: string | null
