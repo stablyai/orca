@@ -103,7 +103,7 @@ test('a serve restart that respawns the shell drops the dead agent title, status
       .toMatchObject({ mouse: 'any', focus: true, applicationCursor: true })
     expect((await readPaneState(page, webTabId))?.runtimeTitle).toContain('Claude Code')
 
-    // Control: a serve restart that keeps the daemon reattaches the same process, so no process-boundary ground runs.
+    // A serve restart that keeps the daemon reattaches the same live agent, so its modes must survive.
     await host.restartServeProcess()
     await expect
       .poll(
@@ -123,8 +123,11 @@ test('a serve restart that respawns the shell drops the dead agent title, status
         { timeout: 120_000, message: 'The paired pane never reattached after the serve restart' }
       )
       .toBe(true)
-    // Only a process-boundary ground clears cursor-key mode; reattach epilogues leave it.
-    expect((await readPaneState(page, webTabId))?.applicationCursor).toBe(true)
+    expect(await readPaneState(page, webTabId)).toMatchObject({
+      mouse: 'any',
+      focus: true,
+      applicationCursor: true
+    })
     const before = await readPaneState(page, webTabId)
 
     // The host machine restarted: serve and its daemon both lose every process.

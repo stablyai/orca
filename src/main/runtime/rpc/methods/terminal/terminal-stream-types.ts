@@ -31,6 +31,8 @@ export type SnapshotFrameOptions = {
   kittyKeyboardFlags?: number
   alternateScreen?: boolean
   terminalOwner?: 'shell'
+  /** The host's tracked title when this image was taken. */
+  lastTitle?: string
 }
 
 export type SerializedSnapshot = {
@@ -48,6 +50,7 @@ export type SerializedSnapshot = {
   kittyKeyboardFlags?: number
   alternateScreen?: boolean
   terminalOwner?: 'shell'
+  lastTitle?: string
 } | null
 
 export type TerminalViewportClient = {

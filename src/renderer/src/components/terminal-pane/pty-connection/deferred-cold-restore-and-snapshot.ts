@@ -219,6 +219,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
           }
         : {}),
       ...(meta.terminalOwner ? { terminalOwner: meta.terminalOwner } : {}),
+      ...(meta.lastTitle !== undefined ? { lastTitle: meta.lastTitle } : {}),
       ...(meta.alternateScreen !== undefined ? { alternateScreen: meta.alternateScreen } : {}),
       ...(meta.snapshotCols !== undefined && meta.snapshotRows !== undefined
         ? { snapshotCols: meta.snapshotCols, snapshotRows: meta.snapshotRows }

@@ -51,6 +51,8 @@ export type RemoteRuntimeMultiplexedTerminalCallbacks = {
       kittyKeyboardFlags?: number
       alternateScreen?: boolean
       terminalOwner?: 'shell'
+      /** The host's tracked title when this image was taken; absent from older hosts. */
+      lastTitle?: string
       /** Grid the host serialized this image at. Absent from hosts that omit
        *  it, which must read as unknown so replay keeps the pane's own grid. */
       cols?: number
@@ -101,6 +103,7 @@ export type RemoteRuntimeSnapshotImage = {
   kittyKeyboardFlags?: number
   alternateScreen?: boolean
   terminalOwner?: 'shell'
+  lastTitle?: string
   /** `data` starts on the normal buffer and enters alt itself. */
   carriesNormalBuffer?: boolean
 }
@@ -226,6 +229,7 @@ export type RemoteRuntimeSnapshotInfo = {
   kittyKeyboardFlags?: number
   alternateScreen?: boolean
   terminalOwner?: 'shell'
+  lastTitle?: string
   requestId?: number
   truncated?: boolean
   unavailable?: TerminalSnapshotUnavailableReason

@@ -2951,6 +2951,9 @@ export function createRemoteRuntimePtyTransport(
               ...(meta?.terminalOwner && meta.seq !== undefined
                 ? { terminalOwner: meta.terminalOwner }
                 : {}),
+              ...(meta?.lastTitle !== undefined && meta.seq !== undefined
+                ? { lastTitle: meta.lastTitle }
+                : {}),
               ...(meta?.alternateScreen !== undefined && meta.seq !== undefined
                 ? { alternateScreen: meta.alternateScreen }
                 : {}),
