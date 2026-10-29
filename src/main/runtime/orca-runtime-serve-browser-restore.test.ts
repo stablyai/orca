@@ -387,6 +387,20 @@ describe('a saved browser tab on a host with no window', () => {
     expect(createTab).not.toHaveBeenCalled()
   })
 
+  it('reports the same index for a tab show as tab list does, past unstarted saved tabs', async () => {
+    const { runtime } = restartedServe()
+    await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    const shown = await runtime.browserTabShow({
+      worktree: `id:${TEST_WORKTREE_ID}`,
+      page: 'page-2'
+    })
+    const listed = await runtime.browserTabList({ worktree: `id:${TEST_WORKTREE_ID}` })
+
+    expect(listed.tabs.map((tab) => tab.browserPageId)).toEqual(['page-1', 'page-2'])
+    expect(shown.tab.index).toBe(1)
+  })
+
   it('starts the named saved page once for a tab show after a restart', async () => {
     const { runtime, createTab } = restartedServe()
 

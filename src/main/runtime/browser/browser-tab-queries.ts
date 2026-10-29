@@ -116,7 +116,8 @@ export class RuntimeBrowserTabQueries {
       try {
         await this.targets.ensureBrowserPageActive(
           selected.worktreeId ?? undefined,
-          selected.browserPageId
+          selected.browserPageId,
+          { waitForFirstLoad: true }
         )
       } catch {
         // The switch below reports browser_tab_not_found if the page could not load.
