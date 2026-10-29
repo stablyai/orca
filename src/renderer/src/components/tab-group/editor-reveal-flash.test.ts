@@ -1,7 +1,9 @@
 // @vitest-environment happy-dom
 
-import { act, renderHook } from '@testing-library/react'
+import { act, render, renderHook } from '@testing-library/react'
+import { createElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { EditorRevealFlash } from './EditorRevealFlash'
 import {
   EDITOR_REVEAL_FLASH_MS,
   flashRevealedEditorView,
@@ -26,19 +28,23 @@ describe('editor reveal flash', () => {
     expect(target.result.current).toBeNull()
   })
 
-  it('restarts with a new key and a fresh timer on a repeat flash', () => {
+  it('replaces the overlay and resets its lifetime on a repeat flash', () => {
     vi.useFakeTimers()
-    const { result } = renderHook(() => useEditorRevealFlashKey('view-c'))
+    const { container } = render(createElement(EditorRevealFlash, { viewStateId: 'view-c' }))
 
     act(() => flashRevealedEditorView('view-c'))
-    const firstKey = result.current
+    const firstOverlay = container.querySelector('.editor-reveal-flash')
+    expect(firstOverlay).not.toBeNull()
     act(() => vi.advanceTimersByTime(EDITOR_REVEAL_FLASH_MS - 100))
     act(() => flashRevealedEditorView('view-c'))
-    expect(result.current).not.toBe(firstKey)
+    const secondOverlay = container.querySelector('.editor-reveal-flash')
+    expect(secondOverlay).not.toBeNull()
+    expect(secondOverlay).not.toBe(firstOverlay)
+    expect(firstOverlay?.isConnected).toBe(false)
 
     act(() => vi.advanceTimersByTime(EDITOR_REVEAL_FLASH_MS - 100))
-    expect(result.current).not.toBeNull()
+    expect(container.querySelector('.editor-reveal-flash')).toBe(secondOverlay)
     act(() => vi.advanceTimersByTime(100))
-    expect(result.current).toBeNull()
+    expect(container.querySelector('.editor-reveal-flash')).toBeNull()
   })
 })
