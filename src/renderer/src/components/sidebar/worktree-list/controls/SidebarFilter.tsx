@@ -2,7 +2,6 @@ import React, { useCallback, useMemo, useState } from 'react'
 import {
   CalendarClock,
   Check,
-  EyeOff,
   FolderPlus,
   GitBranch,
   GitCommitHorizontal,
@@ -64,8 +63,6 @@ const SidebarFilter = React.memo(function SidebarFilter({
   const setHideCliCreatedWorkspaces = useAppStore((s) => s.setHideCliCreatedWorkspaces)
   const hideDetachedHeadWorkspaces = useAppStore((s) => s.hideDetachedHeadWorkspaces)
   const setHideDetachedHeadWorkspaces = useAppStore((s) => s.setHideDetachedHeadWorkspaces)
-  const hideWorkspaceFilterBadge = useAppStore((s) => s.hideWorkspaceFilterBadge)
-  const setHideWorkspaceFilterBadge = useAppStore((s) => s.setHideWorkspaceFilterBadge)
   const alwaysShowDefaultBranchWorkspace = useAppStore((s) => s.alwaysShowDefaultBranchWorkspace)
   const setAlwaysShowDefaultBranchWorkspace = useAppStore(
     (s) => s.setAlwaysShowDefaultBranchWorkspace
@@ -241,15 +238,6 @@ const SidebarFilter = React.memo(function SidebarFilter({
           )}
           checked={hideDetachedHeadWorkspaces}
           onChange={setHideDetachedHeadWorkspaces}
-        />
-        <FilterToggleRow
-          icon={<EyeOff className="size-3.5" />}
-          label={translate(
-            'auto.components.sidebar.SidebarFilter.hideFilterBadge',
-            'Hide filter badge'
-          )}
-          checked={hideWorkspaceFilterBadge}
-          onChange={setHideWorkspaceFilterBadge}
         />
 
         {canFilterRepos && (
