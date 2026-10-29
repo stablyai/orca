@@ -52,6 +52,18 @@ describe('mapMRToWorkItem', () => {
     expect(item.isCrossRepository).toBe(true)
   })
 
+  it('maps GitLab mergeability when the MR payload includes merge status', () => {
+    expect(
+      mapMRToWorkItem(
+        { iid: 1, title: 't', state: 'opened', detailed_merge_status: 'mergeable' },
+        'g/p'
+      ).mergeable
+    ).toBe('MERGEABLE')
+    expect(
+      mapMRToWorkItem({ iid: 2, title: 't', state: 'opened', has_conflicts: true }, 'g/p').mergeable
+    ).toBe('CONFLICTING')
+  })
+
   it('does not flag cross-repository when project ids are absent', () => {
     const item = mapMRToWorkItem({ iid: 1, title: 't', state: 'opened' }, 'g/p')
     expect(item.isCrossRepository).toBe(false)
@@ -63,10 +75,7 @@ describe('mapMRToWorkItem', () => {
   })
 
   it('falls back to a deterministic id when GitLab omits global id', () => {
-    // Why: the GitLab list endpoint always returns id, but the per-MR
-    // detail endpoint occasionally omits it on older instances. The
-    // fallback keeps unique-per-(repo,iid) without colliding with other
-    // MRs in the picker.
+    // Older detail payloads can omit id; the repository/IID fallback must still distinguish records.
     const item = mapMRToWorkItem({ iid: 5, title: 't', state: 'opened' }, 'g/p')
     expect(item.id).toBe('gitlab-mr-g/p-5')
   })
@@ -104,8 +113,6 @@ describe('mapIssueToWorkItem', () => {
 
   it("collapses any non-'opened' state to 'closed'", () => {
     expect(mapIssueToWorkItem({ iid: 1, title: 't', state: 'closed' }, 'g/p').state).toBe('closed')
-    // Defensive: a future state we don't recognize must not leak
-    // through as a 'merged' or 'draft' value.
     expect(mapIssueToWorkItem({ iid: 1, title: 't', state: 'weird' }, 'g/p').state).toBe('closed')
   })
 })

@@ -2,8 +2,12 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import type { GlobalSettings, Repo, Worktree, WorktreeCardProperty } from '../../../../shared/types'
-import { COMPACT_WORKTREE_CARD_PROPERTIES } from '../../../../shared/worktree-card-properties'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { COMPACT_WORKTREE_CARD_PROPERTIES } from '../../../../shared/worktree/card-properties'
 import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 
 const fetchHostedReviewForBranch = vi.fn()
@@ -14,30 +18,38 @@ const updateWorktreeMeta = vi.fn()
 
 let worktreeCardProperties: WorktreeCardProperty[] = ['status']
 let hostedReviewCache: Record<string, unknown> = {}
+let issueCache: Record<string, unknown> = {}
+let prCache: Record<string, unknown> = {}
 let workspacePortScan: WorkspacePortScanResult | null = null
 let settings: Partial<GlobalSettings> | null = null
 
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) =>
-    selector({
-      deleteStateByWorktreeId: {},
-      fetchHostedReviewForBranch,
-      fetchIssue,
-      fetchLinearIssue,
-      gitConflictOperationByWorktree: {},
-      hostedReviewCache,
-      issueCache: {},
-      linearIssueCache: {},
-      openModal,
-      remoteBranchConflictByWorktreeId: {},
-      settings,
-      sshConnectionStates: new Map(),
-      sshTargetLabels: new Map(),
-      updateWorktreeMeta,
-      workspacePortScan,
-      worktreeCardProperties
+vi.mock('@/store', () => {
+  const getState = () => ({
+    deleteStateByWorktreeId: {},
+    fetchHostedReviewForBranch,
+    fetchIssue,
+    fetchLinearIssue,
+    gitConflictOperationByWorktree: {},
+    hostedReviewCache,
+    issueCache,
+    linearIssueCache: {},
+    openModal,
+    prCache,
+    projectGroups: [],
+    remoteBranchConflictByWorktreeId: {},
+    settings,
+    sshConnectionStates: new Map(),
+    sshTargetLabels: new Map(),
+    updateWorktreeMeta,
+    workspacePortScan,
+    worktreeCardProperties
+  })
+  return {
+    useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector(getState()), {
+      getState
     })
-}))
+  }
+})
 
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
@@ -53,6 +65,10 @@ vi.mock('./use-worktree-activity-status', () => ({
   useWorktreeActivityStatus: () => 'active'
 }))
 
+vi.mock('./use-worktree-sleep-state', () => ({
+  useIsSleepingWorktree: () => false
+}))
+
 vi.mock('./CacheTimer', () => ({
   default: () => null,
   usePromptCacheCountdownStartedAt: () => null
@@ -62,13 +78,8 @@ vi.mock('./WorktreeCardAgents', () => ({
   default: () => null
 }))
 
-vi.mock('./SshDisconnectedDialog', () => ({
-  SshDisconnectedDialog: () => null
-}))
-
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
-  CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca:test-close-context-menus',
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR: 'data-worktree-native-context-menu',
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope'
 }))
@@ -120,6 +131,19 @@ function makeHostedReview(overrides: Partial<HostedReviewInfo> = {}): HostedRevi
   }
 }
 
+function makePRInfo(overrides: Partial<PRInfo> = {}): PRInfo {
+  return {
+    number: 456,
+    title: 'Fix stale GH PR',
+    state: 'open',
+    url: 'https://github.com/acme/orca/pull/456',
+    checksStatus: 'success',
+    updatedAt: '2026-05-17T00:00:00.000Z',
+    mergeable: 'MERGEABLE',
+    ...overrides
+  }
+}
+
 function renderWorktreeCardMarkup(element: ReactNode): string {
   return renderToStaticMarkup(<>{element}</>)
 }
@@ -139,6 +163,8 @@ describe('WorktreeCard linked PR display', () => {
     vi.clearAllMocks()
     worktreeCardProperties = ['status']
     hostedReviewCache = {}
+    issueCache = {}
+    prCache = {}
     workspacePortScan = null
     settings = null
   })
@@ -240,6 +266,12 @@ describe('WorktreeCard linked PR display', () => {
         linkedReviewHintKey: 'github:456'
       }
     }
+    prCache = {
+      'repo-1::feature/local-branch': {
+        data: makePRInfo({ number: 456, title: 'Stale branch PR' }),
+        fetchedAt: Date.now()
+      }
+    }
     const { default: WorktreeCard } = await import('./WorktreeCard')
 
     const markup = renderWorktreeCardMarkup(
@@ -260,7 +292,14 @@ describe('WorktreeCard linked PR display', () => {
       'local::repo-1::feature/local-branch': {
         data: makeHostedReview({ number: 456, title: 'Branch PR', state: 'open' }),
         fetchedAt: Date.now(),
-        linkedReviewHintKey: ''
+        linkedReviewHintKey: 'github:456',
+        branchLookupGitHubPRNumber: 456
+      }
+    }
+    prCache = {
+      'repo-1::feature/local-branch': {
+        data: makePRInfo({ number: 456, title: 'Branch PR' }),
+        fetchedAt: Date.now()
       }
     }
     const { default: WorktreeCard } = await import('./WorktreeCard')
@@ -614,5 +653,241 @@ describe('WorktreeCard linked PR display', () => {
     expect(markup).toContain('text-rose-500/85')
     expect(markup).not.toContain('Linked PR #456')
     expect(markup).not.toContain('CI checks')
+  })
+
+  it('uses branch PR cache for the status slot before hosted-review metadata warms', async () => {
+    settings = { experimentalNewWorktreeCardStyle: true }
+    worktreeCardProperties = ['status']
+    prCache = {
+      'repo-1::feature/local-branch': {
+        data: makePRInfo({
+          number: 6340,
+          title: 'Remove split terminal from onboarding checklist',
+          state: 'merged',
+          headSha: 'abc123',
+          checksStatus: 'success'
+        }),
+        fetchedAt: Date.now()
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ linkedPR: null })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('PR: Merged')
+    expect(markup).toContain('text-purple-600/70')
+    expect(markup).not.toContain('Branch')
+    expect(markup).not.toContain('lucide-git-branch')
+  })
+
+  it('reads the local branch PR cache for a known local repo while a runtime is focused', async () => {
+    settings = {
+      activeRuntimeEnvironmentId: 'env-win',
+      experimentalNewWorktreeCardStyle: true
+    }
+    worktreeCardProperties = ['status']
+    prCache = {
+      'repo-1::feature/local-branch': {
+        data: makePRInfo({
+          number: 6341,
+          title: 'Keep local PR status visible',
+          state: 'open',
+          checksStatus: 'pending'
+        }),
+        fetchedAt: Date.now()
+      },
+      'runtime:env-win::repo-1::feature/local-branch': {
+        data: null,
+        fetchedAt: Date.now()
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ linkedPR: null })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('PR checks: Pending')
+    expect(markup).not.toContain('Branch')
+    expect(markup).not.toContain('lucide-git-branch')
+  })
+
+  it('keeps the detailed right-side PR badge during a transient hosted-review miss', async () => {
+    settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: false }
+    worktreeCardProperties = ['pr']
+    hostedReviewCache = {
+      'local::repo-1::feature/local-branch': {
+        data: null,
+        fetchedAt: 100
+      }
+    }
+    prCache = {
+      'repo-1::feature/local-branch': {
+        data: makePRInfo({
+          number: 6340,
+          title: 'Remove split terminal from onboarding checklist',
+          state: 'open',
+          checksStatus: 'success'
+        }),
+        fetchedAt: 200
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ linkedPR: null })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('Linked PR #6340')
+    expect(markup).not.toContain('Linked PR #456')
+  })
+
+  it('keeps the detailed PR badge when a transient miss still has an older review hint', async () => {
+    settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: false }
+    worktreeCardProperties = ['pr']
+    hostedReviewCache = {
+      'local::repo-1::feature/local-branch': {
+        data: null,
+        fetchedAt: 100,
+        linkedReviewHintKey: 'github:999'
+      }
+    }
+    prCache = {
+      'repo-1::feature/local-branch': {
+        data: makePRInfo({
+          number: 6340,
+          title: 'Remove split terminal from onboarding checklist',
+          state: 'open',
+          checksStatus: 'success'
+        }),
+        fetchedAt: 200
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ linkedPR: null })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('Linked PR #6340')
+    expect(markup).not.toContain('Linked PR #456')
+  })
+
+  it('keeps durable non-GitHub linked review metadata ahead of branch PR cache', async () => {
+    settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: false }
+    worktreeCardProperties = ['pr']
+    hostedReviewCache = {
+      'local::repo-1::feature/local-branch': {
+        data: null,
+        fetchedAt: 100
+      }
+    }
+    prCache = {
+      'repo-1::feature/local-branch': {
+        data: makePRInfo({
+          number: 6340,
+          title: 'Remove split terminal from onboarding checklist',
+          state: 'open',
+          checksStatus: 'success'
+        }),
+        fetchedAt: 200
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ linkedGitLabMR: 77 })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('Linked MR #77')
+    expect(markup).not.toContain('Linked PR #6340')
+  })
+
+  it('does not resurrect an older PR cache entry after a newer hosted-review miss', async () => {
+    settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: false }
+    worktreeCardProperties = ['pr']
+    hostedReviewCache = {
+      'local::repo-1::feature/local-branch': {
+        data: null,
+        fetchedAt: 200
+      }
+    }
+    prCache = {
+      'repo-1::feature/local-branch': {
+        data: makePRInfo({
+          number: 6340,
+          title: 'Remove split terminal from onboarding checklist',
+          state: 'open',
+          checksStatus: 'success'
+        }),
+        fetchedAt: 100
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ linkedPR: null })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).not.toContain('Linked PR #6340')
+  })
+
+  it('does not resurrect PR cache on the same millisecond as a hosted-review miss', async () => {
+    settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: false }
+    worktreeCardProperties = ['pr']
+    hostedReviewCache = {
+      'local::repo-1::feature/local-branch': {
+        data: null,
+        fetchedAt: 200
+      }
+    }
+    prCache = {
+      'repo-1::feature/local-branch': {
+        data: makePRInfo({
+          number: 6340,
+          title: 'Remove split terminal from onboarding checklist',
+          state: 'open',
+          checksStatus: 'success'
+        }),
+        fetchedAt: 200
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ linkedPR: null })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).not.toContain('Linked PR #6340')
   })
 })

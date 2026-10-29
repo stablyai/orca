@@ -1,105 +1,82 @@
-import type { FolderWorkspace, ProjectGroup, Repo } from '../../../shared/types'
-import { isPathInsideOrEqual } from '../../../shared/cross-platform-path'
-import { getProjectGroupSubtreeIds } from '../../../shared/project-groups'
+import type { Repo } from '../../../shared/repo-types'
+import {
+  findFolderWorkspaceCandidateRepos,
+  resolveFolderWorkspaceHost,
+  type FolderWorkspaceHost,
+  type FolderWorkspaceHostState
+} from '../../../shared/folder-workspace-execution-host'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
-export type FolderWorkspaceConnectionState = {
-  folderWorkspaces: FolderWorkspace[]
-  projectGroups: ProjectGroup[]
-  repos: Repo[]
-}
+export type FolderWorkspaceConnectionState = FolderWorkspaceHostState
 
-function getFolderScopeCandidateRepos(args: {
-  folderPath: string
-  projectGroupId: string
-  connectionId?: string | null
-  projectGroups: readonly ProjectGroup[]
-  repos: readonly Repo[]
-}): Repo[] {
-  const groupIds = getProjectGroupSubtreeIds(args.projectGroups, args.projectGroupId)
-  const groupRepos = args.repos.filter(
-    (repo) => typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)
-  )
-  const pathRepos = args.repos.filter(
-    (repo) =>
-      !(typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)) &&
-      isPathInsideOrEqual(args.folderPath, repo.path)
-  )
-  if (args.connectionId) {
-    return [
-      ...groupRepos,
-      ...pathRepos.filter((repo) => (repo.connectionId ?? null) === args.connectionId)
-    ]
+type ConnectionsByRepos = WeakMap<
+  FolderWorkspaceHostState['repos'],
+  Map<string, FolderWorkspaceHost>
+>
+// Retained folder tab strips read on every store write; host inference needs only these catalogs.
+const folderConnections = new WeakMap<
+  FolderWorkspaceHostState['folderWorkspaces'],
+  WeakMap<FolderWorkspaceHostState['projectGroups'], ConnectionsByRepos>
+>()
+
+function readFolderWorkspaceHost(
+  state: FolderWorkspaceConnectionState,
+  folderWorkspaceId: string
+): FolderWorkspaceHost {
+  const folders = selectFolderWorkspaces(state)
+  if (!folders || !state.projectGroups || !state.repos) {
+    return resolveFolderWorkspaceHost(state, folderWorkspaceId)
   }
-  if (groupRepos.length === 0) {
-    return pathRepos
+  let byGroups = folderConnections.get(folders)
+  if (!byGroups) {
+    byGroups = new WeakMap()
+    folderConnections.set(folders, byGroups)
   }
-  const groupConnectionIds = new Set(groupRepos.map((repo) => repo.connectionId ?? null))
-  return [
-    ...groupRepos,
-    ...pathRepos.filter((repo) => groupConnectionIds.has(repo.connectionId ?? null))
-  ]
+  let byRepos = byGroups.get(state.projectGroups)
+  if (!byRepos) {
+    byRepos = new WeakMap()
+    byGroups.set(state.projectGroups, byRepos)
+  }
+  let byFolderId = byRepos.get(state.repos)
+  if (!byFolderId) {
+    byFolderId = new Map()
+    byRepos.set(state.repos, byFolderId)
+  }
+  const cached = byFolderId.get(folderWorkspaceId)
+  if (cached) {
+    return cached
+  }
+  const host = resolveFolderWorkspaceHost(state, folderWorkspaceId)
+  // Missing IDs are unbounded; keep only answers for this immutable catalog's folders.
+  if (host.kind !== 'missing') {
+    byFolderId.set(folderWorkspaceId, host)
+  }
+  return host
 }
 
 export function getFolderWorkspaceCandidateRepos(
   state: FolderWorkspaceConnectionState,
   folderWorkspaceId: string
 ): Repo[] {
-  const workspace = state.folderWorkspaces.find((entry) => entry.id === folderWorkspaceId)
-  if (!workspace) {
-    return []
-  }
-  const group = state.projectGroups.find((entry) => entry.id === workspace.projectGroupId)
-  return getFolderScopeCandidateRepos({
-    folderPath: workspace.folderPath,
-    projectGroupId: workspace.projectGroupId,
-    connectionId: workspace.connectionId ?? group?.connectionId ?? null,
-    projectGroups: state.projectGroups,
-    repos: state.repos
-  })
+  return findFolderWorkspaceCandidateRepos(state, folderWorkspaceId)
 }
 
+/** Legacy tri-state view of the shared resolution: `undefined` = gone or ambiguous. */
 export function getFolderWorkspaceConnectionId(
   state: FolderWorkspaceConnectionState,
   folderWorkspaceId: string
 ): string | null | undefined {
-  const workspace = state.folderWorkspaces.find((entry) => entry.id === folderWorkspaceId)
-  if (!workspace) {
-    return undefined
-  }
-  const scopeConnectionId =
-    workspace.connectionId ??
-    state.projectGroups.find((entry) => entry.id === workspace.projectGroupId)?.connectionId ??
-    null
-  const candidateRepos = getFolderWorkspaceCandidateRepos(state, folderWorkspaceId)
-  let hasLocalRepo = false
-  const connectionIds = new Set<string>()
-  for (const repo of candidateRepos) {
-    if (repo.connectionId) {
-      connectionIds.add(repo.connectionId)
-    } else {
-      hasLocalRepo = true
-    }
-  }
-  if (scopeConnectionId) {
-    const hasDifferentSshConnection = [...connectionIds].some(
-      (connectionId) => connectionId !== scopeConnectionId
-    )
-    if (hasLocalRepo || hasDifferentSshConnection) {
+  const host = readFolderWorkspaceHost(state, folderWorkspaceId)
+  switch (host.kind) {
+    case 'ssh':
+      return host.targetId
+    // Use the owning server’s SSH target so its status resolves there rather than reading as local.
+    case 'runtime':
+      return host.sshTargetId
+    case 'local':
+      return null
+    case 'missing':
+    case 'ambiguous':
       return undefined
-    }
-    return scopeConnectionId
   }
-  if (candidateRepos.length === 0) {
-    return null
-  }
-  if (hasLocalRepo && connectionIds.size > 0) {
-    return undefined
-  }
-  if (connectionIds.size === 0) {
-    return null
-  }
-  if (connectionIds.size === 1) {
-    return [...connectionIds][0]
-  }
-  return undefined
 }

@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { WorkspaceDirectorySetting } from './WorkspaceDirectorySetting'
 
 vi.mock('../sidebar/use-sidebar-host-scope-options', () => ({
@@ -63,8 +63,7 @@ function getInput(): HTMLInputElement {
 function typePath(path: string): void {
   act(() => {
     const input = getInput()
-    // Why: React tracks controlled inputs through the native setter; direct
-    // assignment can be ignored by the synthetic input event handler.
+    // Use the native setter so React recognizes controlled-input events.
     const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
     setValue?.call(input, path)
     input.dispatchEvent(new Event('input', { bubbles: true }))

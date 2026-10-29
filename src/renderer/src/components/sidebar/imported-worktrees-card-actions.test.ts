@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
-  IMPORTED_WORKTREES_KEEP_HIDDEN_ERROR,
-  IMPORTED_WORKTREES_SHOW_ERROR,
+  getImportedWorktreesKeepHiddenError,
+  getImportedWorktreesShowError,
   keepImportedWorktreesHiddenCard,
   showImportedWorktreesCard,
   type ImportedWorktreeCardActionState
@@ -43,7 +43,7 @@ describe('imported worktrees card actions', () => {
     expect(updateRepo).toHaveBeenNthCalledWith(2, projectId, { externalWorktreeVisibility: 'hide' })
     expect(setCardState).toHaveBeenLastCalledWith(projectId, {
       pending: false,
-      error: IMPORTED_WORKTREES_SHOW_ERROR
+      error: getImportedWorktreesShowError()
     })
   })
 
@@ -66,7 +66,7 @@ describe('imported worktrees card actions', () => {
     })
     expect(setCardState).toHaveBeenLastCalledWith(projectId, {
       pending: false,
-      error: IMPORTED_WORKTREES_SHOW_ERROR,
+      error: getImportedWorktreesShowError(),
       forceVisible: true
     })
   })
@@ -81,16 +81,23 @@ describe('imported worktrees card actions', () => {
     expect(updateRepo).toHaveBeenNthCalledWith(2, projectId, { externalWorktreeVisibility: 'hide' })
     expect(setCardState).toHaveBeenLastCalledWith(projectId, {
       pending: false,
-      error: IMPORTED_WORKTREES_SHOW_ERROR,
+      error: getImportedWorktreesShowError(),
       forceVisible: true
     })
   })
 
   it('dismisses the card when keep-hidden update succeeds', async () => {
-    await keepImportedWorktreesHiddenCard({ projectId, updateRepo, setCardState })
+    await keepImportedWorktreesHiddenCard({
+      projectId,
+      updateRepo,
+      setCardState,
+      hiddenWorktreePaths: ['/scratch/external'],
+      existingBaselinePaths: ['/scratch/old']
+    })
 
     expect(updateRepo).toHaveBeenCalledWith(projectId, {
-      externalWorktreeVisibilityPromptDismissedAt: expect.any(Number)
+      externalWorktreeVisibilityPromptDismissedAt: expect.any(Number),
+      externalWorktreeInboxBaselinePaths: ['/scratch/old', '/scratch/external']
     })
     expect(setCardState).toHaveBeenLastCalledWith(projectId, null)
   })
@@ -102,7 +109,7 @@ describe('imported worktrees card actions', () => {
 
     expect(setCardState).toHaveBeenLastCalledWith(projectId, {
       pending: false,
-      error: IMPORTED_WORKTREES_KEEP_HIDDEN_ERROR
+      error: getImportedWorktreesKeepHiddenError()
     })
   })
 })

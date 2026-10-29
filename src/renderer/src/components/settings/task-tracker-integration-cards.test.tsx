@@ -2,9 +2,12 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
+import es from '@/i18n/locales/es.json'
+import { i18n, loadRendererUiLanguage, translate } from '@/i18n/i18n'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { TooltipProvider } from '../ui/tooltip'
 import { LinearIntegrationCard } from './task-tracker-integration-cards'
 
 const LOCAL_HOST_LABEL = getExecutionHostLabel('local')
@@ -30,12 +33,15 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: StoreState) => unknown) => {
-    if (!mocks.store.current) {
-      throw new Error('Store state was not installed')
-    }
-    return selector(mocks.store.current)
-  }
+  useAppStore: Object.assign(
+    (selector: (state: StoreState) => unknown) => {
+      if (!mocks.store.current) {
+        throw new Error('Store state was not installed')
+      }
+      return selector(mocks.store.current)
+    },
+    { getState: () => mocks.store.current }
+  )
 }))
 
 vi.mock('@/components/linear-api-key-dialog', () => ({
@@ -86,12 +92,26 @@ async function renderCard(): Promise<HTMLDivElement> {
   document.body.appendChild(container)
   root = createRoot(container)
   await act(async () => {
-    root?.render(<LinearIntegrationCard />)
+    root?.render(
+      <TooltipProvider>
+        <LinearIntegrationCard />
+      </TooltipProvider>
+    )
   })
   return container
 }
 
 describe('LinearIntegrationCard account scope', () => {
+  beforeEach(() => {
+    // Stub the skill scan so the CTA renders setup state rather than a bridge error.
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        skills: { discover: async () => ({ skills: [], sources: [], scannedAt: 0 }) }
+      }
+    })
+  })
+
   afterEach(async () => {
     if (root) {
       await act(async () => {
@@ -102,6 +122,62 @@ describe('LinearIntegrationCard account scope', () => {
     container?.remove()
     container = null
     mocks.store.current = null
+    await i18n.changeLanguage(await loadRendererUiLanguage('en'))
+    Reflect.deleteProperty(window, 'api')
+  })
+
+  it.each(['en', 'ko'] as const)(
+    'renders complete %s connection counts without an English suffix',
+    async (language) => {
+      await i18n.changeLanguage(await loadRendererUiLanguage(language))
+      for (const count of [0, 1, 2]) {
+        const state = installStore(true)
+        state.linearStatus.workspaces = Array.from({ length: count }, (_, index) => ({
+          id: `workspace-${index}`,
+          organizationName: 'Fixture',
+          displayName: 'Fixture workspace'
+        }))
+        const rendered = await renderCard()
+        const description =
+          rendered.querySelector('[data-settings-section="integrations-linear"]')?.textContent ?? ''
+        const expected =
+          language === 'ko'
+            ? `워크스페이스 ${count}개 연결됨`
+            : `${count} workspace${count === 1 ? '' : 's'} connected`
+        expect(description).toContain(expected)
+        expect(description).not.toMatch(/개(?: 사이트| 워크스페이스)?s/)
+        await act(async () => {
+          root?.unmount()
+        })
+        root = null
+        container?.remove()
+        container = null
+      }
+    }
+  )
+
+  it('translates a coded connection failure at the display site', async () => {
+    await i18n.changeLanguage(await loadRendererUiLanguage('es'))
+    const state = installStore(true)
+    state.testLinearConnection = vi.fn(async () => ({
+      ok: false,
+      error: 'Wire detail from the host',
+      errorCode: 'linear.noApiKey'
+    }))
+    const rendered = await renderCard()
+    const label = translate(
+      'auto.components.settings.task.tracker.integration.cards.c24e56c532',
+      'Test'
+    )
+    const button = Array.from(rendered.querySelectorAll('button')).find(
+      (button) => button.textContent === label
+    )
+    expect(button).toBeDefined()
+    await act(async () => {
+      button?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(rendered.textContent).toContain(es.taskProviders.errors.linear.noApiKey)
+    expect(rendered.textContent).not.toContain('Wire detail from the host')
   })
 
   it('shows local-client account ownership when Linear is disconnected', async () => {
@@ -109,9 +185,10 @@ describe('LinearIntegrationCard account scope', () => {
 
     const rendered = await renderCard()
 
+    expect(rendered.querySelector('[data-settings-section="integrations-linear"]')).not.toBeNull()
     expect(rendered.textContent).toContain(`Account scope: ${LOCAL_HOST_LABEL}`)
     expect(rendered.textContent).toContain(
-      'Credentials and account checks for this provider are owned by this desktop client. Use Settings > Remote Orca Servers > Advanced to edit server-owned credentials.'
+      'Credentials and account checks for this provider are owned by this desktop client. To use a server, change Settings > Remote Orca Servers > New projects open on.'
     )
     expect(rendered.textContent).toContain('Open Remote Servers')
     expect(rendered.textContent).toContain('Add access with a Personal API key')
@@ -132,7 +209,7 @@ describe('LinearIntegrationCard account scope', () => {
 
     expect(rendered.textContent).toContain('Account scope: Remote server: runtime-1')
     expect(rendered.textContent).toContain(
-      'Credentials and account checks for this provider are owned by this remote server. Use Settings > Remote Orca Servers > Advanced to edit another default runtime scope.'
+      'Credentials and account checks for this provider are owned by this remote server. To use another host, change Settings > Remote Orca Servers > New projects open on.'
     )
     await act(async () => {
       Array.from(rendered.querySelectorAll('button'))

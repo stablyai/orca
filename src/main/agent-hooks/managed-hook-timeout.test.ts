@@ -1,0 +1,530 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { spawn, spawnSync } from 'node:child_process'
+import { runProcessSync } from '@orca/process-host'
+import { buildPosixAgentHookPostCommand } from './hook-post-command'
+import { createServer, type Server, type Socket } from 'node:net'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import type { SFTPWrapper } from 'ssh2'
+import type * as osModule from 'node:os'
+
+const { homedirMock } = vi.hoisted(() => ({
+  homedirMock: vi.fn<() => string>()
+}))
+
+vi.mock('electron', () => ({
+  app: {
+    getPath: () => '/tmp/orca-user-data'
+  }
+}))
+
+vi.mock('os', async (importOriginal) => {
+  const actual = await importOriginal<typeof osModule>()
+  return {
+    ...actual,
+    homedir: homedirMock.mockImplementation(actual.homedir)
+  }
+})
+
+import { MANAGED_HOOK_TIMEOUT_MILLISECONDS, MANAGED_HOOK_TIMEOUT_SECONDS } from './installer-utils'
+import { CodexHookService } from '../codex/hook-service'
+import { CursorHookService } from '../cursor/hook-service'
+import { CommandCodeHookService } from '../command-code/hook-service'
+import { GeminiHookService } from '../gemini/hook-service'
+import { AntigravityHookService } from '../antigravity/hook-service'
+import { ClaudeHookService } from '../claude/hook-service'
+import { GrokHookService } from '../grok/hook-service'
+import { CopilotHookService } from '../copilot/hook-service'
+import { DevinHookService } from '../devin/hook-service'
+import { DroidHookService } from '../droid/hook-service'
+import { KimiHookService } from '../kimi/hook-service'
+import { openClaudeHookService } from '../openclaude/hook-service'
+import { createAgentHookMemorySftp as createFakeSftp } from './agent-hook-memory-sftp.test-fixture'
+
+const REMOTE_HOME = '/home/dev'
+
+// Amp/Hermes plugins define transport budgets in source rather than JSON/TOML hook entries.
+const JSON_INSTALLERS = [
+  {
+    agent: 'claude',
+    timeout: MANAGED_HOOK_TIMEOUT_SECONDS,
+    configPath: `${REMOTE_HOME}/.claude/settings.json`,
+    install: (sftp: SFTPWrapper) => new ClaudeHookService().installRemote(sftp, REMOTE_HOME)
+  },
+  {
+    agent: 'openclaude',
+    timeout: MANAGED_HOOK_TIMEOUT_SECONDS,
+    configPath: `${REMOTE_HOME}/.openclaude/settings.json`,
+    install: (sftp: SFTPWrapper) => openClaudeHookService.installRemote(sftp, REMOTE_HOME)
+  },
+  {
+    agent: 'codex',
+    timeout: MANAGED_HOOK_TIMEOUT_SECONDS,
+    // Codex caps Interrupt at three seconds.
+    eventTimeouts: { Interrupt: 3 },
+    configPath: `${REMOTE_HOME}/.codex/hooks.json`,
+    install: (sftp: SFTPWrapper) => new CodexHookService().installRemote(sftp, REMOTE_HOME)
+  },
+  {
+    agent: 'gemini',
+    timeout: MANAGED_HOOK_TIMEOUT_MILLISECONDS,
+    configPath: `${REMOTE_HOME}/.gemini/settings.json`,
+    install: (sftp: SFTPWrapper) => new GeminiHookService().installRemote(sftp, REMOTE_HOME)
+  },
+  {
+    agent: 'antigravity',
+    timeout: MANAGED_HOOK_TIMEOUT_SECONDS,
+    configPath: `${REMOTE_HOME}/.gemini/config/hooks.json`,
+    install: (sftp: SFTPWrapper) => new AntigravityHookService().installRemote(sftp, REMOTE_HOME)
+  },
+  {
+    agent: 'cursor',
+    timeout: MANAGED_HOOK_TIMEOUT_SECONDS,
+    configPath: `${REMOTE_HOME}/.cursor/hooks.json`,
+    install: (sftp: SFTPWrapper) => new CursorHookService().installRemote(sftp, REMOTE_HOME)
+  },
+  {
+    agent: 'command-code',
+    timeout: MANAGED_HOOK_TIMEOUT_SECONDS,
+    configPath: `${REMOTE_HOME}/.commandcode/settings.json`,
+    install: (sftp: SFTPWrapper) => new CommandCodeHookService().installRemote(sftp, REMOTE_HOME)
+  },
+  {
+    agent: 'grok',
+    timeout: MANAGED_HOOK_TIMEOUT_SECONDS,
+    configPath: `${REMOTE_HOME}/.grok/hooks/orca-status.json`,
+    install: (sftp: SFTPWrapper) => new GrokHookService().installRemote(sftp, REMOTE_HOME)
+  },
+  {
+    agent: 'copilot',
+    timeout: 5,
+    configPath: `${REMOTE_HOME}/.copilot/hooks/orca.json`,
+    install: (sftp: SFTPWrapper) => new CopilotHookService().installRemote(sftp, REMOTE_HOME)
+  },
+  {
+    agent: 'droid',
+    timeout: MANAGED_HOOK_TIMEOUT_SECONDS,
+    configPath: `${REMOTE_HOME}/.factory/settings.json`,
+    install: (sftp: SFTPWrapper) => new DroidHookService().installRemote(sftp, REMOTE_HOME)
+  },
+  {
+    agent: 'devin',
+    timeout: MANAGED_HOOK_TIMEOUT_SECONDS,
+    configPath: `${REMOTE_HOME}/.config/devin/config.json`,
+    install: (sftp: SFTPWrapper) => new DevinHookService().installRemote(sftp, REMOTE_HOME)
+  }
+] as const
+
+const MANAGED_HOOKS_DIR_NEEDLE = '/.orca/agent-hooks/'
+// Claude's statusLine schema has no timeout field and cannot block agent turns.
+const STATUSLINE_SCRIPT_NEEDLE = '-statusline.'
+
+// Count managed command carriers while asserting their provider-specific timeout fields.
+function countManagedCarriersWithTimeout(
+  node: unknown,
+  expectedTimeout: number,
+  isManagedCarrier = (value: string): boolean => {
+    const normalized = value.replaceAll('\\', '/')
+    return (
+      normalized.includes(MANAGED_HOOKS_DIR_NEEDLE) &&
+      !normalized.includes(STATUSLINE_SCRIPT_NEEDLE)
+    )
+  }
+): number {
+  if (Array.isArray(node)) {
+    return node.reduce<number>(
+      (sum, child) =>
+        sum + countManagedCarriersWithTimeout(child, expectedTimeout, isManagedCarrier),
+      0
+    )
+  }
+  if (node === null || typeof node !== 'object') {
+    return 0
+  }
+  const record = node as Record<string, unknown>
+  let found = 0
+  const carrier = [record.command, record.bash, record.powershell].find(
+    (value): value is string => typeof value === 'string' && isManagedCarrier(value)
+  )
+  if (carrier !== undefined) {
+    const timeout = typeof record.timeout === 'number' ? record.timeout : record.timeoutSec
+    expect(typeof timeout, `managed carrier "${carrier}" is missing a config timeout`).toBe(
+      'number'
+    )
+    expect(timeout as number).toBe(expectedTimeout)
+    found += 1
+  }
+  for (const value of Object.values(record)) {
+    found += countManagedCarriersWithTimeout(value, expectedTimeout, isManagedCarrier)
+  }
+  return found
+}
+
+describe('managed agent hook timeouts', () => {
+  it.skipIf(process.platform === 'win32').each(['raw-json-v1', ''])(
+    'scopes the C numeric locale to the custom curl command for transport %s',
+    (transport) => {
+      const tmpDir = mkdtempSync(join(tmpdir(), 'orca-custom-curl-locale-'))
+      try {
+        const curlPath = join(tmpDir, 'curl with spaces')
+        const observed = join(tmpDir, 'curl-locale')
+        const shellObserved = join(tmpDir, 'shell-locale')
+        const payloadPath = join(tmpDir, 'custom-curl-payload')
+        writeFileSync(
+          curlPath,
+          '#!/bin/sh\nprintf "%s|%s" "$LC_ALL" "$LC_NUMERIC" > "$ORCA_TEST_CURL_LOCALE"\ncat > "$ORCA_TEST_CURL_PAYLOAD"\n'
+        )
+        chmodSync(curlPath, 0o755)
+        const payload = '{"prompt":"漢字 $HOME & quoted"}'
+        const command = [
+          'payload="$ORCA_TEST_PAYLOAD"',
+          'curl_bin="$ORCA_TEST_CURL_BIN"',
+          ...buildPosixAgentHookPostCommand('codex', { curlCommand: '"$curl_bin"' }),
+          'printf "%s|%s" "$LC_ALL" "$LC_NUMERIC" > "$ORCA_TEST_SHELL_LOCALE"'
+        ].join('\n')
+        const result = runProcessSync({
+          program: '/bin/sh',
+          args: ['-c', command],
+          env: {
+            PATH: '/usr/bin:/bin',
+            LC_ALL: 'de_DE.UTF-8',
+            LC_NUMERIC: 'de_DE.UTF-8',
+            ORCA_AGENT_HOOK_TRANSPORT: transport,
+            ORCA_AGENT_HOOK_PORT: '1234',
+            ORCA_AGENT_HOOK_TOKEN: 'token',
+            ORCA_TEST_CURL_BIN: curlPath,
+            ORCA_TEST_CURL_LOCALE: observed,
+            ORCA_TEST_SHELL_LOCALE: shellObserved,
+            ORCA_TEST_CURL_PAYLOAD: payloadPath,
+            ORCA_TEST_PAYLOAD: payload
+          },
+          timeoutMs: 5000
+        })
+        expect(result.timedOut).toBe(false)
+        expect(result.code, result.stderr.toString()).toBe(0)
+        expect(existsSync(observed)).toBe(true)
+        expect(readFileSync(observed, 'utf8')).toBe('|C')
+        expect(readFileSync(shellObserved, 'utf8')).toBe('de_DE.UTF-8|de_DE.UTF-8')
+        expect(readFileSync(payloadPath, 'utf8')).toBe(payload)
+      } finally {
+        rmSync(tmpDir, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it('writes a config-level timeout on every managed JSON hook entry', async () => {
+    for (const installer of JSON_INSTALLERS) {
+      const { agent, configPath, install, timeout } = installer
+      const { sftp, fs } = createFakeSftp()
+      const status = await install(sftp)
+      expect(status.state, `${agent} install state`).toBe('installed')
+      const raw = fs.files.get(configPath)
+      expect(raw, `${agent} config written`).toBeDefined()
+      const config = JSON.parse(raw!)
+      for (const [eventName, eventTimeout] of Object.entries(
+        'eventTimeouts' in installer ? installer.eventTimeouts : {}
+      )) {
+        expect(
+          countManagedCarriersWithTimeout(config.hooks[eventName], eventTimeout),
+          `${agent} ${eventName} managed entry`
+        ).toBeGreaterThan(0)
+        delete config.hooks[eventName]
+      }
+      const carriers = countManagedCarriersWithTimeout(config, timeout)
+      expect(
+        carriers,
+        `${agent} should have at least one managed timeout-bearing entry`
+      ).toBeGreaterThan(0)
+    }
+  })
+
+  it('writes a timeout on the managed Kimi TOML hook block', async () => {
+    const { sftp, fs } = createFakeSftp()
+    const status = await new KimiHookService().installRemote(sftp, REMOTE_HOME)
+    expect(status.state).toBe('installed')
+    const config = fs.files.get(`${REMOTE_HOME}/.kimi-code/config.toml`)!
+    const timeoutLines = config.match(new RegExp(`timeout = ${MANAGED_HOOK_TIMEOUT_SECONDS}`, 'g'))
+    expect(timeoutLines?.length ?? 0).toBeGreaterThan(0)
+    expect(config).toContain('/home/dev/.orca/agent-hooks/kimi-hook.sh')
+  })
+
+  it('writes a config-level timeout on local Droid hooks', () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'orca-droid-hook-timeout-'))
+    homedirMock.mockReturnValue(homeDir)
+    try {
+      const status = new DroidHookService().install()
+      expect(status.state).toBe('installed')
+      const config = JSON.parse(readFileSync(join(homeDir, '.factory', 'settings.json'), 'utf8'))
+      const carriers = countManagedCarriersWithTimeout(
+        config,
+        MANAGED_HOOK_TIMEOUT_SECONDS,
+        (command) =>
+          command.replaceAll('\\', '/').includes(MANAGED_HOOKS_DIR_NEEDLE) ||
+          (process.platform === 'win32' && command.includes('-EncodedCommand'))
+      )
+      expect(carriers).toBeGreaterThan(0)
+    } finally {
+      homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
+      rmSync(homeDir, { recursive: true, force: true })
+    }
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'passes timeout budgets to curl from every generated POSIX wrapper',
+    async () => {
+      const captureDir = mkdtempSync(join(tmpdir(), 'orca-hook-curl-args-'))
+      const capturePath = join(captureDir, 'curl-args')
+      const localePath = join(captureDir, 'curl-locale')
+      try {
+        const installers = [
+          ...JSON_INSTALLERS,
+          {
+            agent: 'kimi',
+            install: (sftp: SFTPWrapper) => new KimiHookService().installRemote(sftp, REMOTE_HOME)
+          }
+        ]
+        for (const { agent, install } of installers) {
+          const { sftp, fs } = createFakeSftp()
+          await install(sftp)
+          let wrappersChecked = 0
+          for (const [path, content] of fs.files) {
+            if (!path.endsWith('.sh')) {
+              continue
+            }
+            rmSync(capturePath, { force: true })
+            rmSync(localePath, { force: true })
+            const result = spawnSync(
+              '/bin/sh',
+              [
+                '-c',
+                [
+                  'curl() { printf "%s|%s" "$LC_ALL" "$LC_NUMERIC" > "$ORCA_TEST_CURL_LOCALE"; printf "%s\\n" "$@" > "$ORCA_TEST_CURL_ARGS"; command -p cat >/dev/null; }',
+                  content
+                ].join('\n')
+              ],
+              {
+                input: '{"hook_event_name":"Stop"}',
+                encoding: 'utf8',
+                timeout: 5_000,
+                env: {
+                  ...process.env,
+                  ORCA_AGENT_HOOK_ENDPOINT: '',
+                  ORCA_AGENT_HOOK_TRANSPORT: '',
+                  ORCA_AGENT_HOOK_PORT: '1',
+                  ORCA_AGENT_HOOK_TOKEN: 'test-token',
+                  ORCA_PANE_KEY: 'pane-1',
+                  CLAUDE_JOB_DIR: '',
+                  DEVIN_PROJECT_DIR: '',
+                  LC_ALL: 'de_DE.UTF-8',
+                  LC_NUMERIC: 'de_DE.UTF-8',
+                  ORCA_TEST_CURL_LOCALE: localePath,
+                  ORCA_TEST_CURL_ARGS: capturePath
+                }
+              }
+            )
+            expect(result.error, `${agent} wrapper execution`).toBeUndefined()
+            expect(result.status, `${agent} wrapper exit`).toBe(0)
+            expect(existsSync(localePath), `${agent} ${path} delivered to curl`).toBe(true)
+            expect(readFileSync(localePath, 'utf8'), `${agent} ${path} curl locale`).toBe('|C')
+            const args = readFileSync(capturePath, 'utf8').trimEnd().split('\n')
+            expect(args, `${agent} delivery endpoint`).toContain(
+              `http://127.0.0.1:1/hook/${agent === 'openclaude' ? 'claude' : agent}`
+            )
+            expect(args[args.indexOf('--connect-timeout') + 1], `${agent} connect budget`).toBe(
+              '0.5'
+            )
+            expect(args[args.indexOf('--max-time') + 1], `${agent} request budget`).toBe('1.5')
+            wrappersChecked += 1
+          }
+          expect(wrappersChecked, `${agent} executed wrappers`).toBeGreaterThan(0)
+        }
+      } finally {
+        rmSync(captureDir, { recursive: true, force: true })
+      }
+    }
+  )
+
+  describe('comma-decimal curl locale', () => {
+    let tempDir: string | null = null
+
+    afterEach(() => {
+      if (tempDir) {
+        rmSync(tempDir, { recursive: true, force: true })
+        tempDir = null
+      }
+    })
+
+    it.skipIf(process.platform === 'win32')(
+      'clears inherited LC_ALL and sets LC_NUMERIC only for curl',
+      async () => {
+        const { sftp, fs } = createFakeSftp()
+        await new GeminiHookService().installRemote(sftp, REMOTE_HOME)
+        const wrapperBody = fs.files.get(`${REMOTE_HOME}/.orca/agent-hooks/gemini-hook.sh`)!
+
+        tempDir = mkdtempSync(join(tmpdir(), 'orca-hook-lc-numeric-'))
+        const binDir = join(tempDir, 'bin')
+        mkdirSync(binDir)
+        const observed = join(tempDir, 'lc-numeric')
+        const shellObserved = join(tempDir, 'shell-locale')
+        writeFileSync(
+          join(binDir, 'curl'),
+          `#!/bin/sh\nprintf '%s|%s' "$LC_ALL" "$LC_NUMERIC" > "${observed}"\nexit 0\n`
+        )
+        chmodSync(join(binDir, 'curl'), 0o755)
+        const scriptPath = join(tempDir, 'gemini-hook.sh')
+        writeFileSync(scriptPath, wrapperBody, 'utf8')
+        chmodSync(scriptPath, 0o755)
+
+        await new Promise<void>((resolve, reject) => {
+          const child = spawn(
+            'sh',
+            [
+              '-c',
+              `trap 'printf "%s|%s" "$LC_ALL" "$LC_NUMERIC" > "$ORCA_TEST_SHELL_LOCALE"' EXIT; . "$1"`,
+              'hook',
+              scriptPath
+            ],
+            {
+              env: {
+                ...process.env,
+                PATH: `${binDir}:${process.env.PATH ?? ''}`,
+                LC_ALL: 'de_DE.UTF-8',
+                LC_NUMERIC: 'de_DE.UTF-8',
+                ORCA_TEST_SHELL_LOCALE: shellObserved,
+                ORCA_AGENT_HOOK_ENDPOINT: '',
+                ORCA_AGENT_HOOK_PORT: '9',
+                ORCA_AGENT_HOOK_TOKEN: 'test-token',
+                ORCA_PANE_KEY: 'pane-1',
+                ORCA_TAB_ID: 'tab-1',
+                ORCA_WORKTREE_ID: 'wt-1'
+              },
+              stdio: ['pipe', 'ignore', 'ignore']
+            }
+          )
+          const timeout = setTimeout(() => {
+            child.kill('SIGKILL')
+            reject(new Error('hook script exceeded test timeout'))
+          }, 10_000)
+          child.on('error', (error) => {
+            clearTimeout(timeout)
+            reject(error)
+          })
+          child.on('close', (status) => {
+            clearTimeout(timeout)
+            if (status === 0) {
+              resolve()
+              return
+            }
+            reject(new Error(`hook script exited ${String(status)}`))
+          })
+          child.stdin.end('{"hook_event_name":"Stop"}')
+        })
+
+        expect(existsSync(observed)).toBe(true)
+        expect(readFileSync(observed, 'utf8')).toBe('|C')
+        expect(readFileSync(shellObserved, 'utf8')).toBe('de_DE.UTF-8|de_DE.UTF-8')
+      }
+    )
+  })
+
+  describe('dead-endpoint transport budget', () => {
+    let tempDir: string | null = null
+    let server: Server | null = null
+    const openSockets: Socket[] = []
+
+    afterEach(() => {
+      for (const socket of openSockets.splice(0)) {
+        socket.destroy()
+      }
+      if (server) {
+        server.close()
+        server = null
+      }
+      if (tempDir) {
+        rmSync(tempDir, { recursive: true, force: true })
+        tempDir = null
+      }
+    })
+
+    const hasPosixCurl =
+      process.platform !== 'win32' &&
+      spawnSync('sh', ['-c', 'command -v curl'], { encoding: 'utf8' }).status === 0
+
+    function runHookScript(scriptPath: string, port: number): Promise<{ status: number | null }> {
+      return new Promise((resolve, reject) => {
+        const child = spawn('sh', [scriptPath], {
+          env: {
+            ...process.env,
+            ORCA_AGENT_HOOK_ENDPOINT: '',
+            ORCA_AGENT_HOOK_PORT: String(port),
+            ORCA_AGENT_HOOK_TOKEN: 'test-token',
+            ORCA_PANE_KEY: 'pane-1',
+            ORCA_TAB_ID: 'tab-1',
+            ORCA_WORKTREE_ID: 'wt-1',
+            CLAUDE_JOB_DIR: ''
+          },
+          stdio: ['pipe', 'ignore', 'ignore']
+        })
+        const timeout = setTimeout(() => {
+          child.kill('SIGKILL')
+          reject(new Error('hook script exceeded test timeout'))
+        }, 10_000)
+        child.on('error', (error) => {
+          clearTimeout(timeout)
+          reject(error)
+        })
+        child.on('close', (status) => {
+          clearTimeout(timeout)
+          resolve({ status })
+        })
+        child.stdin.end('{"hook_event_name":"Stop"}')
+      })
+    }
+
+    // An accepted, unanswered connection exercises max-time after connect-timeout has already passed.
+    it.skipIf(!hasPosixCurl)(
+      'returns within budget when the local listener accepts but never responds',
+      async () => {
+        const { sftp, fs } = createFakeSftp()
+        await new CodexHookService().installRemote(sftp, REMOTE_HOME)
+        const wrapperBody = fs.files.get(`${REMOTE_HOME}/.orca/agent-hooks/codex-hook.sh`)!
+
+        tempDir = mkdtempSync(join(tmpdir(), 'orca-hook-timeout-'))
+        const scriptPath = join(tempDir, 'codex-hook.sh')
+        writeFileSync(scriptPath, wrapperBody, 'utf8')
+        chmodSync(scriptPath, 0o755)
+
+        const stallingServer = createServer((socket) => {
+          openSockets.push(socket)
+        })
+        server = stallingServer
+        const port = await new Promise<number>((resolve) => {
+          stallingServer.listen(0, '127.0.0.1', () => {
+            const address = stallingServer.address()
+            resolve(typeof address === 'object' && address ? address.port : 0)
+          })
+        })
+
+        const startedAt = Date.now()
+        const result = await runHookScript(scriptPath, port)
+        const elapsedMs = Date.now() - startedAt
+
+        // POST timeout must fail open.
+        expect(result.status).toBe(0)
+        expect(openSockets.length).toBeGreaterThan(0)
+        expect(elapsedMs).toBeGreaterThanOrEqual(1_000)
+        // Allow overhead beyond curl's 1.5-second cap.
+        expect(elapsedMs).toBeLessThan(6_000)
+      }
+    )
+  })
+})

@@ -1,7 +1,11 @@
-// src/renderer/src/components/terminal-pane/keyboard-handlers.test.ts
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { FIND_QUERY_MAX_BYTES } from '@/lib/find-query-bounds'
-import { matchFileSearchShortcut, matchSearchNavigate } from './keyboard-handlers'
+import {
+  matchFileSearchShortcut,
+  matchSearchNavigate,
+  resolveTerminalKeyboardShortcutAction,
+  runTerminalSearchNavigation
+} from './terminal-keyboard-shortcut-matching'
 
 function makeKeyEvent(
   overrides: Partial<{
@@ -84,6 +88,109 @@ describe('matchSearchNavigate', () => {
   it('returns null for Ctrl+G on macOS (wrong modifier)', () => {
     const e = makeKeyEvent({ ctrlKey: true })
     expect(matchSearchNavigate(e, true, true, searchState)).toBeNull()
+  })
+})
+
+describe('resolveTerminalKeyboardShortcutAction', () => {
+  it('routes native Option dead keys to consume-only release tracking', () => {
+    expect(
+      resolveTerminalKeyboardShortcutAction(
+        makeKeyEvent({ key: 'Dead', altKey: true }),
+        true,
+        'false',
+        0,
+        false,
+        undefined,
+        undefined,
+        () => 2,
+        undefined,
+        () => 'alt-enter',
+        () => false
+      )
+    ).toEqual({ type: 'trackNativeOptionDeadKey' })
+  })
+
+  it('routes macOS Shift+Enter with the active Windows PTY host bytes', () => {
+    expect(
+      resolveTerminalKeyboardShortcutAction(
+        makeKeyEvent({ key: 'Enter', shiftKey: true }),
+        true,
+        'false',
+        0,
+        false,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        () => 'alt-enter',
+        () => true
+      )
+    ).toEqual({ type: 'sendInput', data: '\x1b\r' })
+  })
+
+  it('forwards trusted Ctrl+Enter authority to the shared policy', () => {
+    expect(
+      resolveTerminalKeyboardShortcutAction(
+        makeKeyEvent({ key: 'Enter', ctrlKey: true }),
+        false,
+        'false',
+        0,
+        true,
+        undefined,
+        () => true,
+        () => 0,
+        undefined,
+        () => 'alt-enter',
+        () => true,
+        'orca-first',
+        () => true
+      )
+    ).toEqual({ type: 'sendInput', data: '\x1b[13;5u' })
+  })
+})
+
+describe('runTerminalSearchNavigation', () => {
+  const searchState = { query: 'hello', caseSensitive: true, regex: false }
+  const decoratedOptions = expect.objectContaining({
+    caseSensitive: true,
+    regex: false,
+    decorations: expect.objectContaining({ activeMatchBackground: expect.any(String) })
+  })
+
+  it('runs the next search through the guarded xterm path', () => {
+    const findNext = vi.fn(() => true)
+    const findPrevious = vi.fn(() => false)
+    const pane = { searchAddon: { findNext, findPrevious } } as unknown as Parameters<
+      typeof runTerminalSearchNavigation
+    >[0]
+
+    expect(runTerminalSearchNavigation(pane, 'next', searchState)).toBe(true)
+    expect(findNext).toHaveBeenCalledWith('hello', decoratedOptions)
+    expect(findPrevious).not.toHaveBeenCalled()
+  })
+
+  it('runs the previous search through the guarded xterm path', () => {
+    const findNext = vi.fn(() => false)
+    const findPrevious = vi.fn(() => true)
+    const pane = { searchAddon: { findNext, findPrevious } } as unknown as Parameters<
+      typeof runTerminalSearchNavigation
+    >[0]
+
+    expect(runTerminalSearchNavigation(pane, 'previous', searchState)).toBe(true)
+    expect(findPrevious).toHaveBeenCalledWith('hello', decoratedOptions)
+    expect(findNext).not.toHaveBeenCalled()
+  })
+
+  it('contains the xterm decoration positive-integer crash from shortcut navigation', () => {
+    const findNext = vi.fn(() => {
+      throw new Error('This API only accepts positive integers')
+    })
+    const pane = { searchAddon: { findNext } } as unknown as Parameters<
+      typeof runTerminalSearchNavigation
+    >[0]
+
+    expect(() => runTerminalSearchNavigation(pane, 'next', searchState)).not.toThrow()
+    expect(runTerminalSearchNavigation(pane, 'next', searchState)).toBe(false)
   })
 })
 

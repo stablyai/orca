@@ -1,12 +1,12 @@
-import { EventEmitter } from 'events'
-import { PassThrough } from 'stream'
+import { EventEmitter } from 'node:events'
+import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { spawn } from 'child_process'
+import { spawn } from 'node:child_process'
 import {
   classifyMacSystemResolverHealth,
   readCurrentProcessMacSystemResolverHealth
 } from './macos-system-resolver-health'
-import type { ChildProcessWithoutNullStreams } from 'child_process'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 
 vi.mock('child_process', () => ({
   spawn: vi.fn()
@@ -126,6 +126,23 @@ resolver #1
     await vi.advanceTimersByTimeAsync(1_500)
     await expect(healthPromise).resolves.toBe('unknown')
 
+    expect(child.stdout.listenerCount('data')).toBe(0)
+    expect(child.stderr.listenerCount('data')).toBe(0)
+    expect(child.listenerCount('error')).toBe(0)
+    expect(child.listenerCount('close')).toBe(0)
+  })
+
+  it('kills scutil and removes listeners when its owner stops', async () => {
+    mockPlatform('darwin')
+    const child = createMockScutilProcess()
+    vi.mocked(spawn).mockReturnValue(child)
+    const abortController = new AbortController()
+
+    const healthPromise = readCurrentProcessMacSystemResolverHealth(abortController.signal)
+    abortController.abort()
+
+    await expect(healthPromise).resolves.toBe('unknown')
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
     expect(child.stdout.listenerCount('data')).toBe(0)
     expect(child.stderr.listenerCount('data')).toBe(0)
     expect(child.listenerCount('error')).toBe(0)

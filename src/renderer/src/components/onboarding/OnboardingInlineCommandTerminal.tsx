@@ -1,21 +1,27 @@
+// COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Loader2 } from 'lucide-react'
 import TerminalPane from '@/components/terminal-pane/TerminalPane'
 import { PASTE_TERMINAL_TEXT_EVENT, type PasteTerminalTextDetail } from '@/constants/terminal'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import {
+  ORCA_TERMINAL_COMMAND_FINISHED_EVENT,
+  type TerminalCommandFinishedEventDetail
+} from '@/hooks/terminal-command-finished-event'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
+import { brandEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
 
 const ONBOARDING_INLINE_TERMINAL_WORKTREE_ID = 'onboarding-inline-terminal'
 const AUTO_INSERT_DELAY_MS = 250
 const READY_RETRY_MS = 100
-// Why: PTY startup can fail before [data-pty-id] appears; cap polling so the
-// setup panel does not leave a hidden retry timer alive forever.
+// PTY startup may fail before exposing an ID; bound readiness polling to avoid hidden perpetual timers.
 export const READY_MAX_ATTEMPTS = 50
 const PTY_TEXT_FALLBACK_MS = 750
 
 type OnboardingInlineCommandTerminalProps = {
   command: string
+  prepareCommandForShell?: (command: string, shellOverride: string | undefined) => string
   title: string
   description?: string
   ariaLabel: string
@@ -25,13 +31,18 @@ type OnboardingInlineCommandTerminalProps = {
   autoScrollIntoView?: boolean
   worktreeId?: string
   shellOverride?: string
+  forceHostRuntime?: boolean
   onOpened?: () => void
   onInteracted?: (method: 'keyboard' | 'pointer', event?: KeyboardEvent<HTMLElement>) => void
   onTerminalExit?: () => void
+  // OSC 133;D reports the command outcome while the shell remains alive.
+  onCommandFinished?: (bestEffortExitCode: number | null) => void
 }
 
+/** Run one setup command in an ephemeral floating-scoped terminal, inserting once its PTY is ready. */
 export function OnboardingInlineCommandTerminal({
   command,
+  prepareCommandForShell,
   title,
   description,
   ariaLabel,
@@ -39,12 +50,19 @@ export function OnboardingInlineCommandTerminal({
   terminalTopMarginPx = 20,
   descriptionPaddingClassName = 'px-4 py-3',
   autoScrollIntoView = true,
-  worktreeId = ONBOARDING_INLINE_TERMINAL_WORKTREE_ID,
+  worktreeId: worktreeIdProp = ONBOARDING_INLINE_TERMINAL_WORKTREE_ID,
   shellOverride,
+  forceHostRuntime = false,
   onOpened,
   onInteracted,
-  onTerminalExit
+  onTerminalExit,
+  onCommandFinished
 }: OnboardingInlineCommandTerminalProps): React.JSX.Element {
+  // Brand synthetic IDs so remote runtimes recognize the floating terminal scope.
+  const worktreeId = useMemo(
+    () => brandEphemeralSetupTerminalWorktreeId(worktreeIdProp),
+    [worktreeIdProp]
+  )
   const createTab = useAppStore((s) => s.createTab)
   const closeTab = useAppStore((s) => s.closeTab)
   const setActiveTabForWorktree = useAppStore((s) => s.setActiveTabForWorktree)
@@ -57,17 +75,36 @@ export function OnboardingInlineCommandTerminal({
     []
   )
   const [cwd, setCwd] = useState<string | null>(null)
-  const [tabId, setTabId] = useState<string | null>(null)
-  // Why: starts at `prefersReducedMotion` so users opted out of motion never
-  // see the slide-in frame; otherwise we flip to true after first paint so the
-  // CSS transition has a starting state to interpolate from.
+  const [createdTab, setCreatedTab] = useState<{
+    id: string
+    shellOverride: string | undefined
+  } | null>(null)
+  const tabId = createdTab?.id ?? null
+  // Reduced-motion users start entered; others need a collapsed first paint for interpolation.
   const [entered, setEntered] = useState(prefersReducedMotion)
   const terminalSectionRef = useRef<HTMLElement>(null)
-  const autoInsertedRef = useRef<string | null>(null)
+  const autoInsertedRef = useRef<{ tabId: string; command: string } | null>(null)
 
   useEffect(() => {
     onOpened?.()
   }, [onOpened])
+
+  useEffect(() => {
+    if (!onCommandFinished) {
+      return
+    }
+    const handleCommandFinished = (event: Event): void => {
+      const detail = (event as CustomEvent<TerminalCommandFinishedEventDetail>).detail
+      if (detail?.worktreeId !== worktreeId) {
+        return
+      }
+      onCommandFinished(detail.exitCode)
+    }
+    window.addEventListener(ORCA_TERMINAL_COMMAND_FINISHED_EVENT, handleCommandFinished)
+    return () => {
+      window.removeEventListener(ORCA_TERMINAL_COMMAND_FINISHED_EVENT, handleCommandFinished)
+    }
+  }, [onCommandFinished, worktreeId])
 
   useEffect(() => {
     let cancelled = false
@@ -84,19 +121,20 @@ export function OnboardingInlineCommandTerminal({
   useEffect(() => {
     const tab = createTab(worktreeId, undefined, shellOverride, {
       activate: false,
-      recordInteraction: false
+      recordInteraction: false,
+      forceHostRuntime
     })
     setActiveTabForWorktree(worktreeId, tab.id)
     setTabCustomTitle(tab.id, title, { recordInteraction: false })
-    setTabId(tab.id)
+    setCreatedTab({ id: tab.id, shellOverride: tab.shellOverride })
     return () => {
-      // Why: inline setup panels can disappear after detection succeeds; close
-      // the backing tab so installer shells do not keep running invisibly.
-      closeTab(tab.id, { recordInteraction: false })
+      // Close the backing tab when setup disappears so installer shells cannot keep running invisibly.
+      closeTab(tab.id, { recordInteraction: false, reason: 'cleanup' })
     }
   }, [
     closeTab,
     createTab,
+    forceHostRuntime,
     setActiveTabForWorktree,
     setTabCustomTitle,
     shellOverride,
@@ -114,9 +152,7 @@ export function OnboardingInlineCommandTerminal({
       })
       return () => window.cancelAnimationFrame(scrollFrame)
     }
-    // Why: double rAF guarantees the browser commits the initial collapsed
-    // styles before we flip to `entered`, so the height/opacity transition
-    // actually plays instead of snapping straight to the final state.
+    // Double rAF commits collapsed styles before entering so height/opacity transitions can interpolate.
     let enteredFrame: number | null = null
     const enterFrame = window.requestAnimationFrame(() => {
       enteredFrame = window.requestAnimationFrame(() => setEntered(true))
@@ -145,11 +181,7 @@ export function OnboardingInlineCommandTerminal({
     }
   }, [autoScrollIntoView])
 
-  // Why: tracking scroll *during* the height transition is unavoidably
-  // jumpy — ResizeObserver / rAF ticks land in pixel-sized chunks, and each
-  // chunk reads as a step. Instead, let the section grow in place, then once
-  // the height has nearly settled fire a single native smooth scroll. The
-  // browser eases that scroll itself, which is the smoothest path available.
+  // Wait for height to settle before one smooth scroll; per-frame geometry tracking would visibly step.
   useEffect(() => {
     if (!autoScrollIntoView || !entered || prefersReducedMotion) {
       return
@@ -165,9 +197,17 @@ export function OnboardingInlineCommandTerminal({
   }, [autoScrollIntoView, entered, prefersReducedMotion])
 
   const insertCommand = useCallback(() => {
-    if (!tabId) {
+    if (!createdTab) {
       return
     }
+    const terminalCommand = prepareCommandForShell?.(command, createdTab.shellOverride) ?? command
+    if (
+      autoInsertedRef.current?.tabId === createdTab.id &&
+      autoInsertedRef.current.command === terminalCommand
+    ) {
+      return
+    }
+    autoInsertedRef.current = { tabId: createdTab.id, command: terminalCommand }
     if (autoScrollIntoView) {
       terminalSectionRef.current?.scrollIntoView({
         behavior: 'auto',
@@ -177,16 +217,16 @@ export function OnboardingInlineCommandTerminal({
     window.dispatchEvent(
       new CustomEvent<PasteTerminalTextDetail>(PASTE_TERMINAL_TEXT_EVENT, {
         detail: {
-          tabId,
-          text: command.trim()
+          tabId: createdTab.id,
+          text: terminalCommand.trim()
         }
       })
     )
-    focusTerminalTabSurface(tabId)
-  }, [autoScrollIntoView, command, tabId])
+    focusTerminalTabSurface(createdTab.id)
+  }, [autoScrollIntoView, command, createdTab, prepareCommandForShell])
 
   useEffect(() => {
-    if (!tabId || !cwd || autoInsertedRef.current === command) {
+    if (!tabId || !cwd) {
       return
     }
     let canceled = false
@@ -200,7 +240,6 @@ export function OnboardingInlineCommandTerminal({
       }
       insertionTimer = window.setTimeout(() => {
         if (!canceled) {
-          autoInsertedRef.current = command
           insertCommand()
         }
       }, AUTO_INSERT_DELAY_MS)
@@ -218,9 +257,7 @@ export function OnboardingInlineCommandTerminal({
       }
       if (hasPty) {
         ptyFirstSeenAt ??= Date.now()
-        // Why: GPU/canvas terminal renderers may not expose visible prompt text
-        // in .xterm-rows. Once the PTY has settled briefly, paste the draft
-        // instead of waiting on a DOM signal that may never arrive.
+        // GPU/canvas renderers may expose no DOM prompt text; settled PTY presence provides a bounded fallback.
         if (Date.now() - ptyFirstSeenAt >= PTY_TEXT_FALLBACK_MS) {
           scheduleInsert()
           return
@@ -244,12 +281,9 @@ export function OnboardingInlineCommandTerminal({
         window.clearTimeout(insertionTimer)
       }
     }
-  }, [command, cwd, insertCommand, tabId])
+  }, [cwd, insertCommand, tabId])
 
-  // Why: grid 0fr → 1fr animates to the child's natural height without a
-  // hardcoded max-height, so we don't leave dead space if the terminal
-  // section's intrinsic size shifts. The inner section is positioned via the
-  // grid row, so xterm.js measures its real container on mount.
+  // Animate grid 0fr→1fr to natural height without max-height gaps, preserving xterm’s measurable mount container.
   return (
     <div
       aria-hidden={!entered}
@@ -283,11 +317,12 @@ export function OnboardingInlineCommandTerminal({
               cwd={cwd}
               isActive
               isVisible
+              showSplitButton={false}
               onPtyExit={() => {
                 onTerminalExit?.()
-                closeTab(tabId, { recordInteraction: false })
+                closeTab(tabId, { recordInteraction: false, reason: 'pty-exit' })
               }}
-              onCloseTab={() => closeTab(tabId, { recordInteraction: false })}
+              onCloseTab={() => closeTab(tabId, { recordInteraction: false, reason: 'cleanup' })}
             />
           ) : (
             <div className="flex h-full items-center justify-center gap-2 text-xs text-muted-foreground">
@@ -321,8 +356,7 @@ function terminalReadyForCommand(element: HTMLElement | null): boolean {
   if (!element?.querySelector('[data-pty-id]')) {
     return false
   }
-  // Why: pasting before the login shell renders a prompt can double-echo the
-  // draft command. Visible terminal text is the least intrusive readiness signal.
+  // Wait for prompt text to avoid double-echoing pasted drafts before the login shell is ready.
   const renderedText = element.querySelector('.xterm-rows')?.textContent?.trim() ?? ''
   return renderedText.length > 0
 }

@@ -1,4 +1,4 @@
-import type { DiffComment, DiffReviewScope } from '../../../src/shared/types'
+import type { DiffComment, DiffReviewScope } from '../../../src/shared/diff-comment-types'
 
 export type CreateMobileDiffCommentInput = {
   worktreeId: string
@@ -16,55 +16,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-function isMarkdownComment(comment: Pick<DiffComment, 'source'>): boolean {
-  return comment.source === 'markdown'
-}
-
 function normalizeScope(value: unknown): DiffReviewScope | undefined {
   return value === 'unstaged' || value === 'staged' || value === 'branch' ? value : undefined
-}
-
-// Why: mobile Vitest/Metro run from the mobile package and cannot transform
-// runtime imports from root src/shared. Keep this byte-for-byte compatible with
-// the desktop shared formatter contract.
-export function formatDiffComment(c: DiffComment): string {
-  const escaped = c.body
-    .replace(/\\/g, '\\\\')
-    .replace(/"/g, '\\"')
-    .replace(/\r/g, '\\r')
-    .replace(/\n/g, '\\n')
-  const locationLabel =
-    c.lineNumber === 0
-      ? 'Scope: file'
-      : c.startLine !== undefined && c.startLine !== c.lineNumber
-        ? `Lines: ${c.startLine}-${c.lineNumber}`
-        : `Line: ${c.lineNumber}`
-  if (!isMarkdownComment(c)) {
-    return [`File: ${c.filePath}`, locationLabel, `User comment: "${escaped}"`].join('\n')
-  }
-  return [
-    `File: ${c.filePath}`,
-    'Source: markdown',
-    locationLabel,
-    `User comment: "${escaped}"`
-  ].join('\n')
-}
-
-export function formatDiffComments(comments: readonly DiffComment[]): string {
-  return comments.map(formatDiffComment).join('\n\n')
-}
-
-export function formatMobileDiffReviewPrompt(comments: readonly DiffComment[]): string {
-  return [
-    'You are reviewing the current worktree. Address the following mobile review notes.',
-    '',
-    formatDiffComments(comments),
-    '',
-    'After applying fixes:',
-    '1. Summarize changed files.',
-    '2. Run relevant tests.',
-    '3. Tell me if anything remains risky.'
-  ].join('\n')
 }
 
 export function normalizeMobileDiffComments(value: unknown, worktreeId: string): DiffComment[] {
@@ -77,7 +30,7 @@ export function normalizeMobileDiffComments(value: unknown, worktreeId: string):
     }
     const id = typeof candidate.id === 'string' ? candidate.id : ''
     const filePath = typeof candidate.filePath === 'string' ? candidate.filePath : ''
-    const lineNumber = typeof candidate.lineNumber === 'number' ? candidate.lineNumber : NaN
+    const lineNumber = typeof candidate.lineNumber === 'number' ? candidate.lineNumber : Number.NaN
     const body = typeof candidate.body === 'string' ? candidate.body.trim() : ''
     const createdAt = typeof candidate.createdAt === 'number' ? candidate.createdAt : Date.now()
     if (!id || !filePath || !Number.isFinite(lineNumber) || lineNumber < 0 || !body) {
@@ -172,4 +125,11 @@ export function removeDeliveredMobileDiffComments(
     const snapshot = deliveredById.get(comment.id)
     return !snapshot || !deliveredCommentMatches(comment, snapshot)
   })
+}
+
+export function sendableMobileDiffComments(
+  comments: readonly DiffComment[],
+  sendingIds: ReadonlySet<string>
+): DiffComment[] {
+  return comments.filter((comment) => !comment.sentAt && !sendingIds.has(comment.id))
 }

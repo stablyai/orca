@@ -2,7 +2,6 @@ export type FeatureWallSetupStepId =
   | 'default-agent'
   | 'add-two-repos'
   | 'notifications'
-  | 'split-terminal'
   | 'two-worktrees'
   | 'browser'
   | 'task-sources'
@@ -17,7 +16,6 @@ export type FeatureWallSetupStep = {
 }
 
 export const FEATURE_WALL_SETUP_PARALLEL_WORK_STEP_IDS = [
-  'split-terminal',
   'two-worktrees',
   'browser'
 ] as const satisfies readonly FeatureWallSetupStepId[]
@@ -26,16 +24,9 @@ export type FeatureWallSetupSectionId = 'parallel-work' | 'setup'
 
 export const FEATURE_WALL_SETUP_STEPS: readonly FeatureWallSetupStep[] = [
   {
-    id: 'split-terminal',
-    name: 'Split a terminal',
-    subtitle: 'Split a terminal',
-    description:
-      'Split a terminal to run two things at once: two agents, an agent next to a dev server, or logs beside a shell.'
-  },
-  {
     id: 'two-worktrees',
-    name: 'Multi-task',
-    subtitle: 'Multi-task',
+    name: 'Work on two tasks at once',
+    subtitle: 'Work on two tasks at once',
     description:
       'Work in 2 different worktrees at once. Each one is isolated (even in the same project). Perfect for working on 2 features at once.'
   },
@@ -60,10 +51,10 @@ export const FEATURE_WALL_SETUP_STEPS: readonly FeatureWallSetupStep[] = [
   },
   {
     id: 'agent-capabilities',
-    name: 'Enable Orca CLI',
-    subtitle: 'Enable Orca CLI',
+    name: 'Give agents Orca skills',
+    subtitle: 'Give agents Orca skills',
     description:
-      'Register the Orca shell command and install agent skills for browser, computer, and orchestration workflows.'
+      "Install the skills agents use to drive Orca's browser, control your computer, and coordinate multi-step work."
   },
   {
     id: 'task-sources',
@@ -114,7 +105,7 @@ export function getFeatureWallSetupStepsForSection(
 export function getFirstIncompleteFeatureWallSetupStepId(
   stepDone: Partial<Record<FeatureWallSetupStepId, boolean>>
 ): FeatureWallSetupStepId {
-  // Why: onboarding should prioritize Setup, while durable definitions retain the original order.
+  // Onboarding prioritizes Setup; durable definitions retain their original order.
   const setupStep = getFeatureWallSetupStepsForSection('setup').find((step) => !stepDone[step.id])
   if (setupStep) {
     return setupStep.id

@@ -1,32 +1,30 @@
-import { isNoUpstreamError } from '../../shared/git-remote-error'
+import { isNoUpstreamError, stripCredentialsFromMessage } from '../../shared/git-remote-error'
 import {
   resolveEffectiveGitUpstream,
   type GitCommandRunner
 } from '../../shared/git-effective-upstream'
 
-/**
- * Git runner so branch-rename logic works identically for local worktrees
- * (`gitExecFileAsync`) and SSH worktrees (`provider.exec`). Same contract the
- * shared upstream-status helpers use.
- */
 export type GitExec = GitCommandRunner
 
-/**
- * True when the branch has a configured upstream — i.e. it has been pushed or
- * is tracking a remote. Auto-rename refuses to touch such a branch because
- * `git branch -m` would orphan the remote branch and break any open PR.
- */
-export async function branchHasUpstream(exec: GitExec): Promise<boolean> {
+export type BranchUpstreamProbe =
+  | { outcome: 'has-upstream' }
+  | { outcome: 'no-upstream' }
+  | { outcome: 'probe-failed'; message: string }
+
+/** Auto-renaming a branch with an effective upstream can strand its remote branch and open review. */
+export async function probeBranchUpstream(exec: GitExec): Promise<BranchUpstreamProbe> {
   try {
-    return (await resolveEffectiveGitUpstream(exec)) !== null
+    const upstream = await resolveEffectiveGitUpstream(exec)
+    return { outcome: upstream !== null ? 'has-upstream' : 'no-upstream' }
   } catch (error) {
     if (isNoUpstreamError(error)) {
-      return false
+      return { outcome: 'no-upstream' }
     }
-    // Why: an unexpected failure (detached HEAD, corruption, transport error)
-    // is not proof there's no upstream. Stay conservative and report "has
-    // upstream" so the caller skips the rename rather than risk a published branch.
-    return true
+    // Probe failures prove neither presence nor absence; keep renaming retryable and scrub UI diagnostics.
+    return {
+      outcome: 'probe-failed',
+      message: stripCredentialsFromMessage(error instanceof Error ? error.message : String(error))
+    }
   }
 }
 
@@ -39,12 +37,7 @@ async function localBranchExists(exec: GitExec, branch: string): Promise<boolean
   }
 }
 
-/**
- * Resolve a branch name that doesn't collide with an existing local branch by
- * appending `-2`, `-3`, … to the leaf — the same suffixing worktree creation
- * uses. `compute` applies the configured prefix to a leaf. The branch currently
- * being renamed away from is never treated as a collision.
- */
+/** Apply compute to suffixed leaves (-2, -3, …), excluding currentBranch from collisions. */
 export async function resolveUniqueBranchName(
   exec: GitExec,
   leaf: string,
@@ -68,7 +61,6 @@ export async function resolveUniqueBranchName(
   return null
 }
 
-/** Rename the currently checked-out branch (`git branch -m <newBranch>`). */
 export async function renameCurrentBranch(exec: GitExec, newBranch: string): Promise<void> {
   await exec(['branch', '-m', newBranch])
 }

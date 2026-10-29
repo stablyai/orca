@@ -1,0 +1,261 @@
+import { app, ipcMain } from 'electron'
+import type { Store } from '../persistence/loading-store/store'
+import {
+  listEphemeralVmRuntimes,
+  updateEphemeralVmRuntimeStatus
+} from '../../shared/ephemeral-vm-runtime-store'
+import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
+import {
+  getEphemeralVmRecipeResultConnection,
+  getEphemeralVmRecipeResultPairingCode
+} from '../../shared/ephemeral-vm-recipes'
+import { updateEnvironmentFromPairingCode } from '../../shared/runtime-environment-store'
+import { releaseEphemeralVmRuntimeEnvironments } from '../ephemeral-vm/runtime-environment-release'
+import {
+  cleanupEphemeralVmRuntime,
+  resumeEphemeralVmRuntime
+} from '../ephemeral-vm/runtime-service'
+import { stopEphemeralVmRuntimeCleanup } from '../ephemeral-vm/runtime-cleanup-control'
+import { removeEphemeralVmRuntimeSshTarget } from '../ephemeral-vm/runtime-ssh-cleanup'
+import {
+  buildEphemeralVmRecipeCleanupCommand,
+  buildEphemeralVmRecipeCleanupPayload
+} from '../../shared/ephemeral-vm-recipe-lifecycle-payload'
+import {
+  connectRuntimeOwnedSshTarget,
+  removeRuntimeOwnedSshTarget
+} from '../ephemeral-vm/runtime-ssh'
+import { getRuntimeRecipeContext } from './ephemeral-vm-recipe-context'
+import {
+  ephemeralVmFailure,
+  ephemeralVmFailureFromError
+} from '../../shared/ephemeral-vm-failure-copy'
+import { invalidateRuntimeEnvironmentTransport } from './runtime-environments/runtime-environments'
+import { retireRemovedRuntimeEnvironment } from './runtime-environments/runtime-environment-removal-cleanup'
+import { attachEphemeralVmRuntimeToWorkspace } from '../ephemeral-vm/runtime-attachment'
+
+export type EphemeralVmCleanupCommandResult = {
+  runtimeId: string
+  command: string | null
+  payloadJson: string
+  cleanupDisabled: boolean
+  message?: string
+}
+
+export function registerEphemeralVmRuntimeHandlers(store: Store): void {
+  ipcMain.removeHandler('ephemeralVm:attachWorkspace')
+  ipcMain.removeHandler('ephemeralVm:listRuntimes')
+  ipcMain.removeHandler('ephemeralVm:cleanup')
+  ipcMain.removeHandler('ephemeralVm:stopCleanup')
+  ipcMain.removeHandler('ephemeralVm:resumeWorkspace')
+  ipcMain.removeHandler('ephemeralVm:getCleanupCommand')
+
+  ipcMain.handle('ephemeralVm:listRuntimes', (): EphemeralVmRuntimeRecord[] => {
+    return listEphemeralVmRuntimes(app.getPath('userData'))
+  })
+
+  ipcMain.handle(
+    'ephemeralVm:attachWorkspace',
+    (_event, args: { runtimeId: string; workspaceId: string }): EphemeralVmRuntimeRecord => {
+      return attachEphemeralVmRuntimeToWorkspace({
+        userDataPath: app.getPath('userData'),
+        runtimeId: args.runtimeId,
+        workspaceId: args.workspaceId
+      })
+    }
+  )
+
+  ipcMain.handle(
+    'ephemeralVm:cleanup',
+    async (_event, args: { runtimeId: string }): Promise<EphemeralVmRuntimeRecord> => {
+      const userDataPath = app.getPath('userData')
+      const runtime = listEphemeralVmRuntimes(userDataPath).find(
+        (entry) => entry.id === args.runtimeId
+      )
+      if (!runtime) {
+        throw new Error(`Unknown ephemeral VM runtime: ${args.runtimeId}`)
+      }
+      if (!runtime.repoId) {
+        throw new Error(`Ephemeral VM runtime has no repo id: ${args.runtimeId}`)
+      }
+      let result
+      if (runtime.cleanupStatus === 'succeeded') {
+        result = { ok: true as const, runtime, skipped: false }
+      } else {
+        let resolved: ReturnType<typeof getRuntimeRecipeContext>
+        try {
+          resolved = getRuntimeRecipeContext(store, userDataPath, runtime.id)
+        } catch (error) {
+          const failed = updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, {
+            status: 'cleanup_failed',
+            cleanupStatus: 'failed',
+            cleanupLastAttemptAt: Date.now(),
+            cleanupLastError: ephemeralVmFailureFromError(error)
+          })
+          return removeEphemeralVmRuntimeSshTarget({
+            userDataPath,
+            runtime: failed,
+            removeTarget: removeRuntimeOwnedSshTarget
+          })
+        }
+        result = await cleanupEphemeralVmRuntime({
+          userDataPath,
+          repoPath: resolved.repo.repo.path,
+          recipe: resolved.recipe,
+          runtimeId: runtime.id
+        })
+      }
+      if (result.ok) {
+        try {
+          await releaseEphemeralVmRuntimeEnvironments(userDataPath, runtime, (environmentId) => {
+            void retireRemovedRuntimeEnvironment(
+              environmentId,
+              invalidateRuntimeEnvironmentTransport,
+              store,
+              userDataPath
+            )
+          })
+        } catch {
+          // Cleanup of provider resources matters more than hiding a stale local
+          // environment row; users can still remove that manually.
+        }
+      }
+      if (!result.ok) {
+        return result.runtime
+      }
+      return removeEphemeralVmRuntimeSshTarget({
+        userDataPath,
+        runtime: result.runtime,
+        removeTarget: removeRuntimeOwnedSshTarget
+      })
+    }
+  )
+
+  ipcMain.handle(
+    'ephemeralVm:stopCleanup',
+    async (_event, args: { runtimeId: string }): Promise<EphemeralVmRuntimeRecord> => {
+      const userDataPath = app.getPath('userData')
+      const stopping = stopEphemeralVmRuntimeCleanup({
+        userDataPath,
+        runtimeId: args.runtimeId
+      })
+      if (stopping) {
+        return (await stopping).runtime
+      }
+
+      const runtime = listEphemeralVmRuntimes(userDataPath).find(
+        (entry) => entry.id === args.runtimeId
+      )
+      if (!runtime) {
+        throw new Error(`Unknown ephemeral VM runtime: ${args.runtimeId}`)
+      }
+      if (runtime.cleanupStatus !== 'running') {
+        return runtime
+      }
+      return updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, {
+        status: 'cleanup_failed',
+        cleanupStatus: 'failed',
+        cleanupLastError: ephemeralVmFailure('cleanupInterrupted')
+      })
+    }
+  )
+
+  ipcMain.handle(
+    'ephemeralVm:resumeWorkspace',
+    async (_event, args: { workspaceId: string }): Promise<EphemeralVmRuntimeRecord | null> => {
+      const userDataPath = app.getPath('userData')
+      const runtime = listEphemeralVmRuntimes(userDataPath).find(
+        (entry) =>
+          entry.workspaceId === args.workspaceId &&
+          entry.status !== 'cleaned' &&
+          entry.status !== 'cleanup_pending'
+      )
+      if (!runtime?.repoId) {
+        return null
+      }
+      if (runtime.status !== 'suspended' && runtime.status !== 'resume_failed') {
+        return runtime
+      }
+      const recipeContext = getRuntimeRecipeContext(store, userDataPath, runtime.id)
+      const result = await resumeEphemeralVmRuntime({
+        userDataPath,
+        repoPath: recipeContext.repo.repo.path,
+        recipe: recipeContext.recipe,
+        runtimeId: runtime.id
+      })
+      if (!result.ok) {
+        throw new Error(result.error)
+      }
+      const connection = getEphemeralVmRecipeResultConnection(result.runtime.recipeResult)
+      // SSH servers use their target and have no pairing to refresh.
+      if (!result.skipped && connection.type !== 'ssh' && runtime.runtimeEnvironmentId) {
+        const pairingCode = getEphemeralVmRecipeResultPairingCode(result.runtime.recipeResult)
+        if (!pairingCode) {
+          throw new Error('Resume result did not include an Orca Server pairing code.')
+        }
+        updateEnvironmentFromPairingCode(userDataPath, runtime.runtimeEnvironmentId, {
+          pairingCode
+        })
+        invalidateRuntimeEnvironmentTransport(runtime.runtimeEnvironmentId)
+      }
+      if (!result.skipped && connection.type === 'ssh') {
+        try {
+          const ssh = await connectRuntimeOwnedSshTarget({
+            runtimeId: result.runtime.id,
+            connection
+          })
+          return updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
+            connectionMode: 'ssh',
+            sshTargetId: ssh.targetId,
+            runtimeEnvironmentId: ssh.environmentId
+          })
+        } catch (error) {
+          updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
+            status: 'resume_failed'
+          })
+          throw error
+        }
+      }
+      return result.runtime
+    }
+  )
+
+  ipcMain.handle(
+    'ephemeralVm:getCleanupCommand',
+    async (_event, args: { runtimeId: string }): Promise<EphemeralVmCleanupCommandResult> => {
+      const userDataPath = app.getPath('userData')
+      const resolved = getRuntimeRecipeContext(store, userDataPath, args.runtimeId)
+      const payload = buildEphemeralVmRecipeCleanupPayload({
+        recipe: resolved.recipe,
+        context: {
+          instanceId: resolved.runtime.id,
+          recipeId: resolved.runtime.recipeId,
+          projectId: resolved.runtime.projectId,
+          workspaceId: resolved.runtime.workspaceId,
+          workspaceName: resolved.runtime.workspaceName,
+          repoPath: resolved.repo.repo.path
+        },
+        recipeResult: resolved.runtime.recipeResult
+      })
+      const payloadJson = JSON.stringify(payload, null, 2)
+      if (resolved.recipe.destroyDisabled || !resolved.recipe.destroy) {
+        return {
+          runtimeId: resolved.runtime.id,
+          command: null,
+          payloadJson,
+          cleanupDisabled: true,
+          message: 'Destroy is disabled for this recipe.'
+        }
+      }
+      return {
+        runtimeId: resolved.runtime.id,
+        command: buildEphemeralVmRecipeCleanupCommand({
+          destroyCommand: resolved.recipe.destroy,
+          payload
+        }),
+        payloadJson,
+        cleanupDisabled: false
+      }
+    }
+  )
+}

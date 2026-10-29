@@ -1,6 +1,8 @@
+import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { GlobalSettings, NotificationDispatchRequest } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { NotificationDispatchRequest } from '../../../../shared/notification-settings-types'
 import { getNotificationSoundOptions } from '@/components/notification-sound-options'
 import {
   createNotificationVolumeDraftState,
@@ -24,7 +26,7 @@ vi.mock('sonner', () => ({
 }))
 
 function createSettings(): GlobalSettings {
-  return {
+  return createGlobalSettingsFixture({
     notifications: {
       enabled: true,
       agentTaskComplete: true,
@@ -32,9 +34,11 @@ function createSettings(): GlobalSettings {
       suppressWhenFocused: true,
       customSoundId: 'system',
       customSoundPath: null,
-      customSoundVolume: 50
+      customSoundVolume: 50,
+      mutedNotificationSourceIds: [],
+      notifyHiddenWorkspaces: false
     }
-  } as GlobalSettings
+  })
 }
 
 describe('NotificationsPane', () => {
@@ -92,8 +96,7 @@ describe('NotificationsPane', () => {
 
     await sendNotificationSettingsTestNotification(createSettings().notifications, 50)
 
-    // Why: this UI sends via Electron's main-process Notification module;
-    // renderer Web Notification.permission can stay stale after macOS Settings changes.
+    // Probe main-process Electron delivery; renderer permission state can remain stale after macOS settings change.
     expect(notifications.dispatch).toHaveBeenCalledWith({
       source: 'test',
       requireDisplayConfirmation: true

@@ -30,6 +30,10 @@ export function findOwnedTextControlPasteTarget(
   if (!(activeElement instanceof Element)) {
     return null
   }
+  // xterm’s hidden helper textarea belongs to terminal input, never native app-menu/large-paste text-control ownership.
+  if (activeElement.closest('.xterm-helper-textarea')) {
+    return null
+  }
   const textControl = activeElement.closest('input, textarea')
   if (!textControl || !isPrimarySelectionTextControl(textControl)) {
     return null

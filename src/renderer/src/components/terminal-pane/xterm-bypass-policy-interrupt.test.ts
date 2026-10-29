@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { _setLayoutMapForTests } from '../../lib/keyboard-layout/layout-base-character'
 import {
   shouldHandleTerminalInterruptKeyboardEvent,
   shouldSuppressTerminalInterruptKeyup,
@@ -20,6 +21,9 @@ function event(overrides: Partial<XtermBypassEvent>): XtermBypassEvent {
     ...overrides
   }
 }
+
+// The layout map is module-level cache; leaving one set would leak into later cases.
+afterEach(() => _setLayoutMapForTests(null))
 
 describe('shouldHandleTerminalInterruptKeyboardEvent', () => {
   it('exports the ETX byte used for terminal interrupts', () => {
@@ -101,6 +105,90 @@ describe('shouldHandleTerminalInterruptKeyboardEvent', () => {
         hasSelection: false
       })
     ).toBe(false)
+  })
+
+  // Non-Latin key glyphs cannot express Ctrl+C; physical KeyC must still reach ETX (#14460).
+  it.each([
+    ['Korean 2-Set', 'ㅊ'],
+    ['Russian', 'с'],
+    ['Greek', 'ψ'],
+    ['Hangul syllable', '차']
+  ])('handles Ctrl+C when %s reports a non-Latin logical key', (_layout, key) => {
+    expect(
+      shouldHandleTerminalInterruptKeyboardEvent(event({ key, code: 'KeyC', ctrlKey: true }), {
+        isMac: true,
+        hasSelection: false
+      })
+    ).toBe(true)
+  })
+
+  it('suppresses the matching keyup for a non-Latin Ctrl+C', () => {
+    expect(
+      shouldSuppressTerminalInterruptKeyup(
+        event({ type: 'keyup', key: 'ㅊ', code: 'KeyC', ctrlKey: true })
+      )
+    ).toBe(true)
+  })
+
+  // Latin remaps such as Dvorak keep their reported letter authoritative.
+  it('still ignores a Latin layout that maps KeyC to a different ASCII letter', () => {
+    expect(
+      shouldHandleTerminalInterruptKeyboardEvent(event({ key: 'j', code: 'KeyC', ctrlKey: true }), {
+        isMac: true,
+        hasSelection: false
+      })
+    ).toBe(false)
+  })
+
+  it('does not handle a non-Latin logical key on a physical key other than KeyC', () => {
+    expect(
+      shouldHandleTerminalInterruptKeyboardEvent(
+        event({ key: 'ㅁ', code: 'KeyA', ctrlKey: true }),
+        {
+          isMac: true,
+          hasSelection: false
+        }
+      )
+    ).toBe(false)
+  })
+
+  // An IME’s Latin base layout map distinguishes the actual C from a positional guess.
+  it('uses the layout map when an IME is layered over a Latin layout', () => {
+    _setLayoutMapForTests(new Map([['KeyC', 'c']]))
+    expect(
+      shouldHandleTerminalInterruptKeyboardEvent(
+        event({ key: 'ㅊ', code: 'KeyC', ctrlKey: true }),
+        {
+          isMac: true,
+          hasSelection: false
+        }
+      )
+    ).toBe(true)
+  })
+
+  // Korean over Dvorak must honor the base map: physical KeyC is not logical C.
+  it('declines when the layout map shows the physical key is not C', () => {
+    _setLayoutMapForTests(new Map([['KeyC', 'j']]))
+    expect(
+      shouldHandleTerminalInterruptKeyboardEvent(
+        event({ key: 'ㅊ', code: 'KeyC', ctrlKey: true }),
+        {
+          isMac: true,
+          hasSelection: false
+        }
+      )
+    ).toBe(false)
+  })
+
+  // True non-Latin layout maps cannot name C either; fall back to terminal physical-position semantics.
+  it('falls back to the physical key when the layout map is itself non-Latin', () => {
+    _setLayoutMapForTests(new Map([['KeyC', 'с']]))
+    expect(
+      shouldHandleTerminalInterruptKeyboardEvent(event({ key: 'с', code: 'KeyC', ctrlKey: true }), {
+        isMac: true,
+        hasSelection: false
+      })
+    ).toBe(true)
   })
 
   it('does not handle modified Ctrl+C chords', () => {

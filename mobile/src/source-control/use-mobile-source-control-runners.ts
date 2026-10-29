@@ -1,15 +1,20 @@
-import { useCallback, type MutableRefObject } from 'react'
-import { useRouter } from 'expo-router'
+import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
+import { translate } from '../i18n/mobile-i18n'
+import type { RouteHandoff } from '../navigation/route-handoff'
 import type { RpcClient } from '../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../platform/haptics'
-import type { MobilePrPrefill } from './mobile-pr-create'
-import { buildOpenPrPrefill, readFreshGitStatus } from './mobile-open-pr-prefill'
 import { useMobileCommitMessageGeneration } from './use-mobile-commit-message-generation'
 import { useMobileSourceControlCommitRunners } from './use-mobile-source-control-commit-runners'
 import { useMobileSourceControlActionSheetRunners } from './use-mobile-source-control-action-sheet-runners'
+import { useMobileCreatePrRunner } from './use-mobile-create-pr-runner'
+import { useMobileStageAllRunner } from './use-mobile-stage-all-runner'
 import type { RuntimeGitLocalBranches } from '../../../src/shared/runtime-types'
 import type { MobileGitStatusResult } from './mobile-git-status'
 import type { LoadStatusOptions } from './mobile-source-control-screen-state'
+import type {
+  MobileCommitFailureRecovery,
+  RecordMobileCommitFailure
+} from './mobile-commit-failure-recovery'
 
 type GitStep = { method: string; params?: Record<string, unknown> }
 type SendGitRequest = <T>(method: string, params?: Record<string, unknown>) => Promise<T>
@@ -21,10 +26,11 @@ type Params = {
   status: MobileGitStatusResult | null
   branchLabel: string
   commitMessage: string
+  stagedEntries: MobileCommitFailureRecovery['stagedEntries']
   generatingMessage: boolean
   stageablePaths: string[]
   unstageablePaths: string[]
-  router: ReturnType<typeof useRouter>
+  router: RouteHandoff
   sendGitRequest: SendGitRequest
   sendCommitRequest: (message: string) => Promise<unknown>
   runGitSyncSteps: () => Promise<void>
@@ -33,18 +39,17 @@ type Params = {
   busyActionRef: MutableRefObject<string | null>
   setBusyAction: (next: string | null) => void
   setActionError: (next: string | null) => void
-  setCommitMessage: (next: string) => void
+  setCommitMessage: Dispatch<SetStateAction<string>>
   setGeneratingMessage: (next: boolean) => void
   setShowActionSheet: (next: boolean) => void
   setLocalBranches: (next: RuntimeGitLocalBranches | null) => void
   setShowBranchPicker: (next: boolean) => void
-  setPrPrefill: (next: MobilePrPrefill | null) => void
-  setShowPrSheet: (next: boolean) => void
+  setCreatedPrUrl: (next: string | null) => void
+  setCreatedPrWarning: (next: string | null) => void
+  recordCommitFailure: RecordMobileCommitFailure
+  onOpenHistory?: () => void
 }
 
-// All git workflow + action-sheet runners for the source-control panel. Split
-// out of the state hook to keep each file under the line limit; behavior is
-// unchanged from the original inline definitions.
 export function useMobileSourceControlRunners(params: Params) {
   const {
     client,
@@ -53,6 +58,7 @@ export function useMobileSourceControlRunners(params: Params) {
     status,
     branchLabel,
     commitMessage,
+    stagedEntries,
     generatingMessage,
     stageablePaths,
     unstageablePaths,
@@ -70,8 +76,10 @@ export function useMobileSourceControlRunners(params: Params) {
     setShowActionSheet,
     setLocalBranches,
     setShowBranchPicker,
-    setPrPrefill,
-    setShowPrSheet
+    setCreatedPrUrl,
+    setCreatedPrWarning,
+    recordCommitFailure,
+    onOpenHistory
   } = params
 
   const runGitWorkflow = useCallback(
@@ -86,6 +94,7 @@ export function useMobileSourceControlRunners(params: Params) {
       busyActionRef.current = actionId
       setBusyAction(actionId)
       setActionError(null)
+      recordCommitFailure(null)
       try {
         await runner()
         if (!mountedRef.current) {
@@ -102,7 +111,8 @@ export function useMobileSourceControlRunners(params: Params) {
           return false
         }
         triggerError()
-        setActionError(err instanceof Error ? err.message : 'Source control action failed')
+        const text = translate('sourceControl.runners.actionFailed', 'Source control action failed')
+        setActionError(err instanceof Error ? err.message : text)
         return false
       } finally {
         if (busyActionRef.current === actionId) {
@@ -113,7 +123,15 @@ export function useMobileSourceControlRunners(params: Params) {
         }
       }
     },
-    [busyActionRef, loadStatus, mountedRef, setActionError, setBusyAction, setCommitMessage]
+    [
+      busyActionRef,
+      loadStatus,
+      mountedRef,
+      recordCommitFailure,
+      setActionError,
+      setBusyAction,
+      setCommitMessage
+    ]
   )
 
   const runGitAction = useCallback(
@@ -145,12 +163,12 @@ export function useMobileSourceControlRunners(params: Params) {
     [runGitSyncSteps, runGitWorkflow]
   )
 
-  const stageAll = useCallback(async () => {
-    if (stageablePaths.length === 0) {
-      return
-    }
-    await runGitAction('stage-all', 'git.bulkStage', { filePaths: stageablePaths })
-  }, [runGitAction, stageablePaths])
+  const stageAll = useMobileStageAllRunner({
+    status,
+    stageablePaths,
+    runGitWorkflow,
+    sendGitRequest
+  })
 
   const unstageAll = useCallback(async () => {
     if (unstageablePaths.length === 0) {
@@ -158,20 +176,6 @@ export function useMobileSourceControlRunners(params: Params) {
     }
     await runGitAction('unstage-all', 'git.bulkUnstage', { filePaths: unstageablePaths })
   }, [runGitAction, unstageablePaths])
-
-  const { commit, runCommitSequence, runCommitSyncSequence } = useMobileSourceControlCommitRunners({
-    commitMessage,
-    sendGitRequest,
-    sendCommitRequest,
-    runGitSyncSteps,
-    runGitWorkflow,
-    loadStatus,
-    mountedRef,
-    busyActionRef,
-    setBusyAction,
-    setActionError,
-    setCommitMessage
-  })
 
   const { generateCommitMessage, cancelGenerateCommitMessage } = useMobileCommitMessageGeneration({
     client,
@@ -184,46 +188,41 @@ export function useMobileSourceControlRunners(params: Params) {
     setActionError
   })
 
-  const openPrSheet = useCallback(
-    async (pushFirst: boolean) => {
-      setShowActionSheet(false)
-      let effectiveStatus = status
-      if (pushFirst) {
-        const pushed = await runGitWorkflow('push-create-pr', async () => {
-          await sendGitRequest<unknown>('git.push')
-        })
-        if (!pushed || !mountedRef.current) {
-          return
-        }
-        // Why: the captured `status` predates the push, so its upstream/ahead data is
-        // stale; read fresh git.status so the prefill reflects the just-pushed branch.
-        if (client) {
-          effectiveStatus = await readFreshGitStatus(worktreeId, status, sendGitRequest)
-          if (!mountedRef.current) {
-            return
-          }
-        }
-      }
-      const prefill = await buildOpenPrPrefill(client, worktreeId, effectiveStatus, branchLabel)
-      if (!mountedRef.current) {
-        return
-      }
-      setPrPrefill(prefill)
-      setShowPrSheet(true)
-    },
-    [
-      branchLabel,
-      client,
-      mountedRef,
-      runGitWorkflow,
-      sendGitRequest,
-      setPrPrefill,
-      setShowActionSheet,
-      setShowPrSheet,
-      status,
-      worktreeId
-    ]
-  )
+  const { commit, runCommitSequence, runCommitSyncSequence } = useMobileSourceControlCommitRunners({
+    commitMessage,
+    stagedEntries,
+    sendGitRequest,
+    sendCommitRequest,
+    cancelGenerateCommitMessage,
+    runGitSyncSteps,
+    runGitWorkflow,
+    loadStatus,
+    mountedRef,
+    busyActionRef,
+    setBusyAction,
+    setActionError,
+    setCommitMessage,
+    recordCommitFailure
+  })
+
+  const createPr = useMobileCreatePrRunner({
+    client,
+    worktreeId,
+    status,
+    branchLabel,
+    commitMessage,
+    stagedEntries,
+    mountedRef,
+    runGitWorkflow,
+    loadStatus,
+    cancelGenerateCommitMessage,
+    setActionError,
+    setCommitMessage,
+    setShowActionSheet,
+    setCreatedPrUrl,
+    setCreatedPrWarning,
+    recordCommitFailure
+  })
 
   const openBranchPicker = useCallback(() => {
     setShowActionSheet(false)
@@ -253,16 +252,23 @@ export function useMobileSourceControlRunners(params: Params) {
 
   const openHistory = useCallback(() => {
     setShowActionSheet(false)
-    if (hostId && worktreeId) {
-      router.push(
-        `/h/${hostId}/history/${encodeURIComponent(worktreeId)}` as Parameters<
-          typeof router.push
-        >[0]
-      )
+    // History is a local hub segment; fallback navigation targets the hub directly to avoid a redirect hop.
+    if (onOpenHistory) {
+      onOpenHistory()
+      return
     }
-  }, [hostId, router, setShowActionSheet, worktreeId])
+    if (hostId && worktreeId) {
+      router.push({
+        pathname: '/h/[hostId]/source-control/[worktreeId]',
+        params: {
+          hostId,
+          worktreeId,
+          tab: 'history'
+        }
+      } as Parameters<typeof router.push>[0])
+    }
+  }, [hostId, onOpenHistory, router, setShowActionSheet, worktreeId])
 
-  // Switch to a local branch, then reload status.
   const checkoutBranch = useCallback(
     async (branch: string) => {
       setShowBranchPicker(false)
@@ -273,7 +279,6 @@ export function useMobileSourceControlRunners(params: Params) {
 
   const actionSheetRunners = useMobileSourceControlActionSheetRunners({
     client,
-    worktreeId,
     sendGitRequest,
     runGitWorkflow,
     runGitSequence,
@@ -284,7 +289,6 @@ export function useMobileSourceControlRunners(params: Params) {
     setShowActionSheet
   })
 
-  // Abort an in-progress merge/rebase from the conflict banner.
   const abortConflictOperation = useCallback(
     async (operation: string) => {
       const method =
@@ -304,7 +308,7 @@ export function useMobileSourceControlRunners(params: Params) {
     commit,
     generateCommitMessage,
     cancelGenerateCommitMessage,
-    openPrSheet,
+    createPr,
     openBranchPicker,
     openHistory,
     checkoutBranch,

@@ -1,46 +1,73 @@
-# AGENTS.md
+# Useful Commands
 
-## Design System
+- **Before handoff**: `pnpm check:changed --maxWorkers=2` (format, lint, typecheck, affected tests, ratchets; cached when nothing changed)
+- **Typecheck**: `pnpm tc` (or `tc:node` / `tc:cli` / `tc:web`)
+- **Test**: `pnpm test [path/to/file.test.ts]`; affected only: `pnpm test:changed [path] --maxWorkers=2` ([details](.github/CONTRIBUTING.md#targeting-local-tests))
+- **Lint**: `oxlint`; format: `pnpm format`
 
-All UI work — layout, color, typography, spacing, component selection, UX behavior — must follow [`docs/STYLEGUIDE.md`](./docs/STYLEGUIDE.md). Use the tokens defined in `src/renderer/src/assets/main.css` (the canonical source) and the shadcn primitives in `src/renderer/src/components/ui/`. Don't invent new color values, font sizes, or shadow tiers when a documented one already covers the role. When STYLEGUIDE.md is silent, follow the resolution order in its final section.
+# Ensure main is always releasable
 
-## Code Comments: Document the "Why", Briefly
+Never break main. Use stacks or collapse PRs before merge
 
-When writing or modifying code driven by a design doc or non-obvious constraint, add a comment explaining **why** the code behaves the way it does.
+# Design System
 
-Keep comments short — one or two lines. Capture only the non-obvious reason (safety constraint, compatibility shim, design-doc rule). Don't restate what the code does, narrate the mechanism, cite design-doc sections verbatim, or explain adjacent API choices unless they're the point.
+All UI work — layout, color, typography, spacing, component selection, UX behavior — must follow [`docs/STYLEGUIDE.md`](./docs/STYLEGUIDE.md). Use the tokens defined in `src/renderer/src/assets/main.css` (the canonical source) and the shadcn primitives in `src/renderer/src/components/ui/`. Don't invent new color values, font sizes, or shadow tiers when a documented one already covers the role. Read the `docs/styleguide/` deep dive it links only when your change touches that topic. When STYLEGUIDE.md is silent, follow the resolution order in its final section.
 
-## Lint Rules: Do Not Disable Max Lines
+# Electron UI Validation
 
-Never add a `max-lines` disable (`eslint-disable max-lines`, `oxlint-disable max-lines`, or line-specific variants). Split the file, extract focused modules, move fixtures/builders into named files, or otherwise reduce the counted lines instead.
+Always run tests and agent-launched apps in the background with `ORCA_BACKGROUND_LAUNCH=1`.
+Never steal monitor focus or reveal test windows: no `show()`, `showInactive()`, `bringToFront()`,
+`app.focus()`, or OS activation. Use CDP screenshots of hidden renderers. Keep native-focus and visible-window tests paused on the user's desktop; run them on an isolated display or CI.
+Rebuild modified launch-policy code before running an app; stale build wrappers are not safe.
+
+Use the `$electron` skill and Playwright CDP for rendered Orca UI checks. Do not use computer-use for Orca UI validation.
+Screenshot presentational components without Electron: `pnpm fixtures:shot <id>` ([fixtures](docs/agents-md-refs/component-fixtures.md)).
+
+# Code Style
+
+## Reuse Before Reimplementing
+
+Before writing new logic at any scale — a function, component, IPC channel, state store, or whole subsystem/flow — check whether an existing implementation already does the job. Extend or generalize it instead of building a parallel version.
+
+## Avoid Comments
+
+- Only use when code does not describe
+- BE CONCISE. 1 LINE if possible (why not how)
 
 ## File and Module Naming
 
 Never use vague names like `helpers`, `utils`, `common`, `misc`, or `shared-stuff` for files, folders, or modules. They carry zero info and tend to become dumping grounds. Name files after what they _actually_ contain — prefer the concrete domain concept (e.g. `tab-group-state.ts`, `terminal-orphan-cleanup.ts`) over the generic role (`tabs-helpers.ts`, `terminal-utils.ts`). If you find yourself reaching for `helpers`, the file probably has more than one responsibility and should be split, or there's a better name hiding in the code that describes what the functions operate on.
 
-## Worktree Safety
+## Type Assertions: Prefer Checked Types
 
-Always use the primary working directory (the worktree) for all file reads and edits. Never follow absolute paths from subagent results that point to the main repo.
+Avoid type assertions except `as const`. Unavoidable casts need a line-specific `SAFETY:` explanation:
+
+# First Class Citizens
+
+Every change must consider these areas:
 
 ## Cross-Platform Support
 
-Orca targets macOS, Linux, and Windows. Keep all platform-dependent behavior behind runtime checks:
+Support macOS, Linux, and Windows. Guard platform-specific behavior at runtime; use platform-aware shortcuts, paths, and existing process wrappers. Before changing platform-specific code, processes, shells, shortcuts, paths, or native modules, read [`docs/agents-md-refs/cross-platform-support.md`](./docs/agents-md-refs/cross-platform-support.md).
 
-- **Keyboard shortcuts**: Never hardcode `e.metaKey`. Use a platform check (`navigator.userAgent.includes('Mac')`) to pick `metaKey` on Mac and `ctrlKey` on Linux/Windows. Electron menu accelerators should use `CmdOrCtrl`.
-- **Shortcut labels in UI**: Display `⌘` / `⇧` on Mac and `Ctrl+` / `Shift+` on other platforms.
-- **File paths**: Use `path.join` or Electron/Node path utilities — never assume `/` or `\`.
+## Remote Use Case
 
-## SSH Use Case
+Support remote execution as well as local. Clients and servers update independently; preserve compatibility across mixed versions.
 
-All changes must consider the SSH use case. Don't assume local-only execution.
+## Mobile
 
-## Git Provider Compatibility
+Any feature should be considered for parity on mobile
 
-Source-control and review changes must consider GitLab and other supported git providers, not only GitHub. Keep provider-specific behavior behind explicit checks, and avoid GitHub-only naming for generic review concepts.
+## Folder Workspaces
 
-## GitHub CLI Usage
+All changes must consider folder workspaces as well as git worktrees. Don't assume every workspace is a git worktree.
 
-Be mindful of the user's `gh` CLI API rate limit — batch requests where possible and avoid unnecessary calls. All code, commands, and scripts must be compatible with macOS, Linux, and Windows.
-Never commit PR evidence images; attach them to the PR conversation instead (but never use gh-attach).
+# Git / GitHub
 
-## Type Declarations: Prefer `.ts` Over `.d.ts`
+If changing code around `git`, `gh`, source-control, or review behavior read [`docs/agents-md-refs/git-workflow.md`](./docs/agents-md-refs/git-workflow.md).
+
+For a failed GitHub Actions run, inspect the failed jobs and retry with `gh run rerun <run-id> --failed --repo stablyai/orca`. Preserve successful jobs; use a full rerun only when the failure requires revalidating them. A code fix needs a new push and fresh checks, not a retry of the old SHA.
+
+# Tests
+
+Avoid adding low-value tests. These might be fine for development but offer negative value when checked in. [Anti-patterns](./docs/agents-md-refs/test-antipatterns.md)

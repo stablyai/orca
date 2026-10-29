@@ -1,6 +1,13 @@
 import { useAppStore } from '@/store'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
+import {
+  agentStartupDeliveryKey as deliveryKey,
+  clearConsumedAgentStartupDeliveriesForTests,
+  isAgentStartupDeliveryConsumed,
+  markAgentStartupDeliveryConsumed,
+  releaseAgentStartupDeliveryConsumed
+} from './agent-startup-delivery-guards'
 
 type AppStoreSnapshot = ReturnType<typeof useAppStore.getState>
 
@@ -13,7 +20,6 @@ type PendingAgentStartupDelivery = {
 }
 
 const pendingAgentStartupDeliveries = new Map<string, PendingAgentStartupDelivery>()
-const consumedAgentStartupDeliveries = new Set<string>()
 const staleStartupRecheckTimers = new Map<string, ReturnType<typeof globalThis.setTimeout>>()
 let unsubscribePendingAgentStartupDeliveries: (() => void) | null = null
 
@@ -22,8 +28,7 @@ export function resolveAgentStartupTabId(
   worktreeId: string,
   primaryTabId: string | null | undefined
 ): string | null {
-  // Why: the caller may know the exact tab that received the queued startup
-  // command. Prefer it over focus-derived state, which can change mid-create.
+  // Prefer the caller’s exact startup tab; focus can change during creation.
   return (
     primaryTabId ??
     state.activeTabIdByWorktree[worktreeId] ??
@@ -84,7 +89,30 @@ function ensurePendingAgentStartupSubscription(): void {
   if (unsubscribePendingAgentStartupDeliveries) {
     return
   }
-  unsubscribePendingAgentStartupDeliveries = useAppStore.subscribe(() => {
+  const initial = useAppStore.getState()
+  // Capture references individually to avoid allocation and support subscribe adapters that reuse state objects.
+  let previousTabs = initial.tabsByWorktree
+  let previousPendingStartups = initial.pendingStartupByTabId
+  let previousLaunchConfigs = initial.agentLaunchConfigByPaneKey
+  let previousPtyIds = initial.ptyIdsByTabId
+  let previousLayouts = initial.terminalLayoutsByTabId
+  unsubscribePendingAgentStartupDeliveries = useAppStore.subscribe((state) => {
+    // Only five immutable slices affect delivery; title/status/focus/usage churn must not rescan indefinitely unmounted launches.
+    if (
+      state.tabsByWorktree === previousTabs &&
+      state.pendingStartupByTabId === previousPendingStartups &&
+      state.agentLaunchConfigByPaneKey === previousLaunchConfigs &&
+      state.ptyIdsByTabId === previousPtyIds &&
+      state.terminalLayoutsByTabId === previousLayouts
+    ) {
+      return
+    }
+    // Update before flushing because delivery can synchronously write the store.
+    previousTabs = state.tabsByWorktree
+    previousPendingStartups = state.pendingStartupByTabId
+    previousLaunchConfigs = state.agentLaunchConfigByPaneKey
+    previousPtyIds = state.ptyIdsByTabId
+    previousLayouts = state.terminalLayoutsByTabId
     flushPendingAgentStartupDeliveries()
   })
 }
@@ -99,7 +127,7 @@ function stopPendingAgentStartupSubscriptionIfIdle(): void {
 
 export function queuePendingAgentStartupDelivery(delivery: PendingAgentStartupDelivery): void {
   const key = deliveryKey(delivery)
-  if (consumedAgentStartupDeliveries.has(key)) {
+  if (isAgentStartupDeliveryConsumed(key)) {
     return
   }
   pendingAgentStartupDeliveries.set(key, delivery)
@@ -109,7 +137,7 @@ export function queuePendingAgentStartupDelivery(delivery: PendingAgentStartupDe
 
 export function resetAgentStartupDelayedDeliveryForTests(): void {
   pendingAgentStartupDeliveries.clear()
-  consumedAgentStartupDeliveries.clear()
+  clearConsumedAgentStartupDeliveriesForTests()
   for (const timer of staleStartupRecheckTimers.values()) {
     globalThis.clearTimeout(timer)
   }
@@ -124,19 +152,21 @@ export function beginAgentStartupDeliveryAttempt(args: {
   launchToken: string
 }): boolean {
   const key = deliveryKey(args)
-  if (consumedAgentStartupDeliveries.has(key)) {
+  if (isAgentStartupDeliveryConsumed(key)) {
     return false
   }
-  consumedAgentStartupDeliveries.add(key)
+  markAgentStartupDeliveryConsumed(key)
   pendingAgentStartupDeliveries.delete(key)
   clearStaleStartupRecheck(key)
   return true
 }
 
-function deliveryKey(
-  delivery: Pick<PendingAgentStartupDelivery, 'worktreeId' | 'tabId' | 'launchToken'>
-): string {
-  return `${delivery.worktreeId}\0${delivery.tabId}\0${delivery.launchToken}`
+export function releaseAgentStartupDeliveryAttempt(args: {
+  worktreeId: string
+  tabId: string
+  launchToken: string
+}): void {
+  releaseAgentStartupDeliveryConsumed(deliveryKey(args))
 }
 
 function flushPendingAgentStartupDeliveries(): void {
@@ -162,9 +192,7 @@ function flushPendingAgentStartupDeliveries(): void {
     if (!ptyId) {
       continue
     }
-    // Why: once the launch-bound PTY exists, the bounded readiness/paste path
-    // owns success or failure. Consume before awaiting so store churn cannot
-    // duplicate a linked-work-item draft.
+    // Consume before awaiting bounded readiness/paste so store churn cannot deliver the linked-work-item draft twice.
     if (beginAgentStartupDeliveryAttempt(delivery)) {
       void delivery.deliver(tabId, ptyId, delivery.startup).catch((error) => {
         console.warn('Queued agent startup delivery failed', error)

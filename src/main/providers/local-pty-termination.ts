@@ -1,0 +1,290 @@
+import type * as pty from 'node-pty'
+import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
+import { killWithDescendantSweep } from '../pty-descendant-termination'
+import { terminateShutdownDescendants } from '../daemon/terminal-descendant-shutdown'
+import {
+  forceKillPosixPtyProcessGroups,
+  forceKillPosixPtyProcessGroupsSync
+} from '../pty/posix-pty-process-groups'
+import { PendingPtyGroupSweep } from '../pty/pending-pty-group-sweep'
+import { terminatePtyJob } from '../windows/windows-pty-job'
+import {
+  clearLocalPtyForceKillTimer,
+  clearPtyState,
+  disposePtyExitListener,
+  disposePtyListeners,
+  ptyAgentSessionIds,
+  ptyForceKillTimers,
+  ptyPhysicalExits,
+  ptyProcesses,
+  ptyShutdownOperations,
+  ptyTerminationMode,
+  ptyLoadGeneration,
+  runPtyCleanup,
+  type PtyShutdownOperation
+} from './local-pty-provider-state'
+import {
+  cancelAllPendingLocalPtySpawns,
+  cancelPendingLocalPtySpawns
+} from './local-pty-spawn-state'
+
+export const LOCAL_PTY_PHYSICAL_EXIT_TIMEOUT_MS = 8_000
+export const LOCAL_PTY_GRACEFUL_FORCE_TIMEOUT_MS = 5_000
+export const LOCAL_PTY_FORCE_KILL_RETRY_MS = 250
+
+export function createPtyPhysicalExit(id: string): void {
+  ptyPhysicalExits.set(id, new PhysicalExitTracker())
+}
+
+function waitForPtyPhysicalExit(id: string, physicalExit?: PhysicalExitTracker): Promise<void> {
+  if (!physicalExit) {
+    return Promise.reject(new Error(`PTY "${id}" exit tracking unavailable`))
+  }
+  return physicalExit.waitForExit(
+    LOCAL_PTY_PHYSICAL_EXIT_TIMEOUT_MS,
+    () => new Error(`Timed out waiting for PTY process exit: ${id}`)
+  )
+}
+
+const groupSweeps = new WeakMap<pty.IPty, PendingPtyGroupSweep>()
+
+function groupSweepFor(proc: pty.IPty): PendingPtyGroupSweep {
+  let sweep = groupSweeps.get(proc)
+  if (!sweep) {
+    sweep = new PendingPtyGroupSweep()
+    groupSweeps.set(proc, sweep)
+  }
+  return sweep
+}
+
+function killLocalPtyProcess(proc: pty.IPty, immediate: boolean): void {
+  if (process.platform === 'win32') {
+    proc.kill()
+    return
+  }
+  if (!immediate) {
+    proc.kill('SIGTERM')
+    return
+  }
+  forceKillPosixPtyProcessGroupsSync(proc.pid, () => proc.kill('SIGKILL'))
+}
+
+function armLocalPtyForceKill(
+  id: string,
+  proc: pty.IPty,
+  options: { delayMs?: number; attemptsRemaining?: number } = {}
+): void {
+  if (ptyProcesses.get(id) !== proc || ptyTerminationMode.get(id) !== 'graceful') {
+    return
+  }
+  const attemptsRemaining = options.attemptsRemaining ?? 2
+  const timer = setTimeout(() => {
+    ptyForceKillTimers.delete(id)
+    if (ptyProcesses.get(id) !== proc || ptyTerminationMode.get(id) !== 'graceful') {
+      return
+    }
+    ptyTerminationMode.set(id, 'force')
+    // Graceful mode is POSIX-only, so this deadline never reaches the ConPTY kill path.
+    groupSweepFor(proc)
+      .track(
+        forceKillPosixPtyProcessGroups(proc.pid, () => proc.kill('SIGKILL'), {
+          ownsRoot: () => ptyProcesses.get(id) === proc
+        })
+      )
+      .catch((error: unknown) => {
+        ptyTerminationMode.set(id, 'graceful')
+        console.error('[pty] failed to force-kill PTY after graceful deadline', { id, error })
+        // Why: a transient native rejection must not consume the only SIGKILL owner while shutdown still awaits physical exit.
+        if (attemptsRemaining > 1) {
+          armLocalPtyForceKill(id, proc, {
+            delayMs: LOCAL_PTY_FORCE_KILL_RETRY_MS,
+            attemptsRemaining: attemptsRemaining - 1
+          })
+        }
+      })
+  }, options.delayMs ?? LOCAL_PTY_GRACEFUL_FORCE_TIMEOUT_MS)
+  timer.unref?.()
+  ptyForceKillTimers.set(id, timer)
+}
+
+export function destroyPtyProcess(proc: pty.IPty, options: { alreadyKilled?: boolean } = {}): void {
+  // Why: neutralize proc.kill before destroy(), whose close-listener SIGHUPs a possibly-recycled POSIX pid; destroy() frees the ptmx fd (docs/fix-pty-fd-leak.md); on Windows destroy() is itself kill().
+  if (process.platform === 'win32' && options.alreadyKilled) {
+    return
+  }
+  if (process.platform !== 'win32') {
+    ;(proc as unknown as { kill: (sig?: string) => void }).kill = () => {}
+  }
+  try {
+    ;(proc as unknown as { destroy?: () => void }).destroy?.()
+  } catch {
+    /* swallow — already torn down */
+  }
+}
+
+function requestPtyTermination(id: string, proc: pty.IPty): void {
+  runPtyCleanup(id)
+  disposePtyListeners(id)
+  // A pending deadline sweep owns escalation until it settles; a rejected one hands it back here.
+  groupSweepFor(proc).afterSettled(() => finishPtyTermination(id, proc))
+}
+
+function finishPtyTermination(id: string, proc: pty.IPty): void {
+  if (ptyProcesses.get(id) !== proc) {
+    // Exited while the sweep ran: its pid may be reused, so only release the handle.
+    destroyPtyProcess(proc, { alreadyKilled: true })
+    return
+  }
+  const previousMode = ptyTerminationMode.get(id)
+  // Escalate outstanding graceful shutdown before cleanup neutralizes kill and disables its deadline.
+  if (previousMode !== 'force') {
+    clearLocalPtyForceKillTimer(id)
+    ptyTerminationMode.set(id, 'force')
+    try {
+      killLocalPtyProcess(proc, true)
+    } catch {
+      if (previousMode === 'graceful') {
+        ptyTerminationMode.set(id, previousMode)
+        armLocalPtyForceKill(id, proc, {
+          delayMs: LOCAL_PTY_FORCE_KILL_RETRY_MS,
+          attemptsRemaining: 1
+        })
+      } else {
+        ptyTerminationMode.delete(id)
+      }
+      /* Process may already be dead. */
+      return
+    }
+  }
+  // Shutdown/orphan cleanup can overlap; retain onExit and tracking until physical exit.
+  destroyPtyProcess(proc, { alreadyKilled: true })
+}
+
+function requestTrackedPtyShutdown(id: string, proc: pty.IPty, immediate: boolean): void {
+  const previousMode = ptyTerminationMode.get(id)
+  // Bare ConPTY kill closes the pseudoconsole; Windows has no graceful-signal phase.
+  const requestedMode = immediate || process.platform === 'win32' ? 'force' : 'graceful'
+  if (!previousMode || (requestedMode === 'force' && previousMode !== 'force')) {
+    ptyTerminationMode.set(id, requestedMode)
+    try {
+      killLocalPtyProcess(proc, immediate)
+      if (requestedMode === 'graceful') {
+        armLocalPtyForceKill(id, proc)
+      } else {
+        clearLocalPtyForceKillTimer(id)
+      }
+    } catch (error) {
+      if (previousMode) {
+        ptyTerminationMode.set(id, previousMode)
+      } else {
+        ptyTerminationMode.delete(id)
+      }
+      throw error
+    }
+  }
+}
+
+async function shutdownTrackedPty(
+  id: string,
+  proc: pty.IPty,
+  operation: PtyShutdownOperation
+): Promise<void> {
+  const physicalExit = ptyPhysicalExits.get(id)
+  const signalRoot = (): void => {
+    // Natural exit can race descendant capture; never signal after losing this PTY handle.
+    if (ptyProcesses.get(id) !== proc) {
+      return
+    }
+    // Cancel startup delivery now, but keep the exit listener and ownership maps until node-pty reports physical exit.
+    runPtyCleanup(id)
+    operation.rootSignalled = true
+    requestTrackedPtyShutdown(id, proc, operation.immediate)
+  }
+  if (ptyAgentSessionIds.has(id) || operation.immediate) {
+    // Typed agents also detach tool process groups; immediate close must snapshot before root exit.
+    await killWithDescendantSweep(proc.pid, signalRoot, {
+      ownsRoot: () => ptyProcesses.get(id) === proc,
+      terminateOwnedTree: () => terminatePtyJob(proc),
+      terminateDescendants: terminateShutdownDescendants,
+      // Group SIGKILL must wait out the SIGTERM grace so agents can run exit hooks (Claude SessionEnd).
+      awaitEscalation: () => operation.immediate
+    })
+  } else {
+    signalRoot()
+  }
+  await waitForPtyPhysicalExit(id, physicalExit)
+}
+
+export async function shutdownLocalPty(
+  id: string,
+  opts: { immediate?: boolean; keepHistory?: boolean }
+): Promise<void> {
+  cancelPendingLocalPtySpawns(id)
+  const pending = ptyShutdownOperations.get(id)
+  if (pending) {
+    if (opts.immediate === true) {
+      pending.immediate = true
+      if (pending.rootSignalled && ptyProcesses.get(id) === pending.proc) {
+        requestTrackedPtyShutdown(id, pending.proc, true)
+      }
+    }
+    await pending.promise
+    return
+  }
+  const proc = ptyProcesses.get(id)
+  if (!proc) {
+    return
+  }
+  const entry: PtyShutdownOperation = {
+    promise: Promise.resolve(),
+    immediate: opts.immediate === true,
+    rootSignalled: false,
+    proc
+  }
+  entry.promise = shutdownTrackedPty(id, proc, entry)
+  ptyShutdownOperations.set(id, entry)
+  try {
+    await entry.promise
+  } finally {
+    if (ptyShutdownOperations.get(id) === entry) {
+      ptyShutdownOperations.delete(id)
+    }
+  }
+}
+
+export function killOrphanedLocalPtys(currentGeneration: number): { id: string }[] {
+  const killed: { id: string }[] = []
+  for (const [id, proc] of ptyProcesses) {
+    if ((ptyLoadGeneration.get(id) ?? -1) < currentGeneration) {
+      requestPtyTermination(id, proc)
+      killed.push({ id })
+    }
+  }
+  return killed
+}
+
+export function killAllLocalPtys(): void {
+  cancelAllPendingLocalPtySpawns()
+  for (const [id, proc] of ptyProcesses) {
+    runPtyCleanup(id)
+    disposePtyListeners(id)
+    disposePtyExitListener(id)
+    if (!(process.platform === 'win32' && ptyTerminationMode.has(id))) {
+      try {
+        if (ptyAgentSessionIds.has(id) && process.platform !== 'win32') {
+          // Synchronous quit must sweep agent groups before releasing node-pty or OMP workers can survive.
+          forceKillPosixPtyProcessGroupsSync(proc.pid, () => proc.kill('SIGKILL'))
+        } else {
+          proc.kill()
+        }
+      } catch {
+        /* Process may already be dead. */
+      }
+    }
+    // App exit is the final ownership boundary; NAPI callbacks cannot survive FreeEnvironment.
+    destroyPtyProcess(proc, { alreadyKilled: true })
+    // Resolve overlapping shutdown waiters at the app-exit boundary replacing node-pty onExit.
+    ptyPhysicalExits.get(id)?.markExited()
+    clearPtyState(id)
+  }
+}

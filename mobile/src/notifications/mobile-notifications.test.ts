@@ -1,271 +1,241 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import * as Notifications from 'expo-notifications'
 import { subscribeToDesktopNotifications } from './mobile-notifications'
+import { dismissHostPushNotification } from './push-socket-dismissal'
+import { requestNotificationCatchup } from './push-dismissal-reconciliation'
+import { RpcClientStreamRegistry } from '../transport/rpc-client-stream-registry'
+import { MobileRelayRpcStreams } from '../transport/mobile-relay-rpc-streams'
 import type { RpcClient } from '../transport/rpc-client'
-import { loadPushNotificationsEnabled } from '../storage/preferences'
+import type { RpcResponse } from '../transport/types'
 
-vi.mock('expo-notifications', () => ({
-  AndroidImportance: { HIGH: 'high' },
-  setNotificationChannelAsync: vi.fn(),
-  getPermissionsAsync: vi.fn(),
-  requestPermissionsAsync: vi.fn(),
-  scheduleNotificationAsync: vi.fn(),
-  dismissNotificationAsync: vi.fn()
+vi.mock('./push-socket-dismissal', () => ({
+  dismissHostPushNotification: vi.fn(async () => {})
 }))
-
-vi.mock('react-native', () => ({
-  Platform: { OS: 'ios' }
+vi.mock('./push-dismissal-reconciliation', () => ({
+  requestNotificationCatchup: vi.fn(async () => {})
 }))
+vi.mock('./notification-permissions', () => ({}))
 
-vi.mock('../storage/preferences', () => ({
-  loadPushNotificationsEnabled: vi.fn()
-}))
+type Handler = (data: unknown) => void
 
-describe('subscribeToDesktopNotifications', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
+type SentFrame = { id: string; method: string; params: unknown }
+
+function readSentFrame(request: unknown): SentFrame {
+  if (
+    typeof request !== 'object' ||
+    request === null ||
+    !('id' in request) ||
+    typeof request.id !== 'string' ||
+    !('method' in request) ||
+    typeof request.method !== 'string'
+  ) {
+    throw new Error('The stream registry sent a frame without a string id and method')
+  }
+  return {
+    id: request.id,
+    method: request.method,
+    params: 'params' in request ? request.params : undefined
+  }
+}
+
+function transportClient(subscribe: RpcClient['subscribe']) {
+  const requests: { method: string; params: unknown }[] = []
+  const client: RpcClient = {
+    sendRequest: async (method, params) => {
+      requests.push({ method, params })
+      return { id: 'reply-1', ok: true, result: {}, _meta: { runtimeId: 'runtime-1' } }
+    },
+    subscribe,
+    updateTerminalSubscriptionViewport: () => {},
+    getState: () => 'connected',
+    getReconnectAttempt: () => 0,
+    getLastConnectedAt: () => null,
+    onStateChange: () => () => {},
+    notifyForeground: () => {},
+    close: () => {}
+  }
+  return { requests, client }
+}
+
+// Use the real registry so transport owns dispose-before-ready cleanup.
+function registryClient() {
+  const sent: SentFrame[] = []
+  let id = 0
+  const registry = new RpcClientStreamRegistry({
+    nextId: () => `rpc-${++id}`,
+    getState: () => 'connected',
+    sendFrame: (request) => {
+      sent.push(readSentFrame(request))
+      return true
+    }
   })
+  return {
+    registry,
+    sent,
+    ...transportClient((method, params, onData, options) =>
+      registry.subscribe(method, params, onData, options)
+    )
+  }
+}
 
-  async function flushAsync(): Promise<void> {
-    for (let i = 0; i < 10; i += 1) {
-      await Promise.resolve()
+function relayClient() {
+  const sent: SentFrame[] = []
+  let id = 0
+  const streams = new MobileRelayRpcStreams({
+    nextId: () => `relay-${++id}`,
+    sendFrame: (frame) => {
+      sent.push(readSentFrame(frame))
+      return true
+    },
+    waitForConnected: async () => {}
+  })
+  return {
+    streams,
+    sent,
+    ...transportClient((method, params, onData, options) =>
+      streams.subscribe(method, params, onData, options)
+    )
+  }
+}
+
+function notificationReleases(rpc: {
+  sent: SentFrame[]
+  requests: { method: string; params: unknown }[]
+}): unknown[] {
+  return [...rpc.sent, ...rpc.requests]
+    .filter((frame) => frame.method === 'notifications.unsubscribe')
+    .map((frame) => frame.params)
+}
+
+function readyReply(id: string, subscriptionId: string): RpcResponse {
+  return {
+    id,
+    ok: true,
+    streaming: true,
+    result: { type: 'ready', subscriptionId },
+    _meta: { runtimeId: 'runtime-1' }
+  }
+}
+
+function client() {
+  let handler: Handler | undefined
+  return {
+    getState: vi.fn(() => 'connected'),
+    sendRequest: vi.fn(async () => ({ ok: true })),
+    subscribe: vi.fn((_method: string, _params: unknown, callback: Handler) => {
+      handler = callback
+      return vi.fn()
+    }),
+    emit(data: unknown) {
+      handler?.(data)
     }
   }
+}
 
-  function makeDeferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-    let resolve!: (value: T) => void
-    const promise = new Promise<T>((next) => {
-      resolve = next
+beforeEach(() => vi.clearAllMocks())
+
+describe('subscribeToDesktopNotifications', () => {
+  it('catches up on ready and ignores socket alert events', async () => {
+    const rpc = client()
+    subscribeToDesktopNotifications(rpc as never, 'host-1')
+    rpc.emit({ type: 'ready', subscriptionId: 'sub-1', epoch: 'epoch-1' })
+    rpc.emit({
+      type: 'notification',
+      notificationId: 'agent-1',
+      title: 'Needs input',
+      body: 'Reply',
+      source: 'agent-task-complete'
     })
-    return { promise, resolve }
-  }
-
-  it('drops the local stream when disposed before the desktop returns ready', () => {
-    const unsubscribeStream = vi.fn()
-    const client = {
-      subscribe: vi.fn(() => unsubscribeStream),
-      getState: vi.fn(() => 'connected'),
-      sendRequest: vi.fn()
-    } as unknown as RpcClient
-
-    const unsubscribe = subscribeToDesktopNotifications(client, 'host-1')
-    unsubscribe()
-
-    expect(unsubscribeStream).toHaveBeenCalledTimes(1)
-    expect(client.sendRequest).not.toHaveBeenCalled()
+    await Promise.resolve()
+    expect(requestNotificationCatchup).toHaveBeenCalledWith(rpc, 'host-1', expect.any(Function))
+    expect(dismissHostPushNotification).not.toHaveBeenCalled()
   })
 
-  it('stores scheduled notification identifiers, replaces duplicates, and dismisses by id', async () => {
-    vi.mocked(loadPushNotificationsEnabled).mockResolvedValue(true)
-    vi.mocked(Notifications.getPermissionsAsync).mockResolvedValue({
-      status: 'granted',
-      canAskAgain: true
-    } as never)
-    vi.mocked(Notifications.scheduleNotificationAsync)
-      .mockResolvedValueOnce('scheduled-1')
-      .mockResolvedValueOnce('scheduled-2')
-    vi.mocked(Notifications.dismissNotificationAsync).mockResolvedValue(undefined)
-    let onEvent: ((data: unknown) => void) | null = null
-    const client = {
-      subscribe: vi.fn((_method, _params, callback: (data: unknown) => void) => {
-        onEvent = callback
-        return vi.fn()
-      }),
-      getState: vi.fn(() => 'connected'),
-      sendRequest: vi.fn()
-    } as unknown as RpcClient
-
-    subscribeToDesktopNotifications(client, 'host-1')
-    onEvent?.({
-      type: 'notification',
-      source: 'agent-task-complete',
-      title: 'Done',
-      body: 'Finished.',
-      worktreeId: 'repo::/tmp/worktree',
-      notificationId: 'agent:one'
-    })
-    await flushAsync()
-    onEvent?.({
-      type: 'notification',
-      source: 'agent-task-complete',
-      title: 'Done again',
-      body: 'Finished again.',
-      notificationId: 'agent:one'
-    })
-    await flushAsync()
-    expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledTimes(2)
-    onEvent?.({ type: 'dismiss', notificationId: 'agent:one' })
-    await flushAsync()
-
-    expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledTimes(2)
-    expect(Notifications.scheduleNotificationAsync).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        content: expect.objectContaining({
-          data: expect.objectContaining({
-            hostId: 'host-1',
-            notificationId: 'agent:one',
-            worktreeId: 'repo::/tmp/worktree'
-          })
-        })
-      })
-    )
-    expect(Notifications.dismissNotificationAsync).toHaveBeenNthCalledWith(1, 'scheduled-1')
-    expect(Notifications.dismissNotificationAsync).toHaveBeenNthCalledWith(2, 'scheduled-2')
+  it('keeps socket dismissal processing active', async () => {
+    const rpc = client()
+    subscribeToDesktopNotifications(rpc as never, 'host-1')
+    rpc.emit({ type: 'ready', subscriptionId: 'sub-1' })
+    const dismissal = { type: 'dismiss', notificationId: 'agent-1', notificationSeq: 4 }
+    rpc.emit(dismissal)
+    await Promise.resolve()
+    expect(dismissHostPushNotification).toHaveBeenCalledWith(dismissal, 'host-1')
   })
 
-  it('dedupes concurrent notification events with the same desktop notification id', async () => {
-    vi.mocked(loadPushNotificationsEnabled).mockResolvedValue(true)
-    vi.mocked(Notifications.getPermissionsAsync).mockResolvedValue({
-      status: 'granted',
-      canAskAgain: true
-    } as never)
-    vi.mocked(Notifications.scheduleNotificationAsync).mockResolvedValue('scheduled-1')
-    let onEvent: ((data: unknown) => void) | null = null
-    const client = {
-      subscribe: vi.fn((_method, _params, callback: (data: unknown) => void) => {
-        onEvent = callback
-        return vi.fn()
-      }),
-      getState: vi.fn(() => 'connected'),
-      sendRequest: vi.fn()
-    } as unknown as RpcClient
+  it('releases the host stream once a ready lands after the disposer ran (direct)', () => {
+    const rpc = registryClient()
+    const stop = subscribeToDesktopNotifications(rpc.client, 'host-1')
+    const subscribeFrame = rpc.sent[0]!
+    expect(subscribeFrame.method).toBe('notifications.subscribe')
 
-    subscribeToDesktopNotifications(client, 'host-concurrent')
-    onEvent?.({
-      type: 'notification',
-      source: 'agent-task-complete',
-      title: 'Done',
-      body: 'Finished.',
-      notificationId: 'agent:concurrent'
-    })
-    onEvent?.({
-      type: 'notification',
-      source: 'agent-task-complete',
-      title: 'Done',
-      body: 'Finished.',
-      notificationId: 'agent:concurrent'
-    })
-    await flushAsync()
+    stop()
+    rpc.registry.handleResponse(readyReply(subscribeFrame.id, 'sub-1'))
 
-    expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledTimes(1)
+    expect(requestNotificationCatchup).not.toHaveBeenCalled()
+    expect(notificationReleases(rpc)).toEqual([{ subscriptionId: 'sub-1' }])
   })
 
-  it('dismisses a notification when dismiss arrives while scheduling is pending', async () => {
-    vi.mocked(loadPushNotificationsEnabled).mockResolvedValue(true)
-    vi.mocked(Notifications.getPermissionsAsync).mockResolvedValue({
-      status: 'granted',
-      canAskAgain: true
-    } as never)
-    let resolveSchedule!: (identifier: string) => void
-    vi.mocked(Notifications.scheduleNotificationAsync).mockImplementation(
-      () =>
-        new Promise<string>((resolve) => {
-          resolveSchedule = resolve
-        })
-    )
-    vi.mocked(Notifications.dismissNotificationAsync).mockResolvedValue(undefined)
-    let onEvent: ((data: unknown) => void) | null = null
-    const client = {
-      subscribe: vi.fn((_method, _params, callback: (data: unknown) => void) => {
-        onEvent = callback
-        return vi.fn()
-      }),
-      getState: vi.fn(() => 'connected'),
-      sendRequest: vi.fn()
-    } as unknown as RpcClient
+  it('releases the host stream once a ready lands after the disposer ran (relay)', async () => {
+    const rpc = relayClient()
+    const stop = subscribeToDesktopNotifications(rpc.client, 'host-1')
+    await Promise.resolve()
+    const subscribeFrame = rpc.sent[0]!
+    expect(subscribeFrame.method).toBe('notifications.subscribe')
 
-    subscribeToDesktopNotifications(client, 'host-dismiss-race')
-    onEvent?.({
-      type: 'notification',
-      source: 'agent-task-complete',
-      title: 'Done',
-      body: 'Finished.',
-      notificationId: 'agent:pending'
-    })
-    await flushAsync()
-    onEvent?.({ type: 'dismiss', notificationId: 'agent:pending' })
-    resolveSchedule('scheduled-pending')
-    await flushAsync()
+    stop()
+    rpc.streams.handleResponse(readyReply(subscribeFrame.id, 'sub-1'))
 
-    expect(Notifications.dismissNotificationAsync).toHaveBeenCalledWith('scheduled-pending')
+    expect(requestNotificationCatchup).not.toHaveBeenCalled()
+    expect(notificationReleases(rpc)).toEqual([{ subscriptionId: 'sub-1' }])
   })
 
-  it('does not carry a failed pending dismiss into a future schedule', async () => {
-    const secondEnabled = makeDeferred<boolean>()
-    vi.mocked(loadPushNotificationsEnabled)
-      .mockResolvedValueOnce(true)
-      .mockReturnValueOnce(secondEnabled.promise)
-      .mockResolvedValueOnce(true)
-    vi.mocked(Notifications.getPermissionsAsync).mockResolvedValue({
-      status: 'granted',
-      canAskAgain: true
-    } as never)
-    vi.mocked(Notifications.scheduleNotificationAsync)
-      .mockResolvedValueOnce('scheduled-1')
-      .mockResolvedValueOnce('scheduled-2')
-    vi.mocked(Notifications.dismissNotificationAsync).mockResolvedValue(undefined)
-    let onEvent: ((data: unknown) => void) | null = null
-    const client = {
-      subscribe: vi.fn((_method, _params, callback: (data: unknown) => void) => {
-        onEvent = callback
-        return vi.fn()
-      }),
-      getState: vi.fn(() => 'connected'),
-      sendRequest: vi.fn()
-    } as unknown as RpcClient
+  it('closes the host stream once when the disposer runs after the ready reply (direct)', async () => {
+    const rpc = registryClient()
+    const stop = subscribeToDesktopNotifications(rpc.client, 'host-1')
+    rpc.registry.handleResponse(readyReply(rpc.sent[0]!.id, 'sub-1'))
 
-    subscribeToDesktopNotifications(client, 'host-dismiss-failed-replacement')
-    onEvent?.({
-      type: 'notification',
-      source: 'agent-task-complete',
-      title: 'Done',
-      body: 'Finished.',
-      notificationId: 'agent:stale-dismiss'
-    })
-    await flushAsync()
-    onEvent?.({
-      type: 'notification',
-      source: 'agent-task-complete',
-      title: 'Done again',
-      body: 'Finished again.',
-      notificationId: 'agent:stale-dismiss'
-    })
-    await flushAsync()
-    onEvent?.({ type: 'dismiss', notificationId: 'agent:stale-dismiss' })
-    secondEnabled.resolve(false)
-    await flushAsync()
+    stop()
+    await Promise.resolve()
 
-    onEvent?.({
-      type: 'notification',
-      source: 'agent-task-complete',
-      title: 'Done later',
-      body: 'Finished later.',
-      notificationId: 'agent:stale-dismiss'
-    })
-    await flushAsync()
-
-    expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledTimes(2)
-    expect(Notifications.dismissNotificationAsync).toHaveBeenCalledTimes(1)
-    expect(Notifications.dismissNotificationAsync).toHaveBeenCalledWith('scheduled-1')
+    expect(notificationReleases(rpc)).toEqual([{ subscriptionId: 'sub-1' }])
   })
 
-  it('treats unknown dismiss events as no-ops', async () => {
-    vi.mocked(Notifications.dismissNotificationAsync).mockResolvedValue(undefined)
-    let onEvent: ((data: unknown) => void) | null = null
-    const client = {
-      subscribe: vi.fn((_method, _params, callback: (data: unknown) => void) => {
-        onEvent = callback
-        return vi.fn()
-      }),
-      getState: vi.fn(() => 'connected'),
-      sendRequest: vi.fn()
-    } as unknown as RpcClient
+  it('closes the host stream once when the disposer runs after the ready reply (relay)', async () => {
+    const rpc = relayClient()
+    const stop = subscribeToDesktopNotifications(rpc.client, 'host-1')
+    await Promise.resolve()
+    rpc.streams.handleResponse(readyReply(rpc.sent[0]!.id, 'sub-1'))
 
-    subscribeToDesktopNotifications(client, 'host-unknown')
-    onEvent?.({ type: 'dismiss', notificationId: 'agent:missing' })
-    await flushAsync()
+    stop()
+    await Promise.resolve()
 
-    expect(Notifications.dismissNotificationAsync).not.toHaveBeenCalled()
+    expect(notificationReleases(rpc)).toEqual([{ subscriptionId: 'sub-1' }])
+  })
+
+  it('releases the replayed stream by its new id, never the one the closed socket assigned', () => {
+    const rpc = registryClient()
+    const stop = subscribeToDesktopNotifications(rpc.client, 'host-1')
+    const subscribeFrame = rpc.sent[0]!
+    rpc.registry.handleResponse(readyReply(subscribeFrame.id, 'sub-1'))
+
+    rpc.registry.markForReplay()
+    rpc.registry.replayAfterAuthentication()
+    expect(rpc.sent[1]).toMatchObject({ id: subscribeFrame.id, method: 'notifications.subscribe' })
+    stop()
+    rpc.registry.handleResponse(readyReply(subscribeFrame.id, 'sub-2'))
+
+    expect(notificationReleases(rpc)).toEqual([{ subscriptionId: 'sub-2' }])
+  })
+
+  it('catches up again when a replayed subscribe is ready', () => {
+    const rpc = registryClient()
+    subscribeToDesktopNotifications(rpc.client, 'host-1')
+    const subscribeFrame = rpc.sent[0]!
+    rpc.registry.handleResponse(readyReply(subscribeFrame.id, 'sub-1'))
+
+    rpc.registry.markForReplay()
+    rpc.registry.replayAfterAuthentication()
+    rpc.registry.handleResponse(readyReply(subscribeFrame.id, 'sub-2'))
+
+    expect(requestNotificationCatchup).toHaveBeenCalledTimes(2)
+    expect(notificationReleases(rpc)).toEqual([])
   })
 })

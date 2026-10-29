@@ -1,16 +1,12 @@
 import { Trash2 } from 'lucide-react'
 import { Button } from '../ui/button'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
+import type { PairedMobileDevice } from '../mobile/paired-mobile-devices'
 
-export type PairedDevice = {
-  deviceId: string
-  name: string
-  pairedAt: number
-  lastSeenAt: number
-}
+export type PairedDevice = PairedMobileDevice
 
 type MobilePairedDevicesSectionProps = {
-  devices: PairedDevice[]
+  devices: readonly PairedDevice[]
   hasQrCode: boolean
   onRevokeDevice: (deviceId: string) => void
 }
@@ -45,7 +41,7 @@ export function MobilePairedDevicesSection({
                 <div className="text-sm font-medium">{device.name}</div>
                 <div className="text-muted-foreground text-xs">
                   {translate('auto.components.settings.MobilePane.254a6d09e4', 'Paired')}
-                  {new Date(device.pairedAt).toLocaleDateString()}
+                  {new Date(device.pairedAt).toLocaleDateString(getIntlLocale())}
                 </div>
               </div>
               <Button

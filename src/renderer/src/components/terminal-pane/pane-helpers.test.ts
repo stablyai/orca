@@ -69,6 +69,8 @@ describe('fitAndFocusPanes', () => {
       )
     }
 
+    matches = vi.fn(() => false)
+
     closest: (selector: string) => Element | null
   }
 
@@ -78,10 +80,12 @@ describe('fitAndFocusPanes', () => {
 
   function makeManager(): { manager: PaneManager; terminal: { focus: ReturnType<typeof vi.fn> } } {
     const terminal = { focus: vi.fn() }
+    const pane = { terminal, container: { querySelector: () => null } }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fitAndFocusPanes reads only these members, and the focus path reads only a pane's terminal and container.
     const manager = {
       fitAllPanes: vi.fn(),
-      getActivePane: () => ({ terminal }),
-      getPanes: () => [{ terminal }]
+      getActivePane: () => pane,
+      getPanes: () => [pane]
     } as unknown as PaneManager
     return { manager, terminal }
   }
@@ -90,6 +94,7 @@ describe('fitAndFocusPanes', () => {
     vi.stubGlobal('HTMLElement', FakeHTMLElement)
     vi.stubGlobal('document', {
       activeElement,
+      querySelectorAll: vi.fn(() => []),
       querySelector: vi.fn((selector: string) =>
         selector === '[data-tab-rename-input="true"]' && renameInputMounted
           ? (new FakeHTMLElement({ tagName: 'INPUT' }) as unknown as Element)

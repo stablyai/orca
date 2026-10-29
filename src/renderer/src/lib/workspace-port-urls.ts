@@ -4,8 +4,7 @@ import type { WorkspacePort } from '../../../shared/workspace-ports'
 const HTTPS_PORTS = new Set([443, 8443])
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0', '::'])
 
-// Why: the scanner reports numeric addresses (127.0.0.1, 0.0.0.0, ::1, ::)
-// while UI actions should use an address a browser can reliably open.
+// Normalize numeric bind addresses to URLs browsers can reliably open.
 function hostForLocalAction(host: string): string {
   if (!host) {
     return 'localhost'
@@ -14,9 +13,7 @@ function hostForLocalAction(host: string): string {
 }
 
 export function addressForPort(port: WorkspacePort): string {
-  // Why: when a dev server printed its own URL to the terminal, that origin
-  // (e.g. `local.getmontecarlo.com:3001`) is what the user actually wants in
-  // the clipboard, not the kernel bind `127.0.0.1:3001`.
+  // Prefer terminal-advertised origins over kernel binds; users expect custom hostnames in copied URLs.
   if (port.kind === 'workspace' && port.advertisedUrl) {
     try {
       const url = new URL(port.advertisedUrl)
@@ -36,12 +33,7 @@ export function browserUrlForPort(port: WorkspacePort): string {
   return `${protocol}://${hostForLocalAction(port.connectHost)}:${port.port}`
 }
 
-/** Extract a custom DNS hostname from an advertised URL for reuse with a
- *  local SSH forward port. Returns null for loopback and IP literals; those
- *  printed-from-remote values don't help the local browser, and callers
- *  should fall back to 127.0.0.1 + local port. A DNS hostname only resolves
- *  locally if the user has /etc/hosts (or equivalent) mapping; we trust that
- *  rather than probing DNS here. */
+/** Reuse advertised DNS names with local SSH-forward ports; reject remote loopback/IP literals and fall back to 127.0.0.1. Trust user host mappings without DNS probing. */
 function customHostFromAdvertised(advertisedUrl: string | undefined): string | null {
   if (!advertisedUrl) {
     return null
@@ -86,8 +78,7 @@ function advertisedProtocolForPort(port: AdvertisedPortUrlFields): 'http' | 'htt
 }
 
 export function browserUrlForPortForwardEntry(entry: PortForwardEntry): string {
-  // Why: older enriched entries may have advertisedUrl without advertisedProtocol;
-  // derive the URL once so the open action and labels do not drift.
+  // Older enriched rows can lack advertisedProtocol; derive once to keep labels/open actions consistent.
   const protocol = advertisedProtocolForPort(entry)
   const host = customHostFromAdvertised(entry.advertisedUrl) ?? '127.0.0.1'
   return `${protocol}://${host}:${entry.localPort}`

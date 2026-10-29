@@ -1,4 +1,5 @@
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
+import { translate } from '@/i18n/i18n'
 
 export type AutomationRunViewAvailability = 'terminal' | 'workspace' | 'snapshot' | 'metadata'
 
@@ -21,6 +22,16 @@ export function getAutomationRerunPendingRemainingMs({
   return Math.max(0, pendingStartedAt + AUTOMATION_RERUN_PENDING_MIN_VISIBLE_MS - now)
 }
 
+export async function waitForAutomationRerunPendingVisibility(
+  pendingStartedAt: number
+): Promise<void> {
+  const remainingMs = getAutomationRerunPendingRemainingMs({ pendingStartedAt })
+  if (remainingMs <= 0) {
+    return
+  }
+  await new Promise<void>((resolve) => window.setTimeout(resolve, remainingMs))
+}
+
 export function canRerunAutomationRun({
   automation,
   run
@@ -41,28 +52,63 @@ export function canRerunAutomationRun({
 export function getAutomationRunViewState({
   run,
   workspaceExists,
-  terminalTabExists
+  terminalTargetExists,
+  terminalOnPairedServer = false
 }: {
   run: AutomationRun
   workspaceExists: boolean
-  terminalTabExists: boolean
+  terminalTargetExists: boolean
+  /** The workspace's paired server holds the terminal; only it can say whether it still lives. */
+  terminalOnPairedServer?: boolean
 }): AutomationRunViewState {
-  if (run.workspaceId && workspaceExists && run.terminalSessionId && terminalTabExists) {
+  const hasTerminalIdentity = Boolean(run.terminalPaneKey && run.terminalPtyId)
+  // Why the pane alone: a slept run drops its PTY id but keeps its pane, which the server resumes.
+  const hasPaneIdentity = Boolean(run.terminalPaneKey)
+  if (run.workspaceId && workspaceExists && terminalTargetExists) {
     return {
       availability: 'terminal',
-      actionLabel: 'View run',
-      statusLabel: 'Run is open',
+      actionLabel: translate('auto.components.automations.runViewState.viewRun', 'View run'),
+      statusLabel: translate('auto.components.automations.runViewState.runOpen', 'Run is open'),
       canOpen: true
     }
   }
 
-  if (run.workspaceId && workspaceExists) {
+  if (run.workspaceId && workspaceExists && hasPaneIdentity && terminalOnPairedServer) {
+    return {
+      availability: 'terminal',
+      actionLabel: translate('auto.components.automations.runViewState.viewRun', 'View run'),
+      statusLabel: translate(
+        'auto.components.automations.runViewState.terminalOnPairedServer',
+        'Run terminal is on the paired server.'
+      ),
+      canOpen: true
+    }
+  }
+
+  if (run.workspaceId && workspaceExists && hasTerminalIdentity) {
+    return {
+      availability: 'terminal',
+      actionLabel: translate('auto.components.automations.runViewState.viewRun', 'View run'),
+      statusLabel: translate(
+        'auto.components.automations.runViewState.terminalUnavailable',
+        'Run terminal is unavailable.'
+      ),
+      canOpen: true
+    }
+  }
+
+  // Why: a run that never dispatched left no agent to resume; opening seeds an empty shell (STA-10103).
+  if (run.workspaceId && workspaceExists && run.dispatchedAt !== null) {
     return {
       availability: 'workspace',
-      actionLabel: 'Resume workspace',
-      statusLabel: run.terminalSessionId
-        ? 'Workspace is available; original terminal is closed.'
-        : 'Workspace is available.',
+      actionLabel: translate(
+        'auto.components.automations.runViewState.openWorkspace',
+        'Open workspace'
+      ),
+      statusLabel: translate(
+        'auto.components.automations.runViewState.workspaceAvailable',
+        'Workspace is available.'
+      ),
       canOpen: true
     }
   }
@@ -70,20 +116,36 @@ export function getAutomationRunViewState({
   if (run.outputSnapshot?.content.trim()) {
     return {
       availability: 'snapshot',
-      actionLabel: 'Snapshot saved',
-      statusLabel: 'Showing saved run snapshot.',
+      actionLabel: translate(
+        'auto.components.automations.runViewState.snapshotSaved',
+        'Snapshot saved'
+      ),
+      statusLabel: translate(
+        'auto.components.automations.runViewState.showingSnapshot',
+        'Showing saved run snapshot.'
+      ),
       canOpen: false
     }
   }
 
   return {
     availability: 'metadata',
-    actionLabel: 'View run',
+    actionLabel: translate('auto.components.automations.runViewState.viewRun', 'View run'),
     statusLabel: run.workspaceId
       ? run.workspaceDisplayName?.trim()
-        ? `${run.workspaceDisplayName.trim()} no longer available`
-        : 'Workspace no longer available'
-      : 'No workspace launched',
+        ? translate(
+            'auto.components.automations.runViewState.namedWorkspaceGone',
+            '{{name}} no longer available',
+            { name: run.workspaceDisplayName.trim() }
+          )
+        : translate(
+            'auto.components.automations.runViewState.workspaceGone',
+            'Workspace no longer available'
+          )
+      : translate(
+          'auto.components.automations.runViewState.noWorkspaceLaunched',
+          'No workspace launched'
+        ),
     canOpen: false
   }
 }

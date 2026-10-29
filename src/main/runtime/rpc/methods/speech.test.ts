@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
@@ -29,8 +30,7 @@ describe('speech RPC methods', () => {
       dictationId: 'dict-1',
       audioBase64: 'AAAA',
       sampleRate: 16_000,
-      clientId: undefined,
-      connectionId: undefined
+      clientId: undefined
     })
   })
 

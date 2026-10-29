@@ -1,4 +1,5 @@
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { composeRepoCacheKey } from '../../../../shared/github/github-cache-key'
 import {
   getSettingsFocusedExecutionHostId,
   normalizeExecutionHostId,
@@ -20,16 +21,18 @@ export function getHostedReviewCacheKey(
   settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
   repoId?: string | null,
   connectionId?: string | null,
-  executionHostId?: string | null
+  executionHostId?: string | null,
+  hasRepoOwner = false
 ): string {
-  const scope = getHostedReviewCacheHostScope(settings, connectionId, executionHostId)
-  return `${scope}::${repoId ?? repoPath}::${branch}`
+  const scope = getHostedReviewCacheHostScope(settings, connectionId, executionHostId, hasRepoOwner)
+  return composeRepoCacheKey(scope, repoId ?? repoPath, branch)
 }
 
 function getHostedReviewCacheHostScope(
   settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
   connectionId?: string | null,
-  executionHostId?: string | null
+  executionHostId?: string | null,
+  hasRepoOwner = false
 ): string {
   const hostId = normalizeExecutionHostId(executionHostId)
   if (hostId) {
@@ -39,11 +42,14 @@ function getHostedReviewCacheHostScope(
   if (sshConnectionId) {
     return toSshExecutionHostId(sshConnectionId)
   }
+  // Known owner without remote markers is local; absent owner context retains active-host focus fallback.
+  if (hasRepoOwner) {
+    return 'local'
+  }
   return getSettingsFocusedExecutionHostId(settings)
 }
 
-// Why: a branch-keyed lookup can describe a different PR than the persisted
-// linked review number. Track that distinction without changing the cache key.
+// Branch results can differ from exact linked review; track provenance without changing cache key.
 export function linkedReviewHintKey(options?: LinkedReviewHints): string {
   const hints = [
     ['github', options?.linkedGitHubPR ?? options?.fallbackGitHubPR ?? null],

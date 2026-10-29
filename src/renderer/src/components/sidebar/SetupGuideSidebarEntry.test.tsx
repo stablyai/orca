@@ -51,7 +51,6 @@ function makeProgress(overrides: Partial<FeatureWallSetupProgress> = {}): Featur
       'default-agent': false,
       'add-two-repos': false,
       notifications: false,
-      'split-terminal': false,
       'two-worktrees': false,
       browser: false,
       'task-sources': false,
@@ -59,7 +58,7 @@ function makeProgress(overrides: Partial<FeatureWallSetupProgress> = {}): Featur
       'setup-script': false
     },
     coreDoneCount: 0,
-    coreTotal: 9,
+    coreTotal: 8,
     ...overrides
   }
 }
@@ -72,15 +71,14 @@ function makeAllDoneProgress(
       'default-agent': true,
       'add-two-repos': true,
       notifications: true,
-      'split-terminal': true,
       'two-worktrees': true,
       browser: true,
       'task-sources': true,
       'agent-capabilities': true,
       'setup-script': true
     },
-    coreDoneCount: 9,
-    coreTotal: 9,
+    coreDoneCount: 8,
+    coreTotal: 8,
     ...overrides
   })
 }
@@ -91,8 +89,8 @@ function makeOnlyBrowserIncompleteProgress(): FeatureWallSetupProgress {
       ...makeAllDoneProgress().stepDone,
       browser: false
     },
-    coreDoneCount: 8,
-    coreTotal: 9
+    coreDoneCount: 7,
+    coreTotal: 8
   })
 }
 
@@ -142,21 +140,6 @@ describe('SetupGuideSidebarEntry', () => {
 
   it('does not render before setup progress readiness settles', () => {
     mocks.useSetupGuideProgress.mockReturnValue(makeProgress({ ready: false }))
-
-    expect(renderToStaticMarkup(<SetupGuideSidebarEntry />)).not.toContain('Onboarding checklist')
-  })
-
-  it('does not flash when agent capability completion is still unresolved', () => {
-    mocks.useSetupGuideProgress.mockReturnValue(
-      makeAllDoneProgress({
-        ready: false,
-        stepDone: {
-          ...makeAllDoneProgress().stepDone,
-          'agent-capabilities': false
-        },
-        coreDoneCount: 7
-      })
-    )
 
     expect(renderToStaticMarkup(<SetupGuideSidebarEntry />)).not.toContain('Onboarding checklist')
   })

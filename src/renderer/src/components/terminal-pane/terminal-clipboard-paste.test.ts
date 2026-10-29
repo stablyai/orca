@@ -98,8 +98,34 @@ describe('terminal clipboard paste', () => {
       pasteText
     })
 
-    expect(saveClipboardImageAsTempFile).toHaveBeenCalledWith({ connectionId: 'ssh-1' })
+    expect(saveClipboardImageAsTempFile).toHaveBeenCalledWith({
+      connectionId: 'ssh-1',
+      runtimeEnvironmentId: undefined
+    })
     expect(pasteText).toHaveBeenCalledWith('/var/tmp/orca-paste-1760000000000-id.png', {
+      forceBracketedPaste: true,
+      recoverImagePasteWebglAtlas: true
+    })
+  })
+
+  it('forwards remote runtime context and bracket-pastes the runtime image path', async () => {
+    const pasteText = vi.fn()
+    const saveClipboardImageAsTempFile = vi
+      .fn()
+      .mockResolvedValue('/tmp/orca-paste-1760000000000-runtime.png')
+
+    await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue(''),
+      saveClipboardImageAsTempFile,
+      runtimeEnvironmentId: 'remote-host-1',
+      pasteText
+    })
+
+    expect(saveClipboardImageAsTempFile).toHaveBeenCalledWith({
+      connectionId: undefined,
+      runtimeEnvironmentId: 'remote-host-1'
+    })
+    expect(pasteText).toHaveBeenCalledWith('/tmp/orca-paste-1760000000000-runtime.png', {
       forceBracketedPaste: true,
       recoverImagePasteWebglAtlas: true
     })
@@ -134,7 +160,10 @@ describe('terminal clipboard paste', () => {
       pasteText
     })
 
-    expect(saveClipboardImageAsTempFile).toHaveBeenCalledWith({ connectionId: undefined })
+    expect(saveClipboardImageAsTempFile).toHaveBeenCalledWith({
+      connectionId: undefined,
+      runtimeEnvironmentId: undefined
+    })
     expect(pasteText).toHaveBeenCalledWith('/tmp/orca-paste-1760000000000-id.png', {
       forceBracketedPaste: true,
       recoverImagePasteWebglAtlas: true
@@ -247,7 +276,7 @@ describe('terminal clipboard paste', () => {
     expect(result).toEqual({ status: 'skipped', reason: 'image-paste-failed' })
   })
 
-  it('forces Windows multi-line text paste onto the bracketed-paste path', async () => {
+  it('delegates multiline protection to the terminal paste coordinator', async () => {
     const saveClipboardImageAsTempFile = vi.fn()
     const pasteText = vi.fn()
 
@@ -255,7 +284,7 @@ describe('terminal clipboard paste', () => {
       readClipboardText: vi.fn().mockResolvedValue('line one\nline two'),
       saveClipboardImageAsTempFile,
       pasteText,
-      forceBracketedMultilineTextPaste: true
+      protectedMultilineTextPasteOptions: { forceBracketedPasteForMultiline: true }
     })
 
     expect(pasteText).toHaveBeenCalledWith('line one\nline two', {
@@ -264,18 +293,18 @@ describe('terminal clipboard paste', () => {
     expect(saveClipboardImageAsTempFile).not.toHaveBeenCalled()
   })
 
-  it('delegates multiline protection to the terminal paste coordinator', async () => {
+  it('delegates Windows input-record newline protection without scanning text', async () => {
     const pasteText = vi.fn()
 
     await pasteTerminalClipboard({
-      readClipboardText: vi.fn().mockResolvedValue('line one\nline two'),
+      readClipboardText: vi.fn().mockResolvedValue('\nline two'),
       saveClipboardImageAsTempFile: vi.fn(),
       pasteText,
-      forceBracketedMultilineTextPaste: true
+      protectedMultilineTextPasteOptions: { windowsInputRecordNewline: 'alt-enter' }
     })
 
-    expect(pasteText).toHaveBeenCalledWith('line one\nline two', {
-      forceBracketedPasteForMultiline: true
+    expect(pasteText).toHaveBeenCalledWith('\nline two', {
+      windowsInputRecordNewline: 'alt-enter'
     })
   })
 
@@ -287,7 +316,7 @@ describe('terminal clipboard paste', () => {
       readClipboardText: vi.fn().mockResolvedValue('hello'),
       saveClipboardImageAsTempFile,
       pasteText,
-      forceBracketedMultilineTextPaste: true
+      protectedMultilineTextPasteOptions: { forceBracketedPasteForMultiline: true }
     })
 
     expect(pasteText).toHaveBeenCalledWith('hello', {
@@ -306,7 +335,7 @@ describe('terminal clipboard paste', () => {
         readClipboardText: vi.fn().mockResolvedValue('x'.repeat(64)),
         saveClipboardImageAsTempFile,
         pasteText,
-        forceBracketedMultilineTextPaste: true
+        protectedMultilineTextPasteOptions: { forceBracketedPasteForMultiline: true }
       })
 
       expect(codePointAtSpy).not.toHaveBeenCalled()

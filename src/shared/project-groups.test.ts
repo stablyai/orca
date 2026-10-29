@@ -8,7 +8,7 @@ import {
   normalizeProjectGroupName,
   normalizeProjectGroups
 } from './project-groups'
-import type { Repo } from './types'
+import type { Repo } from './repo-types'
 
 function repo(overrides: Partial<Repo>): Repo {
   return {
@@ -70,6 +70,18 @@ describe('project-groups', () => {
       isCollapsed: true,
       parentGroupId: null
     })
+  })
+
+  it('preserves normalized execution ownership for persisted groups', () => {
+    const groups = normalizeProjectGroups([
+      { id: 'runtime', name: 'Runtime', tabOrder: 1, executionHostId: 'runtime:env-1' },
+      { id: 'local', name: 'Local', tabOrder: 2, executionHostId: 'local' },
+      { id: 'invalid', name: 'Invalid', tabOrder: 3, executionHostId: 'runtime:' }
+    ])
+
+    expect(groups.find((group) => group.id === 'runtime')?.executionHostId).toBe('runtime:env-1')
+    expect(groups.find((group) => group.id === 'local')?.executionHostId).toBe('local')
+    expect(groups.find((group) => group.id === 'invalid')?.executionHostId).toBeUndefined()
   })
 
   it('clears repo memberships whose group no longer exists', () => {

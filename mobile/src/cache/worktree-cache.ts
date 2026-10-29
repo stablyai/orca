@@ -1,10 +1,10 @@
-// Why: module-level cache lets the home screen pre-populate worktree data
-// so the host detail page can render instantly on navigation instead of
-// waiting for a fresh RPC connection + fetch cycle.
+// Home seeds module cache so host detail renders before reconnect/fetch.
 
 type CachedWorktrees = {
   worktrees: unknown[]
   at: number
+  // Only live host-listed rows can prove absence; persisted cold-start seeds cannot.
+  proven: boolean
 }
 
 const cache = new Map<string, CachedWorktrees>()
@@ -12,12 +12,19 @@ const cache = new Map<string, CachedWorktrees>()
 const MAX_AGE_MS = 30_000
 const MAX_ENTRIES = 20
 
-export function setCachedWorktrees(hostId: string, worktrees: unknown[]): void {
-  // Why: Map.set on an existing key does not move it to the end of iteration
-  // order. Delete first so the re-inserted key becomes the newest entry,
-  // giving us true LRU eviction when the cap is hit.
+export function setCachedWorktrees(
+  hostId: string,
+  worktrees: unknown[],
+  options?: { proven?: boolean }
+): void {
+  // Late cold-start seed must neither erase proof nor truncate live host-listed rows used by Resume.
+  if (options?.proven !== true && readFreshEntry(hostId)?.proven) {
+    return
+  }
+  // Delete before Map.set to move key to newest position for LRU eviction.
   cache.delete(hostId)
-  cache.set(hostId, { worktrees, at: Date.now() })
+  // Default unproven: unknown row origin cannot justify redirecting user from workspace.
+  cache.set(hostId, { worktrees, at: Date.now(), proven: options?.proven === true })
   if (cache.size > MAX_ENTRIES) {
     const oldest = cache.keys().next().value
     if (oldest) {
@@ -27,6 +34,16 @@ export function setCachedWorktrees(hostId: string, worktrees: unknown[]): void {
 }
 
 export function getCachedWorktrees(hostId: string): unknown[] | null {
+  return readFreshEntry(hostId)?.worktrees ?? null
+}
+
+// Return live host-listed rows only; expired/unproven entries cannot establish absence.
+export function getProvenCachedWorktrees(hostId: string): unknown[] | null {
+  const entry = readFreshEntry(hostId)
+  return entry?.proven ? entry.worktrees : null
+}
+
+function readFreshEntry(hostId: string): CachedWorktrees | null {
   const entry = cache.get(hostId)
   if (!entry) {
     return null
@@ -35,5 +52,5 @@ export function getCachedWorktrees(hostId: string): unknown[] | null {
     cache.delete(hostId)
     return null
   }
-  return entry.worktrees
+  return entry
 }

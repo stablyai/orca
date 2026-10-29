@@ -3,10 +3,10 @@ import type { Range } from '@tanstack/react-virtual'
 import {
   getActiveStickyHeaderIndex,
   getPreviousStickyHeaderIndex
-} from '../sidebar/worktree-list-virtual-rows'
+} from '../sidebar/worktree-list/viewport/virtual-rows'
 
 export const VAULT_GROUP_HEADER_ROW_HEIGHT = 32
-export const VAULT_SESSION_ROW_HEIGHT = 82
+export const VAULT_SESSION_ROW_HEIGHT = 98
 
 export type VaultVirtualRow = { type: 'group' | 'session' }
 

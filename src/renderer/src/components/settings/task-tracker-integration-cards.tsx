@@ -1,3 +1,5 @@
+import { taskProviderErrorMessage } from '@/lib/task-provider-error-copy'
+import { UnsealedCredentialNotice } from './UnsealedCredentialNotice'
 import { useState } from 'react'
 import { AlertCircle, CheckCircle2, LoaderCircle, Unlink } from 'lucide-react'
 import { LinearIcon } from '@/components/icons/LinearIcon'
@@ -8,8 +10,10 @@ import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { useAppStore } from '@/store'
 import { IntegrationCardDetails, IntegrationCardShell } from './integration-card-shell'
 import { useIntegrationSubordinateRowClass } from './integration-card-presentation'
-import { getProviderAccountScope } from './provider-account-scope'
+import { LinearAgentSkillInstallCta } from './linear-agent-skill-install-cta'
+import { getProviderAccountScope, type ProviderHostScope } from './provider-account-scope'
 import { ProviderHostScopeControl } from './ProviderHostScopeControl'
+import { LINEAR_INTEGRATION_SECTION_ID } from './task-provider-integration-section-ids'
 import { translate } from '@/i18n/i18n'
 
 type VerificationResult = { state: 'ok' | 'error'; error?: string }
@@ -45,8 +49,7 @@ export function LinearIntegrationCard(): React.JSX.Element {
     }
   }
 
-  // Why: explicit user-triggered verification. This is the only settings path
-  // that decrypts a stored Linear key, avoiding surprise keychain prompts.
+  // Decrypt Linear keys only on explicit verification to avoid surprise keychain prompts.
   const handleTest = async (workspaceId: string): Promise<void> => {
     setTestingWorkspaceId(workspaceId)
     setTestResultByWorkspace((prev) => {
@@ -60,21 +63,28 @@ export function LinearIntegrationCard(): React.JSX.Element {
     }
     setTestResultByWorkspace((prev) => ({
       ...prev,
-      [workspaceId]: result.ok ? { state: 'ok' } : { state: 'error', error: result.error }
+      [workspaceId]: result.ok
+        ? { state: 'ok' }
+        : { state: 'error', error: taskProviderErrorMessage(result) }
     }))
     setTestingWorkspaceId(null)
   }
 
   return (
     <IntegrationCardShell
+      settingsSectionId={LINEAR_INTEGRATION_SECTION_ID}
       icon={<LinearIcon className="size-5" />}
       name="Linear"
       description={
         connected
           ? translate(
-              'auto.components.settings.task.tracker.integration.cards.e1f5e6424c',
-              '{{value0}} workspace{{value1}} connected',
-              { value0: workspaces.length, value1: workspaces.length === 1 ? '' : 's' }
+              workspaces.length === 1
+                ? 'auto.components.settings.task.tracker.integration.cards.connectedWorkspaceSingular'
+                : 'auto.components.settings.task.tracker.integration.cards.connectedWorkspacePlural',
+              workspaces.length === 1
+                ? '{{count}} workspace connected'
+                : '{{count}} workspaces connected',
+              { count: workspaces.length }
             )
           : checking
             ? translate(
@@ -88,7 +98,17 @@ export function LinearIntegrationCard(): React.JSX.Element {
       }
       checking={checking}
       statusTone={connected ? 'connected' : 'attention'}
-      statusLabel={connected ? 'Connected' : 'Not connected'}
+      statusLabel={
+        connected
+          ? translate(
+              'auto.components.settings.task.tracker.integration.cards.statusConnected',
+              'Connected'
+            )
+          : translate(
+              'auto.components.settings.task.tracker.integration.cards.statusNotConnected',
+              'Not connected'
+            )
+      }
       actions={
         !checking ? (
           <Button
@@ -111,6 +131,13 @@ export function LinearIntegrationCard(): React.JSX.Element {
     >
       <IntegrationCardDetails>
         <ProviderAccountScopeRow scope={accountScope} />
+        <UnsealedCredentialNotice
+          protection={linearStatus.credentialProtection ?? null}
+          credentialName={translate(
+            'auto.components.settings.task.tracker.integration.cards.linearTokenName',
+            'Your Linear API token'
+          )}
+        />
         {connected ? (
           <div className="space-y-2">
             {workspaces.map((workspace) => {
@@ -200,6 +227,7 @@ export function LinearIntegrationCard(): React.JSX.Element {
             </Button>
           </>
         ) : null}
+        <LinearAgentSkillInstallCta settings={settings} />
       </IntegrationCardDetails>
 
       <LinearApiKeyDialog
@@ -214,7 +242,7 @@ export function LinearIntegrationCard(): React.JSX.Element {
   )
 }
 
-function ProviderAccountScopeRow({ scope }: { scope: ReturnType<typeof getProviderAccountScope> }) {
+function ProviderAccountScopeRow({ scope }: { scope: ProviderHostScope }) {
   const subordinateRowClass = useIntegrationSubordinateRowClass('text-xs')
 
   return (

@@ -1,6 +1,7 @@
-import { homedir } from 'os'
-import { join } from 'path'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import {
+  buildManagedCommandHook,
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
   removeManagedCommands,
@@ -8,6 +9,7 @@ import {
   type HookDefinition,
   type HooksConfig
 } from '../agent-hooks/installer-utils'
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 
 const DEVIN_SCRIPT_BASE = 'devin-hook'
 
@@ -17,8 +19,7 @@ export const DEVIN_EVENTS = [
   { eventName: 'Stop', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'PostCompaction', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'SessionEnd', definition: { hooks: [{ type: 'command', command: '' }] } },
-  // Why: Devin treats matchers as regexes and says omitted means "all";
-  // Claude's "*" matcher is not a valid Devin regex.
+  // Omit matchers: Devin expects regexes, so Claude's "*" is invalid.
   { eventName: 'PreToolUse', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'PostToolUse', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'PermissionRequest', definition: { hooks: [{ type: 'command', command: '' }] } }
@@ -50,9 +51,7 @@ export function getDevinRemoteConfigPath(remoteHome: string): string {
 
 export function getDevinManagedCommand(scriptPath: string): string {
   if (process.platform === 'win32') {
-    // Why: Devin runs hooks through the platform shell on Windows; invoking the
-    // .cmd via cmd.exe preserves spaces in the shared ~/.orca script path.
-    return `cmd /d /s /c ""${scriptPath.replaceAll('"', '""')}""`
+    return wrapWindowsBatchHookCommand(scriptPath)
   }
   return wrapPosixHookCommand(scriptPath)
 }
@@ -74,7 +73,7 @@ export function applyDevinManagedHooks(
     const cleaned = removeManagedCommands(current, isManagedCommand)
     const definition: HookDefinition = {
       ...event.definition,
-      hooks: [{ type: 'command', command }]
+      hooks: [buildManagedCommandHook(command)]
     }
     nextHooks[event.eventName] = [...cleaned, definition]
   }

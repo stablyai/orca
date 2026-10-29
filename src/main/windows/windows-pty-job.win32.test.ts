@@ -1,0 +1,221 @@
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { IPty } from 'node-pty'
+import { runProcess } from '@orca/process-host'
+import {
+  isPtyJobOwnershipAvailable,
+  killConptyNow,
+  listPtyJobProcessIds,
+  terminatePtyJob
+} from './windows-pty-job'
+import { watchConptyStartup } from '../daemon/pty-subprocess/conpty-startup-input-reader'
+
+/** Real Windows jobs must find detached/reparented grandchildren that console/PID walks miss (#9045/#10475/#10897). */
+const describeOnWindows = process.platform === 'win32' ? describe : describe.skip
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    // An inaccessible process is still alive; only a missing pid proves exit.
+    return (error as NodeJS.ErrnoException).code === 'EPERM'
+  }
+}
+
+// Teardown is asynchronous; poll instead of guessing how long the job takes.
+async function waitUntilDead(pid: number, timeoutMs = 30_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (isAlive(pid) && Date.now() < deadline) {
+    await sleep(50)
+  }
+}
+
+describeOnWindows('ConPTY job ownership', () => {
+  const spawned: IPty[] = []
+
+  afterEach(() => {
+    for (const proc of spawned.splice(0)) {
+      try {
+        proc.kill()
+      } catch {
+        /* already gone */
+      }
+    }
+  })
+
+  async function spawnShellWithDetachedGrandchild(): Promise<{
+    proc: IPty
+    grandchildPid: number
+  }> {
+    const nodePty = await import('node-pty')
+    const proc = nodePty.spawn('cmd.exe', [], {
+      name: 'xterm-256color',
+      cols: 80,
+      rows: 30,
+      cwd: process.cwd(),
+      useConptyDll: true
+    })
+    spawned.push(proc)
+
+    let grandchildPid: number | null = null
+    let output = ''
+    proc.onData((chunk) => {
+      // ConPTY may split the marker across chunks; a trailing non-digit proves the pid is whole.
+      output += chunk
+      const match = /ORCA_GC=(\d+)\D/.exec(output)
+      if (match && grandchildPid === null) {
+        grandchildPid = Number(match[1])
+      }
+    })
+
+    const script = [
+      "const{spawn}=require('child_process');",
+      "const c=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],",
+      "{detached:true,windowsHide:true,stdio:'ignore'});",
+      "c.unref();console.log('ORCA_GC='+c.pid);"
+    ].join('')
+    proc.write(`node -e "${script}"\r`)
+
+    // The marker usually lands within 3s, but can trail the preceding table stress test; this only bounds a hang.
+    for (let attempt = 0; attempt < 160 && grandchildPid === null; attempt += 1) {
+      await sleep(250)
+    }
+    if (grandchildPid === null) {
+      throw new Error(`grandchild never reported its pid: ${JSON.stringify(output.slice(-600))}`)
+    }
+    // Let the shell settle so the pid list is not read mid-spawn.
+    await sleep(1_000)
+    return { proc, grandchildPid }
+  }
+
+  // Allow a real ConPTY host to publish its startup query on slow Windows CI.
+  it('announces an input reader the daemon recognizes', async () => {
+    // A ConPTY upgrade that changes its startup must fail here, not respawn every pane.
+    const nodePty = await import('node-pty')
+    const proc = nodePty.spawn('cmd.exe', ['/d', '/q'], {
+      cols: 80,
+      rows: 24,
+      cwd: process.cwd(),
+      useConptyDll: true
+    })
+    spawned.push(proc)
+    const startup = watchConptyStartup(proc)
+    expect(await startup.verdict).toBe('input-reader')
+    startup.claim()
+  }, 30_000)
+
+  // Allow native ConPTY teardown to settle before observing process retirement.
+  it('tears down a pane discarded before its first output', async () => {
+    // node-pty's own kill() would wait for output that a discarded pane never sends.
+    const nodePty = await import('node-pty')
+    const proc = nodePty.spawn('cmd.exe', ['/d', '/q'], {
+      cols: 80,
+      rows: 24,
+      cwd: process.cwd(),
+      useConptyDll: true
+    })
+    spawned.push(proc)
+    killConptyNow(proc)
+    await waitUntilDead(proc.pid)
+    expect(isAlive(proc.pid)).toBe(false)
+  }, 30_000)
+
+  it('reports this build as able to own pty trees', () => {
+    // Require patched job support or fallback would let ownership assertions pass vacuously.
+    expect(isPtyJobOwnershipAvailable()).toBe(true)
+  })
+
+  it('keeps the native table intact while shell cleanup overlaps new terminals', async () => {
+    const result = await runProcess({
+      program: process.execPath,
+      args: [join(process.cwd(), 'config', 'scripts', 'windows-pty-table-stress.cjs')],
+      env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' },
+      timeoutMs: 90_000
+    })
+    const status = result.code === null ? 'null' : `0x${(result.code >>> 0).toString(16)}`
+    if (result.code === 0 && !result.timedOut) {
+      console.log(result.stdout)
+    }
+    expect(
+      result,
+      `Native host exited ${status} (${result.signal}); timedOut=${result.timedOut}\n${result.stdout}\n${result.stderr}`
+    ).toMatchObject({ code: 0, timedOut: false })
+    expect(result.stdout).toContain('"phase":"complete"')
+  }, 100_000)
+
+  it('counts a detached grandchild as part of the pane tree', async () => {
+    const { proc, grandchildPid } = await spawnShellWithDetachedGrandchild()
+
+    const pids = listPtyJobProcessIds(proc)
+    expect(pids).not.toBeNull()
+    expect(pids).toContain(proc.pid)
+    expect(pids).toContain(grandchildPid)
+  }, 60_000)
+
+  it('kills the shell and the detached grandchild in one call', async () => {
+    const { proc, grandchildPid } = await spawnShellWithDetachedGrandchild()
+    expect(isAlive(grandchildPid)).toBe(true)
+
+    expect(terminatePtyJob(proc)).toBe('terminated')
+    await waitUntilDead(proc.pid)
+    await waitUntilDead(grandchildPid)
+
+    expect(isAlive(proc.pid)).toBe(false)
+    expect(isAlive(grandchildPid)).toBe(false)
+  }, 60_000)
+
+  it('leaves a backgrounded process alone when the shell exits cleanly', async () => {
+    // Explicit teardown must kill descendants while clean shell exit preserves background servers.
+    const { proc, grandchildPid } = await spawnShellWithDetachedGrandchild()
+
+    const exited = new Promise<void>((resolve) => proc.onExit(() => resolve()))
+    proc.write('exit\r')
+    await exited
+    await sleep(2_000)
+
+    expect(isAlive(grandchildPid)).toBe(true)
+    try {
+      process.kill(grandchildPid)
+    } catch {
+      /* already gone */
+    }
+  }, 60_000)
+
+  it('still starts a backgrounded child from inside the job', async () => {
+    // start /b proves ordinary backgrounding, not CREATE_BREAKAWAY_FROM_JOB rejection; that flag needs a dedicated native helper.
+    const nodePty = await import('node-pty')
+    const marker = join(mkdtempSync(join(tmpdir(), 'orca-breakaway-')), 'marker.txt')
+    const proc = nodePty.spawn('cmd.exe', [], {
+      name: 'xterm-256color',
+      cols: 100,
+      rows: 30,
+      cwd: tmpdir(),
+      useConptyDll: true
+    })
+    spawned.push(proc)
+
+    let output = ''
+    proc.onData((chunk) => {
+      output += chunk
+    })
+    proc.write(`start /b cmd /c "echo ORCA_BREAKAWAY> ${marker}"\r`)
+
+    await vi.waitFor(() => expect(existsSync(marker)).toBe(true), { timeout: 15_000 })
+    expect(output).not.toMatch(/Access is denied/i)
+    await vi.waitFor(() => rmSync(marker, { force: true }))
+  }, 60_000)
+
+  it('stops answering once the tree is gone, rather than claiming it is empty', async () => {
+    // Shell exit closes the job; null remains unverifiable, never evidence of tree death.
+    const { proc } = await spawnShellWithDetachedGrandchild()
+    terminatePtyJob(proc)
+    await sleep(1_500)
+
+    expect(listPtyJobProcessIds(proc)).toBeNull()
+  }, 60_000)
+})

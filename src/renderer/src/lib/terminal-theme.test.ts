@@ -4,7 +4,6 @@ import {
   DEFAULT_TERMINAL_THEME_LIGHT,
   getAvailableTerminalThemeOptions,
   getBuiltinTheme,
-  getTerminalThemePreview,
   isTerminalBackgroundLight,
   resolveOpaqueTerminalBackground,
   resolveEffectiveTerminalAppearance
@@ -139,7 +138,7 @@ describe('resolveEffectiveTerminalAppearance', () => {
     )
 
     expect(appearance.themeName).toBe('Invalid Theme Name')
-    expect(appearance.theme).toEqual(getTerminalThemePreview(DEFAULT_TERMINAL_THEME_LIGHT))
+    expect(appearance.theme).toEqual(getBuiltinTheme(DEFAULT_TERMINAL_THEME_LIGHT))
   })
 
   it('resolves custom theme selections by id', () => {
@@ -188,7 +187,7 @@ describe('resolveEffectiveTerminalAppearance', () => {
     )
 
     expect(appearance.themeName).toBe('custom:warp:missing')
-    expect(appearance.theme).toEqual(getTerminalThemePreview(DEFAULT_TERMINAL_THEME_DARK))
+    expect(appearance.theme).toEqual(getBuiltinTheme(DEFAULT_TERMINAL_THEME_DARK))
   })
 
   it('falls back visually to the light default when a light custom selection is missing', () => {
@@ -206,7 +205,7 @@ describe('resolveEffectiveTerminalAppearance', () => {
     )
 
     expect(appearance.themeName).toBe('custom:warp:missing')
-    expect(appearance.theme).toEqual(getTerminalThemePreview(DEFAULT_TERMINAL_THEME_LIGHT))
+    expect(appearance.theme).toEqual(getBuiltinTheme(DEFAULT_TERMINAL_THEME_LIGHT))
   })
 
   it('includes imported themes as grouped picker options', () => {
@@ -336,5 +335,41 @@ describe('resolveOpaqueTerminalBackground', () => {
   it('returns null for unknown color values', () => {
     expect(resolveOpaqueTerminalBackground(undefined)).toBe(null)
     expect(resolveOpaqueTerminalBackground('var(--background)')).toBe(null)
+  })
+})
+
+describe('plugin terminal themes', () => {
+  const pluginTheme = {
+    id: 'plugin:samples.midnight/midnight' as const,
+    pluginKey: 'samples.midnight',
+    pluginName: 'Midnight',
+    label: 'Midnight',
+    mode: 'dark' as const,
+    terminal: { background: '#010203', foreground: '#fefefe', red: '#ff0000' }
+  }
+  const settings = {
+    theme: 'dark' as const,
+    terminalThemeDark: pluginTheme.id,
+    terminalDividerColorDark: '',
+    terminalUseSeparateLightTheme: false,
+    terminalThemeLight: '',
+    terminalCustomThemes: [],
+    terminalDividerColorLight: '',
+    terminalPluginPalettes: [{ id: pluginTheme.id, colors: pluginTheme.terminal }]
+  }
+
+  it('paints a selected plugin theme from its saved palette and lists it by plugin name', () => {
+    expect(resolveEffectiveTerminalAppearance(settings, true).theme?.background).toBe('#010203')
+    expect(getAvailableTerminalThemeOptions(settings, [pluginTheme]).at(-1)).toMatchObject({
+      value: pluginTheme.id,
+      group: 'plugin',
+      sourceLabel: 'Midnight'
+    })
+  })
+
+  it('falls back to the default theme when no palette was saved', () => {
+    expect(
+      resolveEffectiveTerminalAppearance({ ...settings, terminalPluginPalettes: [] }, true).theme
+    ).toEqual(getBuiltinTheme(DEFAULT_TERMINAL_THEME_DARK))
   })
 })

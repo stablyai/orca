@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import type React from 'react'
-import type { WorkspaceStatus } from '../../../../shared/types'
+import type { WorkspaceStatus } from '../../../../shared/worktree/types'
 import { hasWorkspaceDragData, readWorkspaceDragDataIds } from './workspace-status'
 
 const WORKSPACE_STATUS_DROP_TARGET = '[data-workspace-status-drop-target]'
@@ -106,8 +106,7 @@ export function useWorkspaceStatusDocumentDrop<T extends HTMLElement>(
         return
       }
 
-      // Why: Electron's preload bridge stops native drops before React sees
-      // them, so board drops commit from this scoped capture listener.
+      // Preload intercepts native drops before React; commit board drops from this capture listener.
       event.preventDefault()
       event.stopPropagation()
       commitWorkspaceStatusDocumentDrop({

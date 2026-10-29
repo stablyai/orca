@@ -1,7 +1,10 @@
+import { registerMarkdownTokenizerStart } from './markdown-tokenizer-start'
+import { guardMarkdownDirectiveTokenizer } from './markdown-directive-tokenizer'
 import { decodeHtmlEntities, type AnyExtension, type Editor } from '@tiptap/core'
 import { Details, DetailsContent, DetailsSummary } from '@tiptap/extension-details'
 import type { PlaceholderOptions } from '@tiptap/extension-placeholder'
 import { TextSelection } from '@tiptap/pm/state'
+import { translate } from '@/i18n/i18n'
 import {
   detailsBodyHtmlToMarkdown,
   escapeDetailsHtml,
@@ -9,13 +12,28 @@ import {
   isEditableDetailsHtmlBlock,
   matchDetailsHtmlBlock,
   parseDetailsAttributes,
+  parseToggleHeadingVariant,
   renderDetailsAttributes,
-  type DetailsHtmlToken
+  type DetailsHtmlToken,
+  type ToggleHeadingVariant
 } from './details-markdown-html'
 
-const RICH_MARKDOWN_PLACEHOLDER = 'Write markdown… Type / for blocks.'
-const TOGGLE_TEXT_PLACEHOLDER = 'text'
-const TOGGLE_HEADING_PLACEHOLDER = 'Heading 1'
+const TOGGLE_HEADING_PLACEHOLDERS: Record<ToggleHeadingVariant, readonly [string, string]> = {
+  'heading-1': ['auto.components.editor.rich.markdown.slash.commands.e66e7f04c6', 'Heading 1'],
+  'heading-2': ['auto.components.editor.rich.markdown.slash.commands.c209a116b7', 'Heading 2'],
+  'heading-3': ['auto.components.editor.rich.markdown.slash.commands.30566ee962', 'Heading 3'],
+  'heading-4': ['auto.components.editor.rich.markdown.slash.commands.5f9a0ed7c4', 'Heading 4'],
+  'heading-5': ['auto.components.editor.rich.markdown.slash.commands.8440fa4acf', 'Heading 5']
+}
+
+function toggleTextPlaceholder(): string {
+  return translate('auto.components.editor.RichMarkdownEditor.togglePlaceholder', 'text')
+}
+
+function toggleHeadingPlaceholder(variant: ToggleHeadingVariant): string {
+  const [key, fallback] = TOGGLE_HEADING_PLACEHOLDERS[variant]
+  return translate(key, fallback)
+}
 
 export function getRichMarkdownPlaceholder({
   editor,
@@ -25,13 +43,19 @@ export function getRichMarkdownPlaceholder({
   Extract<PlaceholderOptions['placeholder'], (...args: never[]) => string>
 >[0]): string {
   if (node.type.name !== 'detailsSummary') {
-    return RICH_MARKDOWN_PLACEHOLDER
+    return translate(
+      'auto.components.editor.RichMarkdownEditor.placeholder',
+      'Write markdown… Type / for blocks.'
+    )
   }
 
   const parent = editor.state.doc.resolve(pos).parent
-  return parent.type.name === 'details' && parent.attrs.variant === 'heading-1'
-    ? TOGGLE_HEADING_PLACEHOLDER
-    : TOGGLE_TEXT_PLACEHOLDER
+  if (parent.type.name !== 'details') {
+    return toggleTextPlaceholder()
+  }
+
+  const variant = parseToggleHeadingVariant(parent.attrs.variant)
+  return variant ? toggleHeadingPlaceholder(variant) : toggleTextPlaceholder()
 }
 
 export function moveDetailsSummarySelectionToContent(editor: Editor): boolean {
@@ -115,8 +139,7 @@ export function moveFromEmptyDetailsBodyToSummary(editor: Editor): boolean {
   const summaryStart = detailsStart + 1
   const summaryTextEnd = summaryStart + summaryNode.nodeSize - 1
 
-  // Why: Backspace from an empty toggle body should first make the summary
-  // cursor visible; deletion is reserved for the next Backspace.
+  // First Backspace reveals the empty toggle’s summary cursor; only the next press deletes it.
   const tr = state.tr.setSelection(TextSelection.near(state.doc.resolve(summaryTextEnd), -1))
   tr.scrollIntoView()
   view.dispatch(tr)
@@ -171,8 +194,7 @@ export function exitEmptyDetailsBody(editor: Editor): boolean {
     insertPos -= currentBlockTo - currentBlockFrom
   }
 
-  // Why: an empty toggle body must have an Enter escape hatch, while the
-  // detailsContent node still needs one child to stay schema-valid.
+  // Allow Enter to escape an empty toggle while retaining detailsContent’s required child.
   tr.insert(insertPos, paragraph)
   tr.setSelection(TextSelection.create(tr.doc, insertPos + 1))
   tr.scrollIntoView()
@@ -182,8 +204,7 @@ export function exitEmptyDetailsBody(editor: Editor): boolean {
 }
 
 const OrcaDetails = Details.extend({
-  // Why: details summary Enter must run before StarterKit's generic paragraph
-  // splitting so typing a toggle title then pressing Enter moves into the body.
+  // Handle summary Enter before StarterKit splits paragraphs so titles lead into the toggle body.
   priority: 1000,
 
   addAttributes() {
@@ -191,10 +212,11 @@ const OrcaDetails = Details.extend({
       ...this.parent?.(),
       variant: {
         default: null,
-        parseHTML: (element) =>
-          element.getAttribute('data-orca-toggle') === 'heading-1' ? 'heading-1' : null,
-        renderHTML: ({ variant }) =>
-          variant === 'heading-1' ? { 'data-orca-toggle': 'heading-1' } : {}
+        parseHTML: (element) => parseToggleHeadingVariant(element.getAttribute('data-orca-toggle')),
+        renderHTML: ({ variant }) => {
+          const parsed = parseToggleHeadingVariant(variant)
+          return parsed ? { 'data-orca-toggle': parsed } : {}
+        }
       }
     }
   },
@@ -210,7 +232,10 @@ const OrcaDetails = Details.extend({
   markdownTokenizer: {
     name: 'details',
     level: 'block',
-    start: '<details',
+    // HTML blocks open only at a line start; marked passes source.slice(1), so offset 0 never qualifies.
+    start: registerMarkdownTokenizerStart('<', (source) =>
+      source.search(/(?<=[\n\r] {0,3})<details\b/i)
+    ),
     tokenize(src, _tokens, lexer) {
       const detailsBlock = matchDetailsHtmlBlock(src, 0)
       if (!detailsBlock || !isEditableDetailsHtmlBlock(detailsBlock)) {
@@ -268,9 +293,21 @@ const OrcaDetails = Details.extend({
   }
 })
 
+const OrcaDetailsSummary = DetailsSummary.extend({
+  markdownTokenizer: guardMarkdownDirectiveTokenizer(
+    DetailsSummary.config.markdownTokenizer,
+    'detailsSummary'
+  ),
+  // parseInline emits images/math; upstream’s text-only summary becomes invalid and crashes when the first edit rebuilds it.
+  content: 'inline*'
+})
+
 const OrcaDetailsContent = DetailsContent.extend({
-  // Why: detailsContent's double-Enter escape must run before StarterKit's
-  // generic paragraph split, otherwise users can get stuck inside a toggle.
+  markdownTokenizer: guardMarkdownDirectiveTokenizer(
+    DetailsContent.config.markdownTokenizer,
+    'detailsContent'
+  ),
+  // Handle double Enter before StarterKit’s paragraph split so users can escape toggles.
   priority: 1000,
 
   addKeyboardShortcuts() {
@@ -296,7 +333,7 @@ export function createOrcaDetailsExtensions(): AnyExtension[] {
         class: 'orca-details'
       }
     }),
-    DetailsSummary,
+    OrcaDetailsSummary,
     OrcaDetailsContent
   ]
 }

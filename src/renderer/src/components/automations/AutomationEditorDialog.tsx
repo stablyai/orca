@@ -6,32 +6,45 @@ import type {
   AutomationSchedulePreset,
   AutomationWorkspaceMode
 } from '../../../../shared/automations-types'
-import type { GlobalSettings, Repo, TuiAgent, Worktree } from '../../../../shared/types'
-import {
-  isValidAutomationCronSchedule,
-  isValidAutomationSchedule
-} from '../../../../shared/automation-schedules'
-import { Field } from './automation-page-parts'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { SetupDecision } from '../../../../shared/worktree/create-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { closeUnfocusedMonacoFindOrPreventDialogDismiss } from '@/components/editor/monaco-find-widget'
+import { AutomationOwnerConflictNotice } from './AutomationOwnerConflictNotice'
+import type { AutomationActionNotice } from './automation-row-action-dispatch'
+import type { AutomationHostRecoveryAction } from './automation-host-status-descriptors'
+import type { AutomationCreateDestinationControl } from './use-automation-create-destination'
 import { AutomationEditorDialogFooter } from './AutomationEditorDialogFooter'
 import { AutomationEditorDialogHeader } from './AutomationEditorDialogHeader'
+import { getAutomationPromptEditorRoot } from './AutomationEditorPromptEditor'
 import { AutomationEditorPromptSection } from './AutomationEditorPromptSection'
-import { AutomationSchedulePicker } from './AutomationSchedulePicker'
+import { AutomationEditorSettingsSidebar } from './AutomationEditorSettingsSidebar'
 import { getAutomationTemplates, type AutomationTemplate } from './automation-templates'
-import { translate } from '@/i18n/i18n'
 
-const PICKER_TRIGGER_CLASS =
+export const AUTOMATION_EDITOR_PICKER_TRIGGER_CLASS =
   'border-input bg-input/30 shadow-xs hover:bg-accent/60 dark:bg-input/30 dark:hover:bg-input/50'
-const MODE_TOGGLE_ITEM_CLASS =
-  'w-full border-input bg-input/30 shadow-xs hover:bg-accent/60 data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:hover:bg-primary/90 dark:bg-input/30 dark:data-[state=on]:bg-primary dark:data-[state=on]:text-primary-foreground dark:data-[state=on]:hover:bg-primary/90'
+
+export const AUTOMATION_EDITOR_SEGMENTED_GROUP_CLASS =
+  'grid w-full grid-cols-2 rounded-md bg-muted p-0.5'
+
+export const AUTOMATION_EDITOR_SEGMENTED_ITEM_CLASS =
+  'h-7 rounded-sm border-0 bg-transparent shadow-none hover:bg-card/70 data-[state=on]:bg-card data-[state=on]:text-card-foreground data-[state=on]:shadow-xs'
 
 export type AutomationDraft = {
   name: string
   prompt: string
   agentId: TuiAgent
+  /** Saved as-is; empty means none. */
+  extraAgentArgs: string
   projectId: string
   workspaceMode: AutomationWorkspaceMode
   workspaceId: string
   baseBranch: string
+  setupDecision?: Extract<SetupDecision, 'run' | 'skip'>
   reuseSession: boolean
   precheckCommand: string
   precheckTimeoutSeconds: string
@@ -39,29 +52,39 @@ export type AutomationDraft = {
   time: string
   dayOfWeek: string
   customSchedule: string
+  // Validate new input strictly; do not re-judge a saved cadence that still runs.
+  savedSchedule: string | null
   missedRunGraceMinutes: string
   scheduleWarning: string | null
 }
 
-export type AutomationCreateTarget = 'orca' | 'hermes'
-
 type AutomationEditorDialogProps = {
   open: boolean
   isEditing: boolean
-  isEditingExternal: boolean
   isSaving: boolean
   canSave: boolean
-  createTarget: AutomationCreateTarget
-  repos: Repo[]
+  repos: readonly Repo[]
+  projectHostSetups: readonly ProjectHostSetup[]
+  automationYamlHooksByRepoKey: Record<string, OrcaHooks | null>
+  getAutomationHooksCacheKey: (repoId: string) => string
   repoMap: Map<string, Repo>
   worktrees: Worktree[]
   settings: GlobalSettings | null
   draft: AutomationDraft
+  /** Present only while creating an Orca automation. */
+  createDestination?: AutomationCreateDestinationControl
+  /** Present only while editing an Orca automation; selecting another host moves the record. */
+  editDestination?: AutomationCreateDestinationControl
+  /** Why a save was refused. Belongs here rather than on the page: this dialog covers it. */
+  notice?: AutomationActionNotice | null
+  onNoticeRecover?: (action: AutomationHostRecoveryAction) => void
+  onNoticeDismiss?: () => void
   onProjectChange: (projectId: string) => void
   getRepoHostLabel?: (repo: Repo) => string | null | undefined
-  onCreateTargetChange: (target: AutomationCreateTarget) => void
+  allowAddProject?: boolean
   onOpenChange: (open: boolean) => void
   onDraftChange: (updater: (current: AutomationDraft) => AutomationDraft) => void
+  onSetupDecisionTouched: () => void
   onApplyTemplate: (template: AutomationTemplate) => void
   onSave: () => void
 }
@@ -69,27 +92,34 @@ type AutomationEditorDialogProps = {
 export function AutomationEditorDialog({
   open,
   isEditing,
-  isEditingExternal,
   isSaving,
   canSave,
-  createTarget,
   repos,
+  projectHostSetups,
+  automationYamlHooksByRepoKey,
+  getAutomationHooksCacheKey,
   repoMap,
   worktrees,
   settings,
   draft,
+  createDestination,
+  editDestination,
+  notice,
+  onNoticeRecover,
+  onNoticeDismiss,
   onProjectChange,
   getRepoHostLabel,
-  onCreateTargetChange,
+  allowAddProject,
   onOpenChange,
   onDraftChange,
+  onSetupDecisionTouched,
   onApplyTemplate,
   onSave
 }: AutomationEditorDialogProps): React.JSX.Element {
   const [templateOpen, setTemplateOpen] = React.useState(false)
-  const isHermesTarget = createTarget === 'hermes'
-  const isCreateMode = !isEditing && !isEditingExternal
-  const isHermesCreate = isCreateMode && isHermesTarget
+  const dialogContentRef = React.useRef<HTMLDivElement>(null)
+  const isCreateMode = !isEditing
+  const destination = isCreateMode ? createDestination : editDestination
   const visibleAgents = React.useMemo(() => {
     const enabledIds = new Set(
       filterEnabledTuiAgents(
@@ -101,42 +131,38 @@ export function AutomationEditorDialog({
       (agent) => enabledIds.has(agent.id) || agent.id === draft.agentId
     )
   }, [draft.agentId, settings?.disabledTuiAgents])
-  const scheduleField = (
-    <Field
-      label={translate('auto.components.automations.AutomationEditorDialog.c4b19094c2', 'Schedule')}
-    >
-      <AutomationSchedulePicker
-        draft={draft}
-        triggerClassName={PICKER_TRIGGER_CLASS}
-        validateAdvancedSchedule={
-          isHermesTarget ? isValidAutomationCronSchedule : isValidAutomationSchedule
-        }
-        onDraftChange={onDraftChange}
-      />
-    </Field>
-  )
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="flex max-h-[90vh] flex-col gap-0 p-0 dark:border-border dark:bg-card dark:text-card-foreground sm:max-w-[920px]"
+        className="flex h-[min(880px,90vh)] w-[min(1080px,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[1080px]"
+        aria-describedby={undefined}
+        ref={dialogContentRef}
         onOpenAutoFocus={(event) => {
           event.preventDefault()
+        }}
+        onEscapeKeyDown={(event) => {
+          // Radix listens on document; scope editor lookup through the dialog ref rather than currentTarget.
+          const dialog =
+            dialogContentRef.current ??
+            (event.target instanceof Element
+              ? event.target.closest('[data-slot="dialog-content"]')
+              : null)
+          if (
+            closeUnfocusedMonacoFindOrPreventDialogDismiss({
+              root: getAutomationPromptEditorRoot(dialog),
+              eventTarget: event.target
+            })
+          ) {
+            event.preventDefault()
+          }
         }}
       >
         <AutomationEditorDialogHeader
           isEditing={isEditing}
-          isEditingExternal={isEditingExternal}
-          isHermesCreate={isHermesCreate}
           isCreateMode={isCreateMode}
-          createTarget={createTarget}
-          draftName={draft.name}
           templateOpen={templateOpen}
           templates={getAutomationTemplates()}
-          modeToggleItemClassName={MODE_TOGGLE_ITEM_CLASS}
-          pickerTriggerClassName={PICKER_TRIGGER_CLASS}
-          onCreateTargetChange={onCreateTargetChange}
-          onDraftNameChange={(name) => onDraftChange((current) => ({ ...current, name }))}
           onTemplateOpenChange={setTemplateOpen}
           onApplyTemplate={(template) => {
             onApplyTemplate(template)
@@ -144,32 +170,46 @@ export function AutomationEditorDialog({
           }}
         />
 
-        <AutomationEditorPromptSection
-          draft={draft}
-          isHermesCreate={isHermesCreate}
-          pickerTriggerClassName={PICKER_TRIGGER_CLASS}
-          onDraftChange={onDraftChange}
+        <div className="flex min-h-0 flex-1 flex-row">
+          <AutomationEditorPromptSection
+            draft={draft}
+            onDraftChange={onDraftChange}
+            onDismiss={() => onOpenChange(false)}
+          />
+          <AutomationEditorSettingsSidebar
+            destination={destination}
+            repos={repos}
+            projectHostSetups={projectHostSetups}
+            automationYamlHooksByRepoKey={automationYamlHooksByRepoKey}
+            getAutomationHooksCacheKey={getAutomationHooksCacheKey}
+            repoMap={repoMap}
+            worktrees={worktrees}
+            settings={settings}
+            draft={draft}
+            visibleAgents={visibleAgents}
+            pickerTriggerClassName={AUTOMATION_EDITOR_PICKER_TRIGGER_CLASS}
+            segmentedGroupClassName={AUTOMATION_EDITOR_SEGMENTED_GROUP_CLASS}
+            segmentedItemClassName={AUTOMATION_EDITOR_SEGMENTED_ITEM_CLASS}
+            onProjectChange={onProjectChange}
+            getRepoHostLabel={getRepoHostLabel}
+            allowAddProject={allowAddProject}
+            onDraftChange={onDraftChange}
+            onSetupDecisionTouched={onSetupDecisionTouched}
+          />
+        </div>
+
+        <AutomationOwnerConflictNotice
+          notice={notice ?? null}
+          className="mx-5 mb-1"
+          onRecover={onNoticeRecover}
+          onDismiss={onNoticeDismiss}
         />
 
         <AutomationEditorDialogFooter
           isEditing={isEditing}
-          isEditingExternal={isEditingExternal}
-          isHermesTarget={isHermesTarget}
-          isHermesCreate={isHermesCreate}
           isSaving={isSaving}
           canSave={canSave}
-          repos={repos}
-          repoMap={repoMap}
-          worktrees={worktrees}
-          settings={settings}
-          draft={draft}
-          visibleAgents={visibleAgents}
-          scheduleField={scheduleField}
-          pickerTriggerClassName={PICKER_TRIGGER_CLASS}
-          modeToggleItemClassName={MODE_TOGGLE_ITEM_CLASS}
-          onProjectChange={onProjectChange}
-          getRepoHostLabel={getRepoHostLabel}
-          onDraftChange={onDraftChange}
+          hasProjects={repos.length > 0}
           onOpenChange={onOpenChange}
           onSave={onSave}
         />

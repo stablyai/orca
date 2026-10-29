@@ -1,0 +1,95 @@
+{
+  "recordedAt": "2026-10-09T18:44:37.457961+00:00",
+  "baselineCommit": "51e7181850b022bae2d41091fe1229accef4bd50",
+  "executionHost": "Darwin",
+  "sourceSha256": {
+    "config/scripts/claude-usage-append-benchmark.mjs": "b171806ba5f58ce1ae4d2ea701be973505e7bfa27774f99d5c2408402a97f891",
+    "config/scripts/claude-usage-benchmark-scanner.mjs": "ffb6e5defb921f2ab35726a716f5e731dec439ead53cc2f3a192c7bef4df45d3",
+    "config/scripts/codex-usage-parser-memory-benchmark.mjs": "434e9818f8d8b132603912b104560a000e9e2635a2564cf65ae7e87cff483a1a",
+    "config/scripts/native-chat-tool-pairing-benchmark.mjs": "fa529dfb83db216bff9121240dccc7a8c7a1f5a88fb4c25e8a7c2abe8d65f062",
+    "config/vitest.performance.config.ts": "e548a19a39e3ad748a4ab29b93dae7d933f99c9913dc332c803e5b484815b65c",
+    "src/main/claude-usage/scanner-incremental-append.test.ts": "008548702f50700cb94aa6f729c9fd99c2fa06becb238f695132de4fb8b0a62d",
+    "src/main/claude-usage/scanner-incremental-ownership.test.ts": "e96be4afb64ad1bf1368f8f6cf85cd7a3d84140b4201d44f14759b8113d2e411",
+    "src/main/claude-usage/scanner-incremental-reader.test.ts": "cafe02b9015dd107b2ef0530415cbe354cc57811a43a892843456a2578865e1d",
+    "src/main/claude-usage/scanner.ts": "ef42add20f63152cf2ebe106e0794119b9c388c763736c8450b559ae7c2418f5",
+    "src/main/claude-usage/transcript-record-parser.ts": "d4fab89434c1b6c60480a561310542246be34ef86bc13da0340c1dfdbb269854",
+    "src/main/claude-usage/transcript-resume-projection.ts": "4828655a59454ee38ae46495ace531b6f149f8674c7d27828d2bbace1c549fd6",
+    "src/main/claude-usage/transcript-token-checkpoint.ts": "e96cc4aa9b899cad90aee462f053f483f5bb010dea99de1ee11a9f8fd8a2d0f2",
+    "src/main/claude-usage/transcript-usage-projection.ts": "41a1c8b86244efc60e92adb1368393ed52b0bf8773e26e38a0d018780486123b",
+    "src/main/claude-usage/types.ts": "12fa821ed77cec8888757b9556738aa4722d81cce97b8b94fa77f62ba8a1ecff",
+    "src/main/codex-usage/codex-rollout-file-parse.ts": "6e4937105fc9cf8457b79ac16bcfc71f706f22a87e036166bd461aeea8c07fdc",
+    "src/main/codex-usage/codex-rollout-resume-state.ts": "aa028d2155b7744c0d961c5649537faa20c39bfe404dea8d9c4c1464d11a0e39",
+    "src/main/codex-usage/scanner-checkpoint-races.test.ts": "f6f90a5967b297c2a0dfe5eb9d4acfe3257ef1e794a709501d1cdf29092dc379",
+    "src/main/codex-usage/scanner-file-generation.test.ts": "76c1620b4f0cfa793f21a8c67ea298b00a44692e7c6b1bb18d92048599288581",
+    "src/main/codex-usage/scanner-file-identity.test.ts": "7ff12e654fc20dbac8189947ca5e35151291ea4cda60398b0fb1d4d8d5e7b751",
+    "src/main/codex-usage/scanner-incremental-append.test.ts": "a06685d3b451b20d8d94023d6e35ba30aef83831f95192fed34433314342b938",
+    "src/main/codex-usage/scanner.ts": "8221f7420ddaae20a94a6c14421bc688d659f82daf85eb47bbe26760418c41a5",
+    "src/main/codex-usage/types.ts": "84bfd3976613b6a775d215fa54f00917cabb981be780d4837c92d43f7cb0a036",
+    "src/main/native-chat/transcript-line-decoders-codex.ts": "cbd4133da04988a9b86015349411a679a5b1b513738a7c10bf165869c49e05e4",
+    "src/main/native-chat/transcript-record-blocks.ts": "110990b4d8ebd6f28ea8702de92568fff5af398bffa5dafdb81d93b65f7da594",
+    "src/main/native-chat/transcript-tool-result-identity.test.ts": "4080f77a5cf7d035cbd69cfd9fd491113f23ef31485f2085e5d0cfabdd90f366",
+    "src/main/native-chat/transcript-window-tool-attribution.test.ts": "f62b5208890d8fe7b1d0a7659e12b13e4c8d4ecbf81ae97046012106faaf8c48",
+    "src/main/usage/jsonl-file-checkpoint.ts": "8eb579f356e1bb23b36319f00b3d4603fff80a963222dcb8a22331319cab3a03",
+    "src/main/usage/jsonl-file-snapshot.ts": "1bd98ac194f73097cd6c204238fe1db01e1e0d60a604e93c1d7841725971fe0d",
+    "src/main/usage/jsonl-line-offsets.ts": "f119465fad3771acd72b128853e84eed9165f0f74b75743ad662aa5bab991273",
+    "src/main/usage/usage-breakdown-scaling.test.ts": "128438475fac16436ffa39776c041ef1ef59ac9dcc4f9cee67a2fd124a5f18a2",
+    "src/main/usage/usage-event-aggregation.ts": "31adda2e8e0a32756416fb49b2c3e02c707703bfe76434aabc95c61a7efd180b",
+    "src/shared/native-chat-tool-fold-attribution.test.ts": "cd80f8d13ef8794946378a108392efcb6adce00a2f108ddca852516f31424564",
+    "src/shared/native-chat-tool-fold.ts": "3d75ee82c5c09bc796caef4d5127d55b3d291c03d3090f10a204622188aaba4a",
+    "src/shared/native-chat-tool-pairing.performance.test.ts": "5c02cb5f5242d71db91de142ec309864637e5f4788f187ec18814a16afaacb1e",
+    "src/shared/native-chat-tool-pairs.ts": "6be4c6ac899c275362658ac69478cd3b71dec97b0cd59520f71eb5e1dfc093b4",
+    "tests/e2e/helpers/store.ts": "82807c85d54f68bf4347ac37dee04a6112eae84521f3f597f883728df4627dea",
+    "tests/e2e/native-chat-tool-pairing.spec.ts": "053c667589d433b403f5d2a5758079f0edaf3d7598ee318c8d0c30652963bc2c"
+  },
+  "integrated": {
+    "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/claude-usage src/main/codex-usage src/main/usage src/main/native-chat src/shared/native-chat src/renderer/src/components/native-chat",
+    "filesPassed": 839,
+    "testsPassed": 8278,
+    "existingTodo": 5,
+    "seconds": 58.06,
+    "exitCode": 0,
+    "scope": "Relevant provider usage, shared usage, native chat host/shared/renderer suites; not the full repository test suite."
+  },
+  "performanceContracts": {
+    "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test:perf:contracts",
+    "filesPassed": 14,
+    "testsPassed": 118,
+    "seconds": 4.68,
+    "exitCode": 0,
+    "ciPlatformsConfigured": ["Linux", "macOS", "Windows"],
+    "executedHere": "macOS"
+  },
+  "typecheck": {
+    "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm tc",
+    "exitCode": 0
+  },
+  "changedQuality": {
+    "command": "ORCA_BACKGROUND_LAUNCH=1 ORCA_CODE_QUALITY_BASE=51e7181850b022bae2d41091fe1229accef4bd50 pnpm run check:code-quality:changed",
+    "sourceFiles": 37,
+    "newFindings": 0,
+    "exitCode": 0
+  },
+  "formatting": {
+    "command": "pnpm exec oxfmt --check <37 changed .ts/.tsx/.mjs files>",
+    "files": 37,
+    "exitCode": 0
+  },
+  "sourceAudit": {
+    "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm --silent audit:perf",
+    "productionFindings": 0,
+    "existingTestFixtureFindings": 1,
+    "fixture": "src/shared/relay-frame-buffer.test.ts",
+    "exitCode": 0
+  },
+  "evidenceHashVerification": {
+    "renderAndUsageComparisons": 44,
+    "memoryComparisons": 21,
+    "mismatches": 0
+  },
+  "renderedEvidence": "https://github.com/stablyai/orca/blob/nwparker/perf-native-chat-tool-pairing/docs/bug-reproductions/native-chat-tool-pairing/rendered-validation.json",
+  "usageComparison": "comparison.jsonl",
+  "memoryComparison": "codex-parser-memory.json",
+  "independentReviews": "Pair identity/order and orphan indices; append/cold parity; duplicate maxima and first attribution; ownership recovery; pinned generation/coverage/cleanup; aggregation compatibility; benchmark instrumentation and provenance.",
+  "limits": "Timings measure pairing/scanner functions. Memory measures sampled retained heap under forced GC. Bounded append-only evidence cannot prove arbitrary middle-only rewrites during growth. No mobile or real SSH transport latency measurement.",
+  "sourceSnapshotScope": "Recorded from the combined usage-reader/Codex, Claude-append and chat-pairing worktree. Production source was preserved byte-for-byte when split into separate PRs; this is not an individual PR tip record."
+}

@@ -1,8 +1,9 @@
-import { execFile, spawn, type ChildProcess } from 'child_process'
-import { access, mkdtemp } from 'fs/promises'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { promisify } from 'util'
+import { execFile, spawn, type ChildProcess } from 'node:child_process'
+import { access, mkdtemp } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { promisify } from 'node:util'
+import { createElectronHomeIsolation } from './electron-home-isolation'
 
 const execFileAsync = promisify(execFile)
 const RUNTIME_METADATA_FILE = 'orca-runtime.json'
@@ -31,8 +32,7 @@ export async function runOrcaCli(
       options.retryMissingRuntimeMetadata !== false &&
       isMissingRuntimeMetadataError(args, error)
     ) {
-      // Why: Windows CI can let the dev runtime exit while launching the
-      // fixture app; reopen once so the desktop action gets a live runtime.
+      // Windows can lose the dev runtime while launching the fixture app; reopen once before the desktop action.
       await ensureOrcaRuntimeLaunched()
       return await runOrcaCliOnce(args)
     }
@@ -44,10 +44,9 @@ async function runOrcaCliOnce(args: string[]): Promise<CliResult> {
   const devCli = join(process.cwd(), 'config/scripts/orca-dev.mjs')
   const command = process.env.ORCA_COMPUTER_CLI ?? process.execPath
   const cliArgs = process.env.ORCA_COMPUTER_CLI ? args : [devCli, ...args]
-  const env = { ...process.env }
-  if (!process.env.ORCA_COMPUTER_CLI && !env.ORCA_DEV_USER_DATA_PATH) {
-    env.ORCA_DEV_USER_DATA_PATH = await getComputerE2eOrcaDevUserDataPath()
-  }
+  const env = process.env.ORCA_COMPUTER_CLI
+    ? { ...process.env }
+    : await createComputerE2ERuntimeEnv()
   try {
     const result = await execFileAsync(command, cliArgs, {
       env,
@@ -95,8 +94,7 @@ export function parseJsonOutput<T>(stdout: string): T {
 
 async function getComputerE2eOrcaDevUserDataPath(): Promise<string> {
   if (!orcaDevUserDataPath) {
-    // Why: the shared orca-dev profile can keep an older runtime alive across
-    // local test runs, making computer-use E2E exercise stale provider code.
+    // Use a fresh profile so a retained dev runtime cannot execute stale provider code.
     orcaDevUserDataPath = await mkdtemp(join(tmpdir(), 'orca-computer-runtime-'))
   }
   return orcaDevUserDataPath
@@ -140,10 +138,7 @@ function delay(ms: number): Promise<void> {
 async function ensureOrcaRuntimeServed(): Promise<void> {
   if (!orcaServeProcess || orcaServeProcess.exitCode !== null) {
     const devCli = join(process.cwd(), 'config/scripts/orca-dev.mjs')
-    const env = {
-      ...process.env,
-      ORCA_DEV_USER_DATA_PATH: await getComputerE2eOrcaDevUserDataPath()
-    }
+    const env = await createComputerE2ERuntimeEnv()
     orcaServeStdout = ''
     orcaServeStderr = ''
     orcaServeProcess = spawn(process.execPath, [devCli, 'serve', '--no-pairing', '--json'], {
@@ -164,6 +159,25 @@ async function ensureOrcaRuntimeServed(): Promise<void> {
     })
   }
   await waitForOrcaRuntimeReady()
+}
+
+async function createComputerE2ERuntimeEnv(): Promise<NodeJS.ProcessEnv> {
+  const userDataDir =
+    process.env.ORCA_DEV_USER_DATA_PATH ?? (await getComputerE2eOrcaDevUserDataPath())
+  // Strip ELECTRON_RUN_AS_NODE or the Electron child runs as plain Node.
+  const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...inheritedEnv } = process.env
+  void _electronRunAsNode
+  const isolation = createElectronHomeIsolation({
+    inheritedEnv,
+    launchEnv: {},
+    extraEnv: {},
+    userDataDir
+  })
+  return {
+    ...isolation.env,
+    // Keep CLI and Electron on the same runtime metadata while fixture HOME/Codex isolation remains in force.
+    ORCA_DEV_USER_DATA_PATH: userDataDir
+  }
 }
 
 function isMissingRuntimeMetadataError(args: string[], error: unknown): boolean {

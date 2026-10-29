@@ -1,6 +1,4 @@
-// Why: pure compat evaluators shared between desktop tests, renderer runtime
-// switching, and the mobile mirror. All version numbers are passed in to keep
-// the logic dependency-free and easy to duplicate in Expo.
+// Pure compatibility checks take versions as inputs so renderer/tests and the Expo mirror need no platform dependencies.
 
 export type RuntimeCompatVerdict =
   | {
@@ -23,8 +21,7 @@ export function evaluateRuntimeCompat(input: {
   serverProtocolVersion: number | undefined
   serverMinCompatibleClientProtocolVersion: number | undefined
 }): RuntimeCompatVerdict {
-  // Why: absent fields are protocol 0. New clients can give old servers a
-  // clear "update server" error instead of attempting partially-supported RPCs.
+  // Missing versions mean protocol 0, giving old servers explicit update refusals before unsupported RPCs.
   const serverProtocolVersion = input.serverProtocolVersion ?? 0
   const requiredClientProtocolVersion = input.serverMinCompatibleClientProtocolVersion ?? 0
 
@@ -79,16 +76,11 @@ export function evaluateCompat(input: {
   desktopProtocolVersion: number | undefined
   desktopMinCompatibleMobileVersion: number | undefined
 }): CompatVerdict {
-  // Why: absent fields → 0 lets mobile keep talking to pre-PR desktops.
-  // Bumping minCompatibleDesktopVersion above 0 will fence those older
-  // desktops alongside any explicitly-version-0 desktop, which is the
-  // intended kill-switch behavior.
+  // Missing desktop fields mean version 0: allow legacy peers until a positive minimum deliberately fences them.
   const desktopVersion = input.desktopProtocolVersion ?? 0
   const requiredMobile = input.desktopMinCompatibleMobileVersion ?? 0
 
-  // Why: mobile-too-old precedence — if desktop says "I refuse this
-  // mobile build" (kill switch), that wins over any local mobile
-  // judgment about desktop's age.
+  // Desktop’s mobile kill switch outranks mobile’s local desktop-age refusal.
   if (input.mobileProtocolVersion < requiredMobile) {
     return {
       kind: 'blocked',

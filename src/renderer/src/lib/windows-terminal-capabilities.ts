@@ -1,6 +1,9 @@
-import { useEffect, useState } from 'react'
-import { callRuntimeRpc, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
-import type { RuntimeStatus } from '../../../shared/runtime-types'
+import { useEffect, useMemo, useState } from 'react'
+import { startWindowsTerminalCapabilityReprobe } from './windows-terminal-capability-reprobe'
+import {
+  readWindowsTerminalCapabilities,
+  type WindowsTerminalCapabilityLoadTarget
+} from './windows-terminal-capability-read'
 
 export type WindowsTerminalCapabilities = {
   wslAvailable: boolean
@@ -39,14 +42,32 @@ type WindowsTerminalCapabilityHookState = {
   capabilities: WindowsTerminalCapabilities
 }
 
-type WindowsTerminalCapabilityLoadTarget = RuntimeClientTarget
+function resolveWindowsTerminalCapabilityCacheKey(args: {
+  ownerKey?: string
+  target?: WindowsTerminalCapabilityLoadTarget
+  sshConnectionId?: string | null
+}): string {
+  const explicitOwnerKey = args.ownerKey?.trim()
+  if (explicitOwnerKey) {
+    return explicitOwnerKey
+  }
+  const environmentId = args.target?.kind === 'environment' ? args.target.environmentId : null
+  return getWindowsTerminalCapabilityOwnerKey(environmentId, args.sshConnectionId)
+}
 
 export function getWindowsTerminalCapabilityOwnerKey(
-  activeRuntimeEnvironmentId?: string | null
+  activeRuntimeEnvironmentId?: string | null,
+  sshConnectionId?: string | null
 ): string {
-  // Why: remote desktop and paired web clients can switch hosts; Git Bash/WSL availability is
-  // host-owned, so a previous runtime's answer must not bleed into the next.
+  // Shell availability belongs to hosts; runtime switches must not reuse previous-owner Git Bash/WSL answers.
+  const connectionId = sshConnectionId?.trim()
   const environmentId = activeRuntimeEnvironmentId?.trim()
+  if (connectionId && environmentId) {
+    return `runtime:${environmentId}:ssh:${connectionId}`
+  }
+  if (connectionId) {
+    return `ssh:${connectionId}`
+  }
   return environmentId ? `runtime:${environmentId}` : 'local'
 }
 
@@ -105,11 +126,17 @@ export function loadWindowsTerminalCapabilities(
     now?: number
     ownerKey?: string
     target?: WindowsTerminalCapabilityLoadTarget
+    sshConnectionId?: string | null
   } = {}
 ): Promise<WindowsTerminalCapabilities> {
   const now = options.now ?? Date.now()
-  const ownerKey = options.ownerKey ?? 'local'
+  const sshConnectionId = options.sshConnectionId?.trim() || null
   const target = options.target ?? { kind: 'local' }
+  const ownerKey = resolveWindowsTerminalCapabilityCacheKey({
+    ownerKey: options.ownerKey,
+    target,
+    sshConnectionId
+  })
   pruneExpiredCapabilityOwners(now)
   const cached = cachedCapabilitiesByOwnerKey.get(ownerKey)
   if (cached && !options.force && now - cached.loadedAt < CAPABILITY_CACHE_TTL_MS) {
@@ -120,20 +147,11 @@ export function loadWindowsTerminalCapabilities(
     return pendingCapabilities
   }
 
-  // Why: Settings, status bar, and paired web tab bars need one shared answer.
-  // Separate probes can leave one surface showing stale Windows shell choices.
+  // Share one probe across Settings/status/web bars or shell choices can disagree.
   const requestId = ++nextCapabilityRequestId
   latestCapabilityRequestIdByOwnerKey.set(ownerKey, requestId)
-  const nextPendingCapabilities = Promise.all(readWindowsTerminalCapabilityPromises(target))
-    .then(([wslAvailable, wslDistros, pwshAvailable, gitBashAvailable, hostPlatform]) => {
-      const capabilities = {
-        wslAvailable,
-        wslDistros,
-        pwshAvailable,
-        gitBashAvailable,
-        hostPlatform,
-        isLoading: false
-      }
+  const nextPendingCapabilities = readWindowsTerminalCapabilities(target, sshConnectionId)
+    .then((capabilities) => {
       if (requestId === latestCapabilityRequestIdByOwnerKey.get(ownerKey)) {
         pendingCapabilitiesByOwnerKey.delete(ownerKey)
         publish(capabilities, ownerKey, now)
@@ -154,13 +172,6 @@ export function loadWindowsTerminalCapabilities(
   return nextPendingCapabilities
 }
 
-export function refreshWindowsTerminalCapabilities(
-  ownerKey = 'local',
-  target: WindowsTerminalCapabilityLoadTarget = { kind: 'local' }
-): Promise<WindowsTerminalCapabilities> {
-  return loadWindowsTerminalCapabilities({ force: true, ownerKey, target })
-}
-
 export function selectWindowsTerminalCapabilitiesForOwner(
   state: WindowsTerminalCapabilityHookState,
   enabled: boolean,
@@ -171,107 +182,113 @@ export function selectWindowsTerminalCapabilitiesForOwner(
   }
   return state.ownerKey === ownerKey
     ? state.capabilities
-    : (cachedCapabilitiesByOwnerKey.get(ownerKey)?.capabilities ?? UNAVAILABLE_CAPABILITIES)
+    : getCachedWindowsTerminalCapabilities(ownerKey)
 }
 
 export function useWindowsTerminalCapabilities(
   enabled: boolean,
   forceRefreshOnMount = false,
-  ownerKey = 'local',
-  target: WindowsTerminalCapabilityLoadTarget = { kind: 'local' }
+  ownerKey?: string,
+  target: WindowsTerminalCapabilityLoadTarget = { kind: 'local' },
+  sshConnectionId?: string | null
 ): WindowsTerminalCapabilities {
   const targetKind = target.kind
   const targetEnvironmentId = target.kind === 'environment' ? target.environmentId : null
-  const [state, setState] = useState(() => ({
+  const sshConnectionIdKey = sshConnectionId?.trim() || null
+  const resolvedTarget: WindowsTerminalCapabilityLoadTarget = useMemo(
+    () =>
+      targetKind === 'environment' && targetEnvironmentId
+        ? { kind: 'environment', environmentId: targetEnvironmentId }
+        : { kind: 'local' },
+    [targetKind, targetEnvironmentId]
+  )
+  const resolvedOwnerKey = resolveWindowsTerminalCapabilityCacheKey({
     ownerKey,
-    capabilities: getCachedWindowsTerminalCapabilities(ownerKey)
+    target: resolvedTarget,
+    sshConnectionId: sshConnectionIdKey
+  })
+  const [state, setState] = useState(() => ({
+    ownerKey: resolvedOwnerKey,
+    capabilities: getCachedWindowsTerminalCapabilities(resolvedOwnerKey)
   }))
 
   useEffect(() => {
     if (!enabled) {
-      setState({ ownerKey, capabilities: UNAVAILABLE_CAPABILITIES })
+      setState({ ownerKey: resolvedOwnerKey, capabilities: UNAVAILABLE_CAPABILITIES })
       return
     }
-    const loadTarget: WindowsTerminalCapabilityLoadTarget =
-      targetKind === 'environment' && targetEnvironmentId
-        ? { kind: 'environment', environmentId: targetEnvironmentId }
-        : { kind: 'local' }
-
     let cancelled = false
-    const cached = getCachedWindowsTerminalCapabilities(ownerKey)
-    const hasOwnerCache = cachedCapabilitiesByOwnerKey.has(ownerKey)
+    const cached = getCachedWindowsTerminalCapabilities(resolvedOwnerKey)
+    const hasOwnerCache = cachedCapabilitiesByOwnerKey.has(resolvedOwnerKey)
     setState({
-      ownerKey,
+      ownerKey: resolvedOwnerKey,
       capabilities: hasOwnerCache ? cached : { ...cached, isLoading: true }
     })
     const setCapabilities = (capabilities: WindowsTerminalCapabilities): void => {
-      setState({ ownerKey, capabilities })
+      setState({ ownerKey: resolvedOwnerKey, capabilities })
     }
-    const subscribers = subscribersByOwnerKey.get(ownerKey) ?? new Set()
+    const subscribers = subscribersByOwnerKey.get(resolvedOwnerKey) ?? new Set()
     subscribers.add(setCapabilities)
-    subscribersByOwnerKey.set(ownerKey, subscribers)
+    subscribersByOwnerKey.set(resolvedOwnerKey, subscribers)
+    const reprobe: { stop: (() => void) | null } = { stop: null }
     void loadWindowsTerminalCapabilities({
       force: forceRefreshOnMount,
-      ownerKey,
-      target: loadTarget
+      ownerKey: resolvedOwnerKey,
+      target: resolvedTarget,
+      sshConnectionId: sshConnectionIdKey
     }).then((nextCapabilities) => {
-      if (!cancelled) {
-        setState({ ownerKey, capabilities: nextCapabilities })
+      if (cancelled) {
+        return
+      }
+      setState({ ownerKey: resolvedOwnerKey, capabilities: nextCapabilities })
+      // Why: each re-probe spawns wsl.exe/pwsh.exe, so local consumers share a bounded backoff.
+      if (resolvedTarget.kind === 'local' && !sshConnectionIdKey) {
+        reprobe.stop = startWindowsTerminalCapabilityReprobe({
+          ownerKey: resolvedOwnerKey,
+          readCached: () => getCachedWindowsTerminalCapabilities(resolvedOwnerKey),
+          probe: () =>
+            loadWindowsTerminalCapabilities({
+              ownerKey: resolvedOwnerKey,
+              target: resolvedTarget,
+              sshConnectionId: sshConnectionIdKey
+            })
+        })
       }
     })
 
     return () => {
       cancelled = true
-      const currentSubscribers = subscribersByOwnerKey.get(ownerKey)
+      reprobe.stop?.()
+      const currentSubscribers = subscribersByOwnerKey.get(resolvedOwnerKey)
       currentSubscribers?.delete(setCapabilities)
       if (currentSubscribers?.size === 0) {
-        subscribersByOwnerKey.delete(ownerKey)
+        subscribersByOwnerKey.delete(resolvedOwnerKey)
       }
     }
-  }, [enabled, forceRefreshOnMount, ownerKey, targetKind, targetEnvironmentId])
+  }, [enabled, forceRefreshOnMount, resolvedOwnerKey, resolvedTarget, sshConnectionIdKey])
 
-  return selectWindowsTerminalCapabilitiesForOwner(state, enabled, ownerKey)
+  return selectWindowsTerminalCapabilitiesForOwner(state, enabled, resolvedOwnerKey)
 }
 
-function readWindowsTerminalCapabilityPromises(
+export function isWindowsTerminalCapabilityHost(args: {
+  isWindowsRenderer: boolean
+  isWebClient: boolean
   target: WindowsTerminalCapabilityLoadTarget
-): [
-  Promise<boolean>,
-  Promise<string[]>,
-  Promise<boolean>,
-  Promise<boolean>,
-  Promise<NodeJS.Platform | null>
-] {
-  if (target.kind === 'local') {
-    return [
-      window.api.wsl.isAvailable().catch(() => false),
-      window.api.wsl.listDistros().catch(() => []),
-      window.api.pwsh.isAvailable().catch(() => false),
-      window.api.gitBash.isAvailable().catch(() => false),
-      window.api.runtime
-        .getStatus()
-        .then((status) => status.hostPlatform ?? null)
-        .catch(() => null)
-    ]
-  }
+  hostPlatform: NodeJS.Platform | null
+}): boolean {
+  return (
+    args.hostPlatform === 'win32' ||
+    (!args.isWebClient && args.target.kind === 'local' && args.isWindowsRenderer)
+  )
+}
 
-  return [
-    callRuntimeRpc<boolean>(target, 'host.wsl.isAvailable', undefined, { timeoutMs: 15_000 }).catch(
-      () => false
-    ),
-    callRuntimeRpc<string[]>(target, 'host.wsl.listDistros', undefined, {
-      timeoutMs: 15_000
-    }).catch(() => []),
-    callRuntimeRpc<boolean>(target, 'host.pwsh.isAvailable', undefined, {
-      timeoutMs: 15_000
-    }).catch(() => false),
-    callRuntimeRpc<boolean>(target, 'host.gitBash.isAvailable', undefined, {
-      timeoutMs: 15_000
-    }).catch(() => false),
-    callRuntimeRpc<RuntimeStatus>(target, 'status.get', undefined, { timeoutMs: 15_000 })
-      .then((status) => status.hostPlatform ?? null)
-      .catch(() => null)
-  ]
+export function useLocalWindowsTerminalCapabilities(
+  enabled: boolean,
+  forceRefreshOnMount = false,
+  ownerKey = 'local'
+): WindowsTerminalCapabilities {
+  // Why: desktop-owned defaults must not follow the active remote environment.
+  return useWindowsTerminalCapabilities(enabled, forceRefreshOnMount, ownerKey, { kind: 'local' })
 }
 
 export function resetWindowsTerminalCapabilitiesForTests(): void {

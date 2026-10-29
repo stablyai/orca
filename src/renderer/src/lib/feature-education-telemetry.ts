@@ -9,6 +9,7 @@ import {
   type TerminalPaneSplitSource
 } from '../../../shared/feature-education-telemetry'
 import {
+  getFeatureWallSetupSectionId,
   isFeatureWallSetupStepId,
   type FeatureWallSetupStepId
 } from '../../../shared/feature-wall-setup-steps'
@@ -17,10 +18,6 @@ import { track } from './telemetry'
 const SETUP_GUIDE_TELEMETRY_COMPLETED_STEPS_STORAGE_KEY =
   'orca.setupGuideTelemetryCompletedSteps.v1'
 const TERMINAL_PANE_SPLIT_TELEMETRY_STORAGE_KEY = 'orca.terminalPaneSplitTelemetry.v1'
-const SETUP_GUIDE_PARALLEL_WORK_STEP_IDS = new Set<FeatureWallSetupStepId>([
-  'split-terminal',
-  'two-worktrees'
-])
 
 type FeatureEducationTelemetryEventName = Extract<
   EventName,
@@ -136,7 +133,7 @@ export function trackTerminalPaneSplit(args: {
 }
 
 export function readEmittedSetupGuideStepIds(): Set<FeatureWallSetupStepId> {
-  if (typeof globalThis.localStorage === 'undefined') {
+  if (globalThis.localStorage === undefined) {
     return new Set()
   }
   try {
@@ -153,7 +150,7 @@ export function readEmittedSetupGuideStepIds(): Set<FeatureWallSetupStepId> {
 }
 
 export function persistEmittedSetupGuideStepId(id: FeatureWallSetupStepId): void {
-  if (typeof globalThis.localStorage === 'undefined') {
+  if (globalThis.localStorage === undefined) {
     return
   }
   try {
@@ -164,8 +161,7 @@ export function persistEmittedSetupGuideStepId(id: FeatureWallSetupStepId): void
       JSON.stringify([...next])
     )
   } catch {
-    // localStorage can be unavailable in hardened browser contexts; telemetry
-    // is best-effort and must not block the setup-guide state transition.
+    // Telemetry is best-effort; hardened-context localStorage failures must not block setup-guide transitions.
   }
 }
 
@@ -173,7 +169,7 @@ export function reserveTerminalPaneSplitTelemetry(
   source: TerminalPaneSplitSource,
   direction: 'vertical' | 'horizontal'
 ): boolean {
-  if (typeof globalThis.localStorage === 'undefined') {
+  if (globalThis.localStorage === undefined) {
     return true
   }
   try {
@@ -194,8 +190,8 @@ export function reserveTerminalPaneSplitTelemetry(
   }
 }
 
-export function getSetupGuideStepSection(id: FeatureWallSetupStepId): 'parallel-work' | 'setup' {
-  return SETUP_GUIDE_PARALLEL_WORK_STEP_IDS.has(id) ? 'parallel-work' : 'setup'
+function getSetupGuideStepSection(id: FeatureWallSetupStepId): 'parallel-work' | 'setup' {
+  return getFeatureWallSetupSectionId(id)
 }
 
 function emitFeatureEducationTelemetry<N extends FeatureEducationTelemetryEventName>(

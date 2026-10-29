@@ -1,8 +1,8 @@
 import { X } from 'lucide-react'
-import { type CSSProperties, type JSX } from 'react'
+import type { CSSProperties, JSX } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
-import { type ImageViewerImageDimensions } from './image-viewer-zoom'
+import type { ImageViewerImageDimensions } from './image-viewer-zoom'
 import { translate } from '@/i18n/i18n'
 
 type ImageViewerPopupProps = {
@@ -61,7 +61,10 @@ export default function ImageViewerPopup({
                 alt={filename}
                 className={cn(
                   'object-contain',
-                  imageLayoutSize ? 'block h-full w-full' : 'block max-h-full max-w-full'
+                  imageLayoutSize
+                    ? 'block h-full w-full'
+                    : // Percentage maxima cannot constrain the w-max/h-max box before load; use viewport units.
+                      'block max-h-[100vh] max-w-[100vw]'
                 )}
               />
             </div>

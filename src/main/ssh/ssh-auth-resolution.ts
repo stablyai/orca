@@ -1,35 +1,42 @@
-import { existsSync, readFileSync } from 'fs'
-import { utils, type BaseAgent, type ParsedKey } from 'ssh2'
+import { existsSync } from 'node:fs'
+import type { BaseAgent, ParsedKey } from 'ssh2'
 import type { SshTarget } from '../../shared/ssh-types'
-import type { SshResolvedConfig } from './ssh-config-parser'
+import type { SshResolvedConfig } from './config/ssh-g-config-resolution'
 import { createIdentityFilteredAgent } from './ssh-agent-identity-filter'
-import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
+import { loadSsh2 } from './ssh2-module-load'
+import { resolveSshConfigHomePath } from './config/ssh-config-path-expansion'
+import { isOpenSshConfigBackedTarget } from './system-transport/system-ssh-args'
+import { readSshIdentityFileSync } from './ssh-identity-file-read'
+import { isAuthError } from './ssh-reconnect-error-classification'
 
-// Why: ssh2 only tries keys that are explicitly provided. Users with keys in
-// standard locations (e.g. ~/.ssh/id_ed25519) but no SSH agent running would
-// fail to authenticate. Probing default paths matches VS Code's _findDefaultKeyFile.
+// ssh2 discovers no keys itself; probe regular/FIDO2 default paths for users without agents.
 const DEFAULT_KEY_NAMES = ['id_ed25519', 'id_rsa', 'id_ecdsa', 'id_dsa', 'id_xmss']
+const DEFAULT_SECURITY_KEY_NAMES = ['id_ed25519_sk', 'id_ecdsa_sk']
 
 const DEFAULT_KEY_PATHS = DEFAULT_KEY_NAMES.map((name) => `~/.ssh/${name}`)
+const DEFAULT_IDENTITY_PATHS = [...DEFAULT_KEY_NAMES, ...DEFAULT_SECURITY_KEY_NAMES].map(
+  (name) => `~/.ssh/${name}`
+)
 const WINDOWS_OPENSSH_AGENT_PIPE = '\\\\.\\pipe\\openssh-ssh-agent'
 
-// Why: resolved IdentityFile paths are expanded before auth resolution, so they
-// won't match the ~/... form in DEFAULT_KEY_PATHS.
-const EXPANDED_DEFAULT_KEY_PATHS = DEFAULT_KEY_PATHS.map(resolveSshConfigHomePath)
+// IdentityFile paths were already expanded; compare expanded defaults too.
+const EXPANDED_DEFAULT_KEY_PATHS = DEFAULT_IDENTITY_PATHS.map(resolveSshConfigHomePath)
 
 export type PrivateKeyFile = { path: string; contents: Buffer }
 
-export function findDefaultKeyFile(): PrivateKeyFile | undefined {
+export function listDefaultIdentityFilePaths(): string[] {
+  return [...DEFAULT_IDENTITY_PATHS]
+}
+
+export type SkippedIdentityFiles = Map<string, string>
+
+export function findDefaultKeyFile(skipped?: SkippedIdentityFiles): PrivateKeyFile | undefined {
   for (const keyPath of DEFAULT_KEY_PATHS) {
-    const resolved = resolveSshConfigHomePath(keyPath)
-    try {
-      if (!existsSync(resolved)) {
-        continue
-      }
-      const contents = readFileSync(resolved)
-      return { path: keyPath, contents }
-    } catch {
-      continue
+    const key = existsSync(resolveSshConfigHomePath(keyPath))
+      ? readPrivateKey(keyPath, skipped)
+      : undefined
+    if (key) {
+      return key
     }
   }
   return undefined
@@ -62,12 +69,11 @@ function resolveDefaultAgentSocket(): string | undefined {
 }
 
 export function resolveAgentSocket(
-  target: Pick<SshTarget, 'identityAgent' | 'configHost'>,
+  target: Pick<SshTarget, 'identityAgent' | 'configHost' | 'source' | 'host'>,
   resolved: Pick<SshResolvedConfig, 'identityAgent'> | null
 ): string | undefined {
-  // Why: imported config-host targets may contain raw OpenSSH tokens like %d.
-  // ssh -G resolves those tokens, so its value must win when available.
-  const configuredIdentityAgent = target.configHost
+  // ssh -G resolves raw OpenSSH tokens such as %d in imported targets; prefer that result.
+  const configuredIdentityAgent = isOpenSshConfigBackedTarget(target)
     ? (resolved?.identityAgent ?? target.identityAgent)
     : (target.identityAgent ?? resolved?.identityAgent)
   if (configuredIdentityAgent != null) {
@@ -80,50 +86,117 @@ export function resolveAgentSocket(
   return resolveDefaultAgentSocket()
 }
 
-function resolveExplicitPrivateKeyPath(
+function resolveExplicitPrivateKeyPaths(
   target: SshTarget,
   resolved: SshResolvedConfig | null
-): string | undefined {
-  const resolvedIdentity = resolved?.identityFile?.[0]
-  return (
-    target.identityFile ||
-    (resolvedIdentity && !EXPANDED_DEFAULT_KEY_PATHS.includes(resolvedIdentity)
-      ? resolvedIdentity
-      : undefined)
+): string[] {
+  const resolvedIdentities = (resolved?.identityFile ?? []).filter(
+    (identityFile) => !EXPANDED_DEFAULT_KEY_PATHS.includes(identityFile)
   )
-}
-
-function readPrivateKey(keyPath: string): PrivateKeyFile | undefined {
-  try {
-    const resolvedPath = resolveSshConfigHomePath(keyPath)
-    return { path: keyPath, contents: readFileSync(resolvedPath) }
-  } catch {
-    return undefined
+  if (isOpenSshConfigBackedTarget(target) && resolved) {
+    return resolvedIdentities
   }
+  if (target.identityFile) {
+    return [target.identityFile]
+  }
+  return resolvedIdentities
 }
 
-function resolveExplicitPrivateKey(
+export function resolveIdentityFilePaths(
   target: SshTarget,
-  resolved: SshResolvedConfig | null
+  resolved: Pick<SshResolvedConfig, 'identityFile'> | null
+): string[] {
+  if (isOpenSshConfigBackedTarget(target) && resolved) {
+    return resolved.identityFile
+  }
+  if (target.identityFile) {
+    return [target.identityFile]
+  }
+  return resolved?.identityFile ?? []
+}
+
+const MAX_WARNED_IDENTITY_FILE_PROBLEMS = 64
+const warnedIdentityFileProblems = new Set<string>()
+
+// Reconnects/retries re-read keys; warn once per path/problem.
+function warnSkippedIdentityFileOnce(keyPath: string, problem: string): void {
+  const key = `${keyPath}\0${problem}`
+  if (warnedIdentityFileProblems.has(key)) {
+    return
+  }
+  if (warnedIdentityFileProblems.size >= MAX_WARNED_IDENTITY_FILE_PROBLEMS) {
+    warnedIdentityFileProblems.clear()
+  }
+  warnedIdentityFileProblems.add(key)
+  console.warn(`[ssh] Skipping identity file "${keyPath}": ${problem}`)
+}
+
+function readPrivateKey(
+  keyPath: string,
+  skipped: SkippedIdentityFiles | undefined
 ): PrivateKeyFile | undefined {
-  const explicitKey = resolveExplicitPrivateKeyPath(target, resolved)
-  if (explicitKey) {
-    return readPrivateKey(explicitKey)
+  const read = readSshIdentityFileSync(resolveSshConfigHomePath(keyPath))
+  if (read.contents) {
+    skipped?.delete(keyPath)
+    return { path: keyPath, contents: read.contents }
+  }
+  if (read.problem) {
+    skipped?.set(keyPath, read.problem)
+    warnSkippedIdentityFileOnce(keyPath, read.problem)
+  } else if (!EXPANDED_DEFAULT_KEY_PATHS.includes(resolveSshConfigHomePath(keyPath))) {
+    // Absent defaults are normal; a configured key that is missing explains a later password prompt.
+    skipped?.set(keyPath, 'it does not exist')
   }
   return undefined
 }
 
-export function resolvePrivateKey(
-  target: SshTarget,
-  resolved: SshResolvedConfig | null
-): PrivateKeyFile | undefined {
-  if (resolveExplicitPrivateKeyPath(target, resolved)) {
-    return resolveExplicitPrivateKey(target, resolved)
+function readPrivateKeys(keyPaths: string[], skipped?: SkippedIdentityFiles): PrivateKeyFile[] {
+  const keys: PrivateKeyFile[] = []
+  for (const keyPath of keyPaths) {
+    const key = readPrivateKey(keyPath, skipped)
+    if (key) {
+      keys.push(key)
+    }
   }
-  return findDefaultKeyFile()
+  return keys
 }
 
-function isUnencryptedPrivateKey(contents: Buffer): boolean {
+function resolveExplicitPrivateKeys(
+  target: SshTarget,
+  resolved: SshResolvedConfig | null,
+  skipped?: SkippedIdentityFiles
+): PrivateKeyFile[] {
+  return readPrivateKeys(resolveExplicitPrivateKeyPaths(target, resolved), skipped)
+}
+
+export function resolvePrivateKeys(
+  target: SshTarget,
+  resolved: SshResolvedConfig | null,
+  skipped?: SkippedIdentityFiles
+): PrivateKeyFile[] {
+  const keyPaths = resolveIdentityFilePaths(target, resolved)
+  if (keyPaths.length > 0 || resolved || target.identityFile) {
+    return readPrivateKeys(keyPaths, skipped)
+  }
+  const defaultKey = findDefaultKeyFile(skipped)
+  return defaultKey ? [defaultKey] : []
+}
+
+/** Add skipped key paths/reasons to otherwise generic authentication errors. */
+export function withSkippedIdentityFileDetail(
+  error: unknown,
+  skipped: SkippedIdentityFiles
+): unknown {
+  if (!(error instanceof Error) || !isAuthError(error) || skipped.size === 0) {
+    return error
+  }
+  const detail = [...skipped].map(([keyPath, problem]) => `"${keyPath}" (${problem})`).join(', ')
+  error.message = `${error.message.replace(/\.$/, '')}. Orca skipped identity file ${detail}.`
+  return error
+}
+
+export function isUnencryptedPrivateKey(contents: Buffer): boolean {
+  const { utils } = loadSsh2()
   const parsed = utils.parseKey(contents) as ParsedKey | ParsedKey[] | Error
   if (parsed instanceof Error) {
     return false
@@ -132,25 +205,25 @@ function isUnencryptedPrivateKey(contents: Buffer): boolean {
   return keys.some((key) => key && typeof key.isPrivateKey === 'function' && key.isPrivateKey())
 }
 
-export function resolveUnencryptedExplicitPrivateKey(
+export function resolveUnencryptedExplicitPrivateKeys(
   target: SshTarget,
-  resolved: SshResolvedConfig | null
-): PrivateKeyFile | undefined {
-  const key = resolveExplicitPrivateKey(target, resolved)
-  if (!key) {
-    return undefined
-  }
-  return isUnencryptedPrivateKey(key.contents) ? key : undefined
+  resolved: SshResolvedConfig | null,
+  skipped?: SkippedIdentityFiles
+): PrivateKeyFile[] {
+  return resolveExplicitPrivateKeys(target, resolved, skipped).filter((key) =>
+    isUnencryptedPrivateKey(key.contents)
+  )
 }
 
-function resolveIdentityFilePaths(target: SshTarget, resolved: SshResolvedConfig | null): string[] {
-  if (target.configHost && resolved?.identityFile?.length) {
-    return resolved.identityFile
+export function findEncryptedPrivateKeyPath(keys: PrivateKeyFile[]): string | undefined {
+  const { utils } = loadSsh2()
+  for (const key of keys) {
+    const parsed = utils.parseKey(key.contents) as ParsedKey | ParsedKey[] | Error
+    if (parsed instanceof Error && /passphrase|encrypted key|bad decrypt/i.test(parsed.message)) {
+      return key.path
+    }
   }
-  if (target.identityFile) {
-    return [target.identityFile]
-  }
-  return resolved?.identityFile ?? []
+  return undefined
 }
 
 export function resolveAgentConfigValue(

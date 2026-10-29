@@ -1,63 +1,38 @@
+// COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
 export const ORCA_SKILLS_REPOSITORY_URL = 'https://github.com/stablyai/orca'
 
-export const ORCA_CLI_SKILL_NAME = 'orca-cli'
-export const COMPUTER_USE_SKILL_NAME = 'computer-use'
-export const ORCHESTRATION_SKILL_NAME = 'orchestration'
-export const ORCA_LINEAR_SKILL_NAME = 'orca-linear'
-export const LINEAR_TICKETS_SKILL_NAME = 'linear-tickets'
-export const LINEAR_AGENT_SKILL_NAMES = [ORCA_LINEAR_SKILL_NAME, LINEAR_TICKETS_SKILL_NAME] as const
+// Pin one CLI across install rails: 1.5.x lacks commit fetch and bare npx may reuse stale/wrong binaries (#18687).
+export const SKILLS_CLI_VERSION = '1.7.2'
 
-export function buildAgentFeatureSkillInstallCommand(skillNames: readonly string[]): string {
+export type AgentFeatureSkillCommandOptions = {
+  /** Full commit the running build was made from. */
+  sourceCommit: string
+  global?: boolean
+}
+
+export function buildAgentFeatureSkillInstallArgs(
+  skillNames: readonly string[],
+  options: AgentFeatureSkillCommandOptions
+): string[] {
   if (skillNames.length === 0) {
     throw new Error('At least one skill name is required.')
   }
-  return `npx skills add ${ORCA_SKILLS_REPOSITORY_URL} --skill ${skillNames.join(' ')} --global`
+  const global = options.global ?? true
+  // One flag per skill works with both single-value and variadic parsers.
+  const skillArgs = skillNames.flatMap((name) => ['--skill', name])
+  return [
+    `skills@${SKILLS_CLI_VERSION}`,
+    'add',
+    // Use the build commit for manifest freshness on every channel, including untagged hourly builds; add re-copies for updates.
+    `${ORCA_SKILLS_REPOSITORY_URL}/tree/${options.sourceCommit}`,
+    ...skillArgs,
+    ...(global ? ['--global'] : [])
+  ]
 }
 
-export function buildAgentFeatureSkillUpdateCommand(skillName: string): string {
-  const trimmedSkillName = skillName.trim()
-  if (!trimmedSkillName) {
-    throw new Error('A skill name is required.')
-  }
-  return `npx skills update ${trimmedSkillName} --global`
+export function buildAgentFeatureSkillInstallCommand(
+  skillNames: readonly string[],
+  options: AgentFeatureSkillCommandOptions
+): string {
+  return `npx ${buildAgentFeatureSkillInstallArgs(skillNames, options).join(' ')}`
 }
-
-export const ORCA_CLI_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
-  ORCA_CLI_SKILL_NAME
-])
-
-export const ORCA_CLI_SKILL_UPDATE_COMMAND =
-  buildAgentFeatureSkillUpdateCommand(ORCA_CLI_SKILL_NAME)
-
-export const COMPUTER_USE_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
-  COMPUTER_USE_SKILL_NAME
-])
-
-export const COMPUTER_USE_SKILL_UPDATE_COMMAND =
-  buildAgentFeatureSkillUpdateCommand(COMPUTER_USE_SKILL_NAME)
-
-export const ORCHESTRATION_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
-  ORCHESTRATION_SKILL_NAME
-])
-
-export const ORCHESTRATION_SKILL_UPDATE_COMMAND =
-  buildAgentFeatureSkillUpdateCommand(ORCHESTRATION_SKILL_NAME)
-
-export const ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
-  ORCA_CLI_SKILL_NAME,
-  ORCHESTRATION_SKILL_NAME
-])
-
-export const ORCA_LINEAR_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
-  ORCA_LINEAR_SKILL_NAME
-])
-
-export const ORCA_LINEAR_SKILL_UPDATE_COMMAND =
-  buildAgentFeatureSkillUpdateCommand(ORCA_LINEAR_SKILL_NAME)
-
-export const LINEAR_TICKETS_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
-  LINEAR_TICKETS_SKILL_NAME
-])
-
-export const LINEAR_TICKETS_SKILL_UPDATE_COMMAND =
-  buildAgentFeatureSkillUpdateCommand(LINEAR_TICKETS_SKILL_NAME)

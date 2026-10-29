@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'fs'
-import path from 'path'
+import { existsSync, readFileSync } from 'node:fs'
+import path from 'node:path'
 import type { ElectronApplication } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'
@@ -13,13 +13,12 @@ import {
 } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+import { E2E_FORCE_DAEMON_HEALTH_UNREACHABLE_ENV } from '../../src/main/daemon/daemon-health'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
 import { PTY_SESSION_ID_SEPARATOR } from '../../src/shared/pty-session-id-format'
 
-// Why: must land after the relaunched app's 3s daemon health check has timed
-// out (so the unhealthy guard runs) but before the guard's 5s client hello
-// budget expires. Daemon init starts within the first ~2s of main startup.
-const RESUME_DAEMON_AFTER_MS = 6_500
+// Delay guard decisions beyond electron.launch so the test can attach its stderr listener.
+const GUARD_DECISION_DELAY_MS = 3_000
 
 function readDaemonPid(userDataDir: string): number {
   const raw = readFileSync(
@@ -42,12 +41,10 @@ test('preserves a live daemon PTY when the daemon is too slow for the startup he
     test.skip(true, 'Global setup did not produce a seeded test repo')
     return
   }
-  test.skip(process.platform === 'win32', 'SIGSTOP/SIGCONT are POSIX-only')
 
   const session = createRestartSession(testInfo)
   let firstApp: ElectronApplication | null = null
   let secondApp: ElectronApplication | null = null
-  let daemonPid: number | null = null
 
   try {
     const firstLaunch = await session.launch()
@@ -66,64 +63,44 @@ test('preserves a live daemon PTY when the daemon is too slow for the startup he
     await execInTerminal(firstLaunch.page, ptyId, `echo ${marker}`)
     await waitForTerminalOutput(firstLaunch.page, marker)
 
-    daemonPid = readDaemonPid(session.userDataDir)
+    const daemonPid = readDaemonPid(session.userDataDir)
 
     await session.close(firstApp)
     firstApp = null
 
-    // Why: a stopped daemon still accepts socket connections at the kernel
-    // level but answers nothing — the same observable behavior as a daemon
-    // that is too busy to respond within the health-check budget.
-    process.kill(daemonPid, 'SIGSTOP')
-
     const stderrLines: string[] = []
-    const resumeTimer = setTimeout(() => {
-      if (daemonPid !== null) {
-        process.kill(daemonPid, 'SIGCONT')
-      }
-    }, RESUME_DAEMON_AFTER_MS)
-    try {
-      const secondLaunch = await session.launch()
-      secondApp = secondLaunch.app
-      secondApp.process().stderr?.on('data', (chunk: Buffer) => {
-        stderrLines.push(chunk.toString())
-      })
+    // Force only health unreachable: SIGSTOP also blocks listSessions and races the preserve decision.
+    // Delay init until Playwright releases stderr after launch or the decision log is lost.
+    const secondLaunch = await session.launch({
+      extraEnv: {
+        [E2E_FORCE_DAEMON_HEALTH_UNREACHABLE_ENV]: '1',
+        ORCA_E2E_DAEMON_INIT_DELAY_MS: String(GUARD_DECISION_DELAY_MS)
+      },
+      onStderr: (chunk) => stderrLines.push(chunk)
+    })
+    secondApp = secondLaunch.app
 
-      await waitForSessionReady(secondLaunch.page)
-      await expect
-        .poll(
-          async () => secondLaunch.page.evaluate(() => window.__store?.getState().activeWorktreeId),
-          { timeout: 15_000 }
-        )
-        .toBe(worktreeId)
-      await ensureTerminalVisible(secondLaunch.page)
-      await waitForActiveTerminalManager(secondLaunch.page, 30_000)
-      await waitForPaneCount(secondLaunch.page, 1, 30_000)
-      await waitForTerminalOutput(secondLaunch.page, marker, 20_000)
+    await waitForSessionReady(secondLaunch.page)
+    await expect
+      .poll(
+        async () => secondLaunch.page.evaluate(() => window.__store?.getState().activeWorktreeId),
+        { timeout: 15_000 }
+      )
+      .toBe(worktreeId)
+    await ensureTerminalVisible(secondLaunch.page)
+    await waitForActiveTerminalManager(secondLaunch.page, 30_000)
+    await waitForPaneCount(secondLaunch.page, 1, 30_000)
+    await waitForTerminalOutput(secondLaunch.page, marker, 20_000)
 
-      // The guard path must actually have run: the daemon failed the health
-      // check and was preserved because its live session was verified.
-      await expect
-        .poll(() => stderrLines.join(''), { timeout: 10_000 })
-        .toContain('Preserving daemon that failed the health check')
-      expect(readDaemonPid(session.userDataDir)).toBe(daemonPid)
-      // Why: a killed daemon cold-restores scrollback from history, so the
-      // marker text alone cannot distinguish a live session from a dead one.
-      // The restore banner only appears for cold-restored (dead) sessions.
-      expect(await getTerminalContent(secondLaunch.page)).not.toContain('--- session restored ---')
-    } finally {
-      clearTimeout(resumeTimer)
-    }
+    // A stable PID also passes healthy adoption; require the guard’s preserve decision to prove this failure path ran.
+    await expect
+      .poll(() => stderrLines.join(''), { timeout: 10_000 })
+      .toMatch(/preserv\w*\s+daemon[^\n]*health check/i)
+    expect(readDaemonPid(session.userDataDir)).toBe(daemonPid)
+    expect(stderrLines.join('')).not.toMatch(/\breplacing daemon\b/i)
+    // Cold restore can replay the marker; absence of its banner distinguishes a live session.
+    expect(await getTerminalContent(secondLaunch.page)).not.toContain('--- session restored ---')
   } finally {
-    if (daemonPid !== null) {
-      try {
-        // Idempotent: ensures the daemon is resumable for harness cleanup even
-        // if the test failed before the resume timer fired.
-        process.kill(daemonPid, 'SIGCONT')
-      } catch {
-        // Daemon already gone
-      }
-    }
     if (secondApp) {
       await session.close(secondApp)
     }

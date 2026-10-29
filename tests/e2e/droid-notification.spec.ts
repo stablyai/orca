@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: this e2e shares one Electron notification spy and hook endpoint setup across related notification regressions. */
 import { test, expect } from './helpers/orca-app'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { getRendererTitleLog, installRendererTitleLog } from './helpers/terminal-title-log'
@@ -10,7 +9,11 @@ import {
   waitForTerminalOutput
 } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { emitCodexHookStatus, readHookEndpoint } from './helpers/agent-hook-endpoint'
+import {
+  emitCodexHookStatus,
+  emitGrokHookPayload,
+  readHookEndpoint
+} from './helpers/agent-hook-endpoint'
 
 type NotificationDispatch = {
   source?: string
@@ -165,8 +168,7 @@ test.describe('Droid notifications', () => {
     await installMainProcessNotificationDispatchSpy(electronApp)
     const endpoint = await readHookEndpoint(electronApp)
 
-    // Why: the synthetic hook bypasses the shell startup path; wait for a
-    // responsive PTY so the notification liveness gate can observe the turn.
+    // Synthetic hooks skip shell startup; wait for PTY responsiveness so the liveness gate can observe the turn.
     const ptyId = await waitForActivePanePtyId(orcaPage)
     const readyMarker = `__CODEX_HOOK_NOTIFY_READY_${Date.now()}__`
     await sendToTerminal(orcaPage, ptyId, `printf '${readyMarker}\\n'\r`)
@@ -189,8 +191,7 @@ test.describe('Droid notifications', () => {
           ),
         {
           timeout: 30_000,
-          // Why: this synthetic hook posts directly to main; main's cache is
-          // the durable source used to recover renderer startup/listener races.
+          // Main’s cache recovers renderer startup/listener races; assert the direct hook reached it.
           message: 'Codex UserPromptSubmit hook did not reach agent status cache'
         }
       )
@@ -253,6 +254,106 @@ test.describe('Droid notifications', () => {
       .toBe(true)
   })
 
+  test('Grok routine permission prompt hooks stay working and do not notify', async ({
+    orcaPage,
+    electronApp
+  }) => {
+    await waitForSessionReady(orcaPage)
+    await waitForActiveWorktree(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+    await installMainProcessNotificationDispatchSpy(electronApp)
+    const endpoint = await readHookEndpoint(electronApp)
+
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    const readyMarker = `__GROK_HOOK_NOTIFY_READY_${Date.now()}__`
+    await sendToTerminal(orcaPage, ptyId, `printf '${readyMarker}\\n'\r`)
+    await waitForTerminalOutput(orcaPage, readyMarker)
+
+    const { paneKey, worktreeId } = await waitForActivePaneHookDescriptor(orcaPage)
+    const prompt = `grok-hook-notify-${Date.now()}`
+    await emitGrokHookPayload(endpoint, {
+      paneKey,
+      worktreeId,
+      payload: {
+        hookEventName: 'user_prompt_submit',
+        prompt
+      }
+    })
+    await expect
+      .poll(
+        async () =>
+          (await getAgentStatuses(orcaPage)).some(
+            (status) =>
+              status.agentType === 'grok' && status.state === 'working' && status.prompt === prompt
+          ),
+        {
+          timeout: 30_000,
+          message: 'Grok UserPromptSubmit hook did not reach renderer agent status'
+        }
+      )
+      .toBe(true)
+
+    await emitGrokHookPayload(endpoint, {
+      paneKey,
+      worktreeId,
+      payload: {
+        hookEventName: 'pre_tool_use',
+        toolName: 'Shell',
+        toolInput: { command: 'echo hi' }
+      }
+    })
+    await emitGrokHookPayload(endpoint, {
+      paneKey,
+      worktreeId,
+      payload: {
+        hookEventName: 'notification',
+        notificationType: 'permission_prompt',
+        message: 'Tool permission requested',
+        level: 'info'
+      }
+    })
+
+    await orcaPage.waitForTimeout(500)
+    expect(
+      (await getAgentStatuses(orcaPage)).some(
+        (status) =>
+          status.agentType === 'grok' && status.prompt === prompt && status.state === 'waiting'
+      )
+    ).toBe(false)
+    expect(
+      (await getNotificationDispatches(electronApp)).filter(
+        (dispatch) => dispatch.source === 'agent-task-complete'
+      )
+    ).toEqual([])
+
+    const finalMessage = `Grok hook completed ${Date.now()}`
+    await emitGrokHookPayload(endpoint, {
+      paneKey,
+      worktreeId,
+      payload: {
+        hookEventName: 'stop',
+        lastAssistantMessage: finalMessage
+      }
+    })
+    await expect
+      .poll(
+        async () =>
+          (await getAgentStatuses(orcaPage)).some(
+            (status) =>
+              status.agentType === 'grok' &&
+              status.state === 'done' &&
+              status.prompt === prompt &&
+              status.lastAssistantMessage === finalMessage
+          ),
+        {
+          timeout: 30_000,
+          message: 'Grok Stop hook did not reach renderer agent status'
+        }
+      )
+      .toBe(true)
+  })
+
   test('recognized agent title completion dispatches one task-complete notification', async ({
     orcaPage,
     electronApp
@@ -261,8 +362,7 @@ test.describe('Droid notifications', () => {
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
-    // Why: contextBridge freezes window.api, so notification invokes must be
-    // observed in Electron's main process rather than monkey-patched renderer-side.
+    // contextBridge freezes window.api; observe notification dispatch in main instead.
     await installMainProcessNotificationDispatchSpy(electronApp)
     await installRendererTitleLog(orcaPage)
 
@@ -311,8 +411,7 @@ test.describe('Droid notifications', () => {
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
-    // Why: contextBridge freezes window.api, so notification invokes must be
-    // observed in Electron's main process rather than monkey-patched renderer-side.
+    // contextBridge freezes window.api; observe notification dispatch in main instead.
     await installMainProcessNotificationDispatchSpy(electronApp)
     await installRendererTitleLog(orcaPage)
 
@@ -334,8 +433,7 @@ test.describe('Droid notifications', () => {
       )
       .toBe(true)
 
-    // Why: Factory Droid can show this title while Execute is still running
-    // (for example `sleep 180`); hook events own Droid status, not this title.
+    // Droid can show this title during Execute; hooks alone own its completion status.
     await orcaPage.waitForTimeout(500)
     const dispatches = await getNotificationDispatches(electronApp)
     expect(dispatches).toEqual([])

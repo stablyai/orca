@@ -1,66 +1,90 @@
 import { describe, expect, it } from 'vitest'
-import { hasActiveWorkspaceActivity, isInactiveWorkspace } from './worktree-activity-state'
-import type { TerminalTab } from '../../../shared/types'
+import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from './worktree-activity-state'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { AgentStatusEntry } from '../../../shared/agent-status-types'
+
+const NOW = 10_000_000
 
 function makeTab(id: string): Pick<TerminalTab, 'id'> {
   return { id }
 }
 
+function makeAgentEntry(
+  overrides: Partial<AgentStatusEntry> & { paneKey: string }
+): AgentStatusEntry {
+  return {
+    state: 'working',
+    prompt: '',
+    updatedAt: NOW,
+    stateStartedAt: NOW,
+    stateHistory: [],
+    ...overrides
+  }
+}
+
 describe('worktree activity state', () => {
-  it('treats a slept wake-hint workspace as inactive', () => {
-    expect(isInactiveWorkspace('wt-1', { 'wt-1': [makeTab('tab-1')] }, { 'tab-1': [] }, {})).toBe(
-      true
-    )
-  })
-
-  it('treats a never-opened workspace as inactive', () => {
-    expect(isInactiveWorkspace('wt-1', {}, {}, {})).toBe(true)
-  })
-
-  it('treats live terminal workspaces as active', () => {
-    const tabsByWorktree = { 'wt-1': [makeTab('tab-1')] }
-    const ptyIdsByTabId = { 'tab-1': ['pty-1'] }
-
-    expect(isInactiveWorkspace('wt-1', tabsByWorktree, ptyIdsByTabId, {})).toBe(false)
-    expect(hasActiveWorkspaceActivity('wt-1', tabsByWorktree, ptyIdsByTabId, {})).toBe(true)
-  })
-
-  it('treats browser workspaces as active', () => {
+  it('keeps a workspace with a running agent active even without a live pty (#7197)', () => {
+    const worktreeIdsWithLiveAgent = new Set(['wt-1'])
     expect(
       isInactiveWorkspace(
         'wt-1',
         { 'wt-1': [makeTab('tab-1')] },
         { 'tab-1': [] },
-        { 'wt-1': [{ id: 'browser-1' }] }
-      )
-    ).toBe(false)
-  })
-
-  it('treats pending paired web host terminal mirrors as inactive without a live pty', () => {
-    expect(
-      hasActiveWorkspaceActivity('wt-1', { 'wt-1': [makeTab('web-terminal-host-tab-1')] }, {}, {})
-    ).toBe(false)
-  })
-
-  it('treats ready paired web host terminal mirrors as active with a live pty', () => {
-    expect(
-      hasActiveWorkspaceActivity(
-        'wt-1',
-        { 'wt-1': [makeTab('web-terminal-host-tab-1')] },
-        { 'web-terminal-host-tab-1': ['pty-1'] },
-        {}
-      )
-    ).toBe(true)
-  })
-
-  it('keeps browser-only workspaces active when mirrored terminals are pending', () => {
-    expect(
-      hasActiveWorkspaceActivity(
-        'wt-1',
-        { 'wt-1': [makeTab('web-terminal-host-tab-1')] },
         {},
-        { 'wt-1': [{ id: 'browser-1' }] }
+        worktreeIdsWithLiveAgent
       )
-    ).toBe(true)
+    ).toBe(false)
   })
+})
+
+describe('getWorktreeIdsWithLiveAgent', () => {
+  it('falls back to the paneKey tabId when worktreeId is absent', () => {
+    const entries = {
+      'tab-1:00000000-0000-4000-8000-000000000000': makeAgentEntry({
+        paneKey: 'tab-1:00000000-0000-4000-8000-000000000000'
+      })
+    }
+    expect(getWorktreeIdsWithLiveAgent(entries, { 'wt-1': [makeTab('tab-1')] }, NOW)).toEqual(
+      new Set(['wt-1'])
+    )
+  })
+
+  it('ignores completed headless agents without an open session', () => {
+    const entries = {
+      'tab-1:leaf-1': makeAgentEntry({
+        paneKey: 'tab-1:leaf-1',
+        worktreeId: 'wt-1',
+        state: 'done'
+      })
+    }
+
+    expect(getWorktreeIdsWithLiveAgent(entries, {}, NOW)).toEqual(new Set())
+  })
+
+  it('ignores stale status left behind after an SSH disconnect', () => {
+    const entries = {
+      'tab-1:leaf-1': makeAgentEntry({
+        paneKey: 'tab-1:leaf-1',
+        worktreeId: 'wt-1',
+        updatedAt: 0
+      })
+    }
+
+    expect(getWorktreeIdsWithLiveAgent(entries, {}, NOW)).toEqual(new Set())
+  })
+
+  it.each(['working', 'blocked', 'waiting'] as const)(
+    'keeps a fresh %s agent visible during a PTY gap',
+    (state) => {
+      const entries = {
+        'tab-1:leaf-1': makeAgentEntry({
+          paneKey: 'tab-1:leaf-1',
+          worktreeId: 'wt-1',
+          state
+        })
+      }
+
+      expect(getWorktreeIdsWithLiveAgent(entries, {}, NOW)).toEqual(new Set(['wt-1']))
+    }
+  )
 })

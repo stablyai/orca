@@ -3,8 +3,10 @@ import {
   markTerminalBracketedPasteInterrupted,
   observeTerminalBracketedPasteModeOutput,
   pasteTerminalText,
-  sanitizeTerminalPasteText
+  sanitizeTerminalPasteText,
+  wrapTerminalBracketedPasteText
 } from './terminal-bracketed-paste'
+import { wrapTerminalBracketedPasteText as hostPasteFrame } from '../../../../shared/terminal-bracketed-paste-text'
 
 function createTerminal(bracketedPasteMode = true) {
   const terminal = {
@@ -21,6 +23,11 @@ function createTerminal(bracketedPasteMode = true) {
 }
 
 describe('terminal bracketed paste policy', () => {
+  // The host's launch prompt replaced the desktop's draft paste; one function keeps their bytes equal.
+  it('frames pasted text with the same function as the host launch prompt', () => {
+    expect(wrapTerminalBracketedPasteText).toBe(hostPasteFrame)
+  })
+
   it('temporarily ignores bracketed paste wrappers for single-line paste after Ctrl+C', () => {
     const terminal = createTerminal(true)
     const observedIgnoreValues: (boolean | undefined)[] = []
@@ -89,6 +96,17 @@ describe('terminal bracketed paste policy', () => {
     expect(terminal.options.ignoreBracketedPasteMode).toBe(false)
   })
 
+  it('normalizes forced Windows multiline paste like xterm native paste', () => {
+    const terminal = createTerminal(false)
+
+    pasteTerminalText(terminal, 'one\r\ntwo\nthree', {
+      forceBracketedPaste: true
+    })
+
+    expect(terminal.input).toHaveBeenCalledWith('\x1b[200~one\rtwo\rthree\x1b[201~')
+    expect(terminal.paste).not.toHaveBeenCalled()
+  })
+
   it('renders embedded escape bytes inert when forcing bracketed paste', () => {
     const terminal = createTerminal(false)
 
@@ -97,6 +115,17 @@ describe('terminal bracketed paste policy', () => {
     })
 
     expect(terminal.input).toHaveBeenCalledWith('\x1b[200~/tmp/before\u241b[201~after.png\x1b[201~')
+    expect(terminal.paste).not.toHaveBeenCalled()
+  })
+
+  it('encodes Windows input-record newlines atomically and sanitizes escape bytes', () => {
+    const terminal = createTerminal(false)
+
+    pasteTerminalText(terminal, '\none\r\ntwo\x1b[201~', {
+      windowsInputRecordNewline: 'alt-enter'
+    })
+
+    expect(terminal.input).toHaveBeenCalledWith('\x1b\rone\x1b\rtwo␛[201~')
     expect(terminal.paste).not.toHaveBeenCalled()
   })
 

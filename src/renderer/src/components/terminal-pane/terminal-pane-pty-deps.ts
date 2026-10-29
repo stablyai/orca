@@ -1,0 +1,97 @@
+import { settlePaneCwdDeferredSpawn } from './resolve-split-cwd'
+import {
+  clearDeferredSplitPaneHandoff,
+  type DeferredSplitPaneHandoffHandle
+} from './deferred-split-pane-handoff'
+import type { PtyConnectionDeps } from './pty-connection-types'
+import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
+import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
+
+export function createTerminalPanePtyDeps(args: {
+  deps: UseTerminalPaneLifecycleDeps
+  refs: TerminalPaneLifecycleRefs
+  startupCwd: string
+  mountFollowsTerminalPark: boolean
+  restoredPtyIdByLeafId: Record<string, string>
+  deferredSplitHandoffs: Map<number, DeferredSplitPaneHandoffHandle>
+}): PtyConnectionDeps {
+  const { deps, refs, startupCwd, mountFollowsTerminalPark, deferredSplitHandoffs } = args
+  // Concrete binding consumes deferred lookup and input ownership; both layout bind variants must settle the split fence.
+  const settleDeferredSplitOnBind = (paneId: number, ptyId: string | null): void => {
+    if (!ptyId) {
+      return
+    }
+    const deferredSplitHandoff = deferredSplitHandoffs.get(paneId)
+    if (deferredSplitHandoff) {
+      clearDeferredSplitPaneHandoff(deferredSplitHandoff)
+      deferredSplitHandoffs.delete(paneId)
+    }
+    settlePaneCwdDeferredSpawn(deps.paneCwdRef.current, paneId)
+  }
+  return {
+    tabId: deps.tabId,
+    worktreeId: deps.worktreeId,
+    cwd: startupCwd,
+    startup: deps.startup,
+    mountFollowsTerminalPark,
+    paneTransportsRef: deps.paneTransportsRef,
+    paneMode2031Ref: deps.paneMode2031Ref,
+    paneKittyKeyboardModesRef: deps.paneKittyKeyboardModesRef,
+    paneLastThemeModeRef: deps.paneLastThemeModeRef,
+    replayingPanesRef: deps.replayingPanesRef,
+    restoredViewportBlankingPanesRef: refs.restoredViewportBlankingPanesRef,
+    isActiveRef: deps.isActiveRef,
+    isVisibleRef: deps.isVisibleRef,
+    onPtyExitRef: deps.onPtyExitRef,
+    onAgentExitedRef: deps.onAgentExitedRef,
+    onPtyErrorRef: deps.onPtyErrorRef,
+    onPtyErrorClearedRef: deps.onPtyErrorClearedRef,
+    onPaneProcessDied: deps.onPaneProcessDied,
+    onPtyRecoveryStateRef: deps.onPtyRecoveryStateRef,
+    clearTabPtyId: deps.clearTabPtyId,
+    consumeSuppressedPtyExit: deps.consumeSuppressedPtyExit,
+    isPtyShutdownPending: deps.isPtyShutdownPending,
+    updateTabTitle: deps.updateTabTitle,
+    setRuntimePaneTitle: deps.setRuntimePaneTitle,
+    clearRuntimePaneTitle: deps.clearRuntimePaneTitle,
+    updateTabPtyId: deps.updateTabPtyId,
+    markTerminalBell: deps.markTerminalBell,
+    onShowSessionRestoredBanner: deps.onShowSessionRestoredBanner,
+    dispatchNotification: deps.dispatchNotification,
+    setCacheTimerStartedAt: deps.setCacheTimerStartedAt,
+    syncPanePtyLayoutBinding: (paneId: number, ptyId: string | null) => {
+      settleDeferredSplitOnBind(paneId, ptyId)
+      deps.syncPanePtyLayoutBinding(paneId, ptyId)
+    },
+    ...(deps.syncPanePtyLayoutBindingForLeaf
+      ? {
+          syncPanePtyLayoutBindingForLeaf: (
+            leafId: string,
+            ptyId: string | null,
+            sourcePaneId: number
+          ) => {
+            settleDeferredSplitOnBind(sourcePaneId, ptyId)
+            deps.syncPanePtyLayoutBindingForLeaf?.(leafId, ptyId, sourcePaneId)
+          }
+        }
+      : {}),
+    clearExitedPanePtyLayoutBinding: deps.clearExitedPanePtyLayoutBinding,
+    clearExitedPanePtyLayoutBindingForLeaf: deps.clearExitedPanePtyLayoutBindingForLeaf,
+    onStartupBound: deps.onStartupBound,
+    refreshMobileOverlays: deps.refreshMobileOverlays,
+    deferPtyInput: (paneId, data, forward) => {
+      const suppression =
+        refs.httpLinkClickFallbackDisposablesRef.current.get(paneId)?.ptyMouseSuppression
+      if (suppression) {
+        suppression.handlePtyInput(data, forward)
+      } else {
+        forward(data)
+      }
+    },
+    recordPaneMode2031Subscription: (paneId, mode) => {
+      deps.paneMode2031Ref.current.set(paneId, true)
+      deps.paneLastThemeModeRef.current.set(paneId, mode)
+    },
+    restoredPtyIdByLeafId: args.restoredPtyIdByLeafId
+  }
+}

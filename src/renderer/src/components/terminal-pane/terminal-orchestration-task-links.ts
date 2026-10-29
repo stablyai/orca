@@ -8,7 +8,7 @@ export type ParsedOrchestrationTaskLink = {
 
 export const ORCHESTRATION_TASK_PREFIX = 'task_'
 
-const MAX_ORCHESTRATION_TASK_BODY_LENGTH = 128
+const MAX_ORCHESTRATION_TASK_TOKEN_LENGTH = 128
 const ORCHESTRATION_TASK_BOUNDARY_CHAR = /[A-Za-z0-9_-]/
 
 export function extractOrchestrationTaskLinks(lineText: string): ParsedOrchestrationTaskLink[] {
@@ -28,11 +28,14 @@ export function extractOrchestrationTaskLinks(lineText: string): ParsedOrchestra
     const tokenEnd = findOrchestrationTaskTokenEnd(lineText, bodyStart)
     searchStart = Math.max(tokenEnd, bodyStart + 1)
     const bodyLength = tokenEnd - bodyStart
-    if (bodyLength === 0 || bodyLength > MAX_ORCHESTRATION_TASK_BODY_LENGTH) {
+    if (bodyLength === 0) {
       continue
     }
 
     const taskId = lineText.slice(startIndex, tokenEnd)
+    if (taskId.length > MAX_ORCHESTRATION_TASK_TOKEN_LENGTH) {
+      continue
+    }
     if (
       ORCHESTRATION_TASK_BOUNDARY_CHAR.test(lineText[startIndex - 1] ?? '') ||
       ORCHESTRATION_TASK_BOUNDARY_CHAR.test(lineText[tokenEnd] ?? '')
@@ -46,7 +49,8 @@ export function extractOrchestrationTaskLinks(lineText: string): ParsedOrchestra
 
 export async function focusRuntimeOrchestrationTask(
   taskId: string,
-  runtimeEnvironmentId: string | null
+  runtimeEnvironmentId: string | null,
+  focusRendererTerminal?: (handle: string) => boolean
 ): Promise<void> {
   const environmentId = runtimeEnvironmentId?.trim()
   const target = environmentId
@@ -59,9 +63,11 @@ export async function focusRuntimeOrchestrationTask(
   if (!terminal) {
     throw new Error(`No dispatched terminal for orchestration task ${taskId}`)
   }
-  // Why: task IDs are stable orchestration DB records, but terminal.focus owns
-  // the app-side navigation contract for local and SSH runtime terminals.
-  await callRuntimeRpc(target, 'terminal.focus', { terminal })
+  if (focusRendererTerminal?.(terminal)) {
+    return
+  }
+  // Task IDs belong to orchestration DB; terminal.focus owns local/SSH app navigation.
+  await callRuntimeRpc(target, 'terminal.focus', { terminal, navigation: 'host' })
 }
 
 function findOrchestrationTaskTokenEnd(lineText: string, startIndex: number): number {

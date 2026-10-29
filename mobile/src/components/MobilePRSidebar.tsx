@@ -1,7 +1,10 @@
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
 import { RotateCw } from 'lucide-react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
+import type { PrSidebarLoadOptions } from '../session/use-mobile-pr-sidebar-controller'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { useMobilePrActions, type MobilePrActions } from '../session/use-mobile-pr-actions'
@@ -14,9 +17,14 @@ import {
   type MobilePrTitleAction
 } from '../session/use-mobile-pr-title-action'
 import { useMobilePrAiTriage, type MobilePrAiTriage } from '../session/use-mobile-pr-ai-triage'
+import { useHostProtocolGates } from './host-protocol-gates-context'
+import { usePRBotAuthorOverrides } from '../session/use-pr-bot-author-overrides'
 import { buildFixChecksPrompt, buildResolveConflictsPrompt } from '../session/pr-ai-triage-prompt'
+import { fetchPRCheckDetails } from '../session/github-pr-rpc'
+import { hasGitHubCheckHandle } from '../../../src/shared/pr-checks-fix-prompt'
 import { prSidebarRenderBranch } from './mobile-pr-sidebar-presentation'
 import { mobilePrSidebarStyles as styles } from './pr-sidebar/mobile-pr-sidebar-styles'
+import type { MobileGitStatusResult } from '../source-control/mobile-git-status'
 import { PRSidebarHeader } from './pr-sidebar/PRSidebarHeader'
 import { PRConflictingFilesSection } from './pr-sidebar/PRConflictingFilesSection'
 import { PRActionsSection } from './pr-sidebar/PRActionsSection'
@@ -29,22 +37,21 @@ type Props = {
   state: PrSidebarState
   onRetry: () => void
   // Re-fetches authoritative PR data after a successful mutation (U3/U6) or create.
-  refetch: () => void
-  // Threaded to sections for github.* fetches + mutations.
+  refetch: (options?: PrSidebarLoadOptions) => void
   client: RpcClient | null
   connState: ConnectionState
   worktreeId: string
-  // Current git branch — feeds the create-PR prefill in the no-PR empty state.
   gitBranch: string | null
+  gitStatus: MobileGitStatusResult | null
   headSha: string | null
-  // Applied by the docked column so content clears the home indicator (the screen's
-  // SafeAreaView is edges={['top']} only).
   bottomInset?: number
+  // Hub chrome already shows open-on-web; hide the in-body icon there.
+  showOpenOnWeb?: boolean
+  /** Named when an AI button's agent starts; the branch stands in when absent. */
+  workspaceLabel: string | null
 }
 
-// The shell switches on the controller's state machine and renders the sections
-// (header/actions/reviewers/checks). The mutation hook is created here (hooks must
-// run unconditionally) and only fires once a PR is ready. Style only from mobile-theme.
+// Mutation hooks run unconditionally here and gate internally until a PR is ready.
 export function MobilePRSidebar({
   state,
   onRetry,
@@ -53,18 +60,18 @@ export function MobilePRSidebar({
   connState,
   worktreeId,
   gitBranch,
+  gitStatus,
   headSha,
-  bottomInset = 0
+  bottomInset = 0,
+  showOpenOnWeb = true,
+  workspaceLabel
 }: Props) {
+  useMobileColorScheme()
+  const launchWorkspaceLabel = workspaceLabel || gitBranch
   const branch = prSidebarRenderBranch(state)
-  // prNumber is 0 until ready; the hook gates on `ready` so it never fires early.
   const prNumber = state.kind === 'ready' ? state.data.pr.number : 0
-  const prRepo =
-    state.kind === 'ready'
-      ? state.data.pr.prRepo
-        ? { owner: state.data.pr.prRepo.owner, repo: state.data.pr.prRepo.repo }
-        : null
-      : null
+  // Keep stable PRInfo.prRepo identity; cloning owner/repo thrashes mutation/comment/title hooks.
+  const prRepo = state.kind === 'ready' ? (state.data.pr.prRepo ?? null) : null
   const actions = useMobilePrActions({
     client,
     connState,
@@ -74,8 +81,6 @@ export function MobilePRSidebar({
     prRepo,
     refetch
   })
-  // Separate hook for the interactive comment timeline (reply/resolve/add). Like
-  // useMobilePrActions it must run unconditionally; it gates internally on a client.
   const commentActions = useMobilePrCommentActions({
     client,
     connState,
@@ -84,8 +89,6 @@ export function MobilePRSidebar({
     prRepo,
     refetch
   })
-  // Inline title-edit action. Like the others it must run unconditionally and gates
-  // internally on a client; refetches authoritative PR data after a successful edit.
   const titleAction = useMobilePrTitleAction({
     client,
     connState,
@@ -94,15 +97,30 @@ export function MobilePRSidebar({
     prRepo,
     refetch
   })
-  // AI triage (Fix checks / Resolve conflicts). Like the other hooks it must run
-  // unconditionally; it gates internally on a connected client.
-  const triage = useMobilePrAiTriage({ client, connState, worktreeId })
+  const { hostCapabilities, statusPending, statusReadable } = useHostProtocolGates()
+  const triage = useMobilePrAiTriage({
+    client,
+    connState,
+    worktreeId,
+    workspaceLabel: launchWorkspaceLabel,
+    hostCapabilities,
+    hostStatusPending: statusPending,
+    hostStatusReadable: statusReadable
+  })
+  // Key overrides on PR payload so every refetch refreshes them instead of keeping session-long snapshot.
+  const botAuthorOverrides = usePRBotAuthorOverrides(
+    client,
+    connState,
+    state.kind === 'ready' ? state.data.details : null
+  )
 
   return (
     <ScrollView
       style={{ flex: 1 }}
       contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomInset }]}
       keyboardShouldPersistTaps="handled"
+      // Inset scroll for keyboard or bottom root/reply composers remain covered.
+      automaticallyAdjustKeyboardInsets
       showsVerticalScrollIndicator={false}
     >
       <PrSidebarContent
@@ -111,12 +129,17 @@ export function MobilePRSidebar({
         onRetry={onRetry}
         refetch={refetch}
         client={client}
+        connState={connState}
         worktreeId={worktreeId}
         gitBranch={gitBranch}
+        gitStatus={gitStatus}
         actions={actions}
         commentActions={commentActions}
         titleAction={titleAction}
         triage={triage}
+        workspaceLabel={launchWorkspaceLabel}
+        botAuthorOverrides={botAuthorOverrides}
+        showOpenOnWeb={showOpenOnWeb}
       />
     </ScrollView>
   )
@@ -128,35 +151,52 @@ function PrSidebarContent({
   onRetry,
   refetch,
   client,
+  connState,
   worktreeId,
   gitBranch,
+  gitStatus,
   actions,
   commentActions,
   titleAction,
-  triage
+  triage,
+  workspaceLabel,
+  showOpenOnWeb,
+  botAuthorOverrides
 }: {
   branch: ReturnType<typeof prSidebarRenderBranch>
   state: PrSidebarState
   onRetry: () => void
-  refetch: () => void
+  refetch: (options?: PrSidebarLoadOptions) => void
   client: RpcClient | null
+  connState: ConnectionState
   worktreeId: string
   gitBranch: string | null
+  gitStatus: MobileGitStatusResult | null
   actions: MobilePrActions
   commentActions: MobilePrCommentActions
   titleAction: MobilePrTitleAction
   triage: MobilePrAiTriage
+  workspaceLabel: string | null
+  showOpenOnWeb: boolean
+  botAuthorOverrides: ReadonlySet<string>
 }) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   if (branch === 'loading') {
     return (
       <View style={styles.stateArea}>
         <ActivityIndicator color={colors.textSecondary} />
-        <Text style={styles.stateText}>Loading pull request…</Text>
+        <Text style={styles.stateText}>
+          {t('components.prSidebar.loading', 'Loading pull request…')}
+        </Text>
       </View>
     )
   }
   if (branch === 'error') {
-    const message = state.kind === 'error' ? state.message : 'Something went wrong.'
+    const message =
+      state.kind === 'error'
+        ? state.message
+        : t('components.prSidebar.loadFailed', 'Something went wrong.')
     return (
       <View style={styles.stateArea}>
         <Text style={styles.stateText}>{message}</Text>
@@ -164,22 +204,24 @@ function PrSidebarContent({
           style={styles.retryButton}
           onPress={onRetry}
           accessibilityRole="button"
-          accessibilityLabel="Retry loading pull request"
+          accessibilityLabel={t('components.prSidebar.retryLoading', 'Retry loading pull request')}
         >
           <RotateCw size={14} color={colors.textPrimary} strokeWidth={2.2} />
-          <Text style={styles.retryText}>Retry</Text>
+          <Text style={styles.retryText}>{t('common.retry', 'Retry')}</Text>
         </Pressable>
       </View>
     )
   }
   if (branch === 'blocked' || actions.blocked) {
-    // Permanent failure (R9): explanatory, no retry-encouragement styling. A
-    // mutation-time block (actions.blocked) routes here even from a ready state.
+    // Permanent R9 block has no retry styling; mutation-time blocked actions reach this state too.
     const message =
       actions.blocked ??
       (state.kind === 'blocked'
         ? state.message
-        : 'Not permitted — your GitHub account is not connected.')
+        : t(
+            'components.prSidebar.notPermitted',
+            'Not permitted — your GitHub account is not connected.'
+          ))
     return (
       <View style={styles.stateArea}>
         <Text style={styles.blockedText}>{message}</Text>
@@ -187,13 +229,15 @@ function PrSidebarContent({
     )
   }
   if (branch === 'none') {
-    // GitHub repo, but the current branch has no open PR — offer to create one
-    // (desktop parity) rather than showing a dead-end message.
+    // Offer create for GitHub branch without PR, matching desktop rather than dead-end message.
     return (
       <PrSidebarCreateEmptyState
         client={client}
         worktreeId={worktreeId}
         gitBranch={gitBranch}
+        gitStatus={gitStatus}
+        connState={connState}
+        workspaceLabel={workspaceLabel}
         onCreated={refetch}
       />
     )
@@ -209,6 +253,8 @@ function PrSidebarContent({
         titleAction={titleAction}
         triage={triage}
         refetch={refetch}
+        botAuthorOverrides={botAuthorOverrides}
+        showOpenOnWeb={showOpenOnWeb}
       />
     )
   }
@@ -223,7 +269,9 @@ function PrSidebarSections({
   commentActions,
   titleAction,
   triage,
-  refetch
+  refetch,
+  showOpenOnWeb,
+  botAuthorOverrides
 }: {
   data: Extract<PrSidebarState, { kind: 'ready' }>['data']
   client: RpcClient | null
@@ -232,11 +280,13 @@ function PrSidebarSections({
   commentActions: MobilePrCommentActions
   titleAction: MobilePrTitleAction
   triage: MobilePrAiTriage
-  refetch: () => void
+  refetch: (options?: PrSidebarLoadOptions) => void
+  showOpenOnWeb: boolean
+  botAuthorOverrides: ReadonlySet<string>
 }) {
+  useMobileColorScheme()
   const pr = data.pr
-  // Bind the triage launchers to this PR's data; the prompt builders are pure so
-  // building lazily inside launch() keeps a stale capture from leaking in.
+  // Build pure triage prompts lazily at launch so each uses current PR data.
   const checksTriage = {
     fixChecks: () =>
       void triage.launch('fix-checks', () =>
@@ -244,11 +294,25 @@ function PrSidebarSections({
           prNumber: pr.number,
           prTitle: pr.title,
           prUrl: pr.url,
-          checks: data.checks
+          checks: data.checks,
+          loadCheckDetails: async (check) => {
+            if (!client || !hasGitHubCheckHandle(check)) {
+              return null
+            }
+            const outcome = await fetchPRCheckDetails(client, worktreeId, {
+              checkRunId: check.checkRunId,
+              workflowRunId: check.workflowRunId,
+              checkName: check.name,
+              url: check.url,
+              prRepo: pr.prRepo ?? null
+            })
+            return outcome.ok ? outcome.result : null
+          }
         })
       ),
     isBusy: triage.isBusy('fix-checks'),
-    error: triage.error
+    availability: triage.availability,
+    ...triage.noticeFor('fix-checks')
   }
   const conflictsTriage = {
     resolveConflicts: () =>
@@ -256,25 +320,38 @@ function PrSidebarSections({
         buildResolveConflictsPrompt({
           prNumber: pr.number,
           baseRef: pr.conflictSummary?.baseRef ?? pr.baseRefName ?? null,
-          files: pr.conflictSummary?.files ?? []
+          files: pr.conflictSummary?.files ?? [],
+          worktreeId
         })
       ),
     isBusy: triage.isBusy('resolve-conflicts'),
-    error: triage.error
+    availability: triage.availability,
+    ...triage.noticeFor('resolve-conflicts')
   }
+  // Combine ready PR identity/actions in one card to avoid duplicate badge/title/branch/action bands.
   return (
     <>
-      <PRSidebarHeader pr={data.pr} details={data.details} titleAction={titleAction} />
-      {/* Conflicting-files section mirrors desktop order: directly below the header,
-          before actions/checks. Renders only when the PR has merge conflicts. */}
+      <View style={styles.section}>
+        <View style={styles.sectionBody}>
+          <PRSidebarHeader
+            pr={data.pr}
+            details={data.details}
+            titleAction={titleAction}
+            showOpenOnWeb={showOpenOnWeb}
+            bare
+          />
+          <PRActionsSection
+            pr={data.pr}
+            actions={actions}
+            client={client}
+            worktreeId={worktreeId}
+            onUnlinked={refetch}
+            onRecheck={() => refetch({ includeDetails: false })}
+          />
+        </View>
+      </View>
+      {/* Own titled section when present; null otherwise (no empty chrome). */}
       <PRConflictingFilesSection pr={data.pr} triage={conflictsTriage} />
-      <PRActionsSection
-        pr={data.pr}
-        actions={actions}
-        client={client}
-        worktreeId={worktreeId}
-        onUnlinked={refetch}
-      />
       <PRReviewersSection
         details={data.details}
         actions={actions}
@@ -283,6 +360,7 @@ function PrSidebarSections({
       />
       <PRChecksSection
         checks={data.checks}
+        checksError={data.checksError}
         client={client}
         worktreeId={worktreeId}
         prRepo={data.pr.prRepo ?? null}
@@ -294,6 +372,7 @@ function PrSidebarSections({
         prState={data.pr.state}
         prRepo={data.pr.prRepo ?? null}
         actions={commentActions}
+        botAuthorOverrides={botAuthorOverrides}
       />
     </>
   )

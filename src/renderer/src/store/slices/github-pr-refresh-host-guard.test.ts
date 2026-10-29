@@ -5,11 +5,7 @@ import { createHostedReviewSlice } from './hosted-review'
 import type { AppState } from '../types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
-// Why: regression guard for the renderer OOM crash. Enqueuing the local
-// `gh:enqueuePRRefresh` for a repo owned by a remote/SSH/runtime host rejects
-// with "Access denied: unknown repository path"; a flood of those failures grew
-// the renderer heap to the V8 ceiling and crashed it. enqueueGitHubPRRefresh
-// must only hit the local handler for local-host repos.
+// Route only eligible local repos to gh:enqueuePRRefresh; denied remote/SSH/runtime path floods previously grew renderer heap to OOM.
 const enqueuePRRefresh = vi.fn().mockResolvedValue(undefined)
 
 const mockApi = {
@@ -35,12 +31,15 @@ function createTestStore() {
   )
 }
 
-function seed(store: ReturnType<typeof createTestStore>, repo: Record<string, unknown>) {
+function seed(
+  store: ReturnType<typeof createTestStore>,
+  repo: Record<string, unknown> & { id: string; path: string }
+) {
   store.setState({
     settings: { activeRuntimeEnvironmentId: null } as never,
     repos: [repo],
     worktreesByRepo: {
-      [repo.id as string]: [
+      [repo.id]: [
         {
           id: 'wt-1',
           repoId: repo.id,
@@ -74,6 +73,17 @@ describe('enqueueGitHubPRRefresh host guard', () => {
     store.getState().enqueueGitHubPRRefresh('wt-1', 'active', 80)
 
     expect(enqueuePRRefresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('enqueues the local handler for a known local repo while a runtime is focused', () => {
+    const store = createTestStore()
+    seed(store, { id: 'local-1', path: '/Users/me/code/local-1', name: 'local-1', kind: 'git' })
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-win' } as never })
+
+    store.getState().enqueueGitHubPRRefresh('wt-1', 'active', 80)
+
+    expect(enqueuePRRefresh).toHaveBeenCalledTimes(1)
+    expect(mockApi.runtimeEnvironments.call).not.toHaveBeenCalled()
   })
 
   it('enqueues the local handler for a repo with an explicit local executionHostId', () => {

@@ -1,13 +1,16 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
-import { ArrowRight, Pencil } from 'lucide-react-native'
+import { ArrowRight, ExternalLink, Pencil } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
-import type { GitHubWorkItemDetails, PRInfo } from '../../../../src/shared/types'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
+import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
 import type { MobilePrTitleAction } from '../../session/use-mobile-pr-title-action'
 import { prStateBadge } from './pr-checks-presentation'
 import { statusColor } from './pr-sidebar-status-color'
 import { canEditPRTitle } from '../../session/pr-title-edit'
-import { openMobilePrUrl } from '../MobilePrComposeSheet'
+import { openMobilePrUrl } from '../mobile-pr-url'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
 import { prCommentComposerStyles as composerStyles } from './pr-comment-composer-styles'
 
@@ -16,11 +19,22 @@ type Props = {
   details: GitHubWorkItemDetails | null
   // Inline title-edit action; the pencil affordance only shows when the PR is editable.
   titleAction: MobilePrTitleAction
+  // Hub chrome already surfaces open-on-web; hide the duplicate icon in that case.
+  showOpenOnWeb?: boolean
+  // When true, render without section chrome so identity can share a card with actions.
+  bare?: boolean
 }
 
-// Header: state badge (incl. draft — display-only), title, author, head->base.
-// The title is inline-editable on an open/draft PR (desktop parity).
-export function PRSidebarHeader({ pr, details, titleAction }: Props) {
+// Keep state/#/author on one meta row, then title and head→base; print number only once.
+export function PRSidebarHeader({
+  pr,
+  details,
+  titleAction,
+  showOpenOnWeb = true,
+  bare = false
+}: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const item = details?.item
   const badge = prStateBadge(pr.state)
   const badgeColor = statusColor(badge.token)
@@ -29,60 +43,95 @@ export function PRSidebarHeader({ pr, details, titleAction }: Props) {
   const baseRef = item?.baseRefName ?? null
   const headRef = item?.branchName ?? null
   const editable = canEditPRTitle(pr.state)
-  // Tapping the state badge or the #number opens the PR on its host (GitHub/etc.)
-  // in the phone browser — pr.url is the canonical web URL.
   const openPr = pr.url ? () => openMobilePrUrl(pr.url) : undefined
 
-  return (
-    <View style={styles.section}>
-      <View style={styles.sectionBody}>
-        <Pressable
-          onPress={openPr}
-          disabled={!openPr}
-          accessibilityRole="link"
-          accessibilityLabel={`Open pull request #${pr.number} on the web`}
-          style={({ pressed }) => [
-            styles.badge,
-            { borderColor: badgeColor },
-            pressed && { opacity: 0.6 }
-          ]}
-        >
-          <Text style={[styles.badgeText, { color: badgeColor }]}>{badge.label}</Text>
-        </Pressable>
-        <PRTitle
-          title={title}
-          number={pr.number}
-          editable={editable}
-          openPr={openPr}
-          titleAction={titleAction}
-        />
-        {author ? <Text style={styles.prMeta}>by {author}</Text> : null}
-        {baseRef && headRef ? (
-          // head -> base reads in merge direction (desktop ChecksPanel parity).
-          <View style={styles.branchRow}>
-            <Text style={styles.branchPill}>{headRef}</Text>
-            <ArrowRight size={12} color={colors.textSecondary} strokeWidth={2.2} />
-            <Text style={styles.branchPill}>{baseRef}</Text>
-          </View>
+  const body = (
+    <>
+      <View style={styles.metaRow}>
+        <View style={styles.metaLeft}>
+          <Pressable
+            onPress={openPr}
+            disabled={!openPr}
+            accessibilityRole="link"
+            accessibilityLabel={t(
+              'pullRequest.prSidebarHeader.openOnWeb',
+              'Open pull request #{{number}} on the web',
+              { number: pr.number }
+            )}
+            style={({ pressed }) => [
+              styles.badge,
+              { borderColor: badgeColor },
+              pressed && { opacity: 0.6 }
+            ]}
+          >
+            <Text style={[styles.badgeText, { color: badgeColor }]}>{badge.label}</Text>
+          </Pressable>
+          <Text
+            style={styles.prMetaStrong}
+            onPress={openPr}
+            accessibilityRole="link"
+            accessibilityLabel={t(
+              'pullRequest.prSidebarHeader.openOnWeb',
+              'Open pull request #{{number}} on the web',
+              { number: pr.number }
+            )}
+          >
+            #{pr.number}
+          </Text>
+          {author ? <Text style={styles.prMeta}>· {author}</Text> : null}
+        </View>
+        {showOpenOnWeb && openPr ? (
+          <Pressable
+            onPress={openPr}
+            hitSlop={8}
+            accessibilityRole="link"
+            accessibilityLabel={t(
+              'pullRequest.prSidebarHeader.openInBrowser',
+              'Open pull request #{{number}} in browser',
+              { number: pr.number }
+            )}
+            style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.6 }]}
+          >
+            <ExternalLink size={16} color={colors.textSecondary} strokeWidth={2.2} />
+          </Pressable>
         ) : null}
       </View>
+      <PRTitle title={title} editable={editable} titleAction={titleAction} />
+      {baseRef && headRef ? (
+        <View style={styles.branchRow}>
+          <Text style={styles.branchPill} numberOfLines={1}>
+            {headRef}
+          </Text>
+          <ArrowRight size={12} color={colors.textSecondary} strokeWidth={2.2} />
+          <Text style={styles.branchPill} numberOfLines={1}>
+            {baseRef}
+          </Text>
+        </View>
+      ) : null}
+    </>
+  )
+
+  if (bare) {
+    return <View style={styles.identityBlock}>{body}</View>
+  }
+  return (
+    <View style={styles.section}>
+      <View style={styles.sectionBody}>{body}</View>
     </View>
   )
 }
 
 function PRTitle({
   title,
-  number,
   editable,
-  openPr,
   titleAction
 }: {
   title: string
-  number: number
   editable: boolean
-  openPr: (() => void) | undefined
   titleAction: MobilePrTitleAction
 }) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(title)
 
@@ -96,8 +145,7 @@ function PRTitle({
     setEditing(false)
   }
   const save = async () => {
-    // setTitle trims + short-circuits empty/unchanged to a successful no-op; on a
-    // real edit it refetches, so on success we just collapse the editor.
+    // setTitle handles trim/empty/unchanged/refetch; collapse editor on successful result.
     const ok = await titleAction.setTitle(draft, title)
     if (ok) {
       setEditing(false)
@@ -106,7 +154,7 @@ function PRTitle({
 
   if (editing) {
     return (
-      <View>
+      <View style={composerStyles.container}>
         <TextInput
           style={composerStyles.input}
           value={draft}
@@ -122,21 +170,24 @@ function PRTitle({
             onPress={cancel}
             disabled={titleAction.saving}
             accessibilityRole="button"
-            accessibilityLabel="Cancel editing title"
+            accessibilityLabel={t(
+              'pullRequest.prSidebarHeader.cancelEditingTitle',
+              'Cancel editing title'
+            )}
           >
-            <Text style={composerStyles.cancelText}>Cancel</Text>
+            <Text style={composerStyles.cancelText}>{t('common.cancel', 'Cancel')}</Text>
           </Pressable>
           <Pressable
             style={({ pressed }) => [composerStyles.submit, pressed && composerStyles.pressed]}
             onPress={() => void save()}
             disabled={titleAction.saving}
             accessibilityRole="button"
-            accessibilityLabel="Save title"
+            accessibilityLabel={t('pullRequest.prSidebarHeader.saveTitle', 'Save title')}
           >
             {titleAction.saving ? (
               <ActivityIndicator size="small" color={colors.bgBase} />
             ) : (
-              <Text style={composerStyles.submitText}>Save</Text>
+              <Text style={composerStyles.submitText}>{t('common.save', 'Save')}</Text>
             )}
           </Pressable>
         </View>
@@ -150,19 +201,11 @@ function PRTitle({
       onPress={editable ? startEdit : undefined}
       disabled={!editable}
       accessibilityRole={editable ? 'button' : undefined}
-      accessibilityLabel={editable ? 'Edit pull request title' : undefined}
+      accessibilityLabel={
+        editable ? t('pullRequest.prSidebarHeader.editTitle', 'Edit pull request title') : undefined
+      }
     >
-      <Text style={styles.prTitle}>
-        {title}{' '}
-        <Text
-          style={styles.prMeta}
-          onPress={openPr}
-          accessibilityRole="link"
-          accessibilityLabel={`Open pull request #${number} on the web`}
-        >
-          #{number}
-        </Text>
-      </Text>
+      <Text style={styles.prTitle}>{title}</Text>
       {editable ? (
         <View style={styles.titleEditButton}>
           <Pencil size={14} color={colors.textSecondary} strokeWidth={2} />

@@ -1,9 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { gitExecFileAsyncMock, glabExecFileAsyncMock, sshExecMock } = vi.hoisted(() => ({
+const { gitExecFileAsyncMock, glabExecFileAsyncMock } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
-  glabExecFileAsyncMock: vi.fn(),
-  sshExecMock: vi.fn()
+  glabExecFileAsyncMock: vi.fn()
 }))
 
 vi.mock('../git/runner', () => ({
@@ -13,30 +12,69 @@ vi.mock('../git/runner', () => ({
 
 import {
   _getProjectRefCacheSize,
-  _resetKnownHostsCache,
   _resetProjectRefCache,
   classifyGlabError,
+  classifyJobLogError,
+  classifyListFetchError,
   classifyListIssuesError,
+  acquire,
+  release,
+  GITLAB_ADMISSION_TIMEOUT_MS,
   getIssueProjectRef,
-  getGlabKnownHosts,
+  parseGlabJsonList,
+  parseGlabPaginationHeader,
+  isMissingJobLogError,
+  glabHostEnvOptions,
   getProjectRef,
   getProjectRefForRemote,
   parseGlabApiResponse,
   parseGlabAuthStatusHosts,
   resolveIssueSource
 } from './gl-utils'
-import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
+import { GlabNonListResponseError } from './glab-api-response'
+import { _resetRemoteNameListingCache } from '../git/remote-name-listing'
+import { REMOTE_URL_PROBE_TIMEOUT_MS } from '../git/remote-url-probe'
+import { NEGATIVE_ENTRY_TTL_MS } from '../git/remote-ref-probe-cache'
+
+function mockGitRemoteCommands(remotes: Record<string, string>): void {
+  gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+    if (args[0] === 'remote' && args[1] !== 'get-url') {
+      return { stdout: `${Object.keys(remotes).join('\n')}\n` }
+    }
+    if (args[0] === 'remote' && args[1] === 'get-url') {
+      const url = remotes[args[2] ?? '']
+      if (!url) {
+        throw new Error(`fatal: No such remote '${args[2]}'`)
+      }
+      return { stdout: url }
+    }
+    throw new Error(`unexpected git ${args.join(' ')}`)
+  })
+}
+
+function gitRemoteGetUrlCalls(remoteName: string): unknown[][] {
+  return gitExecFileAsyncMock.mock.calls.filter(
+    ([args]) =>
+      Array.isArray(args) && args[0] === 'remote' && args[1] === 'get-url' && args[2] === remoteName
+  )
+}
+
+function gitRemoteListCalls(): unknown[][] {
+  return gitExecFileAsyncMock.mock.calls.filter(
+    ([args]) => Array.isArray(args) && args[0] === 'remote' && args[1] !== 'get-url'
+  )
+}
 
 describe('gitlab project ref resolution', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
-    sshExecMock.mockReset()
-    unregisterSshGitProvider('conn-1')
+    glabExecFileAsyncMock.mockReset()
     _resetProjectRefCache()
+    _resetRemoteNameListingCache()
   })
 
   afterEach(() => {
-    unregisterSshGitProvider('conn-1')
+    vi.useRealTimers()
   })
 
   it('keeps getProjectRef origin-based', async () => {
@@ -49,39 +87,82 @@ describe('gitlab project ref resolution', () => {
       path: 'fork/orca'
     })
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
   })
 
   it('prefers upstream for issue project ref resolution', async () => {
-    gitExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: 'git@gitlab.com:stablyai/orca.git\n'
+    mockGitRemoteCommands({
+      origin: 'git@gitlab.com:fork/orca.git\n',
+      upstream: 'git@gitlab.com:stablyai/orca.git\n'
     })
 
     await expect(getIssueProjectRef('/repo')).resolves.toEqual({
       host: 'gitlab.com',
       path: 'stablyai/orca'
     })
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'upstream'], {
-      cwd: '/repo'
-    })
+    expect(gitRemoteGetUrlCalls('upstream')).toHaveLength(1)
   })
 
-  it('falls back to origin when upstream is missing or non-GitLab', async () => {
-    gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'git@example.com:stablyai/orca.git\n' })
-      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:fork/orca.git\n' })
+  it('does not spawn git remote get-url upstream on an origin-only clone', async () => {
+    mockGitRemoteCommands({ origin: 'git@gitlab.com:fork/orca.git\n' })
 
     await expect(getIssueProjectRef('/repo')).resolves.toEqual({
       host: 'gitlab.com',
       path: 'fork/orca'
     })
+    await expect(getIssueProjectRef('/repo')).resolves.toEqual({
+      host: 'gitlab.com',
+      path: 'fork/orca'
+    })
+    expect(gitRemoteListCalls()).toHaveLength(1)
+    expect(gitRemoteGetUrlCalls('upstream')).toHaveLength(0)
+    expect(gitRemoteGetUrlCalls('origin')).toHaveLength(1)
+  })
+
+  it('falls back to origin when upstream is present but non-GitLab', async () => {
+    mockGitRemoteCommands({
+      origin: 'git@gitlab.com:fork/orca.git\n',
+      upstream: 'git@example.com:stablyai/orca.git\n'
+    })
+
+    await expect(getIssueProjectRef('/repo')).resolves.toEqual({
+      host: 'gitlab.com',
+      path: 'fork/orca'
+    })
+    expect(gitRemoteGetUrlCalls('upstream')).toHaveLength(1)
+    expect(gitRemoteGetUrlCalls('origin')).toHaveLength(1)
+  })
+
+  it('finds the GitLab project on other remotes, preferring one named gitlab like glab', async () => {
+    mockGitRemoteCommands({
+      origin: 'git@github.com:stablyai/orca.git\n',
+      'a-fork': 'git@gitlab.com:someone/orca.git\n',
+      gitlab: 'git@gitlab.com:stablyai/orca.git\n'
+    })
+
+    await expect(getIssueProjectRef('/repo')).resolves.toEqual({
+      host: 'gitlab.com',
+      path: 'stablyai/orca'
+    })
+  })
+
+  it('adds no glab probe for extra remotes on a GitHub-only repo', async () => {
+    mockGitRemoteCommands({
+      origin: 'git@github.com:stablyai/orca.git\n',
+      fork: 'git@github.com:someone/orca.git\n'
+    })
+
+    await expect(getIssueProjectRef('/repo')).resolves.toBeNull()
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 
   it('does not mix origin and upstream cache entries for the same repo path', async () => {
-    gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:fork/orca.git\n' })
-      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:stablyai/orca.git\n' })
+    mockGitRemoteCommands({
+      origin: 'git@gitlab.com:fork/orca.git\n',
+      upstream: 'git@gitlab.com:stablyai/orca.git\n'
+    })
 
     await expect(getProjectRef('/repo')).resolves.toEqual({
       host: 'gitlab.com',
@@ -117,11 +198,13 @@ describe('gitlab project ref resolution', () => {
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['remote', 'get-url', 'origin'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['remote', 'get-url', 'origin'], {
       cwd: '/repo',
-      wslDistro: 'Ubuntu'
+      wslDistro: 'Ubuntu',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
   })
 
@@ -142,24 +225,12 @@ describe('gitlab project ref resolution', () => {
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'upstream'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
 
     await expect(getProjectRefForRemote('/repo', 'upstream')).resolves.toBeNull()
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('resolves project refs through the SSH git provider for connected repos', async () => {
-    sshExecMock.mockResolvedValueOnce({ stdout: 'git@gitlab.com:remote/orca.git\n', stderr: '' })
-    registerSshGitProvider('conn-1', { exec: sshExecMock } as never)
-
-    await expect(getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')).resolves.toEqual({
-      host: 'gitlab.com',
-      path: 'remote/orca'
-    })
-
-    expect(sshExecMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], '/repo')
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
   it('bounds cached project refs for distinct repo paths', async () => {
@@ -175,32 +246,108 @@ describe('gitlab project ref resolution', () => {
     expect(_getProjectRefCacheSize()).toBe(512)
   })
 
-  it('does not cache a missing SSH provider as a permanent null project ref', async () => {
-    await expect(getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')).resolves.toBeNull()
+  it('does not cache a local probe killed on its deadline as a definitive miss', async () => {
+    gitExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('git timed out.'))
+      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:fork/orca.git\n' })
 
-    sshExecMock.mockResolvedValueOnce({
-      stdout: 'git@gitlab.com:remote/orca.git\n',
-      stderr: ''
-    })
-    registerSshGitProvider('conn-1', { exec: sshExecMock } as never)
-
-    await expect(getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')).resolves.toEqual({
+    await expect(getProjectRef('/repo')).resolves.toBeNull()
+    await expect(getProjectRef('/repo')).resolves.toEqual({
       host: 'gitlab.com',
-      path: 'remote/orca'
+      path: 'fork/orca'
     })
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
   })
 
-  it('does not cache transient SSH exec failures as permanent null project refs', async () => {
-    sshExecMock
-      .mockRejectedValueOnce(new Error('ssh tunnel not ready'))
-      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:remote/orca.git\n', stderr: '' })
-    registerSshGitProvider('conn-1', { exec: sshExecMock } as never)
+  it('re-probes a repo whose GitLab remote could have been added since the miss', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000_000)
+    gitExecFileAsyncMock.mockRejectedValueOnce(new Error("error: No such remote 'origin'"))
 
-    await expect(getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')).resolves.toBeNull()
-    await expect(getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')).resolves.toEqual({
+    await expect(getProjectRef('/repo')).resolves.toBeNull()
+    await expect(getProjectRef('/repo')).resolves.toBeNull()
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+
+    // Negative expiry reveals newly configured remotes without requiring local config watchers.
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'git@gitlab.com:fork/orca.git\n' })
+    vi.setSystemTime(1_000_000 + NEGATIVE_ENTRY_TTL_MS + 1)
+
+    await expect(getProjectRef('/repo')).resolves.toEqual({
       host: 'gitlab.com',
-      path: 'remote/orca'
+      path: 'fork/orca'
     })
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps a resolved project ref past the negative interval', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000_000)
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'git@gitlab.com:fork/orca.git\n' })
+
+    await expect(getProjectRef('/repo')).resolves.toEqual({
+      host: 'gitlab.com',
+      path: 'fork/orca'
+    })
+    vi.setSystemTime(1_000_000 + NEGATIVE_ENTRY_TTL_MS * 10)
+    await expect(getProjectRef('/repo')).resolves.toEqual({
+      host: 'gitlab.com',
+      path: 'fork/orca'
+    })
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-resolves a self-hosted remote once glab auth knows its host', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'git@gitlab.internal:team/orca.git\n' })
+    glabExecFileAsyncMock.mockRejectedValue(new Error('not authenticated'))
+
+    await expect(getProjectRefForRemote('/repo', 'origin', ['gitlab.com'])).resolves.toBeNull()
+    await expect(
+      getProjectRefForRemote('/repo', 'origin', ['gitlab.com', 'gitlab.internal'])
+    ).resolves.toEqual({ host: 'gitlab.internal', path: 'team/orca' })
+  })
+
+  it('asks glab about an unauthenticated host once per interval, not once per repo', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000_000)
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'git@github.com:team/orca.git\n' })
+    glabExecFileAsyncMock.mockRejectedValue(new Error('not authenticated'))
+
+    // Per-repo identity expiry must still share one negative auth probe per host.
+    for (const repoPath of ['/repo-a', '/repo-b', '/repo-c']) {
+      await expect(getProjectRef(repoPath)).resolves.toBeNull()
+    }
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(1)
+
+    vi.setSystemTime(1_000_000 + NEGATIVE_ENTRY_TTL_MS + 1)
+    for (const repoPath of ['/repo-a', '/repo-b', '/repo-c']) {
+      await expect(getProjectRef(repoPath)).resolves.toBeNull()
+    }
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('GitLab operation admission', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    for (let i = 0; i < 4; i += 1) {
+      release()
+    }
+  })
+
+  it('expires queued work instead of retaining it behind saturated operations', async () => {
+    vi.useFakeTimers()
+    await Promise.all(Array.from({ length: 4 }, () => acquire()))
+
+    const queued = acquire()
+    const rejection = expect(queued).rejects.toThrow(
+      'Timed out waiting for a GitLab operation slot.'
+    )
+    await vi.advanceTimersByTimeAsync(GITLAB_ADMISSION_TIMEOUT_MS)
+    await rejection
+
+    release()
+    await expect(acquire()).resolves.toBeUndefined()
   })
 })
 
@@ -208,23 +355,27 @@ describe('resolveIssueSource', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
     _resetProjectRefCache()
+    _resetRemoteNameListingCache()
   })
 
   it("'auto' + upstream exists → upstream, fellBack=false", async () => {
-    gitExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: 'git@gitlab.com:stablyai/orca.git\n'
+    mockGitRemoteCommands({
+      origin: 'git@gitlab.com:fork/orca.git\n',
+      upstream: 'git@gitlab.com:stablyai/orca.git\n'
     })
 
     await expect(resolveIssueSource('/repo', 'auto')).resolves.toEqual({
       source: { host: 'gitlab.com', path: 'stablyai/orca' },
       fellBack: false
     })
+    expect(gitRemoteGetUrlCalls('upstream')).toHaveLength(1)
   })
 
-  it("'auto' + no upstream → origin, fellBack=false", async () => {
-    gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'git@example.com:stablyai/orca.git\n' })
-      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:solo/orca.git\n' })
+  it("'auto' + no gitlab upstream → origin, fellBack=false", async () => {
+    mockGitRemoteCommands({
+      origin: 'git@gitlab.com:solo/orca.git\n',
+      upstream: 'git@example.com:stablyai/orca.git\n'
+    })
 
     await expect(resolveIssueSource('/repo', 'auto')).resolves.toEqual({
       source: { host: 'gitlab.com', path: 'solo/orca' },
@@ -254,13 +405,15 @@ describe('resolveIssueSource', () => {
     })
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
   })
 
   it('undefined preference is treated identically to auto', async () => {
-    gitExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: 'git@gitlab.com:stablyai/orca.git\n'
+    mockGitRemoteCommands({
+      origin: 'git@gitlab.com:fork/orca.git\n',
+      upstream: 'git@gitlab.com:stablyai/orca.git\n'
     })
 
     await expect(resolveIssueSource('/repo', undefined)).resolves.toEqual({
@@ -304,6 +457,18 @@ describe('glab error classification', () => {
     expect(classifyListIssuesError('HTTP 403').message).toMatch(/permission to read issues/i)
     expect(classifyListIssuesError('HTTP 404').message).toBe('Project not found.')
   })
+
+  it('rewrites issue-edit copy for job logs via classifyJobLogError', () => {
+    expect(classifyJobLogError('HTTP 403').message).toMatch(/permission to read this job's log/i)
+    expect(classifyJobLogError('HTTP 403').message).not.toMatch(/issue/i)
+    expect(classifyJobLogError('boom').message).toBe('Failed to load the job log: boom')
+  })
+
+  it('treats a 404 job log as missing, but keeps a missing project an error', () => {
+    expect(isMissingJobLogError('HTTP 404 Not Found')).toBe(true)
+    expect(isMissingJobLogError('HTTP 404: Project Not Found')).toBe(false)
+    expect(isMissingJobLogError('HTTP 403 Forbidden')).toBe(false)
+  })
 })
 
 describe('glab auth status host parsing', () => {
@@ -344,6 +509,86 @@ Self-hosted-git
   it('returns empty list for output with no hosts', () => {
     expect(parseGlabAuthStatusHosts('Not logged in.')).toEqual([])
   })
+
+  it('captures a non-default port on header-style lines', () => {
+    const out = `
+gitlab.example.com:8080:
+  ✓ Logged in as user
+    `
+    expect(parseGlabAuthStatusHosts(out)).toContain('gitlab.example.com:8080')
+  })
+
+  it('keeps two services on the same host distinct by port', () => {
+    const out = `
+✓ Logged in to gitlab.example.com:8443 as user (token)
+✓ Logged in to gitlab.example.com:3030 as user (token)
+    `
+    expect(parseGlabAuthStatusHosts(out).sort()).toEqual([
+      'gitlab.example.com:3030',
+      'gitlab.example.com:8443'
+    ])
+  })
+})
+
+describe('parseGlabJsonList', () => {
+  it('returns the parsed list unchanged', () => {
+    expect(parseGlabJsonList<{ iid: number }>('[{"iid":1}]')).toEqual([{ iid: 1 }])
+  })
+
+  it.each([
+    ['null', 'null'],
+    ['a number', '0'],
+    ['a string', '"nope"'],
+    ['an object', '{"data":[]}']
+  ])('reports the raw payload for %s as an unclassifiable body', (_label, payload) => {
+    expect(() => parseGlabJsonList(payload)).toThrow(GlabNonListResponseError)
+    expect(() => parseGlabJsonList(payload)).toThrow(payload)
+  })
+
+  // Bound opaque bodies before a proxy's multi-megabyte response reaches the error banner.
+  it.each([
+    ['an opaque body', `{"data":"${'x'.repeat(50_000)}"}`],
+    ['an error envelope', `{"message":"${'x'.repeat(50_000)}"}`]
+  ])('bounds the reported payload for %s', (_label, payload) => {
+    expect(() => parseGlabJsonList(payload)).toThrow(
+      /^GitLab returned (?:a non-list response|an error): .{300}$/
+    )
+  })
+
+  it.each([
+    ['message', '{"message":"403 Forbidden"}', '403 Forbidden'],
+    ['error', '{"error":"insufficient_scope"}', 'insufficient_scope'],
+    ['error when message is blank', '{"message":"  ","error":"real_error"}', 'real_error'],
+    [
+      'message when both are set',
+      '{"message":"404 Project Not Found","error":"insufficient_scope"}',
+      '404 Project Not Found'
+    ]
+  ])('reports a GitLab error envelope by its %s field', (_label, payload, reported) => {
+    expect(() => parseGlabJsonList(payload)).toThrow(`GitLab returned an error: ${reported}`)
+    expect(() => parseGlabJsonList(payload)).not.toThrow(GlabNonListResponseError)
+  })
+})
+
+describe('classifyListFetchError', () => {
+  it('keeps opaque payload text away from the classifier', () => {
+    // Content keywords must not turn opaque payloads into classified connectivity errors.
+    const payload = '{"data":[{"title":"fix network timeout"}]}'
+    let thrown: unknown
+    try {
+      parseGlabJsonList(payload)
+    } catch (err) {
+      thrown = err
+    }
+    expect(thrown).toBeInstanceOf(GlabNonListResponseError)
+    const classified = classifyListFetchError(thrown)
+    expect(classified.type).toBe('unknown')
+    expect(classified.message).toContain('fix network timeout')
+  })
+
+  it('still classifies ordinary glab failures by their stderr', () => {
+    expect(classifyListFetchError(new Error('HTTP 403 Forbidden')).type).toBe('permission_denied')
+  })
 })
 
 describe('parseGlabApiResponse', () => {
@@ -374,58 +619,73 @@ describe('parseGlabApiResponse', () => {
     expect(usedSeparatorMatch).toBe(false)
   })
 
-  it('lowercases header names for stable lookup', () => {
-    const stdout = 'HTTP/2.0 200 OK\nX-Total: 1\nContent-Type: application/json\n\n{}'
-    const parsed = parseGlabApiResponse(stdout)
-    expect(parsed.headers['x-total']).toBe('1')
-    expect(parsed.headers['content-type']).toBe('application/json')
-  })
-
   it('returns the full input as body when there is no header separator', () => {
     const stdout = '{"iid":1}'
     const parsed = parseGlabApiResponse(stdout)
     expect(parsed.body).toBe(stdout)
     expect(parsed.headers).toEqual({})
   })
+})
 
-  it('skips the status line in the header block', () => {
-    const stdout = 'HTTP/2.0 200 OK\nX-Total: 5\n\n[]'
-    const parsed = parseGlabApiResponse(stdout)
-    // The status line should not have leaked into headers under any key.
-    expect(parsed.headers['http/2.0']).toBeUndefined()
-    expect(parsed.headers['x-total']).toBe('5')
+describe('parseGlabPaginationHeader', () => {
+  it('reads a usable header value', () => {
+    expect(parseGlabPaginationHeader('25', 1)).toBe(25)
+    expect(parseGlabPaginationHeader(' 9 ', 1)).toBe(9)
+  })
+
+  it('returns undefined for an absent or unparseable header', () => {
+    expect(parseGlabPaginationHeader(undefined, 0)).toBeUndefined()
+    expect(parseGlabPaginationHeader('', 0)).toBeUndefined()
+    expect(parseGlabPaginationHeader('abc', 0)).toBeUndefined()
+  })
+
+  // Distinguish total 0 from missing totals while rejecting total-pages 0.
+  it('rejects values below the minimum', () => {
+    expect(parseGlabPaginationHeader('0', 1)).toBeUndefined()
+    expect(parseGlabPaginationHeader('0', 0)).toBe(0)
+    expect(parseGlabPaginationHeader('-3', 0)).toBeUndefined()
   })
 })
 
-describe('getGlabKnownHosts', () => {
-  beforeEach(() => {
-    glabExecFileAsyncMock.mockReset()
-    _resetKnownHostsCache()
+describe('glabHostEnvOptions', () => {
+  const projectRef = { host: 'gitlab.example.internal' }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
   })
 
-  it('returns gitlab.com plus auth-status hosts, deduped', async () => {
-    glabExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: '✓ Logged in to gitlab.com as user\n✓ Logged in to gitlab.example.com as user\n',
-      stderr: ''
-    })
+  it('carries the host in GITLAB_HOST for a connection-backed workspace', () => {
+    const { env } = glabHostEnvOptions(projectRef, 'conn-1')
 
-    await expect(getGlabKnownHosts()).resolves.toEqual(['gitlab.com', 'gitlab.example.com'])
+    expect(env?.GITLAB_HOST).toBe('gitlab.example.internal')
   })
 
-  it('falls back to default when glab auth status fails', async () => {
-    glabExecFileAsyncMock.mockRejectedValueOnce(new Error('glab not authenticated'))
-
-    await expect(getGlabKnownHosts()).resolves.toEqual(['gitlab.com'])
+  it('returns nothing for a local workspace', () => {
+    expect(glabHostEnvOptions(projectRef, null)).toEqual({})
+    expect(glabHostEnvOptions(projectRef, undefined)).toEqual({})
   })
 
-  it('caches the result across calls', async () => {
-    glabExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: '✓ Logged in to gitlab.com as user\n',
-      stderr: ''
-    })
+  it('returns nothing when the project ref carries no host', () => {
+    expect(glabHostEnvOptions(null, 'conn-1')).toEqual({})
+    expect(glabHostEnvOptions({ host: '' }, 'conn-1')).toEqual({})
+  })
 
-    await getGlabKnownHosts()
-    await getGlabKnownHosts()
-    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  // GITLAB_HOST must cross wsl.exe through WSLENV.
+  it('forwards GITLAB_HOST through WSLENV on Windows', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+
+    const { env } = glabHostEnvOptions(projectRef, 'conn-1')
+
+    expect(env?.GITLAB_HOST).toBe('gitlab.example.internal')
+    expect(env?.WSLENV?.split(':')).toContain('GITLAB_HOST')
+  })
+
+  it('leaves WSLENV alone off Windows', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+
+    const { env } = glabHostEnvOptions(projectRef, 'conn-1')
+
+    expect(env?.WSLENV).toBe(process.env.WSLENV)
   })
 })

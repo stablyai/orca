@@ -1,0 +1,42 @@
+name: Download pinned Orca release
+description: Downloads a released Linux .deb, checks its SHA-512, extracts it and points ORCA_CROSS_VERSION_PACKAGED_EXECUTABLE at its executable.
+
+inputs:
+  version:
+    description: Release version without the leading v (e.g. 1.4.224).
+    required: true
+  sha512:
+    description: Base64 SHA-512 of orca-ide_<version>_amd64.deb.
+    required: true
+  github-token:
+    description: Token for gh release download.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Download and verify
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        ORCA_PINNED_VERSION: ${{ inputs.version }}
+        ORCA_PINNED_SHA512: ${{ inputs.sha512 }}
+      run: |
+        gh release download "v$ORCA_PINNED_VERSION" --repo stablyai/orca --pattern "orca-ide_${ORCA_PINNED_VERSION}_amd64.deb" --dir "$RUNNER_TEMP/old-orca"
+        python3 - <<'PYVERIFY'
+        import base64,hashlib,os,pathlib,subprocess
+        version=os.environ['ORCA_PINNED_VERSION']
+        root=pathlib.Path(os.environ['RUNNER_TEMP'])/'old-orca'
+        package=root/f'orca-ide_{version}_amd64.deb'
+        digest=hashlib.sha512()
+        with package.open('rb') as archive:
+            for block in iter(lambda: archive.read(1024*1024), b''):
+                digest.update(block)
+        assert base64.b64encode(digest.digest()).decode()==os.environ['ORCA_PINNED_SHA512']
+        extracted=root/'extracted'
+        subprocess.run(['dpkg-deb','-x',str(package),str(extracted)],check=True)
+        executable=extracted/'opt'/'Orca'/'orca-ide'
+        assert executable.is_file() and os.access(executable,os.X_OK)
+        with open(os.environ['GITHUB_ENV'],'a') as env: env.write('ORCA_CROSS_VERSION_PACKAGED_EXECUTABLE='+str(executable)+'\n')
+        print('Verified old package:',executable)
+        PYVERIFY

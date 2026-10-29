@@ -1,57 +1,54 @@
+import type { TerminalPathExistsCache } from './terminal-path-exists-cache'
+import { createTerminalPathExistenceBatch } from './terminal-path-existence-batch'
 import type { IDisposable, ILink, ILinkProvider, Terminal } from '@xterm/xterm'
-import {
-  extractTerminalFileLinkCandidates,
-  extractTerminalFileLinks,
-  resolveTerminalFileLink
-} from '@/lib/terminal-links'
+import { extractTerminalFileLinkReadings } from '../../../../shared/terminal-links'
+import { preferLongestNonOverlappingMatches } from '@/lib/longest-non-overlapping-matches'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { isRemoteRuntimeFileOperation, runtimePathExists } from '@/runtime/runtime-file-client'
+import { buildCandidateLogicalLinesForBufferPosition } from '../../../../shared/terminal-link-buffer-hit-testing'
+import { openFilePathLinkAtBufferPosition } from './terminal-file-link-hit-testing'
+import { shouldOpenTerminalFileWithSystemDefault } from './terminal-file-open-routing'
+import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
+import { fileLinkTargetExists, resolveFileLinkTarget } from './terminal-file-link-target'
 import {
-  buildCandidateLogicalLinesForBufferPosition,
-  dedupeLogicalLines,
-  openFilePathLinkAtBufferPosition
-} from './terminal-file-link-hit-testing'
-import {
-  getTerminalFileContext,
-  isHtmlFilePath,
-  openDetectedFilePath,
-  shouldOpenTerminalFileWithSystemDefault
-} from './terminal-file-open-routing'
-import {
-  buildHardWrappedPathLogicalLineCandidates,
-  buildWrappedLogicalLine,
   rangeForParsedFileLink,
   type WrappedLogicalLine
-} from './wrapped-terminal-link-ranges'
-import {
-  getTerminalPathExistsCacheKey,
-  readTerminalPathExistsCache,
-  writeTerminalPathExistsCache
-} from './terminal-path-exists-cache'
+} from '../../../../shared/wrapped-terminal-link-ranges'
 import {
   getTerminalHtmlFileOpenHint,
   getTerminalOrcaFileOpenHint,
   getTerminalWorktreePathOpenHint,
   getTerminalFileOpenHint,
-  getTerminalUrlOpenHint,
-  isMacPlatform
+  getTerminalUrlOpenHint
 } from './terminal-link-open-hints'
-import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
+import { isTerminalLinkDirectActivation } from './terminal-link-activation'
+import { getTerminalBufferPositionForMouseEvent } from './terminal-mouse-buffer-position'
+import type { TerminalLinkActionContext } from './terminal-link-action-request'
+import { handleTerminalFileLink } from './terminal-file-link-actions'
+import { showFileLinkOpenFailureToast } from '@/lib/file-link-open-failure-toast'
 
 export { openDetectedFilePath } from './terminal-file-open-routing'
+export { mapTerminalFilePath } from './terminal-file-open-routing'
 export { openFilePathLinkAtBufferPosition } from './terminal-file-link-hit-testing'
 export { getTerminalFileOpenHint, getTerminalHtmlFileOpenHint, getTerminalUrlOpenHint }
+export { isTerminalLinkActivation } from './terminal-link-activation'
 
 export type LinkHandlerDeps = {
   worktreeId: string
   worktreePath: string
   startupCwd: string
+  getPaneLinkCwd?: (paneId: number) => string | null
   managerRef: React.RefObject<PaneManager | null>
   linkProviderDisposablesRef: React.RefObject<Map<number, IDisposable>>
-  pathExistsCache: Map<string, boolean>
+  pathExistsCache: TerminalPathExistsCache
   runtimeEnvironmentId?: string | null
   terminalHomePath?: string | null
+  wslDistro?: string | null
   getRuntimeEnvironmentIdForPane?: (paneId: number) => string | null
+  /** The pane's terminal on its paired server, which may grant files it printed. */
+  getRuntimeTerminalHandleForPane?: (paneId: number) => string | null
+  getLinkActionContext?: (paneId: number) => TerminalLinkActionContext | null
+  /** The terminal tab whose panes print these links; editor opens place beside its group. */
+  sourceTabId?: string
 }
 
 type ProvidedFileLink = {
@@ -68,22 +65,12 @@ function rangesOverlap(left: ILink['range'], right: ILink['range']): boolean {
 }
 
 function preferLongestNonOverlappingLinks(links: ProvidedFileLink[]): ProvidedFileLink[] {
-  const selected: ProvidedFileLink[] = []
-  const byLengthDescending = [...links].sort(
-    (a, b) =>
-      b.link.text.length - a.link.text.length ||
-      a.link.range.start.y - b.link.range.start.y ||
-      a.link.range.start.x - b.link.range.start.x
-  )
-  for (const link of byLengthDescending) {
-    if (!selected.some((existing) => rangesOverlap(existing.link.range, link.link.range))) {
-      selected.push(link)
-    }
-  }
-  return selected.sort(
-    (a, b) =>
+  return preferLongestNonOverlappingMatches(links, {
+    length: ({ link }) => link.text.length,
+    overlaps: (left, right) => rangesOverlap(left.link.range, right.link.range),
+    compareStart: (a, b) =>
       a.link.range.start.y - b.link.range.start.y || a.link.range.start.x - b.link.range.start.x
-  )
+  })
 }
 
 export function createFilePathLinkProvider(
@@ -102,165 +89,122 @@ export function createFilePathLinkProvider(
       }
 
       const buffer = pane.terminal.buffer.active
-      const softWrappedLogicalLine = buildWrappedLogicalLine(buffer, bufferLineNumber)
-      const logicalLines = dedupeLogicalLines([
-        ...buildHardWrappedPathLogicalLineCandidates(buffer, bufferLineNumber),
-        ...(softWrappedLogicalLine ? [softWrappedLogicalLine] : [])
-      ])
-      if (logicalLines.every((logicalLine) => !logicalLine.text)) {
+      // Why: xterm hit-tests only the hovered row, so checking the rest of a long line wastes host stats.
+      const rowLinks = buildCandidateLogicalLinesForBufferPosition(
+        buffer,
+        bufferLineNumber
+      ).flatMap((logicalLine) => {
+        const { links, guesses } = extractTerminalFileLinkReadings(logicalLine.text)
+        // Why guesses too: every reading below is shown only once the host finds its file.
+        return [...links, ...guesses].flatMap((parsed) => {
+          const range = rangeForParsedFileLink(logicalLine, parsed.startIndex, parsed.endIndex)
+          return range && range.start.y <= bufferLineNumber && range.end.y >= bufferLineNumber
+            ? [{ logicalLine, parsed, range }]
+            : []
+        })
+      })
+      if (rowLinks.length === 0) {
         callback(undefined)
         return
       }
 
-      if (
-        logicalLines.every((logicalLine) => extractTerminalFileLinks(logicalLine.text).length === 0)
-      ) {
-        callback(undefined)
-        return
-      }
+      const pathExists = createTerminalPathExistenceBatch()
+      // A rejected wrapped-path guess must not hide verified sibling paths.
+      void Promise.allSettled(
+        rowLinks.map(async ({ logicalLine, parsed, range }): Promise<ProvidedFileLink | null> => {
+          const runtimeEnvironmentId =
+            deps.getRuntimeEnvironmentIdForPane?.(paneId) ?? deps.runtimeEnvironmentId ?? null
+          const target = resolveFileLinkTarget(parsed, {
+            cwd: deps.getPaneLinkCwd?.(paneId) ?? startupCwd,
+            homePath: deps.terminalHomePath,
+            worktreeId,
+            worktreePath,
+            runtimeEnvironmentId,
+            wslDistro: deps.wslDistro
+          })
+          if (!target) {
+            return null
+          }
+          const terminalHandle = deps.getRuntimeTerminalHandleForPane?.(paneId) ?? null
+          if (!(await fileLinkTargetExists(target, pathExistsCache, pathExists, terminalHandle))) {
+            return null
+          }
+          const { absolutePath: mappedPath, fileContext } = target
 
-      void Promise.all(
-        logicalLines.flatMap((logicalLine) =>
-          extractTerminalFileLinkCandidates(logicalLine.text).map(
-            async (parsed): Promise<ProvidedFileLink | null> => {
-              const resolved = startupCwd
-                ? resolveTerminalFileLink(parsed, startupCwd, deps.terminalHomePath)
-                : null
-              if (!resolved) {
-                return null
-              }
-              const range = rangeForParsedFileLink(logicalLine, parsed.startIndex, parsed.endIndex)
-              if (!range) {
-                return null
-              }
-
-              const runtimeEnvironmentId =
-                deps.getRuntimeEnvironmentIdForPane?.(paneId) ?? deps.runtimeEnvironmentId ?? null
-              const fileContext = getTerminalFileContext(
-                worktreeId,
-                worktreePath,
-                runtimeEnvironmentId
-              )
-              const isRemoteRuntimePath = isRemoteRuntimeFileOperation(
-                fileContext,
-                resolved.absolutePath
-              )
-              const cacheKey = getTerminalPathExistsCacheKey({
-                absolutePath: resolved.absolutePath,
-                connectionId: fileContext.connectionId,
-                isRemoteRuntimePath,
-                runtimeEnvironmentId
-              })
-              const worktreeRootLink = resolveKnownWorktreeRootPathLink(resolved.absolutePath)
-              if (/[\\/]$/.test(parsed.pathText) && !worktreeRootLink) {
-                return null
-              }
-              // Why: exact known workspace roots must stay clickable for SSH or
-              // stale local paths even when filesystem probing says "missing".
-              if (!worktreeRootLink) {
-                const cachedExists = readTerminalPathExistsCache(pathExistsCache, cacheKey)
-                const exists =
-                  cachedExists ??
-                  (fileContext.connectionId || isRemoteRuntimePath
-                    ? await runtimePathExists(fileContext, resolved.absolutePath)
-                    : await window.api.shell.pathExists(resolved.absolutePath))
-                writeTerminalPathExistsCache(pathExistsCache, cacheKey, exists)
-                if (!exists) {
-                  return null
-                }
-              }
-
-              return {
-                logicalLine,
-                link: {
-                  range,
-                  text: parsed.displayText,
-                  activate: (event) => {
-                    if (!isTerminalLinkActivation(event)) {
-                      return
-                    }
-                    openDetectedFilePath(resolved.absolutePath, resolved.line, resolved.column, {
+          return {
+            logicalLine,
+            link: {
+              range,
+              text: parsed.displayText,
+              activate: (event) => {
+                if (
+                  handleTerminalFileLink(
+                    mappedPath,
+                    target.line,
+                    target.column,
+                    event,
+                    {
                       worktreeId,
                       worktreePath,
                       runtimeEnvironmentId,
-                      openWithSystemDefault: Boolean(event.shiftKey)
-                    })
-                  },
-                  hover: () => {
-                    // Why: only local paths can offer the Shift+modifier system
-                    // default escape hatch; remote paths may not exist locally.
-                    const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(
-                      fileContext,
-                      resolved.absolutePath
-                    )
-                    const hint = worktreeRootLink
-                      ? getTerminalWorktreePathOpenHint(canOpenWithSystemDefault)
-                      : canOpenWithSystemDefault
-                        ? isHtmlFilePath(resolved.absolutePath)
-                          ? getTerminalHtmlFileOpenHint()
-                          : openLinkHint
-                        : getTerminalOrcaFileOpenHint()
-                    linkTooltip.textContent = `${resolved.absolutePath} (${hint})`
-                    linkTooltip.style.display = ''
-                  },
-                  leave: () => {
-                    linkTooltip.style.display = 'none'
-                  }
+                      wslDistro: deps.wslDistro,
+                      terminalHandle,
+                      sourceTabId: deps.sourceTabId,
+                      onOpenFailure: (failure) => showFileLinkOpenFailureToast(mappedPath, failure)
+                    },
+                    deps.getLinkActionContext?.(paneId)
+                  )
+                ) {
+                  pane.terminal.clearSelection?.()
                 }
+              },
+              hover: () => {
+                // Only local paths can use the Shift+modifier OS escape hatch.
+                const canOpenWithSystemDefault =
+                  shouldOpenTerminalFileWithSystemDefault(fileContext)
+                const showActions = deps.getLinkActionContext
+                  ? deps.getLinkActionContext(paneId) !== null
+                  : true
+                const hint = target.isKnownWorktreeRoot
+                  ? getTerminalWorktreePathOpenHint(canOpenWithSystemDefault, showActions)
+                  : canOpenWithSystemDefault
+                    ? isHtmlFilePath(mappedPath)
+                      ? getTerminalHtmlFileOpenHint(localHtmlFileDestinations(), showActions)
+                      : showActions
+                        ? openLinkHint
+                        : getTerminalFileOpenHint(false)
+                    : getTerminalOrcaFileOpenHint(showActions)
+                linkTooltip.textContent = `${mappedPath} (${hint})`
+                linkTooltip.style.display = ''
+              },
+              leave: () => {
+                linkTooltip.style.display = 'none'
               }
             }
+          }
+        })
+      )
+        .then((settledLinks) => {
+          const latestFingerprints = new Set(
+            buildCandidateLogicalLinesForBufferPosition(buffer, bufferLineNumber).map(
+              (logicalLine) => logicalLine.fingerprint
+            )
           )
-        )
-      ).then((resolvedLinks) => {
-        const latestFingerprints = new Set(
-          buildCandidateLogicalLinesForBufferPosition(buffer, bufferLineNumber).map(
-            (logicalLine) => logicalLine.fingerprint
+          const providedLinks = settledLinks.flatMap((result) =>
+            result.status === 'fulfilled' && result.value !== null ? [result.value] : []
           )
-        )
-        const providedLinks = resolvedLinks.filter(
-          (link): link is ProvidedFileLink => link !== null
-        )
-        const links = preferLongestNonOverlappingLinks(providedLinks)
-          .filter(({ logicalLine }) => latestFingerprints.has(logicalLine.fingerprint))
-          .map(({ link }) => link)
-        if (providedLinks.length > 0 && links.length === 0) {
-          return
-        }
-        callback(links.length > 0 ? links : undefined)
-      })
+          const links = preferLongestNonOverlappingLinks(providedLinks)
+            .filter(({ logicalLine }) => latestFingerprints.has(logicalLine.fingerprint))
+            .map(({ link }) => link)
+          if (providedLinks.length > 0 && links.length === 0) {
+            return
+          }
+          callback(links.length > 0 ? links : undefined)
+        })
+        .catch(() => {
+          // Stale xterm callbacks must not escape best-effort discovery as unhandled rejections.
+        })
     }
-  }
-}
-
-function getTerminalScreenElement(terminal: Terminal): HTMLElement | null {
-  return terminal.element?.querySelector('.xterm-screen') ?? null
-}
-
-function getBufferPositionForTerminalMouseEvent(
-  terminal: Terminal,
-  event: MouseEvent
-): { x: number; y: number } | null {
-  const screenElement = getTerminalScreenElement(terminal)
-  if (!screenElement || terminal.cols <= 0 || terminal.rows <= 0) {
-    return null
-  }
-
-  const rect = screenElement.getBoundingClientRect()
-  const relativeX = event.clientX - rect.left
-  const relativeY = event.clientY - rect.top
-  if (relativeX < 0 || relativeY < 0 || relativeX >= rect.width || relativeY >= rect.height) {
-    return null
-  }
-
-  const cellWidth = rect.width / terminal.cols
-  const cellHeight = rect.height / terminal.rows
-  if (cellWidth <= 0 || cellHeight <= 0) {
-    return null
-  }
-
-  return {
-    x: Math.floor(relativeX / cellWidth) + 1,
-    y: Math.floor(relativeY / cellHeight) + terminal.buffer.active.viewportY + 1
   }
 }
 
@@ -271,31 +215,33 @@ export function installFilePathLinkClickFallback(
 ): IDisposable {
   const mouseUpListenerOptions = { capture: true }
   const handleMouseUp = (event: MouseEvent): void => {
-    if (event.button !== 0 || !isTerminalLinkActivation(event)) {
+    if (!isTerminalLinkDirectActivation(event)) {
       return
     }
 
-    const position = getBufferPositionForTerminalMouseEvent(terminal, event)
+    const position = getTerminalBufferPositionForMouseEvent(terminal, event)
     if (!position) {
       return
     }
     const runtimeEnvironmentId =
       deps.getRuntimeEnvironmentIdForPane?.(paneId) ?? deps.runtimeEnvironmentId ?? null
-    // Why: xterm can show a wrapped provider link as active while still missing
-    // activation for the clicked wrapped row. Always retry file-path hit testing
-    // on modifier mouseup; openDetectedFilePath coalesces duplicate opens.
+    // Retry hit testing on modifier mouseup: wrapped links can hover active without clickable-row activation. Opening coalesces duplicates.
     const opened = openFilePathLinkAtBufferPosition(
       terminal.buffer.active,
       position,
       terminal.cols,
       {
-        startupCwd: deps.startupCwd,
+        startupCwd: deps.getPaneLinkCwd?.(paneId) ?? deps.startupCwd,
         terminalHomePath: deps.terminalHomePath,
         worktreeId: deps.worktreeId,
         worktreePath: deps.worktreePath,
         runtimeEnvironmentId,
+        wslDistro: deps.wslDistro,
+        terminalHandle: deps.getRuntimeTerminalHandleForPane?.(paneId) ?? null,
         pathExistsCache: deps.pathExistsCache,
-        openWithSystemDefault: Boolean(event.shiftKey)
+        openWithSystemDefault: Boolean(event.shiftKey),
+        sourceTabId: deps.sourceTabId,
+        onOpenFailure: showFileLinkOpenFailureToast
       }
     )
     if (opened) {
@@ -312,11 +258,4 @@ export function installFilePathLinkClickFallback(
       terminalElement?.removeEventListener('mouseup', handleMouseUp, mouseUpListenerOptions)
     }
   }
-}
-
-export function isTerminalLinkActivation(
-  event: Pick<MouseEvent, 'metaKey' | 'ctrlKey'> | undefined
-): boolean {
-  const isMac = isMacPlatform()
-  return isMac ? Boolean(event?.metaKey) : Boolean(event?.ctrlKey)
 }

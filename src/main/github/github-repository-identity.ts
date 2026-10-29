@@ -1,19 +1,41 @@
-import { gitExecFileAsync } from '../git/runner'
-import type { GitHubOwnerRepo, IssueSourcePreference } from '../../shared/types'
-import { getSshGitProvider } from '../providers/ssh-git-dispatch'
+import { runCoalescedProbe, type CoalescedProbes } from '../git/coalesced-probe'
+import { readRemoteUrl } from '../git/remote-url-probe'
+import type { GhAccountBinding } from '../../shared/github/account-binding'
+import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
+import { readLocalGitConfigSignature } from './local-git-config-signature'
+import {
+  parseGitHubOwnerRepo,
+  parseGitHubRemoteIdentity,
+  type GitHubRemoteIdentity
+} from './github-remote-identity-parsing'
+import { classifyGitHubOwnerRepoFromRemoteUrl } from './github-ssh-host-alias-resolution'
+import { isStableMissingGitRemoteError } from '../git/stable-missing-git-remote-error'
+import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
+import { requireReachableGitRoute } from '../providers/execution-host-provider-dispatch'
+import { getConnectionExecutionHostId } from '../../shared/execution-host'
 
 export type OwnerRepo = GitHubOwnerRepo
 
-export type GitHubRemoteIdentity = GitHubOwnerRepo & { host: string }
+export type { GitHubRemoteIdentity }
+export { parseGitHubOwnerRepo, parseGitHubRemoteIdentity }
 
 export type GitHubRepoContext = {
   repoPath: string
   connectionId?: string | null
   wslDistro?: string
+  admissionTier?: GitAdmissionTier
+  /** SSH keeps the binding even when cwd is omitted from gh options. */
+  ghAccount?: GhAccountBinding
 }
 
 export type LocalGitExecOptions = {
   wslDistro?: string
+  admissionTier?: GitAdmissionTier
+  ghAccount?: GhAccountBinding
+}
+
+export type GitHubRemoteIdentityProbeOptions = {
+  requireVerifiedSshProbe?: boolean
 }
 
 export function githubRepoContext(
@@ -24,7 +46,9 @@ export function githubRepoContext(
   return {
     repoPath,
     connectionId: connectionId ?? null,
-    ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
+    ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
+    ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {}),
+    ...(localGitOptions.ghAccount ? { ghAccount: localGitOptions.ghAccount } : {})
   }
 }
 
@@ -32,25 +56,34 @@ export function ghRepoExecOptions(context: GitHubRepoContext): {
   cwd?: string
   encoding?: BufferEncoding
   wslDistro?: string
+  admissionTier?: GitAdmissionTier
+  ghAccount?: GhAccountBinding
 } {
+  const account = context.ghAccount ? { ghAccount: context.ghAccount } : {}
   return context.connectionId
-    ? {}
+    ? { ...account }
     : {
         cwd: context.repoPath,
-        ...(context.wslDistro ? { wslDistro: context.wslDistro } : {})
+        ...(context.wslDistro ? { wslDistro: context.wslDistro } : {}),
+        ...(context.admissionTier ? { admissionTier: context.admissionTier } : {}),
+        ...account
       }
 }
 
-const OWNER_REPO_CACHE_TTL_MS = 30_000
+const OWNER_REPO_POSITIVE_CACHE_TTL_MS = 30_000
+const OWNER_REPO_NEGATIVE_CACHE_TTL_MS = 5 * 60_000
+// Signed entries revalidate against Git config before reuse.
+const OWNER_REPO_SIGNED_CACHE_TTL_MS = 5 * 60_000
 const OWNER_REPO_CACHE_MAX_ENTRIES = 512
 
 type OwnerRepoCacheEntry = {
   value: OwnerRepo | null
   expiresAt: number
+  configSignature?: string
 }
 
 const ownerRepoCache = new Map<string, OwnerRepoCacheEntry>()
-const ownerRepoInFlight = new Map<string, Promise<OwnerRepo | null>>()
+const ownerRepoInFlight: CoalescedProbes<OwnerRepo | null> = new Map()
 
 /** @internal - exposed for tests only */
 export function _resetOwnerRepoCache(): void {
@@ -78,217 +111,141 @@ function pruneOwnerRepoCache(now: number): void {
   }
 }
 
-export function parseGitHubOwnerRepo(remoteUrl: string): OwnerRepo | null {
-  const identity = parseGitHubRemoteIdentity(remoteUrl)
-  if (!identity || identity.host.toLowerCase() !== 'github.com') {
-    return null
-  }
-  return { owner: identity.owner, repo: identity.repo }
-}
-
-function normalizeGitHubRemoteHost(host: string): string {
-  const normalizedHost = host.toLowerCase()
-  // Why: GitHub documents ssh.github.com:443 as SSH-over-HTTPS for github.com repos.
-  return normalizedHost === 'ssh.github.com' ? 'github.com' : normalizedHost
-}
-
-function parseGitHubRemotePath(path: string): Pick<GitHubRemoteIdentity, 'owner' | 'repo'> | null {
-  const parts = path.replace(/^\/+/, '').replace(/\/+$/, '').split('/')
-  if (parts.length !== 2) {
-    return null
-  }
-  const [owner, repoWithSuffix] = parts
-  const repo = repoWithSuffix.replace(/\.git$/i, '')
-  if (!owner || !repo) {
-    return null
-  }
-  return { owner, repo }
-}
-
-export function parseGitHubRemoteIdentity(remoteUrl: string): GitHubRemoteIdentity | null {
-  const trimmed = remoteUrl.trim()
-  const sshMatch = trimmed.match(/^git@([^:]+):([^/]+)\/([^/]+?)(?:\.git)?$/i)
-  if (sshMatch) {
-    return { host: normalizeGitHubRemoteHost(sshMatch[1]), owner: sshMatch[2], repo: sshMatch[3] }
-  }
-
-  try {
-    const url = new URL(trimmed)
-    if (!['git:', 'git+ssh:', 'http:', 'https:', 'ssh:'].includes(url.protocol.toLowerCase())) {
-      return null
-    }
-    const path = parseGitHubRemotePath(url.pathname)
-    return path ? { host: normalizeGitHubRemoteHost(url.hostname), ...path } : null
-  } catch {
-    return null
-  }
-}
-
 export async function getRemoteUrlForRepo(
   context: GitHubRepoContext,
   remoteName: string
 ): Promise<string | null> {
-  if (context.connectionId) {
-    const provider = getSshGitProvider(context.connectionId)
-    if (!provider) {
-      return null
-    }
-    const { stdout } = await provider.exec(['remote', 'get-url', remoteName], context.repoPath)
-    return stdout
+  return readRemoteUrl(context, remoteName)
+}
+
+function getOwnerRepoCacheTtl(value: OwnerRepo | null, configSignature?: string): number {
+  if (configSignature) {
+    return value ? OWNER_REPO_SIGNED_CACHE_TTL_MS : OWNER_REPO_NEGATIVE_CACHE_TTL_MS
   }
-  const { stdout } = await gitExecFileAsync(['remote', 'get-url', remoteName], {
-    cwd: context.repoPath,
-    ...(context.wslDistro ? { wslDistro: context.wslDistro } : {})
-  })
-  return stdout
+  return OWNER_REPO_POSITIVE_CACHE_TTL_MS
 }
 
 export async function getOwnerRepoForRemote(
   repoPath: string,
   remoteName: string,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  probeOptions: GitHubRemoteIdentityProbeOptions = {}
 ): Promise<OwnerRepo | null> {
   const context = githubRepoContext(repoPath, connectionId, localGitOptions)
-  const runtimeKey = context.connectionId ?? `local:${context.wslDistro ?? 'host'}`
+  if (probeOptions.requireVerifiedSshProbe) {
+    requireReachableGitRoute(getConnectionExecutionHostId(context.connectionId))
+  }
+  const runtimeKey = context.connectionId
+    ? `ssh:${context.connectionId}`
+    : `local:${context.wslDistro ?? 'host'}`
   const cacheKey = `${runtimeKey}\0${context.repoPath}\0${remoteName}`
   const now = Date.now()
   pruneOwnerRepoCache(now)
   const cached = ownerRepoCache.get(cacheKey)
   if (cached && cached.expiresAt > now) {
-    return cached.value
-  }
-
-  const inFlight = ownerRepoInFlight.get(cacheKey)
-  if (inFlight) {
-    return inFlight
-  }
-
-  // Why: startup can resolve issue sources, PR candidates, and repo metadata
-  // for the same repo concurrently. Coalesce missing-remote probes.
-  const probe = resolveOwnerRepoForRemote(context, remoteName, cacheKey)
-  ownerRepoInFlight.set(cacheKey, probe)
-  try {
-    return await probe
-  } finally {
-    if (ownerRepoInFlight.get(cacheKey) === probe) {
-      ownerRepoInFlight.delete(cacheKey)
+    // Revalidate signed hits so remote changes are immediately visible.
+    if (cached.configSignature !== undefined) {
+      const currentSignature = await readLocalGitConfigSignature(context)
+      if (currentSignature !== cached.configSignature) {
+        ownerRepoCache.delete(cacheKey)
+      } else {
+        return cached.value
+      }
+    } else {
+      return cached.value
     }
   }
+  if (cached && cached.expiresAt <= now) {
+    ownerRepoCache.delete(cacheKey)
+  }
+
+  const nextConfigSignature = await readLocalGitConfigSignature(context)
+  const refreshedNow = Date.now()
+  const refreshedCached = ownerRepoCache.get(cacheKey)
+  if (refreshedCached && refreshedCached.expiresAt > refreshedNow) {
+    return refreshedCached.value
+  }
+
+  // Coalesce concurrent identity probes, but retire wedged work so it cannot pin identity forever.
+  const inFlightKey = `${cacheKey}\0${probeOptions.requireVerifiedSshProbe ? 'verified' : 'tolerant'}`
+  return runCoalescedProbe(ownerRepoInFlight, inFlightKey, () =>
+    resolveOwnerRepoForRemote(
+      context,
+      remoteName,
+      cacheKey,
+      nextConfigSignature,
+      probeOptions.requireVerifiedSshProbe === true
+    )
+  )
 }
 
 async function resolveOwnerRepoForRemote(
   context: GitHubRepoContext,
   remoteName: string,
-  cacheKey: string
+  cacheKey: string,
+  configSignature: string | undefined,
+  requireVerifiedSshProbe: boolean
 ): Promise<OwnerRepo | null> {
   const now = Date.now()
   try {
     const remoteUrl = await getRemoteUrlForRepo(context, remoteName)
-    const result = remoteUrl ? parseGitHubOwnerRepo(remoteUrl) : null
-    if (result) {
+    if (!remoteUrl) {
+      if (requireVerifiedSshProbe) {
+        requireReachableGitRoute(getConnectionExecutionHostId(context.connectionId))
+      }
+      // Empty remote URL is stable until git config changes.
       ownerRepoCache.set(cacheKey, {
-        value: result,
-        expiresAt: now + OWNER_REPO_CACHE_TTL_MS
+        value: null,
+        expiresAt: now + getOwnerRepoCacheTtl(null, configSignature),
+        ...(configSignature ? { configSignature } : {})
       })
       pruneOwnerRepoCache(now)
-      return result
+      return null
     }
-  } catch {
-    // ignore - non-GitHub remote or no remote
+    const classification = await classifyGitHubOwnerRepoFromRemoteUrl(remoteUrl, context)
+    if (classification.kind === 'github') {
+      // Signed entries still expire and revalidate Git config on reuse.
+      ownerRepoCache.set(cacheKey, {
+        value: classification.ownerRepo,
+        expiresAt: now + getOwnerRepoCacheTtl(classification.ownerRepo, configSignature),
+        ...(configSignature ? { configSignature } : {})
+      })
+      pruneOwnerRepoCache(now)
+      return classification.ownerRepo
+    }
+    if (classification.kind === 'indeterminate') {
+      // Why: a failed ssh -G probe is not a stable "not GitHub" result.
+      if (requireVerifiedSshProbe && context.connectionId) {
+        throw new Error('Remote repository identity is unverifiable.')
+      }
+      return null
+    }
+    const stableConfigSignature = classification.cacheWithGitConfigSignature
+      ? configSignature
+      : undefined
+    ownerRepoCache.set(cacheKey, {
+      value: null,
+      expiresAt: now + getOwnerRepoCacheTtl(null, stableConfigSignature),
+      ...(stableConfigSignature ? { configSignature: stableConfigSignature } : {})
+    })
+    pruneOwnerRepoCache(now)
+    return null
+  } catch (error) {
+    // Cache stable missing remotes only; transient lock/I/O failures must retry.
+    if (!isStableMissingGitRemoteError(error)) {
+      if (requireVerifiedSshProbe && context.connectionId) {
+        throw error
+      }
+      return null
+    }
   }
-  ownerRepoCache.set(cacheKey, { value: null, expiresAt: now + OWNER_REPO_CACHE_TTL_MS })
+  // Config changes invalidate stable negative remote results before their longer TTL.
+  ownerRepoCache.set(cacheKey, {
+    value: null,
+    expiresAt: now + getOwnerRepoCacheTtl(null, configSignature),
+    ...(configSignature ? { configSignature } : {})
+  })
   pruneOwnerRepoCache(now)
   return null
-}
-
-export async function getOwnerRepo(
-  repoPath: string,
-  connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
-): Promise<OwnerRepo | null> {
-  return getOwnerRepoForRemote(repoPath, 'origin', connectionId, localGitOptions)
-}
-
-export async function getIssueOwnerRepo(
-  repoPath: string,
-  connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
-): Promise<OwnerRepo | null> {
-  const upstream = await getOwnerRepoForRemote(repoPath, 'upstream', connectionId, localGitOptions)
-  if (upstream) {
-    return upstream
-  }
-  return getOwnerRepoForRemote(repoPath, 'origin', connectionId, localGitOptions)
-}
-
-export type PRRepositoryCandidates = {
-  candidates: OwnerRepo[]
-  headRepo: OwnerRepo | null
-}
-
-function ownerRepoKey(ownerRepo: OwnerRepo): string {
-  return `${ownerRepo.owner.toLowerCase()}/${ownerRepo.repo.toLowerCase()}`
-}
-
-export async function resolvePRRepositoryCandidates(
-  repoPath: string,
-  connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
-): Promise<PRRepositoryCandidates> {
-  const upstream = await getOwnerRepoForRemote(repoPath, 'upstream', connectionId, localGitOptions)
-  const origin = await getOwnerRepoForRemote(repoPath, 'origin', connectionId, localGitOptions)
-  const seen = new Set<string>()
-  const candidates: OwnerRepo[] = []
-
-  for (const candidate of [upstream, origin]) {
-    if (!candidate) {
-      continue
-    }
-    const key = ownerRepoKey(candidate)
-    if (seen.has(key)) {
-      continue
-    }
-    seen.add(key)
-    candidates.push(candidate)
-  }
-
-  return { candidates, headRepo: origin }
-}
-
-export type ResolvedIssueSource = {
-  source: OwnerRepo | null
-  /** True when explicit upstream is gone and resolver fell back to origin. */
-  fellBack: boolean
-}
-
-export async function resolveIssueSource(
-  repoPath: string,
-  preference: IssueSourcePreference | undefined,
-  connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
-): Promise<ResolvedIssueSource> {
-  if (preference === 'upstream') {
-    const upstream = await getOwnerRepoForRemote(
-      repoPath,
-      'upstream',
-      connectionId,
-      localGitOptions
-    )
-    if (upstream) {
-      return { source: upstream, fellBack: false }
-    }
-    const origin = await getOwnerRepoForRemote(repoPath, 'origin', connectionId, localGitOptions)
-    return { source: origin, fellBack: origin !== null }
-  }
-  if (preference === 'origin') {
-    return {
-      source: await getOwnerRepoForRemote(repoPath, 'origin', connectionId, localGitOptions),
-      fellBack: false
-    }
-  }
-  return {
-    source: await getIssueOwnerRepo(repoPath, connectionId, localGitOptions),
-    fellBack: false
-  }
 }

@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentStatusEntry, AgentStatusState } from '../../../shared/agent-status-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/types'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  type AgentStatusEntry,
+  type AgentStatusState
+} from '../../../shared/agent-status-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
+import { structuredAgentSessionPaneKey } from '../../../shared/structured-agent-session-projection'
 import {
   deriveNotesSendAgentTargets,
   type NotesSendAgentTargetState
@@ -10,9 +15,11 @@ import {
 const WORKTREE_ID = 'wt-1'
 const STATUS_TAB_ID = 'tab-status'
 const LAUNCH_TAB_ID = 'tab-launch'
+const MANUAL_TAB_ID = 'tab-manual'
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
 const NOW = 10_000
+const OLD_STATUS_UPDATED_AT = NOW - AGENT_STATUS_STALE_AFTER_MS - 1
 
 function tab(id: string, overrides: Partial<TerminalTab> = {}): TerminalTab {
   return {
@@ -28,15 +35,21 @@ function tab(id: string, overrides: Partial<TerminalTab> = {}): TerminalTab {
   }
 }
 
-function entry(paneKey: string, state: AgentStatusState = 'done'): AgentStatusEntry {
+function entry(
+  paneKey: string,
+  state: AgentStatusState = 'done',
+  updatedAt = NOW,
+  overrides: Partial<AgentStatusEntry> = {}
+): AgentStatusEntry {
   return {
     paneKey,
     state,
     prompt: '',
-    updatedAt: NOW,
-    stateStartedAt: NOW,
+    updatedAt,
+    stateStartedAt: updatedAt,
     agentType: 'codex',
-    stateHistory: []
+    stateHistory: [],
+    ...overrides
   }
 }
 
@@ -70,6 +83,7 @@ function state(
   overrides: Partial<{
     agentStatusByPaneKey: Record<string, AgentStatusEntry>
     tabsByWorktree: Record<string, TerminalTab[]>
+    unifiedTabsByWorktree: NotesSendAgentTargetState['unifiedTabsByWorktree']
     terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
     ptyIdsByTabId: Record<string, string[]>
     runtimePaneTitlesByTabId: Record<string, Record<number, string>>
@@ -79,11 +93,12 @@ function state(
   return {
     agentStatusByPaneKey: {},
     tabsByWorktree: { [WORKTREE_ID]: [] },
+    unifiedTabsByWorktree: {},
     terminalLayoutsByTabId,
     ptyIdsByTabId: deriveLivePtyIdsByTabId(terminalLayoutsByTabId),
     runtimePaneTitlesByTabId: {},
     ...overrides
-  } as NotesSendAgentTargetState
+  }
 }
 
 function deriveLivePtyIdsByTabId(
@@ -107,6 +122,7 @@ describe('notes send agent targets', () => {
         terminalLayoutsByTabId: { [STATUS_TAB_ID]: leafLayout(LEAF_A, 'pty-a') }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -114,7 +130,7 @@ describe('notes send agent targets', () => {
       {
         paneKey,
         tabId: STATUS_TAB_ID,
-        leafId: LEAF_A,
+        messageTarget: { kind: 'terminal', tabId: STATUS_TAB_ID, leafId: LEAF_A },
         agentType: 'codex',
         tabTitle: 'Terminal 1',
         status: 'eligible'
@@ -131,6 +147,7 @@ describe('notes send agent targets', () => {
         terminalLayoutsByTabId: { [STATUS_TAB_ID]: leafLayout(LEAF_A, 'pty-a') }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -153,6 +170,7 @@ describe('notes send agent targets', () => {
         runtimePaneTitlesByTabId: { [STATUS_TAB_ID]: { 1: 'Codex - action required' } }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -175,6 +193,7 @@ describe('notes send agent targets', () => {
         runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex ready' } }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -182,11 +201,78 @@ describe('notes send agent targets', () => {
       {
         paneKey: makePaneKey(LAUNCH_TAB_ID, LEAF_B),
         tabId: LAUNCH_TAB_ID,
-        leafId: LEAF_B,
+        messageTarget: { kind: 'terminal', tabId: LAUNCH_TAB_ID, leafId: LEAF_B },
         agentType: 'codex',
         tabTitle: 'Terminal 2',
         status: 'eligible'
       }
+    ])
+  })
+
+  it('lists a manual agent tab with a recognized idle pane title and live PTY', () => {
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        tabsByWorktree: {
+          [WORKTREE_ID]: [tab(MANUAL_TAB_ID, { title: 'Terminal 2' })]
+        },
+        terminalLayoutsByTabId: { [MANUAL_TAB_ID]: leafLayout(LEAF_B, 'pty-b') },
+        runtimePaneTitlesByTabId: { [MANUAL_TAB_ID]: { 1: 'Codex ready' } }
+      }),
+      WORKTREE_ID,
+      new Map(),
+      NOW
+    )
+
+    expect(targets).toEqual([
+      {
+        paneKey: makePaneKey(MANUAL_TAB_ID, LEAF_B),
+        tabId: MANUAL_TAB_ID,
+        messageTarget: { kind: 'terminal', tabId: MANUAL_TAB_ID, leafId: LEAF_B },
+        agentType: 'codex',
+        tabTitle: 'Terminal 2',
+        status: 'eligible'
+      }
+    ])
+  })
+
+  it('skips a manual agent tab with an unrecognized booting pane title', () => {
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        tabsByWorktree: {
+          [WORKTREE_ID]: [tab(MANUAL_TAB_ID, { title: 'Terminal 2' })]
+        },
+        terminalLayoutsByTabId: { [MANUAL_TAB_ID]: leafLayout(LEAF_B, 'pty-b') },
+        runtimePaneTitlesByTabId: { [MANUAL_TAB_ID]: { 1: 'zsh' } }
+      }),
+      WORKTREE_ID,
+      new Map(),
+      NOW
+    )
+
+    expect(targets).toEqual([])
+  })
+
+  it('disables a manual agent tab with a permission pane title', () => {
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        tabsByWorktree: {
+          [WORKTREE_ID]: [tab(MANUAL_TAB_ID, { title: 'Terminal 2' })]
+        },
+        terminalLayoutsByTabId: { [MANUAL_TAB_ID]: leafLayout(LEAF_B, 'pty-b') },
+        runtimePaneTitlesByTabId: { [MANUAL_TAB_ID]: { 1: 'Codex - action required' } }
+      }),
+      WORKTREE_ID,
+      new Map(),
+      NOW
+    )
+
+    expect(targets).toEqual([
+      expect.objectContaining({
+        paneKey: makePaneKey(MANUAL_TAB_ID, LEAF_B),
+        agentType: 'codex',
+        status: 'disabled',
+        disabledReason: 'Agent needs permission'
+      })
     ])
   })
 
@@ -199,6 +285,7 @@ describe('notes send agent targets', () => {
         terminalLayoutsByTabId: { [LAUNCH_TAB_ID]: leafLayout(LEAF_B, 'pty-b') }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -215,6 +302,7 @@ describe('notes send agent targets', () => {
         runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex' } }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -231,6 +319,7 @@ describe('notes send agent targets', () => {
         runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex - action required' } }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -254,6 +343,7 @@ describe('notes send agent targets', () => {
         terminalLayoutsByTabId: { [LAUNCH_TAB_ID]: leafLayout(LEAF_B, 'pty-b') }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -276,6 +366,7 @@ describe('notes send agent targets', () => {
         runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'zsh' } }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -292,6 +383,7 @@ describe('notes send agent targets', () => {
         runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex' } }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -309,6 +401,7 @@ describe('notes send agent targets', () => {
         runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex ready' } }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
@@ -329,15 +422,219 @@ describe('notes send agent targets', () => {
         runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 2: 'Codex' } }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
     expect(targets).toHaveLength(1)
     expect(targets[0]).toMatchObject({
       tabId: LAUNCH_TAB_ID,
-      leafId: LEAF_A,
+      messageTarget: { kind: 'terminal', tabId: LAUNCH_TAB_ID, leafId: LEAF_A },
       status: 'eligible'
     })
+  })
+
+  it('does not duplicate a status-backed tab with a manual title fallback', () => {
+    const paneKey = makePaneKey(MANUAL_TAB_ID, LEAF_A)
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        agentStatusByPaneKey: { [paneKey]: entry(paneKey, 'working') },
+        tabsByWorktree: {
+          [WORKTREE_ID]: [tab(MANUAL_TAB_ID, { title: 'Codex ready' })]
+        },
+        terminalLayoutsByTabId: {
+          [MANUAL_TAB_ID]: splitLayout(LEAF_B, { [LEAF_A]: 'pty-a', [LEAF_B]: 'pty-b' })
+        },
+        runtimePaneTitlesByTabId: { [MANUAL_TAB_ID]: { 2: 'Codex ready' } }
+      }),
+      WORKTREE_ID,
+      new Map(),
+      NOW
+    )
+
+    expect(targets).toHaveLength(1)
+    expect(targets[0]).toMatchObject({
+      tabId: MANUAL_TAB_ID,
+      messageTarget: { kind: 'terminal', tabId: MANUAL_TAB_ID, leafId: LEAF_A },
+      status: 'eligible'
+    })
+  })
+
+  it('promotes a stale status-backed launch-agent pane when live title and PTY prove it is sendable', () => {
+    const paneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_B)
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        agentStatusByPaneKey: {
+          [paneKey]: entry(paneKey, 'done', OLD_STATUS_UPDATED_AT)
+        },
+        tabsByWorktree: {
+          [WORKTREE_ID]: [
+            tab(LAUNCH_TAB_ID, { title: 'Previous Codex session', launchAgent: 'codex' })
+          ]
+        },
+        terminalLayoutsByTabId: { [LAUNCH_TAB_ID]: leafLayout(LEAF_B, 'pty-b') },
+        runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex ready' } }
+      }),
+      WORKTREE_ID,
+      new Map(),
+      NOW
+    )
+
+    expect(targets).toEqual([
+      {
+        paneKey,
+        tabId: LAUNCH_TAB_ID,
+        messageTarget: { kind: 'terminal', tabId: LAUNCH_TAB_ID, leafId: LEAF_B },
+        agentType: 'codex',
+        tabTitle: 'Previous Codex session',
+        status: 'eligible'
+      }
+    ])
+  })
+
+  it('uses launch ownership when promoting a stale unknown status-backed pane', () => {
+    const paneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_B)
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        agentStatusByPaneKey: {
+          [paneKey]: entry(paneKey, 'done', OLD_STATUS_UPDATED_AT, {
+            agentType: 'unknown'
+          })
+        },
+        tabsByWorktree: {
+          [WORKTREE_ID]: [tab(LAUNCH_TAB_ID, { title: 'Codex ready', launchAgent: 'codex' })]
+        },
+        terminalLayoutsByTabId: { [LAUNCH_TAB_ID]: leafLayout(LEAF_B, 'pty-b') },
+        runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex ready' } }
+      }),
+      WORKTREE_ID,
+      new Map(),
+      NOW
+    )
+
+    expect(targets).toEqual([
+      expect.objectContaining({
+        paneKey,
+        agentType: 'codex',
+        status: 'eligible'
+      })
+    ])
+  })
+
+  it('keeps a stale status-backed launch-agent pane disabled with only a bare agent title', () => {
+    const paneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_B)
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        agentStatusByPaneKey: {
+          [paneKey]: entry(paneKey, 'done', OLD_STATUS_UPDATED_AT)
+        },
+        tabsByWorktree: {
+          [WORKTREE_ID]: [tab(LAUNCH_TAB_ID, { title: 'Codex', launchAgent: 'codex' })]
+        },
+        terminalLayoutsByTabId: { [LAUNCH_TAB_ID]: leafLayout(LEAF_B, 'pty-b') }
+      }),
+      WORKTREE_ID,
+      new Map(),
+      NOW
+    )
+
+    expect(targets).toEqual([
+      expect.objectContaining({
+        paneKey,
+        status: 'disabled',
+        disabledReason: 'Agent status is stale'
+      })
+    ])
+  })
+
+  it('keeps a stale status-backed launch-agent pane disabled when the live title needs permission', () => {
+    const paneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_B)
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        agentStatusByPaneKey: {
+          [paneKey]: entry(paneKey, 'done', OLD_STATUS_UPDATED_AT)
+        },
+        tabsByWorktree: {
+          [WORKTREE_ID]: [tab(LAUNCH_TAB_ID, { title: 'Codex', launchAgent: 'codex' })]
+        },
+        terminalLayoutsByTabId: { [LAUNCH_TAB_ID]: leafLayout(LEAF_B, 'pty-b') },
+        runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex - action required' } }
+      }),
+      WORKTREE_ID,
+      new Map(),
+      NOW
+    )
+
+    expect(targets).toEqual([
+      expect.objectContaining({
+        paneKey,
+        status: 'disabled',
+        disabledReason: 'Agent needs permission'
+      })
+    ])
+  })
+
+  it('does not let a stale status-backed split pane hide a different live active launch-agent pane', () => {
+    const stalePaneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_A)
+    const livePaneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_B)
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        agentStatusByPaneKey: {
+          [stalePaneKey]: entry(stalePaneKey, 'done', OLD_STATUS_UPDATED_AT)
+        },
+        tabsByWorktree: {
+          [WORKTREE_ID]: [tab(LAUNCH_TAB_ID, { title: 'Codex ready', launchAgent: 'codex' })]
+        },
+        terminalLayoutsByTabId: {
+          [LAUNCH_TAB_ID]: splitLayout(LEAF_B, { [LEAF_A]: 'pty-a', [LEAF_B]: 'pty-b' })
+        },
+        runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 2: 'Codex ready' } }
+      }),
+      WORKTREE_ID,
+      new Map(),
+      NOW
+    )
+
+    expect(targets).toEqual([
+      expect.objectContaining({
+        paneKey: stalePaneKey,
+        status: 'disabled',
+        disabledReason: 'Agent status is stale'
+      }),
+      expect.objectContaining({
+        paneKey: livePaneKey,
+        status: 'eligible'
+      })
+    ])
+  })
+
+  it('does not borrow a stale tab title for an active split pane after another pane has title evidence', () => {
+    const stalePaneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_A)
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        agentStatusByPaneKey: {
+          [stalePaneKey]: entry(stalePaneKey, 'done', OLD_STATUS_UPDATED_AT)
+        },
+        tabsByWorktree: {
+          [WORKTREE_ID]: [tab(LAUNCH_TAB_ID, { title: 'Codex ready', launchAgent: 'codex' })]
+        },
+        terminalLayoutsByTabId: {
+          [LAUNCH_TAB_ID]: splitLayout(LEAF_B, { [LEAF_A]: 'pty-a', [LEAF_B]: 'pty-b' })
+        },
+        runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'zsh' } }
+      }),
+      WORKTREE_ID,
+      new Map(),
+      NOW
+    )
+
+    expect(targets).toEqual([
+      expect.objectContaining({
+        paneKey: stalePaneKey,
+        status: 'disabled',
+        disabledReason: 'Agent status is stale'
+      })
+    ])
   })
 
   it('skips a launch-agent tab whose active leaf is not a terminal leaf', () => {
@@ -357,23 +654,117 @@ describe('notes send agent targets', () => {
         runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex' } }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
     expect(targets).toEqual([])
   })
 
-  it('does not list a plain terminal tab without a launch agent or status', () => {
+  it('recognizes a manual agent tab by its explicit ready tab title when no pane title is set', () => {
     const targets = deriveNotesSendAgentTargets(
       state({
-        tabsByWorktree: { [WORKTREE_ID]: [tab(LAUNCH_TAB_ID, { title: 'Codex ready' })] },
-        terminalLayoutsByTabId: { [LAUNCH_TAB_ID]: leafLayout(LEAF_B, 'pty-b') },
-        runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex ready' } }
+        tabsByWorktree: { [WORKTREE_ID]: [tab(MANUAL_TAB_ID, { title: 'Codex ready' })] },
+        terminalLayoutsByTabId: { [MANUAL_TAB_ID]: leafLayout(LEAF_B, 'pty-b') }
       }),
       WORKTREE_ID,
+      new Map(),
       NOW
     )
 
-    expect(targets).toEqual([])
+    expect(targets).toEqual([
+      expect.objectContaining({
+        paneKey: makePaneKey(MANUAL_TAB_ID, LEAF_B),
+        agentType: 'codex',
+        status: 'eligible'
+      })
+    ])
+  })
+
+  // Hookless OpenCode has OC | session without status words; live panes must still appear in the menu.
+  it('lists a manual OpenCode pane by its native session title', () => {
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        tabsByWorktree: { [WORKTREE_ID]: [tab(MANUAL_TAB_ID, { title: 'Terminal 2' })] },
+        terminalLayoutsByTabId: { [MANUAL_TAB_ID]: leafLayout(LEAF_B, 'pty-b') },
+        runtimePaneTitlesByTabId: { [MANUAL_TAB_ID]: { 1: 'OC | Ad hoc build' } }
+      }),
+      WORKTREE_ID,
+      new Map(),
+      NOW
+    )
+
+    expect(targets).toEqual([
+      {
+        paneKey: makePaneKey(MANUAL_TAB_ID, LEAF_B),
+        tabId: MANUAL_TAB_ID,
+        messageTarget: { kind: 'terminal', tabId: MANUAL_TAB_ID, leafId: LEAF_B },
+        agentType: 'opencode',
+        tabTitle: 'Terminal 2',
+        status: 'eligible'
+      }
+    ])
+  })
+
+  it('promotes a stale OpenCode status row from the native title hint', () => {
+    const paneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_A)
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        agentStatusByPaneKey: {
+          [paneKey]: entry(paneKey, 'done', OLD_STATUS_UPDATED_AT, { agentType: 'opencode' })
+        },
+        tabsByWorktree: {
+          [WORKTREE_ID]: [tab(LAUNCH_TAB_ID, { title: 'Terminal 1', launchAgent: 'opencode' })]
+        },
+        terminalLayoutsByTabId: { [LAUNCH_TAB_ID]: leafLayout(LEAF_A, 'pty-a') },
+        runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'OC | Ad hoc build' } }
+      }),
+      WORKTREE_ID,
+      new Map(),
+      NOW
+    )
+
+    expect(targets).toEqual([
+      expect.objectContaining({ paneKey, agentType: 'opencode', status: 'eligible' })
+    ])
+  })
+
+  it('lists a chat before its first turn, which the shared sidebar targets leave out', () => {
+    const chatTabId = 'structured-agent-session-claude_1'
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        unifiedTabsByWorktree: {
+          [WORKTREE_ID]: [
+            {
+              id: chatTabId,
+              entityId: 'claude_1',
+              groupId: 'group-1',
+              worktreeId: WORKTREE_ID,
+              contentType: 'agent-session',
+              agentSessionAgent: 'claude',
+              label: 'Claude Chat',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        }
+      }),
+      WORKTREE_ID,
+      new Map(),
+      NOW
+    )
+
+    expect(targets).toEqual([
+      {
+        paneKey: structuredAgentSessionPaneKey(chatTabId, 'claude_1'),
+        tabId: chatTabId,
+        messageTarget: { kind: 'structured-session', sessionId: 'claude_1' },
+        agentType: 'claude',
+        tabTitle: 'Claude Chat',
+        status: 'eligible'
+      }
+    ])
   })
 })

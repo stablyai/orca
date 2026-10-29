@@ -1,8 +1,15 @@
+import { parseExecutionHostId } from './execution-host'
+
 const SSH_PTY_ID_PREFIX = 'ssh:'
 const SSH_PTY_ID_SEPARATOR = '@@'
 
-// Why: SSH relays allocate target-local ids like "pty-1"; app-wide routing
-// needs the target id embedded so two relays cannot collide after restore.
+// Restore callers may supply ssh:<targetId> host IDs; normalize before comparisons to avoid false ownership errors.
+function normalizeConnectionId(connectionId: string): string {
+  const parsed = parseExecutionHostId(connectionId)
+  return parsed?.kind === 'ssh' ? parsed.targetId : connectionId
+}
+
+// Embed target identity because relay-local PTY IDs collide across hosts.
 export type ParsedSshPtyId = {
   connectionId: string
   relayPtyId: string
@@ -32,14 +39,15 @@ export function parseAppSshPtyId(ptyId: string): ParsedSshPtyId | null {
 }
 
 export function toAppSshPtyId(connectionId: string, relayPtyId: string): string {
+  const normalizedConnectionId = normalizeConnectionId(connectionId)
   const parsed = parseAppSshPtyId(relayPtyId)
   if (parsed) {
-    if (parsed.connectionId !== connectionId) {
+    if (parsed.connectionId !== normalizedConnectionId) {
       throw new Error(`PTY ${relayPtyId} belongs to SSH connection "${parsed.connectionId}"`)
     }
     return relayPtyId
   }
-  return `${SSH_PTY_ID_PREFIX}${encodeURIComponent(connectionId)}${SSH_PTY_ID_SEPARATOR}${relayPtyId}`
+  return `${SSH_PTY_ID_PREFIX}${encodeURIComponent(normalizedConnectionId)}${SSH_PTY_ID_SEPARATOR}${relayPtyId}`
 }
 
 export function toRelaySshPtyId(connectionId: string, ptyId: string): string {
@@ -47,8 +55,17 @@ export function toRelaySshPtyId(connectionId: string, ptyId: string): string {
   if (!parsed) {
     return ptyId
   }
-  if (parsed.connectionId !== connectionId) {
+  if (parsed.connectionId !== normalizeConnectionId(connectionId)) {
     throw new Error(`PTY ${ptyId} belongs to SSH connection "${parsed.connectionId}"`)
   }
   return parsed.relayPtyId
+}
+
+/** Compare stored relay IDs without throwing for another target; a cross-target ID simply does not match. */
+export function toComparableRelaySshPtyId(connectionId: string, ptyId: string): string {
+  try {
+    return toRelaySshPtyId(connectionId, ptyId)
+  } catch {
+    return ptyId
+  }
 }

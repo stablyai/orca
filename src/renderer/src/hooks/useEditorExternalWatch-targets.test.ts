@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  getEditorExternalWatchTargets,
+  selectEditorExternalWatchTargets as getEditorExternalWatchTargets,
   type EditorExternalWatchTargetState
-} from './useEditorExternalWatch'
+} from './editor-external-watch-targets'
 
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -61,6 +61,8 @@ describe('getEditorExternalWatchTargets', () => {
     rightSidebarOpen?: boolean
     rightSidebarTab?: EditorExternalWatchTargetState['rightSidebarTab']
     rightSidebarExplorerView?: EditorExternalWatchTargetState['rightSidebarExplorerView']
+    gitStatusHugeByWorktree?: EditorExternalWatchTargetState['gitStatusHugeByWorktree']
+    sshConnectionStates?: EditorExternalWatchTargetState['sshConnectionStates']
   }): EditorExternalWatchTargetState => ({
     openFiles: args.openFiles ?? [],
     worktreesByRepo: { [args.repo.id]: [args.worktree] },
@@ -69,6 +71,14 @@ describe('getEditorExternalWatchTargets', () => {
     rightSidebarOpen: args.rightSidebarOpen ?? false,
     rightSidebarTab: args.rightSidebarTab ?? 'explorer',
     rightSidebarExplorerView: args.rightSidebarExplorerView ?? 'files',
+    gitStatusHugeByWorktree: args.gitStatusHugeByWorktree ?? {},
+    sshConnectionStates: args.sshConnectionStates ?? new Map(),
+    folderWorkspaces: [],
+    projectGroups: [],
+    // Why: these cases cover target resolution; a recent visit keeps the workspace inside the watch scope.
+    lastVisitedAtByWorktreeId: Object.fromEntries(
+      (args.openFiles ?? []).map((file) => [file.worktreeId, 1])
+    ),
     settings:
       args.runtimeEnvironmentId === undefined
         ? null
@@ -98,7 +108,177 @@ describe('getEditorExternalWatchTargets', () => {
     ])
   })
 
-  it('does not watch the active worktree while the file explorer is hidden', () => {
+  it.each(['check-details'] as const)(
+    'starts no watcher for a %s tab, which has no workspace file',
+    (mode) => {
+      const repo = makeRepo('repo-virtual')
+      const worktree = makeWorktree(repo.id, 'wt-virtual')
+      const virtualFile = { ...makeOpenFile(worktree.id), mode }
+
+      expect(
+        getEditorExternalWatchTargets(makeState({ repo, worktree, openFiles: [virtualFile] }))
+          .targets
+      ).toEqual([])
+    }
+  )
+
+  it('enables WSL aliases for a proven-local Windows drive watcher', () => {
+    const repo = makeRepo('repo-local-drive', null, 'local')
+    const worktree = makeWorktree(repo.id, 'wt-local-drive')
+    worktree.path = 'C:\\repo'
+    worktree.hostId = 'local'
+    const state = makeState({ repo, worktree, openFiles: [makeOpenFile(worktree.id)] })
+    state.repos = [makeRepo(repo.id, 'ssh-1', 'ssh:ssh-1'), repo]
+
+    expect(getEditorExternalWatchTargets(state).targets).toEqual([
+      {
+        worktreeId: 'wt-local-drive',
+        worktreePath: 'C:\\repo',
+        connectionId: undefined,
+        runtimeEnvironmentId: null,
+        allowLocalWindowsWslAliases: true
+      }
+    ])
+  })
+
+  it('does not infer a local alias owner while repo metadata is missing', () => {
+    const repo = makeRepo('repo-unresolved', null, 'local')
+    const worktree = makeWorktree(repo.id, 'wt-unresolved')
+    worktree.path = 'C:\\repo'
+    worktree.hostId = 'local'
+    const state = makeState({ repo, worktree, openFiles: [makeOpenFile(worktree.id)] })
+    state.repos = []
+
+    expect(getEditorExternalWatchTargets(state).targets).toEqual([
+      {
+        worktreeId: 'wt-unresolved',
+        worktreePath: 'C:\\repo',
+        connectionId: undefined,
+        runtimeEnvironmentId: null
+      }
+    ])
+  })
+
+  it.each(['worktree', 'repo'] as const)(
+    'does not grant local aliases while the %s host stamp is missing',
+    (stampOwner) => {
+      const repo = makeRepo('repo-missing-host', null, 'local')
+      const worktree = makeWorktree(repo.id, 'wt-missing-host')
+      worktree.path = 'C:\\repo'
+      worktree.hostId = 'local'
+      if (stampOwner === 'worktree') {
+        worktree.hostId = undefined
+      } else {
+        repo.executionHostId = undefined
+      }
+
+      const target = getEditorExternalWatchTargets(
+        makeState({ repo, worktree, openFiles: [makeOpenFile(worktree.id)] })
+      ).targets[0]
+
+      expect(target).not.toHaveProperty('allowLocalWindowsWslAliases')
+    }
+  )
+
+  it.each(['worktree', 'repo'] as const)(
+    'does not grant local aliases for an unknown %s host stamp',
+    (stampOwner) => {
+      const repo = makeRepo('repo-unknown-host')
+      const worktree = makeWorktree(repo.id, 'wt-unknown-host')
+      worktree.path = 'C:\\repo'
+      worktree.hostId = 'local'
+      repo.executionHostId = 'local'
+      if (stampOwner === 'worktree') {
+        worktree.hostId = 'future:host' as never
+      } else {
+        repo.executionHostId = 'future:host' as never
+      }
+
+      const target = getEditorExternalWatchTargets(
+        makeState({ repo, worktree, openFiles: [makeOpenFile(worktree.id)] })
+      ).targets[0]
+
+      expect(target).not.toHaveProperty('allowLocalWindowsWslAliases')
+    }
+  )
+
+  it('enables WSL aliases for a proven-local folder workspace', () => {
+    const repo = makeRepo('unused', null, 'local')
+    const worktree = makeWorktree(repo.id)
+    const folderWorkspaceId = 'folder-local'
+    const workspaceKey = `folder:${folderWorkspaceId}`
+    const state = makeState({
+      repo,
+      worktree,
+      openFiles: [makeOpenFile(workspaceKey)]
+    })
+    state.folderWorkspaces = [
+      {
+        id: folderWorkspaceId,
+        projectGroupId: 'group-local',
+        folderPath: 'C:\\folder',
+        executionHostId: 'local'
+      } as EditorExternalWatchTargetState['folderWorkspaces'][number]
+    ]
+    state.projectGroups = [
+      {
+        id: 'group-local',
+        executionHostId: 'runtime:env-1'
+      } as EditorExternalWatchTargetState['projectGroups'][number],
+      {
+        id: 'group-local',
+        executionHostId: 'local'
+      } as EditorExternalWatchTargetState['projectGroups'][number]
+    ]
+
+    expect(getEditorExternalWatchTargets(state).targets).toEqual([
+      {
+        worktreeId: workspaceKey,
+        worktreePath: 'C:\\folder',
+        connectionId: undefined,
+        runtimeEnvironmentId: null,
+        allowLocalWindowsWslAliases: true
+      }
+    ])
+  })
+
+  it.each(['ssh', 'missing-group'] as const)(
+    'does not grant local aliases for a %s folder workspace owner',
+    (ownerCase) => {
+      const repo = makeRepo('unused', null, 'local')
+      const worktree = makeWorktree(repo.id)
+      const folderWorkspaceId = `folder-${ownerCase}`
+      const workspaceKey = `folder:${folderWorkspaceId}`
+      const state = makeState({
+        repo,
+        worktree,
+        openFiles: [makeOpenFile(workspaceKey)]
+      })
+      state.folderWorkspaces = [
+        {
+          id: folderWorkspaceId,
+          projectGroupId: `group-${ownerCase}`,
+          folderPath: 'C:\\folder',
+          executionHostId: ownerCase === 'ssh' ? 'ssh:target-1' : 'local'
+        } as EditorExternalWatchTargetState['folderWorkspaces'][number]
+      ]
+      state.projectGroups =
+        ownerCase === 'ssh'
+          ? [
+              {
+                id: 'group-ssh',
+                executionHostId: 'ssh:target-1'
+              } as EditorExternalWatchTargetState['projectGroups'][number]
+            ]
+          : []
+
+      expect(getEditorExternalWatchTargets(state).targets[0]).not.toHaveProperty(
+        'allowLocalWindowsWslAliases'
+      )
+    }
+  )
+
+  it('does not watch the active worktree while the sidebar is hidden', () => {
     const repo = makeRepo('repo-active')
     const worktree = makeWorktree(repo.id, 'wt-active')
 
@@ -150,7 +330,7 @@ describe('getEditorExternalWatchTargets', () => {
     ).toEqual([])
   })
 
-  it('does not watch the active worktree when a different right sidebar tab is visible', () => {
+  it('keeps watching the active worktree when Source Control is visible', () => {
     const repo = makeRepo('repo-source-control')
     const worktree = makeWorktree(repo.id, 'wt-source-control')
 
@@ -164,7 +344,101 @@ describe('getEditorExternalWatchTargets', () => {
           rightSidebarTab: 'source-control'
         })
       ).targets
+    ).toEqual([
+      {
+        worktreeId: 'wt-source-control',
+        worktreePath: '/repo-source-control/worktree',
+        connectionId: undefined,
+        runtimeEnvironmentId: null
+      }
+    ])
+  })
+
+  it('does not watch Source Control-only worktrees when git status is paused as huge', () => {
+    const repo = makeRepo('repo-source-control-huge')
+    const worktree = makeWorktree(repo.id, 'wt-source-control-huge')
+
+    expect(
+      getEditorExternalWatchTargets(
+        makeState({
+          repo,
+          worktree,
+          activeWorktreeId: worktree.id,
+          rightSidebarOpen: true,
+          rightSidebarTab: 'source-control',
+          gitStatusHugeByWorktree: { [worktree.id]: { limit: 1000 } }
+        })
+      ).targets
     ).toEqual([])
+  })
+
+  it('does not watch Source Control-only SSH worktrees while disconnected', () => {
+    const repo = makeRepo('repo-source-control-ssh', 'ssh-1')
+    const worktree = makeWorktree(repo.id, 'wt-source-control-ssh')
+
+    expect(
+      getEditorExternalWatchTargets(
+        makeState({
+          repo,
+          worktree,
+          activeWorktreeId: worktree.id,
+          rightSidebarOpen: true,
+          rightSidebarTab: 'source-control',
+          sshConnectionStates: new Map([['ssh-1', { status: 'disconnected' } as never]])
+        })
+      ).targets
+    ).toEqual([])
+  })
+
+  it('watches Source Control-only SSH worktrees when connected', () => {
+    const repo = makeRepo('repo-source-control-ssh-connected', 'ssh-1')
+    const worktree = makeWorktree(repo.id, 'wt-source-control-ssh-connected')
+
+    expect(
+      getEditorExternalWatchTargets(
+        makeState({
+          repo,
+          worktree,
+          activeWorktreeId: worktree.id,
+          rightSidebarOpen: true,
+          rightSidebarTab: 'source-control',
+          sshConnectionStates: new Map([['ssh-1', { status: 'connected' } as never]])
+        })
+      ).targets
+    ).toEqual([
+      {
+        worktreeId: 'wt-source-control-ssh-connected',
+        worktreePath: '/repo-source-control-ssh-connected/worktree',
+        connectionId: 'ssh-1',
+        runtimeEnvironmentId: null
+      }
+    ])
+  })
+
+  it('keeps a paired runtime SSH Source Control watcher routed through its runtime repo', () => {
+    const repo = makeRepo('repo-paired', null, 'runtime:env-1')
+    const worktree = makeWorktree(repo.id, 'wt-paired')
+    worktree.hostId = 'ssh:private-target'
+    worktree.runtimeOwnerEnvironmentId = 'env-1'
+
+    expect(
+      getEditorExternalWatchTargets(
+        makeState({
+          repo,
+          worktree,
+          activeWorktreeId: worktree.id,
+          rightSidebarOpen: true,
+          rightSidebarTab: 'source-control'
+        })
+      ).targets
+    ).toEqual([
+      {
+        worktreeId: 'wt-paired',
+        worktreePath: '/repo-paired/worktree',
+        connectionId: undefined,
+        runtimeEnvironmentId: 'env-1'
+      }
+    ])
   })
 
   it('rebuilds ownerless targets when an SSH connection id hydrates', () => {

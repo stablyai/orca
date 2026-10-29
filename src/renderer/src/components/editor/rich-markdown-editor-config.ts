@@ -1,0 +1,281 @@
+import type { Editor, UseEditorOptions } from '@tiptap/react'
+import type { EditorView } from '@tiptap/pm/view'
+import { handleRichMarkdownCut } from './rich-markdown-cut-handler'
+import { handleRichMarkdownPaste } from './rich-markdown-paste-handler'
+import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
+import { normalizeEmptyListItems } from './rich-markdown-normalize'
+import { autoFocusRichEditor } from './rich-markdown-auto-focus'
+import {
+  syncSlashMenu,
+  type SlashCommand,
+  type SlashMenuState
+} from './rich-markdown-slash-commands'
+import {
+  syncDocLinkMenu,
+  type DocLinkMenuRow,
+  type DocLinkMenuState
+} from './rich-markdown-commands'
+import { isSingleEmptyTopLevelOrderedList } from './rich-markdown-list-continuation'
+import type { LinkBubbleState } from './RichMarkdownLinkBubble'
+import {
+  handleRichMarkdownEditorClick,
+  type ActivateMarkdownLink
+} from './rich-markdown-editor-click-routing'
+import { createRichMarkdownKeyHandler } from './rich-markdown-key-handler'
+import { staleViewEditEpoch } from './editor-stale-view-edit'
+import {
+  createRichMarkdownImageResolverContext,
+  setRichMarkdownImageResolverContext
+} from './rich-markdown-image-context'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { getRichMarkdownSpellcheckAttribute } from './rich-markdown-spellcheck'
+import type { MutableRefObject, Dispatch, SetStateAction } from 'react'
+import type { DiffComment } from '../../../../shared/diff-comment-types'
+import type { RichMarkdownEditorCodec } from './rich-markdown-source-transport'
+import type { RichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
+import {
+  getRichMarkdownSelectionLinkBubble,
+  openSelectedHtmlSuperscriptLink
+} from './rich-markdown-selected-link-actions'
+
+export type EditorConfigParams = {
+  codec: RichMarkdownEditorCodec
+  htmlSuperscriptLinkContext: RichMarkdownHtmlSuperscriptLinkContext
+  content: string
+  filePath: string
+  worktreeId: string
+  worktreeRoot: string | null
+  externalSshTargetId?: string
+  runtimeEnvironmentId?: string | null
+  isMac: boolean
+  richMarkdownSpellcheckEnabled: boolean
+  /** The document owner's transport, for image reads. */
+  runtimeTarget: RuntimeClientTarget | null
+  activateMarkdownLink: ActivateMarkdownLink
+  rootRef: MutableRefObject<HTMLDivElement | null>
+  editorRef: MutableRefObject<Editor | null>
+  lastCommittedMarkdownRef: MutableRefObject<string>
+  originalSourceRef: MutableRefObject<string>
+  baseCanonicalRef: MutableRefObject<string>
+  reconcileRoundTripRef: MutableRefObject<(markdown: string) => string | null>
+  onContentChangeRef: MutableRefObject<(content: string) => void>
+  onDirtyStateHintRef: MutableRefObject<(dirty: boolean) => void>
+  onSaveRef: MutableRefObject<(content: string) => void>
+  onOpenDocLinkRef: MutableRefObject<((target: string) => void) | undefined>
+  isEditingLinkRef: MutableRefObject<boolean>
+  slashMenuRef: MutableRefObject<SlashMenuState | null>
+  filteredSlashCommandsRef: MutableRefObject<SlashCommand[]>
+  selectedCommandIndexRef: MutableRefObject<number>
+  docLinkMenuRef: MutableRefObject<DocLinkMenuState | null>
+  filteredDocLinkRowsRef: MutableRefObject<DocLinkMenuRow[]>
+  selectedDocLinkIndexRef: MutableRefObject<number>
+  handleLocalImagePickRef: MutableRefObject<() => void>
+  handleEmojiPickRef: MutableRefObject<(menu: SlashMenuState) => void>
+  typedEmptyOrderedListMarkerRef: MutableRefObject<boolean>
+  cancelAutoFocusRef: MutableRefObject<(() => void) | null>
+  fileId: string
+  serializeTimerRef: MutableRefObject<number | null>
+  /** Discard epoch when the pending serialization began. */
+  pendingEditEpochRef: MutableRefObject<number>
+  isInitializingRef: MutableRefObject<boolean>
+  isApplyingProgrammaticUpdateRef: MutableRefObject<boolean>
+  markdownCommentsRef: MutableRefObject<DiffComment[]>
+  markdownSourceLineOffsetRef: MutableRefObject<number>
+  /** Returns true when the pending edit was rejected instead of committed. */
+  flushPendingSerialization: () => boolean
+  openSearchRef: MutableRefObject<() => void>
+  openAnnotationPopoverRef: MutableRefObject<(requireLiveSelection?: boolean) => boolean>
+  syncAnnotationTarget: (editor: Editor) => void
+  clearAnnotationTarget: () => void
+  scrollRichMarkdownReviewNoteCardIntoView: (commentId: string) => void
+  setIsEditingLink: Dispatch<SetStateAction<boolean>>
+  setLinkBubble: Dispatch<SetStateAction<LinkBubbleState | null>>
+  setSelectedCommandIndex: Dispatch<SetStateAction<number>>
+  setSelectedDocLinkIndex: Dispatch<SetStateAction<number>>
+  setSlashMenu: Dispatch<SetStateAction<SlashMenuState | null>>
+  setDocLinkMenu: Dispatch<SetStateAction<DocLinkMenuState | null>>
+}
+
+export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseEditorOptions {
+  const {
+    content,
+    codec,
+    htmlSuperscriptLinkContext,
+    filePath,
+    worktreeId,
+    worktreeRoot,
+    externalSshTargetId,
+    runtimeEnvironmentId,
+    isMac,
+    richMarkdownSpellcheckEnabled,
+    runtimeTarget,
+    activateMarkdownLink,
+    rootRef,
+    editorRef,
+    lastCommittedMarkdownRef,
+    originalSourceRef,
+    baseCanonicalRef,
+    onDirtyStateHintRef,
+    onOpenDocLinkRef,
+    typedEmptyOrderedListMarkerRef,
+    cancelAutoFocusRef,
+    serializeTimerRef,
+    isInitializingRef,
+    isApplyingProgrammaticUpdateRef,
+    markdownCommentsRef,
+    markdownSourceLineOffsetRef,
+    syncAnnotationTarget,
+    clearAnnotationTarget,
+    scrollRichMarkdownReviewNoteCardIntoView,
+    setIsEditingLink,
+    setLinkBubble,
+    setSlashMenu,
+    setDocLinkMenu
+  } = params
+
+  const handleClick = (view: EditorView, pos: number, event: MouseEvent): boolean => {
+    return handleRichMarkdownEditorClick({
+      activateMarkdownLink,
+      editorRef,
+      event,
+      filePath,
+      htmlSuperscriptLinkContext,
+      isMac,
+      markdownCommentsRef,
+      markdownSourceLineOffsetRef,
+      onOpenDocLinkRef,
+      pos,
+      rootRef,
+      runtimeEnvironmentId,
+      scrollRichMarkdownReviewNoteCardIntoView,
+      view,
+      worktreeId,
+      worktreeRoot
+    })
+  }
+
+  return {
+    immediatelyRender: false,
+    content: encodeRawMarkdownHtmlForRichEditor(content, codec, { htmlSuperscriptLinks: true }),
+    contentType: 'markdown' as const,
+    editorProps: {
+      attributes: {
+        class: 'rich-markdown-editor',
+        spellcheck: getRichMarkdownSpellcheckAttribute(richMarkdownSpellcheckEnabled)
+      },
+      handleDOMEvents: {
+        cut: handleRichMarkdownCut,
+        // ProseMirror skips handleClick for Shift gestures to extend the selection.
+        click: (view, event) => {
+          if (
+            event.defaultPrevented ||
+            event.button !== 0 ||
+            !event.shiftKey ||
+            !(isMac ? event.metaKey : event.ctrlKey)
+          ) {
+            return false
+          }
+          const position = view.posAtCoords({ left: event.clientX, top: event.clientY })
+          if (!position || !handleClick(view, position.pos, event)) {
+            return false
+          }
+          event.preventDefault()
+          return true
+        }
+      },
+      handlePaste: (view, event, slice) =>
+        handleRichMarkdownPaste({
+          editor: editorRef.current,
+          event,
+          filePath,
+          worktreeId,
+          runtimeEnvironmentId,
+          slice,
+          view
+        }),
+      handleTextInput: (view, from, to, text) => {
+        typedEmptyOrderedListMarkerRef.current = false
+        if (text !== ' ' || from !== to || !view.state.selection.empty) {
+          return false
+        }
+        const { $from } = view.state.selection
+        const beforeCursor = $from.parent.textBetween(0, $from.parentOffset, '\0', '\0')
+        typedEmptyOrderedListMarkerRef.current = /^\d+\.$/.test(beforeCursor)
+        return false
+      },
+      handleKeyDown: createRichMarkdownKeyHandler({
+        ...params,
+        linkBubbleOwnerId: codec.transport.key,
+        openSelectedHtmlSuperscriptLink: () =>
+          openSelectedHtmlSuperscriptLink({
+            activateMarkdownLink,
+            context: htmlSuperscriptLinkContext,
+            editor: editorRef.current,
+            root: rootRef.current,
+            runtimeEnvironmentId
+          })
+      }),
+      // Shift clicks route only through the DOM handler, including modifier changes during a click.
+      handleClick: (view, pos, event) => !event.shiftKey && handleClick(view, pos, event)
+    },
+    onFocus: () => {
+      window.api.ui.setMarkdownEditorFocused(true)
+    },
+    onBlur: () => {
+      window.api.ui.setMarkdownEditorFocused(false)
+      clearAnnotationTarget()
+      params.flushPendingSerialization()
+    },
+    onCreate: ({ editor: nextEditor }) => {
+      // Repair empty lists while keeping hard-wrapped prose in one paragraph for CSS reflow.
+      normalizeEmptyListItems(nextEditor)
+      lastCommittedMarkdownRef.current = content
+      // Seed raw/canonical reconciliation so the first edit preserves source style instead of canonicalizing the whole file.
+      originalSourceRef.current = content
+      baseCanonicalRef.current = nextEditor.getMarkdown()
+      isInitializingRef.current = false
+      cancelAutoFocusRef.current?.()
+      cancelAutoFocusRef.current = autoFocusRichEditor(nextEditor, rootRef.current)
+    },
+    onBeforeCreate: ({ editor: nextEditor }) => {
+      setRichMarkdownImageResolverContext(
+        nextEditor,
+        createRichMarkdownImageResolverContext({
+          filePath,
+          externalSshTargetId,
+          runtimeTarget,
+          worktreeId,
+          worktreeRoot
+        })
+      )
+    },
+    onUpdate: ({ editor: nextEditor }) => {
+      syncSlashMenu(nextEditor, rootRef.current, setSlashMenu)
+      syncDocLinkMenu(nextEditor, rootRef.current, setDocLinkMenu)
+      if (!isSingleEmptyTopLevelOrderedList(nextEditor)) {
+        typedEmptyOrderedListMarkerRef.current = false
+      }
+      if (isInitializingRef.current || isApplyingProgrammaticUpdateRef.current) {
+        return
+      }
+      onDirtyStateHintRef.current(true)
+      if (serializeTimerRef.current !== null) {
+        window.clearTimeout(serializeTimerRef.current)
+      } else {
+        params.pendingEditEpochRef.current = staleViewEditEpoch(params.fileId)
+      }
+      serializeTimerRef.current = window.setTimeout(() => {
+        params.flushPendingSerialization()
+      }, 300)
+    },
+    onSelectionUpdate: ({ editor: nextEditor }) => {
+      syncSlashMenu(nextEditor, rootRef.current, setSlashMenu)
+      syncDocLinkMenu(nextEditor, rootRef.current, setDocLinkMenu)
+      syncAnnotationTarget(nextEditor)
+      setIsEditingLink(false)
+      setLinkBubble(
+        getRichMarkdownSelectionLinkBubble(nextEditor, rootRef.current, htmlSuperscriptLinkContext)
+      )
+    }
+  }
+}

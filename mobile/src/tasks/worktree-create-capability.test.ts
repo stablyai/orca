@@ -1,0 +1,256 @@
+import { describe, expect, it } from 'vitest'
+import {
+  AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_RUNTIME_CAPABILITY
+} from '../../../src/shared/agent-launch-runtime-capability'
+import type { RpcClient } from '../transport/rpc-client'
+import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
+import { readNewWorktreeRuntimeCapabilities } from './worktree-create-capability'
+import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
+
+type StatusOutcome =
+  | 'cutover'
+  | 'error'
+  | string[]
+  | {
+      capabilities?: string[]
+      worktreeCreateIdempotency?: unknown
+    }
+
+function statusClient(outcomes: StatusOutcome[]): RpcClient {
+  let call = 0
+  return {
+    ...createFakeRpcClient(),
+    sendRequest: async () => {
+      const outcome = outcomes[Math.min(call, outcomes.length - 1)]!
+      call += 1
+      if (outcome === 'cutover') {
+        throw new LogicalClientCutoverError()
+      }
+      if (outcome === 'error') {
+        throw new Error('offline')
+      }
+      const result = Array.isArray(outcome)
+        ? { capabilities: outcome, hostPlatform: 'darwin' }
+        : { ...outcome, hostPlatform: 'darwin' }
+      return {
+        id: '1',
+        ok: true,
+        result,
+        _meta: { runtimeId: 'r' }
+      }
+    }
+  }
+}
+
+describe('readNewWorktreeRuntimeCapabilities', () => {
+  it('reads task and idempotent-create support from status.get', async () => {
+    await expect(
+      readNewWorktreeRuntimeCapabilities(
+        statusClient([
+          {
+            capabilities: ['mobile.tasks.v1', 'worktree.create-idempotency.v1'],
+            worktreeCreateIdempotency: { dedupeTtlMs: 20_000 }
+          }
+        ])
+      )
+    ).resolves.toEqual({
+      branchIntentV2: false,
+      branchIntentV2Request: false,
+      tasksSupported: true,
+      worktreeCreateIdempotency: { dedupeTtlMs: 20_000 },
+      agentLaunch: false,
+      hostPlatform: 'darwin'
+    })
+  })
+
+  it('reads agent.launch support from the same status.get probe', async () => {
+    // Resolve launch and create-idempotency support in one probe so creation cannot straddle inconsistent answers.
+    await expect(
+      readNewWorktreeRuntimeCapabilities(
+        statusClient([{ capabilities: [AGENT_LAUNCH_RUNTIME_CAPABILITY] }])
+      )
+    ).resolves.toEqual({
+      branchIntentV2: false,
+      branchIntentV2Request: false,
+      tasksSupported: false,
+      worktreeCreateIdempotency: false,
+      // Method support does not imply ledger support; older hosts may silently strip operationId.
+      agentLaunch: { replay: false },
+      hostPlatform: 'darwin'
+    })
+  })
+
+  it('reads launch replay support only when the host advertises the ledger', async () => {
+    await expect(
+      readNewWorktreeRuntimeCapabilities(
+        statusClient([
+          {
+            capabilities: [
+              AGENT_LAUNCH_RUNTIME_CAPABILITY,
+              AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY
+            ]
+          }
+        ])
+      )
+    ).resolves.toEqual({
+      branchIntentV2: false,
+      branchIntentV2Request: false,
+      tasksSupported: false,
+      worktreeCreateIdempotency: false,
+      agentLaunch: { replay: true },
+      hostPlatform: 'darwin'
+    })
+  })
+
+  // Ledger capability alone cannot enable a missing launch method.
+  it('ignores the replay capability on a host without agent.launch', async () => {
+    await expect(
+      readNewWorktreeRuntimeCapabilities(
+        statusClient([{ capabilities: [AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY] }])
+      )
+    ).resolves.toMatchObject({ agentLaunch: false })
+  })
+
+  it('does not authorize replay from the optional-identity capability alone', async () => {
+    await expect(
+      readNewWorktreeRuntimeCapabilities(
+        statusClient([
+          {
+            capabilities: [AGENT_LAUNCH_RUNTIME_CAPABILITY, AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY]
+          }
+        ])
+      )
+    ).resolves.toMatchObject({ agentLaunch: { replay: false } })
+  })
+
+  it('uses the bounded fallback for an old idempotent host without an advertisement', async () => {
+    await expect(
+      readNewWorktreeRuntimeCapabilities(statusClient([['worktree.create-idempotency.v1']]))
+    ).resolves.toEqual({
+      branchIntentV2: false,
+      branchIntentV2Request: false,
+      tasksSupported: false,
+      worktreeCreateIdempotency: { dedupeTtlMs: 60_000 },
+      agentLaunch: false,
+      hostPlatform: 'darwin'
+    })
+  })
+
+  it('fails closed when a valid idempotency container omits dedupeTtlMs', async () => {
+    await expect(
+      readNewWorktreeRuntimeCapabilities(
+        statusClient([
+          {
+            capabilities: ['worktree.create-idempotency.v1'],
+            worktreeCreateIdempotency: {}
+          }
+        ])
+      )
+    ).resolves.toEqual({
+      branchIntentV2: false,
+      branchIntentV2Request: false,
+      tasksSupported: false,
+      worktreeCreateIdempotency: { dedupeTtlMs: 0 },
+      agentLaunch: false,
+      hostPlatform: 'darwin'
+    })
+  })
+
+  it.each([
+    { label: 'null', value: null },
+    { label: 'string', value: 'nonsense' },
+    { label: 'number', value: 20_000 },
+    { label: 'empty array', value: [] }
+  ])(
+    'fails closed for a malformed idempotency container ($label)',
+    async ({ value: worktreeCreateIdempotency }) => {
+      await expect(
+        readNewWorktreeRuntimeCapabilities(
+          statusClient([
+            {
+              capabilities: ['worktree.create-idempotency.v1'],
+              worktreeCreateIdempotency
+            }
+          ])
+        )
+      ).resolves.toEqual({
+        branchIntentV2: false,
+        branchIntentV2Request: false,
+        tasksSupported: false,
+        worktreeCreateIdempotency: { dedupeTtlMs: 0 },
+        agentLaunch: false,
+        hostPlatform: 'darwin'
+      })
+    }
+  )
+
+  it('clamps an over-large host advertisement to the client fallback ceiling', async () => {
+    await expect(
+      readNewWorktreeRuntimeCapabilities(
+        statusClient([
+          {
+            capabilities: ['worktree.create-idempotency.v1'],
+            worktreeCreateIdempotency: { dedupeTtlMs: 600_000 }
+          }
+        ])
+      )
+    ).resolves.toEqual({
+      branchIntentV2: false,
+      branchIntentV2Request: false,
+      tasksSupported: false,
+      worktreeCreateIdempotency: { dedupeTtlMs: 60_000 },
+      agentLaunch: false,
+      hostPlatform: 'darwin'
+    })
+  })
+
+  it.each(['60000', -1, Number.NaN, 60_000.5, {}])(
+    'fails closed for malformed host advertisement %j',
+    async (advertisedDedupeTtlMs) => {
+      await expect(
+        readNewWorktreeRuntimeCapabilities(
+          statusClient([
+            {
+              capabilities: ['worktree.create-idempotency.v1'],
+              worktreeCreateIdempotency: { dedupeTtlMs: advertisedDedupeTtlMs }
+            }
+          ])
+        )
+      ).resolves.toEqual({
+        branchIntentV2: false,
+        branchIntentV2Request: false,
+        tasksSupported: false,
+        worktreeCreateIdempotency: { dedupeTtlMs: 0 },
+        agentLaunch: false,
+        hostPlatform: 'darwin'
+      })
+    }
+  )
+
+  it('retries the safe status probe after a connection cutover', async () => {
+    await expect(
+      readNewWorktreeRuntimeCapabilities(
+        statusClient([
+          'cutover',
+          {
+            capabilities: ['worktree.create-idempotency.v1'],
+            worktreeCreateIdempotency: { dedupeTtlMs: 30_000 }
+          }
+        ])
+      )
+    ).resolves.toEqual({
+      branchIntentV2: false,
+      branchIntentV2Request: false,
+      tasksSupported: false,
+      worktreeCreateIdempotency: { dedupeTtlMs: 30_000 },
+      agentLaunch: false,
+      hostPlatform: 'darwin'
+    })
+  })
+
+  it('fails closed when capability detection is unavailable', async () => {
+    await expect(readNewWorktreeRuntimeCapabilities(statusClient(['error']))).resolves.toBeNull()
+  })
+})

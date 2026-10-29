@@ -63,6 +63,7 @@ function targetStoreState(now: number): Record<string, unknown> {
     tabsByWorktree: {
       'wt-1': [{ id: 'tab-1' }]
     },
+    unifiedTabsByWorktree: {},
     terminalLayoutsByTabId: {
       'tab-1': {
         root: {
@@ -91,6 +92,7 @@ vi.mock('@/store', () => ({
     selector({
       agentActivityDisplayMode: 'full',
       acknowledgedAgentsByPaneKey: {},
+      retainedAgentsByPaneKey: {},
       dropAgentStatus: vi.fn(),
       dismissRetainedAgent: vi.fn(),
       acknowledgeAgents: vi.fn(),
@@ -98,6 +100,7 @@ vi.mock('@/store', () => ({
       agentStatusByPaneKey: {},
       agentStatusEpoch: 0,
       tabsByWorktree: {},
+      unifiedTabsByWorktree: {},
       terminalLayoutsByTabId: {},
       ptyIdsByTabId: {},
       runtimePaneTitlesByTabId: {},
@@ -110,7 +113,7 @@ vi.mock('./useWorktreeAgentRows', () => ({
   useWorktreeAgentRows: vi.fn(() => mockAgents)
 }))
 
-vi.mock('@/components/dashboard/useNow', () => ({
+vi.mock('@/hooks/use-now', () => ({
   useNow: vi.fn(() => 2000)
 }))
 

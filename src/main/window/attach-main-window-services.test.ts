@@ -1,6 +1,16 @@
-/* eslint-disable max-lines -- Why: attachMainWindowServices centralizes main-window IPC wiring; keeping its integration-style mocks together avoids brittle cross-file setup. */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
+import { cancelHistoryGc } from '../terminal-history-gc'
+import type { registerSshHandlers } from '../ipc/ssh/ssh'
+import type { registerDaemonManagementHandlers } from '../ipc/pty/pty-management'
+import type { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
+import type { startFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
+import {
+  createMainWindowServiceStub,
+  createRuntime,
+  deferred,
+  type MainWindowStub
+} from './main-window-service-stubs.test-fixture'
 
 const {
   onMock,
@@ -13,23 +23,24 @@ const {
   systemPreferencesAskForMediaAccessMock,
   systemPreferencesGetMediaAccessStatusMock,
   registerRepoHandlersMock,
+  setRepoRemoteClientNotifierMock,
+  setWorktreeCatalogRemoteClientNotifierMock,
   registerWorktreeHandlersMock,
   registerPtyHandlersMock,
+  registerSshHandlersMock,
+  registerDaemonManagementHandlersMock,
+  registerWorkspaceCleanupHandlersMock,
+  startFolderRepoGitUpgradeWatchMock,
   hydrateLocalPtyRegistryAtBootMock,
+  setWorktreeBaseDirectoryWatcherSyncContextMock,
+  scheduleWorktreeBaseDirectoryWatcherSyncMock,
   setupAutoUpdaterMock,
-  sessionFromPartitionMock,
-  setDevicePermissionHandlerMock,
-  setDisplayMediaRequestHandlerMock,
   browserManagerUnregisterAllMock,
-  browserManagerUnregisterGuestsForRendererMock,
-  browserManagerNotifyPermissionDeniedMock,
-  browserManagerHandleGuestWillDownloadMock,
-  getMainWindowForWebContentsMock,
-  getFocusedOrLastActiveMainWindowMock,
-  getMainWindowByIdMock,
-  sendToWindowMock,
-  broadcastToMainWindowsMock,
-  runWorktreeChangeInvalidatorsMock
+  runWorktreeChangeInvalidatorsMock,
+  acknowledgePendingTccPromptNoticeMock,
+  consumePendingTccPromptNoticeMock,
+  dismissTccPromptNoticeMock,
+  releasePendingTccPromptNoticeMock
 } = vi.hoisted(() => ({
   onMock: vi.fn(),
   removeAllListenersMock: vi.fn(),
@@ -41,31 +52,29 @@ const {
   systemPreferencesAskForMediaAccessMock: vi.fn(),
   systemPreferencesGetMediaAccessStatusMock: vi.fn(),
   registerRepoHandlersMock: vi.fn(),
+  setRepoRemoteClientNotifierMock: vi.fn(),
+  setWorktreeCatalogRemoteClientNotifierMock: vi.fn(),
   registerWorktreeHandlersMock: vi.fn(),
   registerPtyHandlersMock: vi.fn(),
+  registerSshHandlersMock: vi.fn<(...args: Parameters<typeof registerSshHandlers>) => void>(),
+  registerDaemonManagementHandlersMock: vi.fn<typeof registerDaemonManagementHandlers>(),
+  registerWorkspaceCleanupHandlersMock: vi.fn<typeof registerWorkspaceCleanupHandlers>(),
+  startFolderRepoGitUpgradeWatchMock: vi.fn<typeof startFolderRepoGitUpgradeWatch>(),
   hydrateLocalPtyRegistryAtBootMock: vi.fn(),
+  setWorktreeBaseDirectoryWatcherSyncContextMock: vi.fn(),
+  scheduleWorktreeBaseDirectoryWatcherSyncMock: vi.fn(),
   setupAutoUpdaterMock: vi.fn(),
-  sessionFromPartitionMock: vi.fn(),
-  setDevicePermissionHandlerMock: vi.fn(),
-  setDisplayMediaRequestHandlerMock: vi.fn(),
   browserManagerUnregisterAllMock: vi.fn(),
-  browserManagerUnregisterGuestsForRendererMock: vi.fn(),
-  browserManagerNotifyPermissionDeniedMock: vi.fn(),
-  browserManagerHandleGuestWillDownloadMock: vi.fn(),
-  getMainWindowForWebContentsMock: vi.fn(),
-  getFocusedOrLastActiveMainWindowMock: vi.fn(),
-  getMainWindowByIdMock: vi.fn(),
-  sendToWindowMock: vi.fn(),
-  broadcastToMainWindowsMock: vi.fn(),
-  runWorktreeChangeInvalidatorsMock: vi.fn()
+  runWorktreeChangeInvalidatorsMock: vi.fn(),
+  acknowledgePendingTccPromptNoticeMock: vi.fn(),
+  consumePendingTccPromptNoticeMock: vi.fn(),
+  dismissTccPromptNoticeMock: vi.fn(),
+  releasePendingTccPromptNoticeMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
   app: {},
   clipboard: {},
-  session: {
-    fromPartition: sessionFromPartitionMock
-  },
   systemPreferences: {
     askForMediaAccess: systemPreferencesAskForMediaAccessMock,
     getMediaAccessStatus: systemPreferencesGetMediaAccessStatusMock
@@ -87,6 +96,14 @@ vi.mock('../ipc/repos', () => ({
   registerRepoHandlers: registerRepoHandlersMock
 }))
 
+vi.mock('../ipc/repos/repos-changed-notification', () => ({
+  setRepoRemoteClientNotifier: setRepoRemoteClientNotifierMock
+}))
+
+vi.mock('../ipc/watched-worktree-catalog-notification', () => ({
+  setWorktreeCatalogRemoteClientNotifier: setWorktreeCatalogRemoteClientNotifierMock
+}))
+
 vi.mock('../ipc/worktrees', () => ({
   registerWorktreeHandlers: registerWorktreeHandlersMock
 }))
@@ -95,30 +112,33 @@ vi.mock('../ipc/worktree-change-invalidators', () => ({
   runWorktreeChangeInvalidators: runWorktreeChangeInvalidatorsMock
 }))
 
-vi.mock('../ipc/pty', () => ({
-  getLocalPtyProvider: vi.fn(),
-  registerPtyHandlers: registerPtyHandlersMock
+vi.mock('../ipc/pty/provider/registry', () => ({ getLocalPtyProvider: vi.fn() }))
+vi.mock('../ipc/pty/register-handlers', () => ({ registerPtyHandlers: registerPtyHandlersMock }))
+
+vi.mock('../ipc/ssh/ssh', () => ({ registerSshHandlers: registerSshHandlersMock }))
+vi.mock('../ipc/pty/pty-management', () => ({
+  registerDaemonManagementHandlers: registerDaemonManagementHandlersMock
+}))
+vi.mock('../ipc/workspace-cleanup', () => ({
+  registerWorkspaceCleanupHandlers: registerWorkspaceCleanupHandlersMock
+}))
+vi.mock('../ipc/folder-repo-git-upgrade', () => ({
+  startFolderRepoGitUpgradeWatch: startFolderRepoGitUpgradeWatchMock
 }))
 
 vi.mock('../memory/hydrate-local-pty-registry', () => ({
   hydrateLocalPtyRegistryAtBoot: hydrateLocalPtyRegistryAtBootMock
 }))
 
-vi.mock('../browser/browser-manager', () => ({
-  browserManager: {
-    notifyPermissionDenied: browserManagerNotifyPermissionDeniedMock,
-    handleGuestWillDownload: browserManagerHandleGuestWillDownloadMock,
-    unregisterAll: browserManagerUnregisterAllMock,
-    unregisterGuestsForRenderer: browserManagerUnregisterGuestsForRendererMock
-  }
+vi.mock('../ipc/worktree-base-directory-watcher', () => ({
+  setWorktreeBaseDirectoryWatcherSyncContext: setWorktreeBaseDirectoryWatcherSyncContextMock,
+  scheduleWorktreeBaseDirectoryWatcherSync: scheduleWorktreeBaseDirectoryWatcherSyncMock
 }))
 
-vi.mock('./main-window-registry', () => ({
-  getMainWindowForWebContents: getMainWindowForWebContentsMock,
-  getFocusedOrLastActiveMainWindow: getFocusedOrLastActiveMainWindowMock,
-  getMainWindowById: getMainWindowByIdMock,
-  sendToWindow: sendToWindowMock,
-  broadcastToMainWindows: broadcastToMainWindowsMock
+vi.mock('../browser/browser-manager', () => ({
+  browserManager: {
+    unregisterAll: browserManagerUnregisterAllMock
+  }
 }))
 
 vi.mock('../updater', () => ({
@@ -128,87 +148,41 @@ vi.mock('../updater', () => ({
   dismissNudge: vi.fn(),
   setupAutoUpdater: setupAutoUpdaterMock
 }))
+vi.mock('../updater/electron-updater-proxy-session', () => ({
+  applyProxyToElectronUpdaterSession: vi.fn()
+}))
 
-import { attachMainWindowServices } from './attach-main-window-services'
+vi.mock('../macos-tcc-prompt-notice', () => ({
+  acknowledgePendingTccPromptNotice: acknowledgePendingTccPromptNoticeMock,
+  consumePendingTccPromptNotice: consumePendingTccPromptNoticeMock,
+  dismissTccPromptNotice: dismissTccPromptNoticeMock,
+  releasePendingTccPromptNotice: releasePendingTccPromptNoticeMock
+}))
+
+import { attachMainWindowServices, registerUpdaterHandlers } from './attach-main-window-services'
+import { registerUpdaterHandlers as registerWindowUpdaterHandlers } from './main-window-updater'
 
 type MockFn = ReturnType<typeof vi.fn>
 
-type MainWindowStub = {
-  id?: number
-  isDestroyed?: MockFn
-  on: MockFn
-  webContents: {
-    id?: number
-    isDestroyed?: MockFn
-    on: MockFn
-    send?: MockFn
-    reload?: MockFn
-    session: {
-      setPermissionRequestHandler: MockFn
-      setPermissionCheckHandler: MockFn
-    }
-  }
+function createMainWindow(
+  extraWebContents: { isLoadingMainFrame?: MockFn; on?: MockFn; send?: MockFn } = {}
+): MainWindowStub {
+  return createMainWindowServiceStub(
+    {
+      setPermissionRequestHandler: setPermissionRequestHandlerMock,
+      setPermissionCheckHandler: setPermissionCheckHandlerMock
+    },
+    extraWebContents
+  )
 }
 
-type RuntimeStub = {
-  attachWindow: MockFn
-  setNotifier: MockFn
-  markRendererReloading: MockFn
-  markGraphUnavailable: MockFn
-  resolveOwnerWindowIdForTabId: MockFn
-  resolveOwnerWindowIdForWorktreeTab: MockFn
-  resolveOwnerWindowIdForLeaf: MockFn
-  resolveOwnerWindowIdForPtyId: MockFn
-  resolveOwnerWindowIdForBrowserPageId: MockFn
-  registerPtyOwnerWindow: MockFn
-}
-
-function createMainWindow(extraWebContents: { on?: MockFn; send?: MockFn } = {}): MainWindowStub {
-  const window = {
-    id: 1,
-    isDestroyed: vi.fn(() => false),
-    on: vi.fn(),
-    webContents: {
-      id: 1,
-      isDestroyed: vi.fn(() => false),
-      on: vi.fn(),
-      reload: vi.fn(),
-      session: {
-        setPermissionRequestHandler: setPermissionRequestHandlerMock,
-        setPermissionCheckHandler: setPermissionCheckHandlerMock
-      },
-      ...extraWebContents
-    }
-  }
-  ;(window.webContents as { __window?: MainWindowStub }).__window = window
-  return window
-}
-
-function createStore(): Store & { flush: MockFn } {
-  return { flush: vi.fn() } as Store & { flush: MockFn }
-}
-
-function createRuntime(): RuntimeStub {
+function createStore(): Store & { flushPendingAsync: MockFn } {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attach only reads these store members; tests never call the rest.
   return {
-    attachWindow: vi.fn(),
-    setNotifier: vi.fn(),
-    markRendererReloading: vi.fn(),
-    markGraphUnavailable: vi.fn(),
-    resolveOwnerWindowIdForTabId: vi.fn(() => null),
-    resolveOwnerWindowIdForWorktreeTab: vi.fn(() => null),
-    resolveOwnerWindowIdForLeaf: vi.fn(() => null),
-    resolveOwnerWindowIdForPtyId: vi.fn(() => null),
-    resolveOwnerWindowIdForBrowserPageId: vi.fn(() => null),
-    registerPtyOwnerWindow: vi.fn()
-  }
-}
-
-function deferred(): { promise: Promise<void>; resolve: () => void } {
-  let resolve!: () => void
-  const promise = new Promise<void>((next) => {
-    resolve = next
-  })
-  return { promise, resolve }
+    getProfileStorageDirectory: vi.fn(() => '/profile-a'),
+    getSettings: vi.fn(() => ({})),
+    flushPendingAsync: vi.fn(() => Promise.resolve())
+  } as unknown as Store & { flushPendingAsync: MockFn }
 }
 
 function getClosedHandlers(mainWindowOnMock: MockFn): (() => void)[] {
@@ -217,45 +191,52 @@ function getClosedHandlers(mainWindowOnMock: MockFn): (() => void)[] {
     .map(([, handler]) => handler as () => void)
 }
 
+// Fire first paint and its deferred hop before asserting updater setup.
+async function fireReadyToShow(mainWindow: MainWindowStub): Promise<void> {
+  const handler = mainWindow.once.mock.calls.find(([event]) => event === 'ready-to-show')?.[1] as
+    | (() => void)
+    | undefined
+  handler?.()
+  await new Promise((resolve) => {
+    setImmediate(resolve)
+  })
+}
+
 describe('attachMainWindowServices', () => {
+  it('exports the updater handlers exercised by the recovery tests', () => {
+    expect(registerUpdaterHandlers).toBe(registerWindowUpdaterHandlers)
+  })
+
+  afterEach(() => {
+    cancelHistoryGc()
+  })
+
   beforeEach(() => {
-    onMock.mockReset()
-    removeAllListenersMock.mockReset()
-    removeListenerMock.mockReset()
-    handleMock.mockReset()
-    removeHandlerMock.mockReset()
-    setPermissionRequestHandlerMock.mockReset()
-    setPermissionCheckHandlerMock.mockReset()
-    systemPreferencesAskForMediaAccessMock.mockReset()
-    systemPreferencesGetMediaAccessStatusMock.mockReset()
-    registerRepoHandlersMock.mockReset()
-    registerWorktreeHandlersMock.mockReset()
-    registerPtyHandlersMock.mockReset()
-    hydrateLocalPtyRegistryAtBootMock.mockReset()
-    setupAutoUpdaterMock.mockReset()
-    sessionFromPartitionMock.mockReset()
-    setDevicePermissionHandlerMock.mockReset()
-    setDisplayMediaRequestHandlerMock.mockReset()
-    browserManagerUnregisterAllMock.mockReset()
-    browserManagerUnregisterGuestsForRendererMock.mockReset()
-    browserManagerNotifyPermissionDeniedMock.mockReset()
-    browserManagerHandleGuestWillDownloadMock.mockReset()
-    getMainWindowForWebContentsMock.mockReset()
-    getFocusedOrLastActiveMainWindowMock.mockReset()
-    getMainWindowByIdMock.mockReset()
-    sendToWindowMock.mockReset()
-    broadcastToMainWindowsMock.mockReset()
-    getMainWindowForWebContentsMock.mockImplementation((sender) => sender?.__window ?? null)
-    sessionFromPartitionMock.mockReturnValue({
-      setPermissionRequestHandler: setPermissionRequestHandlerMock,
-      setPermissionCheckHandler: setPermissionCheckHandlerMock,
-      setDevicePermissionHandler: setDevicePermissionHandlerMock,
-      setDisplayMediaRequestHandler: setDisplayMediaRequestHandlerMock,
-      on: vi.fn(),
-      removeListener: vi.fn()
-    })
+    vi.resetAllMocks()
     systemPreferencesAskForMediaAccessMock.mockResolvedValue(true)
     systemPreferencesGetMediaAccessStatusMock.mockReturnValue('granted')
+  })
+
+  it('gives host-local catalog notifiers the runtime', () => {
+    const runtime = createRuntime()
+    const mainWindow = createMainWindow()
+    const store = createStore()
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Stubs provide the window/runtime methods exercised by attachment.
+    attachMainWindowServices(mainWindow as never, store, runtime as never)
+
+    expect(setRepoRemoteClientNotifierMock).toHaveBeenCalledWith(runtime)
+    expect(setWorktreeCatalogRemoteClientNotifierMock).toHaveBeenCalledWith(runtime)
+    expect(registerSshHandlersMock).toHaveBeenCalledExactlyOnceWith(
+      store,
+      expect.any(Function),
+      runtime
+    )
+    expect(registerSshHandlersMock.mock.calls[0]?.[1]()).toBe(mainWindow)
+    expect(registerDaemonManagementHandlersMock).toHaveBeenCalledExactlyOnceWith()
+    expect(registerDaemonManagementHandlersMock).toHaveBeenCalledAfter(registerPtyHandlersMock)
+    expect(registerWorkspaceCleanupHandlersMock).toHaveBeenCalledExactlyOnceWith(store)
+    expect(startFolderRepoGitUpgradeWatchMock).toHaveBeenCalledExactlyOnceWith(store, mainWindow)
   })
 
   it('reloads the app renderer through main and marks expected renderer teardown', async () => {
@@ -284,8 +265,8 @@ describe('attachMainWindowServices', () => {
     expect(mainWindow.webContents.reload).toHaveBeenCalledTimes(1)
   })
 
-  it('retries local PTY registry hydration after local startup services are ready', async () => {
-    const localStartup = deferred()
+  it('hydrates once after the local PTY provider barrier resolves', async () => {
+    const providerStartup = deferred()
     const store = createStore()
 
     attachMainWindowServices(
@@ -294,48 +275,194 @@ describe('attachMainWindowServices', () => {
       createRuntime() as never,
       undefined,
       undefined,
-      { awaitLocalPtyStartup: () => localStartup.promise }
+      { awaitLocalPtyProviderStartup: () => providerStartup.promise }
     )
 
-    expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenCalledTimes(1)
-    expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenCalledWith(store)
+    expect(hydrateLocalPtyRegistryAtBootMock).not.toHaveBeenCalled()
 
-    localStartup.resolve()
-    await localStartup.promise
+    providerStartup.resolve()
+    await providerStartup.promise
     await Promise.resolve()
 
-    expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenCalledTimes(2)
-    expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenLastCalledWith(store)
+    expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenCalledExactlyOnceWith(store)
   })
 
   it('passes injected update quit cleanup to the auto-updater', async () => {
     const onBeforeUpdateQuit = vi.fn()
     const store = createStore()
+    const mainWindow = createMainWindow()
 
     attachMainWindowServices(
-      createMainWindow() as never,
+      mainWindow as never,
       store,
       createRuntime() as never,
       undefined,
       undefined,
-      { onBeforeUpdateQuit }
+      {
+        onBeforeUpdateQuit,
+        onBeforeUpdateQuitFailure: 'abort',
+        updateInstallMode: 'supervised-headless-serve'
+      }
     )
 
+    // Attachment must leave updater setup until first paint.
+    expect(setupAutoUpdaterMock).not.toHaveBeenCalled()
+    await fireReadyToShow(mainWindow)
     expect(setupAutoUpdaterMock).toHaveBeenCalledTimes(1)
+    const [updaterWindow, updaterOptions] = setupAutoUpdaterMock.mock.calls[0]
+    expect(updaterWindow).toBe(mainWindow)
+    expect(updaterOptions).toMatchObject({
+      installMode: 'supervised-headless-serve',
+      onBeforeQuitFailure: 'abort'
+    })
     await setupAutoUpdaterMock.mock.calls[0][1].onBeforeQuit()
 
     expect(onBeforeUpdateQuit).toHaveBeenCalledTimes(1)
-    expect(store.flush).toHaveBeenCalledTimes(1)
+    expect(store.flushPendingAsync).toHaveBeenCalledTimes(1)
   })
 
   it('flushes the store before update quit when no cleanup is injected', async () => {
     const store = createStore()
+    const mainWindow = createMainWindow()
 
-    attachMainWindowServices(createMainWindow() as never, store, createRuntime() as never)
+    attachMainWindowServices(mainWindow as never, store, createRuntime() as never)
 
+    await fireReadyToShow(mainWindow)
     await setupAutoUpdaterMock.mock.calls[0][1].onBeforeQuit()
 
-    expect(store.flush).toHaveBeenCalledTimes(1)
+    expect(store.flushPendingAsync).toHaveBeenCalledTimes(1)
+  })
+
+  it('replaces the TCC handlers when the main window is reattached', () => {
+    attachMainWindowServices(createMainWindow() as never, createStore(), createRuntime() as never)
+    const releaseCount = releasePendingTccPromptNoticeMock.mock.calls.length
+    attachMainWindowServices(createMainWindow() as never, createStore(), createRuntime() as never)
+
+    for (const channel of [
+      'macosTccPrompts:consumePending',
+      'macosTccPrompts:acknowledgePending',
+      'macosTccPrompts:releasePending',
+      'macosTccPrompts:dismiss'
+    ]) {
+      expect(removeHandlerMock.mock.calls.filter(([value]) => value === channel)).toHaveLength(2)
+      expect(handleMock.mock.calls.filter(([value]) => value === channel)).toHaveLength(2)
+    }
+    expect(releasePendingTccPromptNoticeMock).toHaveBeenCalledTimes(releaseCount + 1)
+  })
+
+  it('lets only the current main renderer consume the pending TCC notice', () => {
+    const mainWindow = createMainWindow()
+    consumePendingTccPromptNoticeMock.mockReturnValue({ claimId: 1, promptCount: 3 })
+    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
+
+    const handler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'macosTccPrompts:consumePending'
+    )?.[1]
+    expect(handler?.({ sender: { id: 999 } })).toBeNull()
+    expect(consumePendingTccPromptNoticeMock).not.toHaveBeenCalled()
+    expect(handler?.({ sender: mainWindow.webContents })).toEqual({ claimId: 1, promptCount: 3 })
+    expect(consumePendingTccPromptNoticeMock).toHaveBeenCalledWith(expect.any(Number))
+  })
+
+  it('acknowledges a claim only from the current main renderer', () => {
+    const mainWindow = createMainWindow()
+    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
+
+    const handler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'macosTccPrompts:acknowledgePending'
+    )?.[1]
+    handler?.({ sender: { id: 999 } }, 7)
+    handler?.({ sender: mainWindow.webContents }, Number.NaN)
+    expect(acknowledgePendingTccPromptNoticeMock).not.toHaveBeenCalled()
+
+    handler?.({ sender: mainWindow.webContents }, 7)
+    expect(acknowledgePendingTccPromptNoticeMock).toHaveBeenCalledWith(expect.any(Number), 7)
+  })
+
+  it('releases a claim only from the current main renderer', () => {
+    const mainWindow = createMainWindow()
+    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
+    releasePendingTccPromptNoticeMock.mockClear()
+
+    const handler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'macosTccPrompts:releasePending'
+    )?.[1]
+    handler?.({ sender: { id: 999 } }, 7)
+    handler?.({ sender: mainWindow.webContents }, Number.NaN)
+    expect(releasePendingTccPromptNoticeMock).not.toHaveBeenCalled()
+
+    handler?.({ sender: mainWindow.webContents }, 7)
+    expect(releasePendingTccPromptNoticeMock).toHaveBeenCalledWith(expect.any(Number), 7)
+  })
+
+  it('releases the owner claim when the main renderer reloads or crashes', () => {
+    const mainWindow = createMainWindow()
+    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
+    const handlers = (event: string): (() => void)[] =>
+      mainWindow.webContents.on.mock.calls
+        .filter(([name]) => name === event)
+        .map(([, handler]) => handler as () => void)
+
+    releasePendingTccPromptNoticeMock.mockClear()
+    mainWindow.webContents.isLoadingMainFrame.mockReturnValue(false)
+    for (const handler of handlers('did-start-loading')) {
+      handler()
+    }
+    expect(releasePendingTccPromptNoticeMock).not.toHaveBeenCalled()
+
+    mainWindow.webContents.isLoadingMainFrame.mockReturnValue(true)
+    for (const handler of handlers('did-start-loading')) {
+      handler()
+    }
+    expect(releasePendingTccPromptNoticeMock).toHaveBeenCalledOnce()
+
+    releasePendingTccPromptNoticeMock.mockClear()
+    for (const handler of handlers('render-process-gone')) {
+      handler()
+    }
+    expect(releasePendingTccPromptNoticeMock).toHaveBeenCalledOnce()
+  })
+
+  it('removes the TCC handlers when the owning window closes', () => {
+    const mainWindow = createMainWindow()
+    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
+
+    removeHandlerMock.mockClear()
+    releasePendingTccPromptNoticeMock.mockClear()
+    for (const handler of getClosedHandlers(mainWindow.on)) {
+      handler()
+    }
+
+    expect(removeHandlerMock).toHaveBeenCalledWith('macosTccPrompts:consumePending')
+    expect(removeHandlerMock).toHaveBeenCalledWith('macosTccPrompts:acknowledgePending')
+    expect(removeHandlerMock).toHaveBeenCalledWith('macosTccPrompts:releasePending')
+    expect(removeHandlerMock).toHaveBeenCalledWith('macosTccPrompts:dismiss')
+    expect(releasePendingTccPromptNoticeMock).toHaveBeenCalledOnce()
+  })
+
+  it('keeps newer TCC handlers when an older window closes late', () => {
+    const oldWindow = createMainWindow()
+    attachMainWindowServices(oldWindow as never, createStore(), createRuntime() as never)
+    const oldClosedHandlers = getClosedHandlers(oldWindow.on)
+    const newWindow = createMainWindow()
+    attachMainWindowServices(newWindow as never, createStore(), createRuntime() as never)
+
+    removeHandlerMock.mockClear()
+    for (const handler of oldClosedHandlers) {
+      handler()
+    }
+    expect(removeHandlerMock).not.toHaveBeenCalledWith('macosTccPrompts:consumePending')
+    expect(removeHandlerMock).not.toHaveBeenCalledWith('macosTccPrompts:acknowledgePending')
+    expect(removeHandlerMock).not.toHaveBeenCalledWith('macosTccPrompts:releasePending')
+    expect(removeHandlerMock).not.toHaveBeenCalledWith('macosTccPrompts:dismiss')
+
+    for (const handler of getClosedHandlers(newWindow.on)) {
+      handler()
+    }
+    expect(removeHandlerMock).toHaveBeenCalledWith('macosTccPrompts:consumePending')
+    expect(removeHandlerMock).toHaveBeenCalledWith('macosTccPrompts:acknowledgePending')
+    expect(removeHandlerMock).toHaveBeenCalledWith('macosTccPrompts:releasePending')
+    expect(removeHandlerMock).toHaveBeenCalledWith('macosTccPrompts:dismiss')
   })
 
   it('ignores app reload requests from non-main webContents', async () => {
@@ -407,7 +534,7 @@ describe('attachMainWindowServices', () => {
     expect(mainWindow.webContents.reload).not.toHaveBeenCalled()
   })
 
-  it('keeps the sender-safe app reload IPC handler when a window closes', () => {
+  it('removes the app reload IPC handler when the owning window closes', () => {
     const mainWindowOnMock = vi.fn()
     const mainWindow = createMainWindow()
     mainWindow.on = mainWindowOnMock
@@ -421,31 +548,10 @@ describe('attachMainWindowServices', () => {
       handler()
     }
 
-    expect(removeHandlerMock).not.toHaveBeenCalledWith('app:reload')
+    expect(removeHandlerMock).toHaveBeenCalledWith('app:reload')
   })
 
-  it('does not read destroyed webContents when unregistering browser guests on close', () => {
-    const mainWindowOnMock = vi.fn()
-    const mainWindow = createMainWindow()
-    mainWindow.on = mainWindowOnMock
-
-    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
-
-    Object.defineProperty(mainWindow, 'webContents', {
-      configurable: true,
-      get() {
-        throw new Error('Object has been destroyed')
-      }
-    })
-
-    for (const handler of getClosedHandlers(mainWindowOnMock)) {
-      expect(() => handler()).not.toThrow()
-    }
-
-    expect(browserManagerUnregisterGuestsForRendererMock).toHaveBeenCalledWith(1)
-  })
-
-  it('keeps the sender-safe app reload IPC handler when an older window closes late', () => {
+  it('keeps a newer app reload handler when an older window closes late', () => {
     const oldWindowOnMock = vi.fn()
     const oldWindow = createMainWindow()
     oldWindow.on = oldWindowOnMock
@@ -467,13 +573,13 @@ describe('attachMainWindowServices', () => {
     for (const handler of getClosedHandlers(newWindowOnMock)) {
       handler()
     }
-    expect(removeHandlerMock).not.toHaveBeenCalledWith('app:reload')
+    expect(removeHandlerMock).toHaveBeenCalledWith('app:reload')
   })
 
   it('only allows the explicit permission allowlist', async () => {
     attachMainWindowServices(createMainWindow() as never, createStore(), createRuntime() as never)
 
-    expect(setPermissionRequestHandlerMock).toHaveBeenCalledTimes(2)
+    expect(setPermissionRequestHandlerMock).toHaveBeenCalledTimes(1)
     const permissionHandler = setPermissionRequestHandlerMock.mock.calls[0][0]
     const callback = vi.fn()
 
@@ -496,9 +602,7 @@ describe('attachMainWindowServices', () => {
 
       const permissionHandler = setPermissionRequestHandlerMock.mock.calls[0][0]
       const callback = vi.fn()
-      permissionHandler(null, 'media', callback, {
-        mediaTypes: ['audio', 'video']
-      })
+      permissionHandler(null, 'media', callback, { mediaTypes: ['audio', 'video'] })
 
       await vi.waitFor(() => expect(callback).toHaveBeenCalledWith(true))
       expect(systemPreferencesAskForMediaAccessMock.mock.calls).toEqual([
@@ -510,216 +614,7 @@ describe('attachMainWindowServices', () => {
     }
   })
 
-  it('denies browser-session permissions, display capture, and downloads by default', async () => {
-    const browserSessionOnMock = vi.fn()
-    sessionFromPartitionMock.mockReturnValue({
-      setPermissionRequestHandler: setPermissionRequestHandlerMock,
-      setPermissionCheckHandler: setPermissionCheckHandlerMock,
-      setDevicePermissionHandler: setDevicePermissionHandlerMock,
-      setDisplayMediaRequestHandler: setDisplayMediaRequestHandlerMock,
-      on: browserSessionOnMock,
-      removeListener: vi.fn()
-    })
-
-    const mainWindowOnMock = vi.fn()
-    const mainWindow = createMainWindow()
-    mainWindow.on = mainWindowOnMock
-
-    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
-
-    const browserPermissionHandler = setPermissionRequestHandlerMock.mock.calls[1][0] as (
-      wc: unknown,
-      permission: string,
-      callback: (allowed: boolean) => void,
-      details?: unknown
-    ) => void
-    const cb = vi.fn()
-    const guestWc = {
-      id: 401,
-      getURL: vi.fn(() => 'https://example.com/account')
-    }
-    browserPermissionHandler(guestWc, 'fullscreen', cb)
-    browserPermissionHandler(guestWc, 'notifications', cb)
-    // Why: `media` routes through macOS TCC instead of being denied outright,
-    // so pages inside the in-app browser can use camera/mic once Orca has been
-    // granted Camera/Microphone at the OS level.
-    browserPermissionHandler(guestWc, 'media', cb, { mediaTypes: ['video'] })
-    await vi.waitFor(() => expect(cb.mock.calls).toEqual([[true], [false], [true]]))
-    expect(browserManagerNotifyPermissionDeniedMock).toHaveBeenCalledTimes(1)
-    expect(browserManagerNotifyPermissionDeniedMock).toHaveBeenCalledWith({
-      guestWebContentsId: 401,
-      permission: 'notifications',
-      rawUrl: 'https://example.com/account'
-    })
-
-    const browserCheckHandler = setPermissionCheckHandlerMock.mock.calls[1][0] as (
-      wc: unknown,
-      permission: string,
-      origin: string,
-      details?: { mediaType?: 'video' | 'audio' | 'unknown' }
-    ) => boolean
-    expect(browserCheckHandler(null, 'fullscreen', '')).toBe(true)
-    expect(browserCheckHandler(null, 'notifications', '')).toBe(false)
-    expect(browserCheckHandler(null, 'media', '', { mediaType: 'video' })).toBe(true)
-
-    const displayMediaHandler = setDisplayMediaRequestHandlerMock.mock.calls[0][0]
-    const displayCb = vi.fn()
-    displayMediaHandler(null, displayCb)
-    expect(displayCb).toHaveBeenCalledWith({
-      video: undefined,
-      audio: undefined
-    })
-
-    const willDownloadHandler = browserSessionOnMock.mock.calls.find(
-      ([eventName]) => eventName === 'will-download'
-    )?.[1] as (
-      event: unknown,
-      item: { getFilename: () => string },
-      webContents: { id: number }
-    ) => void
-    const item = { getFilename: vi.fn(() => 'report.pdf') }
-    willDownloadHandler({}, item, { id: 402 })
-    expect(browserManagerHandleGuestWillDownloadMock).toHaveBeenCalledTimes(1)
-    expect(browserManagerHandleGuestWillDownloadMock).toHaveBeenCalledWith({
-      guestWebContentsId: 402,
-      item
-    })
-  })
-
-  it('wires browser-session WebAuthn device selection for security keys', () => {
-    const browserSessionOnMock = vi.fn()
-    sessionFromPartitionMock.mockReturnValue({
-      setPermissionRequestHandler: setPermissionRequestHandlerMock,
-      setPermissionCheckHandler: setPermissionCheckHandlerMock,
-      setDevicePermissionHandler: setDevicePermissionHandlerMock,
-      setDisplayMediaRequestHandler: setDisplayMediaRequestHandlerMock,
-      on: browserSessionOnMock,
-      removeListener: vi.fn()
-    })
-
-    attachMainWindowServices(createMainWindow() as never, createStore(), createRuntime() as never)
-
-    expect(setDevicePermissionHandlerMock).toHaveBeenCalledWith(expect.any(Function))
-    const devicePermissionHandler = setDevicePermissionHandlerMock.mock.calls[0][0] as (details: {
-      deviceType: string
-      origin: string
-      device: { collections?: { usagePage?: number }[] }
-    }) => boolean
-    expect(
-      devicePermissionHandler({
-        deviceType: 'hid',
-        origin: 'https://github.com',
-        device: { collections: [{ usagePage: 0xf1d0 }] }
-      })
-    ).toBe(true)
-    expect(
-      devicePermissionHandler({
-        deviceType: 'hid',
-        origin: 'http://[::1]:5173',
-        device: { collections: [{ usagePage: 0xf1d0 }] }
-      })
-    ).toBe(true)
-    expect(
-      devicePermissionHandler({
-        deviceType: 'hid',
-        origin: 'https://github.com',
-        device: { collections: [{ usagePage: 1 }] }
-      })
-    ).toBe(false)
-
-    const browserCheckHandler = setPermissionCheckHandlerMock.mock.calls[1][0] as (
-      wc: unknown,
-      permission: string,
-      origin: string,
-      details?: { securityOrigin?: string }
-    ) => boolean
-    expect(
-      browserCheckHandler(null, 'hid', '', {
-        securityOrigin: 'https://github.com'
-      })
-    ).toBe(true)
-
-    const selectHidHandler = browserSessionOnMock.mock.calls.find(
-      ([eventName]) => eventName === 'select-hid-device'
-    )?.[1] as (
-      event: { preventDefault: () => void },
-      details: {
-        deviceList: {
-          deviceId: string
-          collections?: { usagePage?: number }[]
-        }[]
-        frame: { url: string }
-      },
-      callback: (deviceId?: string) => void
-    ) => void
-    const preventDefault = vi.fn()
-    const callback = vi.fn()
-    selectHidHandler(
-      { preventDefault },
-      {
-        frame: { url: 'https://github.com' },
-        deviceList: [
-          { deviceId: 'keyboard', collections: [{ usagePage: 1 }] },
-          { deviceId: 'security-key', collections: [{ usagePage: 0xf1d0 }] }
-        ]
-      },
-      callback
-    )
-
-    expect(preventDefault).toHaveBeenCalled()
-    expect(callback).toHaveBeenCalledWith('security-key')
-
-    const selectWebAuthnHandler = browserSessionOnMock.mock.calls.find(
-      ([eventName]) => eventName === 'select-webauthn-account'
-    )?.[1] as (
-      event: { preventDefault: () => void },
-      details: { accounts: { credentialId: string }[] },
-      callback: (credentialId?: string | null) => void
-    ) => void
-    const webAuthnCallback = vi.fn()
-    selectWebAuthnHandler(
-      { preventDefault: vi.fn() },
-      { accounts: [{ credentialId: 'credential-1' }] },
-      webAuthnCallback
-    )
-    expect(webAuthnCallback).toHaveBeenCalledWith('credential-1')
-  })
-
-  it('replaces the persistent browser-session download handler on re-attach', () => {
-    const browserSessionOnMock = vi.fn()
-    const browserSessionRemoveListenerMock = vi.fn()
-    sessionFromPartitionMock.mockReturnValue({
-      setPermissionRequestHandler: setPermissionRequestHandlerMock,
-      setPermissionCheckHandler: setPermissionCheckHandlerMock,
-      setDevicePermissionHandler: setDevicePermissionHandlerMock,
-      setDisplayMediaRequestHandler: setDisplayMediaRequestHandlerMock,
-      on: browserSessionOnMock,
-      removeListener: browserSessionRemoveListenerMock
-    })
-
-    attachMainWindowServices(createMainWindow() as never, createStore(), createRuntime() as never)
-    attachMainWindowServices(createMainWindow() as never, createStore(), createRuntime() as never)
-
-    const downloadOnCalls = browserSessionOnMock.mock.calls.filter(
-      ([eventName]) => eventName === 'will-download'
-    )
-    const downloadRemoveCalls = browserSessionRemoveListenerMock.mock.calls.filter(
-      ([eventName]) => eventName === 'will-download'
-    )
-    expect(downloadOnCalls).toHaveLength(2)
-    expect(downloadRemoveCalls).toHaveLength(2)
-    expect(downloadRemoveCalls[1][1]).toBe(downloadOnCalls[0][1])
-  })
-
-  it('clears only browser guest registrations owned by the closing renderer', () => {
-    sessionFromPartitionMock.mockReturnValue({
-      setPermissionRequestHandler: setPermissionRequestHandlerMock,
-      setPermissionCheckHandler: setPermissionCheckHandlerMock,
-      setDevicePermissionHandler: setDevicePermissionHandlerMock,
-      setDisplayMediaRequestHandler: setDisplayMediaRequestHandlerMock,
-      on: vi.fn(),
-      removeListener: vi.fn()
-    })
+  it('clears browser guest registrations when the main window closes', () => {
     const mainWindowOnMock = vi.fn()
     const mainWindow = createMainWindow()
     mainWindow.on = mainWindowOnMock
@@ -729,99 +624,7 @@ describe('attachMainWindowServices', () => {
     const closedHandler = getClosedHandlers(mainWindowOnMock).at(-1)
     expect(closedHandler).toBeTypeOf('function')
     closedHandler?.()
-    expect(browserManagerUnregisterAllMock).not.toHaveBeenCalled()
-    expect(browserManagerUnregisterGuestsForRendererMock).toHaveBeenCalledWith(1)
-  })
-
-  it('relays native file drops back to the sender window', () => {
-    const mainWindowOnMock = vi.fn()
-    const mainWindow = createMainWindow({ send: vi.fn() })
-    mainWindow.on = mainWindowOnMock
-
-    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
-
-    const channel = 'terminal:file-dropped-from-preload'
-    const relayHandler = onMock.mock.calls.find(([event]) => event === channel)?.[1]
-    expect(relayHandler).toBeTypeOf('function')
-    expect(removeAllListenersMock).toHaveBeenCalledWith(channel)
-
-    const payload = { paths: ['/tmp/example.txt'], target: 'editor' }
-    relayHandler?.({ sender: mainWindow.webContents } as never, payload)
-
-    expect(mainWindow.webContents.send).toHaveBeenCalledWith('terminal:file-drop', payload)
-    expect(removeListenerMock).not.toHaveBeenCalledWith(channel, relayHandler)
-  })
-
-  it('marks only the closing window graph unavailable when the window closes', () => {
-    const mainWindowOnMock = vi.fn()
-    const mainWindow = createMainWindow()
-    mainWindow.on = mainWindowOnMock
-    const runtime = createRuntime()
-
-    attachMainWindowServices(mainWindow as never, createStore(), runtime as never)
-
-    runtime.setNotifier.mockClear()
-    for (const handler of getClosedHandlers(mainWindowOnMock)) {
-      handler()
-    }
-
-    expect(runtime.markGraphUnavailable).toHaveBeenCalledWith(1)
-    expect(runtime.setNotifier).toHaveBeenCalledWith(null)
-  })
-
-  it('relays native file drops only from the owning renderer webContents', () => {
-    const sendMock = vi.fn()
-    const mainWindow = createMainWindow({ send: sendMock })
-
-    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
-
-    const channel = 'terminal:file-dropped-from-preload'
-    const relayHandler = onMock.mock.calls.find(([event]) => event === channel)?.[1]
-    const payload = { paths: ['/tmp/a'], target: 'editor' }
-
-    relayHandler?.({ sender: { id: 999 } }, payload)
-
-    expect(sendMock).not.toHaveBeenCalled()
-
-    relayHandler?.({ sender: mainWindow.webContents }, payload)
-
-    expect(sendMock).toHaveBeenCalledWith('terminal:file-drop', payload)
-  })
-
-  it('ignores malformed native file-drop payloads from the owning renderer', () => {
-    const sendMock = vi.fn()
-    const mainWindow = createMainWindow({ send: sendMock })
-
-    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
-
-    const channel = 'terminal:file-dropped-from-preload'
-    const relayHandler = onMock.mock.calls.find(([event]) => event === channel)?.[1]
-
-    relayHandler?.(
-      { sender: mainWindow.webContents },
-      { paths: ['C:\\Users\\alice\\secret.txt'], target: 'browser' }
-    )
-    relayHandler?.(
-      { sender: mainWindow.webContents },
-      { paths: ['/tmp/a'], target: 'file-explorer' }
-    )
-
-    expect(sendMock).not.toHaveBeenCalled()
-  })
-
-  it('ignores native file drops after the owning webContents is destroyed', () => {
-    const sendMock = vi.fn()
-    const mainWindow = createMainWindow({ send: sendMock })
-
-    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
-
-    const channel = 'terminal:file-dropped-from-preload'
-    const relayHandler = onMock.mock.calls.find(([event]) => event === channel)?.[1]
-    mainWindow.webContents.isDestroyed?.mockReturnValue(true)
-
-    relayHandler?.({ sender: mainWindow.webContents }, { paths: ['/tmp/a'], target: 'editor' })
-
-    expect(sendMock).not.toHaveBeenCalled()
+    expect(browserManagerUnregisterAllMock).toHaveBeenCalledTimes(1)
   })
 
   it('clears the runtime notifier when the owning window closes', () => {
@@ -841,18 +644,16 @@ describe('attachMainWindowServices', () => {
     expect(runtime.setNotifier).toHaveBeenCalledWith(null)
   })
 
-  it('keeps the registry-backed runtime notifier when an older window closes late', () => {
+  it('keeps a newer runtime notifier when an older window closes late', () => {
     const runtime = createRuntime()
     const oldWindowOnMock = vi.fn()
     const oldWindow = createMainWindow()
-    oldWindow.id = 1
     oldWindow.on = oldWindowOnMock
     attachMainWindowServices(oldWindow as never, createStore(), runtime as never)
     const oldClosedHandlers = getClosedHandlers(oldWindowOnMock)
 
     const newWindowOnMock = vi.fn()
     const newWindow = createMainWindow()
-    newWindow.id = 2
     newWindow.on = newWindowOnMock
     attachMainWindowServices(newWindow as never, createStore(), runtime as never)
 
@@ -869,58 +670,21 @@ describe('attachMainWindowServices', () => {
     expect(runtime.setNotifier).toHaveBeenCalledWith(null)
   })
 
-  it('keeps the registry-backed runtime notifier when the newest window closes first', () => {
-    const runtime = createRuntime()
-    const oldWindowOnMock = vi.fn()
-    const oldWindow = createMainWindow()
-    oldWindow.id = 1
-    oldWindow.on = oldWindowOnMock
-    attachMainWindowServices(oldWindow as never, createStore(), runtime as never)
-
-    const newWindowOnMock = vi.fn()
-    const newWindow = createMainWindow()
-    newWindow.id = 2
-    newWindow.on = newWindowOnMock
-    attachMainWindowServices(newWindow as never, createStore(), runtime as never)
-
-    runtime.setNotifier.mockClear()
-    for (const handler of getClosedHandlers(newWindowOnMock)) {
-      handler()
-    }
-
-    expect(runtime.markGraphUnavailable).toHaveBeenCalledWith(2)
-    expect(runtime.setNotifier).not.toHaveBeenCalledWith(null)
-
-    for (const handler of getClosedHandlers(oldWindowOnMock)) {
-      handler()
-    }
-    expect(runtime.setNotifier).toHaveBeenCalledWith(null)
-  })
-
   it('forwards runtime notifier events to the renderer', () => {
     const sendMock = vi.fn()
     const webContentsOnMock = vi.fn()
     const mainWindowOnMock = vi.fn()
-    const mainWindow = createMainWindow({
-      on: webContentsOnMock,
-      send: sendMock
-    })
+    const mainWindow = createMainWindow({ on: webContentsOnMock, send: sendMock })
     mainWindow.isDestroyed = vi.fn(() => false)
     mainWindow.on = mainWindowOnMock
     const runtime = createRuntime()
-    getFocusedOrLastActiveMainWindowMock.mockReturnValue(mainWindow)
 
     attachMainWindowServices(mainWindow as never, createStore(), runtime as never)
 
     expect(runtime.setNotifier).toHaveBeenCalledTimes(1)
-    const notifier = runtime.setNotifier.mock.calls[0][0] as {
-      worktreesChanged: (repoId: string) => void
-      reposChanged: () => void
-      activateWorktree: (
-        repoId: string,
-        worktreeId: string,
-        setup?: { runnerScriptPath: string; envVars: Record<string, string> }
-      ) => void
+    const notifier = runtime.setNotifier.mock.calls[0][0]
+    if (!notifier) {
+      throw new Error('Missing runtime notifier')
     }
 
     notifier.worktreesChanged('repo-1')
@@ -933,17 +697,10 @@ describe('attachMainWindowServices', () => {
       }
     })
 
-    expect(broadcastToMainWindowsMock.mock.calls).toEqual([
+    expect(sendMock.mock.calls).toEqual([
       ['worktrees:changed', { repoId: 'repo-1' }],
-      ['repos:changed']
-    ])
-    expect(runWorktreeChangeInvalidatorsMock).toHaveBeenCalledWith('repo-1')
-    expect(runWorktreeChangeInvalidatorsMock.mock.invocationCallOrder[0]).toBeLessThan(
-      broadcastToMainWindowsMock.mock.invocationCallOrder[0]
-    )
-    expect(sendToWindowMock.mock.calls).toEqual([
+      ['repos:changed'],
       [
-        mainWindow,
         'ui:activateWorktree',
         {
           repoId: 'repo-1',
@@ -958,97 +715,158 @@ describe('attachMainWindowServices', () => {
         }
       ]
     ])
-    expect(sendMock).not.toHaveBeenCalled()
+    expect(runWorktreeChangeInvalidatorsMock).toHaveBeenCalledWith('repo-1')
+    expect(runWorktreeChangeInvalidatorsMock.mock.invocationCallOrder[0]).toBeLessThan(
+      sendMock.mock.invocationCallOrder[0]
+    )
   })
 
-  it('routes renderer-owned notifier events to the owning window', () => {
-    const ownerWindow = createMainWindow()
-    ownerWindow.id = 1
-    const focusedWindow = createMainWindow()
-    focusedWindow.id = 2
+  it('marks renderer process loss as a graph reload failure', () => {
+    const mainWindow = createMainWindow()
     const runtime = createRuntime()
-    runtime.resolveOwnerWindowIdForTabId.mockImplementation((tabId: string) =>
-      tabId === 'tab-owned' ? 1 : null
-    )
-    runtime.resolveOwnerWindowIdForPtyId.mockImplementation((ptyId: string) =>
-      ptyId === 'pty-owned' ? 1 : null
-    )
-    getMainWindowByIdMock.mockImplementation((windowId: number) =>
-      windowId === 1 ? ownerWindow : null
-    )
-    getFocusedOrLastActiveMainWindowMock.mockReturnValue(focusedWindow)
+    attachMainWindowServices(mainWindow as never, createStore(), runtime as never)
 
-    attachMainWindowServices(focusedWindow as never, createStore(), runtime as never)
-
-    const notifier = runtime.setNotifier.mock.calls[0][0] as {
-      renameTerminal: (tabId: string, title: string | null) => void
-      terminalDriverChanged: (ptyId: string, driver: { kind: 'idle' }) => void
+    const handlers = mainWindow.webContents.on.mock.calls
+      .filter(([event]) => event === 'render-process-gone')
+      .map(([, handler]) => handler as () => void)
+    for (const handler of handlers) {
+      handler()
     }
-    notifier.renameTerminal('tab-owned', 'Owned')
-    notifier.terminalDriverChanged('pty-owned', { kind: 'idle' })
 
-    expect(sendToWindowMock.mock.calls).toEqual([
-      [ownerWindow, 'ui:renameTerminal', { tabId: 'tab-owned', title: 'Owned' }],
-      [
-        ownerWindow,
-        'runtime:terminalDriverChanged',
-        { ptyId: 'pty-owned', driver: { kind: 'idle' } }
-      ]
-    ])
-    expect(broadcastToMainWindowsMock).not.toHaveBeenCalledWith(
-      'runtime:terminalDriverChanged',
-      expect.anything()
-    )
+    expect(runtime.markGraphReloadFailed).toHaveBeenCalledWith(1, 'renderer-process-gone')
   })
 
-  it('stamps reveal-created PTY ownership before asking the renderer to create a terminal', async () => {
-    const focusedWindow = createMainWindow()
-    focusedWindow.id = 3
-    ;(focusedWindow as unknown as { once: MockFn; removeListener: MockFn }).once = vi.fn()
-    ;(focusedWindow as unknown as { once: MockFn; removeListener: MockFn }).removeListener = vi.fn()
+  it('accepts terminal reveal replies only from the main window renderer', async () => {
+    const sendMock = vi.fn()
+    const mainWindow = createMainWindow({ send: sendMock })
     const runtime = createRuntime()
-    getFocusedOrLastActiveMainWindowMock.mockReturnValue(focusedWindow)
 
-    attachMainWindowServices(focusedWindow as never, createStore(), runtime as never)
+    attachMainWindowServices(mainWindow as never, createStore(), runtime as never)
 
     const notifier = runtime.setNotifier.mock.calls[0][0] as {
       revealTerminalSession: (
         worktreeId: string,
-        opts: { ptyId: string; title?: string; activate?: boolean }
+        opts: {
+          ptyId: string
+          title?: string
+          cwd?: string
+          viewMode?: 'terminal' | 'chat'
+          activate?: boolean
+        }
       ) => Promise<{ tabId: string; title?: string }>
     }
-    const reveal = notifier.revealTerminalSession('wt-1', {
-      ptyId: 'pty-created',
-      title: 'Created'
+    const revealPromise = notifier.revealTerminalSession('wt-1', {
+      ptyId: 'pty-1',
+      title: 'SSH tmux',
+      cwd: '/repo/packages/web',
+      viewMode: 'chat'
     })
+    const sentPayload = sendMock.mock.calls.find(
+      ([channel]) => channel === 'ui:createTerminal'
+    )?.[1]
+    const handler = onMock.mock.calls.find(
+      ([channel]) => channel === 'terminal:tabCreateReply'
+    )?.[1]
+    expect(sentPayload).toMatchObject({ cwd: '/repo/packages/web', viewMode: 'chat' })
 
-    expect(runtime.registerPtyOwnerWindow).toHaveBeenCalledWith('pty-created', 3)
-    const createTerminalCall = sendToWindowMock.mock.calls.find(
-      ([, channel]) => channel === 'ui:createTerminal'
+    handler?.(
+      { sender: { send: vi.fn() } },
+      { requestId: sentPayload.requestId, error: 'spoofed renderer reply' }
     )
-    expect(createTerminalCall).toEqual([
-      focusedWindow,
-      'ui:createTerminal',
-      expect.objectContaining({
-        worktreeId: 'wt-1',
-        ptyId: 'pty-created',
-        title: 'Created'
-      })
-    ])
+    expect(removeListenerMock).not.toHaveBeenCalledWith('terminal:tabCreateReply', handler)
 
-    const replyHandler = onMock.mock.calls.find(
-      ([eventName]) => eventName === 'terminal:tabCreateReply'
-    )?.[1] as (
-      event: { sender: unknown },
-      reply: { requestId: string; tabId?: string; title?: string }
-    ) => void
-    expect(createTerminalCall).toBeTruthy()
-    const requestId = (createTerminalCall![2] as { requestId: string }).requestId
-    replyHandler({ sender: focusedWindow.webContents }, { requestId, tabId: 'tab-created' })
+    handler?.(
+      { sender: mainWindow.webContents },
+      { requestId: sentPayload.requestId, tabId: 'tab-1', title: 'SSH tmux' }
+    )
 
-    await expect(reveal).resolves.toEqual({
-      tabId: 'tab-created',
-      title: undefined
+    await expect(revealPromise).resolves.toEqual({ tabId: 'tab-1', title: 'SSH tmux' })
+    expect(removeListenerMock).toHaveBeenCalledWith('terminal:tabCreateReply', handler)
+  })
+
+  it('requires an exact renderer identity receipt for recovered worker reveals', async () => {
+    const sendMock = vi.fn()
+    const mainWindow = createMainWindow({ send: sendMock })
+    const runtime = createRuntime()
+
+    attachMainWindowServices(mainWindow as never, createStore(), runtime as never)
+
+    const notifier = runtime.setNotifier.mock.calls[0][0] as {
+      revealTerminalSession: (
+        worktreeId: string,
+        opts: {
+          ptyId: string
+          tabId: string
+          leafId: string
+          expectedProcessIdentity: { terminalHandle: string; incarnationId: string }
+        }
+      ) => Promise<unknown>
+    }
+    const opts = {
+      ptyId: 'pty-worker',
+      tabId: 'tab-worker',
+      leafId: 'leaf-worker',
+      expectedProcessIdentity: {
+        terminalHandle: 'term_worker',
+        incarnationId: 'inc-worker'
+      }
+    }
+    const mismatch = notifier.revealTerminalSession('worktree-1', opts)
+    const mismatchPayload = sendMock.mock.calls.at(-1)?.[1]
+    const mismatchHandler = onMock.mock.calls.findLast(
+      ([channel]) => channel === 'terminal:tabCreateReply'
+    )?.[1]
+    mismatchHandler?.(
+      { sender: mainWindow.webContents },
+      {
+        requestId: mismatchPayload.requestId,
+        tabId: 'tab-worker',
+        identity: {
+          worktreeId: 'worktree-1',
+          tabId: 'tab-worker',
+          leafId: 'leaf-worker',
+          ptyId: 'pty-replacement'
+        }
+      }
+    )
+    await expect(mismatch).rejects.toThrow('terminal_reveal_identity_mismatch')
+
+    const exact = notifier.revealTerminalSession('worktree-1', opts)
+    const exactPayload = sendMock.mock.calls.at(-1)?.[1]
+    const exactHandler = onMock.mock.calls.findLast(
+      ([channel]) => channel === 'terminal:tabCreateReply'
+    )?.[1]
+    const identity = {
+      worktreeId: 'worktree-1',
+      tabId: 'tab-worker',
+      leafId: 'leaf-worker',
+      ptyId: 'pty-worker'
+    }
+    exactHandler?.(
+      { sender: mainWindow.webContents },
+      { requestId: exactPayload.requestId, tabId: 'tab-worker', identity }
+    )
+    await expect(exact).resolves.toEqual({
+      tabId: 'tab-worker',
+      title: undefined,
+      identity
     })
+  })
+
+  it('keeps deferred worktree watcher setup inside the service boundary', async () => {
+    const mainWindow = createMainWindow()
+    const store = createStore()
+
+    vi.useFakeTimers()
+    try {
+      attachMainWindowServices(mainWindow as never, store, createRuntime() as never)
+
+      expect(setWorktreeBaseDirectoryWatcherSyncContextMock).toHaveBeenCalledWith(store, mainWindow)
+      expect(scheduleWorktreeBaseDirectoryWatcherSyncMock).toHaveBeenCalledWith(store, mainWindow)
+
+      await vi.advanceTimersByTimeAsync(100)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

@@ -1,0 +1,42 @@
+import { mobileFileMediaMime } from './mobile-file-media'
+import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
+import { defaultScheduleTimer } from '../transport/timer-scheduler'
+import {
+  createMobileFilePreviewHref,
+  type MobileFilePreviewHref,
+  type MobileFilePreviewRouteParams
+} from './mobile-file-preview-route'
+
+export type MobileFilePreviewRouter = {
+  push: (href: MobileFilePreviewHref) => void
+}
+
+type NavigateOptions = {
+  embedded?: boolean
+  onRequestClose?: () => void
+  scheduleClose?: (callback: () => void, delayMs: number) => unknown
+}
+
+export function navigateToMobileFilePreview(
+  router: MobileFilePreviewRouter,
+  params: MobileFilePreviewRouteParams,
+  options: NavigateOptions = {}
+): void {
+  router.push(createMobileFilePreviewHref(params))
+  if (options.embedded && options.onRequestClose) {
+    // Wait for Expo’s route commit before closing the dock and unmounting this subtree.
+    const scheduleClose = options.scheduleClose ?? defaultScheduleTimer
+    scheduleClose(options.onRequestClose, 0)
+  }
+}
+
+export function canPreviewMobileFileRow(item: {
+  kind: 'text' | 'binary'
+  relativePath: string
+}): boolean {
+  return (
+    item.kind === 'text' ||
+    classifyMobileArtifact(item.relativePath) === 'image' ||
+    mobileFileMediaMime(item.relativePath) !== null
+  )
+}

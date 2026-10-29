@@ -1,6 +1,11 @@
+import { getAiVaultResumeWorkspaceWslDistro } from '@/lib/ai-vault-resume-shell'
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { toast } from 'sonner'
-import { getConnectionId } from '@/lib/connection-context'
+import { canResumeAiVaultSessionOnTarget } from '../../../../shared/ai-vault-resume-target'
+import {
+  getAiVaultResumeWorkspaceExecutionHostId,
+  getAiVaultResumeWorkspaceTargetStatus
+} from '@/lib/ai-vault-resume-target'
 import {
   AI_VAULT_SESSION_DRAG_END_EVENT,
   AI_VAULT_SESSION_DRAG_START_EVENT,
@@ -8,10 +13,18 @@ import {
   hasAiVaultSessionDragData,
   readAiVaultSessionDragData
 } from '@/lib/ai-vault-session-drag'
+import {
+  buildAiVaultDropRepinStartup,
+  getAiVaultAgentProviderSession
+} from '@/lib/ai-vault-resume-command'
 import { launchAiVaultSessionInNewTab } from '@/lib/launch-ai-vault-session'
+import { prepareAiVaultTerminalResumeRequest } from '@/lib/ai-vault-session-resume-preparation'
+import { describeAiVaultResumeFailure } from '@/lib/ai-vault-resume-refusal'
+import { useAppStore } from '@/store'
 import { resolveDropZone } from './tab-drop-zone'
 import type { TabDropZone } from './useTabDragSplit'
 import { translate } from '@/i18n/i18n'
+import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 
 type PaneDropTarget = {
   groupId: string
@@ -164,40 +177,133 @@ export default function AiVaultSessionDropLayer({
         )
         return true
       }
+      if (payload.structuredSession) {
+        // Use Resume’s reveal path because activating a chat by ID alone cannot reopen its closed tab.
+        void activateAiVaultStructuredSession(payload)
+        return true
+      }
 
-      const connectionId = getConnectionId(worktreeId)
-      if (connectionId) {
+      const state = useAppStore.getState()
+      const targetStatus = getAiVaultResumeWorkspaceTargetStatus(state, worktreeId)
+      const targetExecutionHostId = getAiVaultResumeWorkspaceExecutionHostId(state, worktreeId)
+      if (targetStatus === 'unknown') {
         toast.error(
           translate(
-            'auto.components.tab.group.AiVaultSessionDropLayer.localWorkspacesOnly',
-            'Resume from history is only available in local workspaces.'
+            'auto.components.tab.group.AiVaultSessionDropLayer.openSupportedWorkspace',
+            'Open a workspace before resuming a session.'
           )
         )
         return true
       }
-      if (connectionId === undefined) {
+      if (
+        !canResumeAiVaultSessionOnTarget({
+          sessionFilePath: payload.sessionFilePath ?? null,
+          sessionExecutionHostId: payload.sessionExecutionHostId ?? null,
+          targetStatus,
+          targetExecutionHostId,
+          targetWslDistro: getAiVaultResumeWorkspaceWslDistro(state, worktreeId)
+        })
+      ) {
         toast.error(
           translate(
-            'auto.components.tab.group.AiVaultSessionDropLayer.openLocalWorkspace',
-            'Open a local workspace before resuming a session.'
+            'auto.components.tab.group.AiVaultSessionDropLayer.sessionHostMismatchUnsupported',
+            'This session belongs to a different host. Drop it onto a workspace on the same host.'
           )
         )
         return true
       }
 
-      launchAiVaultSessionInNewTab({
+      const showQueuedToast = (): void => {
+        toast.success(
+          translate(
+            'auto.components.tab.group.AiVaultSessionDropLayer.sessionQueued',
+            'Session queued'
+          )
+        )
+      }
+      if (!payload.sessionFilePath || !payload.sessionExecutionHostId) {
+        toast.error(
+          translate(
+            'auto.components.tab.group.AiVaultSessionDropLayer.oldPayload',
+            'This session was dragged from an older Orca window. Resume it from Session History instead.'
+          )
+        )
+        return true
+      }
+      const preparation = prepareAiVaultTerminalResumeRequest({
         agent: payload.agent,
-        worktreeId,
-        command: payload.command,
-        targetGroupId: dropTarget.groupId,
-        splitDirection: dropTarget.zone === 'center' ? undefined : dropTarget.zone
+        sessionId: payload.sessionId,
+        filePath: payload.sessionFilePath,
+        executionHostId: payload.sessionExecutionHostId,
+        codexHome: payload.codexHome ?? null
       })
-      toast.success(
-        translate(
-          'auto.components.tab.group.AiVaultSessionDropLayer.sessionQueued',
-          'Session queued'
-        )
-      )
+      void preparation
+        .then((result) => {
+          const startup = result.useRealCodexHome
+            ? payload.realHomeStartup
+            : result.substituteCodexHome
+              ? buildAiVaultDropRepinStartup({
+                  state: useAppStore.getState(),
+                  payload,
+                  substituteCodexHome: result.substituteCodexHome,
+                  worktreeId
+                })
+              : payload
+          if (!startup) {
+            // Refuse old payloads that cannot repin the startup command; silently using another account’s home is unsafe.
+            throw new Error(
+              result.substituteCodexHome
+                ? translate(
+                    'auto.components.tab.group.AiVaultSessionDropLayer.legacyDragCannotRetarget',
+                    'This session was dragged from an older Orca window, so Orca cannot retarget it to the selected Codex account. Resume it from the Session History panel instead.'
+                  )
+                : translate(
+                    'auto.components.tab.group.AiVaultSessionDropLayer.legacyDragPrepareFailed',
+                    'Orca could not prepare this legacy Codex session. Retry resume.'
+                  )
+            )
+          }
+          const providerSession = getAiVaultAgentProviderSession({
+            agent: payload.agent,
+            sessionId: payload.sessionId,
+            filePath: payload.sessionFilePath
+          })
+          const launchResult = launchAiVaultSessionInNewTab({
+            agent: payload.agent,
+            worktreeId,
+            command: startup.command,
+            ...(payload.sessionCwd ? { cwd: payload.sessionCwd } : {}),
+            ...(startup.env ? { env: startup.env } : {}),
+            ...(startup.envToDelete ? { envToDelete: startup.envToDelete } : {}),
+            ...(startup.launchConfig ? { launchConfig: startup.launchConfig } : {}),
+            ...(providerSession ? { providerSession } : {}),
+            targetGroupId: dropTarget.groupId,
+            splitDirection: dropTarget.zone === 'center' ? undefined : dropTarget.zone
+          })
+          if (launchResult.tabId === null) {
+            void launchResult.runtimeLaunch.then((outcome) => {
+              if (outcome.status === 'failed') {
+                toast.error(
+                  (outcome.message
+                    ? describeAiVaultResumeFailure(new Error(outcome.message), payload.agent)
+                    : null) ||
+                    translate(
+                      'auto.lib.launch.agent.in.new.tab.11cce5cc77',
+                      'Could not launch {{value0}} in a new terminal.',
+                      { value0: payload.agent }
+                    )
+                )
+                return
+              }
+              showQueuedToast()
+            })
+            return
+          }
+          showQueuedToast()
+        })
+        .catch((error: unknown) => {
+          toast.error(describeAiVaultResumeFailure(error, payload.agent))
+        })
       return true
     },
     [clearDragState, target, updateTarget, worktreeId]

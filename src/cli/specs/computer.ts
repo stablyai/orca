@@ -44,16 +44,17 @@ export const COMPUTER_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['computer', 'click'],
-    summary: 'Click an app element or window coordinate',
+    summary: 'Click an app element or window coordinate, optionally with modifiers',
     usage:
-      'orca computer click --app <app> (--element-index <n> | --x <x> --y <y>) [--window-id <id> | --window-index <n>] [--click-count <n>] [--mouse-button <left|right|middle>] [--restore-window] [--no-screenshot] [--json]',
+      'orca computer click --app <app> (--element-index <n> | --x <x> --y <y>) [--window-id <id> | --window-index <n>] [--click-count <n>] [--mouse-button <left|right|middle>] [--modifiers <modifier-chord>] [--restore-window] [--no-screenshot] [--json]',
     allowedFlags: [
       ...COMPUTER_ACTION_FLAGS,
       'element-index',
       'x',
       'y',
       'click-count',
-      'mouse-button'
+      'mouse-button',
+      'modifiers'
     ]
   },
   {

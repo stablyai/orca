@@ -2,6 +2,7 @@ type WorktreeCardTitleDisplayInput = {
   storedDisplayName: string | null | undefined
   branchName: string | null | undefined
   linearIssueTitle?: string | null
+  jiraIssueTitle?: string | null
   issueTitle?: string | null
   reviewTitle?: string | null
 }
@@ -30,8 +31,7 @@ function isBranchTitle(
 }
 
 export function coerceWorktreeCardVisibleTitle(value: string | null | undefined): string {
-  // Why: the legacy card path can bypass title selection but still feeds trim()
-  // and inline rename props, so nullish persisted titles stop at this boundary.
+  // Legacy paths can bypass title selection; normalize nullish persisted titles before trim/rename consumers.
   return typeof value === 'string' ? value : ''
 }
 
@@ -39,6 +39,7 @@ export function getWorktreeCardTitleDisplay({
   storedDisplayName,
   branchName,
   linearIssueTitle,
+  jiraIssueTitle,
   issueTitle,
   reviewTitle
 }: WorktreeCardTitleDisplayInput): string {
@@ -57,10 +58,10 @@ export function getWorktreeCardTitleDisplay({
     return visibleStoredDisplayName
   }
 
-  // Why: branch names are available in hover/details; the closed card title
-  // should prefer only a confirmed task/review subject, not repo/path guesses.
+  // Prefer confirmed task/review subjects; branch identity remains available in details.
   return (
     normalizeTitle(linearIssueTitle) ??
+    normalizeTitle(jiraIssueTitle) ??
     normalizeTitle(issueTitle) ??
     normalizeTitle(reviewTitle) ??
     (normalizedStoredDisplayName ? visibleStoredDisplayName : '')

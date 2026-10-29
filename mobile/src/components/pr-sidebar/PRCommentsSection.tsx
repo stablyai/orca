@@ -1,22 +1,25 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
-import type { GitHubWorkItemDetails, PRState } from '../../../../src/shared/types'
+import type { PRState } from '../../../../src/shared/github/pull-request-types'
+import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
 import type { GitHubPrRepoSlug } from '../../session/github-pr-rpc'
 import { colors } from '../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import type { Translate } from '../../i18n/mobile-i18n'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { canAddRootComment } from '../../session/pr-comment-actions'
+import { isPrSidebarDetailsPlaceholder } from '../../session/mobile-pr-sidebar-state'
 import type { MobilePrCommentActions } from '../../session/use-mobile-pr-comment-actions'
 import { PRSection } from './PRSection'
 import { CommentMarkdown } from './CommentMarkdown'
 import { PRCommentCard, type PRCommentCardActions } from './PRCommentCard'
 import { PRCommentComposer } from './PRCommentComposer'
 import {
-  PR_COMMENT_AUDIENCE_FILTERS,
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
-  getPRCommentAudienceEmptyLabel,
   type PRCommentAudienceFilter
-} from './pr-comment-audience'
+} from '../../../../src/shared/pr-comment-audience'
 import {
   getPRCommentGroupCount,
   getPRCommentGroupId,
@@ -24,39 +27,66 @@ import {
   groupPRComments,
   isResolvedPRCommentGroup,
   type PRCommentGroup
-} from './pr-comment-groups'
+} from '../../../../src/shared/pr-comment-groups'
 import { prCommentsStyles as styles } from './pr-comments-styles'
 import { mobilePrSidebarStyles as shared } from './mobile-pr-sidebar-styles'
+import { useNow } from '../../hooks/use-now'
 
 type Props = {
   details: GitHubWorkItemDetails | null
   // The PR conversation state — gates the root-comment composer (open PRs only).
   prState: PRState | null
-  // Repo slug for the slug-addressed comment edit/delete RPCs; threaded into the
-  // per-card actions so the edit/delete affordances can gate on its presence.
+  // Thread repo slug into card actions; edit/delete require it.
   prRepo?: GitHubPrRepoSlug | null
-  // Interactive comment actions (reply/resolve/add/edit/delete). Absent (e.g.
-  // non-PR) leaves the timeline read-only.
+  // Omit actions to keep timeline read-only outside interactive PR.
   actions?: MobilePrCommentActions
+  // Honor desktop’s manually marked bot logins so audience tabs classify identically.
+  botAuthorOverrides?: ReadonlySet<string>
 }
 
-// Render comments in bounded pages — the whole sidebar is one ScrollView (can't
-// virtualize a nested list), so eagerly rendering a large set parses markdown for
-// every comment synchronously and ANRs the JS thread. Start small, reveal in chunks.
+// Page comments in chunks: nested ScrollView cannot virtualize, and eager Markdown parse of whole timeline can ANR JS thread.
 const COMMENT_PAGE = 12
 
-// PR body + full comment timeline, mirroring the desktop PR page: a Description
-// card, then a Comments section with an audience filter (PRs only), threaded
-// review comments, reactions, and collapsible resolved threads.
-export function PRCommentsSection({ details, prState, prRepo, actions }: Props) {
-  // details is null while phase 2 (the heavy comments/body payload) is still loading.
-  const loadingDetails = details === null
-  const body = details?.body ?? ''
-  const comments = useMemo(() => details?.comments ?? [], [details])
-  const isPr = details?.item.type === 'pr'
+function audienceFilters(t: Translate): { value: PRCommentAudienceFilter; label: string }[] {
+  return [
+    { value: 'all', label: t('pullRequest.commentsSection.all', 'All') },
+    { value: 'human', label: t('pullRequest.commentsSection.humans', 'Humans') },
+    { value: 'bot', label: t('pullRequest.commentsSection.bots', 'Bots') }
+  ]
+}
 
-  // Per-card action bundle (stable callbacks from the hook) — built once so the
-  // memo'd cards don't re-render on unrelated timeline changes.
+function audienceEmptyLabel(filter: PRCommentAudienceFilter, t: Translate): string {
+  switch (filter) {
+    case 'bot':
+      return t('pullRequest.commentsSection.noBotComments', 'No bot comments.')
+    case 'human':
+      return t('pullRequest.commentsSection.noHumanComments', 'No human comments.')
+    case 'all':
+      return t('pullRequest.commentsSection.noComments', 'No comments yet.')
+  }
+}
+
+// Match desktop description/timeline with audience filter, threaded review replies, reactions and collapsible resolved threads.
+export function PRCommentsSection({
+  details,
+  prState,
+  prRepo,
+  actions,
+  botAuthorOverrides
+}: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  // Null details means phase 2 loading; synthetic placeholder means failure, never empty success.
+  const loadingDetails = details === null
+  const detailsFailed = details != null && isPrSidebarDetailsPlaceholder(details)
+  const body = details?.body ?? ''
+  const comments = useMemo(
+    () => (details && !isPrSidebarDetailsPlaceholder(details) ? details.comments : []),
+    [details]
+  )
+  const isPr = details != null && !detailsFailed && details.item.type === 'pr'
+
+  // Memoize stable per-card callback bundles so unrelated timeline updates skip cards.
   const cardActions = useMemo<PRCommentCardActions | undefined>(
     () =>
       actions && isPr
@@ -77,32 +107,53 @@ export function PRCommentsSection({ details, prState, prRepo, actions }: Props) 
   const canComment = isPr && actions !== undefined && canAddRootComment(prState)
 
   const [filter, setFilter] = useState<PRCommentAudienceFilter>('all')
-  const counts = useMemo(() => getPRCommentAudienceCounts(comments), [comments])
-  const visible = useMemo(() => filterPRCommentsByAudience(comments, filter), [comments, filter])
+  const counts = useMemo(
+    () => getPRCommentAudienceCounts(comments, botAuthorOverrides),
+    [botAuthorOverrides, comments]
+  )
+  const visible = useMemo(
+    () => filterPRCommentsByAudience(comments, filter, botAuthorOverrides),
+    [botAuthorOverrides, comments, filter]
+  )
   const groups = useMemo(() => groupPRComments(visible), [visible])
+  const now = useNow(60_000, comments.length > 0)
 
-  // Bounded render window; reset to the first page whenever the filtered set changes.
   const [limit, setLimit] = useState(COMMENT_PAGE)
-  useEffect(() => {
+  const selectFilter = (nextFilter: PRCommentAudienceFilter): void => {
+    if (nextFilter === filter) {
+      return
+    }
+    // Reset page limit in filter event’s batch to avoid first rendering new audience with old page size.
     setLimit(COMMENT_PAGE)
-  }, [filter])
+    setFilter(nextFilter)
+  }
   const shownGroups = groups.slice(0, limit)
   const remaining = groups.length - shownGroups.length
+  const count = Math.min(remaining, COMMENT_PAGE)
 
   return (
     <>
-      <PRSection title="Description">
+      <PRSection title={t('pullRequest.commentsSection.description', 'Description')}>
         {loadingDetails ? (
           <ActivityIndicator color={colors.textSecondary} />
+        ) : detailsFailed ? (
+          <Text style={styles.noDescription}>
+            {t(
+              'pullRequest.commentsSection.descriptionLoadFailed',
+              'Could not load description. Tap refresh to try again.'
+            )}
+          </Text>
         ) : body.trim() ? (
           <CommentMarkdown content={body} variant="document" />
         ) : (
-          <Text style={styles.noDescription}>No description provided.</Text>
+          <Text style={styles.noDescription}>
+            {t('pullRequest.commentsSection.noDescription', 'No description provided.')}
+          </Text>
         )}
       </PRSection>
 
       <PRSection
-        title="Comments"
+        title={t('pullRequest.commentsSection.title', 'Comments')}
         trailing={
           comments.length > 0 ? (
             <View style={styles.countChip}>
@@ -113,21 +164,30 @@ export function PRCommentsSection({ details, prState, prRepo, actions }: Props) 
       >
         {loadingDetails ? (
           <ActivityIndicator color={colors.textSecondary} />
+        ) : detailsFailed ? (
+          <Text style={styles.empty}>
+            {t(
+              'pullRequest.commentsSection.commentsLoadFailed',
+              'Could not load comments. Tap refresh to try again.'
+            )}
+          </Text>
         ) : (
           <View style={styles.list}>
             {comments.length === 0 ? (
-              <Text style={styles.empty}>No comments yet.</Text>
+              <Text style={styles.empty}>
+                {t('pullRequest.commentsSection.noComments', 'No comments yet.')}
+              </Text>
             ) : (
               <>
                 {isPr ? (
                   <View style={styles.audienceTabs}>
-                    {PR_COMMENT_AUDIENCE_FILTERS.map((tab) => {
+                    {audienceFilters(t).map((tab) => {
                       const active = tab.value === filter
                       return (
                         <Pressable
                           key={tab.value}
                           style={[styles.audienceTab, active && styles.audienceTabActive]}
-                          onPress={() => setFilter(tab.value)}
+                          onPress={() => selectFilter(tab.value)}
                           accessibilityRole="button"
                           accessibilityState={{ selected: active }}
                         >
@@ -147,7 +207,7 @@ export function PRCommentsSection({ details, prState, prRepo, actions }: Props) 
                   </View>
                 ) : null}
                 {visible.length === 0 ? (
-                  <Text style={styles.empty}>{getPRCommentAudienceEmptyLabel(filter)}</Text>
+                  <Text style={styles.empty}>{audienceEmptyLabel(filter, t)}</Text>
                 ) : (
                   <>
                     {shownGroups.map((group) => (
@@ -155,6 +215,7 @@ export function PRCommentsSection({ details, prState, prRepo, actions }: Props) 
                         key={getPRCommentGroupId(group)}
                         group={group}
                         actions={cardActions}
+                        now={now}
                       />
                     ))}
                     {remaining > 0 ? (
@@ -164,8 +225,15 @@ export function PRCommentsSection({ details, prState, prRepo, actions }: Props) 
                         accessibilityRole="button"
                       >
                         <Text style={styles.showMoreText}>
-                          Show {Math.min(remaining, COMMENT_PAGE)} more
-                          {remaining > COMMENT_PAGE ? ` of ${remaining}` : ''}
+                          {remaining > COMMENT_PAGE
+                            ? t(
+                                'pullRequest.commentsSection.showMoreOf',
+                                'Show {{count}} more of {{remaining}}',
+                                { count, remaining }
+                              )
+                            : t('pullRequest.commentsSection.showMore', 'Show {{count}} more', {
+                                count
+                              })}
                         </Text>
                       </Pressable>
                     ) : null}
@@ -177,8 +245,11 @@ export function PRCommentsSection({ details, prState, prRepo, actions }: Props) 
             {canComment && actions ? (
               <View style={styles.rootComposer}>
                 <PRCommentComposer
-                  placeholder="Add a comment…"
-                  submitLabel="Comment"
+                  placeholder={t(
+                    'pullRequest.commentsSection.addCommentPlaceholder',
+                    'Add a comment…'
+                  )}
+                  submitLabel={t('pullRequest.commentsSection.comment', 'Comment')}
                   submitting={actions.isRootBusy}
                   onSubmit={actions.addRootComment}
                 />
@@ -193,21 +264,32 @@ export function PRCommentsSection({ details, prState, prRepo, actions }: Props) 
 
 function CommentGroupView({
   group,
-  actions
+  actions,
+  now
 }: {
   group: PRCommentGroup
   actions?: PRCommentCardActions
+  now: number
 }) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const [expanded, setExpanded] = useState(false)
   const cards =
     group.kind === 'thread'
       ? [
-          <PRCommentCard key={group.root.id} comment={group.root} actions={actions} />,
+          <PRCommentCard key={group.root.id} comment={group.root} actions={actions} now={now} />,
           ...group.replies.map((reply) => (
-            <PRCommentCard key={reply.id} comment={reply} isReply actions={actions} />
+            <PRCommentCard key={reply.id} comment={reply} isReply actions={actions} now={now} />
           ))
         ]
-      : [<PRCommentCard key={group.comment.id} comment={group.comment} actions={actions} />]
+      : [
+          <PRCommentCard
+            key={group.comment.id}
+            comment={group.comment}
+            actions={actions}
+            now={now}
+          />
+        ]
 
   if (!isResolvedPRCommentGroup(group)) {
     return <View style={styles.group}>{cards}</View>
@@ -226,8 +308,29 @@ function CommentGroupView({
       >
         <Chevron size={14} color={colors.textSecondary} strokeWidth={2.2} />
         <Text style={styles.resolvedHeaderText} numberOfLines={1}>
-          Resolved {group.kind === 'thread' ? 'thread' : 'comment'} by {root.author}
-          {count > 1 ? ` (${count})` : ''}
+          {group.kind === 'thread'
+            ? count === 1
+              ? t(
+                  'pullRequest.commentsSection.resolvedThreadSingle',
+                  'Resolved thread by {{author}}',
+                  { author: root.author }
+                )
+              : t(
+                  'pullRequest.commentsSection.resolvedThreadCount',
+                  'Resolved thread by {{author}} ({{count}})',
+                  { author: root.author, count }
+                )
+            : count === 1
+              ? t(
+                  'pullRequest.commentsSection.resolvedCommentSingle',
+                  'Resolved comment by {{author}}',
+                  { author: root.author }
+                )
+              : t(
+                  'pullRequest.commentsSection.resolvedCommentCount',
+                  'Resolved comment by {{author}} ({{count}})',
+                  { author: root.author, count }
+                )}
         </Text>
       </Pressable>
       {expanded ? <View style={shared.sectionBody}>{cards}</View> : null}

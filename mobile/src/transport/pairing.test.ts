@@ -1,14 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { decodePairingUrl, extractPairingCodeFromUrl, parsePairingCode } from './pairing'
+import type { PairingOffer } from './types'
+import { PAIRING_INPUT_MAX_CHARACTERS } from '../../../src/shared/mobile-pairing-protocol-limits'
 
-const offer = {
+const offer: PairingOffer = {
   v: 2,
   endpoint: 'ws://100.102.47.57:6768',
   deviceToken: 'token-abc',
   publicKeyB64: 'pubkey-xyz'
-} as const
+}
 
-function encodeOffer(input = offer): string {
+function encodeOffer(input: PairingOffer = offer): string {
   return btoa(JSON.stringify(input)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
@@ -61,4 +63,42 @@ describe('pairing deep links', () => {
     expect(parsePairingCode(`orca://pair?code=${code}`)).toEqual(offer)
     expect(parsePairingCode(code)).toEqual(offer)
   })
+
+  it('rejects oversized raw codes and URLs before parsing', () => {
+    const code = encodeOffer()
+    const oversizedRawCode = `${code}${' '.repeat(PAIRING_INPUT_MAX_CHARACTERS)}`
+    const oversizedUrl = `orca://pair?code=${code}&ignored=${'A'.repeat(
+      PAIRING_INPUT_MAX_CHARACTERS
+    )}`
+
+    expect(parsePairingCode(oversizedRawCode)).toBeNull()
+    expect(extractPairingCodeFromUrl(oversizedUrl)).toBeNull()
+    expect(decodePairingUrl(oversizedUrl)).toBeNull()
+  })
+
+  it('preserves legacy padding and aliases with the same decoded offer', () => {
+    const paddedOffer = { ...offer, endpoint: `${offer.endpoint}/a` }
+    const code = encodeOffer(paddedOffer)
+    expect(code.length % 4).toBe(2)
+    const alias = `${code.slice(0, -1)}${base64Alias(code.at(-1)!)}`
+
+    expect(parsePairingCode(`${code}=`)).toEqual(paddedOffer)
+    expect(parsePairingCode(`${code}==`)).toEqual(paddedOffer)
+    expect(parsePairingCode(alias)).toEqual(paddedOffer)
+  })
+
+  it('preserves a TLS reverse-proxy endpoint with an explicit port and path', () => {
+    const proxiedOffer = {
+      ...offer,
+      endpoint: 'wss://proxy.example:443/orca/runtime'
+    }
+    const code = encodeOffer(proxiedOffer)
+
+    expect(parsePairingCode(code)).toEqual(proxiedOffer)
+  })
 })
+
+function base64Alias(character: string): string {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+  return alphabet[alphabet.indexOf(character) + 1]!
+}

@@ -1,0 +1,84 @@
+import type { MountAdapter } from '../recording-scenario'
+import { hookMount, performHookAction } from '../hook-mount'
+import { observableModel, projectObservable } from '../observable-model'
+import type { operationModuleLoader } from '../operation-module-loader'
+
+const ROW = {
+  worktreeId: 'wt-1',
+  repoId: 'repo-1',
+  repo: 'marlin',
+  branch: 'feature/pin',
+  displayName: 'marlin',
+  path: '/repos/marlin/wt-1',
+  liveTerminalCount: 0,
+  hasAttachedPty: false,
+  preview: '',
+  unread: false,
+  isPinned: false,
+  linkedPR: null
+}
+
+// Omit hostId to keep the hook off native pinned-id storage while recording worktree writes.
+export function hostWorktreeActionMountAdapters(
+  modules: ReturnType<typeof operationModuleLoader>
+): Record<string, MountAdapter> {
+  return {
+    'host.worktree-actions': (context) => {
+      const useActions = modules.load<
+        typeof import('../../../host-screen/use-host-worktree-actions')
+      >('mobile/src/host-screen/use-host-worktree-actions.ts').useHostWorktreeActions
+      const state = observableModel(context, {
+        pinnedIds: new Set<string>(),
+        worktrees: [ROW],
+        lastKnownWorktrees: [ROW],
+        confirmRemoveHost: false,
+        optimisticActiveWorktreeIdentity: null,
+        serverWorkspaces: { hosts: [], worktrees: [] }
+      })
+      let actions: ReturnType<typeof useActions>
+      const hook = hookMount(() => {
+        actions = useActions({
+          client: context.client,
+          connState: 'connected',
+          embedded: false,
+          fetchWorktrees: async () => {},
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook only forwards this to host removal, which no scenario drives.
+          forgetHostClient: (() => {}) as unknown as Parameters<
+            typeof useActions
+          >[0]['forgetHostClient'],
+          hostCapabilities: [],
+          hostId: undefined,
+          pathname: '/h/host-1',
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: navigation is observed through the recorded sends, not the router.
+          router: { push: () => {}, replace: () => {} } as unknown as Parameters<
+            typeof useActions
+          >[0]['router'],
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recorder supplies only the members the hook reads.
+          state: state as unknown as Parameters<typeof useActions>[0]['state']
+        })
+      })
+      return {
+        action(name) {
+          if (name === 'mount') {
+            return hook.mount()
+          }
+          if (name === 'toggle-pin') {
+            return performHookAction(() => actions.togglePin(ROW))
+          }
+          if (name === 'delete') {
+            return performHookAction(() => actions.handleDeleteWorktree(ROW))
+          }
+          if (name === 'open-session') {
+            return performHookAction(() => actions.openWorktreeSession(ROW))
+          }
+          throw new Error(`Unknown worktree action: ${name}`)
+        },
+        state: () =>
+          projectObservable(
+            Object.fromEntries(Object.entries(state).filter(([key]) => !key.endsWith('Ref')))
+          ),
+        dispose: hook.unmount
+      }
+    }
+  }
+}

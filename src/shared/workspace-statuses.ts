@@ -1,15 +1,15 @@
-import type { Worktree, WorkspaceStatus, WorkspaceStatusDefinition } from './types'
+import type { WorkspaceStatus, WorkspaceStatusDefinition, Worktree } from './worktree/types'
 import { DEFAULT_STATUS_VISUALS, DEFAULT_WORKSPACE_STATUSES } from './workspace-status-defaults'
 import {
   isKnownBadPRReorderedDefaultStatusPayload,
   isLegacyDefaultWorkflowStatusPayload
 } from './workspace-status-default-migration'
+import { sliceAtCodeUnitLimit } from './surrogate-safe-text-slice'
 
 export { DEFAULT_WORKSPACE_STATUSES } from './workspace-status-defaults'
 
 const WORKSPACE_STATUS_GROUP_PREFIX = 'workspace-status:'
 const MAX_STATUS_LABEL_LENGTH = 32
-const MAX_WORKSPACE_STATUSES = 12
 type WorkspaceStatusNormalizationOptions = {
   migrateDefaultWorkflowStatuses?: boolean
   migrateLegacyDefaultStatusVisuals?: boolean
@@ -65,7 +65,7 @@ function sanitizeWorkspaceStatusLabel(value: unknown, fallback: string): string 
     return fallback
   }
   const trimmed = value.trim().replace(/\s+/g, ' ')
-  return trimmed ? trimmed.slice(0, MAX_STATUS_LABEL_LENGTH) : fallback
+  return trimmed ? sliceAtCodeUnitLimit(trimmed, MAX_STATUS_LABEL_LENGTH) : fallback
 }
 
 function slugWorkspaceStatusLabel(label: string): string {
@@ -169,7 +169,7 @@ function normalizeWorkspaceStatusesInternal(
 
   const statuses: WorkspaceStatusDefinition[] = []
   const usedIds = new Set<string>()
-  for (const rawStatus of value.slice(0, MAX_WORKSPACE_STATUSES)) {
+  for (const rawStatus of value) {
     if (!rawStatus || typeof rawStatus !== 'object' || Array.isArray(rawStatus)) {
       continue
     }
@@ -214,9 +214,7 @@ export function normalizePersistedWorkspaceStatuses(
   ) {
     return cloneDefaultWorkspaceStatuses()
   }
-  // Why: this PR briefly wrote the default columns in reverse workflow order.
-  // The repair is one-shot and checks the raw payload, because normalized
-  // IDs/labels are indistinguishable from a user-authored column reorder.
+  // Repair only the raw known reversed default payload once; normalized values cannot distinguish it from a user reorder.
   if (
     options.repairReorderedDefaultStatuses === true &&
     isKnownBadPRReorderedDefaultStatusPayload(value)
@@ -258,6 +256,29 @@ export function getDefaultWorkspaceStatusId(
   return statuses.some((status) => status.id === DEFAULT_WORKSPACE_STATUS_ID)
     ? DEFAULT_WORKSPACE_STATUS_ID
     : (statuses[0]?.id ?? DEFAULT_WORKSPACE_STATUS_ID)
+}
+
+/** The statuses to group by: a payload with none (a partially hydrated store) keeps the defaults. */
+export function withDefaultWorkspaceStatuses(
+  statuses: readonly WorkspaceStatusDefinition[]
+): readonly WorkspaceStatusDefinition[] {
+  return statuses.length > 0 ? statuses : DEFAULT_WORKSPACE_STATUSES
+}
+
+/** Local columns first, then paired hosts' columns the local list lacks; an id clash keeps the local column. */
+export function mergeHostWorkspaceStatuses(
+  local: readonly WorkspaceStatusDefinition[],
+  hosts: readonly (readonly WorkspaceStatusDefinition[])[]
+): readonly WorkspaceStatusDefinition[] {
+  const seen = new Set(local.map((status) => status.id))
+  const extra: WorkspaceStatusDefinition[] = []
+  for (const status of hosts.flat()) {
+    if (!seen.has(status.id)) {
+      seen.add(status.id)
+      extra.push(status)
+    }
+  }
+  return extra.length > 0 ? [...local, ...extra] : local
 }
 
 export function getWorkspaceStatus(

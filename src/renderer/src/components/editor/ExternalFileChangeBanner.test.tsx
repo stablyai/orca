@@ -1,0 +1,245 @@
+import { renderToStaticMarkup } from 'react-dom/server'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { OpenFile } from '@/store/slices/editor'
+
+const toastMock = vi.hoisted(() => vi.fn())
+const readRuntimeFileContentMock = vi.hoisted(() => vi.fn())
+vi.mock('sonner', () => ({
+  toast: toastMock
+}))
+vi.mock('@/store', () => {
+  const getState = vi.fn()
+  return {
+    useAppStore: Object.assign((select: (state: unknown) => unknown) => select(getState()), {
+      getState
+    })
+  }
+})
+vi.mock('@/runtime/runtime-file-read-client', () => ({
+  readRuntimeFileContent: readRuntimeFileContentMock
+}))
+
+vi.mock('@/lib/connection-context', () => ({
+  // Why: the floating workspace is always client-local; other owners are still loading.
+  getConnectionIdForFile: (worktreeId: string) =>
+    worktreeId === 'global-floating-terminal' ? null : undefined
+}))
+
+import {
+  ExternalFileChangeBanner,
+  keepTabEditsOverExternalChange,
+  reloadTabContentFromDisk
+} from './ExternalFileChangeBanner'
+import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
+import { useAppStore } from '@/store'
+import { createTestStore } from '@/store/slices/store-test-helpers'
+
+const file = {
+  id: 'file-1',
+  filePath: '/repo/notes.md',
+  relativePath: 'notes.md',
+  worktreeId: 'wt-1',
+  mode: 'edit',
+  isDirty: true,
+  externalMutation: 'changed'
+} as OpenFile
+
+describe('ExternalFileChangeBanner', () => {
+  const clearEditorDraft = vi.fn()
+  const markFileDirty = vi.fn()
+  const setExternalMutation = vi.fn()
+  const setEditorDraft = vi.fn()
+  const setLastKnownDiskSignature = vi.fn()
+
+  function mockStoreState(editorDrafts: Record<string, string>, openFiles: OpenFile[] = [file]) {
+    vi.mocked(useAppStore.getState).mockReturnValue({
+      ...createTestStore().getState(),
+      clearEditorDraft,
+      markFileDirty,
+      setExternalMutation,
+      setEditorDraft,
+      setLastKnownDiskSignature,
+      editorDrafts,
+      openFiles
+    })
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    readRuntimeFileContentMock.mockResolvedValue({ content: 'disk content', isBinary: false })
+    mockStoreState({})
+  })
+
+  it('renders the overwrite warning, all four actions, and an alert role', () => {
+    const html = renderToStaticMarkup(
+      <ExternalFileChangeBanner file={file} currentContent="buffer" reloadContent={vi.fn()} />
+    )
+    expect(html).toContain('role="alert"')
+    expect(html).toContain('changed on disk')
+    expect(html).toContain('Overwrite replaces')
+    expect(html).toContain('>Overwrite<')
+    expect(html).toContain('Compare')
+    expect(html).toContain('Reload from Disk')
+    expect(html).toContain('Keep My Edits')
+  })
+
+  it('reload clears the draft, dirty flag, and mark before refetching content', () => {
+    mockStoreState({ 'file-1': 'unsaved text' })
+    const calls: string[] = []
+    clearEditorDraft.mockImplementation(() => calls.push('clearEditorDraft'))
+    markFileDirty.mockImplementation(() => calls.push('markFileDirty'))
+    setExternalMutation.mockImplementation(() => calls.push('setExternalMutation'))
+    const reloadContent = vi.fn(() => calls.push('reloadContent'))
+
+    reloadTabContentFromDisk(file, reloadContent)
+
+    expect(clearEditorDraft).toHaveBeenCalledWith('file-1')
+    expect(markFileDirty).toHaveBeenCalledWith('file-1', false)
+    expect(setExternalMutation).toHaveBeenCalledWith('file-1', null)
+    expect(reloadContent).toHaveBeenCalledWith(file)
+    // Drafts shadow loaded content, so clear them before refetching.
+    expect(calls).toEqual([
+      'clearEditorDraft',
+      'markFileDirty',
+      'setExternalMutation',
+      'reloadContent'
+    ])
+  })
+
+  it('reload offers an undo toast that restores the discarded draft and the conflict', () => {
+    mockStoreState({ 'file-1': 'discarded draft' })
+
+    reloadTabContentFromDisk(file, vi.fn())
+
+    expect(toastMock).toHaveBeenCalledTimes(1)
+    const options = toastMock.mock.calls[0][1] as {
+      action: { label: string; onClick: () => void }
+    }
+    vi.clearAllMocks()
+    // Reload undo is valid only while the clean, draft-free state remains untouched.
+    mockStoreState({}, [{ ...file, isDirty: false, externalMutation: undefined } as OpenFile])
+
+    options.action.onClick()
+
+    expect(setEditorDraft).toHaveBeenCalledWith('file-1', 'discarded draft')
+    expect(markFileDirty).toHaveBeenCalledWith('file-1', true)
+    // Restored edits still conflict with disk and must suspend autosave again.
+    expect(setExternalMutation).toHaveBeenCalledWith('file-1', 'changed')
+  })
+
+  it('undo is a no-op when the tab closed while the toast was up', () => {
+    mockStoreState({ 'file-1': 'discarded draft' })
+
+    reloadTabContentFromDisk(file, vi.fn())
+
+    const options = toastMock.mock.calls[0][1] as {
+      action: { label: string; onClick: () => void }
+    }
+    vi.clearAllMocks()
+    mockStoreState({}, [])
+
+    options.action.onClick()
+
+    expect(setEditorDraft).not.toHaveBeenCalled()
+    expect(markFileDirty).not.toHaveBeenCalled()
+    expect(setExternalMutation).not.toHaveBeenCalled()
+  })
+
+  it('undo is a no-op when the user typed or saved after the reload', () => {
+    mockStoreState({ 'file-1': 'discarded draft' })
+
+    reloadTabContentFromDisk(file, vi.fn())
+
+    const options = toastMock.mock.calls[0][1] as {
+      action: { label: string; onClick: () => void }
+    }
+    vi.clearAllMocks()
+    // Post-reload typing is newer intent; undo must not discard it.
+    mockStoreState({ 'file-1': 'newer post-reload edits' }, [
+      { ...file, isDirty: true, externalMutation: undefined } as OpenFile
+    ])
+
+    options.action.onClick()
+
+    expect(setEditorDraft).not.toHaveBeenCalled()
+    expect(setExternalMutation).not.toHaveBeenCalled()
+  })
+
+  it('does not toast when there was no draft to restore', () => {
+    mockStoreState({})
+
+    reloadTabContentFromDisk(file, vi.fn())
+
+    expect(toastMock).not.toHaveBeenCalled()
+  })
+
+  it('undo restores the pre-reload disk signature with the draft', async () => {
+    // Restore the old disk signature or restart scans would clear the restored conflict against the new baseline.
+    mockStoreState({ 'file-1': 'discarded draft' }, [
+      { ...file, lastKnownDiskSignature: 'pre-reload-signature' } as OpenFile
+    ])
+
+    reloadTabContentFromDisk(file, vi.fn())
+
+    const options = toastMock.mock.calls[0][1] as {
+      action: { label: string; onClick: () => void }
+    }
+    vi.clearAllMocks()
+    mockStoreState({}, [{ ...file, isDirty: false, externalMutation: undefined } as OpenFile])
+
+    options.action.onClick()
+
+    expect(setLastKnownDiskSignature).toHaveBeenCalledWith('file-1', 'pre-reload-signature')
+  })
+
+  it('keep-my-edits clears the mark without touching the draft or dirty flag', () => {
+    keepTabEditsOverExternalChange(file)
+
+    expect(setExternalMutation).toHaveBeenCalledWith('file-1', null)
+    expect(clearEditorDraft).not.toHaveBeenCalled()
+    expect(markFileDirty).not.toHaveBeenCalled()
+  })
+
+  it('keep-my-edits advances the disk baseline so the dismissal survives restart', async () => {
+    readRuntimeFileContentMock.mockResolvedValue({ content: 'agent content', isBinary: false })
+    mockStoreState({}, [{ ...file, externalMutation: undefined } as OpenFile])
+
+    keepTabEditsOverExternalChange(file)
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(setLastKnownDiskSignature).toHaveBeenCalledWith(
+      'file-1',
+      getDiskBaselineSignature('agent content')
+    )
+  })
+
+  it('keep-my-edits does not stamp a baseline over a newer conflict', async () => {
+    // A newer conflict owns the baseline; a late Keep read must not hide it from restart scans.
+    readRuntimeFileContentMock.mockResolvedValue({ content: 'even newer', isBinary: false })
+    mockStoreState({}, [{ ...file, externalMutation: 'changed' } as OpenFile])
+
+    keepTabEditsOverExternalChange(file)
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(setLastKnownDiskSignature).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [
+      'a floating-workspace tab, as the file the user named',
+      'global-floating-terminal',
+      'user-file'
+    ],
+    ['a project tab, inside its root', 'wt-1', undefined]
+  ])('keep-my-edits reads %s', async (_label, worktreeId, kind) => {
+    const tab: OpenFile = { ...file, worktreeId }
+    mockStoreState({}, [tab])
+
+    keepTabEditsOverExternalChange(tab)
+    await Promise.resolve()
+
+    expect(readRuntimeFileContentMock.mock.calls[0]?.[0]?.access?.kind).toBe(kind)
+  })
+})

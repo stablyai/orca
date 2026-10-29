@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
 import {
   SettingsRow,
@@ -30,6 +30,8 @@ export function TerminalWindowsShellSection({
   gitBashAvailable
 }: TerminalWindowsShellSectionProps): React.JSX.Element {
   const showGitBashOption = gitBashAvailable || windowsShell === WINDOWS_GIT_BASH_SHELL
+  // New WSL choices need a distro; retain only existing WSL defaults here.
+  const showWslOption = windowsShell === 'wsl.exe'
 
   return (
     <section key="windows-shell" className="space-y-3">
@@ -43,6 +45,7 @@ export function TerminalWindowsShellSection({
 
       <div className="divide-y divide-border/40">
         <SearchableSetting
+          className="@container"
           title={translate('auto.components.settings.TerminalPane.27e301f22c', 'Default Shell')}
           description={translate(
             'auto.components.settings.TerminalPane.bd68f3170d',
@@ -61,6 +64,7 @@ export function TerminalWindowsShellSection({
           ]}
         >
           <SettingsRow
+            className="flex-col items-stretch @lg:flex-row @lg:items-center"
             label={translate('auto.components.settings.TerminalPane.27e301f22c', 'Default Shell')}
             description={translate(
               'auto.components.settings.TerminalPane.09bf02de9a',
@@ -68,6 +72,9 @@ export function TerminalWindowsShellSection({
             )}
             control={
               <SettingsSegmentedControl
+                size="sm"
+                equalWidth
+                wrap
                 ariaLabel={translate(
                   'auto.components.settings.TerminalPane.27e301f22c',
                   'Default Shell'
@@ -116,6 +123,22 @@ export function TerminalWindowsShellSection({
                             'Git Bash'
                           ),
                           disabled: !gitBashAvailable
+                        }
+                      ]
+                    : []),
+                  ...(showWslOption
+                    ? [
+                        {
+                          value: 'wsl.exe',
+                          label: windowsShellLabel(
+                            'wsl.exe',
+                            translate('auto.components.settings.TerminalPane.b637dd57a7', 'WSL')
+                          ),
+                          ariaLabel: translate(
+                            'auto.components.settings.TerminalPane.b637dd57a7',
+                            'WSL'
+                          ),
+                          disabled: true
                         }
                       ]
                     : [])

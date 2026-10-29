@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  activateOpenedMobileSessionTab,
+  activateOpenedSourceControlDiffTab,
   findOpenedMobileSessionTab,
-  refreshOpenedMobileSessionTabs,
   shouldActivateOpenedMobileSessionTab,
   type OpenedMobileSessionTabCandidate
 } from './opened-mobile-session-tab'
@@ -43,6 +42,15 @@ describe('findOpenedMobileSessionTab', () => {
     expect(findOpenedMobileSessionTab(tabs, 'assets/logo.png')?.id).toBe('image-1')
   })
 
+  it('matches a diff tab opened from mobile source control', () => {
+    const tabs: OpenedMobileSessionTabCandidate[] = [
+      { type: 'terminal', id: 'term' },
+      { type: 'file', id: 'diff-1', mode: 'diff', relativePath: 'src/app.ts' }
+    ]
+
+    expect(findOpenedMobileSessionTab(tabs, 'src/app.ts')?.id).toBe('diff-1')
+  })
+
   it('skips diff tabs when an edit tab has the same relative path', () => {
     const tabs: OpenedMobileSessionTabCandidate[] = [
       { type: 'file', id: 'diff-1', mode: 'diff', relativePath: 'src/app.ts' },
@@ -51,49 +59,33 @@ describe('findOpenedMobileSessionTab', () => {
 
     expect(findOpenedMobileSessionTab(tabs, 'src/app.ts')?.id).toBe('edit-1')
   })
-})
 
-describe('refreshOpenedMobileSessionTabs', () => {
-  it('waits for a current refresh before requesting a post-open snapshot', async () => {
-    const order: string[] = []
-    let resolveCurrentRefresh: () => void = () => {}
-    const currentRefresh = new Promise<void>((resolve) => {
-      resolveCurrentRefresh = resolve
-    })
+  it('can prefer a diff tab when source control just opened one', () => {
+    const tabs: OpenedMobileSessionTabCandidate[] = [
+      { type: 'markdown', id: 'edit-1', relativePath: 'README.md' },
+      { type: 'file', id: 'diff-1', mode: 'diff', relativePath: 'README.md' }
+    ]
 
-    const refresh = refreshOpenedMobileSessionTabs({
-      getCurrentRefresh: () => currentRefresh,
-      refreshSessionTabs: async () => {
-        order.push('fresh')
-      }
-    })
-
-    await Promise.resolve()
-    expect(order).toEqual([])
-
-    order.push('current')
-    resolveCurrentRefresh()
-    await refresh
-
-    expect(order).toEqual(['current', 'fresh'])
+    expect(findOpenedMobileSessionTab(tabs, 'README.md', { preferMode: 'diff' })?.id).toBe('diff-1')
   })
 })
 
-describe('activateOpenedMobileSessionTab', () => {
-  const fileTab = { type: 'file', id: 'file-1', relativePath: 'src/app.ts' }
+describe('activateOpenedSourceControlDiffTab', () => {
+  const diffTab = { type: 'file', id: 'diff-1', mode: 'diff', relativePath: 'src/app.ts' }
 
-  function createActivationHarness() {
+  function createSourceControlHarness() {
     let tabs: OpenedMobileSessionTabCandidate[] = []
     let activeTabId: string | null = 'terminal-1'
     let activated = false
     const activationSeq = 1
     let latestActivationSeq = 1
-    let activeTerminalHandle: string | null = 'pty-1'
-    let activeTabType: string | null = 'terminal'
     const switched: string[] = []
     return {
       setTabs(nextTabs: OpenedMobileSessionTabCandidate[]) {
         tabs = nextTabs
+      },
+      setActiveTabId(id: string | null) {
+        activeTabId = id
       },
       markActivated() {
         activated = true
@@ -101,30 +93,17 @@ describe('activateOpenedMobileSessionTab', () => {
       supersedeActivation() {
         latestActivationSeq += 1
       },
-      leaveSourceTerminal() {
-        activeTerminalHandle = null
-        activeTabType = 'file'
-      },
       options(fetchSessionTabs: () => Promise<void>) {
         return {
           relativePath: 'src/app.ts',
+          activeTabIdAtTap: 'terminal-1' as string | null,
           fetchSessionTabs,
           getTabs: () => tabs,
           getActiveTabId: () => activeTabId,
-          getActivationState: () => ({
-            activated,
-            activationSeq,
-            latestActivationSeq,
-            sourceTerminalHandle: 'pty-1',
-            activeTerminalHandle,
-            activeTabType
-          }),
+          getActivationState: () => ({ activated, activationSeq, latestActivationSeq }),
           switchSessionTab: (tab: OpenedMobileSessionTabCandidate) => {
             activeTabId = tab.id
-            activeTabType = tab.type
-            activeTerminalHandle = null
             switched.push(tab.id)
-            return true
           }
         }
       },
@@ -132,58 +111,85 @@ describe('activateOpenedMobileSessionTab', () => {
     }
   }
 
-  it('refreshes tabs and switches to the opened file tab', async () => {
-    const harness = createActivationHarness()
+  it('refreshes tabs and switches to the opened diff tab', async () => {
+    const harness = createSourceControlHarness()
 
-    const activated = await activateOpenedMobileSessionTab(
+    const settled = await activateOpenedSourceControlDiffTab(
       harness.options(async () => {
-        harness.setTabs([fileTab])
+        harness.setTabs([diffTab])
       })
     )
 
-    expect(activated).toBe(true)
-    expect(harness.switched).toEqual(['file-1'])
+    expect(settled).toBe(true)
+    expect(harness.switched).toEqual(['diff-1'])
+  })
+
+  it('prefers the opened diff over an existing edit tab for the same path', async () => {
+    const harness = createSourceControlHarness()
+
+    const settled = await activateOpenedSourceControlDiffTab(
+      harness.options(async () => {
+        harness.setTabs([{ type: 'markdown', id: 'edit-1', relativePath: 'src/app.ts' }, diffTab])
+      })
+    )
+
+    expect(settled).toBe(true)
+    expect(harness.switched).toEqual(['diff-1'])
+  })
+
+  it('settles without switching when the snapshot already made the diff active', async () => {
+    const harness = createSourceControlHarness()
+
+    const settled = await activateOpenedSourceControlDiffTab(
+      harness.options(async () => {
+        harness.setTabs([diffTab])
+        harness.setActiveTabId('diff-1')
+      })
+    )
+
+    expect(settled).toBe(true)
+    expect(harness.switched).toEqual([])
+  })
+
+  it('does not steal focus when the user moved to a different tab after the tap', async () => {
+    const harness = createSourceControlHarness()
+
+    const settled = await activateOpenedSourceControlDiffTab(
+      harness.options(async () => {
+        harness.setTabs([diffTab])
+        harness.setActiveTabId('terminal-2')
+      })
+    )
+
+    expect(settled).toBe(false)
+    expect(harness.switched).toEqual([])
   })
 
   it('does not switch when a newer tap supersedes this attempt during refresh', async () => {
-    const harness = createActivationHarness()
+    const harness = createSourceControlHarness()
 
-    const activated = await activateOpenedMobileSessionTab(
+    const settled = await activateOpenedSourceControlDiffTab(
       harness.options(async () => {
-        harness.setTabs([fileTab])
+        harness.setTabs([diffTab])
         harness.supersedeActivation()
       })
     )
 
-    expect(activated).toBe(false)
-    expect(harness.switched).toEqual([])
-  })
-
-  it('does not switch when the user leaves the source terminal during refresh', async () => {
-    const harness = createActivationHarness()
-
-    const activated = await activateOpenedMobileSessionTab(
-      harness.options(async () => {
-        harness.setTabs([fileTab])
-        harness.leaveSourceTerminal()
-      })
-    )
-
-    expect(activated).toBe(false)
+    expect(settled).toBe(false)
     expect(harness.switched).toEqual([])
   })
 
   it('stops retrying after an earlier attempt already activated the tab', async () => {
-    const harness = createActivationHarness()
+    const harness = createSourceControlHarness()
     harness.markActivated()
 
-    const activated = await activateOpenedMobileSessionTab(
+    const settled = await activateOpenedSourceControlDiffTab(
       harness.options(async () => {
-        harness.setTabs([fileTab])
+        harness.setTabs([diffTab])
       })
     )
 
-    expect(activated).toBe(false)
+    expect(settled).toBe(false)
     expect(harness.switched).toEqual([])
   })
 })
@@ -232,6 +238,39 @@ describe('shouldActivateOpenedMobileSessionTab', () => {
         activated: false,
         activeTabType: 'file',
         activeTerminalHandle: null
+      })
+    ).toBe(false)
+    expect(
+      shouldActivateOpenedMobileSessionTab({
+        ...currentTerminalState,
+        activated: false,
+        activeTerminalHandle: 'pty-2'
+      })
+    ).toBe(false)
+  })
+
+  it('allows a structured agent-session tab to anchor chat file activation', () => {
+    expect(
+      shouldActivateOpenedMobileSessionTab({
+        activated: false,
+        activationSeq: 2,
+        latestActivationSeq: 2,
+        sourceTerminalHandle: null,
+        activeTerminalHandle: null,
+        sourceSessionTabId: 'agent-tab-1',
+        activeSessionTabId: 'agent-tab-1',
+        activeTabType: 'agent-session'
+      })
+    ).toBe(true)
+    expect(
+      shouldActivateOpenedMobileSessionTab({
+        ...currentTerminalState,
+        activated: false,
+        sourceTerminalHandle: null,
+        activeTerminalHandle: null,
+        sourceSessionTabId: 'agent-tab-1',
+        activeSessionTabId: 'agent-tab-2',
+        activeTabType: 'agent-session'
       })
     ).toBe(false)
   })

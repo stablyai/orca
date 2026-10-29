@@ -1,150 +1,95 @@
-import { homedir } from 'os'
-import { join } from 'path'
+import { lstatSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import { resolveGrokHomeDir } from '../../shared/grok-session-paths'
 import {
-  createManagedCommandMatcher,
-  buildWindowsAgentHookPostCommand,
-  getSharedManagedScriptPath,
   readHooksJson,
-  removeManagedCommands,
-  wrapPosixHookCommand,
-  wrapWindowsHookCommand,
+  readHooksJsonWithRaw,
   writeHooksJson,
-  writeManagedScript,
-  type HookDefinition
+  writeManagedScript
 } from '../agent-hooks/installer-utils'
+import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
+import { isOrcaOwnedRemnant, removeManagedGrokHookEntries } from './grok-hook-config-cleanup'
+import { buildInstalledGrokConfig, GROK_EVENTS, GROK_TOOL_EVENT_MATCHER } from './grok-hook-config'
+import { installRemoteGrokHook } from './grok-hook-remote-install'
 import {
-  readHooksJsonRemote,
-  writeHooksJsonRemote,
-  writeManagedScriptRemote
-} from '../agent-hooks/installer-utils-remote'
+  getGrokManagedCommand,
+  getGrokManagedScript,
+  getGrokManagedScriptFileName,
+  getGrokManagedScriptPath
+} from './grok-hook-script'
+import {
+  isGrokHookConfigSymlink,
+  readGrokHookConfigSnapshot,
+  removeGrokHookConfigIfUnchanged,
+  writeGrokHookConfigIfUnchanged
+} from './grok-hook-config-file'
+import {
+  hasRegisteredGrokHookOwner,
+  registerGrokHookOwner,
+  releaseGrokHookOwnerAndCheckForPeers,
+  unregisterGrokHookOwnerSync
+} from './grok-hook-owners'
+import {
+  clearGrokSymlinkCleanupMarker,
+  matchesRecordedGrokSymlinkCleanup,
+  recordGrokSymlinkCleanup
+} from './grok-hook-symlink-cleanup-marker'
 
-const GROK_EVENTS = [
-  { eventName: 'SessionStart', definition: { hooks: [{ type: 'command', command: '' }] } },
-  { eventName: 'UserPromptSubmit', definition: { hooks: [{ type: 'command', command: '' }] } },
-  { eventName: 'Stop', definition: { hooks: [{ type: 'command', command: '' }] } },
-  { eventName: 'SessionEnd', definition: { hooks: [{ type: 'command', command: '' }] } },
-  {
-    eventName: 'PreToolUse',
-    definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
-  },
-  {
-    eventName: 'PostToolUse',
-    definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
-  },
-  {
-    eventName: 'PostToolUseFailure',
-    definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
-  },
-  { eventName: 'Notification', definition: { hooks: [{ type: 'command', command: '' }] } }
-] as const
+export function getGrokToolEventMatcherForTests(): string {
+  return GROK_TOOL_EVENT_MATCHER
+}
 
 function getConfigPath(): string {
-  // Why: Grok loads trusted global hook files from ~/.grok/hooks/*.json. Keep
-  // Orca's managed entries in a dedicated file so user-authored hook files stay
-  // untouched and project-level trust is not required for status reporting.
-  return join(homedir(), '.grok', 'hooks', 'orca-status.json')
+  // Use Grok's selected home and a dedicated managed file so unrelated user hook files stay untouched.
+  return join(resolveGrokHomeDir(), 'hooks', 'orca-status.json')
 }
 
-function getManagedScriptFileName(): string {
-  return process.platform === 'win32' ? 'grok-hook.cmd' : 'grok-hook.sh'
+export function getManagedCommandForTests(scriptPath: string): string {
+  return getGrokManagedCommand(scriptPath)
 }
 
-function getManagedScriptPath(): string {
-  return getSharedManagedScriptPath(getManagedScriptFileName())
-}
-
-function getManagedCommand(scriptPath: string): string {
-  return process.platform === 'win32'
-    ? wrapWindowsHookCommand(scriptPath)
-    : wrapPosixHookCommand(scriptPath)
-}
-
-function getManagedScript(target: 'local' | 'posix' = 'local'): string {
-  if (target === 'local' && process.platform === 'win32') {
-    return [
-      '@echo off',
-      'setlocal',
-      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
-      'if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0',
-      'if "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0',
-      'if "%ORCA_PANE_KEY%"=="" exit /b 0',
-      buildWindowsAgentHookPostCommand('grok'),
-      'exit /b 0',
-      ''
-    ].join('\r\n')
+function isSymbolicLinkSync(configPath: string): boolean {
+  try {
+    return lstatSync(configPath).isSymbolicLink()
+  } catch {
+    return false
   }
-
-  return [
-    '#!/bin/sh',
-    'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
-    '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
-    'fi',
-    'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
-    '  exit 0',
-    'fi',
-    'payload=$(cat)',
-    'if [ -z "$payload" ]; then',
-    '  exit 0',
-    'fi',
-    // Timeout caps best-effort hook posts if the local listener stalls.
-    'curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/grok" \\',
-    '  --connect-timeout 0.5 --max-time 1.5 \\',
-    '  -H "Content-Type: application/x-www-form-urlencoded" \\',
-    '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
-    '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
-    '  --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
-    '  --data-urlencode "launchToken=${ORCA_AGENT_LAUNCH_TOKEN}" \\',
-    '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
-    '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
-    '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
-    '  --data-urlencode "payload=${payload}" >/dev/null 2>&1 || true',
-    'exit 0',
-    ''
-  ].join('\n')
 }
 
-function buildInstalledConfig(
-  config: NonNullable<ReturnType<typeof readHooksJson>>,
-  command: string,
-  scriptFileName: string
-): void {
-  const nextHooks = { ...config.hooks }
-  const isManagedCommand = createManagedCommandMatcher(scriptFileName)
-  const managedEvents = new Set<string>(GROK_EVENTS.map((event) => event.eventName))
-
-  // Why: Orca owns only grok-hook.* entries. Sweep stale managed commands out
-  // of retired events while preserving any user-authored hooks in this file.
-  for (const [eventName, definitions] of Object.entries(nextHooks)) {
-    if (managedEvents.has(eventName) || !Array.isArray(definitions)) {
-      continue
+function readGrokHookConfigRawSync(configPath: string): string | null {
+  try {
+    return readFileSync(configPath, 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return null
     }
-    const cleaned = removeManagedCommands(definitions, isManagedCommand)
-    if (cleaned.length === 0) {
-      delete nextHooks[eventName]
-    } else {
-      nextHooks[eventName] = cleaned
-    }
+    throw error
   }
+}
 
-  for (const event of GROK_EVENTS) {
-    const current = Array.isArray(nextHooks[event.eventName]) ? nextHooks[event.eventName] : []
-    const cleaned = removeManagedCommands(current, isManagedCommand)
-    const definition: HookDefinition = {
-      ...event.definition,
-      hooks: [{ type: 'command', command }]
-    }
-    nextHooks[event.eventName] = [...cleaned, definition]
+function notInstalledStatus(
+  configPath: string,
+  detail: string | null = null
+): AgentHookInstallStatus {
+  return {
+    agent: 'grok',
+    state: detail ? 'error' : 'not_installed',
+    configPath,
+    managedHooksPresent: false,
+    detail
   }
-
-  config.hooks = nextHooks
 }
 
 export class GrokHookService {
+  async refreshManagedScripts(): Promise<void> {
+    await refreshManagedScriptIfPresent(getGrokManagedScriptPath(), getGrokManagedScript())
+  }
+
   getStatus(): AgentHookInstallStatus {
     const configPath = getConfigPath()
-    const scriptPath = getManagedScriptPath()
+    const scriptPath = getGrokManagedScriptPath()
     const config = readHooksJson(configPath)
     if (!config) {
       return {
@@ -156,7 +101,7 @@ export class GrokHookService {
       }
     }
 
-    const command = getManagedCommand(scriptPath)
+    const command = getGrokManagedCommand(scriptPath)
     const missing: string[] = []
     let presentCount = 0
     for (const event of GROK_EVENTS) {
@@ -189,10 +134,11 @@ export class GrokHookService {
     return { agent: 'grok', state, configPath, managedHooksPresent, detail }
   }
 
-  install(): AgentHookInstallStatus {
+  install(options?: { userInitiated?: boolean }): AgentHookInstallStatus {
     const configPath = getConfigPath()
-    const scriptPath = getManagedScriptPath()
-    const config = readHooksJson(configPath)
+    const scriptPath = getGrokManagedScriptPath()
+    const snapshot = readHooksJsonWithRaw(configPath)
+    const config = snapshot.config
     if (!config) {
       return {
         agent: 'grok',
@@ -203,80 +149,141 @@ export class GrokHookService {
       }
     }
 
-    buildInstalledConfig(config, getManagedCommand(scriptPath), getManagedScriptFileName())
-    writeManagedScript(scriptPath, getManagedScript())
-    writeHooksJson(configPath, config)
-    return this.getStatus()
+    // Empty configs mean user opt-out unless explicitly re-enabled or matched to Orca's own symlink-cleanup marker.
+    const configIsSymlink = isSymbolicLinkSync(configPath)
+    const reinstallsOwnSymlinkCleanup =
+      configIsSymlink &&
+      snapshot.raw !== null &&
+      matchesRecordedGrokSymlinkCleanup(configPath, snapshot.raw)
+    if (
+      options?.userInitiated !== true &&
+      snapshot.raw !== null &&
+      Object.keys(config.hooks ?? {}).length === 0 &&
+      !reinstallsOwnSymlinkCleanup
+    ) {
+      return this.getStatus()
+    }
+
+    buildInstalledGrokConfig(
+      config,
+      getGrokManagedCommand(scriptPath),
+      getGrokManagedScriptFileName()
+    )
+    writeManagedScript(scriptPath, getGrokManagedScript())
+    mkdirSync(dirname(configPath), { recursive: true })
+    if (readGrokHookConfigRawSync(configPath) !== snapshot.raw) {
+      return notInstalledStatus(configPath, 'Grok hook config changed during installation')
+    }
+    const ownsWindowsHook = process.platform === 'win32'
+    try {
+      if (ownsWindowsHook) {
+        registerGrokHookOwner()
+      }
+      writeHooksJson(configPath, config)
+      if (configIsSymlink) {
+        clearGrokSymlinkCleanupMarker(configPath)
+      }
+      return this.getStatus()
+    } catch (error) {
+      if (ownsWindowsHook) {
+        unregisterGrokHookOwnerSync()
+      }
+      throw error
+    }
   }
 
-  async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
-    const home = remoteHome.replace(/\/$/, '')
-    const remoteConfigPath = `${home}/.grok/hooks/orca-status.json`
-    const remoteScriptPath = `${home}/.orca/agent-hooks/grok-hook.sh`
-    try {
-      const config = await readHooksJsonRemote(sftp, remoteConfigPath)
-      if (!config) {
-        return {
-          agent: 'grok',
-          state: 'error',
-          configPath: remoteConfigPath,
-          managedHooksPresent: false,
-          detail: 'Could not parse remote Grok hook config'
-        }
-      }
-
-      buildInstalledConfig(config, wrapPosixHookCommand(remoteScriptPath), 'grok-hook.sh')
-      await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
-      await writeHooksJsonRemote(sftp, remoteConfigPath, config)
-
-      return {
-        agent: 'grok',
-        state: 'installed',
-        configPath: remoteConfigPath,
-        managedHooksPresent: true,
-        detail: null
-      }
-    } catch (err) {
-      return {
-        agent: 'grok',
-        state: 'error',
-        configPath: remoteConfigPath,
-        managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
-      }
-    }
+  async installRemote(
+    sftp: SFTPWrapper,
+    remoteHome: string,
+    remoteGrokHome?: string
+  ): Promise<AgentHookInstallStatus> {
+    return await installRemoteGrokHook(
+      sftp,
+      remoteHome,
+      remoteGrokHome,
+      getGrokManagedScript('posix')
+    )
   }
 
   remove(): AgentHookInstallStatus {
     const configPath = getConfigPath()
-    const config = readHooksJson(configPath)
+    if (process.platform === 'win32') {
+      unregisterGrokHookOwnerSync()
+    }
+    clearGrokSymlinkCleanupMarker(configPath)
+    const snapshot = readHooksJsonWithRaw(configPath)
+    const config = snapshot.config
     if (!config) {
-      return {
-        agent: 'grok',
-        state: 'error',
-        configPath,
-        managedHooksPresent: false,
-        detail: 'Could not parse Grok hook config'
-      }
+      return notInstalledStatus(configPath, 'Could not parse Grok hook config')
     }
-
-    const nextHooks = { ...config.hooks }
-    const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
-    for (const [eventName, definitions] of Object.entries(nextHooks)) {
-      if (!Array.isArray(definitions)) {
-        continue
-      }
-      const cleaned = removeManagedCommands(definitions, isManagedCommand)
-      if (cleaned.length === 0) {
-        delete nextHooks[eventName]
-      } else {
-        nextHooks[eventName] = cleaned
-      }
+    if (snapshot.raw === null) {
+      return notInstalledStatus(configPath)
     }
+    const cleanup = removeManagedGrokHookEntries(config, getGrokManagedScriptFileName())
+    if (!cleanup.removedAny) {
+      return notInstalledStatus(configPath)
+    }
+    if (readGrokHookConfigRawSync(configPath) !== snapshot.raw) {
+      return notInstalledStatus(configPath, 'Grok hook config changed during cleanup')
+    }
+    // Preserve user-owned symlinks: strip entries through their target instead of unlinking the link.
+    if (isOrcaOwnedRemnant(cleanup.config) && !isSymbolicLinkSync(configPath)) {
+      rmSync(configPath, { force: true })
+    } else {
+      writeHooksJson(configPath, cleanup.config)
+    }
+    return notInstalledStatus(configPath)
+  }
 
-    config.hooks = nextHooks
-    writeHooksJson(configPath, config)
-    return this.getStatus()
+  async removeAsync(): Promise<AgentHookInstallStatus> {
+    const configPath = getConfigPath()
+    const ownsWindowsHook = process.platform === 'win32'
+    let peerOwnsWindowsHook = false
+    const releaseOwner = async (): Promise<boolean> => {
+      peerOwnsWindowsHook = await releaseGrokHookOwnerAndCheckForPeers()
+      return !peerOwnsWindowsHook
+    }
+    const mutationOptions = ownsWindowsHook
+      ? {
+          beforeHold: releaseOwner,
+          shouldCommit: async () => !(await hasRegisteredGrokHookOwner())
+        }
+      : undefined
+    const snapshot = await readGrokHookConfigSnapshot(configPath)
+    if (!snapshot.config) {
+      if (ownsWindowsHook) {
+        await releaseOwner()
+      }
+      return notInstalledStatus(configPath, 'Could not parse Grok hook config')
+    }
+    if (snapshot.raw === null) {
+      if (ownsWindowsHook) {
+        await releaseOwner()
+      }
+      return notInstalledStatus(configPath)
+    }
+    const cleanup = removeManagedGrokHookEntries(snapshot.config, getGrokManagedScriptFileName())
+    if (!cleanup.removedAny) {
+      if (ownsWindowsHook) {
+        await releaseOwner()
+      }
+      return notInstalledStatus(configPath)
+    }
+    const configIsSymlink = await isGrokHookConfigSymlink(configPath)
+    const unlinkable = isOrcaOwnedRemnant(cleanup.config) && !configIsSymlink
+    const serialized = `${JSON.stringify(cleanup.config, null, 2)}\n`
+    const updated = unlinkable
+      ? await removeGrokHookConfigIfUnchanged(configPath, snapshot.raw, mutationOptions)
+      : await writeGrokHookConfigIfUnchanged(configPath, snapshot.raw, serialized, mutationOptions)
+    if (peerOwnsWindowsHook) {
+      return this.getStatus()
+    }
+    if (updated && configIsSymlink) {
+      await recordGrokSymlinkCleanup(configPath, serialized)
+    }
+    return updated
+      ? notInstalledStatus(configPath)
+      : notInstalledStatus(configPath, 'Grok hook config changed during cleanup')
   }
 }
 

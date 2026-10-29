@@ -1,67 +1,23 @@
-/* eslint-disable max-lines -- Why: marquee selection coordinates pointer capture, lane-scroll refresh, auto-scroll, preview cleanup, and final commit against one drag state. Splitting those phases would make the interaction easier to desynchronize. */
 import React, { useCallback, useEffect, useRef } from 'react'
+import { getAreaSelectionCardRects } from './workspace-kanban-area-selection-card-rects'
 import {
   clearPreviewSelection,
   getAreaSelectionAutoScrollDelta,
   getAreaSelectionCardIds,
-  getAreaSelectionCardRects,
   getAreaSelectionRect,
   getAreaSelectionScrollContainer,
   getAreaSelectionScrollStartContentYByElement,
   isScrollbarPointerDown,
   setOverlayRect,
   shouldIgnoreAreaSelectionStart,
-  updatePreviewSelection,
-  type AreaSelectionCardRect
+  updatePreviewSelection
 } from './workspace-kanban-area-selection-dom'
-
-type AreaSelectionDragState = {
-  startX: number
-  startY: number
-  currentX: number
-  currentY: number
-  additive: boolean
-  baseSelectedIds: Set<string>
-  baseAnchorId: string | null
-  boardRect: DOMRect
-  cardRects: readonly AreaSelectionCardRect[]
-  scrollStartContentYByElement: ReadonlyMap<HTMLElement, number>
-  previewIds: Set<string>
-  finalAreaIds: string[]
-  started: boolean
-  frameId: number | null
-  scrollFrameId: number | null
-}
-
-type UpdateSelectionForArea = (
-  areaIds: readonly string[],
-  additive: boolean,
-  baseSelectedIds?: ReadonlySet<string>,
-  baseAnchorId?: string | null
-) => void
-
-type UseWorkspaceKanbanAreaSelectionParams = {
-  open: boolean
-  boardRef: React.RefObject<HTMLDivElement | null>
-  overlayRef: React.RefObject<HTMLDivElement | null>
-  selectedWorktreeIds: ReadonlySet<string>
-  selectionAnchorId: string | null
-  updateSelectionForArea: UpdateSelectionForArea
-}
-
-const AREA_SELECTION_DRAG_THRESHOLD = 4
-
-export function shouldCommitWorkspaceKanbanAreaSelection({
-  additive,
-  started
-}: {
-  additive: boolean
-  started: boolean
-}): boolean {
-  // Why: a plain click on empty board space is the user's "click off" gesture;
-  // modifier-clicking empty space should not accidentally drop a selected batch.
-  return started || !additive
-}
+import {
+  AREA_SELECTION_DRAG_THRESHOLD,
+  shouldCommitWorkspaceKanbanAreaSelection,
+  type AreaSelectionDragState,
+  type UseWorkspaceKanbanAreaSelectionParams
+} from './workspace-kanban-area-selection-state'
 
 export function useWorkspaceKanbanAreaSelection({
   open,
@@ -76,8 +32,7 @@ export function useWorkspaceKanbanAreaSelection({
   const dragRef = useRef<AreaSelectionDragState | null>(null)
   const updateSelectionForAreaRef = useRef(updateSelectionForArea)
 
-  // Why: pointer handlers are stable while selection commits must call the
-  // latest board-selection updater before the next event can fire.
+  // Stable pointer handlers must read the latest selection updater before the next event.
   updateSelectionForAreaRef.current = updateSelectionForArea
 
   const cancelAreaSelectionDrag = useCallback(() => {
@@ -109,6 +64,19 @@ export function useWorkspaceKanbanAreaSelection({
     }
 
     state.started = true
+
+    // Deferred card mounting needs fresh virtual layout before any scroll event occurs.
+    if (state.cardRects.length === 0) {
+      const board = boardRef.current
+      if (board) {
+        state.boardRect = board.getBoundingClientRect()
+        state.cardRects = getAreaSelectionCardRects(board)
+        state.scrollStartContentYByElement = getAreaSelectionScrollStartContentYByElement(
+          board,
+          state.startY
+        )
+      }
+    }
 
     const viewportRect = getAreaSelectionRect(
       state.startX,
@@ -153,7 +121,7 @@ export function useWorkspaceKanbanAreaSelection({
       state.additive,
       areaIds
     )
-  }, [overlayRef])
+  }, [boardRef, overlayRef])
 
   const refreshAreaSelectionMeasurements = useCallback(() => {
     const state = dragRef.current
@@ -172,8 +140,7 @@ export function useWorkspaceKanbanAreaSelection({
     if (!state || state.frameId !== null) {
       return
     }
-    // Why: the hot path stays imperative and frame-throttled so a Notion-like
-    // marquee drag does not re-render every workspace card on pointermove.
+    // Keep marquee movement imperative and frame-throttled to avoid rerendering every card per event.
     state.frameId = window.requestAnimationFrame(flushAreaSelectionDrag)
   }, [flushAreaSelectionDrag])
 
@@ -233,6 +200,7 @@ export function useWorkspaceKanbanAreaSelection({
         window.cancelAnimationFrame(state.scrollFrameId)
         state.scrollFrameId = null
       }
+      refreshAreaSelectionMeasurements()
       flushAreaSelectionDrag()
       if (shouldCommitWorkspaceKanbanAreaSelection(state)) {
         updateSelectionForAreaRef.current(
@@ -246,7 +214,7 @@ export function useWorkspaceKanbanAreaSelection({
       dragRef.current = null
       setOverlayRect(overlayRef.current, null)
     },
-    [flushAreaSelectionDrag, overlayRef]
+    [flushAreaSelectionDrag, overlayRef, refreshAreaSelectionMeasurements]
   )
 
   const handleAreaSelectionPointerDown = useCallback(
@@ -330,9 +298,7 @@ export function useWorkspaceKanbanAreaSelection({
       if (board && target instanceof Node && !board.contains(target)) {
         return
       }
-      // Why: lane scrolling changes every card's viewport rect while the drag
-      // is still active. Refresh before the next hit-test so selection follows
-      // the scrolled content instead of stale pointer-down measurements.
+      // Lane scrolling moves card viewport rects; refresh them before the next hit-test.
       refreshAreaSelectionMeasurements()
       scheduleAreaSelectionDragFlush()
     }

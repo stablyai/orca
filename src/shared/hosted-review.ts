@@ -1,4 +1,11 @@
-import type { CheckStatus, PRConflictSummary, PRMergeableState, PRReviewDecision } from './types'
+import type { StackedReviewFailureReason } from './stacked-hosted-review-failure-copy'
+import type {
+  CheckStatus,
+  GitHubRepositoryIdentity,
+  PRConflictSummary,
+  PRMergeableState,
+  PRReviewDecision
+} from './github/pull-request-types'
 
 export type HostedReviewProvider =
   | 'github'
@@ -9,6 +16,16 @@ export type HostedReviewProvider =
   | 'unsupported'
 
 export type HostedReviewState = 'open' | 'closed' | 'merged' | 'draft'
+
+// Bitbucket Cloud has no draft API; offering the toggle would publish live or fail.
+export function hostedReviewProviderSupportsDraft(provider: HostedReviewProvider): boolean {
+  return provider !== 'bitbucket'
+}
+
+/** A linked review is identified by a positive integer PR/MR number. */
+export function isPositiveHostedReviewNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0
+}
 
 export type HostedReviewInfo = {
   provider: HostedReviewProvider
@@ -25,14 +42,22 @@ export type HostedReviewInfo = {
   mergeQueueRequired?: boolean | null
   mergeStateStatus?: string | null
   headSha?: string
+  /** GitHub repository that owns the PR; absent on older runtimes and other providers. */
+  githubRepository?: GitHubRepositoryIdentity
+  // Mirror PRInfo containment proof so merged-review cache checks retain confirmed worktree heads.
+  confirmedContainedHeadOid?: string
   /** Target branch name for review-created worktree compare-base repair. */
   baseRefName?: string
   conflictSummary?: PRConflictSummary
 }
 
 export type HostedReviewForBranchArgs = {
+  force?: boolean
   repoPath: string
   repoId?: string
+  admissionTier?: 'interactive' | 'status' | 'background'
+  /** Desktop IPC-only owner guard; runtime RPC callers omit this field. */
+  repoOwnerExecutionHostId?: string
   branch: string
   linkedGitHubPR?: number | null
   fallbackGitHubPR?: number | null
@@ -40,6 +65,12 @@ export type HostedReviewForBranchArgs = {
   linkedBitbucketPR?: number | null
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
+  // The worktree's checked-out HEAD oid (GitHub merged-at-head visibility).
+  currentHeadOid?: string | null
+  /** Only selected-worktree surfaces set active: O(1) checks refresh per minute; O(N) lists refresh more slowly within the shared API budget (#11532). */
+  active?: boolean
+  /** Desktop IPC only: an explicit Refresh, which may start a stopped WSL distro (E9). */
+  wakeWslDistro?: boolean
 }
 
 export type HostedReviewSummary = {
@@ -64,6 +95,14 @@ export type CreateHostedReviewArgs = CreateHostedReviewInput & {
   connectionId?: string | null
 }
 
+export type CreateStackedHostedReviewInput = CreateHostedReviewInput
+
+export type CreateStackedHostedReviewArgs = CreateStackedHostedReviewInput & {
+  repoPath: string
+  repoId?: string
+  connectionId?: string | null
+}
+
 export type CreateHostedReviewErrorCode =
   | 'auth_required'
   | 'unsupported_provider'
@@ -74,13 +113,54 @@ export type CreateHostedReviewErrorCode =
   | 'push_failed'
   | 'unknown'
 
+/** An Orca-authored create failure that clients can show in their own language. */
+export type CreateHostedReviewFailureReason =
+  | NonNullable<HostedReviewCreationBlockedReason>
+  | 'branch_changed'
+  | 'branch_status_unverified'
+  | 'review_lookup_unavailable'
+  | 'provider_not_supported'
+  | 'same_base_branch'
+  /** Bitbucket, Azure DevOps and Gitea need a base branch, head branch and title. */
+  | 'base_head_title_required'
+  | 'rejected'
+  | 'repository_not_found'
+  | 'create_failed'
+  | 'creation_unconfirmed'
+  | StackedReviewFailureReason
+
 export type CreateHostedReviewResult =
   | { ok: true; number: number; url: string }
   | {
       ok: false
       code: CreateHostedReviewErrorCode
+      /** English text for mobile, older clients and logs. */
       error: string
+      /** Absent from older hosts; clients then show `error`. */
+      reason?: CreateHostedReviewFailureReason
+      /** The base branch named by the `base_not_on_remote` reason. */
+      base?: string
       existingReview?: HostedReviewSummary
+    }
+
+export type CreateStackedHostedReviewResult =
+  | {
+      ok: true
+      number: number
+      url: string
+      stackNumber: number
+      parentReview: HostedReviewSummary
+    }
+  | {
+      ok: false
+      code: CreateHostedReviewErrorCode
+      error: string
+      /** Plain create-step reason or a stacked `stack_*` reason; absent from older hosts. */
+      reason?: CreateHostedReviewFailureReason
+      base?: string
+      /** The current branch named by `stack_head_ambiguous`. */
+      head?: string
+      createdReview?: HostedReviewSummary
     }
 
 export type HostedReviewCreationBlockedReason =
@@ -94,6 +174,8 @@ export type HostedReviewCreationBlockedReason =
   | 'fork_head_unsupported'
   | 'unsupported_provider'
   | 'existing_review'
+  // Reject local-only stack bases before submission so unresolvable remote refs get actionable copy.
+  | 'base_not_on_remote'
   | null
 
 export type HostedReviewCreationNextAction =
@@ -105,16 +187,22 @@ export type HostedReviewCreationNextAction =
   | 'open_existing_review'
   | null
 
+/** Only accepted provider lookups yield found/not_found. Unavailable marks skipped/swallowed lookups and cannot prove no review exists. */
+export type HostedReviewLookupOutcome = 'found' | 'not_found' | 'unavailable'
+
 export type HostedReviewCreationEligibility = {
   provider: HostedReviewProvider
   review: HostedReviewSummary | null
   canCreate: boolean
   blockedReason: HostedReviewCreationBlockedReason
   nextAction: HostedReviewCreationNextAction
+  reviewLookupOutcome: HostedReviewLookupOutcome
   defaultBaseRef?: string | null
   head?: string | null
   title?: string | null
   body?: string | null
+  /** Present only when the executing host supports GitHub stack creation. */
+  stackedCreationSupported?: boolean
 }
 
 export type HostedReviewCreationEligibilityArgs = {
@@ -134,58 +222,8 @@ export type HostedReviewCreationEligibilityArgs = {
   linkedBitbucketPR?: number | null
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
-}
-
-export type HostedReviewIdentity = {
-  provider: HostedReviewProvider
-  host: string
-  owner: string
-  repo: string
-  number: number
-}
-
-export type HostedReviewUser = {
-  login: string | null
-  isBot?: boolean
+  /** The user's Create PR: it may start the repo's stopped WSL distro (E9). */
+  wakeWslDistro?: boolean
 }
 
 export type HostedReviewDecision = 'approved' | 'changes_requested' | 'review_required' | null
-
-export type HostedReviewThreadSummary = {
-  unresolvedCount: number | null
-  dataCompleteness?: 'full' | 'partial'
-}
-
-export type HostedReviewQueueSummary = {
-  identity: HostedReviewIdentity
-  title: string
-  url: string
-  state: HostedReviewState
-  author: HostedReviewUser | null
-  updatedAt: string
-  lastViewedAt?: number
-  mergeable: PRMergeableState
-  mergeStateStatus?: string | null
-  checksStatus: CheckStatus
-  reviewDecision?: HostedReviewDecision
-  threadSummary?: HostedReviewThreadSummary
-  requestedReviewerLogins?: string[] | null
-  draft?: boolean
-}
-
-export type HostedReviewQueueKey =
-  | 'mine'
-  | 'requested'
-  | 'agent'
-  | 'teammate'
-  | 'needs-response'
-  | 'ready-to-merge'
-
-export type HostedReviewQueueState = 'mine' | 'requested' | 'agent' | 'teammate'
-
-export type HostedReviewQueueClassification = {
-  state: HostedReviewQueueState
-  needsResponse: boolean
-  readyToMerge: boolean
-  requested: boolean
-}

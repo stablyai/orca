@@ -70,8 +70,10 @@ echo "  -> resources/build/icon.png (1024x1024)"
 sips -s format png --resampleWidth 256 "$TMP_DIR/icon.icns" --out "$RESOURCES_DIR/icon.png" >/dev/null 2>&1
 echo "  -> resources/icon.png (256x256)"
 
-# Generate .ico for Windows (proper ICO format with multiple sizes)
-"$MAGICK_BIN" "$BUILD_DIR/icon.png" -define icon:auto-resize=256,128,64,48,32,16 "$BUILD_DIR/icon.ico"
-echo "  -> resources/build/icon.ico (multi-size ICO via ImageMagick)"
+# #5357: Windows scales the safe-area-inset 1024px render into undersized taskbar/Open-with icons.
+# Use the repo’s pngjs trim script to remove the inset, re-square with 2% margin and emit multi-size ICO,
+# keeping committed output reproducible without ImageMagick.
+node "$PROJECT_DIR/config/scripts/trim-windows-icon-source.mjs"
+echo "  -> resources/build/icon.ico (trimmed, filled multi-size ICO)"
 
 echo "Done! Icons generated in resources/build/ and resources/"

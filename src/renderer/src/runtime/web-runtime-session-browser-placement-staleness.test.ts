@@ -1,0 +1,198 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  BROWSER_CLIENT_AUTOMATION_RUNTIME_CAPABILITY,
+  BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
+  BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY,
+  BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
+  BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
+  BROWSER_SCREENCAST_RUNTIME_CAPABILITY,
+  BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
+import { createWebRuntimeSessionBrowserTab } from './web-runtime-browser-creation'
+import {
+  ENVIRONMENT_ID,
+  WORKTREE_ID,
+  makeSnapshot,
+  resetBrowserTabCreateEnvironment,
+  stubBrowserTabCreateEnvironment
+} from './web-runtime-session-test-harness'
+import { stubBrowserCreateRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
+
+const mocks = vi.hoisted(() => ({
+  getState: vi.fn(),
+  setState: vi.fn(),
+  subscribe: vi.fn(),
+  setActiveWorktree: vi.fn(),
+  createBrowserTab: vi.fn(),
+  closeEmptyGroup: vi.fn(),
+  moveUnifiedTabToGroup: vi.fn(),
+  setRemoteBrowserPageHandle: vi.fn(),
+  focusBrowserTabInWorktree: vi.fn(),
+  applyWebSessionTabsSnapshot: vi.fn(),
+  decideWebSessionTabsSnapshot: vi.fn(() => ({ apply: true, settlesHostMirror: true })),
+  getWebSessionTabsTrackingGeneration: vi.fn(() => 0),
+  acceptReplayedWebSessionTabsSnapshot: vi.fn(),
+  resolveHostSessionTabIdForWebSessionTab: vi.fn(),
+  trackTerminalPaneSplit: vi.fn(),
+  deliverLaunchPromptToAgentTab: vi.fn(),
+  seedNativeChatLaunchDraftForAgentTab: vi.fn(),
+  hasMaterializedWebRuntimeBrowserPage: vi.fn()
+}))
+
+vi.mock('../store', () => ({
+  useAppStore: {
+    getState: mocks.getState,
+    setState: mocks.setState,
+    subscribe: mocks.subscribe
+  }
+}))
+vi.mock('./web-session-tabs-sync/tracking-lifecycle', () => ({
+  acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
+  getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration
+}))
+vi.mock('./web-session-tabs-sync/snapshot-api', () => ({
+  applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot
+}))
+vi.mock('./web-session-tabs-sync/tracking-decisions', () => ({
+  decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot
+}))
+vi.mock('./web-session-tabs-sync/store-patch', () => ({
+  applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
+    mocks.setState(buildPatch)
+    return () => {}
+  }
+}))
+vi.mock('./web-session-tabs-sync/tracking-mappings', () => ({
+  resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
+}))
+vi.mock('@/lib/feature-education-telemetry', () => ({
+  trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
+}))
+vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
+  deliverLaunchPromptToAgentTab: mocks.deliverLaunchPromptToAgentTab,
+  seedNativeChatLaunchDraftForAgentTab: mocks.seedNativeChatLaunchDraftForAgentTab
+}))
+vi.mock('./web-runtime-browser-materialization', () => ({
+  hasMaterializedWebRuntimeBrowserPage: mocks.hasMaterializedWebRuntimeBrowserPage
+}))
+
+const CLIENT_HOSTING_CAPABILITIES = [
+  BROWSER_SCREENCAST_RUNTIME_CAPABILITY,
+  BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY,
+  BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
+  BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY,
+  BROWSER_CLIENT_AUTOMATION_RUNTIME_CAPABILITY,
+  BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
+  BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY
+]
+
+// Pre-upgrade cache advertises streaming but lacks client-hosting capabilities.
+const PRE_UPGRADE_CAPABILITIES = [
+  BROWSER_SCREENCAST_RUNTIME_CAPABILITY,
+  BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY
+]
+
+function cacheCapabilities(capabilities: string[]): void {
+  const state = mocks.getState() as Record<string, unknown>
+  state.runtimeStatusByEnvironmentId = new Map([
+    [ENVIRONMENT_ID, { status: { capabilities }, checkedAt: 1 }]
+  ])
+}
+
+function successfulCreateCalls(): ReturnType<typeof vi.fn> {
+  return vi
+    .fn()
+    .mockResolvedValueOnce({
+      id: 'create',
+      ok: true,
+      result: { browserPageId: 'remote-browser-page-1' }
+    })
+    .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+}
+
+/** The last handle staging wrote — the frame the pane picks its component from. */
+function lastStagedHandle(): Record<string, unknown> | undefined {
+  return mocks.setRemoteBrowserPageHandle.mock.calls.at(-1)?.[1] as
+    | Record<string, unknown>
+    | undefined
+}
+
+describe('browser placement against a stale capability cache', () => {
+  beforeEach(() => stubBrowserTabCreateEnvironment(mocks))
+  afterEach(() => resetBrowserTabCreateEnvironment())
+
+  it('consults the live placement check even when the cached catalog shows no client hosting', async () => {
+    cacheCapabilities(PRE_UPGRADE_CAPABILITIES)
+    const preparePlacement = vi
+      .fn()
+      .mockResolvedValue({ kind: 'client', browserHostClientId: 'browser-client-a' })
+    const runtimeCall = successfulCreateCalls()
+    stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall, preparePlacement)
+
+    await expect(createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID })).resolves.toBe(true)
+
+    // Trusting the cache here pinned an upgraded pair to server placement for a whole catalog TTL.
+    expect(preparePlacement).toHaveBeenCalledWith(
+      expect.objectContaining({ selector: ENVIRONMENT_ID, preference: 'auto' })
+    )
+    expect(runtimeCall.mock.calls[0]?.[0].params).toMatchObject({
+      placement: { kind: 'client', browserHostClientId: 'browser-client-a' }
+    })
+  })
+
+  it('re-marks the staged pane client-hosted once the live placement outvotes the cache', async () => {
+    cacheCapabilities(PRE_UPGRADE_CAPABILITIES)
+    const preparePlacement = vi
+      .fn()
+      .mockResolvedValue({ kind: 'client', browserHostClientId: 'browser-client-a' })
+    const runtimeCall = successfulCreateCalls()
+    stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall, preparePlacement)
+
+    await createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID })
+
+    // Without live re-marking, stale staging mounts streamed content and swaps components on adoption.
+    expect(lastStagedHandle()).toMatchObject({ staged: true, stagedClientHosted: true })
+    // Check every handle write targets the requested page; adoption rewrites the final handle and could mask an earlier wrong mapping.
+    expect(mocks.setRemoteBrowserPageHandle.mock.calls.map((call) => call[1])).toContainEqual({
+      environmentId: ENVIRONMENT_ID,
+      remotePageId: runtimeCall.mock.calls[0]?.[0].params.page,
+      staged: true,
+      stagedClientHosted: true
+    })
+  })
+
+  it('clears the staged client-hosted mark when the live placement answers server', async () => {
+    cacheCapabilities(CLIENT_HOSTING_CAPABILITIES)
+    const preparePlacement = vi.fn().mockResolvedValue({ kind: 'server' })
+    stubBrowserCreateRuntimeEnvironmentBridge(successfulCreateCalls(), preparePlacement)
+
+    await createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID })
+
+    expect(lastStagedHandle()).toMatchObject({ staged: true })
+    expect(lastStagedHandle()?.stagedClientHosted).toBeUndefined()
+  })
+
+  it('keeps the create server-side when the live check refuses an incapable runtime', async () => {
+    cacheCapabilities(PRE_UPGRADE_CAPABILITIES)
+    const preparePlacement = vi.fn().mockResolvedValue({ kind: 'server' })
+    const runtimeCall = successfulCreateCalls()
+    stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall, preparePlacement)
+
+    await expect(createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID })).resolves.toBe(true)
+
+    expect(preparePlacement).toHaveBeenCalledOnce()
+    expect(runtimeCall.mock.calls[0]?.[0].params).not.toHaveProperty('placement')
+  })
+
+  it('still skips the placement check for an explicit server request', async () => {
+    cacheCapabilities(PRE_UPGRADE_CAPABILITIES)
+    const preparePlacement = vi.fn()
+    stubBrowserCreateRuntimeEnvironmentBridge(successfulCreateCalls(), preparePlacement)
+
+    await expect(
+      createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID, placementPreference: 'server' })
+    ).resolves.toBe(true)
+
+    expect(preparePlacement).not.toHaveBeenCalled()
+  })
+})

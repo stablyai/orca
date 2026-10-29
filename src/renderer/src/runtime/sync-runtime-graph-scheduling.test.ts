@@ -1,14 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   getRuntimeMobileSessionSyncKey,
-  registerRuntimeTerminalTab,
-  runtimeMobileSessionSyncKeysEqual,
+  runtimeMobileSessionSyncKeysEqual
+} from './sync-runtime-graph/sync-key'
+import {
   scheduleRuntimeGraphSync,
   setRuntimeGraphStoreStateGetter,
   setRuntimeGraphSyncEnabled
 } from './sync-runtime-graph'
+import {
+  hasRegisteredRuntimeTerminalTab,
+  registerRuntimeTerminalTab
+} from './mounted-terminal-tab-registry'
 import type { AppState } from '../store/types'
-import type { TerminalTab } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 
 function makeState(overrides: Partial<AppState> = {}): AppState {
   return {
@@ -70,6 +75,33 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+describe('runtime terminal registration ownership', () => {
+  it('ignores stale cleanup after a replacement registers the same tab', () => {
+    const first = registerRuntimeTerminalTab({
+      tabId: 'term-replaced',
+      worktreeId: 'wt-1',
+      getManager: () => null,
+      getContainer: () => null,
+      getPtyIdForPane: () => null,
+      getTabWideAgentHintLeafId: () => null
+    })
+    const second = registerRuntimeTerminalTab({
+      tabId: 'term-replaced',
+      worktreeId: 'wt-1',
+      getManager: () => null,
+      getContainer: () => null,
+      getPtyIdForPane: () => null,
+      getTabWideAgentHintLeafId: () => null
+    })
+
+    first()
+    expect(hasRegisteredRuntimeTerminalTab('term-replaced')).toBe(true)
+
+    second()
+    expect(hasRegisteredRuntimeTerminalTab('term-replaced')).toBe(false)
+  })
+})
+
 describe('scheduleRuntimeGraphSync', () => {
   it('coalesces updates that arrive while the runtime graph IPC is in flight', async () => {
     vi.useFakeTimers()
@@ -89,7 +121,8 @@ describe('scheduleRuntimeGraphSync', () => {
       worktreeId: 'wt-1',
       getManager: () => null,
       getContainer: () => null,
-      getPtyIdForPane: () => null
+      getPtyIdForPane: () => null,
+      getTabWideAgentHintLeafId: () => null
     })
     setRuntimeGraphStoreStateGetter(() =>
       makeState({
@@ -125,7 +158,8 @@ describe('scheduleRuntimeGraphSync', () => {
       worktreeId: 'wt-1',
       getManager: () => null,
       getContainer: () => null,
-      getPtyIdForPane: () => null
+      getPtyIdForPane: () => null,
+      getTabWideAgentHintLeafId: () => null
     })
     setRuntimeGraphStoreStateGetter(() =>
       makeState({

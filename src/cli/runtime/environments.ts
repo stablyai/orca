@@ -20,10 +20,6 @@ export type EnvironmentAddResult = {
   environment: PublicKnownRuntimeEnvironment
 }
 
-export type EnvironmentListResult = {
-  environments: PublicKnownRuntimeEnvironment[]
-}
-
 export type EnvironmentRemoveResult = {
   removed: PublicKnownRuntimeEnvironment
 }

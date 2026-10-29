@@ -1,6 +1,9 @@
-/* eslint-disable max-lines -- Why: this fixture verifies the shared remote hook installer fake across every managed agent so SSH regressions are caught together. */
+import { tokenizeCommandLine } from '../../shared/agent-command-line-entrypoint'
+import { qoderHookService } from '../qoder/hook-service'
 import { describe, expect, it, vi } from 'vitest'
+import { parse as parseJsonc } from 'jsonc-parser'
 import type { SFTPWrapper } from 'ssh2'
+import { createAgentHookMemorySftp } from './agent-hook-memory-sftp.test-fixture'
 
 vi.mock('electron', () => ({
   app: {
@@ -9,111 +12,49 @@ vi.mock('electron', () => ({
 }))
 
 import { CodexHookService } from '../codex/hook-service'
+import { DroidHookService } from '../droid/hook-service'
 import { CursorHookService } from '../cursor/hook-service'
+import { CURSOR_EVENTS, type CursorEvent } from '../cursor/hook-events'
 import { CommandCodeHookService } from '../command-code/hook-service'
 import { GeminiHookService } from '../gemini/hook-service'
 import { AntigravityHookService } from '../antigravity/hook-service'
 import { AmpHookService } from '../amp/hook-service'
-import { ClaudeHookService } from '../claude/hook-service'
+import { ClaudeHookService, claudeHookService } from '../claude/hook-service'
 import { GrokHookService } from '../grok/hook-service'
 import { CopilotHookService } from '../copilot/hook-service'
 import { HermesHookService } from '../hermes/hook-service'
 import { DevinHookService } from '../devin/hook-service'
 import { KimiHookService } from '../kimi/hook-service'
+import { JcodeHookService } from '../jcode/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
+import {
+  installRemoteManagedAgentHooks,
+  REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
+} from './remote-managed-hook-installers'
 
-type FakeFs = {
-  files: Map<string, string>
-  dirs: Set<string>
-  modes: Map<string, number>
-  failRenameTo: Set<string>
-}
+const EXPECTED_CURSOR_HOOK_RESPONSES = {
+  beforeSubmitPrompt: '{"continue":true}',
+  stop: '{}',
+  preToolUse: '{"permission":"allow"}',
+  postToolUse: '{}',
+  postToolUseFailure: '{}',
+  beforeShellExecution: '{"permission":"allow"}',
+  beforeMCPExecution: '{"permission":"allow"}',
+  afterAgentResponse: '{}'
+} satisfies Record<CursorEvent, string>
 
-function createFakeSftp(initialFiles: Record<string, string> = {}): {
-  sftp: SFTPWrapper
-  fs: FakeFs
-} {
-  const fs: FakeFs = {
-    files: new Map(Object.entries(initialFiles)),
-    dirs: new Set(['/']),
-    modes: new Map(),
-    failRenameTo: new Set()
-  }
-  const noEntryError = (path: string): { code: number; message: string } => ({
-    code: 2,
-    message: `ENOENT ${path}`
-  })
-  const fakeStats = (mode: number): { mode: number } => ({ mode })
-
-  const sftp = {
-    readFile: (path: string, _enc: string, cb: (err: unknown, data?: string) => void): void => {
-      const v = fs.files.get(path)
-      if (v === undefined) {
-        cb(noEntryError(path))
-        return
-      }
-      cb(null, v)
-    },
-    writeFile: (
-      path: string,
-      content: string,
-      options: string | { mode?: number },
-      cb: (err: unknown) => void
-    ): void => {
-      fs.files.set(path, content)
-      if (typeof options !== 'string' && options.mode !== undefined) {
-        fs.modes.set(path, options.mode)
-      }
-      cb(null)
-    },
-    rename: (src: string, dst: string, cb: (err: unknown) => void): void => {
-      if (fs.failRenameTo.has(dst)) {
-        cb({ code: 4, message: `rename failed ${dst}` })
-        return
-      }
-      const v = fs.files.get(src)
-      if (v === undefined) {
-        cb(noEntryError(src))
-        return
-      }
-      fs.files.set(dst, v)
-      fs.files.delete(src)
-      const mode = fs.modes.get(src)
-      if (mode !== undefined) {
-        fs.modes.set(dst, mode)
-        fs.modes.delete(src)
-      }
-      cb(null)
-    },
-    unlink: (path: string, cb: (err: unknown) => void): void => {
-      fs.files.delete(path)
-      fs.modes.delete(path)
-      cb(null)
-    },
-    chmod: (path: string, mode: number, cb: (err: unknown) => void): void => {
-      fs.modes.set(path, mode)
-      cb(null)
-    },
-    stat: (path: string, cb: (err: unknown, stats?: { mode: number }) => void): void => {
-      if (!fs.files.has(path)) {
-        cb(noEntryError(path))
-        return
-      }
-      cb(null, fakeStats(fs.modes.get(path) ?? 0o100644))
-    },
-    readdir: (path: string, cb: (err: unknown, list?: { filename: string }[]) => void): void => {
-      if (fs.dirs.has(path)) {
-        cb(null, [])
-        return
-      }
-      cb(noEntryError(path))
-    },
-    mkdir: (path: string, cb: (err: unknown) => void): void => {
-      fs.dirs.add(path)
-      cb(null)
+function createFakeSftp(initialFiles: Record<string, string> = {}) {
+  const { sftp, fs } = createAgentHookMemorySftp(initialFiles)
+  const failRenameTo = new Set<string>()
+  const rename = sftp.rename.bind(sftp)
+  sftp.rename = (source, destination, callback) => {
+    if (failRenameTo.has(destination)) {
+      callback(Object.assign(new Error(`rename failed ${destination}`), { code: 4 }))
+      return
     }
-  } as unknown as SFTPWrapper
-  return { sftp, fs }
+    rename(source, destination, callback)
+  }
+  return { sftp, fs: { ...fs, failRenameTo } }
 }
 
 describe('remote hook service installers', () => {
@@ -167,6 +108,14 @@ describe('remote hook service installers', () => {
         {
           path: '/home/dev/.orca/agent-hooks/devin-hook.sh',
           install: (sftp: SFTPWrapper) => new DevinHookService().installRemote(sftp, '/home/dev')
+        },
+        {
+          path: '/home/dev/.orca/agent-hooks/jcode-hook.sh',
+          install: (sftp: SFTPWrapper) => new JcodeHookService().installRemote(sftp, '/home/dev')
+        },
+        {
+          path: '/home/dev/.orca/agent-hooks/droid-hook.sh',
+          install: (sftp: SFTPWrapper) => new DroidHookService().installRemote(sftp, '/home/dev')
         }
       ]
 
@@ -192,7 +141,16 @@ describe('remote hook service installers', () => {
   })
 
   it('installs remote Codex hooks with matching trust entries', async () => {
-    const { sftp, fs } = createFakeSftp()
+    const { sftp, fs } = createFakeSftp({
+      '/home/dev/.codex/hooks.json': `${JSON.stringify({
+        hooks: {},
+        _managed: {
+          'external-manager': {
+            Stop: [0]
+          }
+        }
+      })}\n`
+    })
 
     const status = await new CodexHookService().installRemote(sftp, '/home/dev/')
 
@@ -200,7 +158,9 @@ describe('remote hook service installers', () => {
     expect(status.configPath).toBe('/home/dev/.codex/hooks.json')
     const hooks = JSON.parse(fs.files.get('/home/dev/.codex/hooks.json')!) as {
       hooks: Record<string, { hooks: { command: string }[] }[]>
+      _managed?: unknown
     }
+    expect(hooks._managed).toEqual({ 'external-manager': { Stop: [0] } })
     for (const eventName of [
       'SessionStart',
       'UserPromptSubmit',
@@ -211,7 +171,7 @@ describe('remote hook service installers', () => {
     ]) {
       const command = hooks.hooks[eventName]?.[0]?.hooks?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/codex-hook.sh')
-      expect(command).toMatch(/^if \[ -x /)
+      expect(command).toMatch(/^if \[ -f /)
     }
     expect(fs.files.get('/home/dev/.orca/agent-hooks/codex-hook.sh')).toContain('#!/bin/sh')
     expect(fs.modes.get('/home/dev/.orca/agent-hooks/codex-hook.sh')).toBe(0o755)
@@ -231,6 +191,46 @@ describe('remote hook service installers', () => {
     expect(status.detail).toContain('trust entries could not be written')
     expect(fs.files.get('/home/dev/.codex/hooks.json')).toContain('codex-hook.sh')
     expect(fs.files.get('/home/dev/.orca/agent-hooks/codex-hook.sh')).toContain('#!/bin/sh')
+  })
+
+  it('installs Codex hooks into an explicit redirected CODEX_HOME', async () => {
+    const runtimeHome = '/home/dev/.local/share/orca/codex-runtime-home/home'
+    const { sftp, fs } = createFakeSftp({
+      [`${runtimeHome}/config.toml`]: 'model = "gpt-5.2-codex"\n'
+    })
+
+    const status = await new CodexHookService().installRemote(sftp, '/home/dev', {
+      codexHomeDir: runtimeHome,
+      deferTrustUntilConfigToml: true
+    })
+
+    expect(status.state).toBe('installed')
+    expect(status.configPath).toBe(`${runtimeHome}/hooks.json`)
+    expect(fs.files.has('/home/dev/.codex/hooks.json')).toBe(false)
+    const hooks = JSON.parse(fs.files.get(`${runtimeHome}/hooks.json`)!) as {
+      hooks: Record<string, { hooks: { command: string }[] }[]>
+    }
+    expect(hooks.hooks.Stop?.[0]?.hooks?.[0]?.command).toContain(
+      '/home/dev/.local/share/orca/codex-runtime-home/home/.orca/agent-hooks/codex-hook.sh'
+    )
+    expect(fs.files.get(`${runtimeHome}/config.toml`)).toContain(
+      `${runtimeHome}/hooks.json:stop:0:0`
+    )
+  })
+
+  it('defers redirected Codex trust writes until config.toml exists', async () => {
+    const runtimeHome = '/home/dev/.local/share/orca/codex-runtime-home/home'
+    const { sftp, fs } = createFakeSftp()
+
+    const status = await new CodexHookService().installRemote(sftp, '/home/dev', {
+      codexHomeDir: runtimeHome,
+      deferTrustUntilConfigToml: true
+    })
+
+    expect(status.state).toBe('installed')
+    expect(status.detail).toContain('deferred')
+    expect(fs.files.get(`${runtimeHome}/hooks.json`)).toContain('codex-hook.sh')
+    expect(fs.files.has(`${runtimeHome}/config.toml`)).toBe(false)
   })
 
   it('installs remote Gemini, Antigravity, Cursor, Command Code, Grok, and Devin configs using their CLI-specific schemas', async () => {
@@ -263,7 +263,7 @@ describe('remote hook service installers', () => {
     for (const eventName of ['BeforeAgent', 'AfterAgent', 'AfterTool', 'BeforeTool']) {
       const command = geminiConfig.hooks[eventName]?.[0]?.hooks?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/gemini-hook.sh')
-      expect(command).toMatch(/^if \[ -x /)
+      expect(command).toMatch(/^if \[ -f /)
     }
     expect(geminiConfig.hooks.PreToolUse).toBeUndefined()
 
@@ -277,17 +277,36 @@ describe('remote hook service installers', () => {
     }
     for (const eventName of ['PreInvocation', 'PostInvocation', 'Stop']) {
       const command = antigravityConfig['orca-status'][eventName]?.[0]?.command
-      expect(command).toContain('/home/dev/.orca/agent-hooks/antigravity-hook.sh')
-      expect(command).toContain(`ORCA_ANTIGRAVITY_EVENT='${eventName}'`)
+      expect(tokenizeCommandLine(command ?? '').slice(0, 2)).toEqual(['/bin/sh', '-c'])
+      expect(tokenizeCommandLine(command ?? '')[2]).toContain(
+        '/home/dev/.orca/agent-hooks/antigravity-hook.sh'
+      )
+      expect(tokenizeCommandLine(command ?? '')[2]).toContain(
+        `ORCA_ANTIGRAVITY_EVENT='${eventName}'`
+      )
     }
-    expect(antigravityConfig['orca-status'].PreToolUse).toBeUndefined()
-    for (const eventName of ['PostToolUse']) {
+    for (const eventName of ['PreToolUse', 'PostToolUse']) {
       const definition = antigravityConfig['orca-status'][eventName]?.[0]
       const command = definition?.hooks?.[0]?.command
       expect(definition?.matcher).toBe('*')
-      expect(command).toContain('/home/dev/.orca/agent-hooks/antigravity-hook.sh')
-      expect(command).toContain(`ORCA_ANTIGRAVITY_EVENT='${eventName}'`)
+      expect(tokenizeCommandLine(command ?? '')[2]).toContain(
+        '/home/dev/.orca/agent-hooks/antigravity-hook.sh'
+      )
+      expect(tokenizeCommandLine(command ?? '')[2]).toContain(
+        `ORCA_ANTIGRAVITY_EVENT='${eventName}'`
+      )
     }
+    // Remote missing-script gates need a fallback answer to avoid denying every tool call.
+    expect(
+      tokenizeCommandLine(
+        antigravityConfig['orca-status'].PreToolUse[0].hooks?.[0]?.command ?? ''
+      )[2]
+    ).toContain(`printf '%s\\n' '{"decision":"ask"}'`)
+    expect(
+      tokenizeCommandLine(
+        antigravityConfig['orca-status'].PostToolUse[0].hooks?.[0]?.command ?? ''
+      )[2]
+    ).not.toContain('{"decision"')
 
     const ampPlugin = amp.fs.files.get('/home/dev/.config/amp/plugins/orca-agent-status.ts')
     expect(ampPlugin).toContain('/hook/amp')
@@ -299,19 +318,14 @@ describe('remote hook service installers', () => {
       hooks: Record<string, { command?: string; hooks?: unknown[] }[]>
     }
     expect(cursorConfig.version).toBe(1)
-    for (const eventName of [
-      'beforeSubmitPrompt',
-      'stop',
-      'preToolUse',
-      'postToolUse',
-      'postToolUseFailure',
-      'beforeShellExecution',
-      'beforeMCPExecution',
-      'afterAgentResponse'
-    ]) {
+    for (const eventName of CURSOR_EVENTS) {
       const definition = cursorConfig.hooks[eventName]?.[0]
-      expect(definition?.command).toContain('/home/dev/.orca/agent-hooks/cursor-hook.sh')
+      const command = definition?.command
+      expect(command).toContain('/home/dev/.orca/agent-hooks/cursor-hook.sh')
       expect(definition?.hooks).toBeUndefined()
+      const response = EXPECTED_CURSOR_HOOK_RESPONSES[eventName]
+      expect(command).toContain(`ORCA_CURSOR_HOOK_RESPONSE='${response}'`)
+      expect(command).toContain(`printf '%s\\n' '${response}'`)
     }
 
     const commandCodeConfig = JSON.parse(
@@ -323,7 +337,7 @@ describe('remote hook service installers', () => {
       const definition = commandCodeConfig.hooks[eventName]?.[0]
       const command = definition?.hooks?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/command-code-hook.sh')
-      expect(command).toMatch(/^if \[ -x /)
+      expect(command).toMatch(/^if \[ -f /)
     }
     expect(commandCodeConfig.hooks.PreToolUse?.[0]?.matcher).toBe('.*')
     expect(commandCodeConfig.hooks.PostToolUse?.[0]?.matcher).toBe('.*')
@@ -336,6 +350,8 @@ describe('remote hook service installers', () => {
       'SessionStart',
       'UserPromptSubmit',
       'Stop',
+      'StopCancelled',
+      'StopFailure',
       'SessionEnd',
       'PreToolUse',
       'PostToolUse',
@@ -345,11 +361,18 @@ describe('remote hook service installers', () => {
       const definition = grokConfig.hooks[eventName]?.[0]
       const command = definition?.hooks?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/grok-hook.sh')
-      expect(command).toMatch(/^if \[ -x /)
+      expect(command).toMatch(/^if \[ -n "\$\{ORCA_PANE_KEY-\}" \] && /)
     }
-    expect(grokConfig.hooks.PreToolUse?.[0]?.matcher).toBe('*')
+    // Grok expects regex matchers; bare * is invalid.
+    expect(grokConfig.hooks.PreToolUse?.[0]?.matcher).toBe('.*')
+    expect(grokConfig.hooks.PostToolUse?.[0]?.matcher).toBe('.*')
+    expect(grokConfig.hooks.StopFailure?.[0]?.matcher).toBeUndefined()
 
-    const devinConfig = JSON.parse(devin.fs.files.get('/home/dev/.config/devin/config.json')!) as {
+    const devinText = devin.fs.files.get('/home/dev/.config/devin/config.json')!
+    // Why: Devin config.json is JSONC — parse it as such, and assert the user's comment
+    // survived. Asserting with JSON.parse would only pass if the install had stripped it.
+    expect(devinText).toContain('// Existing Devin config comment')
+    const devinConfig = parseJsonc(devinText) as {
       permissions: { mode: string }
       hooks: Record<string, { matcher?: string; hooks?: { command: string }[] }[]>
     }
@@ -364,17 +387,46 @@ describe('remote hook service installers', () => {
       const definition = devinConfig.hooks[eventName]?.[0]
       const command = definition?.hooks?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/devin-hook.sh')
-      expect(command).toMatch(/^if \[ -x /)
+      expect(command).toMatch(/^if \[ -f /)
     }
     for (const eventName of ['PreToolUse', 'PostToolUse', 'PermissionRequest']) {
       const definition = devinConfig.hooks[eventName]?.[0]
       const command = definition?.hooks?.[0]?.command
       expect(definition?.matcher).toBeUndefined()
       expect(command).toContain('/home/dev/.orca/agent-hooks/devin-hook.sh')
-      expect(command).toMatch(/^if \[ -x /)
+      expect(command).toMatch(/^if \[ -f /)
     }
     expect(devin.fs.files.get('/home/dev/.orca/agent-hooks/devin-hook.sh')).toContain('/hook/devin')
   })
+
+  it('installs remote Grok config in the explicit guest GROK_HOME', async () => {
+    const { sftp, fs } = createFakeSftp()
+
+    const status = await new GrokHookService().installRemote(
+      sftp,
+      '/home/dev',
+      '/srv/grok profile/'
+    )
+
+    expect(status.configPath).toBe('/srv/grok profile/hooks/orca-status.json')
+    expect(fs.files.has('/srv/grok profile/hooks/orca-status.json')).toBe(true)
+    expect(fs.files.has('/home/dev/.grok/hooks/orca-status.json')).toBe(false)
+    const script = fs.files.get('/home/dev/.orca/agent-hooks/grok-hook.sh')!
+    expect(script).toContain('${#GROK_HOME}" -le 4096')
+    expect(script).toContain('--data-urlencode "grokHome=${grok_home}"')
+  })
+
+  it.each(['relative/grok', '/bad\\grok', `/${'x'.repeat(4096)}`])(
+    'falls back to login-home Grok config for invalid remote home %s',
+    async (remoteGrokHome) => {
+      const { sftp, fs } = createFakeSftp()
+
+      const status = await new GrokHookService().installRemote(sftp, '/home/dev', remoteGrokHome)
+
+      expect(status.configPath).toBe('/home/dev/.grok/hooks/orca-status.json')
+      expect(fs.files.has('/home/dev/.grok/hooks/orca-status.json')).toBe(true)
+    }
+  )
 
   it('installs remote Kimi hooks as a managed config.toml block preserving user config', async () => {
     const userConfig = 'default_model = "kimi-k2.6"\n\n[providers."mine"]\napi_key = "sk-secret"\n'
@@ -384,7 +436,6 @@ describe('remote hook service installers', () => {
     expect(status.state).toBe('installed')
 
     const config = fs.files.get('/home/dev/.kimi-code/config.toml')!
-    // User config above the managed block is preserved.
     expect(config).toContain('default_model = "kimi-k2.6"')
     expect(config).toContain('api_key = "sk-secret"')
     for (const eventName of [
@@ -398,9 +449,8 @@ describe('remote hook service installers', () => {
     ]) {
       expect(config).toContain(`event = "${eventName}"`)
     }
-    // The command points at the POSIX managed script via the `[ -x ]` guard.
     expect(config).toContain('/home/dev/.orca/agent-hooks/kimi-hook.sh')
-    expect(config).toMatch(/command = "if \[ -x /)
+    expect(config).toMatch(/command = "if \[ -f /)
     expect(fs.files.get('/home/dev/.orca/agent-hooks/kimi-hook.sh')).toContain('/hook/kimi')
   })
 
@@ -427,7 +477,7 @@ describe('remote hook service installers', () => {
     }
   })
 
-  it('removes stale remote Antigravity PreToolUse hooks while installing SSH hooks', async () => {
+  it('replaces stale remote Antigravity PreToolUse hooks while installing SSH hooks', async () => {
     const { sftp, fs } = createFakeSftp()
     fs.files.set(
       '/home/dev/.gemini/config/hooks.json',
@@ -468,7 +518,12 @@ describe('remote hook service installers', () => {
     const config = JSON.parse(fs.files.get('/home/dev/.gemini/config/hooks.json')!) as {
       'orca-status': Record<string, { hooks?: { command: string }[] }[]>
     }
-    expect(config['orca-status'].PreToolUse).toBeUndefined()
+    const preToolCommands = config['orca-status'].PreToolUse.flatMap((definition) =>
+      (definition.hooks ?? []).map((hook) => hook.command)
+    )
+    expect(preToolCommands).toHaveLength(1)
+    expect(preToolCommands[0]).toContain('/home/dev/.orca/agent-hooks/antigravity-hook.sh')
+    expect(preToolCommands).not.toContain('/tmp/old/agent-hooks/antigravity-hook.sh')
     const postToolCommands = config['orca-status'].PostToolUse.flatMap((definition) =>
       (definition.hooks ?? []).map((hook) => hook.command)
     )
@@ -572,6 +627,160 @@ describe('remote hook service installers', () => {
     expect(fs.modes.get('/home/dev/.orca/agent-hooks/copilot-hook.sh')).toBe(0o755)
   })
 
+  it('installs Qoder on the execution host with its own event endpoint', async () => {
+    const { sftp, fs } = createFakeSftp()
+    const result = await qoderHookService.installRemote(sftp, '/home/dev/')
+    expect(result.state).toBe('installed')
+    expect(result.configPath).toBe('/home/dev/.qoder/settings.json')
+    const settings = JSON.parse(fs.files.get(result.configPath) ?? '{}')
+    expect(settings.hooks.SessionEnd).toHaveLength(1)
+    expect(settings.hooks.Notification).toHaveLength(1)
+    expect(settings.hooks.TeammateIdle).toBeUndefined()
+    expect(fs.files.get('/home/dev/.orca/agent-hooks/qoder-hook.sh')).toContain('/hook/qoder')
+  })
+  it('installs Droid and Copilot when running the aggregate remote installer (issue #7253)', async () => {
+    const { sftp, fs } = createFakeSftp()
+    const results = await installRemoteManagedAgentHooks(sftp, '/home/dev', {
+      agents: REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
+    })
+    const byAgent = new Map(results.map((r) => [r.agent, r.state]))
+    expect(byAgent.get('droid')).toBe('installed')
+    expect(byAgent.get('copilot')).toBe('installed')
+    expect(JSON.parse(fs.files.get('/home/dev/.factory/settings.json') ?? '{}')).toMatchObject({
+      hooks: {
+        Stop: [
+          {
+            hooks: [
+              { command: expect.stringContaining('/home/dev/.orca/agent-hooks/droid-hook.sh') }
+            ]
+          }
+        ]
+      }
+    })
+    expect(JSON.parse(fs.files.get('/home/dev/.copilot/hooks/orca.json') ?? '{}')).toMatchObject({
+      hooks: {
+        Stop: [{ bash: expect.stringContaining('/home/dev/.orca/agent-hooks/copilot-hook.sh') }]
+      }
+    })
+    for (const agent of ['droid', 'copilot']) {
+      const path = `/home/dev/.orca/agent-hooks/${agent}-hook.sh`
+      expect(fs.files.get(path)).toContain(`/hook/${agent}`)
+      expect(fs.modes.get(path)).toBe(0o755)
+    }
+  })
+
+  it('installs only positively detected remote agents', async () => {
+    const { sftp, fs } = createFakeSftp()
+
+    const results = await installRemoteManagedAgentHooks(sftp, '/home/dev', {
+      agents: ['codex']
+    })
+
+    expect(results.map((result) => result.agent)).toEqual(['codex'])
+    const paths = [...fs.files.keys(), ...fs.dirs]
+    for (const unusedHome of ['.factory', '.gemini', '.grok', '.hermes', '.commandcode']) {
+      expect(paths.some((path) => path.includes(`/home/dev/${unusedHome}`))).toBe(false)
+    }
+  })
+
+  it('fails closed when the agent allowlist is omitted or empty (issue #11641)', async () => {
+    const { sftp, fs } = createFakeSftp()
+
+    await expect(installRemoteManagedAgentHooks(sftp, '/home/dev')).resolves.toEqual([])
+    await expect(
+      installRemoteManagedAgentHooks(sftp, '/home/dev', { agents: [] })
+    ).resolves.toEqual([])
+
+    expect([...fs.files.keys()]).toEqual([])
+    expect([...fs.dirs]).toEqual(['/'])
+  })
+
+  it('stops before the next installer when its relay request is cancelled', async () => {
+    const controller = new AbortController()
+    const claudeInstall = vi
+      .spyOn(claudeHookService, 'installRemote')
+      .mockImplementation(async () => {
+        controller.abort()
+        return {
+          agent: 'claude',
+          state: 'installed',
+          configPath: '/home/dev/.claude/settings.json',
+          managedHooksPresent: true,
+          detail: null
+        }
+      })
+    const openClaudeInstall = vi.spyOn(openClaudeHookService, 'installRemote')
+    try {
+      const { sftp } = createFakeSftp()
+
+      await expect(
+        installRemoteManagedAgentHooks(sftp, '/home/dev', {
+          signal: controller.signal,
+          agents: REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
+        })
+      ).rejects.toMatchObject({ name: 'AbortError' })
+      expect(claudeInstall).toHaveBeenCalledTimes(1)
+      expect(openClaudeInstall).not.toHaveBeenCalled()
+    } finally {
+      claudeInstall.mockRestore()
+      openClaudeInstall.mockRestore()
+    }
+  })
+
+  it('installs remote Droid hooks into Factory settings.json (issue #7253)', async () => {
+    const { sftp, fs } = createFakeSftp()
+
+    const status = await new DroidHookService().installRemote(sftp, '/home/dev')
+
+    expect(status.state).toBe('installed')
+    expect(status.configPath).toBe('/home/dev/.factory/settings.json')
+    const config = JSON.parse(fs.files.get('/home/dev/.factory/settings.json')!) as {
+      hooks: Record<string, { matcher?: string; hooks?: { command: string }[] }[]>
+    }
+    for (const eventName of [
+      'SessionStart',
+      'UserPromptSubmit',
+      'Stop',
+      'SubagentStop',
+      'PreToolUse',
+      'PostToolUse',
+      'PermissionRequest',
+      'Notification'
+    ]) {
+      const definition = config.hooks[eventName]?.[0]
+      const command = definition?.hooks?.[0]?.command
+      expect(command).toContain('/home/dev/.orca/agent-hooks/droid-hook.sh')
+      expect(command).toMatch(/^if \[ -f /)
+    }
+    expect(config.hooks.PreToolUse?.[0]?.matcher).toBe('*')
+    expect(config.hooks.PostToolUse?.[0]?.matcher).toBe('*')
+    expect(config.hooks.PermissionRequest?.[0]?.matcher).toBe('*')
+    expect(config.hooks.Stop?.[0]?.matcher).toBeUndefined()
+    const script = fs.files.get('/home/dev/.orca/agent-hooks/droid-hook.sh')
+    expect(script).toContain('#!/bin/sh')
+    expect(script).toContain('/hook/droid')
+    expect(fs.modes.get('/home/dev/.orca/agent-hooks/droid-hook.sh')).toBe(0o755)
+  })
+
+  it('does not overwrite a malformed remote Factory settings.json', async () => {
+    const original = '{"hooks": }'
+    const { sftp, fs } = createFakeSftp({
+      '/home/dev/.factory/settings.json': original
+    })
+
+    const status = await new DroidHookService().installRemote(sftp, '/home/dev')
+
+    expect(status).toMatchObject({
+      agent: 'droid',
+      state: 'error',
+      configPath: '/home/dev/.factory/settings.json',
+      managedHooksPresent: false,
+      detail: 'Could not parse remote Factory settings.json'
+    })
+    expect(fs.files.get('/home/dev/.factory/settings.json')).toBe(original)
+    expect(fs.files.get('/home/dev/.orca/agent-hooks/droid-hook.sh')).toBeUndefined()
+  })
+
   it('installs remote Hermes plugin files and enables the plugin', async () => {
     const { sftp, fs } = createFakeSftp()
 
@@ -585,6 +794,44 @@ describe('remote hook service installers', () => {
     expect(fs.files.get('/home/dev/.hermes/plugins/orca-status/__init__.py')).toContain(
       '/hook/hermes'
     )
+    expect(fs.files.get('/home/dev/.hermes/config.yaml')).toContain('orca-status')
+  })
+
+  it('refreshes remote named profiles that keep the plugin enabled, and only those', async () => {
+    const marker = '# Managed by Orca. Do not edit; changes may be overwritten.\n'
+    const profiles = '/home/dev/.hermes/profiles'
+    const disabledConfig = 'plugins:\n  enabled: [orca-status]\n  disabled: [orca-status]\n'
+    const { sftp, fs } = createFakeSftp({
+      [`${profiles}/work/plugins/orca-status/plugin.yaml`]: marker,
+      [`${profiles}/work/plugins/orca-status/__init__.py`]: marker,
+      [`${profiles}/work/config.yaml`]: 'plugins:\n  enabled: [orca-status]\n',
+      [`${profiles}/off/plugins/orca-status/plugin.yaml`]: marker,
+      [`${profiles}/off/plugins/orca-status/__init__.py`]: marker,
+      [`${profiles}/off/config.yaml`]: disabledConfig,
+      [`${profiles}/user/plugins/orca-status/plugin.yaml`]: marker,
+      [`${profiles}/user/plugins/orca-status/__init__.py`]: 'user code\n',
+      [`${profiles}/user/config.yaml`]: 'plugins:\n  enabled: [orca-status]\n'
+    })
+    fs.dirs.add(profiles)
+
+    expect((await new HermesHookService().installRemote(sftp, '/home/dev')).state).toBe('installed')
+
+    expect(fs.files.get(`${profiles}/work/config.yaml`)).toContain('ORCA_AGENT_PANE')
+    expect(fs.files.get(`${profiles}/work/plugins/orca-status/__init__.py`)).toContain(
+      '/hook/hermes'
+    )
+    expect(fs.files.get(`${profiles}/off/config.yaml`)).toBe(disabledConfig)
+    expect(fs.files.get(`${profiles}/user/plugins/orca-status/__init__.py`)).toBe('user code\n')
+  })
+
+  it('still installs the default Hermes profile when remote profiles cannot be listed', async () => {
+    const { sftp, fs } = createFakeSftp()
+    sftp.readdir = (_path, callback) => {
+      callback(Object.assign(new Error('permission denied'), { code: 3 }), [])
+    }
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    expect((await new HermesHookService().installRemote(sftp, '/home/dev')).state).toBe('installed')
     expect(fs.files.get('/home/dev/.hermes/config.yaml')).toContain('orca-status')
   })
 

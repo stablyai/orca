@@ -1,0 +1,49 @@
+{
+  "$schema": "../node_modules/oxlint/configuration_schema.json",
+  "plugins": ["import", "jsx-a11y", "react-hooks", "vitest"],
+  "categories": {
+    "correctness": "off",
+    "suspicious": "off",
+    "pedantic": "off",
+    "perf": "off",
+    "style": "off",
+    "restriction": "off",
+    "nursery": "off"
+  },
+  "rules": {
+    "import/export": "warn",
+    "import/named": "warn",
+    "import/namespace": "warn",
+    "import/no-cycle": ["warn", { "maxDepth": 3 }],
+    "import/no-duplicates": "warn",
+    "import/no-empty-named-blocks": "warn",
+    "import/no-self-import": "warn"
+  },
+  "overrides": [
+    {
+      "files": ["src/renderer/src/**/*.{ts,tsx}"],
+      "rules": {
+        "jsx-a11y/alt-text": "warn",
+        "jsx-a11y/anchor-has-content": "warn",
+        "jsx-a11y/aria-props": "warn",
+        "jsx-a11y/aria-role": "warn",
+        "jsx-a11y/click-events-have-key-events": "warn"
+      }
+    },
+    {
+      "files": ["**/*.{test,spec}.{ts,tsx}", "tests/**/*.{ts,tsx}"],
+      "rules": {
+        "vitest/no-conditional-tests": "warn",
+        "vitest/no-focused-tests": "warn",
+        "vitest/no-identical-title": "warn"
+      }
+    },
+    {
+      "files": ["mobile/**/*.{ts,tsx}"],
+      "rules": {
+        "react-hooks/exhaustive-deps": "warn"
+      }
+    }
+  ],
+  "ignorePatterns": ["**/node_modules", "**/dist", "**/out"]
+}

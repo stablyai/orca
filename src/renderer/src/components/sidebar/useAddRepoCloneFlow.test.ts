@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactModule from 'react'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 
 const mocks = vi.hoisted(() => ({
   stateValues: [] as unknown[],
@@ -14,7 +14,6 @@ const mocks = vi.hoisted(() => ({
     projects: [],
     projectHostSetups: []
   },
-  cloneRemote: vi.fn(),
   cloneLocal: vi.fn(),
   pickDirectory: vi.fn(),
   onCloneProgress: vi.fn(() => vi.fn()),
@@ -65,10 +64,7 @@ vi.mock('@/store', () => {
   return { useAppStore }
 })
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  getActiveRuntimeTarget: () => ({ kind: 'local' }),
-  callRuntimeRpc: mocks.callRuntimeRpc
-}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
 
 vi.mock('sonner', () => ({
   toast: {
@@ -103,7 +99,6 @@ describe('useAddRepoCloneFlow', () => {
     vi.stubGlobal('window', {
       api: {
         repos: {
-          cloneRemote: mocks.cloneRemote,
           clone: mocks.cloneLocal,
           pickDirectory: mocks.pickDirectory,
           onCloneProgress: mocks.onCloneProgress
@@ -112,70 +107,17 @@ describe('useAddRepoCloneFlow', () => {
     })
   })
 
-  it('clones through the selected SSH target', async () => {
-    const repo = makeRepo({ connectionId: 'ssh-1' })
-    mocks.cloneRemote.mockResolvedValue(repo)
-    mocks.callRuntimeRpc.mockReset()
-    mocks.fetchWorktrees.mockResolvedValue(true)
-    const { useAddRepoCloneFlow } = await import('./useAddRepoCloneFlow')
-
-    const result = useAddRepoCloneFlow({
-      step: 'clone',
-      activeRuntimeEnvironmentId: null,
-      sshTargetId: 'ssh-1',
-      workspaceDir: '/local/workspace',
-      fetchWorktrees: mocks.fetchWorktrees,
-      onGitRepoReady: mocks.onGitRepoReady
-    })
-    await result.handleClone()
-
-    expect(mocks.cloneRemote).toHaveBeenCalledWith({
-      connectionId: 'ssh-1',
-      url: 'https://github.com/stablyai/orca.git',
-      destination: '/srv'
-    })
-    expect(mocks.cloneLocal).not.toHaveBeenCalled()
-    expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
-      requireAuthoritative: true
-    })
-    expect(mocks.storeState.projects).toEqual(
-      expect.arrayContaining([expect.objectContaining({ sourceRepoIds: [repo.id] })])
-    )
-    expect(mocks.storeState.projectHostSetups).toEqual(
-      expect.arrayContaining([expect.objectContaining({ repoId: repo.id, path: repo.path })])
-    )
-    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'clone_url')
-  })
-
-  it('does not prefill SSH clone destinations from the local workspace directory', async () => {
-    mocks.stateValues = ['https://github.com/stablyai/orca.git', '', false, null, null]
-    const { useAddRepoCloneFlow } = await import('./useAddRepoCloneFlow')
-
-    const result = useAddRepoCloneFlow({
-      step: 'clone',
-      activeRuntimeEnvironmentId: null,
-      sshTargetId: 'ssh-1',
-      workspaceDir: '/private/tmp/orca-setup-e2e.hOWO1f',
-      fetchWorktrees: mocks.fetchWorktrees,
-      onGitRepoReady: mocks.onGitRepoReady
-    })
-
-    expect(result.cloneDestination).toBe('')
-    expect(mocks.stateSetters[1]).not.toHaveBeenCalledWith('/private/tmp/orca-setup-e2e.hOWO1f')
-  })
-
   it('strips Electron IPC wrappers from clone errors', async () => {
     const cloneError =
       'Clone failed: Destination already exists and is not empty: /srv/orca. Choose a different parent folder, delete the existing folder, or add the existing repository instead.'
-    mocks.cloneRemote.mockRejectedValue(
-      new Error(`Error invoking remote method 'repos:cloneRemote': Error: ${cloneError}`)
+    mocks.cloneLocal.mockRejectedValue(
+      new Error(`Error invoking remote method 'repos:clone': Error: ${cloneError}`)
     )
     const { useAddRepoCloneFlow } = await import('./useAddRepoCloneFlow')
 
     const result = useAddRepoCloneFlow({
       step: 'clone',
       activeRuntimeEnvironmentId: null,
-      sshTargetId: 'ssh-1',
       workspaceDir: '/local/workspace',
       fetchWorktrees: mocks.fetchWorktrees,
       onGitRepoReady: mocks.onGitRepoReady
@@ -186,7 +128,13 @@ describe('useAddRepoCloneFlow', () => {
   })
 
   it('clones through the selected runtime environment', async () => {
-    const repo = makeRepo({ id: 'runtime-repo', executionHostId: 'runtime:env-1' })
+    const repo = makeRepo({ id: 'runtime-repo' })
+    const localRepo = makeRepo({
+      id: repo.id,
+      path: '/local/runtime-repo',
+      executionHostId: 'local'
+    })
+    mocks.storeState.repos = [localRepo]
     mocks.callRuntimeRpc.mockResolvedValue({ repo })
     mocks.fetchWorktrees.mockResolvedValue(true)
     const { useAddRepoCloneFlow } = await import('./useAddRepoCloneFlow')
@@ -194,7 +142,6 @@ describe('useAddRepoCloneFlow', () => {
     const result = useAddRepoCloneFlow({
       step: 'clone',
       activeRuntimeEnvironmentId: 'env-1',
-      sshTargetId: null,
       workspaceDir: '/local/workspace',
       fetchWorktrees: mocks.fetchWorktrees,
       onGitRepoReady: mocks.onGitRepoReady
@@ -211,10 +158,31 @@ describe('useAddRepoCloneFlow', () => {
       { timeoutMs: 10 * 60_000 }
     )
     expect(mocks.cloneLocal).not.toHaveBeenCalled()
-    expect(mocks.cloneRemote).not.toHaveBeenCalled()
     expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
-      requireAuthoritative: true
+      requireAuthoritative: true,
+      executionHostId: 'runtime:env-1'
     })
-    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'clone_url')
+    expect(mocks.storeState.repos).toContainEqual({
+      ...repo,
+      executionHostId: 'runtime:env-1'
+    })
+    expect(mocks.storeState.repos).toContainEqual(localRepo)
+    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'clone_url', 'runtime:env-1')
+  })
+
+  it('never clones onto this computer while the chosen host is unresolved', async () => {
+    const { useAddRepoCloneFlow } = await import('./useAddRepoCloneFlow')
+
+    const result = useAddRepoCloneFlow({
+      step: 'clone',
+      hostId: null,
+      activeRuntimeEnvironmentId: null,
+      workspaceDir: '/local/workspace',
+      fetchWorktrees: mocks.fetchWorktrees,
+      onGitRepoReady: mocks.onGitRepoReady
+    })
+    await result.handleClone()
+
+    expect(mocks.cloneLocal).not.toHaveBeenCalled()
   })
 })

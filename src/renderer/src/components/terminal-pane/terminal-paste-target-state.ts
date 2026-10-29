@@ -54,9 +54,30 @@ export function isTerminalPanePasteFocusCurrent({
   if (!requireSameFocusedElement || activeElementAtDispatch === null) {
     return true
   }
-  // Why: clipboard reads are async, so focus may leave the terminal before
-  // execution. In that case the stale terminal must not receive the payload.
-  return (
-    activeElement === activeElementAtDispatch && paneContainer.contains(activeElementAtDispatch)
-  )
+  if (!paneContainer.contains(activeElementAtDispatch)) {
+    return false
+  }
+  if (activeElement === activeElementAtDispatch) {
+    return true
+  }
+  // Permission/dictation handoffs can blur xterm to body or replace its textarea mid-paste.
+  if (isInertDocumentFocus(activeElement)) {
+    return true
+  }
+  if (activeElement === paneContainer) {
+    return true
+  }
+  return paneContainer.contains(activeElement) && isXtermHelperTextarea(activeElement)
+}
+
+function isInertDocumentFocus(element: Element | null): boolean {
+  if (!element) {
+    return true
+  }
+  const tagName = element.tagName?.toUpperCase()
+  return tagName === 'BODY' || tagName === 'HTML'
+}
+
+function isXtermHelperTextarea(element: Element | null): boolean {
+  return element?.classList?.contains('xterm-helper-textarea') === true
 }

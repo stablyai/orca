@@ -1,5 +1,5 @@
 import { isNoUpstreamError } from './git-remote-error'
-import type { GitUpstreamStatus } from './types'
+import type { GitUpstreamStatus } from './git-status-types'
 import {
   getConfiguredBranchRemoteUpstream,
   hasConfiguredBranchPushTarget
@@ -7,6 +7,7 @@ import {
 import { splitRemoteBranchName } from './git-remote-branch-name'
 import { parseGitRevListAheadBehindCounts } from './git-rev-list-output'
 import { iterateProcessOutputLines } from './process-output-field-scanner'
+import { createGitConfigSnapshotRunner } from './git-config-snapshot-runner'
 
 export { gitRefTargetsBranchName, splitRemoteBranchName } from './git-remote-branch-name'
 
@@ -138,10 +139,7 @@ async function resolveEffectiveGitUpstreamForBranch(
       return configured
     }
 
-    // Why: older Orca worktrees inherited origin/main as their upstream even
-    // though pushes target origin/<current-branch>. If that same-name remote
-    // exists, source-control pull/sync must follow the publish branch rather
-    // than the base branch.
+    // Legacy worktrees tracked origin/main while publishing same-name branches; pull/sync must follow the existing publish branch.
     if (
       configured.remoteName === 'origin' &&
       (await remoteTrackingRefExists(runGit, configured.remoteName, currentBranchName))
@@ -164,8 +162,7 @@ async function resolveEffectiveGitUpstreamForBranch(
       (remoteName, branchName) => remoteTrackingRefExists(runGit, remoteName, branchName)
     )
     if (branchRemoteUpstream) {
-      // Why: Git cannot resolve HEAD@{u} when branch.<name>.remote is a URL,
-      // but older fork-review worktrees still carry the usable merge target.
+      // URL-valued branch.remote breaks HEAD@{u}; legacy fork-review worktrees can still supply a usable merge target.
       return branchRemoteUpstream
     }
   }
@@ -183,15 +180,17 @@ async function resolveEffectiveGitUpstreamForBranch(
 }
 
 export async function resolveEffectiveGitUpstream(
-  runGit: GitCommandRunner
+  execGit: GitCommandRunner
 ): Promise<EffectiveGitUpstream | null> {
+  const runGit = createGitConfigSnapshotRunner(execGit)
   return resolveEffectiveGitUpstreamForBranch(runGit, await getCurrentBranchName(runGit))
 }
 
 export async function getEffectiveGitUpstreamStatus(
-  runGit: GitCommandRunner,
+  execGit: GitCommandRunner,
   getBehindCommitsArePatchEquivalent?: (upstreamName: string) => Promise<boolean>
 ): Promise<GitUpstreamStatus> {
+  const runGit = createGitConfigSnapshotRunner(execGit)
   const currentBranchName = await getCurrentBranchName(runGit)
   const upstream = await resolveEffectiveGitUpstreamForBranch(runGit, currentBranchName)
   if (!upstream) {
@@ -206,12 +205,20 @@ export async function getEffectiveGitUpstreamStatus(
     }
   }
 
-  const { stdout } = await runGit([
-    'rev-list',
-    '--left-right',
-    '--count',
-    `HEAD...${upstream.upstreamName}`
-  ])
+  return getGitUpstreamStatusForUpstreamName(
+    runGit,
+    upstream.upstreamName,
+    getBehindCommitsArePatchEquivalent
+  )
+}
+
+/** Refresh ahead/behind with one rev-list when branch/config-derived upstream resolution is already cached. */
+export async function getGitUpstreamStatusForUpstreamName(
+  runGit: GitCommandRunner,
+  upstreamName: string,
+  getBehindCommitsArePatchEquivalent?: (upstreamName: string) => Promise<boolean>
+): Promise<GitUpstreamStatus> {
+  const { stdout } = await runGit(['rev-list', '--left-right', '--count', `HEAD...${upstreamName}`])
   const counts = parseGitRevListAheadBehindCounts(stdout)
   if (counts.status === 'unexpected-field-count') {
     throw new Error(`Unexpected git rev-list output: ${JSON.stringify(stdout)}`)
@@ -222,12 +229,12 @@ export async function getEffectiveGitUpstreamStatus(
 
   const behindCommitsArePatchEquivalent =
     counts.ahead > 0 && counts.behind > 0 && getBehindCommitsArePatchEquivalent
-      ? await getBehindCommitsArePatchEquivalent(upstream.upstreamName)
+      ? await getBehindCommitsArePatchEquivalent(upstreamName)
       : undefined
 
   return {
     hasUpstream: true,
-    upstreamName: upstream.upstreamName,
+    upstreamName,
     ahead: counts.ahead,
     behind: counts.behind,
     ...(behindCommitsArePatchEquivalent !== undefined ? { behindCommitsArePatchEquivalent } : {})

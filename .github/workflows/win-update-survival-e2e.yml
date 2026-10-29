@@ -1,0 +1,157 @@
+name: Windows Update-Survival E2E (branch build)
+
+# Build/install/update unsigned branch artifact with --expect survival; require same daemon and interactive original terminal without flashes. Feature push tests pre-default-branch workflow; run only on disposable CI (relocation post-mortem).
+
+on:
+  push:
+    branches:
+      - Jinwoo-H/windows-update-survival
+    paths:
+      - 'src/main/daemon/**'
+      - 'src/main/pty/**'
+      - 'tests/tools/win-update-e2e/**'
+      - 'config/electron-builder.config.cjs'
+      - '.github/workflows/win-update-survival-e2e.yml'
+  workflow_dispatch:
+    inputs:
+      expect:
+        description: Expected outcome profile
+        required: true
+        type: choice
+        default: survival
+        options:
+          - survival
+          - cold-restore
+      trace_installer:
+        description: Trace installer process checks in this disposable build
+        type: boolean
+        default: false
+      policy:
+        description: Execution policy inherited by harness child processes
+        type: choice
+        default: inherited
+        options:
+          - inherited
+          - Restricted
+      from_release:
+        description: Optional base release tag; blank uses this branch build
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: win-update-survival-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  survival:
+    name: update ${{ inputs.from_release || 'branch' }} to branch (${{ inputs.expect || 'survival' }}, policy=${{ inputs.policy || 'inherited' }})
+    runs-on: windows-2022
+    timeout-minutes: 50
+    env:
+      EXPECT: ${{ inputs.expect || 'survival' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # This job only builds and runs the harness locally; it never pushes.
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          check-latest: true
+
+      - name: Setup pnpm
+        uses: pnpm/setup@v2
+        with:
+          install: false
+
+      # Cache installer by product inputs so harness-only changes skip ~20min build; hash before native install generates artifacts.
+      - name: Cache branch installer
+        id: cache-installer
+        uses: actions/cache/restore@v4
+        with:
+          path: dist/orca-windows-setup.exe
+          key: branch-installer-${{ inputs.trace_installer && format('trace-{0}-', hashFiles('tests/tools/win-update-e2e/trace-installer-branches.mjs')) || '' }}${{ hashFiles('src/**', 'config/**', 'native/**', 'resources/**', 'mobile/**', 'patches/**', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml') }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Instrument disposable installer and uninstaller
+        if: inputs.trace_installer && steps.cache-installer.outputs.cache-hit != 'true'
+        run: node tests/tools/win-update-e2e/trace-installer-branches.mjs
+
+      # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
+      # build resolves React Native and Expo from mobile/node_modules. Gated with the
+      # build it feeds, so a cache hit does not pay for an install nothing consumes.
+      - uses: ./.github/actions/install-mobile-dependencies
+        if: steps.cache-installer.outputs.cache-hit != 'true'
+
+      - uses: ./.github/actions/prepare-windows-agent-hook
+        if: steps.cache-installer.outputs.cache-hit != 'true'
+
+      - name: Build Windows installer (unsigned)
+        if: steps.cache-installer.outputs.cache-hit != 'true'
+        run: |
+          node config/scripts/ensure-native-runtime.mjs --runtime=electron
+          pnpm run build:desktop
+          pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never
+
+      - name: Cache successfully built installer before survival verification
+        if: steps.cache-installer.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: dist/orca-windows-setup.exe
+          key: ${{ steps.cache-installer.outputs.cache-primary-key }}
+
+      # A released base also exercises its old uninstaller; default runs isolate this branch.
+      - name: Run survival harness
+        id: harness
+        shell: pwsh
+        env:
+          ORCA_E2E_DIAG_DIR: artifacts/diag
+          ORCA_BACKGROUND_LAUNCH: '1'
+          DEBUG: 'pw:browser'
+          ORCA_E2E_NSIS_TRACE: ${{ github.workspace }}\artifacts\nsis-process-trace.log
+          ORCA_E2E_PROCESS_POLICY: ${{ inputs.policy || 'inherited' }}
+          FROM_RELEASE: ${{ inputs.from_release }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          $exe = "dist/orca-windows-setup.exe"
+          if (-not (Test-Path $exe)) { throw "Installer not found at $exe" }
+          $log = "artifacts/survival-output.log"
+          $harnessArgs = @('--to', $exe, '--expect', $env:EXPECT, '--soak-seconds', '60')
+          if ($env:FROM_RELEASE) {
+            $harnessArgs += @('--from-release', $env:FROM_RELEASE)
+          } else {
+            $harnessArgs += @('--from', $exe)
+          }
+          # Only the harness and its children inherit the test policy.
+          $launch = @'
+          if (process.env.ORCA_E2E_PROCESS_POLICY === 'Restricted') {
+            process.env.PSExecutionPolicyPreference = 'Restricted'
+          }
+          console.log('Harness child process policy: ' + (process.env.PSExecutionPolicyPreference || 'inherited'))
+          process.argv.splice(1, 0, 'tests/tools/win-update-e2e/run.mjs')
+          await import('./tests/tools/win-update-e2e/run.mjs')
+          '@
+          node --input-type=module -e $launch -- @harnessArgs 2>&1 | Tee-Object -FilePath $log
+          exit $LASTEXITCODE
+
+      - name: Upload survival output
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: win-update-survival-output
+          path: |
+            artifacts/survival-output.log
+            artifacts/nsis-process-trace.log
+            artifacts/diag/**
+          retention-days: 7
+          if-no-files-found: warn

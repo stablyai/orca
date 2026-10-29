@@ -1,0 +1,294 @@
+import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
+import { redactKagiSessionToken } from '../../../../../shared/browser-url'
+import {
+  browserViewportPresetToOverride,
+  getBrowserViewportPreset
+} from '../../../../../shared/browser-viewport-presets'
+import type {
+  BrowserLoadError,
+  BrowserViewportPresetId
+} from '../../../../../shared/browser-workspace-types'
+import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import { findWorkspace } from '@/store/slices/browser-page-records'
+import {
+  BROWSER_GUEST_RECOVERY_ERROR_CODE,
+  createBrowserPageGuestRecovery,
+  type BrowserPageGuestRecovery
+} from './browser-page-guest-recovery'
+import {
+  registeredWebContentsIds,
+  replacePersistentWebview,
+  webviewRegistry
+} from './webview-registry'
+import { browserPageExists } from '../describe-page/browser-page-load-error'
+import type {
+  BrowserPageRecoveryNavigationValidation,
+  BrowserTabPageState
+} from '../describe-page/browser-page-types'
+
+export type BrowserPageWebviewGuestSessionArgs = {
+  webview: Electron.WebviewTag
+  browserTabId: string
+  workspaceId: string
+  worktreeId: string
+  sessionProfileId: string | null
+  webviewRef: MutableRefObject<Electron.WebviewTag | null>
+  isPaintableRef: MutableRefObject<boolean>
+  guestRecoveryPendingRef: MutableRefObject<boolean>
+  browserTabUrlRef: MutableRefObject<string>
+  addressBarValueRef: MutableRefObject<string>
+  activeLoadFailureRef: MutableRefObject<BrowserLoadError | null>
+  recoveryNavigationValidationRef: MutableRefObject<BrowserPageRecoveryNavigationValidation | null>
+  keepAddressBarFocusRef: MutableRefObject<boolean>
+  viewportPresetIdRef: MutableRefObject<BrowserViewportPresetId | null>
+  onUpdatePageStateRef: MutableRefObject<(tabId: string, updates: BrowserTabPageState) => void>
+  setGuestRecoveryGeneration: Dispatch<SetStateAction<number>>
+  focusAddressBarNow: () => boolean
+  syncNavigationState: (webview: Electron.WebviewTag) => void
+  syncBrowserAnnotationViewportBridge: () => void
+}
+
+export type BrowserPageWebviewGuestSession = {
+  guestRecovery: BrowserPageGuestRecovery
+  handleDidAttach: () => void
+  handleDomReady: () => void
+  handleGuestDestroyed: () => void
+}
+
+export function createBrowserPageWebviewGuestSession({
+  webview,
+  browserTabId,
+  workspaceId,
+  worktreeId,
+  sessionProfileId,
+  webviewRef,
+  isPaintableRef,
+  guestRecoveryPendingRef,
+  browserTabUrlRef,
+  addressBarValueRef,
+  activeLoadFailureRef,
+  recoveryNavigationValidationRef,
+  keepAddressBarFocusRef,
+  viewportPresetIdRef,
+  onUpdatePageStateRef,
+  setGuestRecoveryGeneration,
+  focusAddressBarNow,
+  syncNavigationState,
+  syncBrowserAnnotationViewportBridge
+}: BrowserPageWebviewGuestSessionArgs): BrowserPageWebviewGuestSession {
+  let registrationInFlight: {
+    webContentsId: number
+    promise: Promise<boolean | null>
+  } | null = null
+  const readWebContentsId = (): number | null => {
+    try {
+      return webview.getWebContentsId()
+    } catch {
+      return null
+    }
+  }
+  const ownsGuest = (webContentsId: number | null): boolean =>
+    webContentsId !== null &&
+    !guestRecovery.isDisposed() &&
+    webviewRef.current === webview &&
+    webviewRegistry.get(browserTabId) === webview &&
+    readWebContentsId() === webContentsId
+  const registerGuest = (webContentsId: number | null): Promise<boolean | null> => {
+    if (webContentsId === null || !ownsGuest(webContentsId)) {
+      return Promise.resolve(null)
+    }
+    if (registrationInFlight?.webContentsId === webContentsId) {
+      return registrationInFlight.promise
+    }
+    const promise = window.api.browser
+      .registerGuest({
+        browserPageId: browserTabId,
+        workspaceId,
+        worktreeId,
+        sessionProfileId,
+        webContentsId
+      })
+      .then((registered) => {
+        if (!ownsGuest(webContentsId)) {
+          return null
+        }
+        if (registered) {
+          registeredWebContentsIds.set(browserTabId, webContentsId)
+          publishActiveBrowserPageIfCurrent(browserTabId)
+          return true
+        }
+        return null
+      })
+      // Why: registration rejection can be an attach-policy race; only validation of an identified guest proves loss.
+      .catch(() => null)
+      .finally(() => {
+        if (registrationInFlight?.promise === promise) {
+          registrationInFlight = null
+        }
+      })
+    registrationInFlight = { webContentsId, promise }
+    return promise
+  }
+
+  const clearGuestRecoveryError = (): void => {
+    if (activeLoadFailureRef.current?.code !== BROWSER_GUEST_RECOVERY_ERROR_CODE) {
+      return
+    }
+    activeLoadFailureRef.current = null
+    onUpdatePageStateRef.current(browserTabId, { loading: false, loadError: null })
+  }
+
+  const guestRecovery = createBrowserPageGuestRecovery({
+    webview,
+    browserPageExists: () => browserPageExists(browserTabId),
+    shouldValidate: () => isPaintableRef.current,
+    isCurrentWebview: () => webviewRef.current === webview,
+    isPending: () => guestRecoveryPendingRef.current,
+    setPending: (pending) => {
+      guestRecoveryPendingRef.current = pending
+    },
+    validateRegistration: async () => {
+      // Budget eviction can remove a hidden guest while its pane stays mounted.
+      if (!webview.isConnected) {
+        return false
+      }
+      let webContentsId: number
+      try {
+        webContentsId = webview.getWebContentsId()
+      } catch {
+        // Why: a reused webview can remount before dom-ready; only an identified guest can be declared missing.
+        return null
+      }
+      if (registeredWebContentsIds.get(browserTabId) !== webContentsId) {
+        return registerGuest(webContentsId)
+      }
+      const registered = await window.api.browser.isGuestRegistered({
+        browserPageId: browserTabId,
+        webContentsId
+      })
+      if (!ownsGuest(webContentsId)) {
+        return null
+      }
+      if (registered) {
+        return true
+      }
+      const repaired = await window.api.browser.repairGuestRegistration({
+        browserPageId: browserTabId,
+        workspaceId,
+        worktreeId,
+        sessionProfileId,
+        webContentsId
+      })
+      return ownsGuest(webContentsId) ? repaired : null
+    },
+    replaceGuest: () => replacePersistentWebview(browserTabId),
+    onReplacementReady: () => setGuestRecoveryGeneration((generation) => generation + 1),
+    onRecoveryFailed: () => {
+      const loadError = {
+        code: BROWSER_GUEST_RECOVERY_ERROR_CODE,
+        description: translate(
+          'browser.guestRecovery.failed',
+          'The browser page stopped unexpectedly. Retry to restore it.'
+        ),
+        validatedUrl: redactKagiSessionToken(
+          browserTabUrlRef.current || addressBarValueRef.current || 'about:blank'
+        )
+      }
+      activeLoadFailureRef.current = loadError
+      onUpdatePageStateRef.current(browserTabId, { loading: false, loadError })
+    },
+    onRecoverySucceeded: clearGuestRecoveryError
+  })
+
+  const handleDidAttach = (): void => {
+    // Why: register at attach since cert failures can precede dom-ready; the dom-ready path stays an idempotent fallback.
+    const webContentsId = readWebContentsId()
+    void registerGuest(webContentsId).then((registered) => {
+      if (!ownsGuest(webContentsId)) {
+        return
+      }
+      if (registered === true) {
+        guestRecovery.confirmRegistration()
+      }
+      syncBrowserAnnotationViewportBridge()
+    })
+  }
+
+  const handleDomReady = (): void => {
+    const validateRecoveryAfterNavigation =
+      recoveryNavigationValidationRef.current?.committed === true
+    if (validateRecoveryAfterNavigation) {
+      recoveryNavigationValidationRef.current = null
+    }
+    let liveWebContentsId: number | null = null
+    try {
+      liveWebContentsId = webview.getWebContentsId()
+    } catch {
+      // Why: the guest can detach between dom-ready and registration.
+    }
+    const queuedAnnotationViewportBridgeSync =
+      liveWebContentsId === null || registeredWebContentsIds.get(browserTabId) !== liveWebContentsId
+    if (queuedAnnotationViewportBridgeSync) {
+      void registerGuest(liveWebContentsId).then((registered) => {
+        if (!ownsGuest(liveWebContentsId)) {
+          return
+        }
+        const completedRecovery = guestRecovery.finish()
+        if (registered === true) {
+          guestRecovery.confirmRegistration()
+          clearGuestRecoveryError()
+        }
+        if (registered === null || completedRecovery || validateRecoveryAfterNavigation) {
+          guestRecovery.validateAfterResume()
+        }
+        syncBrowserAnnotationViewportBridge()
+      })
+    } else {
+      const completedRecovery = guestRecovery.finish()
+      if (completedRecovery || validateRecoveryAfterNavigation) {
+        guestRecovery.validateAfterResume()
+      }
+    }
+    syncNavigationState(webview)
+    if (keepAddressBarFocusRef.current) {
+      focusAddressBarNow()
+    }
+    if (!queuedAnnotationViewportBridgeSync) {
+      syncBrowserAnnotationViewportBridge()
+    }
+    // Why: CDP viewport overrides are scoped to the debugger session and don't survive cross-origin nav, so reapply (idempotently) on dom-ready.
+    const presetId = viewportPresetIdRef.current
+    const preset = getBrowserViewportPreset(presetId)
+    // Why: reapply even null so CDP matches store state; setDeviceMetricsOverride persists across same-origin nav and would leave a stale viewport.
+    void window.api.browser.setViewportOverride({
+      browserPageId: browserTabId,
+      override: preset ? browserViewportPresetToOverride(preset) : null
+    })
+  }
+
+  const handleGuestDestroyed = (): void => {
+    // Guest close or detach races can destroy without render-process-gone; recover only while still connected, excluding intentional teardown.
+    if (webview.isConnected) {
+      guestRecovery.recoverRenderer()
+    }
+  }
+
+  return {
+    guestRecovery,
+    handleDidAttach,
+    handleDomReady,
+    handleGuestDestroyed
+  }
+}
+
+// Why: a page restored at launch is active without any focus action, so main would not learn it.
+function publishActiveBrowserPageIfCurrent(browserPageId: string): void {
+  const state = useAppStore.getState()
+  const workspace = state.activeBrowserTabId
+    ? findWorkspace(state.browserTabsByWorktree, state.activeBrowserTabId)
+    : null
+  if (workspace?.activePageId === browserPageId) {
+    window.api.browser.notifyActiveTabChanged({ browserPageId }).catch(() => {})
+  }
+}

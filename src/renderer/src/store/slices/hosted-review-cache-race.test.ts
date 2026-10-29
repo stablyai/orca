@@ -1,22 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
-import { createHostedReviewSlice, getHostedReviewCacheKey } from './hosted-review'
+import { createHostedReviewSlice } from './hosted-review'
+import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 
 const runtimeRpc = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: runtimeRpc.callRuntimeRpc,
-  getActiveRuntimeTarget: (
-    settings: { activeRuntimeEnvironmentId?: string | null } | null | undefined
-  ) => {
-    const environmentId = settings?.activeRuntimeEnvironmentId?.trim()
-    return environmentId ? { kind: 'environment', environmentId } : { kind: 'local' }
-  }
-}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: runtimeRpc.callRuntimeRpc }))
 
 const mockApi = {
   hostedReview: {
@@ -90,7 +83,15 @@ describe('hosted review cache race protection', () => {
     })
     mockApi.hostedReview.forBranch.mockReturnValueOnce(fetch)
     const store = makeStore()
-    const cacheKey = getHostedReviewCacheKey('/repo', 'feature/race')
+    const cacheKey = getHostedReviewCacheKey(
+      '/repo',
+      'feature/race',
+      null,
+      'repo-1',
+      null,
+      null,
+      true
+    )
 
     const request = store.getState().fetchHostedReviewForBranch('/repo', 'feature/race')
     vi.setSystemTime(200)
@@ -103,10 +104,14 @@ describe('hosted review cache race protection', () => {
         }
       }
     })
+    const subscriber = vi.fn()
+    const unsubscribe = store.subscribe(subscriber)
     vi.setSystemTime(300)
     resolveFetch(olderReview)
 
     await expect(request).resolves.toEqual(olderReview)
+    unsubscribe()
+    expect(subscriber).not.toHaveBeenCalled()
     expect(store.getState().hostedReviewCache[cacheKey]).toEqual({
       data: newerReview,
       fetchedAt: 200,
@@ -125,7 +130,15 @@ describe('hosted review cache race protection', () => {
     })
     mockApi.hostedReview.forBranch.mockReturnValueOnce(fetch)
     const store = makeStore()
-    const cacheKey = getHostedReviewCacheKey('/repo', 'feature/error-race')
+    const cacheKey = getHostedReviewCacheKey(
+      '/repo',
+      'feature/error-race',
+      null,
+      'repo-1',
+      null,
+      null,
+      true
+    )
 
     try {
       const request = store.getState().fetchHostedReviewForBranch('/repo', 'feature/error-race')
@@ -142,10 +155,56 @@ describe('hosted review cache race protection', () => {
       vi.setSystemTime(300)
       rejectFetch(new Error('older lookup failed'))
 
-      await expect(request).resolves.toBeNull()
+      // Lookup failures retain last review instead of caching a definitive miss and blanking cards.
+      await expect(request).resolves.toEqual(newerReview)
       expect(store.getState().hostedReviewCache[cacheKey]).toEqual({
         data: newerReview,
         fetchedAt: 200,
+        linkedReviewHintKey: 'github:42'
+      })
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+
+  it('keeps the last known review when a refresh fails instead of caching a miss', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(100)
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const cachedReview = makeGitHubReview('Known PR status')
+    const cacheKey = getHostedReviewCacheKey(
+      '/repo',
+      'feature/keep-on-error',
+      null,
+      'repo-1',
+      null,
+      null,
+      true
+    )
+    let rejectFetch: (error: Error) => void = () => {}
+    const fetch = new Promise<HostedReviewInfo>((_resolve, reject) => {
+      rejectFetch = reject
+    })
+    mockApi.hostedReview.forBranch.mockReturnValueOnce(fetch)
+    const store = makeStore()
+    store.setState({
+      hostedReviewCache: {
+        [cacheKey]: { data: cachedReview, fetchedAt: 100, linkedReviewHintKey: 'github:42' }
+      }
+    })
+
+    try {
+      const request = store
+        .getState()
+        .fetchHostedReviewForBranch('/repo', 'feature/keep-on-error', { force: true })
+      vi.setSystemTime(300)
+      rejectFetch(new Error('transient gh failure'))
+
+      await expect(request).resolves.toEqual(cachedReview)
+      // No fresh null miss: preserve review and retry next poll.
+      expect(store.getState().hostedReviewCache[cacheKey]).toEqual({
+        data: cachedReview,
+        fetchedAt: 100,
         linkedReviewHintKey: 'github:42'
       })
     } finally {
@@ -167,7 +226,15 @@ describe('hosted review cache race protection', () => {
     })
     mockApi.hostedReview.forBranch.mockReturnValueOnce(fetch)
     const store = makeStore()
-    const cacheKey = getHostedReviewCacheKey('/repo', 'feature/same-ms-race')
+    const cacheKey = getHostedReviewCacheKey(
+      '/repo',
+      'feature/same-ms-race',
+      null,
+      'repo-1',
+      null,
+      null,
+      true
+    )
 
     const request = store.getState().fetchHostedReviewForBranch('/repo', 'feature/same-ms-race')
     store.setState({
@@ -202,7 +269,15 @@ describe('hosted review cache race protection', () => {
     }
     mockApi.hostedReview.forBranch.mockResolvedValueOnce(freshReview)
     const store = makeStore()
-    const cacheKey = getHostedReviewCacheKey('/repo', 'feature/same-ms-existing')
+    const cacheKey = getHostedReviewCacheKey(
+      '/repo',
+      'feature/same-ms-existing',
+      null,
+      'repo-1',
+      null,
+      null,
+      true
+    )
 
     store.setState({
       hostedReviewCache: {
@@ -242,6 +317,7 @@ describe('hosted review cache race protection', () => {
     expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(2)
     expect(mockApi.hostedReview.forBranch).toHaveBeenNthCalledWith(2, {
       branch: 'feature/inflight',
+      currentHeadOid: null,
       linkedAzureDevOpsPR: null,
       linkedBitbucketPR: null,
       linkedGitHubPR: null,

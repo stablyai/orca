@@ -1,9 +1,8 @@
 import { spawn } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const __dirname = import.meta.dirname
 const grandchildPath = path.join(__dirname, 'electron-vite-dev-grandchild.mjs')
 const pidFile = process.env.ORCA_DEV_WRAPPER_TEST_PID_FILE
 const envFile = process.env.ORCA_DEV_WRAPPER_TEST_ENV_FILE
@@ -56,8 +55,7 @@ if (!pidFile) {
   throw new Error('ORCA_DEV_WRAPPER_TEST_PID_FILE is required')
 }
 
-// Why: wrapper tests must clean up both the fake electron-vite CLI process and
-// the spawned Electron-like descendant if the assertion fails before SIGINT.
+// Record both PIDs so assertion failures before SIGINT cannot leak the wrapper or its child.
 writeFileSync(pidFile, `${process.pid}\n${grandchild.pid ?? ''}\n`, 'utf8')
 if (envFile) {
   writeFileSync(
@@ -80,4 +78,10 @@ if (envFile) {
     'utf8'
   )
 }
-setInterval(() => {}, 1000)
+// The wrapper detaches this process group; exit with it so a killed test run cannot orphan us.
+const parentPid = process.ppid
+setInterval(() => {
+  if (process.ppid !== parentPid) {
+    exitAfterGrandchild('SIGTERM', 143)
+  }
+}, 1000)

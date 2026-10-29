@@ -1,19 +1,34 @@
-import type { GlobalSettings, SourceControlGroupOrder } from '../../../../shared/types'
+import { useEffect, useRef, useState } from 'react'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { SourceControlGroupOrder } from '../../../../shared/ui-chrome-types'
 import type { SourceControlAiSettingsPatch } from '../../../../shared/source-control-ai-types'
-import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from '../../../../shared/source-control-group-order'
+import { normalizeSourceControlGroupOrder } from '../../../../shared/source-control-group-order'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
+import { Switch } from '../ui/switch'
 import { useAppStore } from '../../store'
 import { getGitPaneSearchEntries } from './git-search'
 import { SearchableSetting } from './SearchableSetting'
+import { BranchPrefixFeedback } from './BranchPrefixFeedback'
 import { matchesSettingsSearch } from './settings-search'
 import { AutoRenameBranchFromWorkSetting } from './AutoRenameBranchFromWorkSetting'
+import {
+  JIRA_ISSUE_KEY_CASING_KEYWORDS,
+  JiraIssueKeyCasingSetting,
+  getJiraIssueKeyCasingDescription,
+  getJiraIssueKeyCasingTitle
+} from './JiraIssueKeyCasingSetting'
+import {
+  CompareAgainstUpstreamSetting,
+  compareAgainstUpstreamMatchesSearch
+} from './CompareAgainstUpstreamSetting'
 import { getAutoRenameBranchSearchEntries } from './auto-rename-branch-search'
 import {
   KEEP_LOCAL_MAIN_UP_TO_DATE_SECTION_ID,
   getKeepLocalMainUpToDateTitle
 } from './keep-local-main-up-to-date-setting'
-import { translate } from '@/i18n/i18n'
+import { Trans } from 'react-i18next'
+import { i18n, translate } from '@/i18n/i18n'
 import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
 
 export { getGitPaneSearchEntries }
@@ -71,14 +86,14 @@ export function SourceControlGroupOrderSetting({
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
 }): React.JSX.Element {
-  const value = settings.sourceControlGroupOrder ?? DEFAULT_SOURCE_CONTROL_GROUP_ORDER
+  const value = normalizeSourceControlGroupOrder(settings.sourceControlGroupOrder)
   const title = translate(
     'auto.components.settings.GitPane.sourceControlGroupOrderTitle',
     'Source Control Group Order'
   )
   const description = translate(
     'auto.components.settings.GitPane.sourceControlGroupOrderDescription',
-    'Choose whether Changes, Staged Changes, or Untracked Files appear first in Source Control.'
+    'Choose whether Staged Changes or Changes appear first in Source Control.'
   )
 
   return (
@@ -110,13 +125,6 @@ export function SourceControlGroupOrderSetting({
               {
                 value: 'staged-first',
                 label: translate('auto.components.settings.GitPane.stagedFirst', 'Staged first')
-              },
-              {
-                value: 'untracked-first',
-                label: translate(
-                  'auto.components.settings.GitPane.untrackedFirst',
-                  'Untracked first'
-                )
               }
             ]}
           />
@@ -139,6 +147,19 @@ export function GitPane({
   const storeSearchQuery = useAppStore((s) => s.settingsSearchQuery)
   const searchQuery = settingsSearchQuery ?? storeSearchQuery
   const keepLocalMainUpToDateTitle = getKeepLocalMainUpToDateTitle()
+
+  const isBranchPrefixInputMode = settings.branchPrefix !== 'none'
+  // Local drafts preserve caret/fast typing through async IPC; adopt external reloads but ignore delayed echoes of our own edits.
+  const [customPrefixDraft, setCustomPrefixDraft] = useState(settings.branchPrefixCustom)
+  const lastCommittedPrefixRef = useRef(settings.branchPrefixCustom)
+  useEffect(() => {
+    if (settings.branchPrefixCustom !== lastCommittedPrefixRef.current) {
+      lastCommittedPrefixRef.current = settings.branchPrefixCustom
+      setCustomPrefixDraft(settings.branchPrefixCustom)
+    }
+  }, [settings.branchPrefixCustom])
+  const branchPrefixInputValue =
+    settings.branchPrefix === 'git-username' ? displayedGitUsername : customPrefixDraft
 
   const visibleSections = [
     matchesSettingsSearch(searchQuery, {
@@ -191,14 +212,15 @@ export function GitPane({
             </button>
           ))}
         </div>
-        {(settings.branchPrefix === 'custom' || settings.branchPrefix === 'git-username') && (
+        {isBranchPrefixInputMode && (
           <Input
-            value={
-              settings.branchPrefix === 'git-username'
-                ? displayedGitUsername
-                : settings.branchPrefixCustom
-            }
-            onChange={(e) => updateSettings({ branchPrefixCustom: e.target.value })}
+            value={branchPrefixInputValue}
+            onChange={(e) => {
+              const next = e.target.value
+              lastCommittedPrefixRef.current = next
+              setCustomPrefixDraft(next)
+              updateSettings({ branchPrefixCustom: next })
+            }}
             placeholder={
               settings.branchPrefix === 'git-username'
                 ? translate(
@@ -211,7 +233,19 @@ export function GitPane({
             readOnly={settings.branchPrefix === 'git-username'}
           />
         )}
+        {isBranchPrefixInputMode && <BranchPrefixFeedback rawPrefix={branchPrefixInputValue} />}
       </SearchableSetting>
+    ) : null,
+    matchesSettingsSearch(searchQuery, {
+      title: getJiraIssueKeyCasingTitle(),
+      description: getJiraIssueKeyCasingDescription(),
+      keywords: JIRA_ISSUE_KEY_CASING_KEYWORDS
+    }) ? (
+      <JiraIssueKeyCasingSetting
+        key="jira-issue-key-casing"
+        settings={settings}
+        updateSettings={updateSettings}
+      />
     ) : null,
     matchesSettingsSearch(searchQuery, {
       title: keepLocalMainUpToDateTitle,
@@ -229,43 +263,29 @@ export function GitPane({
         <div className="space-y-0.5">
           <Label>{keepLocalMainUpToDateTitle}</Label>
           <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.GitPane.976afc6b3e',
-              'When you create a workspace, Orca refreshes the remote base and safely fast-forwards your matching local branch, such as'
-            )}
-            <code>{translate('auto.components.settings.GitPane.ffba483bae', 'main')}</code>{' '}
-            {translate('auto.components.settings.GitPane.5bf885be48', 'or')}
-            <code>{translate('auto.components.settings.GitPane.3ae3de8898', 'master')}</code>
-            {translate('auto.components.settings.GitPane.db3a127eb1', '. This keeps commands like')}
-            <code>
-              {translate('auto.components.settings.GitPane.d072a12995', 'git diff main...HEAD')}
-            </code>{' '}
-            {translate(
-              'auto.components.settings.GitPane.36e3de3619',
-              'from comparing against stale history. Orca skips the update if that branch has uncommitted changes or local-only commits.'
-            )}
+            <Trans
+              i18n={i18n}
+              defaults={translate(
+                'auto.components.settings.GitPane.refreshLocalBaseDescription',
+                'When you create a workspace, Orca refreshes the remote base and safely fast-forwards your matching local branch, such as <mainBranch>main</mainBranch> or <masterBranch>master</masterBranch>. This keeps commands like <diffCommand>git diff main...HEAD</diffCommand> from comparing against stale history. Orca skips the update if that branch has uncommitted changes or local-only commits.'
+              )}
+              components={{
+                mainBranch: <code />,
+                masterBranch: <code />,
+                diffCommand: <code />
+              }}
+            />
           </p>
         </div>
-        <button
-          role="switch"
-          aria-checked={settings.refreshLocalBaseRefOnWorktreeCreate}
-          onClick={() =>
+        <Switch
+          aria-label={keepLocalMainUpToDateTitle}
+          checked={settings.refreshLocalBaseRefOnWorktreeCreate}
+          onCheckedChange={(checked) =>
             updateSettings({
-              refreshLocalBaseRefOnWorktreeCreate: !settings.refreshLocalBaseRefOnWorktreeCreate
+              refreshLocalBaseRefOnWorktreeCreate: checked
             })
           }
-          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-            settings.refreshLocalBaseRefOnWorktreeCreate
-              ? 'bg-foreground'
-              : 'bg-muted-foreground/30'
-          }`}
-        >
-          <span
-            className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-              settings.refreshLocalBaseRefOnWorktreeCreate ? 'translate-x-4' : 'translate-x-0.5'
-            }`}
-          />
-        </button>
+        />
       </SearchableSetting>
     ) : null,
     matchesSettingsSearch(searchQuery, {
@@ -275,12 +295,19 @@ export function GitPane({
       ),
       description: translate(
         'auto.components.settings.GitPane.sourceControlGroupOrderDescription',
-        'Choose whether Changes, Staged Changes, or Untracked Files appear first in Source Control.'
+        'Choose whether Staged Changes or Changes appear first in Source Control.'
       ),
       keywords: SOURCE_CONTROL_GROUP_ORDER_KEYWORDS
     }) ? (
       <SourceControlGroupOrderSetting
         key="source-control-group-order"
+        settings={settings}
+        updateSettings={updateSettings}
+      />
+    ) : null,
+    compareAgainstUpstreamMatchesSearch(searchQuery) ? (
+      <CompareAgainstUpstreamSetting
+        key="compare-against-upstream"
         settings={settings}
         updateSettings={updateSettings}
       />
@@ -296,64 +323,6 @@ export function GitPane({
         branchPromptDiscardSignal={branchPromptDiscardSignal}
         settingsSearchQuery={searchQuery}
       />
-    ) : null,
-    matchesSettingsSearch(searchQuery, {
-      title: translate('auto.components.settings.GitPane.e02ea23a32', 'Orca Attribution'),
-      description: translate(
-        'auto.components.settings.GitPane.d2eede4c54',
-        'Add Orca attribution to commits, PRs, and issues.'
-      ),
-      keywords: [
-        translate('auto.components.settings.GitPane.32dca11189', 'github'),
-        translate('auto.components.settings.GitPane.895d3f70b8', 'gh'),
-        translate('auto.components.settings.GitPane.b4ef5428a7', 'pr'),
-        translate('auto.components.settings.GitPane.afada55042', 'issue'),
-        translate('auto.components.settings.GitPane.9838c921ed', 'co-author'),
-        translate('auto.components.settings.GitPane.b5f534717a', 'coauthored'),
-        translate('auto.components.settings.GitPane.b9b5771bb1', 'attribution'),
-        translate('auto.components.settings.GitPane.e71ce09c42', 'orca')
-      ]
-    }) ? (
-      <SearchableSetting
-        key="github-attribution"
-        title={translate('auto.components.settings.GitPane.e02ea23a32', 'Orca Attribution')}
-        description={translate(
-          'auto.components.settings.GitPane.d2eede4c54',
-          'Add Orca attribution to commits, PRs, and issues.'
-        )}
-        keywords={['github', 'gh', 'pr', 'issue', 'co-author', 'coauthored', 'attribution', 'orca']}
-        className="flex items-center justify-between gap-4 py-2"
-      >
-        <div className="space-y-0.5">
-          <Label>
-            {translate('auto.components.settings.GitPane.e02ea23a32', 'Orca Attribution')}
-          </Label>
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.GitPane.d2eede4c54',
-              'Add Orca attribution to commits, PRs, and issues.'
-            )}
-          </p>
-        </div>
-        <button
-          role="switch"
-          aria-checked={settings.enableGitHubAttribution}
-          onClick={() =>
-            updateSettings({
-              enableGitHubAttribution: !settings.enableGitHubAttribution
-            })
-          }
-          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-            settings.enableGitHubAttribution ? 'bg-foreground' : 'bg-muted-foreground/30'
-          }`}
-        >
-          <span
-            className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-              settings.enableGitHubAttribution ? 'translate-x-4' : 'translate-x-0.5'
-            }`}
-          />
-        </button>
-      </SearchableSetting>
     ) : null
   ].filter(Boolean)
 

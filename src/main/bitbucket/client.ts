@@ -1,28 +1,31 @@
-import { Buffer } from 'buffer'
-import type { CheckStatus } from '../../shared/types'
+import type { CheckStatus } from '../../shared/github/pull-request-types'
 import {
   deriveBitbucketBuildStatus,
   mapBitbucketPullRequest,
+  mapBitbucketPullRequestState,
   type BitbucketPullRequestInfo,
   type RawBitbucketBuildStatus,
   type RawBitbucketPullRequest
 } from './pull-request-mappers'
 import { getBitbucketRepoRef, type BitbucketRepoRef } from './repository-ref'
+import { shouldHideNonOpenReviewOnDefaultBranch } from '../source-control/repo-default-branch'
 import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
+import { cancelUnreadResponseBody } from '../lib/unread-response-body'
+import { authHeaders, getEnvAuthConfig, hasAuth } from './bitbucket-auth-config'
+import { accountNameFromUser, fetchBitbucketUserResult } from './user-request'
+import {
+  getStoredBitbucketCredentialError,
+  getStoredBitbucketMetadata,
+  hasStoredBitbucketCredential,
+  loadStoredBitbucketSecret
+} from './credential-store'
+import { resolveBitbucketAuthConfig, storedAuthConfig } from './resolve-auth'
 
-const DEFAULT_API_BASE_URL = 'https://api.bitbucket.org/2.0'
 const REQUEST_TIMEOUT_MS = 5000
 const ALL_PULL_REQUEST_STATES = ['OPEN', 'MERGED', 'DECLINED', 'SUPERSEDED'] as const
-
-type BitbucketAuthConfig = {
-  baseUrl: string
-  accessToken: string | null
-  email: string | null
-  apiToken: string | null
-}
 
 export type BitbucketAuthStatus = {
   configured: boolean
@@ -35,42 +38,16 @@ type RequestOptions = {
   timeoutMs?: number
 }
 
-function envValue(name: string): string | null {
-  const value = process.env[name]?.trim() ?? ''
-  return value.length > 0 ? value : null
-}
-
-function getAuthConfig(): BitbucketAuthConfig {
-  return {
-    baseUrl: envValue('ORCA_BITBUCKET_API_BASE_URL') ?? DEFAULT_API_BASE_URL,
-    accessToken: envValue('ORCA_BITBUCKET_ACCESS_TOKEN'),
-    email: envValue('ORCA_BITBUCKET_EMAIL'),
-    apiToken: envValue('ORCA_BITBUCKET_API_TOKEN')
-  }
-}
-
-function hasAuth(config: BitbucketAuthConfig): boolean {
-  return Boolean(config.accessToken || (config.email && config.apiToken))
-}
-
-function authHeaders(config: BitbucketAuthConfig): Record<string, string> {
-  if (config.accessToken) {
-    return { Authorization: `Bearer ${config.accessToken}` }
-  }
-  if (config.email && config.apiToken) {
-    const encoded = Buffer.from(`${config.email}:${config.apiToken}`).toString('base64')
-    return { Authorization: `Basic ${encoded}` }
-  }
-  return {}
-}
-
 function isStringArray(value: string | readonly string[]): value is readonly string[] {
   return Array.isArray(value)
 }
 
-function apiUrl(path: string, searchParams?: RequestOptions['searchParams']): string {
-  const config = getAuthConfig()
-  const base = config.baseUrl.replace(/\/+$/, '')
+function apiUrl(
+  baseUrl: string,
+  path: string,
+  searchParams?: RequestOptions['searchParams']
+): string {
+  const base = baseUrl.replace(/\/+$/, '')
   const url = new URL(`${base}${path}`)
   if (searchParams) {
     for (const [key, value] of Object.entries(searchParams)) {
@@ -86,26 +63,46 @@ function apiUrl(path: string, searchParams?: RequestOptions['searchParams']): st
   return url.toString()
 }
 
-async function requestJson<T>(path: string, options: RequestOptions = {}): Promise<T | null> {
-  const config = getAuthConfig()
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? REQUEST_TIMEOUT_MS)
+async function requestJson<T>(
+  path: string,
+  options: RequestOptions = {},
+  // Creation preflight must distinguish lookup failure from an absent PR.
+  throwOnFailure = false,
+  // A stale linked PR may 404 while the branch still has a review.
+  notFoundIsNull = false
+): Promise<T | null> {
+  const config = resolveBitbucketAuthConfig()
+  // Anonymous private-repo 404s must not be mistaken for an absent PR.
+  if (!hasAuth(config)) {
+    if (throwOnFailure) {
+      throw new Error('Bitbucket request failed: no usable credential')
+    }
+    return null
+  }
   try {
-    const response = await fetch(apiUrl(path, options.searchParams), {
+    const response = await fetch(apiUrl(config.baseUrl, path, options.searchParams), {
       headers: {
         Accept: 'application/json',
         ...authHeaders(config)
       },
-      signal: controller.signal
+      signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
     })
     if (!response.ok) {
+      await cancelUnreadResponseBody(response)
+      if (response.status === 404 && notFoundIsNull) {
+        return null
+      }
+      if (throwOnFailure) {
+        throw new Error(`Bitbucket request failed: HTTP ${response.status}`)
+      }
       return null
     }
     return (await response.json()) as T
-  } catch {
+  } catch (error) {
+    if (throwOnFailure) {
+      throw error
+    }
     return null
-  } finally {
-    clearTimeout(timeout)
   }
 }
 
@@ -144,21 +141,35 @@ async function normalizePullRequest(
   return mapBitbucketPullRequest(raw, status)
 }
 
+// Avoid keychain prompts: validate stored credentials only when the secret is already cached.
 export async function getBitbucketAuthStatus(): Promise<BitbucketAuthStatus> {
-  const config = getAuthConfig()
-  if (!hasAuth(config)) {
-    return { configured: false, authenticated: false, account: null }
+  const env = getEnvAuthConfig()
+  if (hasAuth(env)) {
+    const result = await fetchBitbucketUserResult(env)
+    return {
+      configured: true,
+      // An unreachable host does not prove the credential is invalid.
+      authenticated: result.ok || result.reason === 'unreachable',
+      account: result.ok ? accountNameFromUser(result.user) : null
+    }
   }
-  const user = await requestJson<{
-    username?: string | null
-    display_name?: string | null
-    account_id?: string | null
-  }>('/user', { timeoutMs: 4000 })
-  return {
-    configured: true,
-    authenticated: user !== null,
-    account: user?.username ?? user?.display_name ?? user?.account_id ?? null
+  const metadata = getStoredBitbucketMetadata()
+  if (metadata && hasStoredBitbucketCredential()) {
+    if (getStoredBitbucketCredentialError()) {
+      return { configured: true, authenticated: false, account: metadata.account }
+    }
+    const cached = loadStoredBitbucketSecret()
+    if (!cached) {
+      return { configured: true, authenticated: true, account: metadata.account }
+    }
+    const result = await fetchBitbucketUserResult(storedAuthConfig(metadata, cached))
+    return {
+      configured: true,
+      authenticated: result.ok || result.reason === 'unreachable',
+      account: (result.ok ? accountNameFromUser(result.user) : null) ?? metadata.account
+    }
   }
+  return { configured: false, authenticated: false, account: null }
 }
 
 export async function getBitbucketPullRequest(
@@ -186,7 +197,8 @@ export async function getBitbucketPullRequestForBranch(
   branch: string,
   linkedPRNumber?: number | null,
   connectionId?: string | null,
-  options: HostedReviewExecutionOptions = {}
+  options: HostedReviewExecutionOptions = {},
+  throwOnFailure = false
 ): Promise<BitbucketPullRequestInfo | null> {
   const branchName = branch.replace(/^refs\/heads\//, '')
   if (!branchName && linkedPRNumber == null) {
@@ -200,6 +212,18 @@ export async function getBitbucketPullRequestForBranch(
   )
   if (!repo) {
     return null
+  }
+
+  if (typeof linkedPRNumber === 'number') {
+    const raw = await requestJson<RawBitbucketPullRequest>(
+      `/repositories/${encodedRepoPath(repo)}/pullrequests/${encodeURIComponent(String(linkedPRNumber))}`,
+      {},
+      throwOnFailure,
+      true
+    )
+    if (raw) {
+      return normalizePullRequest(repo, raw)
+    }
   }
 
   if (branchName) {
@@ -216,21 +240,48 @@ export async function getBitbucketPullRequestForBranch(
           q: query,
           state: ALL_PULL_REQUEST_STATES
         }
-      }
+      },
+      throwOnFailure
     )
     const raw = list?.values?.[0]
     if (raw) {
-      return normalizePullRequest(repo, raw)
+      const state = mapBitbucketPullRequestState(raw.state)
+      // Exclude implicit merged matches so they cannot block a new PR on the branch.
+      const isMergedImplicitMatch = state === 'merged'
+      const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
+        state,
+        reviewNumber: raw.id ?? null,
+        linkedReviewNumber: linkedPRNumber,
+        branchName,
+        repoPath,
+        connectionId,
+        localGitOptions: getHostedReviewLocalGitOptions(options)
+      })
+      if (!isMergedImplicitMatch && !hideOnDefaultBranch) {
+        return normalizePullRequest(repo, raw)
+      }
     }
   }
 
-  if (typeof linkedPRNumber !== 'number') {
-    return null
-  }
-  const raw = await requestJson<RawBitbucketPullRequest>(
-    `/repositories/${encodedRepoPath(repo)}/pullrequests/${encodeURIComponent(String(linkedPRNumber))}`
+  return null
+}
+
+/** Preserve lookup failures so creation preflight can report review state as unavailable. */
+export function getBitbucketPullRequestForBranchOrThrow(
+  repoPath: string,
+  branch: string,
+  linkedPRNumber?: number | null,
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
+): Promise<BitbucketPullRequestInfo | null> {
+  return getBitbucketPullRequestForBranch(
+    repoPath,
+    branch,
+    linkedPRNumber,
+    connectionId,
+    options,
+    true
   )
-  return raw ? normalizePullRequest(repo, raw) : null
 }
 
 export async function getBitbucketRepoSlug(

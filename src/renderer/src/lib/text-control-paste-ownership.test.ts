@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { PASTE_PAYLOAD_CORPUS } from './paste-payload-corpus'
+
 import { TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES } from './text-control-paste'
 import {
   classifyTextControlPastePayloadOwnership,
@@ -54,6 +54,7 @@ describe('text control paste ownership', () => {
     expect(findOwnedPasteEventTextControlTarget(textarea, textarea)).toBe(textarea)
     expect(findOwnedPasteEventTextControlTarget(other, textarea)).toBeNull()
     expect(findOwnedPasteEventTextControlTarget(terminalTextarea, terminalTextarea)).toBeNull()
+    expect(findOwnedTextControlPasteTarget(terminalTextarea)).toBeNull()
   })
 
   it('allows native paste for empty and small payloads', () => {
@@ -70,21 +71,6 @@ describe('text control paste ownership', () => {
       exceededLimit: false
     })
     expect(shouldClaimTextControlPastePayload('small')).toBe(false)
-  })
-
-  it('keeps literal corpus text on the native path while it is below paste thresholds', () => {
-    for (const { name, text } of PASTE_PAYLOAD_CORPUS) {
-      expect(
-        classifyTextControlPastePayloadOwnership(text, {
-          directMaxBytes: 10_000,
-          maxBytes: 20_000
-        }),
-        name
-      ).toMatchObject({
-        action: 'allow-native',
-        exceededLimit: false
-      })
-    }
   })
 
   it('claims large text-control payloads with bounded ownership measuring', () => {

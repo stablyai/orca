@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { Automation } from '../../shared/automations-types'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import { buildHeadlessAutomationWorktreeCreateArgs } from './headless-workspace-create'
 
 const repoPath = path.join('tmp', 'orca')
@@ -38,6 +38,7 @@ const automation: Automation = {
   workspaceMode: 'new_per_run',
   workspaceId: null,
   baseBranch: 'origin/main',
+  setupDecision: 'skip',
   reuseSession: false,
   timezone: 'UTC',
   rrule: 'FREQ=DAILY',
@@ -67,7 +68,7 @@ describe('headless automation workspace create args', () => {
       repoSelector: 'repo-1',
       name: 'auto-nightly-review-run-20260102T0304',
       baseBranch: 'origin/main',
-      setupDecision: 'inherit',
+      setupDecision: 'skip',
       activate: false,
       createdWithAgent: 'codex',
       startupAgent: 'codex',

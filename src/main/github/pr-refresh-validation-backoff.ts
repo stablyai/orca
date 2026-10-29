@@ -1,5 +1,5 @@
-import { createHash } from 'crypto'
-import { resolve } from 'path'
+import { createHash } from 'node:crypto'
+import { resolve } from 'node:path'
 import { recordCoalescedCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 
 const VALIDATION_BACKOFF_TTL_MS = 5 * 60_000

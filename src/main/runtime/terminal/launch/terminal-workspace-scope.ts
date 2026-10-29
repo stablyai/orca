@@ -1,0 +1,292 @@
+import { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from '../../session-graph/session-graph-authority'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  floatingWorkspaceToWorktree,
+  isFloatingWorkspaceSelector
+} from '../../../../shared/floating-workspace-worktree'
+import { resolveFloatingTerminalCwd } from '../../../ipc/floating-workspace-directory'
+import type { BrowserNetworkExecutionHost } from '../../../../shared/browser-network-execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  getConnectionExecutionHostId,
+  getWorktreeExecutionHostId,
+  parseExecutionHostId
+} from '../../../../shared/execution-host'
+import { resolveRuntimeBrowserNetworkExecutionHost } from '../../runtime-browser-network-execution-host'
+import { resolveLocalProjectRuntimeForWorktreeId } from '../../../local-project-runtime-resolution'
+import { getRegisteredSshState } from '../../../ssh/targets/ssh-target-registry'
+import {
+  resolveWorktreeHostRouting,
+  resolveWorktreeLaunchHost
+} from '../../worktree-launch-host-repo'
+import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
+import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
+import { resolveTerminalStartupCwd } from '../../../../shared/terminal-startup-cwd'
+import type { ResolvedTerminalWorkspaceLaunchTarget } from '../../orca-runtime-core'
+import { AGENT_HOOK_RUNTIME_ENV_KEYS } from '../../orca-runtime-core'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { homedir } from 'node:os'
+import { getExplicitWorktreeIdSelector } from '../../runtime-worktree-selection'
+import {
+  WORKTREE_ID_SEPARATOR,
+  getRepoIdFromWorktreeId,
+  worktreeIdsEqual
+} from '../../../../shared/worktree/id'
+import { getPtyExecutionHost } from '../../../../shared/terminal-execution-host'
+import { WorktreeIdRequiresFullPathError } from '../../runtime-worktree-lineage-resolution'
+import { triggerTerminalSpawnPushTargetMaterialization } from '../../runtime-terminal-spawn-push-target-materialization'
+import { resolveCreatedWorktreeTerminalTarget } from '../../runtime-created-worktree-terminal-target'
+
+// Why: folder and floating workspaces have no worktree row, so no parent, children or lineage.
+function withoutWorktreeLineage(worktree: Worktree): ResolvedWorktree {
+  return {
+    ...worktree,
+    parentWorktreeId: null,
+    childWorktreeIds: [],
+    lineage: null,
+    git: {
+      path: worktree.path,
+      head: worktree.head,
+      branch: worktree.branch,
+      isBare: worktree.isBare,
+      isMainWorktree: worktree.isMainWorktree
+    }
+  }
+}
+
+export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extends OrcaRuntimeWithTransitionGraphReloadToTerminalState {
+  protected resolveBrowserNetworkExecutionHostForWorktree(worktree?: {
+    id: string
+    repoId?: string
+    hostId?: ExecutionHostId
+  }): BrowserNetworkExecutionHost | Promise<BrowserNetworkExecutionHost> {
+    const repo = worktree?.repoId ? this.requireStore().getRepo(worktree.repoId) : undefined
+    const executionHostId = worktree
+      ? getWorktreeExecutionHostId(worktree, repo)
+      : LOCAL_EXECUTION_HOST_ID
+    const parsedHost = parseExecutionHostId(executionHostId)
+    return resolveRuntimeBrowserNetworkExecutionHost({
+      runtimeId: this.getRuntimeId(),
+      runtimeRevision: this.getStartedAt(),
+      executionHostId,
+      ...(worktree
+        ? {
+            projectRuntime: resolveLocalProjectRuntimeForWorktreeId(
+              this.requireStore(),
+              worktree.id
+            )
+          }
+        : {}),
+      ...(parsedHost?.kind === 'ssh'
+        ? { sshState: getRegisteredSshState(parsedHost.targetId) }
+        : {})
+    })
+  }
+
+  protected async resolveEmulatorCleanupWorkspaceId(selector: string): Promise<string> {
+    const workspaceSelector = selector.startsWith('id:') ? selector.slice(3) : selector
+    const parsed = parseWorkspaceKey(workspaceSelector)
+    return parsed?.type === 'folder'
+      ? folderWorkspaceKey(parsed.folderWorkspaceId)
+      : this.resolveEmulatorWorkspaceId(selector)
+  }
+
+  // Floating terminals and chats must use the panel's configured floating directory.
+  protected async resolveFloatingWorkspacePath(): Promise<string> {
+    const store = this.store
+    return store
+      ? resolveFloatingTerminalCwd(store, { path: store.getSettings().floatingTerminalCwd })
+      : homedir()
+  }
+
+  protected floatingWorkspaceToResolvedWorktree(path: string): ResolvedWorktree {
+    return withoutWorktreeLineage(floatingWorkspaceToWorktree(path))
+  }
+
+  protected folderWorkspaceToResolvedWorktree(folderWorkspace: FolderWorkspace): ResolvedWorktree {
+    return withoutWorktreeLineage(folderWorkspaceToWorktree(folderWorkspace))
+  }
+
+  resolveWorkspaceTerminalStartupCwd(
+    workspace: Pick<TerminalWorkspaceLaunchScope, 'path'>,
+    requestedCwd?: string | null
+  ): string | undefined {
+    return resolveTerminalStartupCwd(workspace.path, requestedCwd)
+  }
+
+  async resolveTerminalWorkspaceLaunchScope(
+    selector: string,
+    createdWorktree?: Worktree
+  ): Promise<TerminalWorkspaceLaunchScope> {
+    return (await this.resolveTerminalWorkspaceLaunchTarget(selector, createdWorktree)).scope
+  }
+
+  protected async resolveTerminalWorkspaceLaunchTarget(
+    selector: string,
+    createdWorktree?: Worktree
+  ): Promise<ResolvedTerminalWorkspaceLaunchTarget> {
+    if (isFloatingWorkspaceSelector(selector)) {
+      // Why no managed worktree: the floating sentinel has no repo or worktree record behind it.
+      return {
+        scope: {
+          id: FLOATING_TERMINAL_WORKTREE_ID,
+          path: await this.resolveFloatingWorkspacePath(),
+          connectionId: null,
+          repo: null,
+          folderWorkspace: null
+        },
+        managedWorktree: null
+      }
+    }
+
+    const folderScope = await this.resolveFolderWorkspaceLaunchScope(selector)
+    if (folderScope) {
+      return {
+        scope: folderScope,
+        managedWorktree: this.folderWorkspaceToResolvedWorktree(folderScope.folderWorkspace)
+      }
+    }
+
+    const workspaceSelector = selector.startsWith('id:') ? selector.slice(3) : selector
+    const parsed = parseWorkspaceKey(workspaceSelector)
+    const worktreeSelector = parsed?.type === 'worktree' ? `id:${parsed.worktreeId}` : selector
+    const worktree =
+      resolveCreatedWorktreeTerminalTarget(this.store, selector, createdWorktree) ??
+      (await this.resolveGitWorktreeSelector(worktreeSelector))
+    // Repo ids are host-blind; resolve the worktree owner or refuse as unresolved rather than spawn locally with a remote cwd (#11163).
+    const resolution = resolveWorktreeLaunchHost(this.store?.getRepos() ?? [], worktree)
+    if (resolution.kind === 'ambiguous') {
+      throw new Error('worktree_execution_host_unresolved')
+    }
+    // Metadata only (display name, hook settings); the routing decision is `resolution.connectionId`.
+    const repo = resolution.repo ?? this.store?.getRepo(worktree.repoId) ?? null
+    triggerTerminalSpawnPushTargetMaterialization(
+      worktree.path,
+      worktree.pushTarget,
+      repo,
+      this.store,
+      worktree.repoId,
+      worktree.id
+    )
+    return {
+      scope: {
+        id: worktree.id,
+        path: worktree.path,
+        connectionId: resolution.connectionId,
+        repo,
+        folderWorkspace: null
+      },
+      managedWorktree: worktree
+    }
+  }
+
+  protected buildTerminalWorkspaceEnv(
+    scope: TerminalWorkspaceLaunchScope,
+    baseEnv: Record<string, string>,
+    agentTeamsEnv?: Record<string, string>
+  ): Record<string, string> {
+    const cleanBaseEnv = { ...baseEnv }
+    for (const key of AGENT_HOOK_RUNTIME_ENV_KEYS) {
+      delete cleanBaseEnv[key]
+    }
+    // Spawn stamps pane ids and jcode dir; match the window's ORCA_WORKSPACE_ID for every workspace kind.
+    const env = {
+      ...cleanBaseEnv,
+      ...agentTeamsEnv,
+      ...this.buildAgentHookPtyEnv?.(),
+      ORCA_WORKSPACE_ID: scope.id
+    }
+    if (!scope.folderWorkspace) {
+      return env
+    }
+    return {
+      ...env,
+      ORCA_PROJECT_GROUP_ID: scope.folderWorkspace.projectGroupId,
+      ORCA_WORKSPACE_ROOT: scope.folderWorkspace.folderPath
+    }
+  }
+
+  protected getValidatedExplicitWorktreeIdSelector(selector: string | undefined): string | null {
+    const worktreeId = getExplicitWorktreeIdSelector(selector)
+    if (
+      worktreeId &&
+      !worktreeId.includes(WORKTREE_ID_SEPARATOR) &&
+      this.store?.getRepo(worktreeId)
+    ) {
+      // Why: a registered repo id is a known-invalid worktree id; reject early before fast paths or Git/SSH scans hide the mistake.
+      throw new WorktreeIdRequiresFullPathError()
+    }
+    return worktreeId
+  }
+
+  /** Keeps host-owned session keys intact; accepts one path alias and rejects ambiguous matches. */
+  getExplicitSessionWorktreeIdSelector(selector: string | undefined): string | null {
+    const worktreeId = this.getValidatedExplicitWorktreeIdSelector(selector)
+    if (
+      !worktreeId?.includes(WORKTREE_ID_SEPARATOR) ||
+      this.mobileSessionTabsByWorktree.has(worktreeId)
+    ) {
+      return worktreeId
+    }
+    // Why: clients normalize Windows paths, but tab maps retain the host's original spelling.
+    const knownIds = new Set([
+      ...this.mobileSessionTabsByWorktree.keys(),
+      ...Object.keys(this.getOwnWorkspaceSessionForWorktree(worktreeId)?.tabsByWorktree ?? {})
+    ])
+    // Why: live PTYs keep their registered spelling, so an exact PTY key must never be rewritten.
+    for (const pty of this.ptysById.values()) {
+      if (pty.connected) {
+        knownIds.add(pty.worktreeId)
+      }
+    }
+    if (knownIds.has(worktreeId)) {
+      return worktreeId
+    }
+    const matches = [...knownIds].filter((knownId) => worktreeIdsEqual(knownId, worktreeId))
+    if (matches.length > 1) {
+      throw new Error('selector_ambiguous')
+    }
+    const matchedId = matches[0]
+    if (!matchedId) {
+      return worktreeId
+    }
+    const owner = resolveWorktreeHostRouting(this.store?.getRepos?.() ?? [], {
+      repoId: getRepoIdFromWorktreeId(worktreeId)
+    })
+    if (owner.kind === 'ambiguous') {
+      throw new Error('worktree_execution_host_unresolved')
+    }
+    if (owner.kind === 'resolved') {
+      const ownerIsRuntime = parseExecutionHostId(owner.hostId)?.kind === 'runtime'
+      const ptyIds = new Set<string>()
+      for (const tab of this.mobileSessionTabsByWorktree.get(matchedId)?.tabs ?? []) {
+        if (tab.type === 'terminal') {
+          const ptyId = tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId]
+          if (ptyId) {
+            ptyIds.add(ptyId)
+          }
+        }
+      }
+      for (const [ptyId, pty] of this.ptysById) {
+        if (pty.connected && worktreeIdsEqual(pty.worktreeId, matchedId)) {
+          ptyIds.add(ptyId)
+        }
+      }
+      for (const ptyId of ptyIds) {
+        const pty = this.ptysById.get(ptyId)
+        const hostId =
+          getPtyExecutionHost(ptyId) ??
+          (pty && !ownerIsRuntime ? getConnectionExecutionHostId(pty.connectionId) : null)
+        // Conflicting aliases could rescue foreign PTYs; unattributed remote ids are valid only under runtime owners.
+        if (hostId && hostId !== owner.hostId && (hostId !== 'foreign' || !ownerIsRuntime)) {
+          throw new Error('worktree_execution_host_unresolved')
+        }
+      }
+    }
+    return matchedId
+  }
+}

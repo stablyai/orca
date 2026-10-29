@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 export function persistDeleteWorktreeConfirmSkipPreference({
   updateSettings,
@@ -18,8 +18,7 @@ export function persistDeleteWorktreeConfirmSkipPreference({
   }) => void
 }): void {
   void updateSettings({ skipDeleteWorktreeConfirm: true })
-  // Why: the toast confirms the preference was saved and deep-links to the
-  // exact toggle so users can undo a skipped destructive confirmation quickly.
+  // Link the saved preference to its exact toggle so destructive confirmation can be restored quickly.
   toast.success(
     translate(
       'auto.components.sidebar.DeleteWorktreeDialog.dd3a45bbbd',

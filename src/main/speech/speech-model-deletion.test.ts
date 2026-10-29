@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultVoiceSettings } from '../../shared/constants'
 import type { VoiceSettings } from '../../shared/speech-types'
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import { SPEECH_MODEL_CATALOG } from './model-catalog'
 import { deleteLocalSpeechModel } from './speech-model-deletion'
 

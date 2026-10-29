@@ -1,8 +1,44 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { resolveCliCommandMock } = vi.hoisted(() => ({
+  resolveCliCommandMock: vi.fn((command: string) => command)
+}))
+
+vi.mock('./codex-cli/command', () => ({
+  resolveCliCommand: resolveCliCommandMock
+}))
+
+import type { SshTarget } from '../shared/ssh-types'
 import { getCmdExePath } from './win32-utils'
 import { resolveExternalEditorLaunchSpec } from './external-editor-launch'
+import { resolveRemoteSshEditorLaunchSpec } from './remote-ssh-editor-launch'
+
+const BUILDER_ALIAS: SshTarget = {
+  id: 'ssh-1',
+  label: 'Builder',
+  host: 'builder.example.com',
+  port: 2222,
+  username: 'ada',
+  source: 'ssh-config',
+  configHost: 'builder'
+}
+
+function remoteLaunchSpec(
+  command: string,
+  pathValue: string,
+  options: Parameters<typeof resolveRemoteSshEditorLaunchSpec>[3],
+  target: SshTarget = BUILDER_ALIAS
+) {
+  const result = resolveRemoteSshEditorLaunchSpec(command, pathValue, target, options)
+  return result.ok ? result.launchSpec : null
+}
 
 describe('resolveExternalEditorLaunchSpec', () => {
+  beforeEach(() => {
+    resolveCliCommandMock.mockReset()
+    resolveCliCommandMock.mockImplementation((command: string) => command)
+  })
+
   it('keeps simple CLI commands on the executable launch path', () => {
     const spec = resolveExternalEditorLaunchSpec('cursor', '/tmp/workspace', {
       platform: 'darwin'
@@ -12,6 +48,184 @@ describe('resolveExternalEditorLaunchSpec', () => {
       hideWindowsConsole: true,
       spawnCmd: expect.any(String),
       spawnArgs: ['--new-window', '/tmp/workspace']
+    })
+  })
+
+  it('falls back to the macOS app CLI when PATH misses code', () => {
+    const macCli = '/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code'
+
+    expect(
+      resolveExternalEditorLaunchSpec('code', '/tmp/workspace', {
+        platform: 'darwin',
+        fileExists: (candidate) => candidate === macCli
+      })
+    ).toEqual({
+      kind: 'executable',
+      hideWindowsConsole: true,
+      spawnCmd: macCli,
+      spawnArgs: ['/tmp/workspace']
+    })
+  })
+
+  it('prefers the JetBrains *64.exe colocated with the resolved idea.cmd on Windows', () => {
+    const installBin = 'C:\\Program Files\\JetBrains\\IntelliJ IDEA\\bin'
+    resolveCliCommandMock.mockImplementation((command: string) =>
+      command === 'idea' ? `${installBin}\\idea.cmd` : command
+    )
+
+    expect(
+      resolveExternalEditorLaunchSpec('idea', 'C:\\workspaces\\orca', {
+        platform: 'win32',
+        fileExists: (candidate) => candidate === `${installBin}\\idea64.exe`
+      })
+    ).toEqual({
+      kind: 'executable',
+      hideWindowsConsole: true,
+      spawnCmd: `${installBin}\\idea64.exe`,
+      spawnArgs: ['C:\\workspaces\\orca']
+    })
+    // A bare idea64 on PATH may belong to a different install.
+    expect(resolveCliCommandMock).toHaveBeenCalledWith('idea', { platform: 'win32' })
+    expect(resolveCliCommandMock).not.toHaveBeenCalledWith('idea64', expect.anything())
+  })
+
+  it('prefers a colocated .exe over an idea64.cmd shim when the user names idea64', () => {
+    const installBin = 'C:\\Program Files\\JetBrains\\GoLand\\bin'
+    resolveCliCommandMock.mockImplementation((command: string) =>
+      command === 'goland64' ? `${installBin}\\goland64.cmd` : command
+    )
+
+    expect(
+      resolveExternalEditorLaunchSpec('goland64', 'C:\\workspaces\\orca', {
+        platform: 'win32',
+        fileExists: (candidate) => candidate === `${installBin}\\goland64.exe`
+      }).spawnCmd
+    ).toBe(`${installBin}\\goland64.exe`)
+  })
+
+  it('keeps the Toolbox idea.cmd shim and detaches it when no GUI exe sits beside it', () => {
+    const toolboxShim = 'C:\\Users\\me\\AppData\\Local\\JetBrains\\Toolbox\\scripts\\idea.cmd'
+    resolveCliCommandMock.mockImplementation((command: string) =>
+      command === 'idea' ? toolboxShim : command
+    )
+
+    expect(
+      resolveExternalEditorLaunchSpec('idea', 'C:\\workspaces\\orca', {
+        platform: 'win32',
+        fileExists: () => false
+      })
+    ).toEqual({
+      kind: 'executable',
+      hideWindowsConsole: true,
+      detachedGui: true,
+      spawnCmd: toolboxShim,
+      spawnArgs: ['C:\\workspaces\\orca']
+    })
+  })
+
+  it('detaches a directly configured JetBrains shim path when no GUI exe is beside it', () => {
+    expect(
+      resolveExternalEditorLaunchSpec('C:\\Tools\\WebStorm\\bin\\webstorm.bat', 'C:\\ws', {
+        platform: 'win32',
+        fileExists: () => false
+      })
+    ).toEqual({
+      kind: 'executable',
+      hideWindowsConsole: true,
+      detachedGui: true,
+      spawnCmd: 'C:\\Tools\\WebStorm\\bin\\webstorm.bat',
+      spawnArgs: ['C:\\ws']
+    })
+  })
+
+  it('upgrades a direct JetBrains .cmd path to the colocated *64.exe', () => {
+    const installBin = 'C:\\Program Files\\JetBrains\\WebStorm\\bin'
+    expect(
+      resolveExternalEditorLaunchSpec(`${installBin}\\webstorm.cmd`, 'C:\\ws', {
+        platform: 'win32',
+        fileExists: (candidate) => candidate === `${installBin}\\webstorm64.exe`
+      })
+    ).toEqual({
+      kind: 'executable',
+      hideWindowsConsole: true,
+      spawnCmd: `${installBin}\\webstorm64.exe`,
+      spawnArgs: ['C:\\ws']
+    })
+  })
+
+  it('upgrades a short-name console idea.exe stub to the colocated idea64.exe', () => {
+    const installBin = 'C:\\Program Files\\JetBrains\\IntelliJ IDEA\\bin'
+    expect(
+      resolveExternalEditorLaunchSpec(`${installBin}\\idea.exe`, 'C:\\ws', {
+        platform: 'win32',
+        fileExists: (candidate) => candidate === `${installBin}\\idea64.exe`
+      })
+    ).toEqual({
+      kind: 'executable',
+      hideWindowsConsole: true,
+      spawnCmd: `${installBin}\\idea64.exe`,
+      spawnArgs: ['C:\\ws']
+    })
+  })
+
+  it('leaves a direct idea64.exe path unchanged even when a sibling exists', () => {
+    const guiExe = 'C:\\Program Files\\JetBrains\\IntelliJ IDEA\\bin\\idea64.exe'
+    expect(
+      resolveExternalEditorLaunchSpec(guiExe, 'C:\\ws', {
+        platform: 'win32',
+        fileExists: () => true
+      })
+    ).toEqual({
+      kind: 'executable',
+      hideWindowsConsole: true,
+      spawnCmd: guiExe,
+      spawnArgs: ['C:\\ws']
+    })
+  })
+
+  it('does not rewrite non-JetBrains .exe launchers via colocation', () => {
+    const codeExe = 'C:\\Program Files\\Microsoft VS Code\\Code.exe'
+    expect(
+      resolveExternalEditorLaunchSpec(codeExe, 'C:\\ws', {
+        platform: 'win32',
+        fileExists: () => true
+      }).spawnCmd
+    ).toBe(codeExe)
+  })
+
+  it('keeps idea.exe when no colocated idea64.exe exists', () => {
+    const consoleExe = 'C:\\Program Files\\JetBrains\\IntelliJ IDEA\\bin\\idea.exe'
+    expect(
+      resolveExternalEditorLaunchSpec(consoleExe, 'C:\\ws', {
+        platform: 'win32',
+        fileExists: () => false
+      })
+    ).toEqual({
+      kind: 'executable',
+      hideWindowsConsole: true,
+      spawnCmd: consoleExe,
+      spawnArgs: ['C:\\ws']
+    })
+  })
+
+  // start re-parses argv; reserve it for shims that need detachment.
+  it.each([
+    ['code', 'C:\\Tools\\code.cmd', ['C:\\workspaces\\orca']],
+    [
+      'cursor',
+      'C:\\Users\\me\\AppData\\Local\\Programs\\cursor\\bin\\cursor.cmd',
+      ['--new-window', 'C:\\workspaces\\orca']
+    ]
+  ])('does not detach the %s batch shim through start', (command, resolvedCommand, spawnArgs) => {
+    resolveCliCommandMock.mockImplementation(() => resolvedCommand)
+
+    expect(
+      resolveExternalEditorLaunchSpec(command, 'C:\\workspaces\\orca', { platform: 'win32' })
+    ).toEqual({
+      kind: 'executable',
+      hideWindowsConsole: true,
+      spawnCmd: resolvedCommand,
+      spawnArgs
     })
   })
 
@@ -68,6 +282,19 @@ describe('resolveExternalEditorLaunchSpec', () => {
     })
   })
 
+  it('runs GUI compound Windows commands verbatim instead of re-parsing them under start', () => {
+    expect(
+      resolveExternalEditorLaunchSpec('code --reuse-window', 'C:\\workspaces\\orca', {
+        platform: 'win32'
+      })
+    ).toEqual({
+      kind: 'shell',
+      hideWindowsConsole: true,
+      spawnCmd: getCmdExePath(),
+      spawnArgs: ['/d', '/s', '/c', 'code --reuse-window C:\\workspaces\\orca']
+    })
+  })
+
   it('quotes Windows paths with spaces in compound commands', () => {
     expect(
       resolveExternalEditorLaunchSpec('start "" notepad', 'C:\\my notes.md', { platform: 'win32' })
@@ -121,4 +348,264 @@ describe('resolveExternalEditorLaunchSpec', () => {
       spawnArgs: ['/d', '/s', '/c', 'nvim --clean C:\\workspaces\\orca']
     })
   })
+
+  it.each(['code', 'code-insiders'])(
+    'opens modern WSL UNC workspaces with %s in the matching VS Code remote',
+    (editorCommand) => {
+      expect(
+        resolveExternalEditorLaunchSpec(
+          editorCommand,
+          '\\\\wsl.localhost\\Ubuntu\\home\\aliuq\\project',
+          { platform: 'win32' }
+        ).spawnArgs
+      ).toEqual(['--remote', 'wsl+Ubuntu', '/home/aliuq/project'])
+    }
+  )
+
+  it.each([
+    [
+      'legacy WSL UNC workspace',
+      '\\\\wsl$\\Debian\\home\\ada\\project',
+      'wsl+Debian',
+      '/home/ada/project'
+    ],
+    ['modern WSL distro root', '\\\\wsl.localhost\\Ubuntu', 'wsl+Ubuntu', '/'],
+    ['legacy WSL distro root', '\\\\wsl$\\Debian', 'wsl+Debian', '/']
+  ])('opens a %s in the matching VS Code remote', (_label, pathValue, authority, linuxPath) => {
+    expect(
+      resolveExternalEditorLaunchSpec('code', pathValue, { platform: 'win32' }).spawnArgs
+    ).toEqual(['--remote', authority, linuxPath])
+  })
+
+  it.each([
+    'C:\\Program Files\\Microsoft VS Code\\Code.exe',
+    'C:\\Program Files\\Microsoft VS Code Insiders\\Code - Insiders.exe',
+    'C:\\Tools\\CODE.CMD',
+    'C:\\Tools\\code.bat',
+    'C:\\Tools\\code-insiders.cmd'
+  ])('recognizes the direct Windows VS Code launcher %s', (editorCommand) => {
+    expect(
+      resolveExternalEditorLaunchSpec(
+        editorCommand,
+        '\\\\wsl.localhost\\Ubuntu\\home\\ada\\project',
+        { platform: 'win32' }
+      ).spawnArgs
+    ).toEqual(['--remote', 'wsl+Ubuntu', '/home/ada/project'])
+  })
+
+  it.each([
+    ['code', 'C:\\Tools\\CODE.CMD'],
+    ['code', 'C:\\Tools\\code.bat'],
+    ['code-insiders', 'C:\\Tools\\code-insiders.cmd']
+  ])('recognizes the resolved Windows VS Code launcher %s', (editorCommand, resolvedCommand) => {
+    resolveCliCommandMock.mockReturnValueOnce(resolvedCommand)
+
+    expect(
+      resolveExternalEditorLaunchSpec(
+        editorCommand,
+        '\\\\wsl.localhost\\Ubuntu\\home\\ada\\project',
+        { platform: 'win32' }
+      )
+    ).toEqual({
+      kind: 'executable',
+      hideWindowsConsole: true,
+      spawnCmd: resolvedCommand,
+      spawnArgs: ['--remote', 'wsl+Ubuntu', '/home/ada/project']
+    })
+  })
+
+  it('preserves spaces in WSL distro and folder arguments', () => {
+    expect(
+      resolveExternalEditorLaunchSpec(
+        'code',
+        '\\\\wsl.localhost\\Ubuntu Preview\\home\\Ada Lovelace\\project',
+        { platform: 'win32' }
+      ).spawnArgs
+    ).toEqual(['--remote', 'wsl+Ubuntu Preview', '/home/Ada Lovelace/project'])
+  })
+
+  it.each(['darwin', 'linux'] as const)('keeps WSL-looking paths local on %s', (platform) => {
+    const pathValue = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\project'
+    expect(resolveExternalEditorLaunchSpec('code', pathValue, { platform }).spawnArgs).toEqual([
+      pathValue
+    ])
+  })
+
+  it.each(['C:\\workspaces\\orca', '\\\\server\\share\\project'])(
+    'keeps the non-WSL Windows path %s local',
+    (pathValue) => {
+      expect(
+        resolveExternalEditorLaunchSpec('code', pathValue, { platform: 'win32' }).spawnArgs
+      ).toEqual([pathValue])
+    }
+  )
+
+  it.each([
+    ['C:\\Tools\\cursor.exe', '\\\\wsl.localhost\\Ubuntu\\home\\ada\\project', 'wsl+Ubuntu'],
+    [
+      'C:\\Users\\me\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin\\cursor.cmd',
+      '\\\\wsl$\\Debian\\home\\ada\\project',
+      'wsl+Debian'
+    ]
+  ])('opens WSL UNC workspaces with %s in a new WSL remote window', (command, pathValue, auth) => {
+    expect(resolveExternalEditorLaunchSpec(command, pathValue, { platform: 'win32' })).toEqual({
+      kind: 'executable',
+      hideWindowsConsole: true,
+      spawnCmd: command,
+      spawnArgs: ['--new-window', '--remote', auth, '/home/ada/project']
+    })
+  })
+
+  it.each(['darwin', 'linux'] as const)(
+    'keeps WSL-looking Cursor paths local on %s',
+    (platform) => {
+      const pathValue = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\project'
+      expect(resolveExternalEditorLaunchSpec('cursor', pathValue, { platform }).spawnArgs).toEqual([
+        '--new-window',
+        pathValue
+      ])
+    }
+  )
+
+  it('keeps non-WSL Windows paths local for Cursor', () => {
+    expect(
+      resolveExternalEditorLaunchSpec('C:\\Tools\\cursor.exe', '\\\\server\\share\\project', {
+        platform: 'win32'
+      }).spawnArgs
+    ).toEqual(['--new-window', '\\\\server\\share\\project'])
+  })
+
+  it('does not add VS Code remote arguments to other editors', () => {
+    const pathValue = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\project'
+
+    expect(
+      resolveExternalEditorLaunchSpec('C:\\Tools\\codium.exe', pathValue, {
+        platform: 'win32'
+      }).spawnArgs
+    ).toEqual([pathValue])
+  })
+
+  it('does not rewrite compound VS Code commands into WSL remote args', () => {
+    const pathValue = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\project'
+
+    expect(
+      resolveExternalEditorLaunchSpec('code --reuse-window', pathValue, { platform: 'win32' })
+    ).toEqual({
+      kind: 'shell',
+      hideWindowsConsole: true,
+      spawnCmd: getCmdExePath(),
+      spawnArgs: ['/d', '/s', '/c', `code --reuse-window ${pathValue}`]
+    })
+  })
+})
+
+describe('resolveRemoteSshEditorLaunchSpec', () => {
+  beforeEach(() => {
+    resolveCliCommandMock.mockReset()
+    resolveCliCommandMock.mockImplementation((command: string) => command)
+  })
+
+  it.each(['code', 'code-insiders'])('builds exact Remote-SSH arguments for %s', (command) => {
+    expect(
+      remoteLaunchSpec(command, '/home/Ada Lovelace/project', {
+        platform: 'linux'
+      })
+    ).toEqual({
+      kind: 'executable',
+      hideWindowsConsole: true,
+      spawnCmd: command,
+      spawnArgs: ['--remote', 'ssh-remote+builder', '/home/Ada Lovelace/project']
+    })
+  })
+
+  it.each([
+    'C:\\Program Files\\Microsoft VS Code\\Code.exe',
+    'C:\\Program Files\\Microsoft VS Code Insiders\\Code - Insiders.exe',
+    'C:\\Tools\\code.cmd',
+    'C:\\Tools\\code-insiders.bat'
+  ])('supports the direct Windows launcher %s', (command) => {
+    expect(
+      remoteLaunchSpec(command, 'C:\\Users\\Ada Lovelace\\project', {
+        platform: 'win32'
+      })?.spawnArgs
+    ).toEqual(['--remote', 'ssh-remote+builder', 'C:\\Users\\Ada Lovelace\\project'])
+  })
+
+  it('supports an existing direct POSIX launcher path containing spaces', () => {
+    const command = '/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code'
+    expect(
+      remoteLaunchSpec(command, '/srv/project', {
+        platform: 'darwin',
+        fileExists: (candidate) => candidate === command
+      })
+    ).toMatchObject({
+      kind: 'executable',
+      spawnCmd: command,
+      spawnArgs: ['--remote', 'ssh-remote+builder', '/srv/project']
+    })
+  })
+
+  it('falls back to the macOS app CLI for Remote-SSH when PATH misses code', () => {
+    const macCli = '/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code'
+
+    expect(
+      remoteLaunchSpec('code', '/home/ada/project', {
+        platform: 'darwin',
+        fileExists: (candidate) => candidate === macCli
+      })
+    ).toEqual({
+      kind: 'executable',
+      hideWindowsConsole: true,
+      spawnCmd: macCli,
+      spawnArgs: ['--remote', 'ssh-remote+builder', '/home/ada/project']
+    })
+  })
+
+  it('recognizes a simple CLI name resolved to a Windows shim', () => {
+    resolveCliCommandMock.mockReturnValueOnce('C:\\Tools\\Code.CMD')
+    expect(
+      remoteLaunchSpec('code', '/srv/project', {
+        platform: 'win32'
+      })
+    ).toMatchObject({ spawnCmd: 'C:\\Tools\\Code.CMD' })
+  })
+
+  it('opens Cursor through Remote-SSH in a new window', () => {
+    expect(remoteLaunchSpec('cursor', '/srv/project', { platform: 'linux' })?.spawnArgs).toEqual([
+      '--new-window',
+      '--remote',
+      'ssh-remote+builder',
+      '/srv/project'
+    ])
+  })
+
+  it('opens Zed with an ssh:// URL that keeps a manual custom port', () => {
+    const manualTarget: SshTarget = { ...BUILDER_ALIAS, source: 'manual', configHost: undefined }
+    expect(
+      remoteLaunchSpec('zed', '/home/Ada Lovelace/project', { platform: 'linux' }, manualTarget)
+    ).toEqual({
+      kind: 'executable',
+      hideWindowsConsole: true,
+      spawnCmd: 'zed',
+      spawnArgs: ['ssh://ada@builder.example.com:2222/home/Ada%20Lovelace/project']
+    })
+  })
+
+  it('still requires an SSH config alias for a VS Code custom port', () => {
+    const manualTarget: SshTarget = { ...BUILDER_ALIAS, source: 'manual', configHost: undefined }
+    expect(
+      resolveRemoteSshEditorLaunchSpec('code', '/srv/project', manualTarget, { platform: 'linux' })
+    ).toEqual({ ok: false, reason: 'ssh-alias-required', host: 'builder.example.com', port: 2222 })
+  })
+
+  it.each(['subl', 'code --reuse-window', 'open -a "Visual Studio Code"'])(
+    'rejects unsupported and compound SSH commands: %s',
+    (command) => {
+      expect(
+        resolveRemoteSshEditorLaunchSpec(command, '/srv/project', BUILDER_ALIAS, {
+          platform: 'linux'
+        })
+      ).toEqual({ ok: false, reason: 'remote-editor-unsupported' })
+    }
+  )
 })

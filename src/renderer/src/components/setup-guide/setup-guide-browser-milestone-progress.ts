@@ -7,7 +7,8 @@ import {
 import type { FeatureWallSetupProgress } from '../feature-wall/feature-wall-setup-progress'
 
 export function useSetupGuideBrowserMilestoneProgress(
-  rawProgress: FeatureWallSetupProgress
+  rawProgress: FeatureWallSetupProgress,
+  preBrowserSetupComplete: boolean
 ): FeatureWallSetupProgress {
   const setupGuideSidebarDismissed = useAppStore((s) => s.setupGuideSidebarDismissed)
   const browserMilestoneMigrated = useAppStore((s) => s.setupGuideBrowserMilestoneMigrated)
@@ -18,7 +19,7 @@ export function useSetupGuideBrowserMilestoneProgress(
   const pendingLegacyComplete =
     !browserMilestoneMigrated && rawProgress.ready
       ? shouldMarkBrowserMilestoneLegacyComplete({
-          stepDone: rawProgress.stepDone,
+          preBrowserSetupComplete,
           setupGuideSidebarDismissed
         })
       : false
@@ -43,13 +44,10 @@ export function useSetupGuideBrowserMilestoneProgress(
 }
 
 export function shouldMarkBrowserMilestoneLegacyComplete(input: {
-  stepDone: Partial<Record<FeatureWallSetupStepId, boolean>>
+  preBrowserSetupComplete: boolean
   setupGuideSidebarDismissed: boolean
 }): boolean {
-  if (input.setupGuideSidebarDismissed) {
-    return true
-  }
-  return FEATURE_WALL_SETUP_STEPS.every((step) => step.id === 'browser' || input.stepDone[step.id])
+  return input.setupGuideSidebarDismissed || input.preBrowserSetupComplete
 }
 
 export function getSetupGuideBrowserMilestoneAwareProgress(
@@ -62,8 +60,7 @@ export function getSetupGuideBrowserMilestoneAwareProgress(
   const stepDone = Object.fromEntries(
     FEATURE_WALL_SETUP_STEPS.map((step) => [step.id, true])
   ) as Record<FeatureWallSetupStepId, boolean>
-  // Why: profiles that finished or dismissed the pre-browser checklist keep
-  // that prior checklist contract after the browser milestone is introduced.
+  // Preserve the checklist contract for profiles that completed or dismissed it before the browser milestone.
   return {
     ...progress,
     stepDone,

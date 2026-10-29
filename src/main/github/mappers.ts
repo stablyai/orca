@@ -1,8 +1,8 @@
-import type { PRInfo, IssueInfo, CheckStatus, PRCheckDetail } from '../../shared/types'
+import type { PRCheckDetail } from '../../shared/github/check-types'
+import type { CheckStatus, IssueInfo, PRInfo } from '../../shared/github/pull-request-types'
+import { derivePRCheckStatusFromRollup } from '../../shared/pr-check-status'
 
-// ── REST API check-runs mapping ───────────────────────────────────────
-// The REST check-runs endpoint returns separate status + conclusion fields
-// (unlike gh pr checks which merges them into a single "state" string).
+// REST check runs separate status/conclusion; gh pr checks combines them into one state.
 
 export function mapCheckRunRESTStatus(status: string): PRCheckDetail['status'] {
   const s = status?.toLowerCase()
@@ -22,7 +22,9 @@ const conclusionMap: Record<string, PRCheckDetail['conclusion']> = {
   timed_out: 'timed_out',
   skipped: 'skipped',
   neutral: 'neutral',
-  action_required: 'failure'
+  action_required: 'action_required',
+  stale: 'failure',
+  startup_failure: 'failure'
 }
 
 export function mapCheckRunRESTConclusion(
@@ -38,7 +40,26 @@ export function mapCheckRunRESTConclusion(
   return conclusionMap[conclusion.toLowerCase()] ?? null
 }
 
-// ── gh pr checks mapping (single "state" string) ─────────────────────
+// Legacy integrations report commit statuses instead of check runs.
+
+export function mapCommitStatusRESTStatus(state: string): PRCheckDetail['status'] {
+  const s = state?.toLowerCase()
+  return s === 'pending' ? 'queued' : 'completed'
+}
+
+export function mapCommitStatusRESTConclusion(state: string): PRCheckDetail['conclusion'] {
+  const s = state?.toLowerCase()
+  if (s === 'success') {
+    return 'success'
+  }
+  if (s === 'failure' || s === 'error') {
+    return 'failure'
+  }
+  if (s === 'pending') {
+    return 'pending'
+  }
+  return null
+}
 
 export function mapCheckStatus(state: string): PRCheckDetail['status'] {
   const s = state?.toUpperCase()
@@ -57,6 +78,12 @@ export function mapCheckConclusion(state: string): PRCheckDetail['conclusion'] {
     return 'success'
   }
   if (s === 'FAILURE' || s === 'FAIL') {
+    return 'failure'
+  }
+  if (s === 'ACTION_REQUIRED') {
+    return 'action_required'
+  }
+  if (s === 'STALE' || s === 'STARTUP_FAILURE') {
     return 'failure'
   }
   if (s === 'CANCELLED') {
@@ -91,9 +118,7 @@ export function mapPRState(state: string, isDraft?: boolean): PRInfo['state'] {
   return 'open'
 }
 
-// ── Issue mapping ────────────────────────────────────────────────────
-// REST API returns html_url + lowercase state; gh issue view returns url + mixed-case state.
-// This helper normalises both shapes into IssueInfo.
+// Accept REST html_url/lowercase state and gh url/mixed-case state.
 
 export function mapIssueInfo(data: {
   number: number
@@ -102,52 +127,18 @@ export function mapIssueInfo(data: {
   url?: string
   html_url?: string
   labels?: { name: string }[]
+  body?: string | null
 }): IssueInfo {
   return {
     number: data.number,
     title: data.title,
     state: data.state?.toLowerCase() === 'open' ? 'open' : 'closed',
     url: data.html_url ?? data.url ?? '',
-    labels: (data.labels || []).map((l) => l.name)
+    labels: (data.labels || []).map((l) => l.name),
+    ...(typeof data.body === 'string' ? { description: data.body } : {})
   }
 }
 
 export function deriveCheckStatus(rollup: unknown[] | null | undefined): CheckStatus {
-  if (!rollup || !Array.isArray(rollup) || rollup.length === 0) {
-    return 'neutral'
-  }
-
-  let hasFailure = false
-  let hasPending = false
-
-  for (const check of rollup as { status?: string; conclusion?: string; state?: string }[]) {
-    const conclusion = check.conclusion?.toUpperCase()
-    const status = check.status?.toUpperCase()
-    const state = check.state?.toUpperCase()
-
-    if (
-      conclusion === 'FAILURE' ||
-      conclusion === 'TIMED_OUT' ||
-      conclusion === 'CANCELLED' ||
-      state === 'FAILURE' ||
-      state === 'ERROR'
-    ) {
-      hasFailure = true
-    } else if (
-      status === 'IN_PROGRESS' ||
-      status === 'QUEUED' ||
-      status === 'PENDING' ||
-      state === 'PENDING'
-    ) {
-      hasPending = true
-    }
-  }
-
-  if (hasFailure) {
-    return 'failure'
-  }
-  if (hasPending) {
-    return 'pending'
-  }
-  return 'success'
+  return derivePRCheckStatusFromRollup(rollup)
 }

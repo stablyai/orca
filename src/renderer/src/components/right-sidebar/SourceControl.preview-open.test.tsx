@@ -2,13 +2,13 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type {
   GitBranchChangeEntry,
-  GitBranchCompareSummary,
-  GitStatusEntry
-} from '../../../../shared/types'
+  GitBranchCompareSummary
+} from '../../../../shared/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import SourceControl from './SourceControl'
 
 const mocks = vi.hoisted(() => {
@@ -47,6 +47,7 @@ const mocks = vi.hoisted(() => {
     openBranchDiff: vi.fn(),
     createEmptySplitGroup: vi.fn(),
     discardRuntimeGitPath: vi.fn(),
+    bulkStageRuntimeGitPaths: vi.fn(),
     refreshGitStatusForWorktree: vi.fn(),
     requestEditorSaveQuiesce: vi.fn(),
     notifyEditorExternalFileChange: vi.fn()
@@ -77,15 +78,16 @@ vi.mock('@/store/selectors', () => ({
   useWorktreeMap: () => new Map([[mocks.activeWorktree.id, mocks.activeWorktree]])
 }))
 
-vi.mock('@/components/confirmation-dialog', () => ({
+vi.mock('@/components/confirmation-dialog-context', () => ({
   useConfirmationDialog: () => vi.fn().mockResolvedValue(true)
 }))
 
-vi.mock('@/runtime/runtime-git-client', async (importOriginal) => {
+vi.mock('@/runtime/runtime-git-working-tree-client', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,
-    discardRuntimeGitPath: mocks.calls.discardRuntimeGitPath
+    discardRuntimeGitPath: mocks.calls.discardRuntimeGitPath,
+    bulkStageRuntimeGitPaths: mocks.calls.bulkStageRuntimeGitPaths
   }
 })
 
@@ -140,6 +142,7 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
   vi.clearAllMocks()
   mocks.calls.createEmptySplitGroup.mockReturnValue('group-2')
   mocks.calls.discardRuntimeGitPath.mockResolvedValue(undefined)
+  mocks.calls.bulkStageRuntimeGitPaths.mockResolvedValue(undefined)
   mocks.calls.refreshGitStatusForWorktree.mockResolvedValue(undefined)
   mocks.calls.requestEditorSaveQuiesce.mockResolvedValue(undefined)
   mocks.state = {
@@ -148,11 +151,15 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
     groupsByWorktree: { [mocks.activeWorktree.id]: [{ id: 'group-1', activeTabId: null }] },
     repos: [mocks.activeRepo],
     worktreesByRepo: { [mocks.activeRepo.id]: [mocks.activeWorktree] },
+    sshConnectionStates: new Map(),
+    sshStateByEnvironment: new Map(),
+    runtimeStatusByEnvironmentId: new Map(),
     rightSidebarOpen: false,
     rightSidebarTab: 'source-control',
     gitStatusByWorktree: { [mocks.activeWorktree.id]: [] },
     gitBranchChangesByWorktree: { [mocks.activeWorktree.id]: [] },
     gitBranchCompareSummaryByWorktree: { [mocks.activeWorktree.id]: null },
+    gitBranchLineTotalByWorktree: {},
     gitConflictOperationByWorktree: {},
     remoteStatusesByWorktree: {},
     isRemoteOperationActive: false,
@@ -177,6 +184,7 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
     updateWorktreeGitIdentity: vi.fn(),
     beginGitBranchCompareRequest: vi.fn(() => 'request-key'),
     setGitBranchCompareResult: vi.fn(),
+    clearGitBranchCompare: vi.fn(),
     fetchUpstreamStatus: noopAsync(),
     setUpstreamStatus: vi.fn(),
     pushBranch: noopAsync(),
@@ -271,33 +279,37 @@ function clickBranchRow(init: MouseEventInit = {}): void {
 }
 
 describe('SourceControl preview row opens', () => {
-  it('passes preview=true when plain uncommitted row clicks open diff tabs', () => {
+  it.each([
+    ['src/file.ts', 'src/staged.ts', 'typescript'],
+    ['report.html', 'staged.html', 'html'],
+    ['REPORT.HTM', 'STAGED.HTM', 'html']
+  ])('opens %s and %s as preview diff tabs on plain clicks', (path, stagedPath, language) => {
     resetState({
       gitStatusByWorktree: {
         [mocks.activeWorktree.id]: [
-          gitEntry({ path: 'src/file.ts' }),
-          gitEntry({ path: 'src/staged.ts', area: 'staged' })
+          gitEntry({ path }),
+          gitEntry({ path: stagedPath, area: 'staged' })
         ]
       }
     })
     renderSourceControl()
 
-    clickUncommitted('src/file.ts')
-    clickUncommitted('src/staged.ts')
+    clickUncommitted(path)
+    clickUncommitted(stagedPath)
 
     expect(mocks.calls.openDiff).toHaveBeenCalledWith(
       mocks.activeWorktree.id,
-      '/repo/wt/src/file.ts',
-      'src/file.ts',
-      'typescript',
+      `/repo/wt/${path}`,
+      path,
+      language,
       false,
       { targetGroupId: undefined, preview: true }
     )
     expect(mocks.calls.openDiff).toHaveBeenCalledWith(
       mocks.activeWorktree.id,
-      '/repo/wt/src/staged.ts',
-      'src/staged.ts',
-      'typescript',
+      `/repo/wt/${stagedPath}`,
+      stagedPath,
+      language,
       true,
       { targetGroupId: undefined, preview: true }
     )
@@ -344,11 +356,12 @@ describe('SourceControl preview row opens', () => {
     )
   })
 
-  it('passes preview through markdown edit-in-changes and conflict file opens', () => {
+  it('passes preview through new markdown rich editor and conflict file opens', () => {
     resetState({
       gitStatusByWorktree: {
         [mocks.activeWorktree.id]: [
-          gitEntry({ path: 'docs/readme.md' }),
+          gitEntry({ path: 'docs/readme.md', status: 'untracked', area: 'untracked' }),
+          gitEntry({ path: 'docs/existing.md' }),
           gitEntry({
             path: 'src/conflict.ts',
             conflictKind: 'both_modified',
@@ -360,6 +373,7 @@ describe('SourceControl preview row opens', () => {
     renderSourceControl()
 
     clickUncommitted('docs/readme.md')
+    clickUncommitted('docs/existing.md')
     clickUncommitted('src/conflict.ts')
 
     expect(mocks.calls.openFile).toHaveBeenCalledWith(
@@ -372,6 +386,14 @@ describe('SourceControl preview row opens', () => {
       },
       { targetGroupId: undefined, preview: true }
     )
+    expect(mocks.calls.openDiff).toHaveBeenCalledWith(
+      mocks.activeWorktree.id,
+      '/repo/wt/docs/existing.md',
+      'docs/existing.md',
+      'markdown',
+      false,
+      { targetGroupId: undefined, preview: true }
+    )
     expect(mocks.calls.openConflictFile).toHaveBeenCalledWith(
       mocks.activeWorktree.id,
       '/repo/wt',
@@ -381,12 +403,17 @@ describe('SourceControl preview row opens', () => {
     )
   })
 
-  it('scopes discard autosave quiesce and reload notifications to the active runtime', async () => {
+  it('scopes discard autosave quiesce and reload notifications to the repo owner runtime', async () => {
     resetState({
       gitStatusByWorktree: { [mocks.activeWorktree.id]: [gitEntry({ path: 'src/file.ts' })] }
     })
+    // Route discard by owner stamp even when another server is focused.
+    Object.assign(mocks.activeRepo, { executionHostId: 'runtime:runtime-remote' })
+    onTestFinished(() => {
+      Reflect.deleteProperty(mocks.activeRepo, 'executionHostId')
+    })
     renderSourceControl()
-    mocks.state.settings = { activeRuntimeEnvironmentId: 'runtime-remote' }
+    mocks.state.settings = { activeRuntimeEnvironmentId: 'runtime-other' }
 
     const row = container.querySelector<HTMLDivElement>('[data-source-control-path="src/file.ts"]')
     const discardButton = row?.querySelector<HTMLButtonElement>(
@@ -436,13 +463,76 @@ describe('SourceControl preview row opens', () => {
     const row = container.querySelector<HTMLDivElement>(
       '[data-source-control-path="packages/nested"]'
     )
-    expect(row?.textContent).toContain('Submodule changes - stage inside submodule')
+    expect(row?.textContent).toContain('Stage inside submodule')
+    expect(
+      row?.querySelector('[title*="cannot stage file changes inside a submodule"]')
+    ).not.toBeNull()
 
-    const stageButton = row?.querySelector<HTMLButtonElement>(
-      'button[aria-label="Stage these changes inside the submodule"]'
+    expect(row?.querySelector<HTMLButtonElement>('button[aria-label="Stage"]')).toBeNull()
+  })
+
+  it('does not render a commit-area Stage All primary for submodule worktree-only rows', () => {
+    resetState({
+      gitStatusByWorktree: {
+        [mocks.activeWorktree.id]: [
+          gitEntry({
+            path: 'june-11th-launch',
+            submodule: { commitChanged: false, trackedChanges: true, untrackedChanges: false }
+          })
+        ]
+      }
+    })
+    renderSourceControl()
+
+    const row = container.querySelector<HTMLDivElement>(
+      '[data-source-control-path="june-11th-launch"]'
     )
-    expect(stageButton).not.toBeNull()
-    expect(stageButton?.getAttribute('aria-disabled')).toBe('true')
+    expect(row?.textContent).toContain('Stage inside submodule')
+
+    const stageAllButton = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === 'Stage All'
+    )
+    expect(stageAllButton).toBeUndefined()
+
+    const commitButton = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === 'Commit'
+    )
+    expect(commitButton).toBeDefined()
+    expect(commitButton?.disabled).toBe(true)
+
+    act(() => {
+      commitButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(mocks.calls.bulkStageRuntimeGitPaths).not.toHaveBeenCalled()
+  })
+
+  it('keeps the commit-area Stage All primary for changed submodule gitlinks', async () => {
+    resetState({
+      gitStatusByWorktree: {
+        [mocks.activeWorktree.id]: [
+          gitEntry({
+            path: 'packages/nested',
+            submodule: { commitChanged: true, trackedChanges: false, untrackedChanges: false }
+          })
+        ]
+      }
+    })
+    renderSourceControl()
+
+    const stageAllButton = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === 'Stage All'
+    )
+    expect(stageAllButton).toBeDefined()
+    expect(stageAllButton?.disabled).toBe(false)
+
+    await act(async () => {
+      stageAllButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+    expect(mocks.calls.bulkStageRuntimeGitPaths).toHaveBeenCalledWith(
+      expect.objectContaining({ worktreeId: mocks.activeWorktree.id, worktreePath: '/repo/wt' }),
+      ['packages/nested']
+    )
   })
 
   it('passes preview=true when a plain branch row click opens a branch diff tab', () => {

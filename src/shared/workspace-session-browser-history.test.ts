@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { getDefaultWorkspaceSession } from './constants'
 import {
   MAX_BROWSER_HISTORY_ENTRIES,
-  normalizeBrowserHistoryEntries
+  normalizeBrowserHistoryEntries,
+  pruneWorkspaceSessionBrowserHistory
 } from './workspace-session-browser-history'
 
 describe('normalizeBrowserHistoryEntries', () => {
@@ -19,5 +21,28 @@ describe('normalizeBrowserHistoryEntries', () => {
     expect(normalized).toHaveLength(MAX_BROWSER_HISTORY_ENTRIES)
     expect(normalized[0]?.url).toBe('https://example.com/499')
     expect(normalized.at(-1)?.url).toBe('https://example.com/300')
+  })
+
+  it('preserves the session on repeated normalization while still repairing and deduplicating history', () => {
+    const entry = {
+      url: 'https://example.com/page',
+      normalizedUrl: 'https://example.com/page',
+      title: 'Page',
+      lastVisitedAt: 1,
+      visitCount: 1
+    }
+    const session = { ...getDefaultWorkspaceSession(), browserUrlHistory: [entry] }
+    for (let i = 0; i < 100; i++) {
+      expect(pruneWorkspaceSessionBrowserHistory(session)).toBe(session)
+    }
+    const repaired = normalizeBrowserHistoryEntries([
+      { ...entry, normalizedUrl: 'incorrect', lastVisitedAt: 3 },
+      { ...entry, lastVisitedAt: 2 }
+    ])
+    expect(repaired).toEqual([{ ...entry, lastVisitedAt: 3 }])
+    expect(
+      normalizeBrowserHistoryEntries([{ ...entry, url: 'https://EXAMPLE.com/page' }])[0]
+        .normalizedUrl
+    ).toBe(entry.normalizedUrl)
   })
 })

@@ -1,0 +1,43 @@
+name: Unit selection evidence
+
+# Call advisory evidence beside unit-tests, preserving artifacts without delaying verify ~36s after shards; job/comparison remain continue-on-error.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  selection_evidence:
+    if: ${{ !cancelled() }}
+    continue-on-error: true
+    runs-on: ubuntu-slim
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: config/scripts/ci-unit-selection-review.mjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: unit-shard-node-*-attempt-${{ github.run_attempt }}
+          path: unit-evidence/
+      - name: Compare selection with full results
+        continue-on-error: true
+        uses: actions/github-script@v8
+        with:
+          github-token: unused
+          script: |
+            const env = { ...process.env }
+            delete env['INPUT_GITHUB-TOKEN']
+            await exec.exec(process.execPath, [
+              'config/scripts/ci-unit-selection-review.mjs',
+              'unit-evidence'
+            ], { env })
+      - uses: actions/upload-artifact@v7
+        if: always()
+        continue-on-error: true
+        with:
+          name: unit-selection-review-attempt-${{ github.run_attempt }}
+          path: unit-evidence/selection-review.json
+          retention-days: 30

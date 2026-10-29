@@ -1,22 +1,51 @@
-import { isQuickOpenQueryTooLarge, prepareQuickOpenFiles } from '../quick-open-search'
+import { getPreparedQuickOpenFiles, isQuickOpenQueryTooLarge } from '../quick-open-search'
 import type { RuntimeFileListState } from '../quick-open-file-list'
 import { translate } from '@/i18n/i18n'
-import { findExistingFileMatches, isLikelyNewFileIntent } from './tab-create-entry-file-matches'
-import { validateNewTabEntryRelativePath } from './tab-create-entry-path-validation'
+import { getTabEntryOmniboxPlaceholder } from './tab-create-entry-copy'
+import { DEFAULT_SEARCH_ENGINE, type SearchEngine } from '../../../../shared/browser-url'
+import {
+  findExistingFileMatches,
+  isLikelyNewFileIntent,
+  type ExistingFileMatch
+} from './tab-create-entry-file-matches'
+import { parseForcedSearchQuery } from './tab-create-entry-forced-search'
+import {
+  isTabEntryAbsolutePathLike,
+  type TabEntryLocalPlatform,
+  validateNewTabEntryAbsolutePath,
+  validateNewTabEntryRelativePath
+} from './tab-create-entry-path-validation'
 import { classifyExplicitUrl, classifyHostUrl } from './tab-create-entry-url-classification'
+import { htmlFilePathFromUrl } from '../../../../shared/html-file-url'
 
-export { validateNewTabEntryRelativePath } from './tab-create-entry-path-validation'
+export {
+  isTabEntryAbsolutePathLike,
+  validateNewTabEntryAbsolutePath,
+  validateNewTabEntryRelativePath
+} from './tab-create-entry-path-validation'
+
+export type TabEntryOptionsContext = {
+  allowAbsolutePaths?: boolean
+  localPlatform?: TabEntryLocalPlatform
+  searchEngine?: SearchEngine
+}
+
+export function getTabEntryAbsolutePathRemoteBlockedMessage(): string {
+  return translate(
+    'auto.components.tab.bar.tab.create.entry.classifier.absolutePathRemoteBlocked',
+    'Absolute paths require a local workspace.'
+  )
+}
 
 export type TabEntryClassification =
   | { kind: 'empty'; message: string }
   | { kind: 'explicit-url'; url: string }
-  | {
-      kind: 'existing-file'
-      matchKind: 'exact-path' | 'exact-basename' | 'fuzzy'
-      relativePath: string
-    }
+  | ExistingFileMatch
   | { kind: 'host-url'; url: string }
+  | { kind: 'search'; engine: SearchEngine; query: string }
   | { kind: 'new-file'; relativePath: string }
+  | { kind: 'absolute-file'; filePath: string }
+  | { kind: 'html-file-url'; filePath: string }
   | { kind: 'blocked'; message: string }
 
 export type TabEntryActionClassification = Exclude<
@@ -29,155 +58,215 @@ export type TabEntryOption = {
   id: string
 }
 
+function tabEntryActionOptionId(classification: TabEntryActionClassification): string {
+  switch (classification.kind) {
+    case 'existing-file':
+    case 'new-file':
+      return `${classification.kind}:${classification.relativePath}`
+    case 'absolute-file':
+    case 'html-file-url':
+      return `${classification.kind}:${classification.filePath}`
+    case 'explicit-url':
+    case 'host-url':
+      return `${classification.kind}:${classification.url}`
+    case 'search':
+      return `search:${classification.query}`
+  }
+}
+
+function emptyOption(): TabEntryOption {
+  return {
+    id: 'empty',
+    // Share placeholder guidance so the empty row and input describe the same search.
+    classification: { kind: 'empty', message: getTabEntryOmniboxPlaceholder() }
+  }
+}
+
+function blockedOption(id: string, message: string): TabEntryOption {
+  return { id, classification: { kind: 'blocked', message } }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function invalidPathOption(error: unknown): TabEntryOption {
+  return blockedOption('invalid-path', errorMessage(error))
+}
+
+function fileListStatusOption(fileList: RuntimeFileListState): TabEntryOption | null {
+  if (fileList.loading) {
+    return blockedOption(
+      'loading',
+      translate(
+        'auto.components.tab.bar.tab.create.entry.classifier.097a982ee0',
+        'Loading files...'
+      )
+    )
+  }
+  return fileList.loadError ? blockedOption('load-error', fileList.loadError) : null
+}
+
+function clampActionLimit(limit: number): number {
+  return Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 0
+}
+
+function toOptions(
+  classifications: TabEntryActionClassification[],
+  limit: number,
+  status?: TabEntryOption | null
+): TabEntryOption[] {
+  const options: TabEntryOption[] = classifications
+    .slice(0, clampActionLimit(limit))
+    .map((classification) => ({
+      id: tabEntryActionOptionId(classification),
+      classification
+    }))
+  if (status) {
+    options.push(status)
+  }
+  return options
+}
+
 export function classifyTabEntryQuery(
   query: string,
-  fileList: RuntimeFileListState
+  fileList: RuntimeFileListState,
+  context: TabEntryOptionsContext = {}
 ): TabEntryClassification {
   return (
-    getTabEntryOptions(query, fileList, 1)[0]?.classification ?? {
-      kind: 'empty',
-      message: translate(
-        'auto.components.tab.bar.tab.create.entry.classifier.5553b283ce',
-        'Enter a URL or file path.'
-      )
-    }
+    getTabEntryOptions(query, fileList, 1, context)[0]?.classification ??
+    emptyOption().classification
   )
 }
 
 export function getTabEntryOptions(
   query: string,
   fileList: RuntimeFileListState,
-  limit = 4
+  limit = 4,
+  context: TabEntryOptionsContext = {}
 ): TabEntryOption[] {
   if (isQuickOpenQueryTooLarge(query)) {
     return [
-      {
-        id: 'query-too-large',
-        classification: {
-          kind: 'blocked',
-          message: translate(
-            'auto.components.tab.bar.tab.create.entry.classifier.queryTooLarge',
-            'Search text is too large.'
-          )
-        }
-      }
+      blockedOption(
+        'query-too-large',
+        translate(
+          'auto.components.tab.bar.tab.create.entry.classifier.queryTooLarge',
+          'Search text is too large.'
+        )
+      )
     ]
   }
 
-  const trimmed = query.trim()
+  const parsedSearch = parseForcedSearchQuery(query)
+  const trimmed = parsedSearch.query
+  const engine = context.searchEngine ?? DEFAULT_SEARCH_ENGINE
+  const search: TabEntryActionClassification = { kind: 'search', engine, query: trimmed }
+  if (parsedSearch.forced) {
+    return trimmed ? toOptions([search], limit) : [emptyOption()]
+  }
   if (!trimmed) {
-    return [
-      {
-        id: 'empty',
-        classification: {
-          kind: 'empty',
-          message: translate(
-            'auto.components.tab.bar.tab.create.entry.classifier.5a9c83c04b',
-            'Open any file, URL, agent, ...'
-          )
-        }
-      }
-    ]
+    return [emptyOption()]
+  }
+
+  const htmlFilePath = htmlFilePathFromUrl(trimmed)
+  if (htmlFilePath) {
+    return toOptions([{ kind: 'html-file-url', filePath: htmlFilePath }], limit)
+  }
+
+  if (isTabEntryAbsolutePathLike(trimmed)) {
+    if (!context.allowAbsolutePaths) {
+      return [blockedOption('absolute-path-blocked', getTabEntryAbsolutePathRemoteBlockedMessage())]
+    }
+    try {
+      const filePath = validateNewTabEntryAbsolutePath(trimmed, context.localPlatform)
+      return toOptions([{ kind: 'absolute-file', filePath }], limit)
+    } catch (error) {
+      return [blockedOption('invalid-absolute-path', errorMessage(error))]
+    }
   }
 
   const explicitUrl = classifyExplicitUrl(trimmed)
   if (explicitUrl) {
-    return [
-      {
-        id: explicitUrl.kind === 'blocked' ? 'invalid-url' : `url:${explicitUrl.url}`,
-        classification: explicitUrl
-      }
-    ]
-  }
-
-  if (fileList.loading) {
-    return [
-      {
-        id: 'loading',
-        classification: {
-          kind: 'blocked',
-          message: translate(
-            'auto.components.tab.bar.tab.create.entry.classifier.097a982ee0',
-            'Loading files...'
-          )
-        }
-      }
-    ]
-  }
-  if (fileList.loadError) {
-    return [{ id: 'load-error', classification: { kind: 'blocked', message: fileList.loadError } }]
-  }
-  const existingFiles = findExistingFileMatches(
-    trimmed,
-    prepareQuickOpenFiles(fileList.files),
-    Math.max(limit, 1)
-  )
-  const exactExistingFiles = existingFiles.filter((file) => file.matchKind !== 'fuzzy')
-  const fuzzyExistingFiles = existingFiles.filter((file) => file.matchKind === 'fuzzy')
-
-  let newFile: TabEntryActionClassification | null = null
-  try {
-    newFile = { kind: 'new-file', relativePath: validateNewTabEntryRelativePath(trimmed) }
-  } catch {
-    newFile = null
+    return explicitUrl.kind === 'blocked'
+      ? [blockedOption('invalid-url', explicitUrl.message)]
+      : toOptions([explicitUrl], limit)
   }
 
   const hostUrl = classifyHostUrl(trimmed)
-
-  const options: TabEntryActionClassification[] = []
-  if (exactExistingFiles.length > 0) {
-    options.push(...exactExistingFiles)
-    if (hostUrl) {
-      options.push(hostUrl)
-    }
-  } else if (hostUrl) {
-    options.push(hostUrl)
-    options.push(...fuzzyExistingFiles)
-  } else if (newFile && isLikelyNewFileIntent(trimmed)) {
-    options.push(newFile, ...fuzzyExistingFiles)
-  } else {
-    options.push(...fuzzyExistingFiles)
-    if (newFile) {
-      options.push(newFile)
-    }
-  }
-
-  if (options.length > 0) {
-    return options.slice(0, limit).map((classification) => ({
-      id:
-        classification.kind === 'existing-file'
-          ? `${classification.kind}:${classification.relativePath}`
-          : classification.kind === 'new-file'
-            ? `${classification.kind}:${classification.relativePath}`
-            : `${classification.kind}:${classification.url}`,
-      classification
-    }))
-  }
-
+  let newFile: TabEntryActionClassification | null = null
+  let pathError: unknown = null
   try {
-    validateNewTabEntryRelativePath(trimmed)
+    newFile = { kind: 'new-file', relativePath: validateNewTabEntryRelativePath(trimmed) }
   } catch (error) {
-    return [
-      {
-        id: 'invalid-path',
-        classification: {
-          kind: 'blocked',
-          message: error instanceof Error ? error.message : String(error)
-        }
-      }
-    ]
+    pathError = error
   }
 
-  return [
-    {
-      id: 'blocked',
-      classification: {
-        kind: 'blocked',
-        message: translate(
-          'auto.components.tab.bar.tab.create.entry.classifier.42e6262ae9',
-          'No action available.'
-        )
-      }
+  const fileStatus = fileListStatusOption(fileList)
+  if (fileStatus) {
+    if (hostUrl?.kind === 'blocked') {
+      return [fileStatus]
     }
-  ]
+    if (hostUrl?.kind === 'host-url') {
+      return toOptions([hostUrl], limit, fileStatus)
+    }
+    // Wait for path-shaped scans before reporting errors that a completed listing may replace.
+    if (isLikelyNewFileIntent(trimmed)) {
+      return [fileStatus]
+    }
+    if (pathError) {
+      return [invalidPathOption(pathError)]
+    }
+    return toOptions([search], limit, fileStatus)
+  }
+
+  const actionLimit = clampActionLimit(limit)
+  const existingFiles = findExistingFileMatches(
+    trimmed,
+    getPreparedQuickOpenFiles(fileList.files),
+    Math.max(actionLimit, 1)
+  )
+  const exactExistingFiles = existingFiles.filter(
+    (file) => file.matchKind === 'exact-path' || file.matchKind === 'exact-basename'
+  )
+
+  if (exactExistingFiles.length > 0) {
+    const options: TabEntryActionClassification[] = [...exactExistingFiles]
+    if (hostUrl?.kind === 'host-url') {
+      options.push(hostUrl)
+    } else if (!hostUrl && newFile) {
+      options.push(search)
+    }
+    options.push(...existingFiles.filter((file) => file.matchKind === 'literal-basename'))
+    return toOptions(options, actionLimit)
+  }
+  if (hostUrl?.kind === 'blocked') {
+    return [blockedOption('invalid-url', hostUrl.message)]
+  }
+  if (hostUrl?.kind === 'host-url') {
+    return toOptions([hostUrl, ...existingFiles], actionLimit)
+  }
+  if (pathError || !newFile) {
+    // Incomplete paths such as src/ still match files; preserve those rows through validation errors.
+    return existingFiles.length > 0
+      ? toOptions(existingFiles, actionLimit)
+      : [invalidPathOption(pathError)]
+  }
+  if (isLikelyNewFileIntent(trimmed)) {
+    return toOptions([newFile, search, ...existingFiles], actionLimit)
+  }
+  // Treat extensionless phrases as search so accidental creation cannot leave an empty file that permanently outranks it.
+  if (/\s/.test(trimmed)) {
+    return toOptions([search, ...existingFiles], actionLimit)
+  }
+  // Short Latin tokens match too many filenames to imply file intent; CJK words can be short.
+  if (/^[\p{Script=Latin}\p{Nd}]{1,2}$/u.test(trimmed.normalize('NFC'))) {
+    return toOptions([search, ...existingFiles, newFile], actionLimit)
+  }
+  const literalFiles = existingFiles.filter((file) => file.matchKind === 'literal-basename')
+  const fuzzyFiles = existingFiles.filter((file) => file.matchKind === 'fuzzy')
+  // Reserve a search slot even when literal filename matches fill the list.
+  return toOptions(
+    [...literalFiles.slice(0, Math.max(actionLimit - 1, 1)), search, ...fuzzyFiles, newFile],
+    actionLimit
+  )
 }

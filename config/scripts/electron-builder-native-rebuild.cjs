@@ -7,27 +7,45 @@ function electronBuilderNativeRebuild(context) {
   return runElectronBuilderNativeRebuild(context)
 }
 
-function runElectronBuilderNativeRebuild(context, runner = execFileSync) {
-  const args = buildNativeRebuildArgs(context)
+function runElectronBuilderNativeRebuild(context, runner = execFileSync, runtime = {}) {
+  const args = buildNativeRebuildArgs(context, runtime)
+  if (readPlatformName(context?.platform) === 'win32') {
+    runner(process.execPath, ['config/scripts/build-windows-cli-launcher.mjs'], {
+      cwd: projectDir,
+      stdio: 'inherit'
+    })
+    // Packaging rejects a hook built for another machine, so build the one this package targets.
+    runner(
+      process.execPath,
+      ['config/scripts/build-windows-agent-hook.mjs', '--arch', readArchName(context?.arch)],
+      { cwd: projectDir, stdio: 'inherit' }
+    )
+  }
   runner(process.execPath, args, {
     cwd: projectDir,
     stdio: 'inherit'
   })
 
-  // Why: returning false tells electron-builder that native deps were handled
-  // externally, avoiding its all-module rebuild of optional cpu-features.
+  // Return false to skip electron-builder’s all-module rebuild of optional cpu-features.
   return false
 }
 
-function buildNativeRebuildArgs(context) {
+function buildNativeRebuildArgs(
+  context,
+  { environment = process.env, hostPlatform = process.platform, hostArch = process.arch } = {}
+) {
   const platform = readPlatformName(context?.platform)
   const arch = readArchName(context?.arch)
+  const canReusePreparedRuntime =
+    environment.ORCA_REUSE_PREPARED_NATIVE_RUNTIME === '1' &&
+    platform === hostPlatform &&
+    arch === hostArch
 
   return [
     'config/scripts/rebuild-native-deps.mjs',
     `--platform=${platform}`,
     `--arch=${arch}`,
-    '--force'
+    ...(canReusePreparedRuntime ? [] : ['--force'])
   ]
 }
 

@@ -1,10 +1,11 @@
+import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react'
 import type { Editor } from '@tiptap/react'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { useAppStore } from '@/store'
 import { isMarkdownPreviewFindShortcut } from './markdown-preview-search'
-import { editorShortcutMatches } from './editor-shortcuts'
-import { getLinkBubblePosition, type LinkBubbleState } from './RichMarkdownLinkBubble'
+import { handleRichMarkdownAddReviewNoteShortcut } from './rich-markdown-annotation-shortcut'
+import type { LinkBubbleState } from './RichMarkdownLinkBubble'
 import { commitRow, type DocLinkMenuRow, type DocLinkMenuState } from './rich-markdown-commands'
 import {
   runSlashCommand,
@@ -17,12 +18,32 @@ import {
   convertEmptyNestedOrderedItemToContinuation,
   exitTrailingEmptyOrderedListItem
 } from './rich-markdown-list-continuation'
+import { deleteAdjacentEmptyParagraph } from './rich-markdown-empty-paragraph-delete'
+import { handleRichMarkdownTableBackspace } from './rich-markdown-table-row-delete'
+import { handleRichMarkdownTableEnter } from './rich-markdown-table-enter'
+import { handleRichMarkdownTableTab } from './rich-markdown-table-tab'
+import {
+  indentRichMarkdownListItem,
+  outdentRichMarkdownListItem
+} from './rich-markdown-list-indent'
+import {
+  outdentRichMarkdownCodeBlock,
+  RICH_MARKDOWN_CODE_BLOCK_INDENT
+} from './rich-markdown-code-block-indent'
+import { handleRichMarkdownCitationKey } from './rich-markdown-citation-keyboard'
+import type { RichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
+import { handleRichMarkdownLinkShortcut } from './rich-markdown-link-shortcut'
+import { handleRichMarkdownSaveShortcut } from './rich-markdown-save-shortcut'
+import { flushPendingProseMirrorSelection } from './rich-markdown-selection-flush'
 
 export type KeyHandlerContext = {
   isMac: boolean
   editorRef: MutableRefObject<Editor | null>
   rootRef: MutableRefObject<HTMLDivElement | null>
   lastCommittedMarkdownRef: MutableRefObject<string>
+  originalSourceRef: MutableRefObject<string>
+  baseCanonicalRef: MutableRefObject<string>
+  reconcileRoundTripRef: MutableRefObject<(markdown: string) => string | null>
   onContentChangeRef: MutableRefObject<(content: string) => void>
   onSaveRef: MutableRefObject<(content: string) => void>
   isEditingLinkRef: MutableRefObject<boolean>
@@ -35,70 +56,50 @@ export type KeyHandlerContext = {
   handleLocalImagePickRef: MutableRefObject<() => void>
   handleEmojiPickRef: MutableRefObject<(menu: SlashMenuState) => void>
   typedEmptyOrderedListMarkerRef: MutableRefObject<boolean>
-  flushPendingSerialization: () => void
+  /** Returns true when the pending edit was rejected instead of committed. */
+  flushPendingSerialization: () => boolean
   openSearchRef: MutableRefObject<() => void>
+  openAnnotationPopoverRef: MutableRefObject<(requireLiveSelection?: boolean) => boolean>
   setIsEditingLink: (editing: boolean) => void
   setLinkBubble: (bubble: LinkBubbleState | null) => void
   setSelectedCommandIndex: Dispatch<SetStateAction<number>>
   setSelectedDocLinkIndex: Dispatch<SetStateAction<number>>
   setSlashMenu: Dispatch<SetStateAction<SlashMenuState | null>>
   setDocLinkMenu: (menu: DocLinkMenuState | null) => void
+  openSelectedHtmlSuperscriptLink?: () => boolean
+  linkBubbleOwnerId: string
+  htmlSuperscriptLinkContext: RichMarkdownHtmlSuperscriptLinkContext
 }
 
 function isComposingMarkdownInput(event: KeyboardEvent, editor: Editor | null): boolean {
-  return event.isComposing || editor?.view.composing === true
+  return isImeOwnedKeyboardEvent(event) || editor?.view.composing === true
 }
 
-type NativeSelectionSnapshot = {
-  anchorNode: Node | null
-  anchorOffset: number
-  focusNode: Node | null
-  focusOffset: number
-}
-
-type ProseMirrorDomObserver = {
-  currentSelection?: {
-    set?: (selection: NativeSelectionSnapshot) => void
-  }
-  flush?: () => void
-}
-
-type ProseMirrorViewWithDomObserver = Editor['view'] & {
-  domObserver?: ProseMirrorDomObserver
-}
-
-function flushPendingProseMirrorSelection(editor: Editor): void {
-  let observer: ProseMirrorDomObserver | undefined
-  try {
-    observer = (editor.view as ProseMirrorViewWithDomObserver).domObserver
-  } catch {
-    return
-  }
-
-  if (typeof observer?.flush !== 'function') {
-    return
-  }
-
-  // Why: immediate Tab after a mouse click can run before ProseMirror has
-  // copied the native selection into editor state, so list commands hit stale item state.
-  observer.currentSelection?.set?.({
-    anchorNode: null,
-    anchorOffset: 0,
-    focusNode: null,
-    focusOffset: 0
-  })
-  observer.flush()
-}
-
-/**
- * Why: extracted from RichMarkdownEditor to stay under the file line-limit
- * while keeping the keyboard handler logic co-located and testable.
- */
 export function createRichMarkdownKeyHandler(
   ctx: KeyHandlerContext
 ): (_view: unknown, event: KeyboardEvent) => boolean {
   return (_view, event) => {
+    if (isImeOwnedKeyboardEvent(event)) {
+      return false
+    }
+    // Save must flush pending text even while the editor's composition state lingers.
+    if (handleRichMarkdownSaveShortcut(ctx, event)) {
+      return true
+    }
+    if (isComposingMarkdownInput(event, ctx.editorRef.current)) {
+      return false
+    }
     const mod = ctx.isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
+    if (
+      handleRichMarkdownCitationKey({
+        editor: ctx.editorRef.current,
+        event,
+        linkBubbleOwnerId: ctx.linkBubbleOwnerId,
+        onOpen: ctx.openSelectedHtmlSuperscriptLink
+      })
+    ) {
+      return true
+    }
     if (
       isMarkdownPreviewFindShortcut(
         event,
@@ -110,49 +111,29 @@ export function createRichMarkdownKeyHandler(
       ctx.openSearchRef.current()
       return true
     }
-    if (editorShortcutMatches('editor.save', event)) {
-      event.preventDefault()
-      // Why: flush any pending debounced serialization so the save
-      // captures the very latest editor content, not a stale snapshot.
-      ctx.flushPendingSerialization()
-      const markdown = ctx.editorRef.current?.getMarkdown() ?? ctx.lastCommittedMarkdownRef.current
-      ctx.lastCommittedMarkdownRef.current = markdown
-      ctx.onContentChangeRef.current(markdown)
-      ctx.onSaveRef.current(markdown)
+    if (handleRichMarkdownAddReviewNoteShortcut(ctx, event)) {
       return true
     }
 
-    // Strikethrough: Cmd/Ctrl+Shift+X (standard shortcut used by Google
-    // Docs, Notion, etc. — supplements Tiptap's built-in Mod+Shift+S).
+    // Offer the familiar Mod+Shift+X alternative to Tiptap’s Mod+Shift+S.
     if (mod && event.shiftKey && event.key.toLowerCase() === 'x') {
       event.preventDefault()
       ctx.editorRef.current?.chain().focus().toggleStrike().run()
       return true
     }
 
-    // Link: Cmd/Ctrl+K — insert or edit a hyperlink.
-    if (mod && event.key.toLowerCase() === 'k') {
-      event.preventDefault()
-      const ed = ctx.editorRef.current
-      if (!ed) {
-        return true
-      }
-
-      if (ctx.isEditingLinkRef.current) {
-        ctx.setIsEditingLink(false)
-        if (!ed.isActive('link')) {
-          ctx.setLinkBubble(null)
-        }
-        ed.commands.focus()
-        return true
-      }
-
-      const pos = getLinkBubblePosition(ed, ctx.rootRef.current)
-      if (pos) {
-        const href = ed.isActive('link') ? (ed.getAttributes('link').href as string) || '' : ''
-        ctx.setLinkBubble({ href, ...pos })
-        ctx.setIsEditingLink(true)
-      }
+    if (
+      handleRichMarkdownLinkShortcut({
+        editor: ctx.editorRef.current,
+        event,
+        htmlSuperscriptLinkContext: ctx.htmlSuperscriptLinkContext,
+        isEditing: ctx.isEditingLinkRef.current,
+        isMac: ctx.isMac,
+        root: ctx.rootRef.current,
+        setEditing: ctx.setIsEditingLink,
+        setLinkBubble: ctx.setLinkBubble
+      })
+    ) {
       return true
     }
 
@@ -162,7 +143,21 @@ export function createRichMarkdownKeyHandler(
         ed &&
         !isComposingMarkdownInput(event, ed) &&
         (convertEmptyNestedOrderedItemToContinuation(ed) ||
-          collapseEmptyListContinuationParagraph(ed))
+          collapseEmptyListContinuationParagraph(ed) ||
+          deleteAdjacentEmptyParagraph(ed, 'backward') ||
+          handleRichMarkdownTableBackspace(ed))
+      ) {
+        event.preventDefault()
+        return true
+      }
+    }
+
+    if (event.key === 'Delete') {
+      const ed = ctx.editorRef.current
+      if (
+        ed &&
+        !isComposingMarkdownInput(event, ed) &&
+        deleteAdjacentEmptyParagraph(ed, 'forward')
       ) {
         event.preventDefault()
         return true
@@ -185,12 +180,20 @@ export function createRichMarkdownKeyHandler(
         event.preventDefault()
         return true
       }
+      // Table Enter must precede unserializable in-cell paragraph insertion; open menus retain Enter ownership.
+      if (
+        ed &&
+        !ctx.slashMenuRef.current &&
+        !ctx.docLinkMenuRef.current &&
+        !isComposingMarkdownInput(event, ed) &&
+        handleRichMarkdownTableEnter(ed)
+      ) {
+        event.preventDefault()
+        return true
+      }
     }
 
-    // Tab/Shift-Tab: indent/outdent lists, insert spaces in code blocks,
-    // and prevent focus from escaping the editor. When the slash menu or
-    // doc-link menu is open, Tab selects a row instead (handled in the
-    // menu blocks below).
+    // Menus own Tab while open; otherwise navigate table cells before list/code indentation and prevent focus escape.
     if (event.key === 'Tab' && !ctx.slashMenuRef.current && !ctx.docLinkMenuRef.current) {
       event.preventDefault()
       const ed = ctx.editorRef.current
@@ -199,33 +202,29 @@ export function createRichMarkdownKeyHandler(
       }
       flushPendingProseMirrorSelection(ed)
 
+      // Run table navigation before list indentation because this handler precedes Tiptap’s table shortcuts.
+      if (!isComposingMarkdownInput(event, ed) && handleRichMarkdownTableTab(ed, event.shiftKey)) {
+        return true
+      }
+
       if (event.shiftKey) {
-        if (!ed.commands.liftListItem('listItem')) {
-          ed.commands.liftListItem('taskItem')
+        if (!outdentRichMarkdownCodeBlock(ed)) {
+          outdentRichMarkdownListItem(ed)
         }
         return true
       }
 
       if (ed.isActive('codeBlock')) {
-        ed.commands.insertContent('  ')
+        ed.commands.insertContent(RICH_MARKDOWN_CODE_BLOCK_INDENT)
         return true
       }
 
-      // Why: sinkListItem succeeds when the item has a previous sibling;
-      // otherwise it no-ops. Either way we consume Tab to prevent focus escape.
-      if (!ed.commands.sinkListItem('listItem')) {
-        ed.commands.sinkListItem('taskItem')
-      }
+      // Consume Tab even when list indentation no-ops, preventing focus escape.
+      indentRichMarkdownListItem(ed)
       return true
     }
 
-    // ── Doc-link menu navigation ──────────────────────
-    // Why: this block MUST be registered before the slash-menu block below.
-    // The slash-menu block early-returns with `return false` when no slash
-    // menu is open, which short-circuits every subsequent handler — a
-    // doc-link block placed after it would be dead code. When THIS menu is
-    // closed, fall through (no early return) so the slash-menu block below
-    // still gets a chance.
+    // Handle document links before the slash-menu early return or their menu becomes unreachable.
     const currentDocLinkMenu = ctx.docLinkMenuRef.current
     if (currentDocLinkMenu) {
       const currentFilteredDocLinkRows = ctx.filteredDocLinkRowsRef.current
@@ -254,9 +253,7 @@ export function createRichMarkdownKeyHandler(
         return true
       }
       if (event.key === 'Enter' || event.key === 'Tab') {
-        // Why: with zero rows (empty state), Enter must fall through so it
-        // behaves as a normal paragraph break instead of silently eating the
-        // keystroke. syncDocLinkMenu closes the popover on the next tick.
+        // With no rows, let Enter create a paragraph; the next sync closes the menu.
         if (currentFilteredDocLinkRows.length === 0 || !activeEditorForDocLink) {
           return false
         }
@@ -274,13 +271,9 @@ export function createRichMarkdownKeyHandler(
         ctx.setDocLinkMenu(null)
         return true
       }
-      // Any other key (including ArrowLeft/ArrowRight, Backspace, printable
-      // characters) falls through. syncDocLinkMenu re-runs on the next
-      // onUpdate/onSelectionUpdate and closes or refreshes the popover based
-      // on whether the trigger still matches.
+      // Other keys fall through; selection/content updates resync the trigger and popover.
     }
 
-    // ── Slash menu navigation ─────────────────────────
     const currentSlashMenu = ctx.slashMenuRef.current
     if (!currentSlashMenu) {
       return false
@@ -298,8 +291,7 @@ export function createRichMarkdownKeyHandler(
       return false
     }
 
-    // Why: handleKeyDown is frozen from the first render, so this closure
-    // must read editorRef to get the live editor instance.
+    // The lifetime-stable handler must read the current editor from its ref.
     const activeEditor = ctx.editorRef.current
     if (!activeEditor) {
       return false
@@ -323,8 +315,7 @@ export function createRichMarkdownKeyHandler(
     }
     if (event.key === 'Enter' || event.key === 'Tab') {
       event.preventDefault()
-      // Why: this key handler is stable for the editor lifetime, so the ref
-      // mirrors the latest highlighted slash-menu item for keyboard picks.
+      // Read the latest highlighted command through its ref, avoiding the initial render’s stale selection.
       const selectedCommand = currentFilteredSlashCommands[ctx.selectedCommandIndexRef.current]
       if (selectedCommand) {
         runSlashCommand(

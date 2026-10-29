@@ -2,15 +2,19 @@ import { describe, expect, it } from 'vitest'
 import { normalizeRightSidebarRoute } from './right-sidebar-route'
 
 describe('normalizeRightSidebarRoute', () => {
-  it('preserves the folder-only PR Checks route', () => {
-    expect(normalizeRightSidebarRoute('pr-checks')).toEqual({
-      rightSidebarTab: 'pr-checks',
+  it('preserves well-formed plugin panel tabs', () => {
+    expect(normalizeRightSidebarRoute('plugin:samples.my-plugin/dashboard')).toEqual({
+      rightSidebarTab: 'plugin:samples.my-plugin/dashboard',
       rightSidebarExplorerView: 'files'
     })
   })
 
-  it('still normalizes invalid tabs to Explorer files', () => {
-    expect(normalizeRightSidebarRoute('missing')).toEqual({
+  it('drops a well-formed tab once the installed plugin list proves it is stale', () => {
+    expect(
+      normalizeRightSidebarRoute('plugin:samples.removed/dashboard', undefined, {
+        installedPluginTabKeys: new Set(['plugin:samples.present/dashboard'])
+      })
+    ).toEqual({
       rightSidebarTab: 'explorer',
       rightSidebarExplorerView: 'files'
     })

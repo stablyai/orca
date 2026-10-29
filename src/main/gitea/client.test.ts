@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { cancelTrackingResponse } from '../lib/unread-response-body.test-fixtures'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn()
@@ -11,11 +12,30 @@ vi.mock('../git/runner', () => ({
 import {
   getGiteaAuthStatus,
   getGiteaPullRequestForBranch,
+  getGiteaPullRequestForBranchOrThrow,
   normalizeGiteaApiBaseUrl
 } from './client'
 import { _resetGiteaRepoRefCache } from './repository-ref'
+import {
+  _getGiteaPullRequestScanCacheSize,
+  _resetGiteaPullRequestScanCache,
+  scanGiteaPullRequests
+} from './pull-request-scan-cache'
+import { __resetRepoDefaultBranchCacheForTests } from '../source-control/repo-default-branch'
 
 const OLD_ENV = process.env
+
+function primeGitExecWithDefaultBranch(defaultRef = 'refs/remotes/origin/main'): void {
+  gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+    if (args[0] === 'remote') {
+      return { stdout: 'https://git.example.com/team/repo.git\n', stderr: '' }
+    }
+    if (args[0] === 'for-each-ref' && args.includes('--format=%(refname)%00%(symref)')) {
+      return { stdout: `refs/remotes/origin/HEAD\0${defaultRef}\n`, stderr: '' }
+    }
+    throw new Error(`unexpected git call: ${args.join(' ')}`)
+  })
+}
 
 function giteaPr(index = 7, branch = 'feature/gitea') {
   return {
@@ -44,7 +64,72 @@ describe('Gitea client', () => {
       stderr: ''
     })
     _resetGiteaRepoRefCache()
+    _resetGiteaPullRequestScanCache()
+    __resetRepoDefaultBranchCacheForTests()
     vi.unstubAllGlobals()
+  })
+
+  it('hides a stale closed PR whose source branch is the repo default branch (#9171)', async () => {
+    primeGitExecWithDefaultBranch()
+    const fetchMock = vi.fn(async (url: string) => {
+      const parsed = new URL(url)
+      if (parsed.pathname.endsWith('/status')) {
+        return Response.json({ state: 'success' })
+      }
+      return Response.json([{ ...giteaPr(7, 'main'), state: 'closed' }])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getGiteaPullRequestForBranch('/repo', 'refs/heads/main')).resolves.toBeNull()
+  })
+
+  it('hides a stale merged PR on the default branch but keeps an open one', async () => {
+    primeGitExecWithDefaultBranch()
+    const fetchMock = vi.fn(async (url: string) => {
+      const parsed = new URL(url)
+      if (parsed.pathname.endsWith('/status')) {
+        return Response.json({ state: 'success' })
+      }
+      return Response.json([{ ...giteaPr(9, 'main'), merged: true }])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getGiteaPullRequestForBranch('/repo', 'refs/heads/main')).resolves.toBeNull()
+
+    _resetGiteaPullRequestScanCache()
+    __resetRepoDefaultBranchCacheForTests()
+    const openFetchMock = vi.fn(async (url: string) => {
+      const parsed = new URL(url)
+      if (parsed.pathname.endsWith('/status')) {
+        return Response.json({ state: 'success' })
+      }
+      return Response.json([giteaPr(10, 'main')])
+    })
+    vi.stubGlobal('fetch', openFetchMock)
+
+    await expect(getGiteaPullRequestForBranch('/repo', 'refs/heads/main')).resolves.toMatchObject({
+      number: 10,
+      state: 'open'
+    })
+  })
+
+  it('discards a closed default-branch shadow and refetches the linked PR via the fallback (#9171)', async () => {
+    primeGitExecWithDefaultBranch()
+    const fetchMock = vi.fn(async (url: string) => {
+      const parsed = new URL(url)
+      if (parsed.pathname.endsWith('/status')) {
+        return Response.json({ state: 'success' })
+      }
+      if (parsed.pathname.endsWith('/pulls/42')) {
+        return Response.json(giteaPr(42, 'main'))
+      }
+      return Response.json([{ ...giteaPr(7, 'main'), state: 'closed' }])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      getGiteaPullRequestForBranch('/repo', 'refs/heads/main', 42)
+    ).resolves.toMatchObject({ number: 42 })
   })
 
   it('normalizes Gitea API base URLs', () => {
@@ -90,6 +175,194 @@ describe('Gitea client', () => {
     expect(listUrl.searchParams.get('sort')).toBe('recentupdate')
     expect(listUrl.searchParams.get('page')).toBe('1')
     expect(listUrl.searchParams.get('limit')).toBe('50')
+  })
+
+  it('shares one /pulls scan across concurrent branch lookups (#8807)', async () => {
+    let listCalls = 0
+    const fetchMock = vi.fn(async (url: string) => {
+      const parsed = new URL(url)
+      if (parsed.pathname.endsWith('/status')) {
+        return Response.json({ state: 'success' })
+      }
+      listCalls++
+      return Response.json([giteaPr(7, 'feature/a'), giteaPr(8, 'feature/b')])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const [a, b, missing] = await Promise.all([
+      getGiteaPullRequestForBranch('/repo', 'feature/a'),
+      getGiteaPullRequestForBranch('/repo', 'feature/b'),
+      getGiteaPullRequestForBranch('/repo', 'feature/none')
+    ])
+
+    expect(a?.number).toBe(7)
+    expect(b?.number).toBe(8)
+    expect(missing).toBeNull()
+    expect(listCalls).toBe(1)
+  })
+
+  it('reuses the cached /pulls scan for lookups inside the TTL', async () => {
+    let listCalls = 0
+    const fetchMock = vi.fn(async (url: string) => {
+      const parsed = new URL(url)
+      if (parsed.pathname.endsWith('/status')) {
+        return Response.json({ state: 'success' })
+      }
+      listCalls++
+      return Response.json([giteaPr()])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getGiteaPullRequestForBranch('/repo', 'feature/gitea')
+    await getGiteaPullRequestForBranch('/repo', 'feature/gitea')
+    await getGiteaPullRequestForBranch('/repo', 'no-pr-branch')
+
+    expect(listCalls).toBe(1)
+  })
+
+  it('retries a failed /pulls scan after only the short failure cooldown', async () => {
+    vi.useFakeTimers()
+    try {
+      let listCalls = 0
+      const fetchMock = vi.fn(async (url: string) => {
+        const parsed = new URL(url)
+        if (parsed.pathname.endsWith('/status')) {
+          return Response.json({ state: 'success' })
+        }
+        listCalls++
+        return listCalls === 1
+          ? Response.json({ message: 'temporary failure' }, { status: 503 })
+          : Response.json([giteaPr()])
+      })
+      vi.stubGlobal('fetch', fetchMock)
+
+      await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toBeNull()
+      await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toBeNull()
+      expect(listCalls).toBe(1)
+
+      await vi.advanceTimersByTimeAsync(3_001)
+      await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toMatchObject({
+        number: 7
+      })
+      expect(listCalls).toBe(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('surfaces a lookup failure via getGiteaPullRequestForBranchOrThrow instead of null (finding 4)', async () => {
+    const fetchMock = vi.fn(async () => Response.json({ message: 'unauthorized' }, { status: 403 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toBeNull()
+    // Strict lookup must distinguish unavailable transport from a confirmed missing review.
+    await expect(getGiteaPullRequestForBranchOrThrow('/repo', 'feature/gitea')).rejects.toThrow(
+      /Gitea request failed/
+    )
+  })
+
+  it('treats a 404 on the linked PR as "no PR" rather than a lookup failure', async () => {
+    const requested: string[] = []
+    const fetchMock = vi.fn(async (url: string | URL) => {
+      requested.push(new URL(String(url)).pathname)
+      // The branch scan succeeds and is simply empty; only PR #42 is gone.
+      return String(url).includes('/pulls/42')
+        ? Response.json({ message: 'not found' }, { status: 404 })
+        : Response.json([])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      getGiteaPullRequestForBranchOrThrow('/repo', 'feature/gitea', 42)
+    ).resolves.toBeNull()
+    expect(requested).toEqual(['/api/v1/repos/team/repo/pulls', '/api/v1/repos/team/repo/pulls/42'])
+  })
+
+  it('resolves null without throwing when the scan returns an empty list', async () => {
+    // Gitea has no head-branch filter, so "branch has no PR" arrives as a 200
+    // with [] from the repo listing — never a 404. The throwing variant must
+    // still report that as a plain "no PR".
+    const fetchMock = vi.fn(async () => Response.json([]))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getGiteaPullRequestForBranchOrThrow('/repo', 'feature/gitea')).resolves.toBeNull()
+  })
+
+  it('still throws on a 404 from the /pulls scan so a misconfigured host is not read as "no PR"', async () => {
+    const fetchMock = vi.fn(async () => Response.json({ message: 'not found' }, { status: 404 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    // A repo-level 404 means wrong base URL / repo absent / token lacks scope —
+    // collapsing it to "no PR" would hide the misconfiguration indefinitely.
+    await expect(getGiteaPullRequestForBranchOrThrow('/repo', 'feature/gitea')).rejects.toThrow(
+      /Gitea request failed: HTTP 404/
+    )
+  })
+
+  it('expires successful scans and bounds retained repository listings', async () => {
+    vi.useFakeTimers()
+    try {
+      let listCalls = 0
+      const fetchMock = vi.fn(async (url: string) => {
+        const parsed = new URL(url)
+        if (parsed.pathname.endsWith('/status')) {
+          return Response.json({ state: 'success' })
+        }
+        listCalls++
+        return Response.json([giteaPr()])
+      })
+      vi.stubGlobal('fetch', fetchMock)
+
+      await getGiteaPullRequestForBranch('/repo', 'feature/gitea')
+      expect(_getGiteaPullRequestScanCacheSize()).toBe(1)
+      await vi.advanceTimersByTimeAsync(30_001)
+      expect(_getGiteaPullRequestScanCacheSize()).toBe(0)
+      await getGiteaPullRequestForBranch('/repo', 'feature/gitea')
+      expect(listCalls).toBe(2)
+
+      await Promise.all(
+        Array.from({ length: 40 }, (_, index) =>
+          scanGiteaPullRequests(`repo-${index}`, async () => [], 50, 5)
+        )
+      )
+      expect(_getGiteaPullRequestScanCacheSize()).toBe(32)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not let an in-flight scan re-cache results from before an invalidation', async () => {
+    let releaseFirstScan!: () => void
+    const firstScanGate = new Promise<void>((resolve) => {
+      releaseFirstScan = resolve
+    })
+    let listCalls = 0
+    const fetchMock = vi.fn(async (url: string) => {
+      const parsed = new URL(url)
+      if (parsed.pathname.endsWith('/status')) {
+        return Response.json({ state: 'success' })
+      }
+      listCalls++
+      if (listCalls === 1) {
+        // First scan is in flight (pre-create listing) when the invalidation lands.
+        await firstScanGate
+        return Response.json([giteaPr(7, 'feature/old')])
+      }
+      return Response.json([giteaPr(7, 'feature/old'), giteaPr(8, 'feature/new')])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const staleScanRead = getGiteaPullRequestForBranch('/repo', 'feature/old')
+    const { invalidateGiteaPullRequestScanForRepo, getGiteaRepoSlug } = await import('./client')
+    const repo = await getGiteaRepoSlug('/repo')
+    invalidateGiteaPullRequestScanForRepo(repo!)
+    releaseFirstScan()
+    await staleScanRead
+
+    await expect(getGiteaPullRequestForBranch('/repo', 'feature/new')).resolves.toMatchObject({
+      number: 8
+    })
+    expect(listCalls).toBe(2)
   })
 
   it('uses an API base URL override for subpath or non-standard deployments', async () => {
@@ -155,5 +428,20 @@ describe('Gitea client', () => {
       tokenConfigured: true
     })
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe('https://git.example.com/api/v1/user')
+  })
+
+  it('cancels unread error-response bodies so bundled undici cannot crash on socket close', async () => {
+    let cancelledBodies = 0
+    const fetchMock = vi.fn(async () =>
+      cancelTrackingResponse(502, () => {
+        cancelledBodies += 1
+      })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getGiteaPullRequestForBranch('/repo', 'refs/heads/feature/gitea')
+
+    expect(fetchMock).toHaveBeenCalled()
+    expect(cancelledBodies).toBe(fetchMock.mock.calls.length)
   })
 })

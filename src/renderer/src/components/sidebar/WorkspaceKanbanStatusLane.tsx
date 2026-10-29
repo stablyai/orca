@@ -1,6 +1,11 @@
-import React from 'react'
+import React, { useMemo, useRef } from 'react'
 import { Plus } from 'lucide-react'
-import type { Repo, WorkspaceStatusDefinition, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type {
+  WorkspaceStatus,
+  WorkspaceStatusDefinition,
+  Worktree
+} from '../../../../shared/worktree/types'
 import {
   WORKSPACE_BOARD_COLUMN_WIDTH_MAX,
   WORKSPACE_BOARD_COLUMN_WIDTH_MIN
@@ -8,20 +13,26 @@ import {
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import WorkspaceKanbanCard from './WorkspaceKanbanCard'
+import WorkspaceKanbanLaneCardList from './WorkspaceKanbanLaneCardList'
+import { serializeWorkspaceLaneFullIds } from './workspace-kanban-filtered-drop-index'
 import { getWorkspaceStatusVisualMeta } from './workspace-status'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 type WorkspaceKanbanStatusLaneProps = {
   status: WorkspaceStatusDefinition
   items: readonly Worktree[]
+  /** Lane membership before search filtering; defaults to the rendered items. */
+  totalCount?: number
+  hasQuery?: boolean
+  fullWorktreeIds?: readonly string[]
   repoMap: Map<string, Repo>
-  activeWorktreeId: string | null
+  activeWorktreeIdentity: string | null
   columnWidth: number
   isResizingColumn: boolean
   isDragTarget: boolean
-  canCreateWorktree: boolean
   nativeDragEnabled?: boolean
+  renderCards: boolean
   selectedWorktreeIds: ReadonlySet<string>
   selectedWorktrees: readonly Worktree[]
   onDragOver: (event: React.DragEvent, statusId: string) => void
@@ -33,21 +44,25 @@ type WorkspaceKanbanStatusLaneProps = {
     event: React.MouseEvent<HTMLElement>,
     worktree: Worktree
   ) => readonly Worktree[]
+  onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: WorkspaceStatus) => void
   onCreateWorktree: (statusId: string) => void
   onColumnResizeStart: (event: React.PointerEvent<HTMLElement>) => void
   onColumnResizeKeyDown: (event: React.KeyboardEvent<HTMLElement>) => void
 }
 
-export default function WorkspaceKanbanStatusLane({
+function WorkspaceKanbanStatusLane({
   status,
   items,
+  totalCount,
+  hasQuery = false,
+  fullWorktreeIds,
   repoMap,
-  activeWorktreeId,
+  activeWorktreeIdentity,
   columnWidth,
   isResizingColumn,
   isDragTarget,
-  canCreateWorktree,
   nativeDragEnabled = true,
+  renderCards,
   selectedWorktreeIds,
   selectedWorktrees,
   onDragOver,
@@ -56,14 +71,32 @@ export default function WorkspaceKanbanStatusLane({
   onActivate,
   onSelectionGesture,
   onContextMenuSelect,
+  onAssignWorkspaceStatus,
   onCreateWorktree,
   onColumnResizeStart,
   onColumnResizeKeyDown
 }: WorkspaceKanbanStatusLaneProps): React.JSX.Element {
+  useUiLanguageRevision()
+  const laneScrollRef = useRef<HTMLDivElement | null>(null)
   const meta = getWorkspaceStatusVisualMeta(status)
-  const createTooltip = canCreateWorktree
-    ? `New workspace in ${status.label}`
-    : 'Add a project to create workspaces'
+  // Only filtered-away cards justify No matches; intrinsically empty lanes remain Empty.
+  const laneTotalCount = totalCount ?? items.length
+  const isFiltered = hasQuery && laneTotalCount > 0
+  // Memoize full-lane ID serialization to avoid rebuilding large strings on unrelated board renders.
+  const laneFullIdsAttribute = useMemo(() => {
+    if (!hasQuery) {
+      return undefined
+    }
+    return (
+      serializeWorkspaceLaneFullIds(fullWorktreeIds ?? items.map((worktree) => worktree.id)) ??
+      undefined
+    )
+  }, [fullWorktreeIds, hasQuery, items])
+  const createTooltip = translate(
+    'auto.components.sidebar.WorkspaceKanbanStatusLane.newWorkspaceIn',
+    'New workspace in {{status}}',
+    { status: status.label }
+  )
   const createButton = (
     <Button
       type="button"
@@ -71,7 +104,6 @@ export default function WorkspaceKanbanStatusLane({
       size="icon-xs"
       className="size-6 text-muted-foreground"
       aria-label={createTooltip}
-      disabled={!canCreateWorktree}
       onClick={() => onCreateWorktree(status.id)}
     >
       <Plus className="size-3.5" />
@@ -82,6 +114,8 @@ export default function WorkspaceKanbanStatusLane({
     <section
       data-workspace-status-drop-target=""
       data-workspace-status={status.id}
+      // Filtered drag/drop needs full membership beyond rendered cards; omit the extra DOM payload when unfiltered.
+      data-workspace-lane-full-ids={laneFullIdsAttribute}
       data-contextual-tour-target={
         status.id === 'completed' ? 'workspace-board-done-lane' : undefined
       }
@@ -133,7 +167,7 @@ export default function WorkspaceKanbanStatusLane({
             {status.label}
           </div>
           <div className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium leading-none text-muted-foreground">
-            {items.length}
+            {isFiltered ? `${items.length} / ${laneTotalCount}` : items.length}
           </div>
         </div>
         <Tooltip>
@@ -145,34 +179,34 @@ export default function WorkspaceKanbanStatusLane({
       </div>
 
       <div
+        ref={laneScrollRef}
         data-workspace-board-lane-scroll=""
         className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-1.5 py-2 scrollbar-sleek"
       >
         {items.length > 0 ? (
-          <div className="space-y-2">
-            {items.map((worktree) => {
-              const isSelected = selectedWorktreeIds.has(worktree.id)
-              return (
-                <WorkspaceKanbanCard
-                  key={worktree.id}
-                  worktree={worktree}
-                  repo={repoMap.get(worktree.repoId)}
-                  isActive={activeWorktreeId === worktree.id}
-                  isSelected={isSelected}
-                  nativeDragEnabled={nativeDragEnabled}
-                  selectedWorktrees={
-                    isSelected && selectedWorktrees.length > 0 ? selectedWorktrees : undefined
-                  }
-                  onActivate={onActivate}
-                  onSelectionGesture={onSelectionGesture}
-                  onContextMenuSelect={onContextMenuSelect}
-                />
-              )
-            })}
-          </div>
+          renderCards ? (
+            <WorkspaceKanbanLaneCardList
+              items={items}
+              repoMap={repoMap}
+              activeWorktreeIdentity={activeWorktreeIdentity}
+              scrollRef={laneScrollRef}
+              selectedWorktreeIds={selectedWorktreeIds}
+              selectedWorktrees={selectedWorktrees}
+              nativeDragEnabled={nativeDragEnabled}
+              onActivate={onActivate}
+              onSelectionGesture={onSelectionGesture}
+              onContextMenuSelect={onContextMenuSelect}
+              onAssignWorkspaceStatus={onAssignWorkspaceStatus}
+            />
+          ) : null
         ) : (
           <div className="flex h-20 items-center justify-center rounded-md border border-dashed border-border/70 text-[11px] text-muted-foreground">
-            {translate('auto.components.sidebar.WorkspaceKanbanStatusLane.8ad104642b', 'Empty')}
+            {isFiltered
+              ? translate(
+                  'auto.components.sidebar.WorkspaceKanbanStatusLane.2df01a03ff',
+                  'No matches'
+                )
+              : translate('auto.components.sidebar.WorkspaceKanbanStatusLane.8ad104642b', 'Empty')}
           </div>
         )}
         <Tooltip>
@@ -186,7 +220,6 @@ export default function WorkspaceKanbanStatusLane({
                 'group-hover/lane:opacity-100 group-focus-within/lane:opacity-100'
               )}
               aria-label={createTooltip}
-              disabled={!canCreateWorktree}
               onClick={() => onCreateWorktree(status.id)}
             >
               <Plus className="size-3.5" />
@@ -200,3 +233,5 @@ export default function WorkspaceKanbanStatusLane({
     </section>
   )
 }
+
+export default React.memo(WorkspaceKanbanStatusLane)

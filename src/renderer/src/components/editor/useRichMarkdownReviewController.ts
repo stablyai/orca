@@ -11,10 +11,11 @@ import {
   type RichMarkdownAnnotationTarget
 } from './rich-markdown-review-annotations'
 import { shouldExpandRichMarkdownReviewRail } from './rich-markdown-review-note-layout'
+import { flushPendingProseMirrorSelection } from './rich-markdown-selection-flush'
 import { useRichMarkdownReviewData } from './useRichMarkdownReviewData'
 import { useRichMarkdownReviewCopyFeedback } from './useRichMarkdownReviewCopyFeedback'
 import { useRichMarkdownReviewRailController } from './useRichMarkdownReviewRailController'
-import type { DiffComment } from '../../../../shared/types'
+import type { DiffComment } from '../../../../shared/diff-comment-types'
 
 type UseRichMarkdownReviewControllerOptions = {
   addDiffComment: AppState['addDiffComment']
@@ -201,48 +202,65 @@ export function useRichMarkdownReviewController({
     ]
   )
 
-  const openAnnotationPopover = useCallback((): void => {
-    if (!annotationTarget || !canAnnotateRichMarkdown) {
-      return
-    }
-    const editor = editorRef.current
-    const root = rootRef.current
-    const liveTarget = editor && root ? getRichMarkdownAnnotationTarget(editor, root) : null
-    const target = editor
-      ? clampRichMarkdownAnnotationTarget(editor, liveTarget ?? annotationTarget)
-      : annotationTarget
-    if (
-      !target ||
-      hasRichMarkdownCommentForRange(markdownComments, target, markdownSourceLineOffset)
-    ) {
+  // Report opened/retained composers so keyboard callers consume only handled chords.
+  const openAnnotationPopover = useCallback(
+    (requireLiveSelection = false): boolean => {
+      if (!canAnnotateRichMarkdown) {
+        return false
+      }
+      // Consume repeated open requests without remounting a composer and losing its draft.
+      if (annotationPopoverRef.current) {
+        return true
+      }
+      const editor = editorRef.current
+      const root = rootRef.current
+      // Flush native mouse selection before choosing the target; a chord can precede ProseMirror’s selection sync.
+      if (editor) {
+        flushPendingProseMirrorSelection(editor)
+      }
+      // Keyboard actions need live targets; mouse buttons may use the target their render exposed.
+      const liveTarget = editor && root ? getRichMarkdownAnnotationTarget(editor, root) : null
+      const baseTarget = liveTarget ?? (requireLiveSelection ? null : annotationTarget)
+      if (!baseTarget) {
+        return false
+      }
+      const target = editor ? clampRichMarkdownAnnotationTarget(editor, baseTarget) : baseTarget
+      if (
+        !target ||
+        hasRichMarkdownCommentForRange(markdownComments, target, markdownSourceLineOffset)
+      ) {
+        setAnnotationTarget(null)
+        return false
+      }
+      editor?.view.dispatch(
+        editor.state.tr.setMeta(richMarkdownAnnotationHighlightPluginKey, {
+          activeRange: { from: target.from, to: target.to }
+        })
+      )
+      // Claim the draft before setState so same-tick chords/repeats cannot remount it and discard typing.
+      annotationPopoverRef.current = target
+      // Why: opening a draft should reserve the notes rail immediately; saved notes stay visible.
+      setReviewRailOpen(true)
+      setAnnotationPopover(target)
       setAnnotationTarget(null)
-      return
-    }
-    editor?.view.dispatch(
-      editor.state.tr.setMeta(richMarkdownAnnotationHighlightPluginKey, {
-        activeRange: { from: target.from, to: target.to }
-      })
-    )
-    // Why: opening a draft should reserve the notes rail immediately; saved notes stay visible.
-    setReviewRailOpen(true)
-    setAnnotationPopover(target)
-    setAnnotationTarget(null)
-  }, [
-    annotationTarget,
-    canAnnotateRichMarkdown,
-    editorRef,
-    markdownComments,
-    markdownSourceLineOffset,
-    rootRef,
-    setReviewRailOpen
-  ])
+      return true
+    },
+    [
+      annotationTarget,
+      canAnnotateRichMarkdown,
+      editorRef,
+      markdownComments,
+      markdownSourceLineOffset,
+      rootRef,
+      setReviewRailOpen
+    ]
+  )
 
   useEffect(() => {
     if (canAnnotateRichMarkdown) {
       return
     }
-    // Why: disabling annotations must immediately remove stale popovers and
-    // highlights that cannot be derived from the next non-annotatable render.
+    // Remove transient highlights/popovers immediately when annotations become unavailable.
     // oxlint-disable-next-line react-doctor/no-adjust-state-on-prop-change
     setAnnotationTarget(null)
     // oxlint-disable-next-line react-doctor/no-adjust-state-on-prop-change

@@ -1,182 +1,246 @@
-import { createReadStream } from 'fs'
-import { readFile } from 'fs/promises'
-import { createInterface } from 'readline'
-import type { AiVaultSession } from '../../shared/ai-vault-types'
-import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
 import {
-  addPreviewContent,
+  remoteSessionContentLines,
+  type RemoteSessionContent
+} from './remote-session-content-lines'
+import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
+import { createInterface } from 'node:readline'
+import type { AiVaultSession } from '../../shared/ai-vault-types'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
+import { isKnownHarnessInjectedUserTurnText } from '../../shared/harness-injected-user-turns'
+import { normalizePromptField } from '../../shared/agent-status-field-normalization'
+import type {
+  FileWithMtime,
+  ResumableSessionParseState,
+  SessionAccumulator
+} from './session-scanner-types'
+import type { TranscriptMessageSink } from './session-transcript-consumers'
+import {
+  accumulatorSessionIdentity,
   createAccumulator,
   finalizeSession,
   sessionIdFromFileName,
   updateLatestLocation,
   updateTimeline
 } from './session-scanner-accumulator'
+import { addSessionContent } from './session-scanner-messages'
+import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
 import {
-  arrayValue,
   asRecord,
   claudeUsageTotal,
-  extractContentText,
   extractMessageText,
   extractString,
   normalizeTitleText,
-  parseJsonObject,
-  tokenTotal
+  parseJsonObject
 } from './session-scanner-values'
 
-export async function parseClaudeSessionFile(
-  file: FileWithMtime,
-  platform: NodeJS.Platform = process.platform
-): Promise<AiVaultSession | null> {
-  const accumulator = createAccumulator({
-    agent: 'claude',
-    file,
-    sessionId: sessionIdFromFileName(file.path)
-  })
-  let metaTitle: string | null = null
-  let generatedTitle: string | null = null
-
-  const lines = createInterface({
-    input: createReadStream(file.path, { encoding: 'utf-8' }),
-    crlfDelay: Infinity
-  })
-
-  for await (const line of lines) {
-    const record = parseJsonObject(line)
-    if (!record) {
-      continue
-    }
-
-    if (typeof record.sessionId === 'string' && record.sessionId.trim()) {
-      accumulator.sessionId = record.sessionId.trim()
-    }
-    updateTimeline(accumulator, extractString(record.timestamp))
-    updateLatestLocation(accumulator, record)
-
-    if (record.type === 'custom-title') {
-      accumulator.title = normalizeTitleText(extractString(record.customTitle) ?? '')
-      continue
-    }
-
-    if (record.type === 'ai-title') {
-      generatedTitle ??= normalizeTitleText(extractString(record.aiTitle) ?? '')
-      continue
-    }
-
-    if (record.type === 'agent-name' && !generatedTitle) {
-      metaTitle ??= normalizeTitleText(extractString(record.agentName) ?? '')
-      continue
-    }
-
-    if (record.type === 'user') {
-      accumulator.messageCount++
-      const title = extractMessageText(record.message)
-      addPreviewContent(accumulator, 'user', asRecord(record.message)?.content, record.timestamp)
-      if (title && record.isMeta !== true && !accumulator.title) {
-        accumulator.title = title
-      } else if (title && !metaTitle) {
-        metaTitle = title
-      }
-      continue
-    }
-
-    if (record.type === 'assistant') {
-      accumulator.messageCount++
-      const message = asRecord(record.message)
-      addPreviewContent(accumulator, 'assistant', message?.content, record.timestamp)
-      const model = extractString(message?.model)
-      if (model) {
-        accumulator.model = model
-      }
-      accumulator.totalTokens += claudeUsageTotal(message?.usage)
-    }
-  }
-
-  accumulator.fallbackTitle = generatedTitle ?? metaTitle
-  return finalizeSession(accumulator, platform)
+type ParserSessionOptions = {
+  executionHostId?: ExecutionHostId
+  executionHostPlatform?: NodeJS.Platform | null
 }
 
-export async function parseGeminiSessionFile(
-  file: FileWithMtime,
-  platform: NodeJS.Platform = process.platform
-): Promise<AiVaultSession | null> {
-  if (file.path.endsWith('.jsonl')) {
-    return parseGeminiJsonlSessionFile(file, platform)
-  }
-
-  const record = asRecord(JSON.parse(await readFile(file.path, 'utf-8')) as unknown)
-  if (!record) {
-    return null
-  }
-  const accumulator = createAccumulator({
-    agent: 'gemini',
-    file,
-    sessionId: extractString(record.sessionId) ?? sessionIdFromFileName(file.path)
-  })
-  updateTimeline(accumulator, extractString(record.startTime))
-  updateTimeline(accumulator, extractString(record.lastUpdated))
-  for (const message of arrayValue(record.messages)) {
-    consumeGeminiMessage(accumulator, asRecord(message))
-  }
-  return finalizeSession(accumulator, platform)
+export type ClaudeSessionParseState = {
+  accumulator: SessionAccumulator
+  metaTitle: string | null
+  generatedTitle: string | null
+  firstUserTitle: string | null
 }
 
-export async function parseGeminiJsonlSessionFile(
+export function createClaudeSessionParseState(
   file: FileWithMtime,
-  platform: NodeJS.Platform
-): Promise<AiVaultSession | null> {
-  const accumulator = createAccumulator({
-    agent: 'gemini',
-    file,
-    sessionId: sessionIdFromFileName(file.path)
-  })
-  const lines = createInterface({
-    input: createReadStream(file.path, { encoding: 'utf-8' }),
-    crlfDelay: Infinity
-  })
-
-  for await (const line of lines) {
-    const record = parseJsonObject(line)
-    if (!record) {
-      continue
-    }
-    const setRecord = asRecord(record.$set)
-    if (setRecord) {
-      updateTimeline(accumulator, extractString(setRecord.lastUpdated))
-      continue
-    }
-    const sessionId = extractString(record.sessionId)
-    if (sessionId) {
-      accumulator.sessionId = sessionId
-    }
-    updateTimeline(accumulator, extractString(record.startTime))
-    updateTimeline(accumulator, extractString(record.lastUpdated))
-    consumeGeminiMessage(accumulator, record)
+  messages?: TranscriptMessageSink
+): ClaudeSessionParseState {
+  return {
+    accumulator: createAccumulator({
+      agent: 'claude',
+      file,
+      sessionId: sessionIdFromFileName(file.path),
+      messages
+    }),
+    metaTitle: null,
+    generatedTitle: null,
+    firstUserTitle: null
   }
-
-  return finalizeSession(accumulator, platform)
 }
 
-export function consumeGeminiMessage(
-  accumulator: SessionAccumulator,
-  record: Record<string, unknown> | null
+export function cloneClaudeSessionParseState(
+  state: ClaudeSessionParseState
+): ClaudeSessionParseState {
+  return {
+    accumulator: {
+      ...state.accumulator,
+      previewMessages: [...state.accumulator.previewMessages]
+    },
+    metaTitle: state.metaTitle,
+    generatedTitle: state.generatedTitle,
+    firstUserTitle: state.firstUserTitle
+  }
+}
+
+export function consumeClaudeSessionLine(state: ClaudeSessionParseState, line: string): void {
+  const record = parseJsonObject(line)
+  if (record) {
+    consumeClaudeSessionRecord(state, record)
+  }
+}
+
+export function consumeClaudeSessionRecord(
+  state: ClaudeSessionParseState,
+  record: Record<string, unknown>
 ): void {
-  if (!record) {
-    return
+  const { accumulator } = state
+
+  if (typeof record.sessionId === 'string' && record.sessionId.trim()) {
+    accumulator.sessionId = record.sessionId.trim()
   }
   updateTimeline(accumulator, extractString(record.timestamp))
-  if (record.type === 'user') {
-    accumulator.messageCount++
-    accumulator.title ??= extractContentText(record.content)
-    addPreviewContent(accumulator, 'user', record.content, record.timestamp)
+  updateLatestLocation(accumulator, record)
+
+  if (record.type === 'custom-title') {
+    accumulator.title = normalizeTitleText(extractString(record.customTitle) ?? '')
     return
   }
-  if (record.type === 'gemini') {
+
+  if (record.type === 'ai-title') {
+    const title = normalizeTitleText(extractString(record.aiTitle) ?? '')
+    if (title) {
+      state.generatedTitle = title
+    }
+    return
+  }
+
+  if (record.type === 'agent-name' && !state.generatedTitle) {
+    state.metaTitle ??= normalizeTitleText(extractString(record.agentName) ?? '')
+    return
+  }
+
+  if (record.type === 'queue-operation') {
+    // Track recoverable queued content separately from turns; uncounted empty enqueues can make removals undercount.
+    if (record.operation === 'enqueue' && (extractString(record.content)?.trim().length ?? 0) > 0) {
+      accumulator.queuedMessageCount++
+    } else if (record.operation === 'remove' || record.operation === 'dequeue') {
+      accumulator.queuedMessageCount = Math.max(0, accumulator.queuedMessageCount - 1)
+    }
+    return
+  }
+
+  if (record.type === 'last-prompt') {
+    const prompt = normalizePromptField(record.lastPrompt)
+    if (prompt) {
+      accumulator.lastUserPrompt = prompt
+    }
+    return
+  }
+
+  if (record.type === 'user') {
     accumulator.messageCount++
-    addPreviewContent(accumulator, 'assistant', record.content, record.timestamp)
-    const model = extractString(record.model)
+    const title = extractMessageText(record.message)
+    // Known injected tags may lack isMeta; custom tags must remain real prompts rather than fallback titles.
+    const isMetaUserTurn =
+      record.isMeta === true || (title != null && isKnownHarnessInjectedUserTurnText(title))
+    addSessionContent(accumulator, 'user', asRecord(record.message)?.content, record.timestamp, {
+      seedFirstUserPrompt: !isMetaUserTurn
+    })
+    if (title) {
+      if (isMetaUserTurn) {
+        state.metaTitle ??= title
+      } else {
+        state.firstUserTitle ??= title
+      }
+    }
+    return
+  }
+
+  if (record.type === 'assistant') {
+    accumulator.messageCount++
+    const message = asRecord(record.message)
+    addSessionContent(accumulator, 'assistant', message?.content, record.timestamp)
+    const model = extractString(message?.model)
     if (model) {
       accumulator.model = model
     }
-    accumulator.totalTokens += tokenTotal(record.tokens)
+    accumulator.totalTokens += claudeUsageTotal(message?.usage)
   }
+}
+
+export async function finalizeClaudeSessionParseState(
+  state: ClaudeSessionParseState,
+  platform: NodeJS.Platform,
+  options: ParserSessionOptions = {}
+): Promise<AiVaultSession | null> {
+  // Detach previews so later appends cannot mutate a published session.
+  const snapshot = cloneClaudeSessionParseState(state)
+  // Explicit custom titles win, then generated names, real prompts and injected-context fallbacks.
+  snapshot.accumulator.fallbackTitle =
+    snapshot.generatedTitle ?? snapshot.firstUserTitle ?? snapshot.metaTitle
+  // Count only on the transcript-owning host; runtime hosts stamp identity after parsing, while SSH walks supply counts.
+  const ownsTranscriptDisk =
+    !options.executionHostId || options.executionHostId === LOCAL_EXECUTION_HOST_ID
+  if (ownsTranscriptDisk) {
+    snapshot.accumulator.subagentTranscriptCount = await countSubagentTranscripts(
+      snapshot.accumulator.filePath
+    )
+  }
+  return finalizeSession(snapshot.accumulator, platform, options)
+}
+
+export function createClaudeSessionResumeState(
+  file: FileWithMtime,
+  messages?: TranscriptMessageSink
+): ResumableSessionParseState {
+  return claudeResumeStateFromParseState(createClaudeSessionParseState(file, messages))
+}
+
+function claudeResumeStateFromParseState(
+  state: ClaudeSessionParseState
+): ResumableSessionParseState {
+  return {
+    consumeLine: (line) => consumeClaudeSessionLine(state, line),
+    identity: () => accumulatorSessionIdentity(state.accumulator),
+    clone: () => claudeResumeStateFromParseState(cloneClaudeSessionParseState(state)),
+    touchFile: (file) => {
+      state.accumulator.modifiedAt = file.modifiedAt
+    },
+    finalize: (platform, options) => finalizeClaudeSessionParseState(state, platform, options)
+  }
+}
+
+export async function parseClaudeSessionFile(
+  file: FileWithMtime,
+  platform: NodeJS.Platform = process.platform,
+  messages?: TranscriptMessageSink
+): Promise<AiVaultSession | null> {
+  const lines = createInterface({
+    input: openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan'),
+    crlfDelay: Infinity
+  })
+  return parseClaudeSessionLines({ file, lines, platform, messages })
+}
+
+export async function parseClaudeSessionContent(
+  file: FileWithMtime,
+  content: RemoteSessionContent,
+  platform: NodeJS.Platform = process.platform,
+  options: ParserSessionOptions = {},
+  signal?: AbortSignal
+): Promise<AiVaultSession | null> {
+  return parseClaudeSessionLines({
+    file,
+    lines: remoteSessionContentLines(content, signal),
+    platform,
+    options
+  })
+}
+
+async function parseClaudeSessionLines(args: {
+  file: FileWithMtime
+  lines: AsyncIterable<string> | Iterable<string>
+  platform: NodeJS.Platform
+  options?: ParserSessionOptions
+  messages?: TranscriptMessageSink
+}): Promise<AiVaultSession | null> {
+  const state = createClaudeSessionParseState(args.file, args.messages)
+  for await (const line of args.lines) {
+    consumeClaudeSessionLine(state, line)
+  }
+  return finalizeClaudeSessionParseState(state, args.platform, args.options)
 }

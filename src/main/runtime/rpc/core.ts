@@ -1,10 +1,43 @@
-// Why: this is the single boundary between raw RPC frames and the OrcaRuntimeService.
-// Keeping the schema, handler, and result type attached to one object makes the
-// CLI-facing contract greppable and lets the dispatcher verify every payload
-// against the same shape the handler consumed during development.
 import { ZodError, type ZodType } from 'zod'
 import type { TerminalStreamFrame } from '../../../shared/terminal-stream-protocol'
-import type { OrcaRuntimeService } from '../orca-runtime'
+import type { OrcaRuntimeService, OrchestrationCompatibilityCallerAuthority } from '../orca-runtime'
+import type { StructuredAgentCliSourceEvidence } from '../../native-chat/structured-agent-cli-source'
+import type {
+  DeviceCredentialInstalled,
+  PairingGetEndpointsParams,
+  PairingGetEndpointsResult,
+  PairingProvisionRelayParams
+} from '../../../shared/mobile-relay-credential-contract'
+import type { RuntimeCapability } from '../../../shared/protocol-version'
+import type {
+  MobileRelayHostsListResult,
+  MobileRelayHostWorktreesResult
+} from '../../../shared/mobile-relay-hosts-contract'
+import type {
+  DelegatedPhone,
+  DelegatedMobileDeviceSyncResult
+} from '../../../shared/delegated-mobile-device-contract'
+import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration-compatibility-evidence'
+import type { OrchestrationSessionCaller } from '../orchestration/orchestration-caller-identity'
+import type { RpcCallerIdentity } from './rpc-caller-identity'
+import type { OrcadPeerDesktopsResult } from '../../../shared/orcad-peer-desktops-contract'
+import type { RpcBinarySender } from './rpc-binary-sender'
+import type { RpcMethodPermission } from './rpc-method-permission'
+import type { OrcadFeatureRequirement } from './orcad-feature-readiness'
+import type {
+  RegisterDeviceKeyParams,
+  RegisterDeviceKeyResult
+} from '../../../shared/device-key-registration-contract'
+
+// Bind key rotation to the authenticated socket so callers can re-key only themselves.
+export type DeviceSelfRpcContext = {
+  registerDeviceKey(params: RegisterDeviceKeyParams): RegisterDeviceKeyResult
+}
+
+export type PairingRpcContext = {
+  getEndpoints(params: PairingGetEndpointsParams): Promise<PairingGetEndpointsResult>
+  provisionRelay(params: PairingProvisionRelayParams): Promise<DeviceCredentialInstalled>
+}
 
 export type RpcEnvelopeMeta = {
   runtimeId: string
@@ -36,113 +69,193 @@ export type RpcRequest = {
   authToken: string
   method: string
   params?: unknown
+  orchestrationContractVersion?: number
+  orchestrationRequestId?: string
+  compatibilityInvocationId?: string
+  orchestrationCompatibilityEvidence?: OrchestrationCompatibilityEvidence
+  // Untrusted wire evidence; runtime-source-admission validates it.
+  expectedRuntimeSource?: unknown
+  // Phone-supplied runtime target; validate at its point of use.
+  executionHost?: unknown
 }
+
+export type LegacyCoordinatorAuthorityProof = Readonly<{
+  runId: string
+  principalId: string | null
+  terminalHandle: string
+  paneKey: string
+  consumerGeneration: number
+}>
 
 export type RpcContext = {
   runtime: OrcaRuntimeService
-  // Why: long-poll handlers (e.g. orchestration.check with wait=true) need to
-  // observe the underlying socket's lifetime so they can release their slot
-  // and resolve their inner waiters immediately when a client disconnects
-  // instead of running down the configured timeoutMs. Undefined outside the
-  // runtime-rpc transport (direct in-process callers don't need it).
-  // See design doc §3.1 counter-lifecycle.
+  // Release long-poll handlers immediately when the client disconnects.
   signal?: AbortSignal
-  // Why: streaming handlers (notifications/accounts/terminal subscribe)
-  // register cleanup callbacks against the runtime so reconnects don't leak
-  // listeners. Keying those cleanups by per-WebSocket connectionId lets the
-  // server reap all subscriptions for a closing socket, even when other
-  // sockets for the same deviceToken stay alive (multi-screen mobile).
+  // Cleanup is socket-scoped so sibling sockets sharing a device token survive.
   connectionId?: string
-  // Why: shared-control multiplexes many logical streams over one socket. Some
-  // handlers need the frame id to register cleanup at logical-stream granularity.
+  // An unsubscribe cannot retire a registration created after its dispatch began.
+  subscriptionRegistrationVersion?: number
+  structuredAgentCliSourceEvidence?: StructuredAgentCliSourceEvidence
+  // Multiplexed streams need request-scoped cleanup within their shared socket.
   requestId?: string
-  // Why: WebSocket RPCs authenticate by mobile device token. State-owning
-  // handlers use this to clean up when that paired device disconnects.
+  // Device-scoped handlers release owned state when that client disconnects.
   clientId?: string
-  // Why: one-shot desktop IPC originates from a specific renderer window.
-  // Terminal/browser mutators use this to enforce the same owner checks as
-  // direct IPC without affecting authenticated socket/mobile clients.
-  senderWindowId?: number
-  // Why: mobile terminal traffic is byte-oriented and bypasses JSON streaming
-  // responses after the binary terminal cutover. Undefined on Unix/socket
-  // transports and non-E2EE WebSocket paths.
-  sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
-  // Why: binary terminal input/resize frames arrive outside JSON-RPC after a
-  // stream is established. The WebSocket transport owns the connection-scoped
-  // stream table; handlers register only the stream IDs they created.
+  // Key navigation by revocable device identity, never bearer token or socket id.
+  pairedDeviceId?: string
+  // Delegated phones use their parent desktop's workspaces.
+  pairedDeviceParentId?: string
+  // Host-assigned transport identity; absent means the caller could not be established.
+  caller?: RpcCallerIdentity
+  // Only phones receive truncated payloads; undefined in-process callers remain unclipped.
+  clientKind?: 'mobile' | 'runtime'
+  // Trust socket-negotiated capabilities, never destructive request assertions.
+  clientCapabilities?: readonly RuntimeCapability[]
+  // Capability upgrades mutate only the authenticated socket after exact-key v2 auth.
+  updateClientCapabilities?: (capabilities: readonly RuntimeCapability[]) => void
+  // Durable mutation acceptance may precede a long-lived waiter's settlement.
+  recordMutationReceipt?: (receipt: unknown) => void
+  // Only local worker_done can prove its atomic settlement transaction never committed.
+  markWorkerDoneMutationEffectFree?: () => void
+  // Prompt retries stop once PTY write effects become ambiguous.
+  markMutationEffectPossible?: () => void
+  // Commit operation identity with worker-start so crash recovery can inspect it.
+  orchestrationMutation?: {
+    callerFingerprint: string
+    requestId: string
+    method: string
+    payloadHash: string
+  }
+  // A replay with --wait-submit observes its receipt rather than writing again.
+  replayedMutationReceipt?: unknown
+  // Compare declared Run handles against request attestation.
+  orchestrationCompatibilityEvidence?: OrchestrationCompatibilityEvidence
+  // Resolve the injected Orca session id once at dispatch; session identity wins.
+  orchestrationCaller?: OrchestrationSessionCaller
+  // Only the trusted compatibility router sets this; params cannot bypass Run consumer binding.
+  legacyCoordinatorRunId?: string
+  legacyCoordinatorAuthority?: LegacyCoordinatorAuthorityProof
+  revalidateLegacyCoordinator?: () => string
+  orchestrationCompatibilityCallerAuthority?: OrchestrationCompatibilityCallerAuthority
+  // Pin authenticated federation identity without exposing its token to handlers or storage.
+  authenticatedCallerFingerprint?: string
+  pairing?: PairingRpcContext
+  deviceSelf?: DeviceSelfRpcContext
+  // Available only on a desktop relay for its configured servers.
+  mobileRelayHosts?: {
+    list(): MobileRelayHostsListResult
+    worktrees(hostId: string): Promise<MobileRelayHostWorktreesResult>
+  }
+  // Authenticated runtime devices see which other desktops share this server.
+  peerDesktops?: {
+    list(callerClientInstanceId?: string): OrcadPeerDesktopsResult
+    /** Tags this socket with the caller's installation until it closes. */
+    declare(clientInstanceId: string): void
+  }
+  // Authenticated runtime devices may manage only their own delegated phones.
+  delegatedMobileDevices?: {
+    sync(phones: readonly DelegatedPhone[]): DelegatedMobileDeviceSyncResult
+  }
+  // Binary terminal transport is absent on Unix and non-E2EE WebSocket paths.
+  sendBinary?: RpcBinarySender
+  // Register only handler-owned stream ids; binary frames arrive outside JSON-RPC.
   registerBinaryStreamHandler?: (
     streamId: number,
     handler: (frame: TerminalStreamFrame) => void
   ) => () => void
+  // Why: non-terminal binary protocols own their dedicated authenticated subscription socket.
+  registerBinaryMessageHandler?: (
+    handler: (bytes: Uint8Array<ArrayBufferLike>) => void
+  ) => () => void
 }
 
-export type RpcHandler<TParams> = (params: TParams, ctx: RpcContext) => Promise<unknown> | unknown
+// No schema means no params; the handler must not read its first argument.
+type RpcParsedParams<TSchema extends ZodType | null> = TSchema extends ZodType
+  ? TSchema['_output']
+  : void
 
-// Why: defineMethod preserves the inferred param type locally so each handler
-// is fully typed, but the erased `RpcMethod` form is what the dispatcher
-// actually stores. The erasure lives in one cast inside defineMethod rather
-// than in every method file, which is the tradeoff for the variance problem
-// of `RpcHandler` being contravariant in its param type.
-export type RpcMethod = {
-  readonly name: string
-  readonly params: ZodType | null
-  readonly handler: (params: unknown, ctx: RpcContext) => Promise<unknown> | unknown
+// Preserve literal name, schema and result types until the registry boundary.
+export type RpcTypedMethod<TName extends string, TSchema extends ZodType | null, TResult> = {
+  readonly name: TName
+  // Every new method must explicitly choose caller permissions.
+  readonly permission: RpcMethodPermission
+  readonly params: TSchema
+  // Startup phases this method needs; the dispatcher waits for them, bounded (orcad only).
+  readonly requires?: OrcadFeatureRequirement<RpcParsedParams<TSchema>>
+  readonly handler: (params: RpcParsedParams<TSchema>, ctx: RpcContext) => TResult
 }
 
-type DefineMethodSpec<TSchema extends ZodType | null> = {
-  name: string
-  params: TSchema
-  handler: RpcHandler<TSchema extends ZodType ? TSchema['_output'] : void>
+export function defineMethod<TName extends string, TSchema extends ZodType | null, TResult>(
+  spec: RpcTypedMethod<TName, TSchema, TResult>
+): RpcTypedMethod<TName, TSchema, TResult> {
+  return spec
 }
 
-export function defineMethod<TSchema extends ZodType | null>(
-  spec: DefineMethodSpec<TSchema>
-): RpcMethod {
-  return {
-    name: spec.name,
-    params: spec.params,
-    handler: spec.handler as RpcMethod['handler']
-  }
-}
-
-export type RpcStreamingHandler<TParams> = (
-  params: TParams,
-  ctx: RpcContext,
-  emit: (result: unknown) => void
-) => Promise<void>
-
-// Why: streaming methods emit multiple responses over a long-lived connection.
-// The `stream` flag lets the dispatcher distinguish them from one-shot methods
-// and route them to the emit-based call path instead of the Promise-based one.
-export type RpcStreamingMethod = {
-  readonly name: string
-  readonly params: ZodType | null
+// Emit callbacks have no result position for inference; emitted values remain unknown.
+export type RpcTypedStreamingMethod<TName extends string, TSchema extends ZodType | null> = {
+  readonly name: TName
+  readonly permission: RpcMethodPermission
+  readonly params: TSchema
+  readonly requires?: OrcadFeatureRequirement<RpcParsedParams<TSchema>>
   readonly stream: true
   readonly handler: (
-    params: unknown,
+    params: RpcParsedParams<TSchema>,
     ctx: RpcContext,
     emit: (result: unknown) => void
   ) => Promise<void>
 }
 
-type DefineStreamingMethodSpec<TSchema extends ZodType | null> = {
-  name: string
-  params: TSchema
-  handler: RpcStreamingHandler<TSchema extends ZodType ? TSchema['_output'] : void>
+export function defineStreamingMethod<TName extends string, TSchema extends ZodType | null>(
+  spec: Omit<RpcTypedStreamingMethod<TName, TSchema>, 'stream'>
+): RpcTypedStreamingMethod<TName, TSchema> {
+  return { ...spec, stream: true }
 }
 
-export function defineStreamingMethod<TSchema extends ZodType | null>(
-  spec: DefineStreamingMethodSpec<TSchema>
-): RpcStreamingMethod {
-  return {
-    name: spec.name,
-    params: spec.params,
-    stream: true,
-    handler: spec.handler as RpcStreamingMethod['handler']
-  }
+type RpcMethodWithParams<P> = {
+  readonly name: string
+  readonly permission: RpcMethodPermission
+  readonly params: ZodType | null
+  readonly requires?: OrcadFeatureRequirement<P>
+  readonly handler: (params: P, ctx: RpcContext) => unknown
 }
 
-export type RpcAnyMethod = RpcMethod | RpcStreamingMethod
+type RpcStreamingMethodWithParams<P> = {
+  readonly name: string
+  readonly permission: RpcMethodPermission
+  readonly params: ZodType | null
+  readonly requires?: OrcadFeatureRequirement<P>
+  readonly stream: true
+  readonly handler: (params: P, ctx: RpcContext, emit: (result: unknown) => void) => Promise<void>
+}
+
+// never makes declarations supertypes of parsed handlers until registry erasure.
+export type RpcMethodDeclaration = RpcMethodWithParams<never>
+type RpcStreamingMethodDeclaration = RpcStreamingMethodWithParams<never>
+export type RpcAnyMethodDeclaration = RpcMethodDeclaration | RpcStreamingMethodDeclaration
+
+// The erased registry accepts unknown; the dispatcher always parses before invoking handlers.
+export type RpcMethod = RpcMethodWithParams<unknown>
+export type RpcStreamingMethod = RpcStreamingMethodWithParams<unknown>
+type RpcAnyMethod = RpcMethod | RpcStreamingMethod
+
+// Erasure drops params types while preserving one-shot versus streaming dispatch.
+export function eraseRpcMethods(methods: readonly RpcMethodDeclaration[]): readonly RpcMethod[]
+export function eraseRpcMethods(
+  methods: readonly RpcStreamingMethodDeclaration[]
+): readonly RpcStreamingMethod[]
+export function eraseRpcMethods(
+  methods: readonly RpcAnyMethodDeclaration[]
+): readonly RpcAnyMethod[]
+// Erase once after contravariance blocks assignment; handlers still receive dispatcher-parsed input.
+export function eraseRpcMethods(
+  methods: readonly RpcAnyMethodDeclaration[]
+): readonly RpcAnyMethod[] {
+  return methods as readonly RpcAnyMethod[]
+}
+
+// Unsubscribes that must not retire a registration created after their dispatch began.
+export function isRegistrationFencedUnsubscribe(method: string): boolean {
+  return method === 'terminal.unsubscribe' || method === 'session.tabs.unsubscribe'
+}
 
 export function isStreamingMethod(method: RpcAnyMethod): method is RpcStreamingMethod {
   return 'stream' in method && method.stream === true
@@ -150,9 +263,9 @@ export function isStreamingMethod(method: RpcAnyMethod): method is RpcStreamingM
 
 export type RpcRegistry = ReadonlyMap<string, RpcAnyMethod>
 
-export function buildRegistry(methods: readonly RpcAnyMethod[]): RpcRegistry {
+export function buildRegistry(methods: readonly RpcAnyMethodDeclaration[]): RpcRegistry {
   const registry = new Map<string, RpcAnyMethod>()
-  for (const method of methods) {
+  for (const method of eraseRpcMethods(methods)) {
     if (registry.has(method.name)) {
       throw new Error(`duplicate_rpc_method:${method.name}`)
     }
@@ -168,10 +281,7 @@ export class InvalidArgumentError extends Error {
   }
 }
 
-// Why: zod aggregates all failing fields into `issues`, but the CLI surfaces
-// a single string to users. Pick the first issue's message so callers see a
-// message that matches the original handler's `Missing terminal handle`-style
-// phrasing (each schema supplies that literal message on its own constraint).
+// CLI displays the first schema-authored user-facing validation message.
 export function formatZodError(error: ZodError): string {
   const first = error.issues[0]
   return first?.message ?? 'invalid_argument'

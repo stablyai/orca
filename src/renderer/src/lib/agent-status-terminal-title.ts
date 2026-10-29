@@ -1,4 +1,4 @@
-import { detectAgentStatusFromTitle } from '../../../shared/agent-detection'
+import { classifyTitleActivity } from './pane-agent-evidence'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import {
   getSyntheticAgentTerminalTitle,
@@ -26,7 +26,7 @@ function shouldReplaceCurrentTitle(
   if (!currentTitle?.trim()) {
     return true
   }
-  const currentStatus = detectAgentStatusFromTitle(currentTitle)
+  const currentStatus = classifyTitleActivity(currentTitle)
   if (currentStatus === 'working') {
     return true
   }
@@ -37,8 +37,7 @@ function shouldReplaceCurrentTitle(
   if (!profile) {
     return false
   }
-  // Why: cursor-agent can report the bare native title at completion; the
-  // detector treats that as a no-op, so explicit status needs the idle label.
+  // Cursor’s bare completion title is a detector no-op; explicit status needs an idle label.
   if (currentTitle.trim().toLowerCase() === profile.workingLabel.toLowerCase()) {
     return true
   }

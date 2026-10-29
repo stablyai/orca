@@ -1,0 +1,195 @@
+// SSH repo hydration once left connectionId undefined, routing remote POSIX paths through local authorization and latching access-denied errors even after hydration (#6648, Windows). Exercise the real owner-not-ready guard so reads wait instead.
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Repo } from '../../../shared/repo-types'
+import { useAppStore } from '@/store'
+import { getConnectionIdForFile, isWorktreeConnectionResolved } from '@/lib/connection-context'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import {
+  WORKTREE_OWNER_NOT_READY_ERROR,
+  WORKTREE_OWNER_UNREACHABLE_ERROR
+} from '@/components/editor/editor-panel-content-types'
+import { shouldRetryFileLoadError } from '@/components/editor/useEditorPanelFileLoadRetry'
+import { readRuntimeFileContent } from './runtime-file-read-client'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+
+// Mirrors src/main/ipc/filesystem/filesystem-auth.ts PATH_ACCESS_DENIED_MESSAGE.
+const PATH_ACCESS_DENIED_MESSAGE =
+  'Access denied: path resolves outside allowed directories. If this blocks a legitimate workflow, please file a GitHub issue.'
+
+const REMOTE_REPO_ROOT = '/home/user/project'
+const REMOTE_FILE_PATH = '/home/user/project/src/index.ts'
+const FLOATING_FILE_PATH = '/tmp/orca/floating-workspace/notes.md'
+const SSH_TARGET_ID = 'ssh-target-1'
+const SSH_REPO_ID = 'repo-ssh'
+const REMOTE_WORKTREE_ID = `${SSH_REPO_ID}::${REMOTE_REPO_ROOT}`
+
+const initialState = useAppStore.getInitialState()
+
+const fsReadFile = vi.fn()
+
+/**
+ * Stand-in for the main-process `fs:readFile` IPC handler. It mirrors the real
+ * routing in src/main/ipc/filesystem.ts: when a connectionId is supplied the
+ * read is served by the SSH provider; otherwise it goes through the local
+ * authorized-path resolver, which denies any path outside the local allowed
+ * roots (SSH repo roots are intentionally excluded — see getLocalRepos).
+ */
+function mainProcessReadFile(args: { filePath: string; connectionId?: string }) {
+  if (args.connectionId) {
+    return Promise.resolve({ content: 'export const remote = true\n', isBinary: false })
+  }
+  if (args.filePath === FLOATING_FILE_PATH) {
+    return Promise.resolve({ content: '# floating workspace\n', isBinary: false })
+  }
+  // Local resolver: the remote POSIX path is not under any local allowed root.
+  return Promise.reject(new Error(PATH_ACCESS_DENIED_MESSAGE))
+}
+
+function makeRepo(overrides: Partial<Repo> & { id: string }): Repo {
+  return {
+    path: REMOTE_REPO_ROOT,
+    displayName: 'project',
+    badgeColor: '#000',
+    addedAt: 0,
+    ...overrides
+  }
+}
+
+beforeEach(() => {
+  fsReadFile.mockReset()
+  fsReadFile.mockImplementation(mainProcessReadFile)
+  vi.stubGlobal('window', {
+    api: {
+      fs: { readFile: fsReadFile },
+      runtime: { call: vi.fn() },
+      runtimeEnvironments: { call: vi.fn(), subscribe: vi.fn() }
+    }
+  })
+})
+
+afterEach(() => {
+  useAppStore.setState(initialState, true)
+  vi.unstubAllGlobals()
+})
+
+// Replay editor loadFileContent with #6648 owner-not-ready guard.
+async function openRemoteFileInEditor() {
+  const resolvedConnectionId = getConnectionIdForFile(REMOTE_WORKTREE_ID, REMOTE_FILE_PATH)
+  const connectionId = resolvedConnectionId ?? undefined
+  const readTarget: RuntimeClientTarget = { kind: 'local' }
+  if (
+    resolvedConnectionId === undefined &&
+    readTarget.kind === 'local' &&
+    !isWorktreeConnectionResolved(REMOTE_WORKTREE_ID)
+  ) {
+    throw new Error(WORKTREE_OWNER_NOT_READY_ERROR)
+  }
+  return readRuntimeFileContent({
+    target: readTarget,
+    filePath: REMOTE_FILE_PATH,
+    relativePath: 'src/index.ts',
+    worktreeId: REMOTE_WORKTREE_ID,
+    connectionId
+  })
+}
+
+async function openFloatingWorkspaceFileInEditor() {
+  const resolvedConnectionId = getConnectionIdForFile(
+    FLOATING_TERMINAL_WORKTREE_ID,
+    FLOATING_FILE_PATH
+  )
+  const connectionId = resolvedConnectionId ?? undefined
+  const readTarget: RuntimeClientTarget = { kind: 'local' }
+  if (
+    resolvedConnectionId === undefined &&
+    readTarget.kind === 'local' &&
+    !isWorktreeConnectionResolved(FLOATING_TERMINAL_WORKTREE_ID)
+  ) {
+    throw new Error(WORKTREE_OWNER_NOT_READY_ERROR)
+  }
+  return readRuntimeFileContent({
+    target: readTarget,
+    filePath: FLOATING_FILE_PATH,
+    relativePath: 'notes.md',
+    worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+    connectionId
+  })
+}
+
+describe('issue #6648: opening a remote-host file in the editor', () => {
+  it('succeeds once the SSH repo is hydrated with its connectionId', async () => {
+    useAppStore.setState({
+      repos: [makeRepo({ id: SSH_REPO_ID, connectionId: SSH_TARGET_ID })],
+      worktreesByRepo: {}
+    })
+
+    await expect(openRemoteFileInEditor()).resolves.toEqual({
+      content: 'export const remote = true\n',
+      isBinary: false
+    })
+    expect(fsReadFile).toHaveBeenCalledWith({
+      filePath: REMOTE_FILE_PATH,
+      connectionId: SSH_TARGET_ID
+    })
+  })
+
+  it('FIXED: fails retryably (not a local access-denied) while the SSH repo hydrates', async () => {
+    // Restored tab precedes SSH repo hydration, especially on Windows; unknown repo yields undefined connection ID.
+    useAppStore.setState({ repos: [], worktreesByRepo: {} })
+
+    expect(getConnectionIdForFile(REMOTE_WORKTREE_ID, REMOTE_FILE_PATH)).toBeUndefined()
+    expect(isWorktreeConnectionResolved(REMOTE_WORKTREE_ID)).toBe(false)
+
+    // The owner-not-ready guard prevents the bad local read entirely.
+    await expect(openRemoteFileInEditor()).rejects.toThrow(WORKTREE_OWNER_NOT_READY_ERROR)
+    await expect(openRemoteFileInEditor()).rejects.not.toThrow(PATH_ACCESS_DENIED_MESSAGE)
+    expect(fsReadFile).not.toHaveBeenCalled()
+  })
+
+  it('FIXED: recovers once the SSH repo finishes hydrating', async () => {
+    useAppStore.setState({ repos: [], worktreesByRepo: {} })
+    await expect(openRemoteFileInEditor()).rejects.toThrow(WORKTREE_OWNER_NOT_READY_ERROR)
+
+    // Relay discovery completes and the SSH repo lands in the store.
+    useAppStore.setState({
+      repos: [makeRepo({ id: SSH_REPO_ID, connectionId: SSH_TARGET_ID })],
+      worktreesByRepo: {}
+    })
+
+    await expect(openRemoteFileInEditor()).resolves.toEqual({
+      content: 'export const remote = true\n',
+      isBinary: false
+    })
+    expect(fsReadFile).toHaveBeenCalledWith({
+      filePath: REMOTE_FILE_PATH,
+      connectionId: SSH_TARGET_ID
+    })
+  })
+
+  it('retry gate retries owner-not-ready but not access-denied or the terminal message', () => {
+    // owner-not-ready auto-retries (while connecting)...
+    expect(shouldRetryFileLoadError(WORKTREE_OWNER_NOT_READY_ERROR)).toBe(true)
+    // Genuine access denial and exhausted retry budget never auto-retry; terminal failure requires Retry.
+    expect(shouldRetryFileLoadError(PATH_ACCESS_DENIED_MESSAGE)).toBe(false)
+    expect(shouldRetryFileLoadError(WORKTREE_OWNER_UNREACHABLE_ERROR)).toBe(false)
+  })
+})
+
+describe('issue #6831: opening a floating-workspace file in the editor', () => {
+  it('FIXED: treats the floating workspace as local instead of waiting for repo hydration', async () => {
+    // Floating workspace is synthetic local identity; missing repos must not make its owner guard wait forever (#6831).
+    useAppStore.setState({ repos: [], worktreesByRepo: {} })
+
+    expect(getConnectionIdForFile(FLOATING_TERMINAL_WORKTREE_ID, FLOATING_FILE_PATH)).toBeNull()
+    expect(isWorktreeConnectionResolved(FLOATING_TERMINAL_WORKTREE_ID)).toBe(true)
+
+    await expect(openFloatingWorkspaceFileInEditor()).resolves.toEqual({
+      content: '# floating workspace\n',
+      isBinary: false
+    })
+    expect(fsReadFile).toHaveBeenCalledWith({
+      filePath: FLOATING_FILE_PATH,
+      connectionId: undefined
+    })
+  })
+})

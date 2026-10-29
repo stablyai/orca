@@ -1,12 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ITerminalAddon } from '@xterm/xterm'
 import { WebglAddon } from '@xterm/addon-webgl'
 import type { ManagedPaneInternal } from './pane-manager-types'
 import {
   attachWebgl,
   markComplexScriptOutput,
+  primeTerminalWebglAddon,
   resetTerminalWebglSuggestion
 } from './pane-webgl-renderer'
-import { attachLigatures, openTerminal } from './pane-lifecycle'
+import { attachLigatures, disposePane, openTerminal, setLigaturesEnabled } from './pane-lifecycle'
+import { ensureArabicShapingJoinerForText } from './terminal-arabic-shaping-joiner'
 import {
   buildDefaultTerminalOptions,
   DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY,
@@ -15,6 +18,7 @@ import {
   normalizeTerminalScrollSensitivity,
   resolveTerminalCursorInactiveStyle
 } from './pane-terminal-options'
+import { buildTerminalKeyboardProtocolOptions } from './terminal-keyboard-protocol'
 
 const webglMock = vi.hoisted(() => ({
   contextLossHandler: null as (() => void) | null,
@@ -40,10 +44,13 @@ function createPane(): ManagedPaneInternal {
     id: 1,
     leafId,
     stablePaneId: leafId,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: stand-in for xterm's Terminal exposing only the members these lifecycle paths touch.
     terminal: {
       loadAddon: vi.fn(),
       attachCustomWheelEventHandler: vi.fn(),
       refresh: vi.fn(),
+      onRender: vi.fn(() => ({ dispose: vi.fn() })),
+      cols: 80,
       rows: 24
     } as never,
     container: {} as never,
@@ -55,7 +62,8 @@ function createPane(): ManagedPaneInternal {
     webglDisabledAfterContextLoss: false,
     hasComplexScriptOutput: false,
     fitAddon: {
-      fit: vi.fn()
+      fit: vi.fn(),
+      proposeDimensions: vi.fn(() => ({ cols: 80, rows: 23 }))
     } as never,
     fitResizeObserver: null,
     pendingObservedFitRafId: null,
@@ -65,6 +73,7 @@ function createPane(): ManagedPaneInternal {
     ligaturesAddon: null,
     webLinksAddon: {} as never,
     webglAddon: null,
+    imageAddon: null,
     compositionHandler: null,
     pendingSplitScrollState: null,
     debugLabel: null
@@ -82,10 +91,12 @@ describe('buildDefaultTerminalOptions', () => {
   })
 
   it('shows the slim xterm scrollbar in its reserved gutter', () => {
-    // Why: 7px gutter is an accepted ~1-column cost (VS Code reserves 14);
-    // the v1.4.51 table corruption that once forced width 0 was the ZWJ
-    // width bug, fixed separately by the Orca unicode provider.
+    // Accept the ~one-column gutter cost; v1.4.51 table corruption was the separate ZWJ width bug.
     expect(buildDefaultTerminalOptions().scrollbar?.width).toBe(7)
+  })
+
+  it('uses the shared desktop scrollback row default', () => {
+    expect(buildDefaultTerminalOptions().scrollback).toBe(5_000)
   })
 
   it('slightly increases default terminal wheel scrolling while preserving fast scroll', () => {
@@ -106,7 +117,7 @@ describe('buildDefaultTerminalOptions', () => {
     expect(normalizeTerminalFastScrollSensitivity(25)).toBe(20)
   })
 
-  it('enables xterm contrast correction for low-contrast CLI colors', () => {
+  it('defaults minimumContrastRatio to the light-background value (applyTerminalAppearance re-gates it)', () => {
     expect(buildDefaultTerminalOptions().minimumContrastRatio).toBe(4.5)
   })
 
@@ -117,17 +128,75 @@ describe('buildDefaultTerminalOptions', () => {
   })
 
   it('advertises kitty keyboard protocol so CLIs enable enhanced key reporting', () => {
-    // Why: Orca already writes CSI-u bytes for extended key chords like
-    // Shift+Enter on non-Windows platforms (see terminal-shortcut-policy.ts).
-    // CLIs that gate enhanced input on a CSI ? u handshake only read those
-    // bytes once the terminal advertises support. Regressing this flag
-    // silently breaks enhanced chords, especially inside tmux.
+    // Orca sends CSI-u for enhanced chords off Windows; advertise KKP so handshake-gated CLIs accept them, including inside tmux.
     expect(buildDefaultTerminalOptions().vtExtensions?.kittyKeyboard).toBe(true)
+  })
+
+  it('lets a local Windows ConPTY pane override the default and withhold kitty keyboard', () => {
+    // Per-pane overrides must win, including disabling KKP for CSI-u-blind Windows ConPTY CLIs (#2434).
+    const merged = {
+      ...buildDefaultTerminalOptions(),
+      ...buildTerminalKeyboardProtocolOptions({
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        osRelease: '10.0.26100',
+        connectionId: null,
+        cwd: 'C:\\repo',
+        shellOverride: 'powershell.exe',
+        executionHostId: 'local'
+      })
+    }
+
+    expect(merged.vtExtensions?.kittyKeyboard).toBe(false)
+  })
+
+  it('keeps kitty keyboard when a local Windows ConPTY pane is launching Grok', () => {
+    // Grok requires KKP for Ctrl+Enter/Shift+Enter, overriding normal ConPTY withholding.
+    const merged = {
+      ...buildDefaultTerminalOptions(),
+      ...buildTerminalKeyboardProtocolOptions({
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        osRelease: '10.0.26100',
+        connectionId: null,
+        cwd: 'C:\\repo',
+        shellOverride: 'powershell.exe',
+        executionHostId: 'local',
+        tuiAgent: 'grok'
+      })
+    }
+
+    expect(merged.vtExtensions?.kittyKeyboard).toBe(true)
+  })
+
+  it('keeps the advertised kitty keyboard default for SSH and macOS/Linux panes', () => {
+    for (const context of [
+      {
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        connectionId: 'ssh-1',
+        cwd: 'C:\\repo',
+        shellOverride: null,
+        executionHostId: 'local'
+      },
+      {
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)',
+        connectionId: null,
+        cwd: '/repo',
+        shellOverride: null,
+        executionHostId: 'local'
+      }
+    ] as const) {
+      const merged = {
+        ...buildDefaultTerminalOptions(),
+        ...buildTerminalKeyboardProtocolOptions(context)
+      }
+
+      expect(merged.vtExtensions?.kittyKeyboard).toBe(true)
+    }
   })
 })
 
 describe('attachWebgl', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await primeTerminalWebglAddon()
     webglMock.contextLossHandler = null
     webglMock.clearTextureAtlas.mockClear()
     webglMock.dispose.mockClear()
@@ -358,26 +427,42 @@ describe('attachLigatures', () => {
     expect(pane.terminal.refresh).toHaveBeenCalledWith(0, 23)
     expect(pane.ligaturesAddon).not.toBeNull()
   })
+
+  it('defers a retained WebGL rebuild while hidden', () => {
+    const pane = createPane()
+    const retainedAddon = { dispose: vi.fn() } as never
+    pane.webglAddon = retainedAddon
+    pane.webglAttachmentDeferred = true
+
+    attachLigatures(pane)
+
+    expect(pane.webglAddon).toBe(retainedAddon)
+    expect(pane.webglRebuildDeferred).toBe(true)
+    expect(pane.terminal.refresh).not.toHaveBeenCalled()
+  })
 })
 
-describe('openTerminal — Unicode 11 ordering', () => {
+describe('openTerminal — addon and provider wiring', () => {
   beforeEach(() => {
     vi.stubGlobal('requestAnimationFrame', () => 1)
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
   })
 
   afterEach(() => {
     vi.unstubAllGlobals()
   })
 
-  // Why: CJK / emoji / ZWJ widths get baked into the buffer at the active
-  // unicode version on write. If anything writes bytes through xterm before
-  // unicode v11 is activated (still on default v6 width tables), wide chars
-  // lay out as single cells. The bug surfaces as the broken `?`-style glyphs
-  // users saw on worktree switch.
-  it('activates unicode 11 before any caller-driven write would be possible', () => {
+  function createOpenTerminalHarness(): {
+    pane: ManagedPaneInternal
+    events: string[]
+    getRegisteredJoinHandler: () => ((text: string) => [number, number][]) | null
+  } {
     const events: string[] = []
+    let registeredJoinHandler: ((text: string) => [number, number][]) | null = null
 
-    const fitAddon = { fit: vi.fn() } as unknown as ManagedPaneInternal['fitAddon']
+    const fitAddon = {
+      fit: vi.fn()
+    } as unknown as ManagedPaneInternal['fitAddon']
     const searchAddon = {} as unknown as ManagedPaneInternal['searchAddon']
     const serializeAddon = {} as unknown as ManagedPaneInternal['serializeAddon']
     const unicode11Addon = {} as unknown as ManagedPaneInternal['unicode11Addon']
@@ -394,21 +479,40 @@ describe('openTerminal — Unicode 11 ordering', () => {
       }
     }
 
-    const fakeContainer = {
+    const fakePaneContainer = {
       appendChild: vi.fn(),
       addEventListener: vi.fn()
     } as unknown as HTMLDivElement
+    const fakeXtermContainer = {
+      appendChild: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    } as unknown as HTMLDivElement
     const fakeTooltip = {} as unknown as HTMLDivElement
+    const fakeTerminalElement = {
+      appendChild: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      querySelector: vi.fn(() => null),
+      classList: { contains: vi.fn(() => false) }
+    } as unknown as HTMLElement
+    vi.stubGlobal(
+      'MutationObserver',
+      vi.fn(function MutationObserver() {
+        return { observe: vi.fn(), disconnect: vi.fn() }
+      })
+    )
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a hand-built stand-in for xterm's Terminal; openTerminal touches only the members defined here, and a real Terminal needs a rendering canvas this suite has no DOM for.
     const terminal = {
-      element: null as HTMLElement | null,
+      element: fakeTerminalElement,
       textarea: null,
       cols: 80,
       rows: 24,
       open: vi.fn(() => {
         events.push('open')
       }),
-      loadAddon: vi.fn((addon: object) => {
+      loadAddon: vi.fn((addon: ITerminalAddon) => {
         if (addon === fitAddon) {
           events.push('loadAddon:fit')
         } else if (addon === searchAddon) {
@@ -422,8 +526,24 @@ describe('openTerminal — Unicode 11 ordering', () => {
         }
       }),
       attachCustomWheelEventHandler: vi.fn(),
+      onWriteParsed: vi.fn(() => ({ dispose: vi.fn() })),
+      refresh: vi.fn(),
       write: vi.fn(() => {
         events.push('write')
+      }),
+      registerCharacterJoiner: vi.fn((handler: (text: string) => [number, number][]) => {
+        events.push('registerCharacterJoiner')
+        registeredJoinHandler = handler
+        return 3
+      }),
+      deregisterCharacterJoiner: vi.fn((joinerId: number) => {
+        events.push(`deregisterCharacterJoiner:${joinerId}`)
+      }),
+      clearSelection: vi.fn(() => {
+        events.push('clearSelection')
+      }),
+      dispose: vi.fn(() => {
+        events.push('dispose')
       }),
       unicode: unicodeProxy,
       buffer: { active: { cursorX: 0, cursorY: 0 } }
@@ -435,8 +555,8 @@ describe('openTerminal — Unicode 11 ordering', () => {
       leafId,
       stablePaneId: leafId,
       terminal,
-      container: fakeContainer,
-      xtermContainer: fakeContainer,
+      container: fakePaneContainer,
+      xtermContainer: fakeXtermContainer,
       linkTooltip: fakeTooltip,
       terminalGpuAcceleration: 'off',
       gpuRenderingEnabled: false,
@@ -452,13 +572,49 @@ describe('openTerminal — Unicode 11 ordering', () => {
       ligaturesAddon: null,
       webLinksAddon,
       webglAddon: null,
+      imageAddon: null,
       compositionHandler: null,
       pendingSplitScrollState: null,
       debugLabel: null
     }
 
+    return { pane, events, getRegisteredJoinHandler: () => registeredJoinHandler }
+  }
+
+  // Activate Unicode v11 before any writes: widths bake into buffer cells, and default v6 mismeasures CJK/emoji/ZWJ across restores.
+  it('builds one initial WebGL atlas with ligatures and still rebuilds on a live toggle', async () => {
+    await primeTerminalWebglAddon()
+    resetTerminalWebglSuggestion()
+    vi.mocked(WebglAddon).mockClear()
+    webglMock.dispose.mockClear()
+    vi.stubGlobal('navigator', { platform: 'MacIntel', userAgent: 'Macintosh' })
+    const { pane } = createOpenTerminalHarness()
+    pane.terminalGpuAcceleration = 'auto'
+    pane.gpuRenderingEnabled = true
+
+    openTerminal(pane, { ligatures: true })
+    expect(pane.ligaturesAddon).not.toBeNull()
+    expect(pane.webglAddon).not.toBeNull()
+    const addons = vi.mocked(pane.terminal.loadAddon).mock.calls.map(([addon]) => addon)
+    expect(addons.indexOf(pane.ligaturesAddon!)).toBeLessThan(addons.indexOf(pane.webglAddon!))
+    setLigaturesEnabled(pane, true)
+    expect(WebglAddon).toHaveBeenCalledTimes(1)
+    expect(webglMock.dispose).not.toHaveBeenCalled()
+
+    setLigaturesEnabled(pane, false)
+    expect(WebglAddon).toHaveBeenCalledTimes(2)
+    expect(webglMock.dispose).toHaveBeenCalledTimes(1)
+    expect(pane.ligaturesAddon).toBeNull()
+  })
+
+  it('activates unicode 11 before any caller-driven write would be possible', () => {
+    const { pane, events } = createOpenTerminalHarness()
+
     openTerminal(pane)
 
+    expect(pane.container.appendChild).toHaveBeenCalledWith(pane.linkTooltip)
+    expect(pane.xtermContainer.appendChild).not.toHaveBeenCalled()
+    expect(pane.terminal.element!.appendChild).not.toHaveBeenCalled()
     expect(events).toContain('loadAddon:unicode11')
     expect(events).toContain('activeVersion=11')
 
@@ -471,5 +627,88 @@ describe('openTerminal — Unicode 11 ordering', () => {
     const loadUnicodeIdx = events.indexOf('loadAddon:unicode11')
     expect(loadUnicodeIdx).toBeLessThan(unicodeIdx)
     expect(events.indexOf('open')).toBeLessThan(loadUnicodeIdx)
+  })
+
+  // Ordinary panes must skip joiner grid scans; first RTL writes must register before parsing.
+  it('registers Arabic shaping lazily and deregisters it on dispose', () => {
+    const { pane, events } = createOpenTerminalHarness()
+
+    openTerminal(pane)
+
+    expect(events).not.toContain('registerCharacterJoiner')
+    expect(pane.arabicShapingJoinerCleanup).toBeTypeOf('function')
+    ensureArabicShapingJoinerForText(pane.terminal, 'مرحبا')
+    expect(events).toContain('registerCharacterJoiner')
+
+    disposePane(pane, new Map([[pane.id, pane]]))
+
+    expect(events).toContain('deregisterCharacterJoiner:3')
+    expect(pane.arabicShapingJoinerCleanup).toBeNull()
+  })
+
+  it('clears selection before disposing a remounted pane', () => {
+    const { pane, events } = createOpenTerminalHarness()
+    openTerminal(pane)
+
+    disposePane(pane, new Map([[pane.id, pane]]))
+
+    expect(events.indexOf('clearSelection')).toBeLessThan(events.indexOf('dispose'))
+  })
+
+  // Streamed links under a stationary pointer need hover-cache invalidation, detached on disposal.
+  it('installs the streamed-output linkifier hover reset and disposes it', () => {
+    const { pane } = createOpenTerminalHarness()
+
+    openTerminal(pane)
+    const disposable = pane.linkifierHoverResetDisposable
+    expect(disposable?.dispose).toBeTypeOf('function')
+    expect(pane.terminal.onWriteParsed).toHaveBeenCalledTimes(1)
+
+    const disposeSpy = vi.spyOn(disposable!, 'dispose')
+    disposePane(pane, new Map([[pane.id, pane]]))
+    expect(disposeSpy).toHaveBeenCalledTimes(1)
+    expect(pane.linkifierHoverResetDisposable).toBeNull()
+  })
+
+  it('installs the mouseleave linkifier hover reset and disposes it', () => {
+    const { pane } = createOpenTerminalHarness()
+    const addEventListener = vi.fn()
+    const removeEventListener = vi.fn()
+    const screen = {
+      addEventListener,
+      removeEventListener
+    } as unknown as HTMLElement
+    vi.mocked(pane.terminal.element!.querySelector).mockReturnValueOnce(screen)
+
+    openTerminal(pane)
+    const disposable = pane.linkifierMouseLeaveResetDisposable
+    expect(disposable?.dispose).toBeTypeOf('function')
+    expect(addEventListener).toHaveBeenCalledWith('mouseleave', expect.any(Function))
+    const mouseLeaveHandler = addEventListener.mock.calls.find(
+      ([eventName]) => eventName === 'mouseleave'
+    )?.[1]
+    expect(mouseLeaveHandler).toBeTypeOf('function')
+
+    disposePane(pane, new Map([[pane.id, pane]]))
+    expect(removeEventListener).toHaveBeenCalledWith('mouseleave', mouseLeaveHandler)
+    expect(pane.linkifierMouseLeaveResetDisposable).toBeNull()
+  })
+
+  // DOM letter-spacing misrenders joined spans; real lifecycle wiring must enable joining only with live WebGL.
+  it('joins RTL runs only while the pane has a live WebGL addon', () => {
+    const { pane, getRegisteredJoinHandler } = createOpenTerminalHarness()
+
+    openTerminal(pane)
+    ensureArabicShapingJoinerForText(pane.terminal, 'مرحبا')
+    const handler = getRegisteredJoinHandler()!
+
+    expect(pane.webglAddon).toBeNull()
+    expect(handler('مرحبا')).toEqual([])
+
+    pane.webglAddon = {} as never
+    expect(handler('مرحبا')).toEqual([[0, 5]])
+
+    pane.webglAddon = null
+    expect(handler('مرحبا')).toEqual([])
   })
 })

@@ -1,14 +1,19 @@
-import type { PRCheckDetail, PRState } from '../../../../src/shared/types'
+import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
+import type {
+  PRState,
+  ProviderCheckSummary
+} from '../../../../src/shared/github/pull-request-types'
+import {
+  classifyCheckOutcome,
+  summarizeProviderChecks,
+  type CheckOutcome as SharedCheckOutcome
+} from '../../../../src/shared/provider-check-summary'
 import { prStateToken } from '../pr-state-token'
+import { translate } from '../../i18n/mobile-i18n'
 
-// Pure presentation logic for the PR sidebar's checks + state badge. No React /
-// native imports so it is unit-testable under the node Vitest config (KTD5).
-// Ports the LOGIC of the desktop presenters (github-pr-merge-state.ts,
-// github-pr-reviewer-display.ts), not their components.
+// Pure RN-free checks/badge logic follows desktop merge-state and reviewer presenters.
 
-// The mobile-theme color tokens this logic maps to. Section components resolve
-// the token name to an actual color from `mobile-theme`, keeping this module
-// free of style imports.
+// Return theme token names; components resolve colors so pure logic stays style-free.
 export type MobileStatusToken =
   | 'statusGreen'
   | 'statusAmber'
@@ -18,47 +23,16 @@ export type MobileStatusToken =
 
 export type CheckOutcome = 'success' | 'pending' | 'failure' | 'neutral'
 
-const FAILURE_CONCLUSIONS = new Set<PRCheckDetail['conclusion']>([
-  'failure',
-  'cancelled',
-  'timed_out'
-])
+const OUTCOME_BY_SHARED: Record<SharedCheckOutcome, CheckOutcome> = {
+  passed: 'success',
+  failed: 'failure',
+  pending: 'pending',
+  neutral: 'neutral'
+}
 
-const SUCCESS_CONCLUSIONS = new Set<PRCheckDetail['conclusion']>(['success'])
-
-// Why: a check that is queued/in_progress, or completed with a null/`pending`
-// conclusion, is still pending — never render it as a failure (U5 edge case).
+// Share desktop classifier: duplicate logic misclassified skipped as unresolved and action_required as pending.
 export function checkOutcome(check: PRCheckDetail): CheckOutcome {
-  if (check.status !== 'completed') {
-    return 'pending'
-  }
-  if (check.conclusion === null || check.conclusion === 'pending') {
-    return 'pending'
-  }
-  if (FAILURE_CONCLUSIONS.has(check.conclusion)) {
-    return 'failure'
-  }
-  if (SUCCESS_CONCLUSIONS.has(check.conclusion)) {
-    return 'success'
-  }
-  // neutral / skipped are non-blocking — treat as neutral, not failure.
-  return 'neutral'
-}
-
-// Sort order: failures first (most actionable), then pending, then success /
-// neutral. Stable within a bucket so the upstream ordering is preserved.
-const OUTCOME_RANK: Record<CheckOutcome, number> = {
-  failure: 0,
-  pending: 1,
-  neutral: 2,
-  success: 3
-}
-
-export function sortPRChecks(checks: readonly PRCheckDetail[]): PRCheckDetail[] {
-  return checks
-    .map((check, index) => ({ check, index, rank: OUTCOME_RANK[checkOutcome(check)] }))
-    .sort((a, b) => a.rank - b.rank || a.index - b.index)
-    .map((entry) => entry.check)
+  return OUTCOME_BY_SHARED[classifyCheckOutcome(check)]
 }
 
 export type PRChecksSummary = {
@@ -66,58 +40,73 @@ export type PRChecksSummary = {
   passed: number
   pending: number
   failed: number
-  // Worst-case outcome across all checks, for the summary badge color.
   outcome: CheckOutcome | 'none'
   label: string
 }
 
+const OUTCOME_BY_STATE: Record<ProviderCheckSummary['state'], CheckOutcome | 'none'> = {
+  success: 'success',
+  failure: 'failure',
+  pending: 'pending',
+  neutral: 'neutral',
+  none: 'none'
+}
+
 export function summarizePRChecks(checks: readonly PRCheckDetail[]): PRChecksSummary {
   if (checks.length === 0) {
-    return { total: 0, passed: 0, pending: 0, failed: 0, outcome: 'none', label: 'No checks' }
-  }
-  let passed = 0
-  let pending = 0
-  let failed = 0
-  let neutral = 0
-  for (const check of checks) {
-    const outcome = checkOutcome(check)
-    if (outcome === 'failure') {
-      failed += 1
-    } else if (outcome === 'pending') {
-      pending += 1
-    } else if (outcome === 'success') {
-      passed += 1
-    } else {
-      neutral += 1
+    return {
+      total: 0,
+      passed: 0,
+      pending: 0,
+      failed: 0,
+      outcome: 'none',
+      label: translate('pullRequest.prChecksPresentation.noChecks', 'No checks')
     }
   }
-  // Worst-case wins so a single failure colors the summary red even if others passed.
-  // A neutral-only set reads as neutral (not success) with a non-empty label.
-  const outcome: CheckOutcome | 'none' =
-    failed > 0
-      ? 'failure'
-      : pending > 0
-        ? 'pending'
-        : passed > 0
-          ? 'success'
-          : neutral > 0
-            ? 'neutral'
-            : 'none'
+  // Counts and the worst-case rollup come from the shared summarizer; only the label wording is mobile's.
+  const { total, passed, pending, failed, neutral, state } = summarizeProviderChecks(checks)
+  const outcome = OUTCOME_BY_STATE[state]
   const parts: string[] = []
   if (failed > 0) {
-    parts.push(`${failed} failing`)
+    const count = failed
+    parts.push(
+      count === 1
+        ? translate('pullRequest.prChecksPresentation.failing_one', '{{count}} failing', { count })
+        : translate('pullRequest.prChecksPresentation.failing_other', '{{count}} failing', {
+            count
+          })
+    )
   }
   if (pending > 0) {
-    parts.push(`${pending} pending`)
+    const count = pending
+    parts.push(
+      count === 1
+        ? translate('pullRequest.prChecksPresentation.pending_one', '{{count}} pending', { count })
+        : translate('pullRequest.prChecksPresentation.pending_other', '{{count}} pending', {
+            count
+          })
+    )
   }
   if (passed > 0) {
-    parts.push(`${passed} passed`)
+    const count = passed
+    parts.push(
+      count === 1
+        ? translate('pullRequest.prChecksPresentation.passed_one', '{{count}} passed', { count })
+        : translate('pullRequest.prChecksPresentation.passed_other', '{{count}} passed', { count })
+    )
   }
   if (neutral > 0) {
-    parts.push(`${neutral} neutral`)
+    const count = neutral
+    parts.push(
+      count === 1
+        ? translate('pullRequest.prChecksPresentation.neutral_one', '{{count}} neutral', { count })
+        : translate('pullRequest.prChecksPresentation.neutral_other', '{{count}} neutral', {
+            count
+          })
+    )
   }
   return {
-    total: checks.length,
+    total,
     passed,
     pending,
     failed,
@@ -126,28 +115,11 @@ export function summarizePRChecks(checks: readonly PRCheckDetail[]): PRChecksSum
   }
 }
 
-// Per-row status word shown beside each check (desktop ChecksList parity), so the
-// outcome is readable without expanding the row. Mirrors getCheckStatusLabel.
-export function checkStatusLabel(check: PRCheckDetail): string {
-  if (check.status !== 'completed') {
-    return check.status === 'in_progress' ? 'In progress' : 'Pending'
-  }
-  switch (check.conclusion) {
-    case 'success':
-      return 'Successful'
-    case 'failure':
-      return 'Failed'
-    case 'cancelled':
-      return 'Cancelled'
-    case 'timed_out':
-      return 'Timed out'
-    case 'neutral':
-      return 'Neutral'
-    case 'skipped':
-      return 'Skipped'
-    default:
-      return 'Pending'
-  }
+/** An unreadable checks reply is not an absent one, so the header must not read "No checks". */
+export function prChecksSummaryLabel(summary: PRChecksSummary, checksError: string | null): string {
+  return checksError === null
+    ? summary.label
+    : translate('pullRequest.prChecksPresentation.unavailable', 'Checks unavailable')
 }
 
 export function checkOutcomeToken(outcome: CheckOutcome | 'none'): MobileStatusToken {
@@ -163,9 +135,7 @@ export function checkOutcomeToken(outcome: CheckOutcome | 'none'): MobileStatusT
   }
 }
 
-// Stable identity for a check so its lazily-fetched detail can be cached and
-// re-expanded without a second fetch (U5). Prefer the numeric run ids; fall
-// back to the name (GitHub keeps check names unique per head commit).
+// Cache detail by numeric run id, falling back to name (unique per head), so re-expansion avoids refetch.
 export function prCheckKey(check: PRCheckDetail): string {
   if (typeof check.checkRunId === 'number') {
     return `run:${check.checkRunId}`
@@ -176,9 +146,7 @@ export function prCheckKey(check: PRCheckDetail): string {
   return `name:${check.name}`
 }
 
-// Key of the first failing check in a list, or null when none fail. Mirrors the
-// desktop ChecksList behavior of auto-expanding the first failed check on load.
-// Pass the sorted list so "first" matches the rendered order (failures lead).
+// Use sorted list for first-failure auto-expand so chosen row matches rendered actionable order.
 export function firstFailingCheckKey(checks: readonly PRCheckDetail[]): string | null {
   for (const check of checks) {
     if (checkOutcome(check) === 'failure') {
@@ -193,87 +161,16 @@ export type PRStateBadge = {
   token: MobileStatusToken
 }
 
-const PR_STATE_LABELS: Record<PRState, string> = {
-  open: 'Open',
-  merged: 'Merged',
-  draft: 'Draft',
-  closed: 'Closed'
+function prStateLabels(): Record<PRState, string> {
+  return {
+    open: translate('pullRequest.prChecksPresentation.stateOpen', 'Open'),
+    merged: translate('pullRequest.prChecksPresentation.stateMerged', 'Merged'),
+    draft: translate('pullRequest.prChecksPresentation.stateDraft', 'Draft'),
+    closed: translate('pullRequest.prChecksPresentation.stateClosed', 'Closed')
+  }
 }
 
-// State-badge color comes from the shared prStateToken so the sidebar badge and
-// the workspace-list linked-PR badge resolve the SAME color per state (merged =
-// purple, open = green, closed = red, draft/unknown = muted).
+// Use shared prStateToken so sidebar and workspace badge agree on merged/open/closed/draft colors.
 export function prStateBadge(state: PRState): PRStateBadge {
-  return { label: PR_STATE_LABELS[state] ?? state, token: prStateToken(state) }
-}
-
-export type ReviewerRow = {
-  login: string
-  name: string | null
-  avatarUrl: string
-  stateLabel: string
-  token: MobileStatusToken
-}
-
-function reviewStateLabel(state: string | null | undefined): {
-  label: string
-  token: MobileStatusToken
-} {
-  switch (state) {
-    case 'APPROVED':
-      return { label: 'Approved', token: 'statusGreen' }
-    case 'CHANGES_REQUESTED':
-      return { label: 'Changes requested', token: 'statusRed' }
-    case 'COMMENTED':
-      return { label: 'Commented', token: 'textSecondary' }
-    case 'DISMISSED':
-      return { label: 'Dismissed', token: 'textSecondary' }
-    case 'PENDING':
-      return { label: 'Pending', token: 'statusAmber' }
-    case null:
-    case undefined:
-      return { label: 'Reviewed', token: 'textSecondary' }
-    default:
-      return { label: 'Reviewed', token: 'textSecondary' }
-  }
-}
-
-type ReviewDisplayItem = {
-  reviewRequests?: { login: string; name: string | null; avatarUrl: string }[]
-  latestReviews?: { login: string; state?: string | null; avatarUrl?: string | null }[]
-}
-
-// Port of getGitHubPRReviewerRows: requested reviewers (status "Requested")
-// followed by any latest-review authors not already requested, deduped by login.
-export function getPRReviewerRows(item: ReviewDisplayItem): ReviewerRow[] {
-  const byLogin = new Map<string, ReviewerRow>()
-  for (const user of item.reviewRequests ?? []) {
-    const login = user.login.trim()
-    if (!login) {
-      continue
-    }
-    byLogin.set(login.toLowerCase(), {
-      login,
-      name: user.name,
-      avatarUrl: user.avatarUrl,
-      stateLabel: 'Requested',
-      token: 'statusAmber'
-    })
-  }
-  for (const review of item.latestReviews ?? []) {
-    const login = review.login.trim()
-    const key = login.toLowerCase()
-    if (!login || byLogin.has(key)) {
-      continue
-    }
-    const { label, token } = reviewStateLabel(review.state)
-    byLogin.set(key, {
-      login,
-      name: null,
-      avatarUrl: review.avatarUrl ?? '',
-      stateLabel: label,
-      token
-    })
-  }
-  return Array.from(byLogin.values())
+  return { label: prStateLabels()[state] ?? state, token: prStateToken(state) }
 }

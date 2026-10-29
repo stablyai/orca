@@ -1,30 +1,28 @@
-import { createHash } from 'crypto'
-import path from 'path'
+import { translateMain } from '../i18n/main-i18n'
+import { createHash } from 'node:crypto'
+import path from 'node:path'
 import { BrowserWindow, dialog, type OpenDialogOptions, type WebContents } from 'electron'
 import type { WarpThemeImportSkippedFile } from '../../shared/terminal-custom-themes'
-import {
-  compareThemeFileLabels,
-  isYamlFile,
-  MAX_THEME_FILES,
-  type ThemeFileCandidate
-} from './theme-file-scanner'
+import { isYamlFile, MAX_THEME_FILES, type ThemeFileCandidate } from './theme-file-scanner'
 
 export function createManualWarpThemeFileCandidates(filePaths: string[]): ThemeFileCandidate[] {
-  return filePaths
-    .map((filePath) => ({
-      path: filePath,
-      label: path.basename(filePath),
-      contentHashDiscriminator: true
-    }))
-    .sort((left, right) => {
-      const labelComparison = compareThemeFileLabels(left, right)
-      if (labelComparison !== 0) {
-        return labelComparison
-      }
-      // Why: manual dialogs can return selections in click order. Sort only in
-      // main so duplicate basenames get deterministic IDs without persisting paths.
-      return left.path.localeCompare(right.path, undefined, { sensitivity: 'base' })
-    })
+  const candidates = filePaths.map((filePath) => ({
+    path: filePath,
+    label: path.basename(filePath),
+    contentHashDiscriminator: true
+  }))
+  if (candidates.length < 2) {
+    return candidates
+  }
+  const compareLabels = new Intl.Collator(undefined, { sensitivity: 'base' }).compare
+  return candidates.sort((left, right) => {
+    const labelComparison = compareLabels(left.label, right.label)
+    if (labelComparison !== 0) {
+      return labelComparison
+    }
+    // Normalize click-ordered selections in main so duplicate basenames get deterministic IDs without persisting paths.
+    return compareLabels(left.path, right.path)
+  })
 }
 
 export function manualWarpThemeContentDiscriminator(label: string, content: string): string {
@@ -42,9 +40,14 @@ export async function chooseManualWarpThemeFiles(webContents?: WebContents): Pro
 > {
   const ownerWindow = webContents ? BrowserWindow.fromWebContents(webContents) : null
   const options: OpenDialogOptions = {
-    title: 'Import Warp Theme',
+    title: translateMain('native.dialog.importWarpTheme', 'Import Warp Theme'),
     properties: ['openFile', 'multiSelections'],
-    filters: [{ name: 'Warp theme YAML', extensions: ['yaml', 'yml'] }]
+    filters: [
+      {
+        name: translateMain('native.dialog.warpThemeYaml', 'Warp theme YAML'),
+        extensions: ['yaml', 'yml']
+      }
+    ]
   }
   const result = ownerWindow
     ? await dialog.showOpenDialog(ownerWindow, options)
@@ -76,7 +79,7 @@ export async function chooseManualWarpThemeFolderPath(
 ): Promise<string | null> {
   const ownerWindow = webContents ? BrowserWindow.fromWebContents(webContents) : null
   const options: OpenDialogOptions = {
-    title: 'Import Warp Theme Folder',
+    title: translateMain('native.dialog.importWarpFolder', 'Import Warp Theme Folder'),
     properties: ['openDirectory']
   }
   const result = ownerWindow

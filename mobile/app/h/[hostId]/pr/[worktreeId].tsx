@@ -1,29 +1,28 @@
-import { useLocalSearchParams } from 'expo-router'
-import { useHostClient } from '../../../../src/transport/client-context'
-import { useMobilePrBranchContext } from '../../../../src/session/use-mobile-pr-branch-context'
-import { MobilePrViewPanel } from '../../../../src/components/pr-sidebar/MobilePrViewPanel'
+import { Redirect, useLocalSearchParams } from 'expo-router'
+import { firstParam } from '../../../../src/navigation/route-param-reader'
 
-// Narrow-layout full-screen PR route. The standalone panel can't ride on the review
-// screen's diff state, so branch/head SHA are resolved here from git.status + branchCompare.
-export default function MobilePrViewScreen() {
-  const { hostId, worktreeId } = useLocalSearchParams<{ hostId: string; worktreeId: string }>()
-  const { client, state: connState } = useHostClient(hostId)
-  const { branch, headSha, isGithubRepo, repoLoaded, loaded } = useMobilePrBranchContext({
-    client,
-    connState,
-    worktreeId
-  })
-
+// Redirect legacy deep links to Source Control’s PR tab; wide SessionDockColumn opens that hub directly with initialTab="pr".
+export default function PrRedirect() {
+  const params = useLocalSearchParams<{
+    hostId?: string | string[]
+    worktreeId?: string | string[]
+    name?: string | string[]
+    origin?: string | string[]
+    executionHost?: string | string[]
+  }>()
   return (
-    <MobilePrViewPanel
-      client={client}
-      connState={connState}
-      worktreeId={worktreeId}
-      branch={branch}
-      headSha={headSha}
-      isGithubRepo={isGithubRepo}
-      branchContextLoaded={loaded && repoLoaded}
-      embedded={false}
+    <Redirect
+      href={{
+        pathname: '/h/[hostId]/source-control/[worktreeId]',
+        params: {
+          hostId: firstParam(params.hostId),
+          worktreeId: firstParam(params.worktreeId),
+          name: firstParam(params.name),
+          origin: firstParam(params.origin),
+          executionHost: firstParam(params.executionHost),
+          tab: 'pr'
+        }
+      }}
     />
   )
 }

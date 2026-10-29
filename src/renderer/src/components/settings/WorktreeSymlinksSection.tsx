@@ -1,18 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Folder, Link2, Plus, X } from 'lucide-react'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { Button } from '../ui/button'
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '../ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { cn } from '@/lib/utils'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { FileTypeIcon } from '@/components/FileTypeIcon'
 import { SearchableSetting } from './SearchableSetting'
 import {
   getWorktreeSymlinkPathFilterState,
   type WorktreeSymlinkPathSuggestion
 } from './worktree-symlink-path-filter'
-import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
 type WorktreeSymlinksSectionProps = {
   repo: Repo
@@ -32,10 +32,10 @@ export function WorktreeSymlinksSection({
 }: WorktreeSymlinksSectionProps): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const activeRuntimeEnvironmentId = useAppStore((s) => s.settings?.activeRuntimeEnvironmentId)
 
   const paths = repo.symlinkPaths ?? EMPTY_WORKTREE_SYMLINK_PATHS
-  const useLocalDirectorySuggestions = !activeRuntimeEnvironmentId?.trim()
+  // Only local selected repos may inspect this filesystem; focused host is not ownership evidence.
+  const useLocalDirectorySuggestions = getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
   const directorySuggestionKey = `${repo.path}\n${repo.connectionId ?? ''}`
   const [directorySuggestions, setDirectorySuggestions] = useState<DirectorySuggestionState>(
     () => ({
@@ -61,8 +61,7 @@ export function WorktreeSymlinksSection({
         })
       })
       .catch(() => {
-        // Non-fatal: without entries the combobox still works as a free-text
-        // input — the user can type any path and commit it.
+        // Suggestions are optional; free-text paths remain usable after read failure.
       })
     return () => {
       cancelled = true
@@ -180,7 +179,6 @@ export function WorktreeSymlinksSection({
                 ) : null}
                 {filtered.map((entry) => {
                   const alreadyAdded = paths.includes(entry.name)
-                  const FileIcon = getFileTypeIcon(entry.name)
                   return (
                     <CommandItem
                       key={entry.name}
@@ -192,7 +190,10 @@ export function WorktreeSymlinksSection({
                       {entry.isDirectory ? (
                         <Folder className="size-3.5 text-muted-foreground" />
                       ) : (
-                        <FileIcon className="size-3.5 text-muted-foreground" />
+                        <FileTypeIcon
+                          filePath={entry.name}
+                          className="size-3.5 text-muted-foreground"
+                        />
                       )}
                       <span className="truncate text-xs">{entry.name}</span>
                       {alreadyAdded ? (

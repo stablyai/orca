@@ -1,20 +1,22 @@
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   getRepoExecutionHostId,
+  isRuntimeOwnedSshTargetId,
   type ExecutionHostScope
 } from './execution-host'
 import { isGitRepoKind } from './repo-kind'
-import type { Repo } from './types'
+import type { Repo } from './repo-types'
 
 type NewWorkspaceDialogRepo = Pick<
   Repo,
   'id' | 'path' | 'kind' | 'connectionId' | 'executionHostId'
 >
 
-export function getNewWorkspaceDialogEligibleRepos<T extends Pick<Repo, 'path'>>(
+export function getNewWorkspaceDialogEligibleRepos<T extends Pick<Repo, 'path' | 'connectionId'>>(
   repos: readonly T[]
 ): T[] {
-  return repos.filter((repo) => Boolean(repo.path))
+  // Runtime-owned SSH repos are hidden plumbing. Selecting them after VM creation seeds a recipe-less repo and hides Run on in the next create.
+  return repos.filter((repo) => Boolean(repo.path) && !isRuntimeOwnedSshTargetId(repo.connectionId))
 }
 
 export function resolveNewWorkspaceDialogRepoId({
@@ -30,8 +32,7 @@ export function resolveNewWorkspaceDialogRepoId({
   activeRepoId?: string | null
   focusedHostScope?: ExecutionHostScope | null
 }): string {
-  // Why: every new-workspace dialog should seed the repo the same way. Mobile
-  // mirrors this locally because Metro cannot bundle root shared runtime modules.
+  // Share repo seeding across the desktop dialogs and mobile.
   const focusedHostRepo =
     focusedHostScope && focusedHostScope !== ALL_EXECUTION_HOSTS_SCOPE
       ? eligibleRepos.find((repo) => getRepoExecutionHostId(repo) === focusedHostScope)

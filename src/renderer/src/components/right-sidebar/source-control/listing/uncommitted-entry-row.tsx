@@ -1,0 +1,255 @@
+import React from 'react'
+import { ChevronDown, MessageSquare, Minus, Plus, Trash, Undo2 } from 'lucide-react'
+import { FileTypeIcon } from '@/components/FileTypeIcon'
+import { basename, dirname, joinPath } from '@/lib/path'
+import { cn } from '@/lib/utils'
+import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
+import { writeWorkspaceFileDragSourceForWorkspace } from '@/lib/workspace-file-drag-source'
+import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import { ActionButton } from './action-button'
+import { ConflictBadge } from './conflict-badge'
+import { getLocalizedConflictKindLabel } from './conflict-label'
+import { DiffLineCounts } from './diff-line-counts'
+import { reviewNoteCountTitle } from './review-note-count-title'
+import { SourceControlEntryContextMenu } from './entry-context-menu'
+import {
+  canDiscardStatusEntry,
+  canStageStatusEntry,
+  canUnstageStatusEntry
+} from '../../../../../../shared/source-control-entry-actions'
+import { isSubmoduleWorktreeOnlyChange } from '../../../../../../shared/source-control-discard-all-sequence'
+import { toPermanentSourceControlRowOpenEvent, type SourceControlRowOpenEvent } from './split-open'
+import {
+  SOURCE_CONTROL_ROW_ACTION_OVERLAY_CLASS,
+  SOURCE_CONTROL_TREE_FILE_PADDING_PX,
+  SOURCE_CONTROL_TREE_INDENT_PX,
+  getSubmoduleWorktreeOnlyLabel,
+  getSubmoduleWorktreeOnlyTooltip
+} from './row-layout'
+import { STATUS_COLORS, STATUS_LABELS } from '../../status-display'
+
+export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
+  entryKey,
+  entry,
+  currentWorktreeId,
+  worktreePath,
+  depth = 0,
+  selected,
+  isOpenFile = false,
+  onSelect,
+  onContextMenu,
+  onRevealInExplorer,
+  connectionId,
+  onOpen,
+  onStage,
+  onUnstage,
+  onDiscard,
+  commentCount,
+  showPathHint = true,
+  submoduleExpansion
+}: {
+  entryKey: string
+  entry: GitStatusEntry
+  currentWorktreeId: string
+  worktreePath: string
+  depth?: number
+  selected?: boolean
+  isOpenFile?: boolean
+  onSelect?: (e: React.MouseEvent, key: string, entry: GitStatusEntry) => void
+  onContextMenu?: (key: string) => void
+  onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
+  connectionId?: string | null
+  onOpen: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
+  onStage: (filePath: string) => Promise<void>
+  onUnstage: (filePath: string, oldPath?: string) => Promise<void>
+  onDiscard: (entry: GitStatusEntry) => void
+  commentCount: number
+  showPathHint?: boolean
+  // When set, the row is a dirty submodule: clicking toggles lazy expansion instead of opening an uninformative gitlink diff.
+  submoduleExpansion?: { isExpanded: boolean; onToggle: () => void }
+}): React.JSX.Element {
+  useUiLanguageRevision()
+  const fileName = basename(entry.path)
+  const parentDir = dirname(entry.path)
+  const dirPath = parentDir === '.' ? '' : parentDir
+  const isUnresolvedConflict = entry.conflictStatus === 'unresolved'
+  const isSubmoduleWorktreeOnly = isSubmoduleWorktreeOnlyChange(entry)
+  const conflictLabel = entry.conflictKind
+    ? getLocalizedConflictKindLabel(entry.conflictKind)
+    : null
+  // Stage clears unresolved u records; discard can recreate conflicts or lose local resolutions, so gate both.
+  const canDiscard = canDiscardStatusEntry(entry)
+  const canStage = canStageStatusEntry(entry)
+  // Parent Git cannot unstage submodule-internal files; match bulk gating.
+  const canUnstage = canUnstageStatusEntry(entry)
+
+  return (
+    <SourceControlEntryContextMenu
+      currentWorktreeId={currentWorktreeId}
+      absolutePath={joinPath(worktreePath, entry.path)}
+      relativePath={entry.path}
+      hasWorkingTreeFile={entry.status !== 'deleted'}
+      connectionId={connectionId}
+      onView={() => onOpen(entry)}
+      onRevealInExplorer={onRevealInExplorer}
+      onOpenChange={(open) => {
+        if (open && onContextMenu) {
+          onContextMenu(entryKey)
+        }
+      }}
+    >
+      <div
+        data-testid="source-control-entry"
+        data-source-control-path={entry.path}
+        data-source-control-area={entry.area}
+        // Open-file accents outrank bulk selection so the active file stays identifiable.
+        data-current={isOpenFile ? 'true' : undefined}
+        className={cn(
+          'group relative flex cursor-pointer items-center gap-1 pr-3 py-1 transition-colors',
+          isOpenFile ? 'bg-accent hover:bg-accent' : 'hover:bg-accent/40',
+          !isOpenFile && selected && 'bg-accent/60'
+        )}
+        style={{
+          paddingLeft: `${depth * SOURCE_CONTROL_TREE_INDENT_PX + SOURCE_CONTROL_TREE_FILE_PADDING_PX}px`
+        }}
+        draggable
+        onDragStart={(e) => {
+          if (isUnresolvedConflict && entry.status === 'deleted') {
+            e.preventDefault()
+            return
+          }
+          const absolutePath = joinPath(worktreePath, entry.path)
+          e.dataTransfer.setData(WORKSPACE_FILE_PATH_MIME, absolutePath)
+          writeWorkspaceFileDragSourceForWorkspace(e.dataTransfer, currentWorktreeId)
+          e.dataTransfer.effectAllowed = 'copy'
+        }}
+        onClick={(e) => {
+          if (submoduleExpansion) {
+            // Ignore the second click of a double-click or expansion immediately collapses again.
+            if (e.detail > 1) {
+              return
+            }
+            submoduleExpansion.onToggle()
+            return
+          }
+          if (onSelect) {
+            onSelect(e, entryKey, entry)
+          } else {
+            onOpen(entry, e)
+          }
+        }}
+        onDoubleClick={(e) => {
+          if (submoduleExpansion) {
+            return
+          }
+          onOpen(entry, toPermanentSourceControlRowOpenEvent(e))
+        }}
+      >
+        {submoduleExpansion && (
+          <ChevronDown
+            className={cn(
+              'size-3 shrink-0 text-muted-foreground transition-transform',
+              !submoduleExpansion.isExpanded && '-rotate-90'
+            )}
+          />
+        )}
+        {React.createElement(FileTypeIcon, {
+          filePath: entry.path,
+          className: 'size-3.5 shrink-0',
+          style: { color: STATUS_COLORS[entry.status] }
+        })}
+        <div className="min-w-0 flex-1 text-xs">
+          <span className="min-w-0 block truncate">
+            <span className="text-foreground">{fileName}</span>
+            {showPathHint && dirPath && (
+              <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>
+            )}
+          </span>
+          {conflictLabel && (
+            <div className="truncate text-[11px] text-muted-foreground">{conflictLabel}</div>
+          )}
+          {isSubmoduleWorktreeOnly && (
+            // Parent Git stages gitlinks, not nested dirtiness; make that boundary visible.
+            <div
+              className="truncate text-[11px] text-muted-foreground"
+              title={getSubmoduleWorktreeOnlyTooltip()}
+            >
+              {getSubmoduleWorktreeOnlyLabel()}
+            </div>
+          )}
+        </div>
+        {commentCount > 0 && (
+          <span
+            className="flex shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground"
+            title={reviewNoteCountTitle(commentCount)}
+          >
+            <MessageSquare className="size-3" />
+            <span className="tabular-nums">{commentCount}</span>
+          </span>
+        )}
+        {entry.conflictStatus ? (
+          <ConflictBadge entry={entry} />
+        ) : (
+          <>
+            <DiffLineCounts added={entry.added} removed={entry.removed} />
+            <span
+              className="w-4 shrink-0 text-center text-[10px] font-bold"
+              style={{ color: STATUS_COLORS[entry.status] }}
+            >
+              {STATUS_LABELS[entry.status]}
+            </span>
+          </>
+        )}
+        <div className={SOURCE_CONTROL_ROW_ACTION_OVERLAY_CLASS}>
+          {canDiscard && (
+            <ActionButton
+              icon={entry.area === 'untracked' ? Trash : Undo2}
+              title={
+                entry.area === 'untracked'
+                  ? translate(
+                      'auto.components.right.sidebar.SourceControl.11463f7a98',
+                      'Delete untracked file'
+                    )
+                  : entry.status === 'deleted'
+                    ? translate(
+                        'auto.components.right.sidebar.SourceControl.989f3d5e34',
+                        'Restore file'
+                      )
+                    : translate(
+                        'auto.components.right.sidebar.SourceControl.d54dd48b0b',
+                        'Discard changes'
+                      )
+              }
+              onClick={(event) => {
+                event.stopPropagation()
+                onDiscard(entry)
+              }}
+            />
+          )}
+          {canStage && (
+            <ActionButton
+              icon={Plus}
+              title={translate('auto.components.right.sidebar.SourceControl.8cde1a2fb0', 'Stage')}
+              onClick={(event) => {
+                event.stopPropagation()
+                void onStage(entry.path)
+              }}
+            />
+          )}
+          {canUnstage && (
+            <ActionButton
+              icon={Minus}
+              title={translate('auto.components.right.sidebar.SourceControl.df5040e3c3', 'Unstage')}
+              onClick={(event) => {
+                event.stopPropagation()
+                void onUnstage(entry.path, entry.status === 'renamed' ? entry.oldPath : undefined)
+              }}
+            />
+          )}
+        </div>
+      </div>
+    </SourceControlEntryContextMenu>
+  )
+})

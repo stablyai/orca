@@ -1,4 +1,5 @@
-import type { GlobalSettings, Repo } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Repo } from '../../../../shared/repo-types'
 import {
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId
@@ -14,16 +15,7 @@ type RepoHostCursor = {
   nextIndex: number
 }
 
-/** Split a cross-host reorder permutation into per-host permutations.
- *
- * Why: each host persists only its own repos and rejects any id list that is not
- * a full permutation of that host's repos (persistence.ts#reorderRepos). So a
- * single combined id list can only be applied on the host that owns every id —
- * never the case once repos span hosts. We instead group ids by their owner host
- * (preserving the user's relative order within each host) and dispatch one
- * permutation per host. Repos without an explicit owner fall back to the focused
- * host, matching the rest of the owner-routing helpers.
- */
+/** Hosts accept only full permutations of their own repos. Split combined user order by owner, preserving relative order per host; unstamped repos retain focused-host fallback. */
 export function splitRepoReorderByHost(
   orderedIds: readonly string[],
   repos: readonly Repo[],
@@ -44,8 +36,7 @@ export function splitRepoReorderByHost(
   const groups = new Map<string, string[]>()
   for (const id of orderedIds) {
     const remainingHosts = remainingHostsByRepoId.get(id)
-    // Why: a bare repo id can appear once per host in the combined order. The
-    // cursor consumes each occurrence against its owner host exactly once.
+    // Same bare ID can occur per host; cursor assigns each occurrence to its owner once.
     const hostId = remainingHosts?.hosts[remainingHosts.nextIndex]
     if (remainingHosts) {
       remainingHosts.nextIndex += 1

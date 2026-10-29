@@ -1,0 +1,145 @@
+import { ipcRenderer } from 'electron'
+import {
+  RUNTIME_HOST_STATUS_CHANNEL,
+  type RuntimeHostStatusSnapshot
+} from '../../shared/runtime-host-status'
+import type { VerifyAndAddRuntimeEnvironmentResult } from '../../shared/remote-pairing-verification'
+import type { RuntimeStatus } from '../../shared/runtime-types'
+import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import type {
+  PublicKnownRuntimeEnvironment,
+  RuntimeEnvironmentRemoval
+} from '../../shared/runtime-environments'
+import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../shared/remote-runtime/control/remote-runtime-shared-control-types'
+import { RUNTIME_ENVIRONMENT_DIAGNOSTICS_CHANNEL } from '../../shared/runtime-environment-diagnostics'
+import { RUNTIME_ENVIRONMENT_CATALOG_CHANGED_CHANNEL } from '../../shared/runtime-environment-catalog-channel'
+import {
+  WSL_ORCAD_ACCOUNT_NOT_APPLIED_CHANNEL,
+  type WslOrcadAccountNotAppliedEvent
+} from '../../shared/wsl-orcad-account-notice'
+import {
+  subscribeRuntimeEnvironmentFromPreload,
+  type RuntimeEnvironmentSubscriptionHandle
+} from '../runtime-environment-subscriptions'
+import type { PreloadApi } from '../api-types'
+import { managedOrcadApi } from './managed-orcad-api'
+import { getWslHostsApi } from './wsl-hosts-api'
+
+export const runtimeEnvironmentsApi = {
+  desktopCreatedChatIds: (): Promise<string[]> =>
+    ipcRenderer.invoke('runtimeEnvironments:desktopCreatedChatIds'),
+  getStatusSnapshots: (): Promise<RuntimeHostStatusSnapshot[]> =>
+    ipcRenderer.invoke('runtimeEnvironments:getStatusSnapshots'),
+  onStatusChanged: (callback: (snapshot: RuntimeHostStatusSnapshot) => void): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      snapshot: RuntimeHostStatusSnapshot
+    ): void => callback(snapshot)
+    ipcRenderer.on(RUNTIME_HOST_STATUS_CHANNEL, listener)
+    return () => ipcRenderer.removeListener(RUNTIME_HOST_STATUS_CHANNEL, listener)
+  },
+  onCatalogChanged: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on(RUNTIME_ENVIRONMENT_CATALOG_CHANGED_CHANNEL, listener)
+    return () => ipcRenderer.removeListener(RUNTIME_ENVIRONMENT_CATALOG_CHANGED_CHANNEL, listener)
+  },
+  list: (): Promise<PublicKnownRuntimeEnvironment[]> =>
+    ipcRenderer.invoke('runtimeEnvironments:list'),
+  addFromPairingCode: (args: {
+    name: string
+    pairingCode: string
+  }): Promise<{ environment: PublicKnownRuntimeEnvironment }> =>
+    ipcRenderer.invoke('runtimeEnvironments:addFromPairingCode', args),
+  verifyAndAddFromPairingCode: (args: {
+    name: string
+    pairingCode: string
+    allowLoopback?: boolean
+  }): Promise<VerifyAndAddRuntimeEnvironmentResult> =>
+    ipcRenderer.invoke('runtimeEnvironments:verifyAndAddFromPairingCode', args),
+  repairFromPairingCode: (args: {
+    selector: string
+    pairingCode: string
+  }): Promise<VerifyAndAddRuntimeEnvironmentResult> =>
+    ipcRenderer.invoke('runtimeEnvironments:repairFromPairingCode', args),
+  resolve: (args: { selector: string }): Promise<PublicKnownRuntimeEnvironment> =>
+    ipcRenderer.invoke('runtimeEnvironments:resolve', args),
+  remove: (args: { selector: string }): Promise<RuntimeEnvironmentRemoval> =>
+    ipcRenderer.invoke('runtimeEnvironments:remove', args),
+  disconnect: (args: {
+    selector: string
+  }): Promise<{ disconnected: PublicKnownRuntimeEnvironment }> =>
+    ipcRenderer.invoke('runtimeEnvironments:disconnect', args),
+  connect: (args: {
+    selector: string
+    timeoutMs?: number
+  }): Promise<RuntimeRpcResponse<RuntimeStatus>> =>
+    ipcRenderer.invoke('runtimeEnvironments:connect', args),
+  getStatus: (args: {
+    selector: string
+    timeoutMs?: number
+    observeOnly?: true
+  }): Promise<RuntimeRpcResponse<RuntimeStatus>> =>
+    ipcRenderer.invoke('runtimeEnvironments:getStatus', args),
+  onSharedControlDiagnostics: (
+    callback: (event: {
+      environmentId: string
+      transportGeneration: number
+      diagnostics: RemoteRuntimeSharedConnectionDiagnostics
+    }) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: {
+        environmentId: string
+        transportGeneration: number
+        diagnostics: RemoteRuntimeSharedConnectionDiagnostics
+      }
+    ): void => callback(data)
+    ipcRenderer.on(RUNTIME_ENVIRONMENT_DIAGNOSTICS_CHANNEL, listener)
+    return () => ipcRenderer.removeListener(RUNTIME_ENVIRONMENT_DIAGNOSTICS_CHANNEL, listener)
+  },
+  onWslAccountNotApplied: (
+    callback: (event: WslOrcadAccountNotAppliedEvent) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: WslOrcadAccountNotAppliedEvent
+    ): void => callback(data)
+    ipcRenderer.on(WSL_ORCAD_ACCOUNT_NOT_APPLIED_CHANNEL, listener)
+    return () => ipcRenderer.removeListener(WSL_ORCAD_ACCOUNT_NOT_APPLIED_CHANNEL, listener)
+  },
+  prepareBrowserClientHostPlacement: (args) =>
+    ipcRenderer.invoke('runtimeEnvironments:prepareBrowserClientHostPlacement', args),
+  retryConnectionsNow: (): Promise<void> =>
+    ipcRenderer.invoke('runtimeEnvironments:retryConnectionsNow'),
+  call: (args: {
+    selector: string
+    method: string
+    params?: unknown
+    timeoutMs?: number
+    expectedEnvironmentPairingRevision?: number
+    expectedEnvironmentRuntimeId?: string
+  }): Promise<RuntimeRpcResponse<unknown>> => ipcRenderer.invoke('runtimeEnvironments:call', args),
+  cancelSubscription: (args: { subscriptionId: string }): Promise<void> =>
+    ipcRenderer.invoke('runtimeEnvironments:unsubscribe', args).then(() => undefined),
+  subscribe: async (
+    args: {
+      subscriptionId?: string
+      selector: string
+      method: string
+      params?: unknown
+      timeoutMs?: number
+      expectedEnvironmentPairingRevision?: number
+      expectedEnvironmentRuntimeId?: string
+    },
+    callbacks: {
+      onResponse: (response: RuntimeRpcResponse<unknown>) => void
+      onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
+      onError?: (error: { code: string; message: string }) => void
+      onClose?: () => void
+    }
+  ): Promise<RuntimeEnvironmentSubscriptionHandle> =>
+    subscribeRuntimeEnvironmentFromPreload(ipcRenderer, args, callbacks),
+  managedOrcad: managedOrcadApi,
+  wslHosts: getWslHostsApi()
+} satisfies PreloadApi['runtimeEnvironments']

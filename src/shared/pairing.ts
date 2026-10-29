@@ -1,31 +1,35 @@
-import { z } from 'zod'
+import {
+  PAIRING_OFFER_VERSION,
+  PairingOfferSchema,
+  type PairingOffer
+} from './mobile-relay-pairing-offer'
+import { normalizePairingBase64 } from './mobile-pairing-base64'
+import {
+  PAIRING_CODE_MAX_CHARACTERS,
+  PAIRING_INPUT_MAX_CHARACTERS
+} from './mobile-pairing-protocol-limits'
 
-export const PAIRING_OFFER_VERSION = 2
-
-export const PairingOfferSchema = z.object({
-  v: z.literal(PAIRING_OFFER_VERSION),
-  endpoint: z.string().min(1),
-  deviceToken: z.string().min(1),
-  // Why: the desktop's Curve25519 public key, base64-encoded. The mobile client
-  // uses this to derive a shared secret via ECDH for end-to-end encryption.
-  publicKeyB64: z.string().min(1)
-})
-
-export type PairingOffer = z.infer<typeof PairingOfferSchema>
+export { PAIRING_OFFER_VERSION, PairingOfferSchema }
+export type { PairingOffer }
 
 export function encodePairingOffer(offer: PairingOffer): string {
-  const json = JSON.stringify(offer)
+  const json = JSON.stringify(PairingOfferSchema.parse(offer))
   const base64url = Buffer.from(json, 'utf-8')
     .toString('base64')
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/, '')
-  // Why: Android camera intents and Expo Router preserve query params more
-  // reliably than URL fragments when launching a custom-scheme app.
+  if (base64url.length > PAIRING_CODE_MAX_CHARACTERS) {
+    throw new Error('Pairing offer exceeds safe size')
+  }
+  // Android camera intents and Expo Router retain custom-scheme query parameters more reliably than fragments.
   return `orca://pair?code=${base64url}`
 }
 
 export function decodePairingOffer(url: string): PairingOffer {
+  if (url.length > PAIRING_INPUT_MAX_CHARACTERS) {
+    throw new Error('Invalid pairing URL: pairing code exceeds safe size')
+  }
   const code = extractPairingCodeFromUrl(url)
   if (!code) {
     throw new Error('Invalid pairing URL: must start with orca://pair and include a pairing code')
@@ -40,8 +44,7 @@ function extractPairingCodeFromUrl(url: string): string | null {
   } catch {
     return null
   }
-  // Why: prefix checks accepted routes like `orca://pairing?...`; only the
-  // pairing deep-link host may carry runtime auth material.
+  // Exact pairing host prevents prefix matches such as orca://pairing from carrying runtime credentials.
   if (parsed.protocol !== 'orca:' || parsed.hostname !== 'pair') {
     return null
   }
@@ -55,10 +58,11 @@ function extractPairingCodeFromUrl(url: string): string | null {
   return parsed.hash ? parsed.hash.slice(1) || null : null
 }
 
-// Why: accept either an `orca://pair?...` URL or the bare base64
-// string so the mobile paste-pair flow can take whichever the user
-// actually copied from desktop.
+// Mobile paste accepts either the copied deep link or bare base64 code.
 export function parsePairingCode(input: string): PairingOffer | null {
+  if (input.length > PAIRING_INPUT_MAX_CHARACTERS) {
+    return null
+  }
   const trimmed = input.trim()
   if (!trimmed) {
     return null
@@ -74,7 +78,12 @@ export function parsePairingCode(input: string): PairingOffer | null {
 }
 
 function decodePairingBase64(base64url: string): PairingOffer {
-  const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/')
-  const json = Buffer.from(base64, 'base64').toString('utf-8')
+  const base64 = normalizePairingBase64(base64url)
+  const json =
+    typeof Buffer === 'undefined'
+      ? new TextDecoder().decode(
+          Uint8Array.from(atob(base64), (character) => character.charCodeAt(0))
+        )
+      : Buffer.from(base64, 'base64').toString('utf-8')
   return PairingOfferSchema.parse(JSON.parse(json))
 }

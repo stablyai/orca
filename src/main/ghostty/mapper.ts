@@ -1,9 +1,7 @@
-import type {
-  GlobalSettings,
-  TerminalColorOverrides,
-  GhosttyImportPreview
-} from '../../shared/types'
+import type { GhosttyImportPreview, GlobalSettings } from '../../shared/global-settings-types'
+import type { TerminalColorOverrides } from '../../shared/terminal-color-overrides'
 import { HEX_COLOR_RE } from '../../shared/color-validation'
+import { parsePaddingValue, parseStrictInt } from './numeric-config-values'
 
 const PALETTE_INDEX_MAP: Record<number, keyof TerminalColorOverrides> = {
   0: 'black',
@@ -33,18 +31,6 @@ type FieldResult =
   | null
 
 const normalizeHex = (v: string): string => (v.startsWith('#') ? v : `#${v}`)
-
-// Why: `Number("1e10")` succeeds and passes `Number.isInteger`, so a Ghostty
-// config with `window-padding-x = 1e9` would sail through the mapper and land
-// an absurd value in the store. Restrict to plain decimal integers.
-const STRICT_INT_RE = /^-?\d+$/
-const parseStrictInt = (v: string): number | null => {
-  if (!STRICT_INT_RE.test(v)) {
-    return null
-  }
-  const num = Number(v)
-  return Number.isFinite(num) ? num : null
-}
 
 type FieldParser = (value: string, rawValue: string | string[]) => FieldResult
 
@@ -129,7 +115,7 @@ export function mapGhosttyToOrca(
         }
         const idxStr = entry.slice(0, eqIdx).trim()
         const color = entry.slice(eqIdx + 1).trim()
-        const index = parseInt(idxStr, 10)
+        const index = Number.parseInt(idxStr, 10)
         if (Number.isNaN(index) || !HEX_COLOR_RE.test(color)) {
           continue
         }
@@ -171,19 +157,34 @@ export function mapGhosttyToOrca(
     },
 
     'window-padding-x': (v) => {
-      const num = parseStrictInt(v)
-      if (num === null || num < 0 || num > 512) {
+      const num = parsePaddingValue(v)
+      if (num === null) {
         return null
       }
       return { key: 'terminalPaddingX', value: num }
     },
 
     'window-padding-y': (v) => {
-      const num = parseStrictInt(v)
-      if (num === null || num < 0 || num > 512) {
+      const num = parsePaddingValue(v)
+      if (num === null) {
         return null
       }
       return { key: 'terminalPaddingY', value: num }
+    },
+
+    // Pixel offsets need rendered cell height; accept percentages only within Orca's [1, 3] line-height range.
+    'adjust-cell-height': (v) => {
+      const match = /^\+?(\d+(?:\.\d+)?)%$/.exec(v.trim())
+      if (!match) {
+        return null
+      }
+      const percent = Number(match[1])
+      const rawLineHeight = 1 + percent / 100
+      if (rawLineHeight > 3) {
+        return null
+      }
+      const lineHeight = Math.round(100 + percent) / 100
+      return { key: 'terminalLineHeight', value: lineHeight }
     },
 
     'cursor-text': (v) => {
@@ -191,13 +192,6 @@ export function mapGhosttyToOrca(
         return null
       }
       return { colorOverrides: { cursorAccent: normalizeHex(v) } }
-    },
-
-    'bold-color': (v) => {
-      if (!HEX_COLOR_RE.test(v)) {
-        return null
-      }
-      return { colorOverrides: { bold: normalizeHex(v) } }
     },
 
     'mouse-hide-while-typing': (v) => {
@@ -246,8 +240,6 @@ export function mapGhosttyToOrca(
     },
 
     'cursor-style-blink': (v) => {
-      // Why: Ghostty uses 'true'/'false' strings for booleans; anything else
-      // is treated as unsupported rather than silently coerced.
       if (v !== 'true' && v !== 'false') {
         return null
       }
@@ -255,8 +247,6 @@ export function mapGhosttyToOrca(
     },
 
     'focus-follows-mouse': (v) => {
-      // Why: Ghostty's focus-follows-mouse is semantically identical to Orca's
-      // terminalFocusFollowsMouse — both control pointer-hover focus transfer.
       if (v !== 'true' && v !== 'false') {
         return null
       }
@@ -274,11 +264,14 @@ export function mapGhosttyToOrca(
   for (const [key, rawValue] of Object.entries(parsed)) {
     const value = Array.isArray(rawValue) ? (rawValue.at(-1) ?? '') : rawValue
 
-    // Why: Ghostty's selection-word-chars defines characters that ARE part of a
-    // word, while xterm.js wordSeparator defines characters that BREAK words.
-    // Passing the same string inverts the semantics, and correctly inverting a
-    // character set is non-trivial. Treat as unsupported to avoid silent misbehavior.
+    // Ghostty lists word members; xterm lists separators, so importing unchanged would invert the meaning.
     if (key === 'selection-word-chars') {
+      unsupportedKeys.push(key)
+      continue
+    }
+
+    // xterm has no bold-color theme slot, so report this unsupported rather than implying success.
+    if (key === 'bold-color') {
       unsupportedKeys.push(key)
       continue
     }
@@ -300,9 +293,7 @@ export function mapGhosttyToOrca(
       continue
     }
 
-    // Why: Orca's windowBackgroundBlur is a boolean; the numeric radius is lost.
-    // Only note the drop when blur is actually being turned on — a `0` cleanly
-    // maps to `false` and there is no radius to lose.
+    // Orca preserves only whether blur is enabled; report radius loss only for nonzero values.
     if (
       key === 'background-blur-radius' &&
       !Array.isArray(result) &&

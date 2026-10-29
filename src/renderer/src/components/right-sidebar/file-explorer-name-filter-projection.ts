@@ -1,6 +1,12 @@
-import { joinPath, normalizeRelativePath } from '@/lib/path'
-import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
-import type { TreeNode } from './file-explorer-types'
+import { getRelativePathInsideRoot, joinPath, normalizeRelativePath } from '@/lib/path'
+import { compareFileNames } from '../../../../shared/file-name-sort'
+import {
+  FILE_NAME_FILTER_QUERY_MAX_BYTES,
+  isFileNameFilterQueryTooLarge,
+  pathMatchesFileNameFilterTokens,
+  splitFileNameFilterTokens
+} from '../../../../shared/file-name-filter-tokens'
+import type { FileExplorerOperationOwner, TreeNode } from './file-explorer-types'
 import {
   createFileExplorerRowProjectionFromParts,
   type FileExplorerRowProjection
@@ -12,9 +18,10 @@ import { isPathIgnored } from './status-display'
 export type FileExplorerNameFilterProjectionSource = {
   query: string
   relativePaths: readonly string[] | null
+  operationOwner?: FileExplorerOperationOwner
 }
 
-export const FILE_EXPLORER_NAME_FILTER_QUERY_MAX_BYTES = 2 * 1024
+export const FILE_EXPLORER_NAME_FILTER_QUERY_MAX_BYTES = FILE_NAME_FILTER_QUERY_MAX_BYTES
 
 export function getNextNameFilterCollapsedPaths(
   collapsedPaths: ReadonlySet<string>,
@@ -46,65 +53,20 @@ export function isFileExplorerNameFilterQueryTooLarge(
   query: string | undefined,
   maxBytes = FILE_EXPLORER_NAME_FILTER_QUERY_MAX_BYTES
 ): boolean {
-  const value = query ?? ''
-  return isClipboardTextByteLengthOverLimit(value, maxBytes)
+  return isFileNameFilterQueryTooLarge(query ?? '', maxBytes)
 }
 
 export function getFileExplorerNameFilterTokens(query: string | undefined): string[] {
   if (isFileExplorerNameFilterQueryTooLarge(query)) {
     return []
   }
-  return splitFileExplorerNameFilterTokens(query ?? '')
-}
-
-// Why: accepted pasted file-filter queries are still on a renderer hot path;
-// tokenize whitespace directly instead of allocating a regex split array.
-function splitFileExplorerNameFilterTokens(query: string): string[] {
-  const tokens: string[] = []
-  let tokenStart = -1
-  for (let index = 0; index <= query.length; index += 1) {
-    const isEnd = index === query.length
-    if (!isEnd && !isFileExplorerNameFilterWhitespace(query.charCodeAt(index))) {
-      if (tokenStart === -1) {
-        tokenStart = index
-      }
-      continue
-    }
-    if (tokenStart !== -1) {
-      tokens.push(query.slice(tokenStart, index).toLocaleLowerCase())
-      tokenStart = -1
-    }
-  }
-  return tokens
-}
-
-function isFileExplorerNameFilterWhitespace(code: number): boolean {
-  return (
-    code === 32 ||
-    (code >= 9 && code <= 13) ||
-    code === 160 ||
-    code === 5760 ||
-    (code >= 8192 && code <= 8202) ||
-    code === 8232 ||
-    code === 8233 ||
-    code === 8239 ||
-    code === 8287 ||
-    code === 12288 ||
-    code === 65279
-  )
-}
-
-function relativePathMatchesNameFilter(relativePath: string, tokens: readonly string[]): boolean {
-  if (tokens.length === 0) {
-    return true
-  }
-  const haystack = normalizeRelativePath(relativePath).toLocaleLowerCase()
-  return tokens.every((token) => haystack.includes(token))
+  return splitFileNameFilterTokens(query ?? '')
 }
 
 export function getFileExplorerNameFilterIgnoredQueryRelativePaths(
   source: FileExplorerNameFilterProjectionSource,
-  showDotfiles: boolean
+  showDotfiles: boolean,
+  worktreePath?: string | null
 ): string[] {
   if (isFileExplorerNameFilterQueryTooLarge(source.query)) {
     return []
@@ -114,12 +76,12 @@ export function getFileExplorerNameFilterIgnoredQueryRelativePaths(
   }
   const tokens = getFileExplorerNameFilterTokens(source.query)
   return source.relativePaths
-    .map((relativePath) => normalizeRelativePath(relativePath))
+    .map((relativePath) => normalizeRelativePath(relativePath, worktreePath))
     .filter(
       (relativePath) =>
         Boolean(relativePath) &&
-        (showDotfiles || !isDotfileRelativePath(relativePath)) &&
-        relativePathMatchesNameFilter(relativePath, tokens)
+        (showDotfiles || !isDotfileRelativePath(relativePath, worktreePath)) &&
+        pathMatchesFileNameFilterTokens(relativePath, tokens)
     )
 }
 
@@ -133,24 +95,28 @@ function createSyntheticNode(
   relativePath: string,
   name: string,
   depth: number,
-  isDirectory: boolean
+  isDirectory: boolean,
+  operationOwner: FileExplorerOperationOwner | undefined
 ): TreeNode {
   return {
     name,
     path: joinPath(worktreePath, relativePath),
     relativePath,
     isDirectory,
-    depth
+    depth,
+    operationOwner
   }
 }
 
+/** Builds a filtered subtree for the display root while retaining worktree-relative paths on synthetic nodes. */
 export function createNameFilteredFileExplorerProjection({
   collapsedPaths,
   ignoredSet,
   nameFilter,
   showDotfiles,
   showGitIgnoredFiles,
-  worktreePath
+  worktreePath,
+  displayRootPath = worktreePath
 }: {
   collapsedPaths?: ReadonlySet<string>
   ignoredSet: Set<string>
@@ -158,6 +124,7 @@ export function createNameFilteredFileExplorerProjection({
   showDotfiles: boolean
   showGitIgnoredFiles: boolean
   worktreePath: string
+  displayRootPath?: string
 }): FileExplorerRowProjection {
   const visibleFlatRows: TreeNode[] = []
   const rowsByPath = new Map<string, TreeNode>()
@@ -166,38 +133,43 @@ export function createNameFilteredFileExplorerProjection({
   }
   const nameFilterTokens = getFileExplorerNameFilterTokens(nameFilter.query)
   if (nameFilterTokens.length === 0 || nameFilter.relativePaths === null) {
-    // Why: empty queries use the normal explorer projection, and loading filters must not
-    // fall back to a partial cached path list.
+    // Empty queries use normal projection; loading filters must not reveal partial cached paths.
     return createFileExplorerRowProjectionFromParts(visibleFlatRows, rowsByPath)
   }
 
   const rootChildren = new Map<string, SyntheticTreeEntry>()
   for (const rawRelativePath of nameFilter.relativePaths) {
-    const relativePath = normalizeRelativePath(rawRelativePath)
-    if (!relativePath) {
+    const relativePath = normalizeRelativePath(rawRelativePath, worktreePath)
+    if (!relativePath || !pathMatchesFileNameFilterTokens(relativePath, nameFilterTokens)) {
       continue
     }
-    if (!showDotfiles && isDotfileRelativePath(relativePath)) {
+    if (getRelativePathInsideRoot(joinPath(worktreePath, relativePath), displayRootPath) === null) {
+      continue
+    }
+    if (!showDotfiles && isDotfileRelativePath(relativePath, worktreePath)) {
       continue
     }
     if (!showGitIgnoredFiles && isPathIgnored(ignoredSet, relativePath)) {
       continue
     }
-    if (!relativePathMatchesNameFilter(relativePath, nameFilterTokens)) {
-      continue
-    }
-
-    const segments = splitPathSegments(relativePath)
+    const segments = splitPathSegments(relativePath, worktreePath)
     let currentChildren = rootChildren
     let currentRelativePath = ''
     for (let index = 0; index < segments.length; index += 1) {
       const name = segments[index]
-      currentRelativePath = currentRelativePath ? joinPath(currentRelativePath, name) : name
+      currentRelativePath = currentRelativePath ? `${currentRelativePath}/${name}` : name
       const isDirectory = index < segments.length - 1
       let entry = currentChildren.get(name)
       if (!entry) {
         entry = {
-          node: createSyntheticNode(worktreePath, currentRelativePath, name, index, isDirectory),
+          node: createSyntheticNode(
+            worktreePath,
+            currentRelativePath,
+            name,
+            index,
+            isDirectory,
+            nameFilter.operationOwner
+          ),
           children: new Map()
         }
         currentChildren.set(name, entry)
@@ -208,7 +180,16 @@ export function createNameFilteredFileExplorerProjection({
     }
   }
 
-  appendNameFilteredEntries(rootChildren.values(), visibleFlatRows, rowsByPath, collapsedPaths)
+  let displayChildren = rootChildren
+  const scope = getRelativePathInsideRoot(displayRootPath, worktreePath)
+  for (const segment of scope ? splitPathSegments(scope, worktreePath) : []) {
+    const entry = displayChildren.get(segment)
+    if (!entry) {
+      return createFileExplorerRowProjectionFromParts(visibleFlatRows, rowsByPath)
+    }
+    displayChildren = entry.children
+  }
+  appendNameFilteredEntries(displayChildren.values(), visibleFlatRows, rowsByPath, collapsedPaths)
   return createFileExplorerRowProjectionFromParts(visibleFlatRows, rowsByPath)
 }
 
@@ -222,7 +203,7 @@ function appendNameFilteredEntries(
     if (a.node.isDirectory !== b.node.isDirectory) {
       return a.node.isDirectory ? -1 : 1
     }
-    return a.node.name.localeCompare(b.node.name)
+    return compareFileNames(a.node.name, b.node.name)
   })
   for (const entry of sortedEntries) {
     visibleFlatRows.push(entry.node)

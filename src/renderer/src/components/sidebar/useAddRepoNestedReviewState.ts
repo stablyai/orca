@@ -1,9 +1,9 @@
 import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { NestedRepoTelemetryRuntimeKind } from '../../../../shared/nested-repo-telemetry'
-import type { NestedRepoScanResult } from '../../../../shared/types'
+import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
 import { defaultProjectGroupNameForPath, type AddRepoDialogStep } from './add-repo-dialog-types'
 
-type ShowNestedRepoReviewArgs = {
+export type ShowNestedRepoReviewArgs = {
   scan: NestedRepoScanResult
   selectedPath: string
   connectionId: string | null
@@ -11,6 +11,7 @@ type ShowNestedRepoReviewArgs = {
   runtimeKind: NestedRepoTelemetryRuntimeKind
   inProgress: boolean
   scanId: string | null
+  runtimeEnvironmentId?: string | null
 }
 
 export function useAddRepoNestedReviewState({
@@ -19,7 +20,10 @@ export function useAddRepoNestedReviewState({
   setStep
 }: {
   activeRuntimeEnvironmentId: string | null | undefined
-  cancelNestedRepoScan: (scanId: string) => Promise<unknown>
+  cancelNestedRepoScan: (
+    scanId: string,
+    options: { runtimeEnvironmentId: string | null }
+  ) => Promise<unknown>
   setStep: (step: AddRepoDialogStep) => void
 }): {
   nestedScan: NestedRepoScanResult | null
@@ -31,12 +35,13 @@ export function useAddRepoNestedReviewState({
   nestedScanInProgress: boolean
   nestedScanId: string | null
   nestedImportScanId: string | null
+  nestedRuntimeEnvironmentId: string | null
   setNestedSelectedPaths: Dispatch<SetStateAction<Set<string>>>
   setNestedGroupName: Dispatch<SetStateAction<string>>
   setNestedScanInProgress: Dispatch<SetStateAction<boolean>>
   getNestedRepoRuntimeKind: (connectionId: string | null) => NestedRepoTelemetryRuntimeKind
   showNestedRepoReview: (args: ShowNestedRepoReviewArgs) => void
-  setActiveNestedScanId: (scanId: string | null) => void
+  setActiveNestedScanId: (scanId: string | null, runtimeEnvironmentId?: string | null) => void
   handleStopNestedScan: () => void
   resetNestedRepoReviewState: () => void
 } {
@@ -51,7 +56,9 @@ export function useAddRepoNestedReviewState({
   const [nestedScanInProgress, setNestedScanInProgress] = useState(false)
   const [nestedScanId, setNestedScanId] = useState<string | null>(null)
   const [nestedImportScanId, setNestedImportScanId] = useState<string | null>(null)
+  const [nestedRuntimeEnvironmentId, setNestedRuntimeEnvironmentId] = useState<string | null>(null)
   const nestedScanIdRef = useRef<string | null>(null)
+  const nestedScanRuntimeEnvironmentIdRef = useRef<string | null>(null)
 
   const getNestedRepoRuntimeKind = useCallback(
     (connectionId: string | null): NestedRepoTelemetryRuntimeKind => {
@@ -75,28 +82,37 @@ export function useAddRepoNestedReviewState({
       setNestedRuntimeKind(args.runtimeKind)
       setNestedScanInProgress(args.inProgress)
       setNestedImportScanId(args.scanId)
+      setNestedRuntimeEnvironmentId(args.runtimeEnvironmentId ?? null)
       setStep('nested')
     },
     [setStep]
   )
 
-  const setActiveNestedScanId = useCallback((scanId: string | null): void => {
-    nestedScanIdRef.current = scanId
-    setNestedScanId(scanId)
-  }, [])
+  const setActiveNestedScanId = useCallback(
+    (scanId: string | null, runtimeEnvironmentId: string | null = null): void => {
+      nestedScanIdRef.current = scanId
+      nestedScanRuntimeEnvironmentIdRef.current = scanId ? runtimeEnvironmentId : null
+      setNestedScanId(scanId)
+    },
+    []
+  )
 
   const handleStopNestedScan = useCallback(() => {
     const scanId = nestedScanIdRef.current
     if (!scanId) {
       return
     }
-    void cancelNestedRepoScan(scanId)
+    void cancelNestedRepoScan(scanId, {
+      runtimeEnvironmentId: nestedScanRuntimeEnvironmentIdRef.current
+    })
   }, [cancelNestedRepoScan])
 
   const resetNestedRepoReviewState = useCallback((): void => {
     const activeNestedScanId = nestedScanIdRef.current
     if (activeNestedScanId) {
-      void cancelNestedRepoScan(activeNestedScanId)
+      void cancelNestedRepoScan(activeNestedScanId, {
+        runtimeEnvironmentId: nestedScanRuntimeEnvironmentIdRef.current
+      })
     }
     setNestedScan(null)
     setNestedSelectedPaths(new Set())
@@ -106,6 +122,7 @@ export function useAddRepoNestedReviewState({
     setNestedRuntimeKind(null)
     setNestedScanInProgress(false)
     setNestedImportScanId(null)
+    setNestedRuntimeEnvironmentId(null)
     setActiveNestedScanId(null)
   }, [cancelNestedRepoScan, setActiveNestedScanId])
 
@@ -119,6 +136,7 @@ export function useAddRepoNestedReviewState({
     nestedScanInProgress,
     nestedScanId,
     nestedImportScanId,
+    nestedRuntimeEnvironmentId,
     setNestedSelectedPaths,
     setNestedGroupName,
     setNestedScanInProgress,

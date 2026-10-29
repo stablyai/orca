@@ -6,30 +6,16 @@ import { Label } from '../ui/label'
 import { RuntimeAccessGrantList } from './RuntimeAccessGrantList'
 import { translate } from '@/i18n/i18n'
 import { RuntimePairingGeneratorForm } from './RuntimePairingGeneratorForm'
-
-const LOOPBACK_ADDRESS = '127.0.0.1'
-
-// Why: runtime pairing tokens stay valid in the main-process registry; keep the
-// last displayed URL across settings collapse/navigation without less-protected storage.
-const runtimePairingUrlCache: {
-  selectedAddress: string
-  customAddress: string
-  runtimePairingUrl: string | null
-  webClientUrl: string | null
-  runtimePairingDeviceId: string | null
-} = {
-  selectedAddress: LOOPBACK_ADDRESS,
-  customAddress: '',
-  runtimePairingUrl: null,
-  webClientUrl: null,
-  runtimePairingDeviceId: null
-}
-
-type RuntimePairingUrlGeneratorProps = {
-  framed?: boolean
-  showHeader?: boolean
-  showGeneratorForm?: boolean
-}
+import {
+  RUNTIME_PAIRING_LOOPBACK_ADDRESS,
+  cacheGeneratedRuntimePairingLink,
+  clearGeneratedRuntimePairingLink,
+  runtimePairingLinkCache,
+  runtimePairingReachForIntent,
+  selectRuntimePairingIntent,
+  type RuntimePairingIntent,
+  type RuntimePairingUrlGeneratorProps
+} from './runtime-pairing-link-state'
 
 export function RuntimePairingUrlGenerator({
   framed = true,
@@ -39,16 +25,19 @@ export function RuntimePairingUrlGenerator({
   const [networkInterfaces, setNetworkInterfaces] = useState<{ name: string; address: string }[]>(
     []
   )
-  const [selectedAddress, setSelectedAddress] = useState(runtimePairingUrlCache.selectedAddress)
-  const [customAddress, setCustomAddress] = useState(runtimePairingUrlCache.customAddress)
+  const [selectedAddress, setSelectedAddress] = useState(runtimePairingLinkCache.selectedAddress)
+  const [intent, setIntent] = useState<RuntimePairingIntent>(runtimePairingLinkCache.intent)
+  const [generatedAddress, setGeneratedAddress] = useState<string | null>(
+    runtimePairingLinkCache.generatedAddress
+  )
   const [runtimePairingUrl, setRuntimePairingUrl] = useState<string | null>(
-    runtimePairingUrlCache.runtimePairingUrl
+    runtimePairingLinkCache.runtimePairingUrl
   )
   const [webClientUrl, setWebClientUrl] = useState<string | null>(
-    runtimePairingUrlCache.webClientUrl
+    runtimePairingLinkCache.webClientUrl
   )
   const [runtimePairingDeviceId, setRuntimePairingDeviceId] = useState<string | null>(
-    runtimePairingUrlCache.runtimePairingDeviceId
+    runtimePairingLinkCache.runtimePairingDeviceId
   )
   const [runtimeAccessGrants, setRuntimeAccessGrants] = useState<RuntimeAccessGrant[]>([])
   const [isLoadingAccessGrants, setIsLoadingAccessGrants] = useState(false)
@@ -71,8 +60,7 @@ export function RuntimePairingUrlGenerator({
 
   const setContainerNode = useCallback(
     (node: HTMLDivElement | null): void => {
-      // Why: copy feedback timers are owned by this settings surface; clear
-      // them when Settings collapses or navigates away.
+      // Cancel surface-owned copy timers when Settings detaches.
       if (!node) {
         clearCopiedTargetResetTimer()
       }
@@ -158,6 +146,20 @@ export function RuntimePairingUrlGenerator({
   }, [loadNetworkInterfaces])
 
   useEffect(() => {
+    if (intent !== 'another' || networkInterfaces.length === 0) {
+      return
+    }
+    const addressStillAvailable = networkInterfaces.some(
+      (networkInterface) => networkInterface.address === selectedAddress
+    )
+    if (!addressStillAvailable) {
+      const nextAddress = networkInterfaces[0]?.address ?? ''
+      runtimePairingLinkCache.selectedAddress = nextAddress
+      setSelectedAddress(nextAddress)
+    }
+  }, [intent, networkInterfaces, selectedAddress])
+
+  useEffect(() => {
     void loadRuntimeAccessGrants()
     return () => {
       accessGrantLoadIdRef.current += 1
@@ -165,43 +167,55 @@ export function RuntimePairingUrlGenerator({
   }, [loadRuntimeAccessGrants])
 
   const clearGeneratedUrls = (): void => {
-    runtimePairingUrlCache.runtimePairingUrl = null
-    runtimePairingUrlCache.webClientUrl = null
-    runtimePairingUrlCache.runtimePairingDeviceId = null
+    clearGeneratedRuntimePairingLink()
     if (mountedRef.current) {
       setRuntimePairingUrl(null)
       setWebClientUrl(null)
       setRuntimePairingDeviceId(null)
+      setGeneratedAddress(null)
     }
   }
 
   const generateRuntimePairingUrl = async (): Promise<void> => {
+    const address = selectedAddress.trim()
+    runtimePairingLinkCache.selectedAddress = address
+    setSelectedAddress(address)
+    if (intent === 'custom') {
+      runtimePairingLinkCache.customAddress = address
+    }
     setIsGeneratingPairing(true)
     try {
-      const advertiseAddress = customAddress.trim() || selectedAddress
       const result = await window.api.mobile.getRuntimePairingUrl({
-        address: advertiseAddress,
-        rotate: true
+        address,
+        rotate: true,
+        // Send declared reach with the address; loopback alone cannot distinguish local-only intent from a tunnel frontend.
+        reach: runtimePairingReachForIntent(intent)
       })
       if (!result.available) {
         clearGeneratedUrls()
         if (mountedRef.current) {
+          // Prefer specific exposure guidance after widening failure, with generic fallback for other unavailable cases (STA-2370).
           toast.error(
-            translate(
-              'auto.components.settings.RuntimePairingUrlGenerator.2752126f3e',
-              'Runtime pairing is unavailable.'
-            )
+            result.guidance ??
+              translate(
+                'auto.components.settings.RuntimePairingUrlGenerator.2752126f3e',
+                'Runtime pairing is unavailable.'
+              )
           )
         }
         return
       }
-      runtimePairingUrlCache.runtimePairingUrl = result.pairingUrl
-      runtimePairingUrlCache.webClientUrl = result.webClientUrl
-      runtimePairingUrlCache.runtimePairingDeviceId = result.deviceId
+      cacheGeneratedRuntimePairingLink({
+        address,
+        pairingUrl: result.pairingUrl,
+        webClientUrl: result.webClientUrl,
+        deviceId: result.deviceId
+      })
       if (mountedRef.current) {
         setRuntimePairingUrl(result.pairingUrl)
         setWebClientUrl(result.webClientUrl)
         setRuntimePairingDeviceId(result.deviceId)
+        setGeneratedAddress(address)
       }
       await loadRuntimeAccessGrants()
       if (mountedRef.current) {
@@ -329,13 +343,29 @@ export function RuntimePairingUrlGenerator({
   const sharedAccessClassName = showGeneratorForm ? 'border-t border-border/40 pt-3' : ''
 
   const updateSelectedAddress = (address: string): void => {
-    runtimePairingUrlCache.selectedAddress = address
+    runtimePairingLinkCache.selectedAddress = address
     setSelectedAddress(address)
+    if (
+      intent === 'another' &&
+      !networkInterfaces.some((networkInterface) => networkInterface.address === address)
+    ) {
+      runtimePairingLinkCache.customAddress = address
+      runtimePairingLinkCache.intent = 'custom'
+      setIntent('custom')
+    } else if (intent === 'custom') {
+      runtimePairingLinkCache.customAddress = address
+    }
   }
 
-  const updateCustomAddress = (address: string): void => {
-    runtimePairingUrlCache.customAddress = address
-    setCustomAddress(address)
+  const updateIntent = (nextIntent: RuntimePairingIntent): void => {
+    setIntent(nextIntent)
+    setSelectedAddress(
+      selectRuntimePairingIntent(
+        nextIntent,
+        networkInterfaces,
+        runtimePairingLinkCache.customAddress
+      )
+    )
   }
 
   return (
@@ -358,17 +388,18 @@ export function RuntimePairingUrlGenerator({
       ) : null}
       {showGeneratorForm ? (
         <RuntimePairingGeneratorForm
-          loopbackAddress={LOOPBACK_ADDRESS}
+          intent={intent}
+          loopbackAddress={RUNTIME_PAIRING_LOOPBACK_ADDRESS}
           networkInterfaces={networkInterfaces}
           selectedAddress={selectedAddress}
-          customAddress={customAddress}
           refreshingNetworkInterfaces={refreshingNetworkInterfaces}
           isGeneratingPairing={isGeneratingPairing}
           webClientUrl={webClientUrl}
           runtimePairingUrl={runtimePairingUrl}
           copiedTarget={copiedTarget}
+          generatedAddress={generatedAddress}
+          onIntentChange={updateIntent}
           onSelectedAddressChange={updateSelectedAddress}
-          onCustomAddressChange={updateCustomAddress}
           onRefreshNetworkInterfaces={() => void loadNetworkInterfaces({ showToastOnError: true })}
           onGenerate={() => void generateRuntimePairingUrl()}
           onCopy={(target, value) => void copyGeneratedUrl(target, value)}
@@ -381,7 +412,6 @@ export function RuntimePairingUrlGenerator({
         currentGrantId={runtimePairingDeviceId}
         isLoading={isLoadingAccessGrants}
         revokingGrantId={revokingGrantId}
-        onRefresh={() => void loadRuntimeAccessGrants({ showToastOnError: true })}
         onRevoke={(grant) => void revokeRuntimeAccess(grant)}
       />
     </div>

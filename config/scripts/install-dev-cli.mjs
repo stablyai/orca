@@ -1,12 +1,10 @@
 #!/usr/bin/env node
-// Symlinks the orca-dev wrapper into /usr/local/bin so the dev CLI is
-// available globally after `pnpm run build:cli`.
+// Symlink orca-dev into /usr/local/bin after build:cli for global dev access.
 import { existsSync, lstatSync, readlinkSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
-const scriptDir = path.dirname(fileURLToPath(import.meta.url))
+const scriptDir = import.meta.dirname
 const source = path.join(scriptDir, 'orca-dev.mjs')
 
 const commandPath =

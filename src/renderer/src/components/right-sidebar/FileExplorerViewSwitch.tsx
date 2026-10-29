@@ -1,7 +1,7 @@
 import type React from 'react'
 import { translate } from '@/i18n/i18n'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import type { RightSidebarExplorerView } from '../../../../shared/types'
+import type { RightSidebarExplorerView } from '../../../../shared/ui-chrome-types'
 
 type FileExplorerViewSwitchProps = {
   view: RightSidebarExplorerView
@@ -13,9 +13,6 @@ type ExplorerViewOption = {
   label: string
   ariaLabel: string
 }
-
-const VIEW_SWITCH_ITEM_CLASS =
-  'h-full min-w-0 flex-1 shrink rounded-sm px-2 text-[11px] font-normal text-muted-foreground transition-[color,background-color,box-shadow] hover:bg-background/40 hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring data-[state=on]:bg-background data-[state=on]:font-medium data-[state=on]:text-foreground data-[state=on]:shadow-xs data-[state=on]:hover:bg-background data-[state=on]:hover:text-foreground'
 
 export function FileExplorerViewSwitch({
   view,
@@ -44,31 +41,36 @@ export function FileExplorerViewSwitch({
   ]
 
   return (
-    <ToggleGroup
-      type="single"
-      value={view}
-      onValueChange={(value) => {
-        if (value === 'files' || value === 'search') {
-          onSelectView(value)
-        }
-      }}
-      aria-label={translate(
-        'auto.components.right.sidebar.FileExplorerViewSwitch.f8a2c4d1e0',
-        'Explorer search mode'
-      )}
-      className="flex h-7 w-full items-center gap-0.5 rounded-md bg-input/40 p-0.5"
-      data-ignore-file-explorer-keys="true"
-    >
-      {options.map((option) => (
-        <ToggleGroupItem
-          key={option.view}
-          value={option.view}
-          aria-label={option.ariaLabel}
-          className={VIEW_SWITCH_ITEM_CLASS}
-        >
-          {option.label}
-        </ToggleGroupItem>
-      ))}
-    </ToggleGroup>
+    <div className="rounded-md bg-muted p-0.5">
+      <ToggleGroup
+        variant="segmented"
+        size="xs"
+        type="single"
+        spacing={1}
+        value={view}
+        onValueChange={(value) => {
+          if (value === 'files' || value === 'search') {
+            onSelectView(value)
+          }
+        }}
+        aria-label={translate(
+          'auto.components.right.sidebar.FileExplorerViewSwitch.f8a2c4d1e0',
+          'Explorer search mode'
+        )}
+        className="h-6 w-full"
+        data-ignore-file-explorer-keys="true"
+      >
+        {options.map((option) => (
+          <ToggleGroupItem
+            key={option.view}
+            value={option.view}
+            aria-label={option.ariaLabel}
+            className="min-w-0 flex-1"
+          >
+            {option.label}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+    </div>
   )
 }

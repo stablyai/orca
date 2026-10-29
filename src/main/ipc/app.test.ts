@@ -1,28 +1,83 @@
+import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as AppRelaunch from '../app-relaunch'
+import { detectUiLanguage } from '../../shared/ui-locale'
 
 const {
   handlers,
   appExitMock,
   appQuitMock,
   appRelaunchMock,
-  execFileMock,
+  spawnMock,
   destroySystemTrayMock,
+  rebuildSystemTrayMenuMock,
+  rebuildAppMenuMock,
+  getSystemLanguageDetectionMock,
+  setMainUiLanguageMock,
+  relaunchAppMock,
   showOpenDialogMock,
-  grantFloatingWorkspaceDirectoryMock
+  trustFloatingWorkspaceDirectoryMock,
+  registerRendererShutdownCheckpointHandlerMock,
+  registerMacKeyboardLayoutChangeNotificationsMock,
+  prepareWindowsAdministratorRestartMock
 } = vi.hoisted(() => ({
   handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
   appExitMock: vi.fn(),
   appQuitMock: vi.fn(),
   appRelaunchMock: vi.fn(),
-  execFileMock: vi.fn(),
+  spawnMock: vi.fn(),
   destroySystemTrayMock: vi.fn(),
+  rebuildSystemTrayMenuMock: vi.fn(),
+  rebuildAppMenuMock: vi.fn(),
+  getSystemLanguageDetectionMock: vi.fn(),
+  setMainUiLanguageMock: vi.fn(),
+  relaunchAppMock: vi.fn(),
   showOpenDialogMock: vi.fn(),
-  grantFloatingWorkspaceDirectoryMock: vi.fn()
+  trustFloatingWorkspaceDirectoryMock: vi.fn(),
+  registerRendererShutdownCheckpointHandlerMock: vi.fn(),
+  registerMacKeyboardLayoutChangeNotificationsMock: vi.fn(),
+  prepareWindowsAdministratorRestartMock: vi.fn()
 }))
 
 vi.mock('node:child_process', () => ({
-  execFile: execFileMock
+  spawn: spawnMock
 }))
+
+// Fake detached child lets tests drive readCommandStdout's stdout and close/error lifecycle.
+function createFakeSpawnChild(options: {
+  stdout?: string
+  code?: number
+  error?: Error
+  pid?: number
+  hang?: boolean
+}): EventEmitter & { pid: number; kill: ReturnType<typeof vi.fn>; stdout: EventEmitter } {
+  const { stdout, code = 0, error, pid = 4242, hang = false } = options
+  const child = new EventEmitter() as EventEmitter & {
+    pid: number
+    kill: ReturnType<typeof vi.fn>
+    stdout: EventEmitter & { setEncoding: ReturnType<typeof vi.fn> }
+  }
+  child.pid = pid
+  child.kill = vi.fn()
+  const stdoutStream = new EventEmitter() as EventEmitter & {
+    setEncoding: ReturnType<typeof vi.fn>
+  }
+  stdoutStream.setEncoding = vi.fn()
+  child.stdout = stdoutStream
+  if (!hang) {
+    queueMicrotask(() => {
+      if (error) {
+        child.emit('error', error)
+        return
+      }
+      if (stdout !== undefined) {
+        stdoutStream.emit('data', stdout)
+      }
+      child.emit('close', code)
+    })
+  }
+  return child
+}
 
 vi.mock('electron', () => ({
   app: {
@@ -45,24 +100,65 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('@electron-toolkit/utils', () => ({
-  is: { dev: true }
+vi.mock('../tray/system-tray', () => ({
+  destroySystemTray: destroySystemTrayMock,
+  rebuildSystemTrayMenu: rebuildSystemTrayMenuMock
 }))
 
-vi.mock('../tray/system-tray', () => ({
-  destroySystemTray: destroySystemTrayMock
+vi.mock('../menu/register-app-menu', () => ({ rebuildAppMenu: rebuildAppMenuMock }))
+vi.mock('../i18n/system-language', () => ({
+  getSystemLanguageDetection: getSystemLanguageDetectionMock
+}))
+vi.mock('../i18n/main-i18n', () => ({ setMainUiLanguage: setMainUiLanguageMock }))
+
+vi.mock('../app-relaunch', async (importOriginal) => ({
+  ...(await importOriginal<typeof AppRelaunch>()),
+  relaunchApp: relaunchAppMock
+}))
+
+vi.mock('../windows/windows-administrator-restart', () => ({
+  prepareWindowsAdministratorRestart: prepareWindowsAdministratorRestartMock
 }))
 
 vi.mock('./floating-workspace-directory', () => ({
   ensureDefaultFloatingWorkspacePath: vi.fn(),
-  grantFloatingWorkspaceDirectory: grantFloatingWorkspaceDirectoryMock,
+  trustFloatingWorkspaceDirectory: trustFloatingWorkspaceDirectoryMock,
   resolveFloatingTerminalCwd: vi.fn()
+}))
+
+vi.mock('./renderer-shutdown-checkpoint', () => ({
+  registerRendererShutdownCheckpointHandler: registerRendererShutdownCheckpointHandlerMock
+}))
+
+vi.mock('./macos-keyboard-layout-change-notifications', () => ({
+  registerMacKeyboardLayoutChangeNotifications: registerMacKeyboardLayoutChangeNotificationsMock
+}))
+
+const windowsProbes = vi.hoisted(() => ({
+  isWslAvailableAsync: vi.fn(async () => true),
+  listWslDistros: vi.fn(() => ['Ubuntu']),
+  listWslDistrosAsync: vi.fn(async () => ['Ubuntu']),
+  isPwshAvailable: vi.fn(() => true),
+  isPwshAvailableAsync: vi.fn(async () => true)
+}))
+
+vi.mock('../wsl', () => ({
+  isWslAvailableAsync: windowsProbes.isWslAvailableAsync,
+  listWslDistros: windowsProbes.listWslDistros,
+  listWslDistrosAsync: windowsProbes.listWslDistrosAsync
+}))
+
+vi.mock('../pwsh', () => ({
+  isPwshAvailable: windowsProbes.isPwshAvailable,
+  isPwshAvailableAsync: windowsProbes.isPwshAvailableAsync
 }))
 
 import { registerAppHandlers } from './app'
 
 describe('registerAppHandlers', () => {
   const originalPlatform = process.platform
+  // Fake child PIDs must never target a live process group on timeout.
+  let processKillSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
     vi.useFakeTimers()
@@ -70,16 +166,137 @@ describe('registerAppHandlers', () => {
     appExitMock.mockReset()
     appQuitMock.mockReset()
     appRelaunchMock.mockReset()
-    execFileMock.mockReset()
+    spawnMock.mockReset()
     destroySystemTrayMock.mockReset()
+    rebuildSystemTrayMenuMock.mockReset()
+    rebuildAppMenuMock.mockReset()
+    getSystemLanguageDetectionMock.mockReset()
+    setMainUiLanguageMock.mockReset()
+    relaunchAppMock.mockReset()
+    relaunchAppMock.mockImplementation(() => appRelaunchMock())
+    prepareWindowsAdministratorRestartMock.mockReset()
     showOpenDialogMock.mockReset()
-    grantFloatingWorkspaceDirectoryMock.mockReset()
+    trustFloatingWorkspaceDirectoryMock.mockReset()
+    registerRendererShutdownCheckpointHandlerMock.mockReset()
+    registerMacKeyboardLayoutChangeNotificationsMock.mockReset()
+    for (const probe of Object.values(windowsProbes)) {
+      probe.mockClear()
+    }
+    processKillSpy = vi.spyOn(process, 'kill').mockReturnValue(true)
     Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
   })
 
   afterEach(() => {
+    processKillSpy.mockRestore()
     vi.useRealTimers()
     Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+  })
+
+  it('registers the combined renderer shutdown checkpoint', () => {
+    const store = {}
+
+    registerAppHandlers(store as never)
+
+    expect(registerRendererShutdownCheckpointHandlerMock).toHaveBeenCalledWith(
+      store,
+      undefined,
+      undefined
+    )
+    expect(registerMacKeyboardLayoutChangeNotificationsMock).toHaveBeenCalledOnce()
+  })
+
+  it('returns fallback detection before catalog loading and then refreshes native menus', async () => {
+    const detection = detectUiLanguage(['fr-FR'], 'browser-fallback')
+    getSystemLanguageDetectionMock.mockReturnValueOnce(null).mockReturnValue(detection)
+    let finishLoad: (locale: string) => void = () => {}
+    setMainUiLanguageMock.mockReturnValue(
+      new Promise<string>((resolve) => {
+        finishLoad = resolve
+      })
+    )
+    const store = { getSettings: () => ({ uiLanguage: 'system' }) }
+    // SAFETY: the language handler only reads the uiLanguage setting.
+    registerAppHandlers(store as never)
+
+    expect(await handlers.get('app:getSystemLanguageDetection')?.(null, ['fr-FR'])).toBe(detection)
+    expect(getSystemLanguageDetectionMock).toHaveBeenLastCalledWith(['fr-FR'])
+    expect(rebuildAppMenuMock).not.toHaveBeenCalled()
+    expect(rebuildSystemTrayMenuMock).not.toHaveBeenCalled()
+    finishLoad('fr')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(rebuildAppMenuMock).toHaveBeenCalledOnce()
+    expect(rebuildSystemTrayMenuMock).toHaveBeenCalledOnce()
+  })
+
+  it('keeps an explicit language while accepting browser fallback detection', () => {
+    const detection = detectUiLanguage(['fr-FR'], 'browser-fallback')
+    getSystemLanguageDetectionMock.mockReturnValueOnce(null).mockReturnValue(detection)
+    const store = { getSettings: () => ({ uiLanguage: 'en' }) }
+    // SAFETY: the language handler only reads the uiLanguage setting.
+    registerAppHandlers(store as never)
+
+    expect(handlers.get('app:getSystemLanguageDetection')?.(null, ['fr-FR'])).toBe(detection)
+    expect(setMainUiLanguageMock).not.toHaveBeenCalled()
+  })
+
+  it('preserves detection if the asynchronous native menu refresh fails', async () => {
+    const detection = detectUiLanguage(['fr-FR'], 'browser-fallback')
+    getSystemLanguageDetectionMock.mockReturnValueOnce(null).mockReturnValue(detection)
+    const failure = new Error('Catalog unavailable')
+    setMainUiLanguageMock.mockRejectedValue(failure)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const store = { getSettings: () => ({ uiLanguage: 'system' }) }
+    // SAFETY: the language handler only reads the uiLanguage setting.
+    registerAppHandlers(store as never)
+
+    try {
+      expect(await handlers.get('app:getSystemLanguageDetection')?.(null, ['fr-FR'])).toBe(
+        detection
+      )
+      await vi.advanceTimersByTimeAsync(0)
+      expect(warn).toHaveBeenCalledWith('[app] failed to refresh system language menus:', failure)
+      expect(rebuildAppMenuMock).not.toHaveBeenCalled()
+      expect(rebuildSystemTrayMenuMock).not.toHaveBeenCalled()
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('checkpoints before scheduling the native administrator restart and quits normally', async () => {
+    const plan = { execPath: 'C:\\Orca\\resources\\bin\\orca.exe', args: ['restart'] }
+    prepareWindowsAdministratorRestartMock.mockReturnValue(plan)
+    let finishCleanup!: () => void
+    const onBeforeRelaunch = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishCleanup = resolve
+        })
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this handler never reads the store.
+    registerAppHandlers({} as never, { onBeforeRelaunch })
+    const pending = Promise.resolve(handlers.get('app:restartAsAdministrator')?.(null))
+    await vi.advanceTimersByTimeAsync(150)
+    expect(relaunchAppMock).not.toHaveBeenCalled()
+    finishCleanup()
+    await pending
+    await vi.advanceTimersByTimeAsync(150)
+    expect(relaunchAppMock).toHaveBeenCalledWith('windows-administrator', undefined, plan)
+    expect(appQuitMock).toHaveBeenCalledOnce()
+    expect(appExitMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps the desktop open if the native restart is unavailable', async () => {
+    prepareWindowsAdministratorRestartMock.mockImplementation(() => {
+      throw new Error('Unavailable')
+    })
+    const onBeforeRelaunch = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this handler never reads the store.
+    registerAppHandlers({} as never, { onBeforeRelaunch })
+    await expect(handlers.get('app:restartAsAdministrator')?.(null)).rejects.toThrow('Unavailable')
+    await vi.advanceTimersByTimeAsync(150)
+    expect(onBeforeRelaunch).not.toHaveBeenCalled()
+    expect(relaunchAppMock).not.toHaveBeenCalled()
+    expect(appQuitMock).not.toHaveBeenCalled()
   })
 
   it('marks relaunch as expected shutdown before exiting', async () => {
@@ -96,6 +313,7 @@ describe('registerAppHandlers', () => {
     await vi.advanceTimersByTimeAsync(150)
 
     expect(destroySystemTrayMock).toHaveBeenCalledTimes(1)
+    expect(relaunchAppMock).toHaveBeenCalledWith('renderer-request')
     expect(appRelaunchMock).toHaveBeenCalledTimes(1)
     expect(appExitMock).toHaveBeenCalledWith(0)
     expect(destroySystemTrayMock.mock.invocationCallOrder[0]).toBeLessThan(
@@ -129,6 +347,37 @@ describe('registerAppHandlers', () => {
     expect(appExitMock).toHaveBeenCalledWith(0)
   })
 
+  it('runs exit-only cleanup after pre-relaunch cleanup on relaunch, never on restart', async () => {
+    let finishExitCleanup!: () => void
+    const onBeforeRelaunch = vi.fn()
+    const onBeforeRelaunchExit = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishExitCleanup = resolve
+        })
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: relaunch and restart never read the store.
+    registerAppHandlers({} as never, { onBeforeRelaunch, onBeforeRelaunchExit })
+
+    await handlers.get('app:restart')?.(null)
+    await vi.advanceTimersByTimeAsync(150)
+    expect(onBeforeRelaunchExit).not.toHaveBeenCalled()
+
+    const relaunchPromise = Promise.resolve(handlers.get('app:relaunch')?.(null))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(onBeforeRelaunchExit).toHaveBeenCalledOnce()
+    expect(onBeforeRelaunch.mock.invocationCallOrder.at(-1)).toBeLessThan(
+      onBeforeRelaunchExit.mock.invocationCallOrder[0]
+    )
+    await vi.advanceTimersByTimeAsync(150)
+    expect(appExitMock).not.toHaveBeenCalled()
+
+    finishExitCleanup()
+    await relaunchPromise
+    await vi.advanceTimersByTimeAsync(150)
+    expect(appExitMock).toHaveBeenCalledWith(0)
+  })
+
   it('marks restart as expected shutdown before quitting through the normal pipeline', async () => {
     const onBeforeRelaunch = vi.fn()
     registerAppHandlers({} as never, { onBeforeRelaunch })
@@ -144,6 +393,7 @@ describe('registerAppHandlers', () => {
     await vi.advanceTimersByTimeAsync(150)
 
     expect(appRelaunchMock).toHaveBeenCalledTimes(1)
+    expect(relaunchAppMock).toHaveBeenCalledWith('admin-restart')
     expect(appQuitMock).toHaveBeenCalledTimes(1)
     expect(appExitMock).not.toHaveBeenCalled()
   })
@@ -175,10 +425,110 @@ describe('registerAppHandlers', () => {
     expect(appExitMock).not.toHaveBeenCalled()
   })
 
-  it('falls back when the macOS keyboard layout probe never reports completion', async () => {
+  it.each([true, false])(
+    'prioritizes the selected input mode regardless of record order (%s)',
+    async (modeLast) => {
+      Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+      const inputMode = {
+        'Bundle ID': 'com.apple.inputmethod.SCIM',
+        'Input Mode': 'com.apple.inputmethod.SCIM.ITABC',
+        InputSourceKind: 'Input Mode'
+      }
+      const keyboardLayout = {
+        InputSourceKind: 'Keyboard Layout',
+        'KeyboardLayout Name': 'ABC',
+        'KeyboardLayout ID': 252
+      }
+      spawnMock.mockImplementation(() =>
+        createFakeSpawnChild({
+          stdout: JSON.stringify([
+            { 'Bundle ID': 'com.apple.PressAndHold', InputSourceKind: 'Non Keyboard Input Method' },
+            ...(modeLast ? [keyboardLayout, inputMode] : [inputMode, keyboardLayout])
+          ])
+        })
+      )
+      registerAppHandlers({} as never)
+
+      await expect(handlers.get('app:getKeyboardInputSourceId')?.(null)).resolves.toBe(
+        'com.apple.inputmethod.SCIM.ITABC'
+      )
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+      // macOS 15 plutil crashes extracting the array as JSON; pin defaults export, xml1 extraction and final JSON conversion.
+      expect(spawnMock).toHaveBeenCalledWith(
+        '/bin/sh',
+        [
+          '-c',
+          '/usr/bin/defaults export com.apple.HIToolbox - | ' +
+            '/usr/bin/plutil -extract AppleSelectedInputSources xml1 -o - - | ' +
+            '/usr/bin/plutil -convert json -o - -'
+        ],
+        expect.objectContaining({ detached: true, stdio: ['ignore', 'pipe', 'ignore'] })
+      )
+    }
+  )
+
+  it('reads the layout ID only after a selected keyboard layout without a bundle ID is proved', async () => {
     Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
-    const killMock = vi.fn()
-    execFileMock.mockImplementation(() => ({ kill: killMock }))
+    spawnMock
+      .mockImplementationOnce(() =>
+        createFakeSpawnChild({
+          stdout: JSON.stringify([
+            {
+              'Bundle ID': 'com.apple.PressAndHold',
+              InputSourceKind: 'Non Keyboard Input Method'
+            },
+            {
+              InputSourceKind: 'Keyboard Layout',
+              'KeyboardLayout Name': 'ABC',
+              'KeyboardLayout ID': 252
+            }
+          ])
+        })
+      )
+      .mockImplementationOnce(() => createFakeSpawnChild({ stdout: 'com.apple.keylayout.ABC\n' }))
+    registerAppHandlers({} as never)
+
+    await expect(handlers.get('app:getKeyboardInputSourceId')?.(null)).resolves.toBe(
+      'com.apple.keylayout.ABC'
+    )
+    expect(spawnMock).toHaveBeenCalledTimes(2)
+    expect(spawnMock).toHaveBeenLastCalledWith(
+      '/usr/bin/defaults',
+      ['read', 'com.apple.HIToolbox', 'AppleCurrentKeyboardLayoutInputSourceID'],
+      expect.objectContaining({ detached: true })
+    )
+  })
+
+  it.each([
+    { name: 'nonzero exit', result: { code: 1 } },
+    { name: 'spawn failure', result: { error: new Error('spawn ENOENT') } },
+    { name: 'invalid JSON', result: { stdout: '{' } },
+    { name: 'non-array JSON', result: { stdout: '{}' } },
+    { name: 'empty records', result: { stdout: '[]' } },
+    { name: 'unknown record', result: { stdout: '[{"InputSourceKind":"Unknown"}]' } },
+    {
+      name: 'unidentified input mode',
+      result: { stdout: '[{"InputSourceKind":"Keyboard Layout"},{"InputSourceKind":"Input Mode"}]' }
+    },
+    {
+      name: 'non-keyboard record',
+      result: {
+        stdout:
+          '[{"InputSourceKind":"Non Keyboard Input Method","Bundle ID":"com.apple.PressAndHold"}]'
+      }
+    }
+  ])('does not infer the backing layout after $name', async ({ result }) => {
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+    spawnMock.mockImplementation(() => createFakeSpawnChild(result))
+    registerAppHandlers({} as never)
+
+    await expect(handlers.get('app:getKeyboardInputSourceId')?.(null)).resolves.toBeNull()
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns unknown and cleans up when the selected-source probe times out', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+    spawnMock.mockImplementation(() => createFakeSpawnChild({ pid: 4242, hang: true }))
     registerAppHandlers({} as never)
 
     const handler = handlers.get('app:getKeyboardInputSourceId')
@@ -189,11 +539,13 @@ describe('registerAppHandlers', () => {
       return result
     })
 
-    await vi.advanceTimersByTimeAsync(500)
+    await vi.advanceTimersByTimeAsync(1000)
 
     expect(settled).toBe(true)
     await expect(resultPromise).resolves.toBeNull()
-    expect(killMock).toHaveBeenCalled()
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+    expect(processKillSpy).toHaveBeenCalledTimes(1)
+    expect(processKillSpy).toHaveBeenCalledWith(-4242, 'SIGKILL')
   })
 
   it('picks an existing floating workspace directory without enabling native directory creation', async () => {
@@ -210,6 +562,21 @@ describe('registerAppHandlers', () => {
     expect(showOpenDialogMock).toHaveBeenCalledWith({
       properties: ['openDirectory']
     })
-    expect(grantFloatingWorkspaceDirectoryMock).toHaveBeenCalledWith(store, '/Users/kaylee/notes')
+    expect(trustFloatingWorkspaceDirectoryMock).toHaveBeenCalledWith(store, '/Users/kaylee/notes')
+  })
+
+  // Renderer capability refreshes must not block the main loop on synchronous wsl.exe/pwsh.exe probes.
+  it('answers the Windows shell capability channels without a blocking spawn', async () => {
+    registerAppHandlers({} as never)
+
+    await expect(handlers.get('wsl:isAvailable')?.(null)).resolves.toBe(true)
+    await expect(handlers.get('wsl:listDistros')?.(null)).resolves.toEqual(['Ubuntu'])
+    await expect(handlers.get('pwsh:isAvailable')?.(null)).resolves.toBe(true)
+
+    expect(windowsProbes.isWslAvailableAsync).toHaveBeenCalledTimes(1)
+    expect(windowsProbes.listWslDistrosAsync).toHaveBeenCalledTimes(1)
+    expect(windowsProbes.isPwshAvailableAsync).toHaveBeenCalledTimes(1)
+    expect(windowsProbes.listWslDistros).not.toHaveBeenCalled()
+    expect(windowsProbes.isPwshAvailable).not.toHaveBeenCalled()
   })
 })

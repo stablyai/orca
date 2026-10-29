@@ -1,13 +1,38 @@
 import { translate } from '@/i18n/i18n'
+import { Switch } from '@/components/ui/switch'
+
 type TerminalQuickCommandAppendEnterSwitchProps = {
   appendEnter: boolean
   onToggle: () => void
+  compact?: boolean
 }
 
 export function TerminalQuickCommandAppendEnterSwitch({
   appendEnter,
-  onToggle
+  onToggle,
+  compact = false
 }: TerminalQuickCommandAppendEnterSwitchProps): React.JSX.Element {
+  if (compact) {
+    return (
+      <label className="flex min-w-0 cursor-pointer items-center gap-2">
+        <Switch
+          checked={appendEnter}
+          aria-label={translate(
+            'auto.components.terminal.quick.commands.TerminalQuickCommandAppendEnterSwitch.e4e5fed3b3',
+            'Toggle append Enter'
+          )}
+          onCheckedChange={onToggle}
+        />
+        <span className="truncate text-[11px] text-muted-foreground">
+          {translate(
+            'auto.components.terminal.quick.commands.TerminalQuickCommandAppendEnterSwitch.767e4be3e3',
+            'Append Enter — run immediately'
+          )}
+        </span>
+      </label>
+    )
+  }
+
   return (
     <div className="flex items-start justify-between gap-4">
       <div className="space-y-0.5">
@@ -24,25 +49,14 @@ export function TerminalQuickCommandAppendEnterSwitch({
           )}
         </div>
       </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={appendEnter}
+      <Switch
+        checked={appendEnter}
         aria-label={translate(
           'auto.components.terminal.quick.commands.TerminalQuickCommandAppendEnterSwitch.e4e5fed3b3',
           'Toggle append Enter'
         )}
-        onClick={onToggle}
-        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-          appendEnter ? 'bg-foreground' : 'bg-muted-foreground/30'
-        }`}
-      >
-        <span
-          className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-            appendEnter ? 'translate-x-4' : 'translate-x-0.5'
-          }`}
-        />
-      </button>
+        onCheckedChange={onToggle}
+      />
     </div>
   )
 }

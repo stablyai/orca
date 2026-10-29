@@ -1,11 +1,20 @@
-import type { MobileTerminalTheme } from '../terminal/TerminalWebView'
+import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import type { BrowserLoadError } from '../../../src/shared/browser-workspace-types'
+import { browserLoadErrorsEqual } from '../../../src/shared/browser-load-failure'
+import { translate } from '../i18n/mobile-i18n'
 
 export type TerminalRecord = {
   handle: string
   title: string
   terminalTheme?: MobileTerminalTheme
   isActive: boolean
+  /** From `terminal.list`; parked and proven-absent leaves report false. */
+  connected?: boolean
+  /** From `terminal.list`; a live PTY with no leaf, so it never appears as a tab. */
+  orphaned?: boolean
+  /** From `terminal.list`; the host's own pane identity, which tab snapshots never carry. */
+  agentIdentity?: string
 }
 
 export type MobileTerminalSessionTab = {
@@ -17,6 +26,10 @@ export type MobileTerminalSessionTab = {
   status?: 'pending-handle' | 'ready'
   terminal: string | null
   agentStatus?: AgentStatusEntry | null
+  nativeChatIdentity?: unknown
+  /** Host-provided launch context still parked as an unsent TUI-input draft. */
+  launchDraft?: string
+  launchDraftCreatedAt?: number
   terminalTheme?: MobileTerminalTheme
   isActive: boolean
 }
@@ -51,10 +64,48 @@ type MobileSessionTabLike =
       browserPageId?: string | null
       url?: string
       loading?: boolean
+      loadError?: BrowserLoadError | null
       canGoBack?: boolean
       canGoForward?: boolean
       isActive?: boolean
     }
+  | {
+      type: 'agent-session'
+      id: string
+      title?: string
+      sessionId?: string
+      agent?: string
+      chatStatus?: unknown
+      isActive?: boolean
+    }
+
+export function mobileTerminalThemesEqual(
+  left: MobileTerminalTheme | null | undefined,
+  right: MobileTerminalTheme | null | undefined
+): boolean {
+  if (left === right) {
+    return true
+  }
+  if (!left || !right || left.mode !== right.mode) {
+    return false
+  }
+  const leftColors = left.theme as Readonly<Record<string, unknown>>
+  const rightColors = right.theme as Readonly<Record<string, unknown>>
+  for (const color in leftColors) {
+    if (
+      Object.hasOwn(leftColors, color) &&
+      (!Object.hasOwn(rightColors, color) || leftColors[color] !== rightColors[color])
+    ) {
+      return false
+    }
+  }
+  for (const color in rightColors) {
+    if (Object.hasOwn(rightColors, color) && !Object.hasOwn(leftColors, color)) {
+      return false
+    }
+  }
+  return true
+}
 
 export function mobileSessionTabsEqual(
   a: readonly MobileSessionTabLike[],
@@ -84,8 +135,12 @@ function mobileSessionTabEqual(
         a.leafId === b.leafId &&
         a.status === b.status &&
         a.terminal === b.terminal &&
+        a.launchDraft === b.launchDraft &&
+        a.launchDraftCreatedAt === b.launchDraftCreatedAt &&
         JSON.stringify(a.agentStatus ?? null) === JSON.stringify(b.agentStatus ?? null) &&
-        JSON.stringify(a.terminalTheme ?? null) === JSON.stringify(b.terminalTheme ?? null)
+        JSON.stringify(a.nativeChatIdentity ?? null) ===
+          JSON.stringify(b.nativeChatIdentity ?? null) &&
+        mobileTerminalThemesEqual(a.terminalTheme, b.terminalTheme)
       )
     case 'markdown':
       return (
@@ -110,9 +165,29 @@ function mobileSessionTabEqual(
         a.browserPageId === b.browserPageId &&
         a.url === b.url &&
         a.loading === b.loading &&
+        browserLoadErrorsEqual(a.loadError, b.loadError) &&
         a.canGoBack === b.canGoBack &&
         a.canGoForward === b.canGoForward
       )
+    case 'agent-session':
+      return (
+        b.type === 'agent-session' &&
+        a.sessionId === b.sessionId &&
+        a.agent === b.agent &&
+        JSON.stringify(a.chatStatus ?? null) === JSON.stringify(b.chatStatus ?? null)
+      )
+  }
+}
+
+// Partial snapshots own live fields; omitted theme and host pane identity retain the known values.
+function mergeTerminalSnapshotWithKnownRecord(
+  snapshot: TerminalRecord,
+  known: TerminalRecord
+): TerminalRecord {
+  return {
+    ...snapshot,
+    terminalTheme: snapshot.terminalTheme ?? known.terminalTheme,
+    agentIdentity: snapshot.agentIdentity ?? known.agentIdentity
   }
 }
 
@@ -126,9 +201,31 @@ export function mergeTerminalRecordsByCurrentOrder(
   const terminalTabsByHandle = new Map(terminalTabs.map((tab) => [tab.handle, tab]))
   const currentHandles = new Set(currentTerminals.map((terminal) => terminal.handle))
   return [
-    ...currentTerminals.map((terminal) => terminalTabsByHandle.get(terminal.handle) ?? terminal),
+    ...currentTerminals.map((terminal) => {
+      const snapshotTerminal = terminalTabsByHandle.get(terminal.handle)
+      return snapshotTerminal
+        ? mergeTerminalSnapshotWithKnownRecord(snapshotTerminal, terminal)
+        : terminal
+    }),
     ...terminalTabs.filter((terminal) => !currentHandles.has(terminal.handle))
   ]
+}
+
+// Partial tabs only justify an inventory sweep, never pruning; parked/orphaned handles legitimately lack tabs and must not force fast polling.
+export function hasConnectedTerminalAbsentFromSessionTabs(
+  currentTerminals: readonly TerminalRecord[],
+  tabs: readonly MobileSessionTabLike[]
+): boolean {
+  const tabbable = currentTerminals.filter(
+    (terminal) => terminal.connected === true && terminal.orphaned !== true
+  )
+  if (tabbable.length === 0) {
+    return false
+  }
+  const tabHandles = new Set(
+    getTerminalRecordsFromSessionTabs(tabs).map((terminal) => terminal.handle)
+  )
+  return tabbable.some((terminal) => !tabHandles.has(terminal.handle))
 }
 
 export function getTerminalRecordsFromSessionTabs(
@@ -141,9 +238,10 @@ export function getTerminalRecordsFromSessionTabs(
     return [
       {
         handle: tab.terminal,
-        title: tab.title || 'Terminal',
+        title: tab.title || translate('session.terminalRecords.defaultTitle', 'Terminal'),
         terminalTheme: tab.terminalTheme,
-        isActive: tab.isActive === true
+        isActive: tab.isActive === true,
+        connected: true
       }
     ]
   })
@@ -163,8 +261,7 @@ export function mergeTerminalListWithKnownRecords(
   return terminalList.map((terminal) => {
     const sessionTerminal = sessionTerminalsByHandle.get(terminal.handle)
     const currentTerminal = currentTerminalsByHandle.get(terminal.handle)
-    // Why: terminal.list summaries can omit the mobile theme; keep the richer
-    // session-tab/current record so polling cannot reset TerminalWebView.
+    // Keep richer themes absent from terminal.list so polling cannot reset the WebView.
     return {
       ...terminal,
       terminalTheme:
@@ -183,9 +280,9 @@ export function terminalRecordsEqual(
       (terminal, index) =>
         terminal.handle === b[index]?.handle &&
         terminal.title === b[index]?.title &&
-        JSON.stringify(terminal.terminalTheme ?? null) ===
-          JSON.stringify(b[index]?.terminalTheme ?? null) &&
-        terminal.isActive === b[index]?.isActive
+        mobileTerminalThemesEqual(terminal.terminalTheme, b[index]?.terminalTheme) &&
+        terminal.isActive === b[index]?.isActive &&
+        terminal.agentIdentity === b[index]?.agentIdentity
     )
   )
 }

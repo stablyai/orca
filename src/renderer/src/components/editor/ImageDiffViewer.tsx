@@ -1,4 +1,4 @@
-import { type JSX } from 'react'
+import type { JSX } from 'react'
 import { cn } from '@/lib/utils'
 import ImageViewer from './ImageViewer'
 import { translate } from '@/i18n/i18n'
@@ -72,11 +72,7 @@ export default function ImageDiffViewer({
   layout = 'fill'
 }: ImageDiffViewerProps): JSX.Element {
   const isIntrinsicLayout = layout === 'intrinsic'
-  // Why: in inline (single-column) mode the grid defaults to equal row
-  // heights, which squishes each preview into half the panel. Using
-  // minmax(32rem, 1fr) ensures content panes are tall enough to show a
-  // full page, and overflow-y-auto lets the user scroll between them.
-  // Empty "No preview" panes collapse to auto height.
+  // Equal inline grid rows squash previews; give content a scrollable page-sized minimum while empty panes collapse.
   const gridRowStyle =
     !sideBySide && !isIntrinsicLayout
       ? {

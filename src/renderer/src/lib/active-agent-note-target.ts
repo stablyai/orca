@@ -1,25 +1,24 @@
-import { useEffect, useState } from 'react'
 import type { RuntimeTerminalListResult } from '../../../shared/runtime-types'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import { toHostSessionTabId } from '../../../shared/terminal-surface-id'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../shared/agent-status-types'
 import type { AppState } from '@/store/types'
-import { useAppStore } from '@/store'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
-import {
-  getSettingsForWorktreeRuntimeOwner,
-  type WorktreeRuntimeOwnerState
-} from '@/lib/worktree-runtime-owner'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
-import type { TerminalLayoutSnapshot } from '../../../shared/types'
+import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
 import {
-  detectAgentStatusFromTitle,
-  getAgentLabel,
-  isExplicitAgentStatusFresh
-} from './agent-status'
-import { resolveRuntimePaneTitleForLeaf } from './runtime-pane-title-leaf-id'
+  classifyTitleActivity,
+  isExplicitAgentStatusFresh,
+  resolveTitleActivityLabel
+} from '@/lib/pane-agent-evidence'
+import { resolveRuntimePaneTitleForLeaf } from '../../../shared/runtime-pane-title-leaf-id'
 
 const ACTIVE_AGENT_PROBE_RPC_TIMEOUT_MS = 3000
 const ACTIVE_AGENT_TERMINAL_LIST_LIMIT = 200
@@ -50,13 +49,12 @@ export type ActiveTerminalNoteTargetState = {
   >
   runtimePaneTitlesByTabId?: Record<string, Record<number, string> | undefined>
   agentStatusByPaneKey?: Record<string, AgentStatusEntry | undefined>
-  settings: Parameters<typeof getActiveRuntimeTarget>[0]
 } & Pick<WorktreeRuntimeOwnerState, 'repos' | 'worktreesByRepo'>
 
 type ActiveAgentRuntimeProbeDescriptor = {
   key: string
   worktreeId: string
-  runtimeTarget: ReturnType<typeof getActiveRuntimeTarget>
+  runtimeTarget: RuntimeClientTarget
   noteTarget: ActiveTerminalNoteTarget
 }
 
@@ -80,48 +78,6 @@ export function getActiveTerminalNoteTarget(
   return leafId ? { tabId, leafId } : null
 }
 
-export function useCanSendNotesToActiveTerminal(worktreeId: string): boolean {
-  const canSendFromRendererState = useAppStore(
-    (state) => getActiveAgentNoteTarget(state, worktreeId) !== null
-  )
-  const probeKey = useAppStore(
-    (state) => getActiveAgentRuntimeProbeDescriptor(state, worktreeId)?.key ?? null
-  )
-  const [runtimeProbe, setRuntimeProbe] = useState<{ key: string; canSend: boolean } | null>(null)
-
-  useEffect(() => {
-    if (canSendFromRendererState || !probeKey) {
-      return
-    }
-    const probeDescriptor = getActiveAgentRuntimeProbeDescriptor(useAppStore.getState(), worktreeId)
-    if (!probeDescriptor || probeDescriptor.key !== probeKey) {
-      return
-    }
-
-    let cancelled = false
-    void probeActiveAgentNoteTarget(probeDescriptor)
-      .then((canSend) => {
-        if (!cancelled) {
-          setRuntimeProbe({ key: probeKey, canSend })
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setRuntimeProbe({ key: probeKey, canSend: false })
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [canSendFromRendererState, probeKey, worktreeId])
-
-  return (
-    canSendFromRendererState ||
-    (runtimeProbe !== null && runtimeProbe.key === probeKey && runtimeProbe.canSend)
-  )
-}
-
 export function getActiveAgentNoteTarget(
   state: ActiveTerminalNoteTargetState,
   worktreeId: string,
@@ -141,9 +97,7 @@ export function getActiveAgentNoteTarget(
   if (entry && isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
     return noteTarget
   }
-  // Why: freshly opened agents can be idle before their first hook event. Use
-  // renderer title/launch hints only to show the option; runtime still verifies
-  // the focused terminal is an idle agent before sending Enter.
+  // Idle-before-first-hook hints only expose the option; runtime still verifies the focused agent is idle before Enter.
   if (!hasFocusedPaneAgentHint(state, worktreeId, noteTarget)) {
     return null
   }
@@ -163,10 +117,9 @@ export function getActiveAgentRuntimeProbeDescriptor(
   if (!activePtyId) {
     return null
   }
-  // Route by the worktree's owner host so the probe targets the host that runs
-  // this worktree's agent terminal, not the focused runtime.
-  const runtimeTarget = getActiveRuntimeTarget(
-    getSettingsForWorktreeRuntimeOwner(state, worktreeId)
+  // Probe the worktree’s owner host rather than the focused runtime.
+  const runtimeTarget = runtimeTargetForOwnerEnvironment(
+    runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   )
   const runtimeKey =
     runtimeTarget.kind === 'environment' ? `env:${runtimeTarget.environmentId}` : 'local'
@@ -202,7 +155,7 @@ export async function probeActiveAgentNoteTarget({
 }
 
 export async function findActiveRuntimeTerminal(
-  runtimeTarget: ReturnType<typeof getActiveRuntimeTarget>,
+  runtimeTarget: RuntimeClientTarget,
   worktreeId: string,
   noteTarget: ActiveTerminalNoteTarget,
   timeoutMs: number
@@ -211,12 +164,18 @@ export async function findActiveRuntimeTerminal(
     runtimeTarget,
     'terminal.list',
     // Why: worktree ids can look like branch names or paths; keep the lookup unambiguous.
-    { worktree: toRuntimeWorktreeSelector(worktreeId), limit: ACTIVE_AGENT_TERMINAL_LIST_LIMIT },
+    {
+      worktree: toRuntimeWorktreeSelector(worktreeId),
+      limit: ACTIVE_AGENT_TERMINAL_LIST_LIMIT,
+      includeVisualLayouts: false
+    },
     { timeoutMs }
   )
+  // Why: paired renderer tabs wrap the host id with `web-terminal-*`.
+  const runtimeTabId = toHostSessionTabId(noteTarget.tabId)
   return (
     terminals.find(
-      (terminal) => terminal.tabId === noteTarget.tabId && terminal.leafId === noteTarget.leafId
+      (terminal) => terminal.tabId === runtimeTabId && terminal.leafId === noteTarget.leafId
     ) ?? null
   )
 }
@@ -233,8 +192,7 @@ function getActivePanePtyId(
   const ptyIdsByLeafId = state.terminalLayoutsByTabId[noteTarget.tabId]?.ptyIdsByLeafId
   if (ptyIdsByLeafId && Object.keys(ptyIdsByLeafId).length > 0) {
     const activeLeafPtyId = ptyIdsByLeafId[noteTarget.leafId]
-    // Why: layout maps can survive sleep/reconnect; ptyIdsByTabId is the live
-    // PTY source of truth for whether submitting with Enter is currently safe.
+    // Layout maps can survive reconnect; only live ptyIdsByTabId bindings make Enter safe.
     return activeLeafPtyId && livePtyIds.includes(activeLeafPtyId) ? activeLeafPtyId : null
   }
   return livePtyIds[0] ?? null
@@ -271,5 +229,5 @@ function getFocusedRuntimePaneTitle(
 }
 
 function isRecognizedAgentTitle(title: string): boolean {
-  return detectAgentStatusFromTitle(title) !== null && getAgentLabel(title) !== null
+  return classifyTitleActivity(title) !== null && resolveTitleActivityLabel(title) !== null
 }

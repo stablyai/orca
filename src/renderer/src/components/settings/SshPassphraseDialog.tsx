@@ -26,9 +26,7 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
 
   const requestId = request?.requestId
 
-  // Why: reset form state during render (not useEffect) so the cleared input is
-  // visible on the same paint as the new request arriving — useEffect would
-  // leave one render showing the previous passphrase value.
+  // Reset before paint so new requests cannot flash the previous credential.
   const [prevRequestId, setPrevRequestId] = useState(requestId)
   if (requestId !== prevRequestId) {
     setPrevRequestId(requestId)
@@ -38,8 +36,7 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
     }
   }
 
-  // Why: focusing from the ref callback avoids a passive request-id Effect while
-  // still canceling stale frames when the request or mounted input changes.
+  // Ref-owned focus frames avoid passive request effects and cancel on request/input replacement.
   const setInputRef = useCallback(
     (input: HTMLInputElement | null): void => {
       inputRef.current = input
@@ -61,7 +58,8 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
   )
 
   const handleSubmit = useCallback(async () => {
-    if (!request || !value) {
+    // Keyboard-interactive prompts may accept empty Enter for MFA; passwords/passphrases cannot.
+    if (!request || (!value && request.kind !== 'keyboard-interactive')) {
       return
     }
     setSubmitting(true)
@@ -107,26 +105,48 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
 
   const label = targetLabels.get(request.targetId) ?? request.targetId
   const isPassword = request.kind === 'password'
+  const isKeyboardInteractive = request.kind === 'keyboard-interactive'
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && void handleCancel()}>
-      <DialogContent showCloseButton={false} className="max-w-[360px]">
+      {/* Credential prompts must cover existing menus/popovers, whose z-order exceeds the default dialog. */}
+      <DialogContent
+        showCloseButton={false}
+        overlayClassName="!z-[140]"
+        className="!z-[150] max-w-[360px]"
+      >
         <DialogHeader>
           <DialogTitle className="text-sm">
-            {isPassword
-              ? translate('auto.components.settings.SshPassphraseDialog.106bd57f4a', 'SSH Password')
-              : translate(
-                  'auto.components.settings.SshPassphraseDialog.1f3dde805d',
-                  'SSH Key Passphrase'
-                )}
+            {isKeyboardInteractive
+              ? translate(
+                  'auto.components.settings.SshPassphraseDialog.a21f9e74c0',
+                  'SSH Verification'
+                )
+              : isPassword
+                ? translate(
+                    'auto.components.settings.SshPassphraseDialog.106bd57f4a',
+                    'SSH Password'
+                  )
+                : translate(
+                    'auto.components.settings.SshPassphraseDialog.1f3dde805d',
+                    'SSH Key Passphrase'
+                  )}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {isPassword ? (
+            {isKeyboardInteractive ? (
+              <>
+                {translate(
+                  'auto.components.settings.SshPassphraseDialog.981352fb42',
+                  'Complete the verification challenge for'
+                )}{' '}
+                <span className="font-medium">{label}</span>
+              </>
+            ) : isPassword ? (
               <>
                 {translate(
                   'auto.components.settings.SshPassphraseDialog.dbf9b6f2d0',
                   'Enter the password for'
-                )}
+                )}{' '}
                 <span className="font-medium">{label}</span>
               </>
             ) : (
@@ -134,7 +154,7 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
                 {translate(
                   'auto.components.settings.SshPassphraseDialog.ce4fdf7914',
                   'Enter the passphrase for'
-                )}
+                )}{' '}
                 <span className="font-medium">{label}</span>
               </>
             )}
@@ -143,24 +163,26 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
         <div>
           <label
             htmlFor="ssh-credential-input"
-            className="text-[11px] font-medium text-muted-foreground mb-1 block"
+            className="text-[11px] font-medium text-muted-foreground mb-1 block whitespace-pre-wrap break-words"
           >
-            {isPassword
-              ? translate(
-                  'auto.components.settings.SshPassphraseDialog.cab3d5f5a5',
-                  'Password for {{value0}}',
-                  { value0: request.detail }
-                )
-              : translate(
-                  'auto.components.settings.SshPassphraseDialog.8a349e3fac',
-                  'Passphrase for {{value0}}',
-                  { value0: request.detail }
-                )}
+            {isKeyboardInteractive
+              ? request.detail
+              : isPassword
+                ? translate(
+                    'auto.components.settings.SshPassphraseDialog.cab3d5f5a5',
+                    'Password for {{value0}}',
+                    { value0: request.detail }
+                  )
+                : translate(
+                    'auto.components.settings.SshPassphraseDialog.8a349e3fac',
+                    'Passphrase for {{value0}}',
+                    { value0: request.detail }
+                  )}
           </label>
           <Input
             id="ssh-credential-input"
             ref={setInputRef}
-            type="password"
+            type={isKeyboardInteractive && request.echo ? 'text' : 'password'}
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => {
@@ -170,15 +192,20 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
               }
             }}
             placeholder={
-              isPassword
+              isKeyboardInteractive
                 ? translate(
-                    'auto.components.settings.SshPassphraseDialog.abaa0dc653',
-                    'Enter password'
+                    'auto.components.settings.SshPassphraseDialog.456516603b',
+                    'Enter response'
                   )
-                : translate(
-                    'auto.components.settings.SshPassphraseDialog.c3ce71aad6',
-                    'Enter passphrase'
-                  )
+                : isPassword
+                  ? translate(
+                      'auto.components.settings.SshPassphraseDialog.abaa0dc653',
+                      'Enter password'
+                    )
+                  : translate(
+                      'auto.components.settings.SshPassphraseDialog.c3ce71aad6',
+                      'Enter passphrase'
+                    )
             }
             className="h-8 text-sm"
             disabled={submitting}
@@ -193,10 +220,16 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
           >
             {translate('auto.components.settings.SshPassphraseDialog.d5a234456f', 'Cancel')}
           </Button>
-          <Button size="sm" onClick={() => void handleSubmit()} disabled={!value || submitting}>
-            {isPassword
-              ? translate('auto.components.settings.SshPassphraseDialog.bec2c1318f', 'Connect')
-              : translate('auto.components.settings.SshPassphraseDialog.405066423c', 'Unlock')}
+          <Button
+            size="sm"
+            onClick={() => void handleSubmit()}
+            disabled={(!value && !isKeyboardInteractive) || submitting}
+          >
+            {isKeyboardInteractive
+              ? translate('auto.components.settings.SshPassphraseDialog.c624f64b86', 'Continue')
+              : isPassword
+                ? translate('auto.components.settings.SshPassphraseDialog.bec2c1318f', 'Connect')
+                : translate('auto.components.settings.SshPassphraseDialog.405066423c', 'Unlock')}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getEffectiveLayoutForWorktree, anyMountedWorktreeHasLayout } from './split-group-mount'
-import type { TabGroup, TabGroupLayoutNode } from '../../../../shared/types'
+import type { TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
 
 function makeGroup(id: string, worktreeId: string): TabGroup {
   return { id, worktreeId, activeTabId: null, tabOrder: [] }
@@ -54,7 +54,6 @@ describe('anyMountedWorktreeHasLayout', () => {
   })
 
   it('returns true when only a non-active mounted worktree has a layout (the bug fix)', () => {
-    // wt-1 has a layout, wt-2 (the newly active one) does not
     const result = anyMountedWorktreeHasLayout(
       ['wt-1', 'wt-2'],
       new Set(['wt-1', 'wt-2']),
@@ -79,8 +78,8 @@ describe('anyMountedWorktreeHasLayout', () => {
   it('ignores worktrees that exist but are not mounted', () => {
     const result = anyMountedWorktreeHasLayout(
       ['wt-1', 'wt-2'],
-      new Set(['wt-2']), // only wt-2 is mounted
-      { 'wt-1': layout }, // only wt-1 has a layout
+      new Set(['wt-2']),
+      { 'wt-1': layout },
       {},
       {}
     )

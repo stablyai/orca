@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-27T19:35:31.758Z",
+  "platform": "darwin",
+  "command": ["codex", "--dangerously-bypass-approvals-and-sandbox"],
+  "cols": 120,
+  "rows": 40,
+  "note": "codex-cli 0.157.1, plain launch (no -m/-c). Header paints with `loading` rows, then fills in; the ready baseline for STA-8628. Worktree-path leaf redacted by the recorder scan.",
+  "exitCode": 0
+}

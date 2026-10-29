@@ -1,12 +1,16 @@
+import { ImeInput } from '@/lib/ime-text-field'
 import type { CSSProperties, RefObject } from 'react'
-import { SquareSplitVertical, X } from 'lucide-react'
+import { MessageSquarePlus, SquareSplitVertical, SquareTerminal, X } from 'lucide-react'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import { WORKSPACE_FILE_PATH_MIME, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
-import type { PtyTransport } from './pty-transport'
-import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
+import { canCloseTerminalPane, terminalPaneCloseLabel } from './terminal-pane-close-affordance'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
+import type { PtyTransport } from './pty-transport-types'
+import { TerminalPaneHeaderDropSurface } from './TerminalPaneHeaderDropSurface'
+import { TerminalPaneResumeInChatButton } from './TerminalPaneResumeInChatButton'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 
 export type PaneTitleOverlayRect = {
   left: number
@@ -19,6 +23,9 @@ type TerminalPaneHeaderOverlayProps = {
   worktreeId: string
   cwd: string
   showAlwaysOnHeaders: boolean
+  /** Used by ephemeral one-off command terminals that omit the header affordance. */
+  showSplitButton?: boolean
+  isTabPinned: boolean
   paneCount: number
   activePaneId: number | null | undefined
   panes: readonly ManagedPane[]
@@ -33,6 +40,14 @@ type TerminalPaneHeaderOverlayProps = {
   hiddenStartupStyle: CSSProperties
   managerRef: RefObject<PaneManager | null>
   paneTransportsRef: RefObject<Map<number, PtyTransport>>
+  /** True for native chat’s return-to-terminal control; entering chat uses the conversation action. */
+  canShowTerminal?: boolean
+  /** Flip the active pane from the native chat view back to the terminal. */
+  onShowTerminal?: () => void
+  /** Offers the tab menu's "Switch to Chat" for the active pane's own conversation. */
+  canResumeInNewNativeChat?: boolean
+  canContinueAgentSessionInNewSession?: boolean
+  onContinueAgentSessionInNewSession?: (pane: ManagedPane) => void
   onSplitPane: (pane: ManagedPane, direction: 'vertical' | 'horizontal') => void
   onBeginPaneDrag: (paneId: number, handle: HTMLElement, event: PointerEvent) => void
   onActivatePaneTitleInteraction: (paneId: number) => void
@@ -51,6 +66,8 @@ export default function TerminalPaneHeaderOverlay({
   worktreeId,
   cwd,
   showAlwaysOnHeaders,
+  showSplitButton = true,
+  isTabPinned,
   paneCount,
   activePaneId,
   panes,
@@ -65,6 +82,11 @@ export default function TerminalPaneHeaderOverlay({
   hiddenStartupStyle,
   managerRef,
   paneTransportsRef,
+  canShowTerminal,
+  onShowTerminal,
+  canResumeInNewNativeChat,
+  canContinueAgentSessionInNewSession,
+  onContinueAgentSessionInNewSession,
   onSplitPane,
   onBeginPaneDrag,
   onActivatePaneTitleInteraction,
@@ -99,15 +121,22 @@ export default function TerminalPaneHeaderOverlay({
         const isActivePane = activePaneId === pane.id
         const isChromeless = showAlwaysOnHeaders && !title && !isEditing
         const showHeader = overlayRect && (showAlwaysOnHeaders || Boolean(title) || isEditing)
+        const closeLabel = terminalPaneCloseLabel(paneCount)
+        // Titled split panes use X to clear titles; titled single panes still need a close control.
+        const showCloseButton =
+          showAlwaysOnHeaders &&
+          (paneCount > 1
+            ? !title
+            : canCloseTerminalPane({ paneCount, showSplitButton, isTabPinned }))
         if (!showHeader || !overlayRect) {
           return null
         }
 
         return (
-          <div
-            key={`pane-title-${pane.leafId}`}
+          <TerminalPaneHeaderDropSurface
+            key={makePaneKey(tabId, pane.leafId)}
+            destination={{ pane, tabId, worktreeId, cwd, managerRef, paneTransportsRef }}
             className="pane-title-bar"
-            data-native-file-drop-target="terminal"
             data-terminal-tab-id={tabId}
             data-pane-prevent-terminal-focus=""
             {...(isActivePane ? { 'data-active-pane': '' } : {})}
@@ -116,40 +145,6 @@ export default function TerminalPaneHeaderOverlay({
             onPointerDownCapture={
               title || isEditing ? () => onActivatePaneTitleInteraction(pane.id) : undefined
             }
-            onDragOver={(event) => {
-              onActivatePaneTitleInteraction(pane.id)
-              if (
-                event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME) ||
-                event.dataTransfer.types.includes(WORKSPACE_FILE_PATHS_MIME)
-              ) {
-                event.preventDefault()
-                event.dataTransfer.dropEffect = 'copy'
-              }
-            }}
-            onDrop={(event) => {
-              if (
-                !event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME) &&
-                !event.dataTransfer.types.includes(WORKSPACE_FILE_PATHS_MIME)
-              ) {
-                return
-              }
-              event.preventDefault()
-              event.stopPropagation()
-              onActivatePaneTitleInteraction(pane.id)
-              const manager = managerRef.current
-              if (!manager) {
-                return
-              }
-              void handleInternalTerminalFileDrop({
-                manager,
-                paneTransports: paneTransportsRef.current,
-                worktreeId,
-                tabId,
-                cwd,
-                dataTransfer: event.dataTransfer,
-                dropTarget: event.target
-              })
-            }}
             onContextMenuCapture={(event) => onPaneTitleContextMenu(event, pane.id)}
             style={{
               left: overlayRect.left,
@@ -158,7 +153,7 @@ export default function TerminalPaneHeaderOverlay({
             }}
           >
             {isEditing ? (
-              <input
+              <ImeInput
                 ref={renameInputRef}
                 className="pane-title-input"
                 aria-label={translate(
@@ -172,7 +167,14 @@ export default function TerminalPaneHeaderOverlay({
                 value={renameValue}
                 onChange={(event) => onRenameValueChange(event.target.value)}
                 onKeyDown={(event) => {
+                  // Wait for non-composition Enter so accepting a CJK IME candidate cannot commit the rename.
+                  if (isImeCompositionKeyDown(event)) {
+                    return
+                  }
                   if (event.key === 'Enter') {
+                    onRenameSubmit()
+                  } else if (event.key === 'Tab') {
+                    // Commit Tab explicitly because headless/SSH focus may not blur; submitting closes the editor and makes later blur inert.
                     onRenameSubmit()
                   } else if (event.key === 'Escape') {
                     onRenameCancel()
@@ -182,7 +184,7 @@ export default function TerminalPaneHeaderOverlay({
               />
             ) : (
               <>
-                {paneCount > 1 && (
+                {paneCount > 1 && !isChromeless && (
                   <div
                     className="pane-title-drag-handle"
                     aria-hidden="true"
@@ -205,15 +207,71 @@ export default function TerminalPaneHeaderOverlay({
                     {title}
                   </button>
                 ) : null}
-                <div className="pane-title-actions ml-auto flex shrink-0 items-center gap-0.5">
-                  {showAlwaysOnHeaders ? (
+                <div className="pane-title-actions ml-auto flex shrink-0 items-center gap-0">
+                  {canContinueAgentSessionInNewSession && isActivePane ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
                           type="button"
-                          variant="ghost"
+                          variant="pane-title"
                           size="icon-xs"
-                          className="pane-title-split-trigger"
+                          aria-label={translate(
+                            'components.agentSessionContinuation.handOffToAnotherAgent',
+                            'Hand Off to Another Agent'
+                          )}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            onContinueAgentSessionInNewSession?.(pane)
+                          }}
+                        >
+                          <MessageSquarePlus className="size-3" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={4}>
+                        {translate(
+                          'components.agentSessionContinuation.handOffToAnotherAgent',
+                          'Hand Off to Another Agent'
+                        )}
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : null}
+                  {canShowTerminal && isActivePane ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="pane-title"
+                          size="icon-xs"
+                          aria-label={translate(
+                            'components.native-chat.toggle.showTerminal',
+                            'Show terminal'
+                          )}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            onShowTerminal?.()
+                          }}
+                        >
+                          <SquareTerminal className="size-3" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={4}>
+                        {translate('components.native-chat.toggle.showTerminal', 'Show terminal')}
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : canResumeInNewNativeChat && isActivePane ? (
+                    <TerminalPaneResumeInChatButton
+                      tabId={tabId}
+                      worktreeId={worktreeId}
+                      paneKey={makePaneKey(tabId, pane.leafId)}
+                    />
+                  ) : null}
+                  {showAlwaysOnHeaders && showSplitButton ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="pane-title"
+                          size="icon-xs"
                           data-contextual-tour-target={
                             isActivePane ? 'terminal-pane-split-target' : undefined
                           }
@@ -236,9 +294,8 @@ export default function TerminalPaneHeaderOverlay({
                       <TooltipTrigger asChild>
                         <Button
                           type="button"
-                          variant="ghost"
+                          variant="pane-title-close"
                           size="icon-xs"
-                          className="pane-title-close"
                           onClick={(event) => {
                             event.stopPropagation()
                             onRemoveTitle(pane.id)
@@ -259,38 +316,32 @@ export default function TerminalPaneHeaderOverlay({
                         )}
                       </TooltipContent>
                     </Tooltip>
-                  ) : paneCount > 1 && showAlwaysOnHeaders ? (
+                  ) : null}
+                  {showCloseButton ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
                           type="button"
-                          variant="ghost"
+                          variant="pane-title-close"
                           size="icon-xs"
-                          className="pane-title-close"
                           onClick={(event) => {
                             event.stopPropagation()
                             onClosePane(pane.id)
                           }}
-                          aria-label={translate(
-                            'auto.components.terminal.pane.TerminalContextMenu.8c17d6786d',
-                            'Close Pane'
-                          )}
+                          aria-label={closeLabel}
                         >
                           <X className="size-3" />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent side="bottom" sideOffset={4}>
-                        {translate(
-                          'auto.components.terminal.pane.TerminalContextMenu.8c17d6786d',
-                          'Close Pane'
-                        )}
+                        {closeLabel}
                       </TooltipContent>
                     </Tooltip>
                   ) : null}
                 </div>
               </>
             )}
-          </div>
+          </TerminalPaneHeaderDropSurface>
         )
       })}
     </div>

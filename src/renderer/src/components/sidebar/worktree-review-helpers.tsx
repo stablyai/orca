@@ -1,5 +1,7 @@
+import { createElement } from 'react'
 import { GitMerge } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { getReviewStateIcon } from '@/components/github/review-state-presentation'
 import { PullRequestIcon } from './WorktreeCardHelpers'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 
@@ -23,37 +25,61 @@ export function getProviderName(review: WorktreeCardPrDisplay): string {
   return 'GitHub'
 }
 
+// Open reviews take check tones; draft/closed/merged keep state tones, and unconfirmed stateless rows flag problems only.
+export function getReviewChecksTone(status: WorktreeCardPrDisplay['status']): string | null {
+  if (status === 'failure') {
+    return 'text-rose-500/85'
+  }
+  if (status === 'pending') {
+    return 'text-amber-500/85'
+  }
+  if (status === 'success') {
+    return 'text-emerald-500/80'
+  }
+  return null
+}
+
+function getCheckTone(review: WorktreeCardPrDisplay): string | null {
+  if ((review.state && review.state !== 'open') || (!review.state && review.status === 'success')) {
+    return null
+  }
+  return getReviewChecksTone(review.status)
+}
+
+function getStateTone(state: WorktreeCardPrDisplay['state']): string {
+  if (state === 'merged') {
+    return 'text-purple-600/70 dark:text-purple-400/70'
+  }
+  if (state === 'open') {
+    return 'text-emerald-500/80'
+  }
+  if (state === 'closed') {
+    return 'text-muted-foreground/60'
+  }
+  if (state === 'draft') {
+    return 'text-muted-foreground/50'
+  }
+  return 'text-muted-foreground opacity-70'
+}
+
 export function ReviewIcon({
   review,
   className,
-  variant = 'provider'
+  variant = 'provider',
+  showChecks = true
 }: {
   review: WorktreeCardPrDisplay
   className?: string
   variant?: 'provider' | 'generic'
+  showChecks?: boolean
 }): React.JSX.Element {
-  const Icon = variant === 'provider' && review.provider === 'gitlab' ? GitMerge : PullRequestIcon
-  const checkTone =
-    review.state !== 'merged' && review.status === 'failure'
-      ? 'text-rose-500/85'
-      : review.state !== 'merged' && review.status === 'pending'
-        ? 'text-amber-500/85'
-        : review.state === 'open' && review.status === 'success'
-          ? 'text-emerald-500/80'
-          : null
-  return (
-    <Icon
-      className={cn(
-        className,
-        checkTone,
-        review.state === 'merged' && 'text-purple-600/70 dark:text-purple-400/70',
-        !checkTone && review.state === 'open' && 'text-emerald-500/80',
-        !checkTone && review.state === 'closed' && 'text-muted-foreground/60',
-        !checkTone && review.state === 'draft' && 'text-muted-foreground/50',
-        !checkTone &&
-          (!review.state || !['merged', 'open', 'closed', 'draft'].includes(review.state)) &&
-          'text-muted-foreground opacity-70'
-      )}
-    />
-  )
+  const providerIcon =
+    variant === 'provider' && review.provider === 'gitlab' ? GitMerge : PullRequestIcon
+  const Icon = getReviewStateIcon(review.state) ?? providerIcon
+  return createElement(Icon, {
+    className: cn(
+      className,
+      (showChecks ? getCheckTone(review) : null) ?? getStateTone(review.state)
+    )
+  })
 }

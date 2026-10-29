@@ -1,43 +1,90 @@
-import { BrowserWindow, ipcMain, type WebContents } from 'electron'
+import { normalizeJiraQuickFilterState } from '../../shared/jira/jira-quick-filters'
+import { JiraQuickFilterStateParam } from '../../shared/rpc-contract/jira-quick-filter-params'
+import {
+  normalizeJiraSavedFilterState,
+  mutateJiraSavedFilterState
+} from '../../shared/jira/jira-saved-filters'
+import { JiraSavedFilterMutationParam } from '../../shared/rpc-contract/jira-saved-filter-params'
+import { BrowserWindow, ipcMain, webContents, type WebContents } from 'electron'
 import type { Store } from '../persistence'
-import type { PersistedUIState } from '../../shared/types'
+import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import { isFeatureInteractionId } from '../../shared/feature-interactions'
+import { isWslMoveWindowWriteHeld } from '../persistence/moving-wsl-projects/wsl-move-window-write-hold'
+import { isTrustedMainRendererSender } from './main-renderer-sender-trust'
 
-const trustedUIRendererWebContentsIds = new Set<number>()
-let explicitUIRendererTrustInitialized = false
+let trustedUIRendererWebContentsId: number | null = null
 
 export function setTrustedUIRendererWebContentsId(webContentsId: number | null): void {
-  if (webContentsId === null) {
-    trustedUIRendererWebContentsIds.clear()
-    explicitUIRendererTrustInitialized = false
-    return
-  }
-  explicitUIRendererTrustInitialized = true
-  trustedUIRendererWebContentsIds.add(webContentsId)
+  trustedUIRendererWebContentsId = webContentsId
 }
 
 export function clearTrustedUIRendererWebContentsId(webContentsId: number): void {
-  trustedUIRendererWebContentsIds.delete(webContentsId)
+  if (trustedUIRendererWebContentsId === webContentsId) {
+    trustedUIRendererWebContentsId = null
+  }
 }
 
-export function registerUIHandlers(store: Store): void {
-  // Why: UI view-state is shared between the desktop renderer and mobile (ui.set
-  // RPC). Broadcast every change so the desktop re-hydrates when mobile (or
-  // another window) updates it — bi-directional sync, mirroring settings:changed.
-  store.onUIChanged((ui) => {
-    for (const window of BrowserWindow.getAllWindows()) {
-      if (!window.isDestroyed()) {
-        window.webContents.send('ui:stateChanged', ui)
-      }
-    }
-  })
+export function sendToTrustedUIRenderer(
+  channel: string,
+  payload: unknown,
+  excludedWebContentsId?: number
+): void {
+  const renderer = getTrustedUIRendererWebContents(excludedWebContentsId)
+  renderer?.send(channel, payload)
+}
 
+export function getTrustedUIRendererWebContents(
+  excludedWebContentsId?: number
+): WebContents | null {
+  // Target only trusted app UI; retained browser/utility windows cannot consume these events.
+  const rendererId = trustedUIRendererWebContentsId
+  if (rendererId == null || rendererId === excludedWebContentsId) {
+    return null
+  }
+  const renderer = webContents.fromId(rendererId)
+  if (!renderer || renderer.isDestroyed()) {
+    return null
+  }
+  return renderer
+}
+
+export function getTrustedUIRendererWindow(): BrowserWindow | null {
+  const renderer = getTrustedUIRendererWebContents()
+  return renderer ? BrowserWindow.fromWebContents(renderer) : null
+}
+
+export function registerUIHandlers(
+  store: Store,
+  options: { isDashboardPopoutRenderer?: (sender: WebContents) => boolean } = {}
+): void {
+  store.onUIChanged((ui) => sendToTrustedUIRenderer('ui:stateChanged', ui))
+
+  ipcMain.handle('ui:getJiraQuickFilters', () =>
+    normalizeJiraQuickFilterState(store.getUI().jiraQuickFilterState)
+  )
+  ipcMain.handle('ui:setJiraQuickFilters', (_event, input: unknown) => {
+    const state = normalizeJiraQuickFilterState(JiraQuickFilterStateParam.parse(input))
+    store.updateUI({ jiraQuickFilterState: state })
+    return state
+  })
+  ipcMain.handle('ui:getJiraSavedFilters', () =>
+    normalizeJiraSavedFilterState(store.getUI().jiraSavedFilterState)
+  )
+  ipcMain.handle('ui:mutateJiraSavedFilters', (_event, input: unknown) => {
+    const mutation = JiraSavedFilterMutationParam.parse(input)
+    const state = mutateJiraSavedFilterState(store.getUI().jiraSavedFilterState, mutation)
+    store.updateUI({ jiraSavedFilterState: state })
+    return state
+  })
   ipcMain.handle('ui:get', () => {
     return store.getUI()
   })
 
   ipcMain.handle('ui:set', (_event, args: Partial<PersistedUIState>) => {
-    store.updateUI(args)
+    // A window a WSL move rewrote under is stale until main reloads it.
+    if (!isWslMoveWindowWriteHeld()) {
+      store.updateUI(args)
+    }
   })
 
   ipcMain.handle('ui:recordFeatureInteraction', (_event, id: unknown) => {
@@ -52,8 +99,7 @@ export function registerUIHandlers(store: Store): void {
     if (!isTrustedUIRenderer(event.sender)) {
       return
     }
-    // Why: coordinated renderer paste falls back here only after no Orca owner
-    // claims the app-menu action; paste back into the requesting window only.
+    // Unclaimed app-menu paste falls back only to the requesting window.
     const webContents = BrowserWindow.fromWebContents(event.sender)?.webContents
     if (options?.mode === 'paste-and-match-style') {
       webContents?.pasteAndMatchStyle()
@@ -61,26 +107,24 @@ export function registerUIHandlers(store: Store): void {
     }
     webContents?.paste()
   })
+
+  ipcMain.removeAllListeners('ui:performNativeSelectionAction')
+  ipcMain.on('ui:performNativeSelectionAction', (event, action: unknown) => {
+    if (
+      !isTrustedUIRenderer(event.sender) &&
+      options.isDashboardPopoutRenderer?.(event.sender) !== true
+    ) {
+      return
+    }
+    const target = BrowserWindow.fromWebContents(event.sender)?.webContents
+    if (action === 'copy') {
+      target?.copy()
+    } else if (action === 'select-all') {
+      target?.selectAll()
+    }
+  })
 }
 
-function isTrustedUIRenderer(sender: WebContents): boolean {
-  if (sender.isDestroyed() || sender.getType() !== 'window') {
-    return false
-  }
-  if (explicitUIRendererTrustInitialized) {
-    return trustedUIRendererWebContentsIds.has(sender.id)
-  }
-
-  const senderUrl = sender.getURL()
-  if (process.env.ELECTRON_RENDERER_URL) {
-    try {
-      return new URL(senderUrl).origin === new URL(process.env.ELECTRON_RENDERER_URL).origin
-    } catch {
-      return false
-    }
-  }
-
-  // Why: packaged fallback must be tied to the created main window id, not any
-  // file:// document that can obtain this IPC channel.
-  return false
+export function isTrustedUIRenderer(sender: WebContents): boolean {
+  return isTrustedMainRendererSender(sender, trustedUIRendererWebContentsId)
 }

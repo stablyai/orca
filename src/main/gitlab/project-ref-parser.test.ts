@@ -13,6 +13,27 @@ describe('gitlab project ref parsing', () => {
     })
   })
 
+  it.each([
+    'ssh://git@altssh.gitlab.com:443/team/project.git',
+    'git@altssh.gitlab.com:team/project.git',
+    'ssh://git@ALTSSH.GITLAB.COM:443/team/project.git',
+    'git@ALTSSH.GITLAB.COM:team/project.git',
+    'git+ssh://git@altssh.gitlab.com:443/team/project.git'
+  ])('parses the SSH alias as the canonical GitLab host: %s', (remote) => {
+    expect(parseGitLabProjectRef(remote)).toEqual({
+      host: 'gitlab.com',
+      path: 'team/project'
+    })
+  })
+
+  it.each([
+    'ssh://git@altssh.gitlab.com.example.com:443/team/project.git',
+    'git@altssh.gitlab.com.example.com:team/project.git',
+    'git@notaltssh.gitlab.com:team/project.git'
+  ])('does not trust an SSH alias lookalike: %s', (remote) => {
+    expect(parseGitLabProjectRef(remote)).toBeNull()
+  })
+
   it('preserves nested group paths', () => {
     expect(parseGitLabProjectRef('git@gitlab.com:group/subgroup/project.git')).toEqual({
       host: 'gitlab.com',
@@ -38,19 +59,45 @@ describe('gitlab project ref parsing', () => {
     ).toEqual({ host: 'gitlab.example.com', path: 'team/api' })
   })
 
-  it('parses GitLab remotes with non-standard ports without treating the port as a path segment', () => {
+  it('drops the SSH transport port from the GitLab host identity', () => {
+    // SSH ports select transport, not the web/API endpoint.
     expect(
       parseGitLabProjectRef('ssh://git@gitlab.example.com:2222/team/api.git', [
         'gitlab.com',
         'gitlab.example.com'
       ])
     ).toEqual({ host: 'gitlab.example.com', path: 'team/api' })
+  })
+
+  it('keeps the HTTP(S) port as part of the self-hosted GitLab host identity', () => {
+    // Non-default HTTPS ports identify the self-hosted API endpoint.
+    expect(
+      parseGitLabProjectRef('https://gitlab.example.com:8443/team/api.git', [
+        'gitlab.com',
+        'gitlab.example.com:8443'
+      ])
+    ).toEqual({ host: 'gitlab.example.com:8443', path: 'team/api' })
+  })
+
+  it('matches a port-bearing http remote against a port-less legacy known host', () => {
+    // Legacy portless inventory entries recognize any port on that hostname.
     expect(
       parseGitLabProjectRef('https://gitlab.example.com:8443/team/api.git', [
         'gitlab.com',
         'gitlab.example.com'
       ])
-    ).toEqual({ host: 'gitlab.example.com', path: 'team/api' })
+    ).toEqual({ host: 'gitlab.example.com:8443', path: 'team/api' })
+  })
+
+  it('distinguishes two services on the same host by port — only the GitLab one matches', () => {
+    // Same-host services on different ports must retain distinct forge identities.
+    const knownHosts = ['gitlab.com', 'gitea.example.com:8443']
+    expect(parseGitLabProjectRef('http://gitea.example.com:8443/team/api.git', knownHosts)).toEqual(
+      { host: 'gitea.example.com:8443', path: 'team/api' }
+    )
+    expect(
+      parseGitLabProjectRef('http://gitea.example.com:3030/team/api.git', knownHosts)
+    ).toBeNull()
   })
 
   it('rejects single-segment paths (host root or user-only)', () => {
@@ -85,6 +132,12 @@ describe('gitlab project ref parsing', () => {
 })
 
 describe('gitlab remote project ref candidates', () => {
+  it('canonicalizes the SSH alias before resolving auth for a candidate', () => {
+    expect(
+      parseRemoteProjectRefCandidate('ssh://git@altssh.gitlab.com:443/team/subgroup/project.git')
+    ).toEqual({ host: 'gitlab.com', path: 'team/subgroup/project' })
+  })
+
   it('extracts self-hosted candidates before the host is trusted', () => {
     expect(parseRemoteProjectRefCandidate('git@gitlab.internal:team/orca.git')).toEqual({
       host: 'gitlab.internal',

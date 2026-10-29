@@ -76,7 +76,13 @@ async function resolveSymbolicFullName(
       ['rev-parse', '--symbolic-full-name', '--end-of-options', ref],
       cwd
     )
-    return stdout.trim().split(/\r?\n/).find(Boolean) ?? null
+    // --symbolic-full-name echoes --end-of-options; skip it or branches/tags fall through ref-prefix checks as commits.
+    return (
+      stdout
+        .trim()
+        .split(/\r?\n/)
+        .find((line) => line && line !== '--end-of-options') ?? null
+    )
   } catch {
     return null
   }
@@ -130,8 +136,7 @@ async function resolveUpstreamRef(
     if (!upstreamRef || !upstreamShortName) {
       return undefined
     }
-    // Why: %(upstream:objectname) is not portable across Git versions; resolve
-    // the upstream name first, then ask rev-parse for the commit object.
+    // Resolve upstream names then commit OIDs; %(upstream:objectname) is not portable across Git versions.
     const oid = await resolveCommit(git, cwd, upstreamRef)
     return oid ? gitHistoryRefFromFullName(upstreamRef, upstreamShortName, oid) : undefined
   } catch {
@@ -183,8 +188,7 @@ export async function loadGitHistoryFromExecutor(
       ? rawBaseRef
       : undefined
 
-  // Why: this panel is scoped to the active workspace. Upstream and base refs
-  // stay as comparison metadata so old workspaces do not list newly fetched upstream/base commits.
+  // Keep upstream/base as comparison metadata so old workspaces do not gain fetched commits outside their HEAD history.
   const historyRevisions = [headOid]
 
   let mergeBase: string | undefined
@@ -200,6 +204,8 @@ export async function loadGitHistoryFromExecutor(
   const { stdout } = await git(
     [
       'log',
+      '--no-show-signature',
+      '--no-color',
       `--format=${GIT_HISTORY_COMMIT_FORMAT}`,
       '-z',
       '--topo-order',

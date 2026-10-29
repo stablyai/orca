@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 
 type SystemNotificationSettingsCopy = {
@@ -12,15 +12,27 @@ export function getSystemNotificationSettingsCopy(
 ): SystemNotificationSettingsCopy | null {
   if (platform === 'darwin') {
     return {
-      failureTitle: 'macOS did not show the notification',
-      failureDescription: 'Enable Allow notifications for Orca in System Settings.'
+      failureTitle: translate(
+        'auto.components.settings.notification.settings.copy.macFailureTitle',
+        'macOS did not show the notification'
+      ),
+      failureDescription: translate(
+        'auto.components.settings.notification.settings.copy.macFailureDescription',
+        'Enable Allow notifications for Orca in System Settings.'
+      )
     }
   }
 
   if (platform === 'win32') {
     return {
-      failureTitle: 'Windows did not show the notification',
-      failureDescription: 'Enable notifications for Orca in Windows Settings.'
+      failureTitle: translate(
+        'auto.components.settings.notification.settings.copy.windowsFailureTitle',
+        'Windows did not show the notification'
+      ),
+      failureDescription: translate(
+        'auto.components.settings.notification.settings.copy.windowsFailureDescription',
+        'Enable notifications for Orca in Windows Settings.'
+      )
     }
   }
 
@@ -50,10 +62,18 @@ export function resolveNotificationVolumeDraftState(
     : createNotificationVolumeDraftState(sourceVolume)
 }
 
+export type NotificationTestOutcome = 'delivered' | 'not-displayed' | 'not-sent'
+
+type SendTestNotificationOptions = {
+  /** Inline delivery cards replace ambiguous macOS banner-check toasts that could contradict them. */
+  suppressSystemPermissionToasts?: boolean
+}
+
 export async function sendNotificationSettingsTestNotification(
   notificationSettings: GlobalSettings['notifications'],
-  volumeDraft: number
-): Promise<void> {
+  volumeDraft: number,
+  options?: SendTestNotificationOptions
+): Promise<NotificationTestOutcome> {
   const permissionStatus = await window.api.notifications.getPermissionStatus()
   if (!permissionStatus.supported) {
     toast.error(
@@ -62,7 +82,7 @@ export async function sendNotificationSettingsTestNotification(
         'Notifications are not supported on this system'
       )
     )
-    return
+    return 'not-sent'
   }
 
   const result = await window.api.notifications.dispatch({
@@ -84,7 +104,10 @@ export async function sendNotificationSettingsTestNotification(
           'Custom notification sound could not be played'
         )
       )
-      return
+      return 'delivered'
+    }
+    if (options?.suppressSystemPermissionToasts) {
+      return 'delivered'
     }
     const settingsCopy = getSystemNotificationSettingsCopy(permissionStatus.platform)
     if (permissionStatus.platform === 'darwin' && settingsCopy) {
@@ -109,15 +132,18 @@ export async function sendNotificationSettingsTestNotification(
           }
         }
       )
-      return
+      return 'delivered'
     }
     toast.success(
       translate('auto.components.settings.NotificationsPane.d3d54e0915', 'Test notification sent')
     )
-    return
+    return 'delivered'
   }
 
-  if (result.reason === 'not-displayed') {
+  if (result.reason === 'not-displayed' || result.reason === 'blocked-by-system') {
+    if (options?.suppressSystemPermissionToasts) {
+      return 'not-displayed'
+    }
     const settingsCopy = getSystemNotificationSettingsCopy(permissionStatus.platform)
     if (settingsCopy) {
       toast.error(settingsCopy.failureTitle, {
@@ -146,7 +172,7 @@ export async function sendNotificationSettingsTestNotification(
         }
       )
     }
-    return
+    return 'not-displayed'
   }
 
   toast.error(
@@ -160,4 +186,5 @@ export async function sendNotificationSettingsTestNotification(
           'Test notification was not delivered'
         )
   )
+  return 'not-sent'
 }

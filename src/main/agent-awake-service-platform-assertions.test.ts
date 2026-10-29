@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AgentAwakeService } from './agent-awake-service'
 import type { AgentAwakeStatus } from './agent-awake-service'
 
@@ -16,11 +16,29 @@ vi.mock('electron', () => ({
 
 function workingStatus(): AgentAwakeStatus {
   return {
+    paneKey: 'pane-1',
     state: 'working',
     receivedAt: 1_000,
     observedInCurrentRuntime: true
   }
 }
+
+describe('AgentAwakeService status array ownership', () => {
+  it('does not observe rows appended to the caller array after setStatuses', () => {
+    const service = createService()
+    service.setMode('auto')
+    const statuses: AgentAwakeStatus[] = [workingStatus()]
+
+    service.setStatuses(statuses)
+    expect(service.getWorkingAgentCount()).toBe(1)
+    statuses.push(
+      { ...workingStatus(), paneKey: 'pane-2' },
+      { ...workingStatus(), paneKey: 'pane-3' }
+    )
+
+    expect(service.getWorkingAgentCount()).toBe(1)
+  })
+})
 
 function createBlocker() {
   const startedIds = new Set<number>()
@@ -46,25 +64,51 @@ function createPlatformAssertion() {
   }
 }
 
+const services = new Set<AgentAwakeService>()
+
+afterEach(() => {
+  for (const service of services) {
+    service.dispose()
+  }
+  services.clear()
+  vi.useRealTimers()
+})
+
 function createService(
   blocker = createBlocker(),
   macosAssertion = createPlatformAssertion(),
-  linuxAssertion = createPlatformAssertion()
+  linuxAssertion = createPlatformAssertion(),
+  platform: NodeJS.Platform = 'linux'
 ): AgentAwakeService {
-  return new AgentAwakeService({
+  const service = new AgentAwakeService({
     blocker,
     linuxAssertion,
     macosAssertion,
     now: () => 1_000,
+    platform,
     powerMonitor: null,
     logger: {
       debug: vi.fn(),
       warn: vi.fn()
     }
   })
+  services.add(service)
+  return service
 }
 
 describe('AgentAwakeService platform assertions', () => {
+  it('uses caffeinate without Electron display blocking on macOS', () => {
+    const blocker = createBlocker()
+    const macosAssertion = createPlatformAssertion()
+    const service = createService(blocker, macosAssertion, createPlatformAssertion(), 'darwin')
+
+    service.setEnabled(true)
+    service.setStatuses([workingStatus()])
+
+    expect(macosAssertion.start).toHaveBeenCalledTimes(1)
+    expect(blocker.start).not.toHaveBeenCalled()
+  })
+
   it('keeps Electron blocker active when macOS assertion start fails', () => {
     const blocker = createBlocker()
     const macosAssertion = createPlatformAssertion()
@@ -72,7 +116,7 @@ describe('AgentAwakeService platform assertions', () => {
     macosAssertion.start.mockImplementation(() => {
       throw new Error('caffeinate failed')
     })
-    const service = createService(blocker, macosAssertion, linuxAssertion)
+    const service = createService(blocker, macosAssertion, linuxAssertion, 'darwin')
 
     service.setEnabled(true)
     service.setStatuses([workingStatus()])
@@ -83,6 +127,20 @@ describe('AgentAwakeService platform assertions', () => {
     expect(macosAssertion.stop).toHaveBeenCalled()
     expect(linuxAssertion.start).toHaveBeenCalledTimes(1)
     expect(linuxAssertion.stop).toHaveBeenCalled()
+  })
+
+  it('drops the display-blocking fallback after caffeinate recovers', () => {
+    const blocker = createBlocker()
+    const macosAssertion = createPlatformAssertion()
+    macosAssertion.start.mockImplementationOnce(() => false).mockImplementation(() => true)
+    const service = createService(blocker, macosAssertion, createPlatformAssertion(), 'darwin')
+
+    service.setEnabled(true)
+    service.setStatuses([workingStatus()])
+    expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
+
+    service.setStatuses([{ ...workingStatus(), receivedAt: 1_001 }])
+    expect(blocker.stop).toHaveBeenCalledWith(1)
   })
 
   it('keeps Electron blocker active when Linux assertion start fails', () => {

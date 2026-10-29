@@ -1,0 +1,348 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import type { Repo } from '../../shared/repo-types'
+import type { SshTarget } from '../../shared/ssh-types'
+import type { Automation } from '../../shared/automations-types'
+import { AUTOMATION_ORPHAN_ISSUES } from '../../shared/automation-list-scope'
+import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
+import type { Store } from '../persistence'
+import { resolveAutomationRunTarget } from './run-target-resolution'
+import { AutomationService } from './service'
+import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
+import { writeOrcadMigrationSourceCutover } from '../ssh/orcad-migration-cutover-journal'
+import { orcadMigrationCutoverFixture } from '../ssh/orcad-migration-cutover-fixture'
+
+vi.mock('electron', () => ({
+  app: {
+    getPath: () => testState.dir
+  },
+  safeStorage: {
+    isEncryptionAvailable: () => true,
+    encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
+    decryptString: (ciphertext: Buffer) => ciphertext.toString('utf-8').slice('encrypted:'.length)
+  }
+}))
+
+// Runtime-owned target IDs can repeat across registrations.
+const TARGET_ID = 'runtime-ssh-recipe-1'
+
+const REPLACED =
+  'The automation host was removed and re-registered, so this automation must be re-adopted before it can run.'
+
+const MISSING =
+  'The automation host is no longer registered, so this automation has nowhere to run.'
+
+function sshTarget(generation: number | undefined): SshTarget {
+  return {
+    id: TARGET_ID,
+    label: 'devbox',
+    host: 'devbox.internal',
+    port: 22,
+    username: 'orca',
+    ...(generation === undefined ? {} : { generation })
+  }
+}
+
+function seedSshAutomation(store: Store, options: { capture?: boolean } = {}): Automation {
+  store.addSshTarget(sshTarget(options.capture === false ? undefined : 1))
+  store.addRepo({
+    id: 'r1',
+    path: '/repo',
+    displayName: 'test',
+    badgeColor: '#fff',
+    addedAt: 1,
+    connectionId: TARGET_ID
+  } as Repo)
+  return store.createAutomation({
+    name: 'Nightly check',
+    prompt: 'Check the repo',
+    agentId: 'claude',
+    projectId: 'r1',
+    workspaceMode: 'new_per_run',
+    timezone: 'UTC',
+    rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+    dtstart: new Date('2026-05-12T00:00:00').getTime()
+  })
+}
+
+function seedMissingSetupAutomation(store: Store): Automation {
+  store.addRepo({
+    id: 'r2',
+    path: '/other',
+    displayName: 'other',
+    badgeColor: '#fff',
+    addedAt: 1
+  } as Repo)
+  const automation = store.createAutomation({
+    name: 'Other check',
+    prompt: 'Check the other repo',
+    agentId: 'claude',
+    projectId: 'r2',
+    workspaceMode: 'new_per_run',
+    timezone: 'UTC',
+    rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+    dtstart: new Date('2026-05-12T00:00:00').getTime()
+  })
+  // Inject drift after creation, which derives its own valid context.
+  return {
+    ...automation,
+    runContext: {
+      kind: 'workspace-run',
+      projectId: 'project-2',
+      hostId: 'local',
+      projectHostSetupId: 'missing-setup',
+      repoId: 'r2',
+      path: '/other'
+    }
+  }
+}
+
+function seedRemoteScheduledAutomation(store: Store): Automation {
+  store.addRepo({
+    id: 'r3',
+    path: '/remote',
+    displayName: 'remote',
+    badgeColor: '#fff',
+    addedAt: 1,
+    executionHostId: 'runtime:vm-1'
+  } as Repo)
+  return store.createAutomation({
+    name: 'Remote check',
+    prompt: 'Check the remote repo',
+    agentId: 'claude',
+    projectId: 'r3',
+    workspaceMode: 'new_per_run',
+    timezone: 'UTC',
+    rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+    dtstart: new Date('2026-05-12T00:00:00').getTime()
+  })
+}
+
+function reRegisterTarget(store: Store): void {
+  store.removeSshTarget(TARGET_ID)
+  store.addSshTarget(sshTarget(store.allocateSshTargetGeneration()))
+}
+
+function attachedService(store: Store): {
+  service: AutomationService
+  send: ReturnType<typeof vi.fn>
+} {
+  const send = vi.fn()
+  const service = new AutomationService(store, { tickMs: 60_000 })
+  service.setWebContents({ isDestroyed: () => false, send } as never)
+  return { service, send }
+}
+
+async function evaluateAt(
+  store: Store,
+  service: AutomationService,
+  automationId: string,
+  when: string
+): Promise<void> {
+  const nextRunAt = (): number | undefined =>
+    store.listAutomations().find((entry) => entry.id === automationId)?.nextRunAt
+  const before = nextRunAt()
+  vi.setSystemTime(new Date(when))
+  service.setRendererReady()
+  await vi.waitFor(() => expect(nextRunAt()).toBeGreaterThan(before ?? 0))
+}
+
+describe('scheduled dispatch fenced on the host the record captured', () => {
+  beforeEach(() => {
+    testState.dir = mkdtempSync(join(tmpdir(), 'orca-dispatch-fence-test-'))
+    vi.useFakeTimers()
+  })
+
+  afterEach(async () => {
+    await closeTestStores()
+    vi.useRealTimers()
+    removeTreeSync(testState.dir)
+  })
+
+  it('refuses the run once the same id carries a new registration', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
+    const store = await createStore()
+    const automation = seedSshAutomation(store)
+    const { service, send } = attachedService(store)
+    reRegisterTarget(store)
+
+    await evaluateAt(store, service, automation.id, '2026-05-13T09:01:00')
+
+    expect(send).not.toHaveBeenCalled()
+    expect(store.listAutomationRuns(automation.id)[0]).toMatchObject({
+      status: 'skipped_unavailable',
+      error: REPLACED
+    })
+  })
+
+  it('refuses the run once its host is gone entirely', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
+    const store = await createStore()
+    const automation = seedSshAutomation(store)
+    const { service, send } = attachedService(store)
+    store.removeSshTarget(TARGET_ID)
+
+    await evaluateAt(store, service, automation.id, '2026-05-13T09:01:00')
+
+    expect(send).not.toHaveBeenCalled()
+    expect(store.listAutomationRuns(automation.id)[0]).toMatchObject({
+      status: 'skipped_unavailable',
+      error: MISSING
+    })
+  })
+
+  it('still dispatches a record whose scheduler lives on a remote server', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
+    const store = await createStore()
+    const automation = seedRemoteScheduledAutomation(store)
+    const send = vi.fn()
+    const service = new AutomationService(store, {
+      tickMs: 60_000,
+      allowRemoteHostScheduling: true
+    })
+    service.setWebContents({ isDestroyed: () => false, send } as never)
+
+    expect(automation.schedulerOwner).toBe('remote_host_service')
+    expect(
+      store.listAutomationsForScope().items.find((entry) => entry.automationId === automation.id)
+        ?.selector
+    ).toEqual({ kind: 'orphan', issue: AUTOMATION_ORPHAN_ISSUES.scheduledElsewhere })
+
+    await evaluateAt(store, service, automation.id, '2026-05-13T09:01:00')
+
+    expect(send).toHaveBeenCalledWith('automations:dispatchRequested', expect.anything())
+  })
+
+  it('dispatches while the registration the record captured is still the live one', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
+    const store = await createStore()
+    const automation = seedSshAutomation(store)
+    const { service, send } = attachedService(store)
+
+    await evaluateAt(store, service, automation.id, '2026-05-13T09:01:00')
+
+    expect(send).toHaveBeenCalledWith('automations:dispatchRequested', expect.anything())
+    expect(store.listAutomationRuns(automation.id)[0]?.status).toBe('dispatching')
+  })
+
+  it('dispatches a record that captured no generation at all', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
+    const store = await createStore()
+    const automation = seedSshAutomation(store, { capture: false })
+    store.updateSshTarget(TARGET_ID, { generation: store.allocateSshTargetGeneration() })
+    const { service, send } = attachedService(store)
+
+    expect(automation.executionTargetGeneration).toBeUndefined()
+    await evaluateAt(store, service, automation.id, '2026-05-13T09:01:00')
+
+    expect(send).toHaveBeenCalledWith('automations:dispatchRequested', expect.anything())
+  })
+
+  it('refuses a legacy record with no run context once its host was replaced', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
+    const store = await createStore()
+    const automation = seedSshAutomation(store)
+    store.updateAutomation(
+      automation.id,
+      { runContext: null },
+      { expectedOwner: store.automationOwnerPrecondition(automation.id) ?? undefined }
+    )
+    const { service, send } = attachedService(store)
+    reRegisterTarget(store)
+
+    await evaluateAt(store, service, automation.id, '2026-05-13T09:01:00')
+
+    expect(send).not.toHaveBeenCalled()
+    expect(store.listAutomationRuns(automation.id)[0]).toMatchObject({
+      status: 'skipped_unavailable',
+      error: REPLACED
+    })
+  })
+
+  it('refuses in bytes that neither vary nor collide with another skip reason', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
+    const store = await createStore()
+    const automation = seedSshAutomation(store)
+    const other = seedMissingSetupAutomation(store)
+
+    reRegisterTarget(store)
+    const first = resolveAutomationRunTarget(store, automation)
+    reRegisterTarget(store)
+    const second = resolveAutomationRunTarget(store, automation)
+
+    expect(first).toEqual({ ok: false, error: REPLACED, errorCode: 'targetReplaced' })
+    expect(second).toEqual(first)
+    expect(resolveAutomationRunTarget(store, other)).toEqual({
+      ok: false,
+      error: 'Project is not set up on the selected automation host anymore.',
+      errorCode: 'projectSetupMissing'
+    })
+    store.removeSshTarget(TARGET_ID)
+    expect(resolveAutomationRunTarget(store, automation)).toEqual({
+      ok: false,
+      error: MISSING,
+      errorCode: 'targetMissing'
+    })
+  })
+
+  it('folds repeated refusals into a single record', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
+    const store = await createStore()
+    const automation = seedSshAutomation(store)
+    const { service } = attachedService(store)
+    reRegisterTarget(store)
+
+    await evaluateAt(store, service, automation.id, '2026-05-13T09:01:00')
+    await evaluateAt(store, service, automation.id, '2026-05-14T09:01:00')
+    await evaluateAt(store, service, automation.id, '2026-05-15T09:01:00')
+
+    const runs = store.listAutomationRuns(automation.id)
+    expect(runs).toHaveLength(1)
+    expect(runs[0]).toMatchObject({ error: REPLACED, occurrenceCount: 3 })
+  })
+
+  // #29083: the host's server owns its automations once a move fences it.
+  it('writes nothing for a host a move fenced, and resumes when the fence is released', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
+    const store = await createStore()
+    const automation = seedSshAutomation(store)
+    const { service, send } = attachedService(store)
+    store.updateSshTarget(TARGET_ID, { orcadFence: { environmentId: 'env-1' } })
+    const before = store.listAutomations()[0]
+
+    vi.setSystemTime(new Date('2026-05-13T09:01:00'))
+    service.setRendererReady()
+    await vi.advanceTimersByTimeAsync(0)
+    await expect(service.runNow(automation.id)).rejects.toThrow(
+      "This automation now runs on its SSH host's Orca server."
+    )
+    await service.recordRefusedRun(automation.id)
+
+    expect(send).not.toHaveBeenCalled()
+    expect(store.listAutomationRuns(automation.id)).toEqual([])
+    expect(store.listAutomations()[0]).toEqual(before)
+
+    store.updateSshTarget(TARGET_ID, { orcadFence: undefined })
+    await evaluateAt(store, service, automation.id, '2026-05-13T09:02:00')
+
+    expect(send).toHaveBeenCalledWith('automations:dispatchRequested', expect.anything())
+  })
+
+  it('still runs an automation Move anyway left on this desktop', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
+    const store = await createStore()
+    const automation = seedSshAutomation(store)
+    const { service, send } = attachedService(store)
+    writeOrcadMigrationSourceCutover(testState.dir, {
+      ...orcadMigrationCutoverFixture('m-1', TARGET_ID, { generation: 1 }),
+      phase: 'destination-committed'
+    })
+    store.updateSshTarget(TARGET_ID, { orcadFence: { environmentId: 'env-1' } })
+
+    await evaluateAt(store, service, automation.id, '2026-05-13T09:01:00')
+
+    expect(send).toHaveBeenCalledWith('automations:dispatchRequested', expect.anything())
+  })
+})

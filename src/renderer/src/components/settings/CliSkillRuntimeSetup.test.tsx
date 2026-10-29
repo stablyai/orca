@@ -1,45 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
-import {
-  buildSkillCommandForRuntime,
-  buildSkillInstallCommandForRuntime,
-  getSelectedAgentRuntime,
-  getSkillDiscoveryTargetForRuntime
-} from './CliSkillRuntimeSetup'
+import { buildSkillCommandForRuntime, getSelectedAgentRuntime } from './CliSkillRuntimeSetup'
 
 describe('CliSkillRuntimeSetup runtime helpers', () => {
-  it('wraps WSL skill installs in the selected distro login shell', () => {
-    const command = buildSkillInstallCommandForRuntime('npx skills add orchestration --global', {
-      runtime: 'wsl',
-      wslDistro: 'Ubuntu',
-      label: 'WSL Ubuntu'
-    })
+  it('forces English git messages only for POSIX skill install targets', () => {
+    const command =
+      'npx skills@1.7.2 add https://github.com/stablyai/orca/tree/abc --skill orca-cli'
+    const wsl = { runtime: 'wsl' as const, label: 'WSL' }
 
-    expect(command).toContain("wsl.exe -d 'Ubuntu' -- sh -c")
-    expect(command).toContain('getent passwd')
-    expect(command).toContain('npx skills add orchestration --global')
-  })
-
-  it('wraps WSL skill updates with the same selected distro login shell', () => {
-    const command = buildSkillCommandForRuntime('npx skills update orchestration --global', {
-      runtime: 'wsl',
-      wslDistro: 'Fedora Remix',
-      label: 'WSL Fedora Remix'
-    })
-
-    expect(command).toContain("wsl.exe -d 'Fedora Remix' -- sh -c")
-    expect(command).toContain('getent passwd')
-    expect(command).toContain('npx skills update orchestration --global')
-  })
-
-  it('preserves the selected WSL distro for skill discovery', () => {
-    expect(
-      getSkillDiscoveryTargetForRuntime({
-        runtime: 'wsl',
-        wslDistro: 'Ubuntu',
-        label: 'WSL Ubuntu'
-      })
-    ).toEqual({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    expect(buildSkillCommandForRuntime(command, undefined, 'linux')).toBe(`env LC_ALL=C ${command}`)
+    expect(buildSkillCommandForRuntime(command, wsl, 'win32')).toBe(`env LC_ALL=C ${command}`)
+    expect(buildSkillCommandForRuntime(command, undefined, 'win32')).toMatch(/^cmd\.exe .*\(npx /)
   })
 
   it('uses the global project runtime default instead of stale WSL agent location', () => {

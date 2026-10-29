@@ -1,27 +1,27 @@
-import { execFileSync } from 'node:child_process'
-import { delimiter, join } from 'node:path'
+import { delimiter, join, win32 } from 'node:path'
 import { existsSync } from 'node:fs'
+import { loadWindowsSecurity, WINDOWS_FILE_ALL_ACCESS } from '../shared/windows-security-addon'
 
-/**
- * Full path to icacls.exe. Electron's main process may have a stripped PATH
- * that excludes System32, causing bare `icacls` to throw ENOENT.
- */
-export function getIcaclsExePath(): string {
-  return `${process.env.SystemRoot ?? 'C:\\Windows'}\\System32\\icacls.exe`
+export {
+  getCmdExePath,
+  getSpawnArgsForWindows,
+  wrapWindowsStartWait,
+  isWindowsBatchScript,
+  WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR,
+  WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL,
+  UnsafeWindowsBatchArgumentsError,
+  type GetSpawnArgsForWindowsOptions
+} from '../shared/windows-batch-spawn'
+
+/** Absolute path because service-launched Electron can omit System32 from PATH. */
+export function getSystem32ExePath(exe: string, env: NodeJS.ProcessEnv = process.env): string {
+  const systemRoot = env.SystemRoot?.trim()
+  const root = systemRoot && /^[a-z]:[\\/]/i.test(systemRoot) ? systemRoot : 'C:\\Windows'
+  return win32.join(root, 'System32', exe)
 }
 
-/**
- * Full path to cmd.exe, respecting the ComSpec convention used elsewhere in
- * the codebase (hooks.ts, repo.ts, ssh-connection-utils.ts).
- * Falls back to SystemRoot-based path if ComSpec is unset.
- */
-export function getCmdExePath(): string {
-  return process.env.ComSpec || `${process.env.SystemRoot ?? 'C:\\Windows'}\\System32\\cmd.exe`
-}
-
-/** Whether a resolved command path points to a Windows batch script (.cmd/.bat). */
-export function isWindowsBatchScript(commandPath: string): boolean {
-  return process.platform === 'win32' && /\.(cmd|bat)$/i.test(commandPath)
+export function getRegExePath(env: NodeJS.ProcessEnv = process.env): string {
+  return getSystem32ExePath('reg.exe', env)
 }
 
 export function resolveWindowsCommand(
@@ -51,20 +51,6 @@ export function resolveWindowsCommand(
   return command
 }
 
-export const WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR = 'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
-
-export class UnsafeWindowsBatchArgumentsError extends Error {
-  constructor() {
-    super(WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR)
-    this.name = 'UnsafeWindowsBatchArgumentsError'
-  }
-}
-
-function hasUnsafeWindowsBatchSyntax(value: string): boolean {
-  return /[&|<>^"%!\r\n]/.test(value)
-}
-
-/** Check whether an error is a Windows permission error (EACCES or EPERM). */
 export function isPermissionError(error: unknown): boolean {
   return (
     error instanceof Error &&
@@ -74,100 +60,30 @@ export function isPermissionError(error: unknown): boolean {
   )
 }
 
-// Why: USERNAME-only identity resolution silently no-ops under services, CI,
-// and hardened envs where USERNAME is unset. Fall back to the SID via
-// `whoami /user` (same strategy as runtime-metadata.ts), which is authoritative
-// and always available on Windows. Cached because it never changes in-process.
-let cachedIdentity: string | null | undefined
+const USER_DIRECTORY_GRANT = { inheritable: true, replace: true } as const
 
-export function resolveCurrentWindowsIdentity(): string | null {
-  return resolveCurrentIdentity()
+/** An explicit user grant makes the directory writable when Chromium's inherited ACEs do not. */
+export function grantDirAcl(dirPath: string): void {
+  const security = loadWindowsSecurity()
+  if (!('error' in security)) {
+    security.addon.grantAccess(
+      dirPath,
+      security.userSid,
+      WINDOWS_FILE_ALL_ACCESS,
+      USER_DIRECTORY_GRANT
+    )
+  }
 }
 
-function resolveCurrentIdentity(): string | null {
-  if (cachedIdentity !== undefined) {
-    return cachedIdentity
+/** Run the subtree grant on the thread pool. */
+export async function grantDirAclAsync(dirPath: string): Promise<void> {
+  const security = loadWindowsSecurity()
+  if (!('error' in security)) {
+    await security.addon.grantAccessAsync(
+      dirPath,
+      security.userSid,
+      WINDOWS_FILE_ALL_ACCESS,
+      USER_DIRECTORY_GRANT
+    )
   }
-  if (process.env.USERNAME) {
-    cachedIdentity = process.env.USERNAME
-    return cachedIdentity
-  }
-  try {
-    const output = execFileSync('whoami', ['/user', '/fo', 'csv', '/nh'], {
-      encoding: 'utf-8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-      windowsHide: true,
-      timeout: 5000
-    }).trim()
-    // CSV columns: "DOMAIN\\user","S-1-5-21-..."
-    const sidMatch = /"(S-[\d-]+)"\s*$/.exec(output)
-    cachedIdentity = sidMatch ? `*${sidMatch[1]}` : null
-  } catch {
-    cachedIdentity = null
-  }
-  return cachedIdentity
-}
-
-/**
- * Grant Full Control (OI)(CI)(F) on a directory for the current user.
- * Used to fix Chromium's Protected DACL propagation which leaves child
- * directories with Inherit-Only ACEs that deny direct file creation.
- *
- * Why /grant:r not /inheritance:e: Chromium's ACEs carry the Inherit-Only
- * flag when propagated to children, so restoring inheritance does not grant
- * the directory itself any effective permissions. An explicit ACE survives
- * future DACL propagation and grants create-file rights.
- */
-export function grantDirAcl(dirPath: string, options?: { recursive?: boolean }): void {
-  const identity = resolveCurrentIdentity()
-  if (!identity) {
-    return
-  }
-  const args = [dirPath, '/grant:r', `${identity}:(OI)(CI)(F)`]
-  if (options?.recursive) {
-    args.push('/T', '/C')
-  }
-  // Why: /T walks the entire subtree; a 10s cap can starve on large userData
-  // dirs (tens of thousands of cached chromium files), making the startup
-  // grant silently fail. Give recursive calls a generous budget.
-  const timeout = options?.recursive ? 60_000 : 10_000
-  execFileSync(getIcaclsExePath(), args, {
-    stdio: 'ignore',
-    windowsHide: true,
-    timeout
-  })
-}
-
-/**
- * Resolve spawn parameters for a command that may be a Windows batch script.
- *
- * Why: Node's spawn() cannot execute .cmd/.bat files directly without
- * shell:true, but shell:true with an args array triggers DEP0190 because
- * args are concatenated, not escaped. Routing through cmd.exe /c explicitly
- * avoids the deprecation warning while passing args correctly.
- *
- * Why /d: disables per-machine/user AutoRun registry commands so a background
- * spawn cannot inherit surprising side effects from the user's shell config.
- *
- * SAFETY: when the .cmd/.bat branch is taken, cmd.exe re-parses the command
- * line. Args with cmd metacharacters are rejected instead of escaped because
- * the agent prompt may contain arbitrary staged diff text.
- */
-export function getSpawnArgsForWindows(
-  command: string,
-  args: string[]
-): { spawnCmd: string; spawnArgs: string[] } {
-  if (isWindowsBatchScript(command)) {
-    for (const value of [command, ...args]) {
-      if (hasUnsafeWindowsBatchSyntax(value)) {
-        throw new UnsafeWindowsBatchArgumentsError()
-      }
-    }
-
-    // Why: when Node passes a pre-quoted command line as one argv entry,
-    // cmd.exe sees literal escaped quotes on Windows and refuses to run .cmd
-    // shims. Separate argv entries let Node quote spaces without breaking cmd.
-    return { spawnCmd: getCmdExePath(), spawnArgs: ['/d', '/c', command, ...args] }
-  }
-  return { spawnCmd: command, spawnArgs: args }
 }

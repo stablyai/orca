@@ -1,4 +1,3 @@
-/* oxlint-disable max-lines -- Why: diagnostics IPC tests share mocked Electron handler setup; splitting would duplicate brittle IPC wiring. */
 import { readFileSync, writeFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CollectedBundle } from '../observability/bundle'
@@ -303,7 +302,7 @@ describe('diagnostics IPC handlers', () => {
     collectDiagnosticBundleMock.mockReturnValue(bundle)
     const collect = handlers.get('diagnostics:collectBundle')!
 
-    expect(collect({}, 30)).toEqual({
+    expect(await collect({}, 30)).toEqual({
       bundleSubmissionId: bundle.bundleSubmissionId,
       bytes: bundle.bytes,
       spanCount: bundle.spanCount

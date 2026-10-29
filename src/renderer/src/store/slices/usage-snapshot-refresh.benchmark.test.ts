@@ -7,7 +7,7 @@ import type {
   CodexUsageSnapshot,
   CodexUsageSummary
 } from '../../../../shared/codex-usage-types'
-import { createCodexUsageSlice } from './codex-usage'
+import { createCodexUsageSlice } from './usage-provider-slices'
 
 type Deferred<T> = {
   promise: Promise<T>
@@ -56,6 +56,7 @@ function createSummary(totalTokens: number): CodexUsageSummary {
     reasoningOutputTokens: 0,
     totalTokens,
     estimatedCostUsd: 1,
+    hasUnpricedModels: false,
     topModel: 'gpt-5',
     topProject: 'orca',
     hasAnyCodexData: true

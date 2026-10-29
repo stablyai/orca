@@ -1,8 +1,9 @@
 import { test, expect } from './helpers/orca-app'
 import type { Page } from '@stablyai/playwright-test'
-import type { TerminalPaneLayoutNode } from '../../src/shared/types'
+import type { TerminalPaneLayoutNode } from '../../src/shared/terminal-tab-types'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { worktreeRow } from './worktree-row-locators'
+import { SIDEBAR_INPUTS_BUILD } from './helpers/sidebar-inputs-build'
 
 type SmartSortScenario = {
   blockedId: string
@@ -105,10 +106,7 @@ async function seedSmartSortScenario(page: Page): Promise<SmartSortScenario> {
     let blockedLeafId = ''
     let doneLeafId = ''
 
-    // Why: WorktreeList intentionally holds cold-start ordering until a live
-    // PTY exists. E2E hidden windows can create tabs before panes mount, so
-    // seed the live-PTY and stable-layout maps explicitly and let agent-status
-    // writes drive the same sortEpoch path that hook events use in the app.
+    // Cold sort holds until a live PTY exists; seed live/stable-layout maps for hidden windows, then drive production sortEpoch via agent status.
     store.setState((current) => {
       const blockedLayout = current.terminalLayoutsByTabId[blockedTab.id]
       const doneLayout = current.terminalLayoutsByTabId[doneTab.id]
@@ -211,6 +209,8 @@ async function getSmartSortScenarioReadiness(
 }
 
 test.describe('Worktree Smart Sort', () => {
+  // The window-seeded statuses here never reach the host, which owns Smart in that build.
+  test.skip(SIDEBAR_INPUTS_BUILD, 'ORCA_SIDEBAR_INPUTS=main sorts by host stamps')
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)

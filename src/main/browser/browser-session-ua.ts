@@ -1,55 +1,126 @@
 import type { Session } from 'electron'
+import type { BrowserTabIdentity, UserAgentMetadata } from './browser-tab-identity'
+export { cleanElectronUserAgent } from './browser-process-user-agent'
+import { getBrowserProcessUserAgentIdentity } from './browser-process-user-agent'
+import { decideBrowserSessionRequestHeaders } from './browser-session-request-decisions'
+import { reportBrowserSessionWebRequest } from './browser-session-web-request-observer'
 
-// Why: Electron's default UA includes "Electron/X.X.X" and the app name
-// (e.g. "orca/1.2.3"), which Cloudflare Turnstile and other bot detectors
-// flag as non-human traffic. Strip those tokens so the webview's UA and
-// sec-ch-ua Client Hints look like standard Chrome.
-export function cleanElectronUserAgent(ua: string): string {
-  return (
-    ua
-      .replace(/\s+Electron\/\S+/, '')
-      // Why: \S+ matches any non-whitespace token (e.g. "orca/1.3.8-rc.0")
-      // including pre-release semver strings that [\d.]+ would miss.
-      .replace(/(\)\s+)\S+\s+(Chrome\/)/, '$1$2')
-  )
+import {
+  currentUserAgent,
+  googleAuthUserAgent,
+  setUserAgentHeader,
+  shouldUseGoogleAuthIdentity,
+  stripClientHints
+} from './browser-google-auth-ua'
+
+export type BrowserSessionRequestUserAgentResolver = (args: {
+  session: Session
+  url: string
+  referrer?: string
+  resourceType?: string
+  webContentsId?: number
+  currentUserAgent?: string
+  effectiveUserAgent?: string
+}) => BrowserTabIdentity | undefined
+
+function quoteClientHint(value: string): string {
+  return `"${value.replace(/["\\]/g, '\\$&')}"`
 }
 
-// Why: Electron's actual Chromium version (e.g. 134) differs from the source
-// browser's version (e.g. Edge 147). The sec-ch-ua Client Hints headers
-// reveal the real version, creating a mismatch that Google's anti-fraud
-// detection flags as CookieMismatch on accounts.google.com. Override Client
-// Hints on outgoing requests to match the source browser's UA.
-export function setupClientHintsOverride(sess: Session, ua: string): void {
-  const chromeMatch = ua.match(/Chrome\/([\d.]+)/)
-  if (!chromeMatch) {
-    return
+function formatClientHintBrands(brands: { brand: string; version: string }[]): string {
+  return brands
+    .map(({ brand, version }) => `${quoteClientHint(brand)};v=${quoteClientHint(version)}`)
+    .join(', ')
+}
+
+function applyUserAgentMetadataHeaders(
+  headers: Record<string, string>,
+  metadata: UserAgentMetadata
+): void {
+  const values: Record<string, string> = {
+    'sec-ch-ua': formatClientHintBrands(metadata.brands),
+    'sec-ch-ua-full-version-list': formatClientHintBrands(metadata.fullVersionList),
+    'sec-ch-ua-full-version': quoteClientHint(metadata.fullVersion),
+    'sec-ch-ua-platform': quoteClientHint(metadata.platform),
+    'sec-ch-ua-platform-version': quoteClientHint(metadata.platformVersion),
+    'sec-ch-ua-arch': quoteClientHint(metadata.architecture),
+    'sec-ch-ua-model': quoteClientHint(metadata.model),
+    'sec-ch-ua-mobile': metadata.mobile ? '?1' : '?0'
   }
-  const fullChromeVersion = chromeMatch[1]
-  const majorVersion = fullChromeVersion.split('.')[0]
-
-  let brand = 'Google Chrome'
-  let brandFullVersion = fullChromeVersion
-
-  const edgeMatch = ua.match(/Edg\/([\d.]+)/)
-  if (edgeMatch) {
-    brand = 'Microsoft Edge'
-    brandFullVersion = edgeMatch[1]
-  }
-  const brandMajor = brandFullVersion.split('.')[0]
-
-  const secChUa = `"${brand}";v="${brandMajor}", "Chromium";v="${majorVersion}", "Not/A)Brand";v="24"`
-  const secChUaFull = `"${brand}";v="${brandFullVersion}", "Chromium";v="${fullChromeVersion}", "Not/A)Brand";v="24.0.0.0"`
-
-  sess.webRequest.onBeforeSendHeaders({ urls: ['https://*/*'] }, (details, callback) => {
-    const headers = details.requestHeaders
-    for (const key of Object.keys(headers)) {
-      const lower = key.toLowerCase()
-      if (lower === 'sec-ch-ua') {
-        headers[key] = secChUa
-      } else if (lower === 'sec-ch-ua-full-version-list') {
-        headers[key] = secChUaFull
-      }
+  for (const key of Object.keys(headers)) {
+    const lowerKey = key.toLowerCase()
+    if (!lowerKey.startsWith('sec-ch-ua')) {
+      continue
     }
-    callback({ requestHeaders: headers })
-  })
+    const value = values[lowerKey]
+    if (value === undefined) {
+      delete headers[key]
+    } else {
+      headers[key] = value
+    }
+  }
+}
+
+// Rewrite only hints Chromium emitted; desktop hints remain browser-owned.
+export function installBrowserSessionUserAgentPolicy(
+  sess: Session,
+  resolveRequestUserAgent?: BrowserSessionRequestUserAgentResolver
+): () => void {
+  const firefoxUa = googleAuthUserAgent()
+  const applyUserAgentPolicy = (details: Electron.OnBeforeSendHeadersListenerDetails): void => {
+    const headers = details.requestHeaders
+    const requestUserAgent = currentUserAgent(headers)
+    let effectiveUserAgent: string | undefined
+    try {
+      effectiveUserAgent = details.webContents?.getUserAgent()
+    } catch {
+      // The request can race guest teardown; the header and manager state still provide a fallback.
+    }
+    // Native mode must keep its process identity on auth requests.
+    if (
+      getBrowserProcessUserAgentIdentity().mode === 'clean' &&
+      shouldUseGoogleAuthIdentity(details.url, details.referrer ?? '', details.resourceType ?? '')
+    ) {
+      setUserAgentHeader(headers, firefoxUa)
+      stripClientHints(headers)
+      return
+    }
+    const identity = resolveRequestUserAgent?.({
+      session: sess,
+      url: details.url,
+      referrer: details.referrer,
+      resourceType: details.resourceType,
+      webContentsId: details.webContentsId,
+      currentUserAgent: requestUserAgent,
+      effectiveUserAgent
+    })
+    if (!identity) {
+      return
+    }
+    setUserAgentHeader(headers, identity.userAgent)
+    if (identity.kind === 'google-auth') {
+      stripClientHints(headers)
+    } else if (identity.kind === 'mobile') {
+      applyUserAgentMetadataHeaders(headers, identity.userAgentMetadata)
+    }
+  }
+  sess.webRequest.onBeforeSendHeaders(
+    { urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] },
+    (details, callback) => {
+      reportBrowserSessionWebRequest(sess, 'onBeforeSendHeaders', details)
+      applyUserAgentPolicy(details)
+      // Why after the policy: Chrome sets its own user agent before extensions modify headers.
+      callback({
+        requestHeaders: decideBrowserSessionRequestHeaders(sess, details, details.requestHeaders)
+      })
+    }
+  )
+  let disposed = false
+  return (): void => {
+    if (disposed) {
+      return
+    }
+    disposed = true
+    sess.webRequest.onBeforeSendHeaders(null)
+  }
 }

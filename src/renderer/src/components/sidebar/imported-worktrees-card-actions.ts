@@ -1,4 +1,6 @@
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import { mergeExternalWorktreeInboxPaths } from '../../../../shared/external-worktree-inbox'
+import { translate } from '@/i18n/i18n'
 
 export type ImportedWorktreeCardActionState = {
   pending: boolean
@@ -13,18 +15,35 @@ type ImportedWorktreeCardActionDeps = {
   updateRepo: (
     projectId: string,
     updates: Partial<
-      Pick<Repo, 'externalWorktreeVisibility' | 'externalWorktreeVisibilityPromptDismissedAt'>
+      Pick<
+        Repo,
+        | 'externalWorktreeVisibility'
+        | 'externalWorktreeVisibilityPromptDismissedAt'
+        | 'externalWorktreeInboxBaselinePaths'
+      >
     >
   ) => Promise<boolean>
+  hiddenWorktreePaths?: readonly string[]
+  existingBaselinePaths?: readonly string[]
   fetchWorktrees: (
     projectId: string,
     options?: { requireAuthoritative?: boolean }
   ) => Promise<boolean>
 }
 
-export const IMPORTED_WORKTREES_SHOW_ERROR = 'Could not show discovered worktrees. Try again.'
-export const IMPORTED_WORKTREES_KEEP_HIDDEN_ERROR =
-  'Could not keep discovered worktrees hidden. Try again.'
+export function getImportedWorktreesShowError(): string {
+  return translate(
+    'auto.components.sidebar.importedWorktreesCardActions.showError',
+    'Could not show discovered worktrees. Try again.'
+  )
+}
+
+export function getImportedWorktreesKeepHiddenError(): string {
+  return translate(
+    'auto.components.sidebar.importedWorktreesCardActions.keepHiddenError',
+    'Could not keep discovered worktrees hidden. Try again.'
+  )
+}
 
 export async function showImportedWorktreesCard(
   args: ImportedWorktreeCardActionDeps
@@ -40,7 +59,7 @@ export async function showImportedWorktreesCard(
   if (!updated) {
     args.setCardState(args.projectId, {
       pending: false,
-      error: IMPORTED_WORKTREES_SHOW_ERROR,
+      error: getImportedWorktreesShowError(),
       ...(forceVisible ? { forceVisible: true } : {})
     })
     return
@@ -50,7 +69,7 @@ export async function showImportedWorktreesCard(
     const rolledBack = await args.updateRepo(args.projectId, { externalWorktreeVisibility: 'hide' })
     args.setCardState(args.projectId, {
       pending: false,
-      error: IMPORTED_WORKTREES_SHOW_ERROR,
+      error: getImportedWorktreesShowError(),
       ...(rolledBack ? {} : { forceVisible: true })
     })
     return
@@ -63,12 +82,20 @@ export async function keepImportedWorktreesHiddenCard(
 ): Promise<void> {
   args.setCardState(args.projectId, { pending: true, error: null })
   const updated = await args.updateRepo(args.projectId, {
-    externalWorktreeVisibilityPromptDismissedAt: Date.now()
+    externalWorktreeVisibilityPromptDismissedAt: Date.now(),
+    ...(args.hiddenWorktreePaths && args.hiddenWorktreePaths.length > 0
+      ? {
+          externalWorktreeInboxBaselinePaths: mergeExternalWorktreeInboxPaths(
+            args.existingBaselinePaths,
+            args.hiddenWorktreePaths
+          )
+        }
+      : {})
   })
   if (!updated) {
     args.setCardState(args.projectId, {
       pending: false,
-      error: IMPORTED_WORKTREES_KEEP_HIDDEN_ERROR
+      error: getImportedWorktreesKeepHiddenError()
     })
     return
   }

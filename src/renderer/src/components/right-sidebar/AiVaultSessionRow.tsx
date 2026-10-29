@@ -1,265 +1,302 @@
+import { isAntigravityReferenceSession } from '../../../../shared/antigravity-session-origin'
+import type { AiVaultSubagentResumeActions } from './AiVaultSessionSubagents'
 import { useCallback } from 'react'
 import type React from 'react'
-import { Copy, FileJson, FolderOpen, Play } from 'lucide-react'
-import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger
-} from '@/components/ui/context-menu'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { cn } from '@/lib/utils'
 import {
+  AI_VAULT_SESSION_DRAG_END_EVENT,
   AI_VAULT_SESSION_DRAG_START_EVENT,
   writeAiVaultSessionDragData
 } from '@/lib/ai-vault-session-drag'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import { agentLabel } from './ai-vault-session-filters'
+import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
 import { translate } from '@/i18n/i18n'
-import { SessionInlineDetails, SessionTime } from './AiVaultSessionDetails'
+import { SessionInlineDetails } from './AiVaultSessionDetails'
 import { latestSessionConversationTurn } from './ai-vault-session-display'
+import { SessionActionMenuItems } from './AiVaultSessionActionMenuItems'
 import { SessionRowTrailingActions } from './SessionRowTrailingActions'
+import { aiVaultSessionDeleteBlockedReason } from './ai-vault-session-deletability'
+import { useAiVaultSessionDeleteHost } from './ai-vault-session-delete-action'
+import type { AiVaultSessionResumeActions } from './ai-vault-session-resume'
+import type { AiVaultSessionWorktreeInfo } from './ai-vault-session-worktree'
+import {
+  conversationRoleLabel,
+  getSessionDetailsId,
+  SessionMetadata
+} from './ai-vault-session-row-display'
+import type { AgentDotState } from '@/components/AgentStateDot'
+import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
+import { AiVaultSearchEvidence } from './AiVaultSearchEvidence'
+import { useAiVaultSessionDisplayTitle } from './use-ai-vault-session-display-title'
 
 export function VaultSessionRow({
   session,
-  resumeCommand,
+  liveState,
+  resumeStartup,
+  realHomeResumeStartup,
+  worktreeInfo,
+  vaultScope,
   detailsExpanded,
   resumeDisabled,
+  resumeHidden,
   onToggleDetails,
+  onJumpToOriginalPane,
+  showJumpToWorktree,
+  onJumpToWorktree,
   onResume,
+  onContinueInNewSession,
+  onResumeInNewChat,
+  onResumeInNewCli,
+  resumeLabel: defaultResumeLabel,
+  resumeActions,
+  onResumeInWorktree,
+  onResumeInNewTab,
+  subagentResume,
   onCopyResume,
   onCopyId,
   onCopyPath,
   onOpenLog,
   onRevealLog,
-  onOpenCwd
+  onOpenCwd,
+  onRequestDelete,
+  searchHit,
+  sourceHostLabel,
+  onPick
 }: {
   session: AiVaultSession
-  resumeCommand: string
+  liveState: AgentDotState | null
+  resumeStartup: AiVaultResumeStartup
+  realHomeResumeStartup: AiVaultResumeStartup
+  worktreeInfo: AiVaultSessionWorktreeInfo | null
+  vaultScope: AiVaultScope
   detailsExpanded: boolean
   resumeDisabled: boolean
+  resumeHidden?: boolean
   onToggleDetails: () => void
+  onJumpToOriginalPane?: () => void
+  showJumpToWorktree: boolean
+  onJumpToWorktree?: () => void
   onResume: () => void
-  onCopyResume: () => void
+  onContinueInNewSession?: () => void
+  onResumeInNewChat?: () => void
+  onResumeInNewCli?: () => void
+  resumeLabel: string
+  resumeActions: AiVaultSessionResumeActions
+  onResumeInWorktree: () => void
+  onResumeInNewTab: () => void
+  subagentResume?: AiVaultSubagentResumeActions
+  onCopyResume?: () => void
   onCopyId: () => void
-  onCopyPath: () => void
-  onOpenLog: () => void
-  onRevealLog: () => void
+  onCopyPath?: () => void
+  onOpenLog?: () => void
+  onRevealLog?: () => void
   onOpenCwd?: () => void
+  onRequestDelete?: (session: AiVaultSession) => void
+  searchHit?: AiVaultSearchHit
+  /** The host a search hit came from, set when hits span several hosts. */
+  sourceHostLabel?: string
+  /** Set in `/resume`'s picker: a click resumes the row, and the row offers no other action. */
+  onPick?: () => void
 }) {
+  const resumeLabel = isAntigravityReferenceSession(session)
+    ? translate('aiVault.continueInCli', 'Continue in CLI')
+    : defaultResumeLabel
   const updatedAt = session.updatedAt ?? session.modifiedAt
+  const title = useAiVaultSessionDisplayTitle(session)
   const detailsId = getSessionDetailsId(session.id)
   const latestTurn = latestSessionConversationTurn(session)
+  const deleteHost = useAiVaultSessionDeleteHost(session)
+  const deleteBlockedReason = onRequestDelete
+    ? aiVaultSessionDeleteBlockedReason(session, deleteHost)
+    : translate(
+        'auto.components.right.sidebar.AiVaultSearchEvidence.sourceActionsUnavailable',
+        'The transcript source is unavailable.'
+      )
+  const requestDelete = session.structuredSession
+    ? undefined
+    : (): void => onRequestDelete?.(session)
+  const draggable = !resumeDisabled && !onPick
   const detailsTooltip = detailsExpanded
     ? translate('auto.components.right.sidebar.AiVaultSessionRow.hideDetails', 'Hide Details')
     : translate('auto.components.right.sidebar.AiVaultSessionRow.showDetails', 'Show Details')
   const startResumeDrag = useCallback(
-    (event: React.DragEvent<HTMLButtonElement>): void => {
+    (event: React.DragEvent<HTMLElement>): void => {
       event.stopPropagation()
-      if (resumeDisabled) {
+      if (!draggable) {
         event.preventDefault()
         return
       }
       writeAiVaultSessionDragData(event.dataTransfer, {
         agent: session.agent,
         sessionId: session.sessionId,
-        title: session.title,
-        command: resumeCommand
+        ...(session.structuredSession ? { structuredSession: session.structuredSession } : {}),
+        title,
+        command: resumeStartup.command,
+        sessionFilePath: session.filePath,
+        sessionExecutionHostId: session.executionHostId,
+        codexHome: session.codexHome,
+        // Send null for missing cwd so consumers can distinguish absence from older payloads without repinning support.
+        sessionCwd: session.cwd ?? null,
+        ...(resumeStartup.env ? { env: resumeStartup.env } : {}),
+        ...(resumeStartup.envToDelete ? { envToDelete: resumeStartup.envToDelete } : {}),
+        ...(resumeStartup.launchConfig ? { launchConfig: resumeStartup.launchConfig } : {}),
+        ...(session.structuredSession ? {} : { realHomeStartup: realHomeResumeStartup })
       })
       window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_START_EVENT))
     },
-    [resumeDisabled, session.agent, session.sessionId, session.title, resumeCommand]
+    [draggable, realHomeResumeStartup, session, resumeStartup, title]
   )
 
-  return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild className="block w-full min-w-0">
+  const body = (
+    <div
+      className={cn(
+        'group/session-row flex w-full min-w-0 cursor-pointer flex-col border-b border-sidebar-border px-3 py-2 text-left transition-colors hover:bg-sidebar-accent/55',
+        !detailsExpanded && 'min-h-[98px]'
+      )}
+      onClick={(event) => {
+        // Ignore portaled React clicks outside the row DOM so menu actions cannot expand the row.
+        const target = event.target
+        if (target instanceof Node && !event.currentTarget.contains(target)) {
+          return
+        }
+        if (onPick) {
+          onPick()
+        } else {
+          onToggleDetails()
+        }
+      }}
+    >
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1">
         <div
-          className="group/session-row flex min-h-[82px] w-full min-w-0 cursor-pointer flex-col border-b border-sidebar-border px-3 py-2 text-left transition-colors hover:bg-sidebar-accent/55"
-          onClick={() => {
-            onToggleDetails()
+          className={cn(
+            'min-w-0 text-[13px] font-medium leading-5 text-foreground',
+            // Only the title drags; previews/details retain normal text selection.
+            draggable && 'cursor-grab active:cursor-grabbing',
+            detailsExpanded ? 'line-clamp-2 [overflow-wrap:anywhere]' : 'line-clamp-1'
+          )}
+          draggable={draggable}
+          title={
+            !draggable
+              ? undefined
+              : translate(
+                  'auto.components.right.sidebar.AiVaultSessionRow.dragToResume',
+                  'Drag to resume in a new tab'
+                )
+          }
+          onDragStart={startResumeDrag}
+          onDragEnd={() => {
+            window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_END_EVENT))
           }}
         >
-          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1">
-            <div
-              className={cn(
-                'min-w-0 text-[13px] font-medium leading-5 text-foreground',
-                detailsExpanded ? 'break-words [overflow-wrap:anywhere]' : 'line-clamp-1'
-              )}
-            >
-              {session.title}
-            </div>
-            <SessionRowTrailingActions
-              session={session}
-              detailsExpanded={detailsExpanded}
-              detailsId={detailsId}
-              detailsTooltip={detailsTooltip}
-              resumeDisabled={resumeDisabled}
-              onToggleDetails={onToggleDetails}
-              onResume={onResume}
-              onCopyResume={onCopyResume}
-              onCopyId={onCopyId}
-              onCopyPath={onCopyPath}
-              onOpenLog={onOpenLog}
-              onRevealLog={onRevealLog}
-              onOpenCwd={onOpenCwd}
-              onStartResumeDrag={startResumeDrag}
-            />
-          </div>
-          <div className="mt-0.5 min-w-0 line-clamp-2 text-[12px] leading-4 text-muted-foreground">
-            {latestTurn ? (
-              <>
-                <span className="font-medium text-foreground/80">
-                  {conversationRoleLabel(latestTurn.role)}
-                </span>
-                <span>: {latestTurn.text}</span>
-              </>
-            ) : (
-              translate(
-                'auto.components.right.sidebar.AiVaultSessionRow.noPreviewAvailable',
-                'No conversation preview available'
-              )
-            )}
-          </div>
-          <SessionMetadata session={session} updatedAt={updatedAt} />
-          {detailsExpanded ? (
-            <SessionInlineDetails
-              id={detailsId}
-              session={session}
-              resumeDisabled={resumeDisabled}
-              onResume={onResume}
-              onCopyResume={onCopyResume}
-            />
-          ) : null}
+          {title}
         </div>
-      </ContextMenuTrigger>
-      <ContextMenuContent>
-        <SessionActionMenuItems
-          menuKind="context"
+        <SessionRowTrailingActions
+          session={session}
+          detailsExpanded={detailsExpanded}
+          detailsId={detailsId}
+          detailsTooltip={detailsTooltip}
           resumeDisabled={resumeDisabled}
+          resumeHidden={resumeHidden}
+          resumeLabel={resumeLabel}
+          worktreeInfo={worktreeInfo}
+          onToggleDetails={onToggleDetails}
+          onJumpToOriginalPane={onJumpToOriginalPane}
+          showJumpToWorktree={showJumpToWorktree}
+          onJumpToWorktree={onJumpToWorktree}
           onResume={onResume}
+          onContinueInNewSession={onContinueInNewSession}
+          onResumeInNewChat={onResumeInNewChat}
+          onResumeInNewCli={onResumeInNewCli}
           onCopyResume={onCopyResume}
           onCopyId={onCopyId}
           onCopyPath={onCopyPath}
           onOpenLog={onOpenLog}
           onRevealLog={onRevealLog}
           onOpenCwd={onOpenCwd}
+          deleteBlockedReason={deleteBlockedReason}
+          onRequestDelete={requestDelete}
+          actionsHidden={Boolean(onPick)}
+        />
+      </div>
+      {searchHit ? <AiVaultSearchEvidence hit={searchHit} /> : null}
+      {!detailsExpanded && !searchHit ? (
+        <div className="mt-0.5 min-w-0 line-clamp-2 text-[12px] leading-4 text-muted-foreground">
+          {latestTurn ? (
+            <>
+              <span className="font-medium text-foreground/80">
+                {conversationRoleLabel(latestTurn.role)}
+              </span>
+              <span>: {latestTurn.text}</span>
+            </>
+          ) : (
+            translate(
+              'auto.components.right.sidebar.AiVaultSessionRow.noPreviewAvailable',
+              'No conversation preview available'
+            )
+          )}
+        </div>
+      ) : null}
+      <SessionMetadata
+        session={session}
+        liveState={liveState}
+        updatedAt={updatedAt}
+        worktreeInfo={worktreeInfo}
+        vaultScope={vaultScope}
+        sourceHostLabel={sourceHostLabel}
+      />
+      {detailsExpanded ? (
+        <SessionInlineDetails
+          id={detailsId}
+          session={session}
+          worktreeInfo={worktreeInfo}
+          vaultScope={vaultScope}
+          resumeActions={resumeActions}
+          onResumeInWorktree={onResumeInWorktree}
+          onResumeInNewTab={onResumeInNewTab}
+          subagentResume={onPick ? null : subagentResume}
+          onContinueInNewSession={onContinueInNewSession}
+          onResumeInNewChat={onResumeInNewChat}
+          onResumeInNewCli={onResumeInNewCli}
+          // The unsaved notice's "open the log" hint needs the button the picker hides.
+          onOpenLog={onPick ? undefined : onOpenLog}
+          actionsHidden={Boolean(onPick)}
+        />
+      ) : null}
+    </div>
+  )
+  if (onPick) {
+    return body
+  }
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild className="block w-full min-w-0">
+        {body}
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <SessionActionMenuItems
+          menuKind="context"
+          resumeDisabled={resumeDisabled}
+          resumeHidden={resumeHidden}
+          resumeLabel={resumeLabel}
+          onJumpToOriginalPane={onJumpToOriginalPane}
+          showJumpToWorktree={showJumpToWorktree}
+          jumpWorkspaceId={worktreeInfo?.worktreeId}
+          onJumpToWorktree={onJumpToWorktree}
+          onResume={onResume}
+          onContinueInNewSession={onContinueInNewSession}
+          onResumeInNewChat={onResumeInNewChat}
+          onResumeInNewCli={onResumeInNewCli}
+          onCopyResume={onCopyResume}
+          onCopyId={onCopyId}
+          onCopyPath={onCopyPath}
+          onOpenLog={onOpenLog}
+          onRevealLog={onRevealLog}
+          onOpenCwd={onOpenCwd}
+          deleteBlockedReason={deleteBlockedReason}
+          onDelete={requestDelete}
         />
       </ContextMenuContent>
     </ContextMenu>
   )
-}
-
-export function SessionActionMenuItems({
-  menuKind = 'dropdown',
-  resumeDisabled,
-  onResume,
-  onCopyResume,
-  onCopyId,
-  onCopyPath,
-  onOpenLog,
-  onRevealLog,
-  onOpenCwd
-}: {
-  menuKind?: 'dropdown' | 'context'
-  resumeDisabled: boolean
-  onResume: () => void
-  onCopyResume: () => void
-  onCopyId: () => void
-  onCopyPath: () => void
-  onOpenLog: () => void
-  onRevealLog: () => void
-  onOpenCwd?: () => void
-}) {
-  const Item = menuKind === 'context' ? ContextMenuItem : DropdownMenuItem
-  const Separator = menuKind === 'context' ? ContextMenuSeparator : DropdownMenuSeparator
-
-  return (
-    <>
-      <Item disabled={resumeDisabled} onSelect={onResume}>
-        <Play className="size-3.5" />
-        {translate(
-          'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewTab',
-          'Resume in New Tab'
-        )}
-      </Item>
-      <Item onSelect={onCopyResume}>
-        <Copy className="size-3.5" />
-        {translate(
-          'auto.components.right.sidebar.AiVaultSessionRow.copyResumeCommand',
-          'Copy Resume Command'
-        )}
-      </Item>
-      <Separator />
-      <Item onSelect={onOpenLog}>
-        <FileJson className="size-3.5" />
-        {translate('auto.components.right.sidebar.AiVaultSessionRow.openLog', 'Open Log')}
-      </Item>
-      <Item onSelect={onRevealLog}>
-        <FolderOpen className="size-3.5" />
-        {translate('auto.components.right.sidebar.AiVaultSessionRow.revealLog', 'Reveal Log')}
-      </Item>
-      {onOpenCwd ? (
-        <Item onSelect={onOpenCwd}>
-          <FolderOpen className="size-3.5" />
-          {translate(
-            'auto.components.right.sidebar.AiVaultSessionRow.openWorkingDirectory',
-            'Open Working Directory'
-          )}
-        </Item>
-      ) : null}
-      <Separator />
-      <Item onSelect={onCopyId}>
-        {translate(
-          'auto.components.right.sidebar.AiVaultSessionRow.copySessionId',
-          'Copy Session ID'
-        )}
-      </Item>
-      <Item onSelect={onCopyPath}>
-        {translate('auto.components.right.sidebar.AiVaultSessionRow.copyLogPath', 'Copy Log Path')}
-      </Item>
-    </>
-  )
-}
-
-function getSessionDetailsId(sessionId: string): string {
-  return `ai-vault-session-details-${sessionId.replace(/[^A-Za-z0-9_-]/g, '-')}`
-}
-
-function SessionMetadata({ session, updatedAt }: { session: AiVaultSession; updatedAt: string }) {
-  return (
-    <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] leading-4 text-muted-foreground">
-      <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
-        <AgentIcon agent={session.agent} size={14} />
-      </span>
-      <span className="min-w-0 truncate">{agentLabel(session.agent)}</span>
-      <span className="shrink-0 rounded-sm border border-sidebar-border bg-sidebar-accent/45 px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
-        {translate(
-          'auto.components.right.sidebar.AiVaultSessionRow.messageCount',
-          '{{value0}} msgs',
-          { value0: session.messageCount }
-        )}
-      </span>
-      <span className="shrink-0 text-muted-foreground/55">·</span>
-      <SessionTime value={updatedAt} />
-    </div>
-  )
-}
-
-function conversationRoleLabel(role: AiVaultSession['previewMessages'][number]['role']): string {
-  if (role === 'user') {
-    return translate('auto.components.right.sidebar.AiVaultSessionRow.userRole', 'You')
-  }
-  if (role === 'assistant') {
-    return translate('auto.components.right.sidebar.AiVaultSessionRow.agentRole', 'Agent')
-  }
-  if (role === 'tool') {
-    return translate('auto.components.right.sidebar.AiVaultSessionRow.toolRole', 'Tool')
-  }
-  if (role === 'system') {
-    return translate('auto.components.right.sidebar.AiVaultSessionRow.systemRole', 'System')
-  }
-  return translate('auto.components.right.sidebar.AiVaultSessionRow.sessionRole', 'Session')
 }

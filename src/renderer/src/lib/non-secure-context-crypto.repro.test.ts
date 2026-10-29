@@ -1,20 +1,13 @@
-/**
- * Reproduces the LAN web-client crash: served over plain HTTP, the browser
- * hides crypto.randomUUID and crypto.subtle (secure-context-only). This test
- * recreates that exact global shape and drives the real call sites.
- */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+/** Exercise real call sites with plain-HTTP crypto shape: LAN clients lack randomUUID/subtle. */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createNonSecureContextCrypto } from './non-secure-context-crypto-stub'
 
 const realCrypto = globalThis.crypto
 
 beforeEach(() => {
-  // Match a non-secure browser context: getRandomValues stays, the
-  // secure-context-only members are undefined.
   Object.defineProperty(globalThis, 'crypto', {
     configurable: true,
-    value: {
-      getRandomValues: realCrypto.getRandomValues.bind(realCrypto)
-    }
+    value: createNonSecureContextCrypto(realCrypto)
   })
 })
 
@@ -23,20 +16,7 @@ afterEach(() => {
 })
 
 describe('non-secure context (plain HTTP LAN web client)', () => {
-  it('crypto.randomUUID is undefined, like the browser reports', () => {
-    expect((globalThis.crypto as Crypto).randomUUID).toBeUndefined()
-    expect(() => (globalThis.crypto as Crypto).randomUUID()).toThrow()
-  })
-
-  it('hashOrcaHookScript does not throw when crypto.subtle is missing', async () => {
-    const { hashOrcaHookScript } = await import('./orca-hook-trust')
-    const hash = await hashOrcaHookScript('echo hi')
-    expect(hash).toMatch(/^[0-9a-f]+$/)
-  })
-
-  // The fallback must match the secure-context hash, or the shared trust store
-  // mismatches and the user is re-prompted to approve a hook they already
-  // trusted on the desktop app.
+  // Fallback hashes must match secure-context hashes or previously approved hook trust would mismatch.
   it('produces the same hash as crypto.subtle did in a secure context', async () => {
     const { hashOrcaHookScript } = await import('./orca-hook-trust')
     const secureHash = await (async () => {
@@ -45,15 +25,15 @@ describe('non-secure context (plain HTTP LAN web client)', () => {
     })()
     Object.defineProperty(globalThis, 'crypto', {
       configurable: true,
-      value: { getRandomValues: realCrypto.getRandomValues.bind(realCrypto) }
+      value: createNonSecureContextCrypto(realCrypto)
     })
     expect(await hashOrcaHookScript('echo hi')).toBe(secureHash)
   })
 
-  it('createBrowserUuid does not throw when randomUUID is missing', async () => {
-    const { createBrowserUuid } = await import('./browser-uuid')
-    expect(createBrowserUuid()).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/
-    )
+  // Evaluate the whole store graph so future import-time secure-context calls fail too.
+  it('evaluates the whole store graph', async () => {
+    vi.resetModules()
+    const { useAppStore } = await import('@/store')
+    expect(typeof useAppStore.getState).toBe('function')
   })
 })

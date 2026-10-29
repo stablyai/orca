@@ -1,12 +1,10 @@
-import type { GlobalSettings } from './types'
+import type { GlobalSettings } from './global-settings-types'
 
 export type TerminalColorSchemeMode = 'dark' | 'light'
 
 const MODE_2031_SCAN_TAIL_LIMIT = 128
 
-// Contour/Kitty "color-scheme update" protocol (DEC mode 2031 + CSI 997):
-// terminals push `CSI ?997;1n` for dark and `CSI ?997;2n` for light to
-// subscribed TUIs.
+// Contour/Kitty mode-2031 subscribers receive CSI ?997;1n for dark, ?997;2n for light.
 export function mode2031SequenceFor(mode: TerminalColorSchemeMode): string {
   return mode === 'dark' ? '\x1b[?997;1n' : '\x1b[?997;2n'
 }
@@ -24,13 +22,38 @@ export type Mode2031ScanResult = {
   unsubscribe: boolean
   finalState: 'subscribed' | 'unsubscribed' | null
   tail: string
+  /** An incomplete private-mode tail can still resolve to 2031; finalState remains provisional. */
+  tailMayResolveToMode2031: boolean
+}
+
+export type Mode2031ReplyScanState = {
+  tail: string
+  pendingSubscribe: boolean
+}
+
+export type Mode2031ReplyDecision = 'subscribed' | 'unsubscribed' | null
+
+export type Mode2031ReplyScanResult = {
+  decision: Mode2031ReplyDecision
+  state: Mode2031ReplyScanState
+}
+
+export const INITIAL_MODE_2031_REPLY_SCAN_STATE: Mode2031ReplyScanState = {
+  tail: '',
+  pendingSubscribe: false
+}
+
+const NO_MODE_2031_REPLY_DECISION: Mode2031ReplyScanResult = {
+  decision: null,
+  state: INITIAL_MODE_2031_REPLY_SCAN_STATE
 }
 
 const NO_MODE_2031_SEQUENCE: Mode2031ScanResult = {
   subscribe: false,
   unsubscribe: false,
   finalState: null,
-  tail: ''
+  tail: '',
+  tailMayResolveToMode2031: false
 }
 
 export function scanMode2031Sequences(previousTail: string, data: string): Mode2031ScanResult {
@@ -38,11 +61,13 @@ export function scanMode2031Sequences(previousTail: string, data: string): Mode2
     return NO_MODE_2031_SEQUENCE
   }
   const input = `${previousTail}${data}`
+  const tail = extractPrivateModeScanTail(input)
   const result: Mode2031ScanResult = {
     subscribe: false,
     unsubscribe: false,
     finalState: null,
-    tail: extractPrivateModeScanTail(input)
+    tail,
+    tailMayResolveToMode2031: tailCouldStillBeMode2031(tail)
   }
   // oxlint-disable-next-line no-control-regex -- terminal escape sequences require control chars
   const privateModeRe = /\x1b\[\?([0-9;]+)([hl])|\x9b\?([0-9;]+)([hl])/g
@@ -61,6 +86,40 @@ export function scanMode2031Sequences(previousTail: string, data: string): Mode2
     }
   }
   return result
+}
+
+export function scanMode2031ReplyDecision(
+  previous: Mode2031ReplyScanState,
+  data: string
+): Mode2031ReplyScanResult {
+  if (
+    !previous.pendingSubscribe &&
+    !previous.tail &&
+    !data.includes('\x1b') &&
+    !data.includes('\x9b')
+  ) {
+    return NO_MODE_2031_REPLY_DECISION
+  }
+  const scan = scanMode2031Sequences(previous.tail, data)
+  let decision = scan.finalState
+  let pendingSubscribe = previous.pendingSubscribe
+
+  if (scan.finalState === 'unsubscribed') {
+    pendingSubscribe = false
+  } else if (scan.finalState === 'subscribed' || pendingSubscribe) {
+    if (scan.tailMayResolveToMode2031) {
+      decision = null
+      pendingSubscribe = true
+    } else {
+      decision = 'subscribed'
+      pendingSubscribe = false
+    }
+  }
+
+  return {
+    decision,
+    state: { tail: scan.tail, pendingSubscribe }
+  }
 }
 
 function hasMode2031(params: string): boolean {
@@ -90,4 +149,10 @@ function extractPrivateModeScanTail(input: string): string {
 
 function isIncompletePrivateModeParams(params: string): boolean {
   return /^[0-9;]*$/.test(params)
+}
+
+/** Hold provisional decisions while the next bytes could withdraw a 2031 subscription (#9993). */
+function tailCouldStillBeMode2031(tail: string): boolean {
+  // Any retained private-mode prefix can still append `;2031` before its final byte.
+  return tail.length > 0
 }

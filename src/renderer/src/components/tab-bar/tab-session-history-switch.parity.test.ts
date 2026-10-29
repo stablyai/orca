@@ -1,0 +1,219 @@
+// @vitest-environment happy-dom
+import { renderHook } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
+import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
+import { makeRepo, makeWorktree } from '../worktree-jump-palette-test-fixtures'
+import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import { getDefaultSettings } from '../../../../shared/constants'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { resolveAiVaultSessionRowChatActions } from '../right-sidebar/ai-vault-session-chat-action'
+import { useAiVaultPanelSessionResume } from '../right-sidebar/use-ai-vault-panel-session-resume'
+import {
+  resolveTabSessionSwitch,
+  type TabSessionHistorySubject
+} from './tab-session-history-switch'
+
+// Stage host IPC capabilities only; run the shared panel/tab composition for real.
+vi.mock('@/runtime/local-runtime-capabilities', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  readLocalRuntimeCapabilitiesOrUnknown: () => [
+    STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY
+  ]
+}))
+vi.mock('@/lib/agent-session-launch-plan', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  structuredAgentSessionLaunchFeasible: () => true
+}))
+
+const WORKTREE_ID = 'repo-1::/repo/wt'
+const SIBLING_ID = 'repo-1::/repo/sibling'
+
+function row(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
+  return {
+    id: 'row-1',
+    executionHostId: 'local',
+    agent: 'claude',
+    sessionId: 'claude-session-1',
+    title: 'Fix the build',
+    cwd: '/repo/wt',
+    branch: 'main',
+    model: null,
+    filePath: '/home/.claude/projects/repo/claude-session-1.jsonl',
+    codexHome: null,
+    createdAt: null,
+    updatedAt: null,
+    modifiedAt: '2026-10-08T00:00:00.000Z',
+    messageCount: 2,
+    totalTokens: 10,
+    previewMessages: [{ role: 'user', text: 'Fix the build', timestamp: null }],
+    queuedMessageCount: 0,
+    subagentTranscriptCount: 0,
+    resumeCommand: 'claude --resume claude-session-1',
+    subagent: null,
+    ...overrides
+  }
+}
+
+function makeState(): AppState {
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  useAppStore.setState({
+    activeRepoId: 'repo-1',
+    activeWorktreeId: WORKTREE_ID,
+    repos: [makeRepo()],
+    settings: { ...getDefaultSettings('/home/me'), experimentalNativeChat: true },
+    worktreesByRepo: {
+      'repo-1': [
+        makeWorktree(WORKTREE_ID, 'wt', { path: '/repo/wt' }),
+        makeWorktree(SIBLING_ID, 'sibling', { path: '/repo/sibling' })
+      ]
+    }
+  })
+  return useAppStore.getState()
+}
+
+/** What AiVaultPanel + AiVaultVirtualRow compute for this row while WORKTREE_ID is active. */
+function panelTargets(state: AppState, session: AiVaultSession) {
+  const { result } = renderHook(() =>
+    useAiVaultPanelSessionResume({
+      sessions: [session],
+      repos: state.repos,
+      allWorktrees: getIndexedAllWorktrees(state.worktreesByRepo),
+      workspaceId: WORKTREE_ID,
+      resumeTargetState: state,
+      settings: state.settings
+    })
+  )
+  return resolveAiVaultSessionRowChatActions({
+    session,
+    originalPaneTarget: null,
+    structuredSessionOpen: false,
+    resumeState: result.current.getSessionResumeState(session),
+    resumeInChat: result.current.getSessionResumeInChat(session),
+    searchHit: undefined
+  })
+}
+
+const request = { scopePaths: [], executionHostScope: 'local', sessionLimit: 250 } as const
+
+beforeEach(() => {
+  makeState()
+})
+
+describe('the tab menu offers exactly what the Session History row offers', () => {
+  it('Switch to Chat for a CLI conversation', () => {
+    const state = useAppStore.getState()
+    const session = row()
+    const subject: TabSessionHistorySubject = {
+      kind: 'cli',
+      agent: 'claude',
+      providerSessionId: session.sessionId,
+      workspaceId: WORKTREE_ID,
+      request
+    }
+    const panel = panelTargets(state, session)
+
+    expect(panel.resumeInNewChatWorkspaceId).toBe(WORKTREE_ID)
+    expect(resolveTabSessionSwitch(state, session, subject)).toEqual({
+      action: 'resume-in-new-chat',
+      worktreeId: panel.resumeInNewChatWorkspaceId
+    })
+  })
+
+  it('nothing for a CLI conversation a native chat already holds', () => {
+    const state = useAppStore.getState()
+    const owned = row({
+      structuredSession: { sessionId: 'orca-chat-1', workspaceId: WORKTREE_ID }
+    })
+    expect(panelTargets(state, owned).resumeInNewChatWorkspaceId).toBeNull()
+    expect(
+      resolveTabSessionSwitch(state, owned, {
+        kind: 'cli',
+        agent: 'claude',
+        providerSessionId: owned.sessionId,
+        workspaceId: WORKTREE_ID,
+        request
+      })
+    ).toBeNull()
+  })
+
+  it("Switch to Chat in the conversation's own worktree when that differs", () => {
+    const state = useAppStore.getState()
+    const session = row({ cwd: '/repo/sibling' })
+    const panel = panelTargets(state, session)
+
+    expect(panel.resumeInNewChatWorkspaceId).toBe(SIBLING_ID)
+    expect(
+      resolveTabSessionSwitch(state, session, {
+        kind: 'cli',
+        agent: 'claude',
+        providerSessionId: session.sessionId,
+        workspaceId: WORKTREE_ID,
+        request
+      })
+    ).toEqual({ action: 'resume-in-new-chat', worktreeId: SIBLING_ID })
+  })
+
+  it('Switch to Terminal for a native chat, and nothing once it has no saved turns', () => {
+    const state = useAppStore.getState()
+    const subject: TabSessionHistorySubject = {
+      kind: 'chat',
+      sessionId: 'orca-chat-1',
+      workspaceId: WORKTREE_ID,
+      request
+    }
+    const chatRow = row({
+      structuredSession: { sessionId: 'orca-chat-1', workspaceId: WORKTREE_ID }
+    })
+    const panel = panelTargets(state, chatRow)
+
+    expect(panel.resumeInNewCliWorktreeId).toBe(WORKTREE_ID)
+    expect(resolveTabSessionSwitch(state, chatRow, subject)).toEqual({
+      action: 'resume-in-new-cli',
+      worktreeId: panel.resumeInNewCliWorktreeId
+    })
+
+    const emptyChat = { ...chatRow, messageCount: 0, previewMessages: [] }
+    expect(panelTargets(state, emptyChat).resumeInNewCliWorktreeId).toBeNull()
+    expect(resolveTabSessionSwitch(state, emptyChat, subject)).toBeNull()
+  })
+
+  it("Switch to Chat in the conversation's own folder workspace", () => {
+    useAppStore.setState({
+      folderWorkspaces: [
+        {
+          id: 'folder-1',
+          projectGroupId: 'group-1',
+          name: 'Notes',
+          folderPath: '/work/notes',
+          executionHostId: 'local',
+          linkedTask: null,
+          comment: '',
+          isArchived: false,
+          isUnread: false,
+          isPinned: false,
+          sortOrder: 0,
+          lastActivityAt: 1,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ]
+    })
+    const state = useAppStore.getState()
+    const session = row({ cwd: '/work/notes' })
+    const panel = panelTargets(state, session)
+
+    expect(panel.resumeInNewChatWorkspaceId).toBe(folderWorkspaceKey('folder-1'))
+    expect(
+      resolveTabSessionSwitch(state, session, {
+        kind: 'cli',
+        agent: 'claude',
+        providerSessionId: session.sessionId,
+        workspaceId: WORKTREE_ID,
+        request
+      })
+    ).toEqual({ action: 'resume-in-new-chat', worktreeId: folderWorkspaceKey('folder-1') })
+  })
+})

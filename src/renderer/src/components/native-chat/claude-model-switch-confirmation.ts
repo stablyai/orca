@@ -1,0 +1,194 @@
+import { subscribeToPtyData } from '../terminal-pane/pty-data-sidecar-subscriptions'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
+import { subscribeToRuntimeTerminalData } from '@/runtime/runtime-terminal-stream'
+import { NATIVE_CHAT_SUBMIT } from '../../../../shared/native-chat-paste-bytes'
+import { stripScrollbackAnsi } from './native-chat-scrape-fallback'
+import type { ClaudeModelSwitchOutcome } from '../../../../shared/native-chat-session-option-dispatch'
+
+const DETECTION_TIMEOUT_MS = 5_000
+const MAX_OBSERVED_BYTES = 64 * 1024
+
+type SubscribeToData = (watcher: (data: string) => void) => Promise<() => void> | (() => void)
+
+export type ClaudeModelSwitchConfirmationObserver = {
+  ready: Promise<void>
+  result: Promise<ClaudeModelSwitchOutcome>
+  arm(): void
+  startDetection(): void
+  dispose(): void
+}
+
+export function hasClaudeModelSwitchConfirmation(buffer: string): boolean {
+  const text = compactTerminalText(buffer)
+  return (
+    text.includes('switchmodel?') && text.includes('thisconversationiscachedforthecurrentmodel')
+  )
+}
+
+function compactTerminalText(buffer: string): string {
+  // Cursor-column escapes replace literal TUI spaces, so match independently of rendered gaps.
+  return stripScrollbackAnsi(buffer).replace(/\s+/g, '').toLowerCase()
+}
+
+function hasClaudeModelSwitchSuccess(buffer: string, modelLabel: string): boolean {
+  const text = compactTerminalText(buffer)
+  const marker = `setmodelto${modelLabel.replace(/\s+/g, '').toLowerCase()}`
+  if (text.includes(marker)) {
+    return true
+  }
+  // Match every picker token so a versioned echo cannot confirm the wrong context variant.
+  const labelTokens = modelLabel.toLowerCase().match(/[a-z]+|\d+[a-z]*/g) ?? []
+  const successStart = text.lastIndexOf('setmodelto')
+  if (successStart === -1 || labelTokens.length === 0) {
+    return false
+  }
+  const successText = text.slice(successStart)
+  let tokenEnd = 0
+  for (const token of labelTokens) {
+    const tokenStart = successText.indexOf(token, tokenEnd)
+    if (tokenStart === -1) {
+      return false
+    }
+    tokenEnd = tokenStart + token.length
+  }
+  return true
+}
+
+function hasClaudeModelSwitchRejection(buffer: string): boolean {
+  return compactTerminalText(buffer).includes('keptmodelas')
+}
+
+function subscribeToClaudeModelSwitchData(args: {
+  ptyId: string
+  subscribeToData?: SubscribeToData
+  watcher: (data: string) => void
+}): Promise<() => void> | (() => void) {
+  if (args.subscribeToData) {
+    return args.subscribeToData(args.watcher)
+  }
+  if (isRemoteRuntimePtyId(args.ptyId)) {
+    return subscribeToRuntimeTerminalData(
+      args.ptyId,
+      `desktop:native-chat-model-switch:${args.ptyId}`,
+      args.watcher,
+      { startAtLiveTail: true }
+    )
+  }
+  return subscribeToPtyData(args.ptyId, args.watcher)
+}
+
+export function createClaudeModelSwitchConfirmationObserver(args: {
+  ptyId: string
+  expectedModelLabel: string | null
+  subscribeToData?: SubscribeToData
+  submitConfirmation?: () => boolean | void
+  timeoutMs?: number
+}): ClaudeModelSwitchConfirmationObserver {
+  let armed = false
+  let settled = false
+  let confirmationSubmitted = false
+  let observed = ''
+  let timeout: ReturnType<typeof setTimeout> | null = null
+  let unsubscribe: (() => void) | null = null
+  let resolveResult!: (outcome: ClaudeModelSwitchOutcome) => void
+  let resolveReady!: () => void
+  const result = new Promise<ClaudeModelSwitchOutcome>((resolve) => {
+    resolveResult = resolve
+  })
+  const ready = new Promise<void>((resolve) => {
+    resolveReady = resolve
+  })
+
+  const finish = (outcome: ClaudeModelSwitchOutcome): void => {
+    if (settled) {
+      return
+    }
+    settled = true
+    if (timeout !== null) {
+      clearTimeout(timeout)
+      timeout = null
+    }
+    unsubscribe?.()
+    unsubscribe = null
+    resolveResult(outcome)
+  }
+
+  const scheduleTimeout = (): void => {
+    if (timeout !== null) {
+      clearTimeout(timeout)
+    }
+    timeout = setTimeout(() => finish('unknown'), args.timeoutMs ?? DETECTION_TIMEOUT_MS)
+  }
+
+  const observeData = (data: string): void => {
+    if (!armed || settled) {
+      return
+    }
+    observed = `${observed}${data}`.slice(-MAX_OBSERVED_BYTES)
+    if (args.expectedModelLabel && hasClaudeModelSwitchSuccess(observed, args.expectedModelLabel)) {
+      finish('applied')
+      return
+    }
+    if (hasClaudeModelSwitchRejection(observed)) {
+      finish('rejected')
+      return
+    }
+    if (!confirmationSubmitted && hasClaudeModelSwitchConfirmation(observed)) {
+      confirmationSubmitted = true
+      try {
+        // The picker already authorizes switching; this exact warning defaults to Yes and needs one Enter.
+        const accepted = args.submitConfirmation
+          ? args.submitConfirmation() !== false
+          : sendRuntimePtyInput(args.ptyId, NATIVE_CHAT_SUBMIT, 'driving')
+        if (!accepted) {
+          finish('unknown')
+          return
+        }
+        scheduleTimeout()
+      } catch {
+        finish('unknown')
+      }
+    }
+  }
+
+  try {
+    const subscription = subscribeToClaudeModelSwitchData({
+      ptyId: args.ptyId,
+      subscribeToData: args.subscribeToData,
+      watcher: observeData
+    })
+    void Promise.resolve(subscription)
+      .then((dispose) => {
+        if (settled) {
+          dispose()
+        } else {
+          unsubscribe = dispose
+        }
+      })
+      .catch(() => finish('unknown'))
+      .finally(resolveReady)
+  } catch {
+    finish('unknown')
+    resolveReady()
+  }
+
+  return {
+    ready,
+    result,
+    arm: () => {
+      if (settled || armed) {
+        return
+      }
+      armed = true
+    },
+    startDetection: () => {
+      // Start timeout at command delivery; SSH body/Enter latency must not consume the response window.
+      if (settled) {
+        return
+      }
+      scheduleTimeout()
+    },
+    dispose: () => finish('unknown')
+  }
+}

@@ -22,8 +22,7 @@ export type WindowShortcutInput = {
   metaKey?: boolean
   ctrlKey?: boolean
   shiftKey?: boolean
-  // Set only by the double-tap detector; threads the synthetic input through
-  // the main-process resolver so allowlisted actions can fire on double-tap.
+  // Carry detector-generated double taps through main’s allowlisted action resolver.
   doubleTapModifier?: PhysicalModifierToken
 }
 
@@ -36,10 +35,12 @@ export type WindowShortcutAction =
   | { type: 'toggleLeftSidebar' }
   | { type: 'toggleRightSidebar' }
   | { type: 'openQuickOpen' }
+  | { type: 'toggleQuickCommandsMenu' }
   | { type: 'openNewWorkspace' }
   | { type: 'deleteCurrentWorkspace' }
   | { type: 'openWorkspaceBoard' }
   | { type: 'openTasks' }
+  | { type: 'toggleAgentDashboard' }
   | { type: 'switchRecentTab' }
   | { type: 'jumpToWorktreeIndex'; index: number }
   | { type: 'jumpToTabIndex'; index: number }
@@ -74,8 +75,7 @@ export function matchesRecentTabSwitcherChord(
   if (input.code !== 'Tab' || !control || meta || alt) {
     return false
   }
-  // Why: the Ctrl+Tab switcher is a held-key interaction where Shift reverses
-  // direction. Gate the whole family on the configurable unshifted binding.
+  // Shift reverses the held Ctrl+Tab interaction; gate the family on its unshifted binding.
   return keybindingMatchesAction(
     'tab.previousRecent',
     {
@@ -117,8 +117,7 @@ export function isRecentTabSwitcherCommitRelease(input: WindowShortcutInput): bo
     return true
   }
   const control = input.control ?? input.ctrlKey
-  // Why: some Electron surfaces report the final Ctrl+Tab release as Tab
-  // keyup after Control is already up, so commit instead of stranding the UI.
+  // Some Electron surfaces release Tab after Control is already up; commit rather than strand the switcher.
   return isTabKey(input) && control === false
 }
 
@@ -130,6 +129,38 @@ function actionMatches(
   options: WindowShortcutResolveOptions
 ): boolean {
   return keybindingMatchesAction(actionId, input, platform, keybindings, options)
+}
+
+export function nativeZoomCommandMatchesKeybindings(
+  direction: 'in' | 'out',
+  platform: NodeJS.Platform,
+  keybindings?: KeybindingOverrides,
+  options: KeybindingMatchOptions = {}
+): boolean {
+  const primary =
+    platform === 'darwin' ? { meta: true, control: false } : { meta: false, control: true }
+  const actionId = direction === 'in' ? 'zoom.in' : 'zoom.out'
+  const candidates =
+    direction === 'in'
+      ? [
+          { key: '=', code: 'Equal', shift: false },
+          { key: '+', code: 'Equal', shift: true },
+          { key: 'Add', code: 'NumpadAdd', shift: false }
+        ]
+      : [
+          { key: '-', code: 'Minus', shift: false },
+          { key: 'Subtract', code: 'NumpadSubtract', shift: false }
+        ]
+
+  return candidates.some((candidate) =>
+    keybindingMatchesAction(
+      actionId,
+      { ...primary, alt: false, ...candidate },
+      platform,
+      keybindings,
+      options
+    )
+  )
 }
 
 export function resolveWindowShortcutAction(
@@ -192,12 +223,7 @@ export function resolveWindowShortcutAction(
     return { type: 'openQuickOpen' }
   }
 
-  // Why: Cmd/Ctrl+N opens the new-workspace composer. Routed through the
-  // main process so it reaches the renderer even when focus lives inside
-  // a contentEditable surface (markdown rich editor) or a browser guest
-  // webContents, both of which bypass the renderer's window-level keydown.
-  // Shift is accepted for compatibility with the former Create-from shortcut;
-  // the unified composer now exposes source switching inside the name field.
+  // Route workspace-create through main so contentEditable/browser guests cannot bypass it. Keep Shift for the former Create-from chord.
   if (actionMatches('workspace.create', input, platform, keybindings, options)) {
     return { type: 'openNewWorkspace' }
   }
@@ -218,14 +244,15 @@ export function resolveWindowShortcutAction(
     return { type: 'openTasks' }
   }
 
+  if (actionMatches('dashboard.toggle', input, platform, keybindings, options)) {
+    return { type: 'toggleAgentDashboard' }
+  }
+
   if (actionMatches('tab.previousRecent', input, platform, keybindings, options)) {
     return { type: 'switchRecentTab' }
   }
 
-  // Why: the two ranges live in different scopes (no shared conflictGroup), so a
-  // user is free to map both onto the same modifier without it being blocked as a
-  // conflict. Checking workspace first gives that overlap deterministic
-  // precedence — workspace wins — matching the historical Cmd-before-Ctrl order.
+  // Ranges have separate conflict scopes and may share a chord; workspace-first preserves deterministic historical precedence.
   const worktreeIndex = matchKeybindingDigitIndex(
     'workspace.selectByIndex',
     input,
@@ -248,10 +275,11 @@ export function resolveWindowShortcutAction(
     return { type: 'jumpToTabIndex', index: tabIndex }
   }
 
-  // Why: this helper is the explicit allowlist for main-process interception.
-  // Anything not listed here must keep flowing to the renderer/PTTY so readline
-  // chords like Ctrl+R, Ctrl+U, and Ctrl+E are not accidentally stolen while
-  // terminals own focus.
+  if (actionMatches('tab.openQuickCommandsMenu', input, platform, keybindings, options)) {
+    return { type: 'toggleQuickCommandsMenu' }
+  }
+
+  // Only explicitly allowlisted actions may intercept; leave readline/terminal chords such as Ctrl+R/U/E to the renderer/PTTY.
   return null
 }
 
@@ -277,6 +305,8 @@ export function getWindowShortcutActionId(action: WindowShortcutAction): Keybind
       return 'sidebar.right.toggle'
     case 'openQuickOpen':
       return 'worktree.quickOpen'
+    case 'toggleQuickCommandsMenu':
+      return 'tab.openQuickCommandsMenu'
     case 'openNewWorkspace':
       return 'workspace.create'
     case 'deleteCurrentWorkspace':
@@ -285,6 +315,8 @@ export function getWindowShortcutActionId(action: WindowShortcutAction): Keybind
       return 'workspace.openBoard'
     case 'openTasks':
       return 'view.tasks'
+    case 'toggleAgentDashboard':
+      return 'dashboard.toggle'
     case 'switchRecentTab':
       return 'tab.previousRecent'
     case 'worktreeHistoryNavigate':

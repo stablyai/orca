@@ -9,6 +9,7 @@ export type FeatureInteractionId =
   | 'cmd-j-quick-action'
   | 'cmd-j-create-workspace'
   | 'browser'
+  | 'client-hosted-browser'
   | 'browser-tab-created'
   | 'tasks'
   | 'github-tasks'
@@ -27,6 +28,7 @@ export type FeatureInteractionId =
   | 'agent-browser-use'
   | 'agent-orchestration-setup'
   | 'agent-orchestration'
+  | 'ephemeral-vm-setup'
   | 'mobile-emulator-agent-setup'
   | 'ai-commit-generation'
   | 'ai-pr-generation'
@@ -58,8 +60,7 @@ export type FeatureInteractionDefinition = {
   interaction: string
 }
 
-// Why: these ids become persisted product state; see
-// docs/reference/feature-discovery-interaction-tracking.md before changing them.
+// These IDs persist in product state; changing them breaks discovery tracking.
 export const FEATURE_INTERACTIONS = [
   { id: 'workspace-board', interaction: 'workspace board opened' },
   {
@@ -77,6 +78,7 @@ export const FEATURE_INTERACTIONS = [
   { id: 'cmd-j-quick-action', interaction: 'quick action run from Cmd+J' },
   { id: 'cmd-j-create-workspace', interaction: 'workspace creation started from Cmd+J' },
   { id: 'browser', interaction: 'in-app browser opened' },
+  { id: 'client-hosted-browser', interaction: 'client-hosted remote browser page opened' },
   { id: 'browser-tab-created', interaction: 'browser tab explicitly created' },
   { id: 'tasks', interaction: 'Tasks page opened' },
   { id: 'github-tasks', interaction: 'GitHub task item workflow used' },
@@ -96,6 +98,7 @@ export const FEATURE_INTERACTIONS = [
   { id: 'workspace-creation', interaction: 'workspace creation flow opened' },
   { id: 'agent-browser-setup', interaction: 'Agent Browser Use setup enabled or opened' },
   { id: 'agent-browser-use', interaction: 'agent browser runtime method used' },
+  { id: 'ephemeral-vm-setup', interaction: 'Ephemeral VMs setup opened or scaffold prompt copied' },
   {
     id: 'agent-orchestration-setup',
     interaction: 'Agent Orchestration setup enabled or opened'

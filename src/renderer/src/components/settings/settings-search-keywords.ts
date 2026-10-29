@@ -1,5 +1,4 @@
-import { i18n } from '@/i18n/i18n'
-import { translate } from '@/i18n/i18n'
+import { i18n, translate } from '@/i18n/i18n'
 
 export type SearchKeywordSpec = {
   key: string
@@ -10,7 +9,7 @@ export type SearchKeywordSpec = {
   englishOnly?: boolean
 }
 
-// Why: settings search should match localized copy and English aliases devs still type.
+// Index localized copy alongside English aliases users still type.
 export function translateSearchKeyword(
   key: string,
   fallback: string,

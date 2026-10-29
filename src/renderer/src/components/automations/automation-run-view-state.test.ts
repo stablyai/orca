@@ -47,6 +47,8 @@ function makeRun(overrides: Partial<AutomationRun> = {}): AutomationRun {
     sessionKind: 'terminal',
     chatSessionId: null,
     terminalSessionId: 'tab-1',
+    terminalPaneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
+    terminalPtyId: 'pty-1',
     outputSnapshot: null,
     precheckResult: null,
     usage: null,
@@ -64,7 +66,7 @@ describe('automation run view state', () => {
       getAutomationRunViewState({
         run: makeRun(),
         workspaceExists: true,
-        terminalTabExists: true
+        terminalTargetExists: true
       })
     ).toMatchObject({
       availability: 'terminal',
@@ -74,27 +76,79 @@ describe('automation run view state', () => {
     })
   })
 
-  it('falls back to resuming the workspace when terminal history is gone', () => {
+  it('keeps View run for exact terminal identity even before the live target is resolved', () => {
     expect(
       getAutomationRunViewState({
         run: makeRun(),
         workspaceExists: true,
-        terminalTabExists: false
+        terminalTargetExists: false
       })
     ).toMatchObject({
-      availability: 'workspace',
-      actionLabel: 'Resume workspace',
-      statusLabel: 'Workspace is available; original terminal is closed.',
+      availability: 'terminal',
+      actionLabel: 'View run',
+      statusLabel: 'Run terminal is unavailable.',
       canOpen: true
     })
   })
 
-  it('keeps skipped or missing-workspace runs as metadata-only history', () => {
+  it('keeps View run for a paired server run whose pane slept, which only the server can open', () => {
+    const slept = makeRun({ terminalPtyId: null })
+    expect(
+      getAutomationRunViewState({
+        run: slept,
+        workspaceExists: true,
+        terminalTargetExists: false,
+        terminalOnPairedServer: true
+      })
+    ).toMatchObject({ availability: 'terminal', actionLabel: 'View run', canOpen: true })
+    expect(
+      getAutomationRunViewState({ run: slept, workspaceExists: true, terminalTargetExists: false })
+    ).toMatchObject({ availability: 'workspace', actionLabel: 'Open workspace' })
+  })
+
+  it('resumes the workspace only when there is no exact terminal identity', () => {
+    expect(
+      getAutomationRunViewState({
+        run: makeRun({ terminalPaneKey: null, terminalPtyId: null }),
+        workspaceExists: true,
+        terminalTargetExists: false
+      })
+    ).toMatchObject({
+      availability: 'workspace',
+      actionLabel: 'Open workspace',
+      statusLabel: 'Workspace is available.'
+    })
+  })
+
+  it.each([
+    'skipped_precheck',
+    'skipped_unavailable',
+    'skipped_needs_interactive_auth',
+    'dispatch_failed',
+    'pending',
+    'dispatching'
+  ] as const)('offers no workspace resume for a %s run that never dispatched', (status) => {
+    expect(
+      getAutomationRunViewState({
+        run: makeRun({
+          status,
+          terminalSessionId: null,
+          terminalPaneKey: null,
+          terminalPtyId: null,
+          dispatchedAt: null
+        }),
+        workspaceExists: true,
+        terminalTargetExists: false
+      })
+    ).toMatchObject({ availability: 'metadata', actionLabel: 'View run', canOpen: false })
+  })
+
+  it('keeps runs without a workspace as metadata-only history', () => {
     expect(
       getAutomationRunViewState({
         run: makeRun({ workspaceId: null, terminalSessionId: null }),
         workspaceExists: false,
-        terminalTabExists: false
+        terminalTargetExists: false
       })
     ).toMatchObject({
       availability: 'metadata',
@@ -108,7 +162,7 @@ describe('automation run view state', () => {
       getAutomationRunViewState({
         run: makeRun({ workspaceDisplayName: 'Nightly Checks' }),
         workspaceExists: false,
-        terminalTabExists: false
+        terminalTargetExists: false
       })
     ).toMatchObject({
       availability: 'metadata',
@@ -129,7 +183,7 @@ describe('automation run view state', () => {
           }
         }),
         workspaceExists: false,
-        terminalTabExists: false
+        terminalTargetExists: false
       })
     ).toMatchObject({
       availability: 'snapshot',

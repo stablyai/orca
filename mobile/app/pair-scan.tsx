@@ -1,8 +1,8 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import {
+  AppState,
   View,
   Text,
-  StyleSheet,
   Pressable,
   ActivityIndicator,
   Linking,
@@ -14,24 +14,29 @@ import { useRouter } from 'expo-router'
 import { ChevronLeft, Clipboard as ClipboardIcon, QrCode } from 'lucide-react-native'
 import { decodePairingUrl, parsePairingCode } from '../src/transport/pairing'
 import {
-  startPairingConnectionAttempt,
-  type PairingConnectionAttempt
-} from '../src/transport/pairing-connection-attempt'
-import { connect } from '../src/transport/rpc-client'
-import { saveHost, getNextHostName } from '../src/transport/host-store'
-import type { ConnectionLogEntry, PairingOffer, RpcResponse } from '../src/transport/types'
-import { colors, spacing, radii, typography } from '../src/theme/mobile-theme'
+  startPreProfilePairing,
+  type PreProfilePairingAttempt
+} from '../src/transport/pre-profile-pairing-coordinator'
+import type { ConnectionLogEntry, PairingOffer } from '../src/transport/types'
+import { useRefreshHostClient } from '../src/transport/host-client-hooks'
+import { colors, spacing } from '../src/theme/mobile-theme'
+import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
 import { TextInputModal } from '../src/components/TextInputModal'
 import { ConnectionLog } from '../src/components/ConnectionLog'
+import {
+  loadMobileOnboardingSteps,
+  mobileOnboardingDestination
+} from '../src/onboarding/mobile-onboarding-plan'
+import { pairScanStyles as styles } from '../src/pair-scan-styles'
 
-// Why: see pair-confirm.tsx — cap initial-pair "Connecting…" so a broken
-// route surfaces as a real error with the log visible instead of a
-// silent infinite spinner.
+// Bound initial pairing at ~25s (one connect timeout plus retry) so broken routes show an actionable error/log; live RPC retries indefinitely.
 const PAIRING_OVERALL_TIMEOUT_MS = 25_000
 const SCAN_RETICLE_SCALE = 0.62
 const SCAN_RETICLE_MAX_SIZE = 360
 
 function Step({ number, text }: { number: number; text: string }) {
+  useMobileColorScheme()
   return (
     <View style={styles.step}>
       <View style={styles.stepBadge}>
@@ -43,9 +48,12 @@ function Step({ number, text }: { number: number; text: string }) {
 }
 
 export default function PairScanScreen() {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const router = useRouter()
+  const refreshHostClient = useRefreshHostClient()
   const insets = useSafeAreaInsets()
-  const [permission, requestPermission] = useCameraPermissions()
+  const [permission, requestPermission, getPermission] = useCameraPermissions()
   const [status, setStatus] = useState<'scanning' | 'connecting' | 'error'>('scanning')
   const [errorMessage, setErrorMessage] = useState('')
   const [pasteVisible, setPasteVisible] = useState(false)
@@ -54,15 +62,23 @@ export default function PairScanScreen() {
   const logsRef = useRef<ConnectionLogEntry[]>([])
   const processingRef = useRef(false)
   const mountedRef = useRef(true)
-  const activePairingAttemptRef = useRef<PairingConnectionAttempt | null>(null)
+  const activePairingAttemptRef = useRef<PreProfilePairingAttempt | null>(null)
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        void getPermission().catch(() => {})
+      }
+    })
+    return () => subscription.remove()
+  }, [getPermission])
 
   const setPairScanRootRef = useCallback((node: View | null): void => {
     if (node !== null) {
       mountedRef.current = true
       return
     }
-    // Why: pairing attempts can outlive the visible route; dispose them when
-    // the scan screen detaches without a passive cleanup-only Effect.
+    // Dispose pairing on route detach: attempts can outlive the visible screen, before passive cleanup.
     mountedRef.current = false
     activePairingAttemptRef.current?.dispose()
     activePairingAttemptRef.current = null
@@ -78,33 +94,41 @@ export default function PairScanScreen() {
       const offer = decodePairingUrl(data)
       if (!offer) {
         setStatus('error')
-        setErrorMessage('Not a valid Orca QR code')
+        setErrorMessage(t('app.pairScan.invalidQrCode', 'Not a valid Orca QR code'))
         processingRef.current = false
         return
       }
 
       void testAndSave(offer)
     },
-    [router]
+    [router, t]
   )
 
-  const handlePasteSubmit = useCallback((input: string) => {
-    setPasteVisible(false)
-    if (processingRef.current) {
-      return
-    }
-    processingRef.current = true
+  const handlePasteSubmit = useCallback(
+    (input: string) => {
+      setPasteVisible(false)
+      if (processingRef.current) {
+        return
+      }
+      processingRef.current = true
 
-    const offer = parsePairingCode(input)
-    if (!offer) {
-      setStatus('error')
-      setErrorMessage('Not a valid pairing code — copy it from your computer and paste again')
-      processingRef.current = false
-      return
-    }
+      const offer = parsePairingCode(input)
+      if (!offer) {
+        setStatus('error')
+        setErrorMessage(
+          t(
+            'app.pairScan.invalidPairingCode',
+            'Not a valid pairing code — copy it from your computer and paste again'
+          )
+        )
+        processingRef.current = false
+        return
+      }
 
-    void testAndSave(offer)
-  }, [])
+      void testAndSave(offer)
+    },
+    [t]
+  )
 
   const handleCameraLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout
@@ -123,21 +147,12 @@ export default function PairScanScreen() {
     setStatus('connecting')
     logsRef.current = []
     setLogs([])
-    let client: ReturnType<typeof connect> | null = null
     activePairingAttemptRef.current?.dispose()
 
-    // Why: split the try/catch around the network call vs the local save
-    // so a Keychain or AsyncStorage failure doesn't masquerade as a
-    // "Cannot connect — same network?" error. Pairing reached the
-    // desktop fine; the failure is local persistence.
-    let response: RpcResponse
-    const attempt = startPairingConnectionAttempt({
+    const attempt = startPreProfilePairing({
+      offer,
       timeoutMs: PAIRING_OVERALL_TIMEOUT_MS,
-      closeClient: () => client?.close()
-    })
-    activePairingAttemptRef.current = attempt
-    try {
-      client = connect(offer.endpoint, offer.deviceToken, offer.publicKeyB64, {
+      connectOptions: {
         onLog: (entry) => {
           if (!mountedRef.current || activePairingAttemptRef.current !== attempt) {
             return
@@ -145,8 +160,11 @@ export default function PairScanScreen() {
           logsRef.current = [...logsRef.current, entry]
           setLogs(logsRef.current)
         }
-      })
-      response = await client.sendRequest('status.get')
+      }
+    })
+    activePairingAttemptRef.current = attempt
+    try {
+      const { hostId } = await attempt.result
       const attemptIsCurrent = activePairingAttemptRef.current === attempt
       attempt.dispose()
       if (activePairingAttemptRef.current === attempt) {
@@ -155,6 +173,13 @@ export default function PairScanScreen() {
       if (!mountedRef.current || !attemptIsCurrent) {
         return
       }
+      // Re-pair reuses host id; close cached client so it reloads the persisted endpoint/relay (STA-1840).
+      refreshHostClient(hostId)
+      const onboardingSteps = await loadMobileOnboardingSteps()
+      if (!mountedRef.current) {
+        return
+      }
+      router.replace(mobileOnboardingDestination(onboardingSteps, hostId))
     } catch (err) {
       const timedOut = attempt.timedOut
       const attemptIsCurrent = activePairingAttemptRef.current === attempt
@@ -169,52 +194,14 @@ export default function PairScanScreen() {
       setStatus('error')
       setErrorMessage(
         timedOut
-          ? `Couldn't connect within ${PAIRING_OVERALL_TIMEOUT_MS / 1000}s — see log below for where it stalled`
-          : 'Cannot connect — check that your computer is on the same network'
-      )
-      processingRef.current = false
-      return
-    }
-
-    if (!response.ok) {
-      if (!mountedRef.current) {
-        return
-      }
-      if (response.error.code === 'unauthorized') {
-        setStatus('error')
-        setErrorMessage('Authentication failed — token may be expired')
-        processingRef.current = false
-        return
-      }
-      setStatus('error')
-      setErrorMessage(`Server error: ${response.error.message}`)
-      processingRef.current = false
-      return
-    }
-
-    try {
-      const hostId = `host-${Date.now()}`
-      const hostName = await getNextHostName()
-      await saveHost({
-        id: hostId,
-        name: hostName,
-        endpoint: offer.endpoint,
-        deviceToken: offer.deviceToken,
-        publicKeyB64: offer.publicKeyB64,
-        lastConnected: Date.now()
-      })
-      if (!mountedRef.current) {
-        return
-      }
-      router.replace(`/h/${hostId}`)
-    } catch (err) {
-      if (!mountedRef.current) {
-        return
-      }
-      console.warn('[pair] save failed', err)
-      setStatus('error')
-      setErrorMessage(
-        `Pairing succeeded but couldn't save the host: ${err instanceof Error ? err.message : String(err)}`
+          ? t(
+              'app.pairScan.connectTimedOut',
+              "Couldn't connect within {{seconds}}s — see log below for where it stalled",
+              { seconds: PAIRING_OVERALL_TIMEOUT_MS / 1000 }
+            )
+          : t('app.pairScan.pairingFailed', 'Pairing failed: {{error}}', {
+              error: err instanceof Error ? err.message : String(err)
+            })
       )
       processingRef.current = false
     }
@@ -228,15 +215,12 @@ export default function PairScanScreen() {
     processingRef.current = false
   }
 
-  // Why: bottom inset accounts for Android 3-button nav bars and iOS
-  // home-indicator areas that would otherwise overlap the 'Or paste
-  // pairing code' button at the bottom of the scan screen.
+  // Include Android three-button/iOS home-indicator inset so paste button stays clear.
   const containerPadding = {
     paddingTop: insets.top + spacing.sm,
     paddingBottom: insets.bottom + spacing.sm
   }
-  // Why: iPad camera previews are often rectangular, but QR guides should
-  // stay square so the corners still describe the code shape.
+  // Keep QR guide square even on rectangular iPad previews.
   const reticleSize = Math.min(
     Math.round(Math.min(cameraBounds.width, cameraBounds.height) * SCAN_RETICLE_SCALE),
     SCAN_RETICLE_MAX_SIZE
@@ -250,21 +234,35 @@ export default function PairScanScreen() {
     )
   }
 
-  if (!permission.granted) {
+  if (!permission.granted && status === 'scanning') {
     const canAskAgain = permission.canAskAgain !== false
     return (
       <View ref={setPairScanRootRef} style={[styles.container, containerPadding]}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
+        <Pressable
+          style={styles.backButton}
+          onPress={() => router.back()}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.back', 'Back')}
+        >
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
         <View style={styles.centered}>
           <Text style={styles.title}>
-            {canAskAgain ? 'Pair with desktop' : 'Camera Access Disabled'}
+            {canAskAgain
+              ? t('app.pairScan.title', 'Pair with desktop')
+              : t('app.pairScan.cameraDisabledTitle', 'Camera Access Disabled')}
           </Text>
           <Text style={styles.subtitle}>
             {canAskAgain
-              ? 'Scan the QR code from Orca on your desktop, or paste the pairing code instead.'
-              : 'Enable camera access in Settings, or paste the pairing code instead.'}
+              ? t(
+                  'app.pairScan.cameraPermissionDescription',
+                  'Scan the QR code from Orca on your desktop, or paste the pairing code instead.'
+                )
+              : t(
+                  'app.pairScan.cameraDisabledDescription',
+                  'Enable camera access in Settings, or paste the pairing code instead.'
+                )}
           </Text>
           <Pressable
             style={styles.primaryButton}
@@ -272,7 +270,9 @@ export default function PairScanScreen() {
           >
             {canAskAgain && <QrCode size={16} color={colors.bgBase} />}
             <Text style={styles.primaryButtonText}>
-              {canAskAgain ? 'Continue' : 'Open Settings'}
+              {canAskAgain
+                ? t('common.continue', 'Continue')
+                : t('app.pairScan.openSettings', 'Open Settings')}
             </Text>
           </Pressable>
           <Pressable
@@ -280,14 +280,22 @@ export default function PairScanScreen() {
             onPress={() => setPasteVisible(true)}
           >
             <ClipboardIcon size={16} color={colors.textSecondary} />
-            <Text style={styles.pasteButtonText}>Paste code instead</Text>
+            <Text style={styles.pasteButtonText}>
+              {t('app.pairScan.pasteInstead', 'Paste code instead')}
+            </Text>
           </Pressable>
         </View>
         <TextInputModal
           visible={pasteVisible}
-          title="Paste pairing code"
-          message="Copy the code shown under the QR on your computer."
-          placeholder="orca://pair?code=... or paste the code"
+          title={t('app.pairScan.pasteCodeTitle', 'Paste pairing code')}
+          message={t(
+            'app.pairScan.pasteCodeMessage',
+            'Copy the code shown under the QR on your computer.'
+          )}
+          placeholder={t(
+            'app.pairScan.pasteCodePlaceholder',
+            'orca://pair?code=... or paste the code'
+          )}
           onSubmit={handlePasteSubmit}
           onCancel={() => setPasteVisible(false)}
         />
@@ -297,23 +305,28 @@ export default function PairScanScreen() {
 
   return (
     <View ref={setPairScanRootRef} style={[styles.container, containerPadding]}>
-      <Pressable style={styles.backButton} onPress={() => router.back()}>
+      <Pressable
+        style={styles.backButton}
+        onPress={() => router.back()}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={t('common.back', 'Back')}
+      >
         <ChevronLeft size={22} color={colors.textSecondary} />
       </Pressable>
 
       <View style={styles.steps}>
-        <Step number={1} text="Open Orca on your computer" />
-        <Step number={2} text="Go to Settings → Mobile" />
-        <Step number={3} text="Scan the QR code" />
+        <Step number={1} text={t('app.pairScan.openDesktopStep', 'Open Orca on your computer')} />
+        <Step
+          number={2}
+          text={t('app.pairScan.openMobileSettingsStep', 'Go to Settings → Mobile')}
+        />
+        <Step number={3} text={t('app.pairScan.scanCodeStep', 'Scan the QR code')} />
       </View>
 
       {status === 'scanning' && (
         <>
-          {/* Why: unmount the camera while the paste sheet is open. The
-              user has clearly chosen the paste path; keeping the camera
-              streaming behind a sheet wastes power and looks weird if
-              they cancel the sheet and the QR was scanned silently in
-              the meantime. */}
+          {/* Pause camera behind paste sheet to save power and prevent unnoticed scans. */}
           {!pasteVisible && (
             <View style={styles.cameraWrap} onLayout={handleCameraLayout}>
               <CameraView
@@ -338,7 +351,9 @@ export default function PairScanScreen() {
             onPress={() => setPasteVisible(true)}
           >
             <ClipboardIcon size={16} color={colors.textSecondary} />
-            <Text style={styles.pasteButtonText}>Or paste pairing code</Text>
+            <Text style={styles.pasteButtonText}>
+              {t('app.pairScan.pastePairingCode', 'Or paste pairing code')}
+            </Text>
           </Pressable>
         </>
       )}
@@ -346,9 +361,9 @@ export default function PairScanScreen() {
       {status === 'connecting' && (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={colors.textSecondary} />
-          <Text style={styles.connectingText}>Connecting…</Text>
+          <Text style={styles.connectingText}>{t('app.pairScan.connecting', 'Connecting…')}</Text>
           <View style={styles.logSlot}>
-            <ConnectionLog entries={logs} title="Pairing log" />
+            <ConnectionLog entries={logs} title={t('app.pairScan.pairingLog', 'Pairing log')} />
           </View>
         </View>
       )}
@@ -358,12 +373,14 @@ export default function PairScanScreen() {
           <Text style={styles.errorText}>{errorMessage}</Text>
           {logs.length > 0 && (
             <View style={styles.logSlot}>
-              <ConnectionLog entries={logs} title="Pairing log" />
+              <ConnectionLog entries={logs} title={t('app.pairScan.pairingLog', 'Pairing log')} />
             </View>
           )}
           <View style={styles.errorActions}>
             <Pressable style={styles.primaryButton} onPress={retry}>
-              <Text style={styles.primaryButtonText}>Try Again</Text>
+              <Text style={styles.primaryButtonText}>
+                {t('app.pairScan.tryAgain', 'Try Again')}
+              </Text>
             </Pressable>
             <Pressable
               style={({ pressed }) => [
@@ -375,7 +392,9 @@ export default function PairScanScreen() {
                 setPasteVisible(true)
               }}
             >
-              <Text style={styles.secondaryButtonText}>Paste code instead</Text>
+              <Text style={styles.secondaryButtonText}>
+                {t('app.pairScan.pasteInstead', 'Paste code instead')}
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -383,195 +402,18 @@ export default function PairScanScreen() {
 
       <TextInputModal
         visible={pasteVisible}
-        title="Paste pairing code"
-        message="Copy the code shown under the QR on your computer."
-        placeholder="orca://pair?code=... or paste the code"
+        title={t('app.pairScan.pasteCodeTitle', 'Paste pairing code')}
+        message={t(
+          'app.pairScan.pasteCodeMessage',
+          'Copy the code shown under the QR on your computer.'
+        )}
+        placeholder={t(
+          'app.pairScan.pasteCodePlaceholder',
+          'orca://pair?code=... or paste the code'
+        )}
         onSubmit={handlePasteSubmit}
         onCancel={() => setPasteVisible(false)}
       />
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase,
-    padding: spacing.lg
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm
-  },
-  steps: {
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
-    marginLeft: 7
-  },
-  step: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  stepBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  stepNumber: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.textSecondary
-  },
-  stepText: {
-    fontSize: typography.bodySize,
-    color: colors.textSecondary
-  },
-  cameraWrap: {
-    flex: 1,
-    borderRadius: radii.camera,
-    overflow: 'hidden'
-  },
-  // Why: holds the layout slot while the camera is unmounted during
-  // paste, so the bottom action button doesn't snap up to fill the
-  // empty space.
-  cameraPlaceholder: {
-    flex: 1,
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.camera
-  },
-  camera: {
-    ...StyleSheet.absoluteFillObject
-  },
-  reticle: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  reticleFrame: {
-    position: 'relative'
-  },
-  corner: {
-    position: 'absolute',
-    width: 28,
-    height: 28,
-    borderColor: 'rgba(255,255,255,0.7)'
-  },
-  cornerTL: {
-    top: 0,
-    left: 0,
-    borderTopWidth: 2.5,
-    borderLeftWidth: 2.5,
-    borderTopLeftRadius: 6
-  },
-  cornerTR: {
-    top: 0,
-    right: 0,
-    borderTopWidth: 2.5,
-    borderRightWidth: 2.5,
-    borderTopRightRadius: 6
-  },
-  cornerBL: {
-    bottom: 0,
-    left: 0,
-    borderBottomWidth: 2.5,
-    borderLeftWidth: 2.5,
-    borderBottomLeftRadius: 6
-  },
-  cornerBR: {
-    bottom: 0,
-    right: 0,
-    borderBottomWidth: 2.5,
-    borderRightWidth: 2.5,
-    borderBottomRightRadius: 6
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  title: {
-    fontSize: typography.titleSize,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: spacing.sm
-  },
-  subtitle: {
-    maxWidth: 310,
-    fontSize: typography.bodySize,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: spacing.xl,
-    lineHeight: 20
-  },
-  connectingText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    marginTop: spacing.lg
-  },
-  logSlot: {
-    width: '100%',
-    marginTop: spacing.lg,
-    paddingHorizontal: spacing.sm
-  },
-  errorText: {
-    color: colors.statusRed,
-    fontSize: typography.bodySize,
-    textAlign: 'center',
-    marginBottom: spacing.xl,
-    lineHeight: 20
-  },
-  primaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.textPrimary,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radii.button
-  },
-  primaryButtonText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  pasteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.button
-  },
-  pasteButtonPressed: {
-    opacity: 0.6
-  },
-  pasteButtonText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    fontWeight: '500'
-  },
-  errorActions: {
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  secondaryButton: {
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.button
-  },
-  secondaryButtonText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    fontWeight: '500'
-  }
-})

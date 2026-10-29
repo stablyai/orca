@@ -1,24 +1,33 @@
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/types'
+import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
+import type { WorktreeMemory } from '../../../../shared/process-stats-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import type {
+  AgentOwnershipEvidence,
+  PtyListedSession
+} from '../../../../shared/pty-listed-session'
 
-/** `null` === "no local sample" (e.g. SSH PTY); UI renders as em-dash. */
+/** Null means no process sample, commonly for SSH PTYs; render an em dash. */
 export type Metric = number | null
 
-export type DaemonSession = {
-  id: string
-  cwd: string
-  title: string
-}
+/** One `pty.listSessions()` row. Aliased so ownership evidence cannot be dropped locally. */
+export type DaemonSession = PtyListedSession
 
 export type UnifiedSessionRow = {
   sessionId: string
+  incarnationId?: string
   paneKey: string | null
   pid: number
   label: string
   bound: boolean
+  /** Ownership as the provider could establish it; anything but `absent` means confirm first. */
+  agentOwnership: AgentOwnershipEvidence
   tabId: string | null
   cpu: Metric
   memory: Metric
   hasLocalSamples: boolean
+  /** Sampled on a paired server; this client cannot end it. */
+  readOnly?: true
 }
 
 export type UnifiedWorktreeRow = {
@@ -30,9 +39,12 @@ export type UnifiedWorktreeRow = {
   memory: Metric
   history: number[]
   hasLocalSamples: boolean
-  /** Why: repo connectionId, not sample presence, drives the remote chip. */
+  /** Execution-host metadata drives the remote chip; missing samples do not. */
   isRemote: boolean
+  /** Paired server that sampled this row; absent for this machine and SSH rows. */
+  hostLabel?: string
   sessions: UnifiedSessionRow[]
+  browsers: BrowserWorkspace[]
 }
 
 export type UnifiedProjectGroup = {
@@ -40,24 +52,40 @@ export type UnifiedProjectGroup = {
   repoName: string
   cpu: Metric
   memory: Metric
-  /** Why: kept for callsite stability; this now means SSH-backed repo rows. */
+  /** True when any workspace in this project runs over SSH. */
   hasRemoteChildren: boolean
   worktrees: UnifiedWorktreeRow[]
 }
 
 export type MergeContext = {
-  /** From useAppStore: maps worktreeId -> tabs[] for tab-walk resolution. */
   tabsByWorktree: Record<string, TerminalTab[]>
-  /** From useAppStore: maps tabId -> ptyIds[] for the bound check. */
   ptyIdsByTabId: Record<string, string[]>
   /** From useAppStore: persisted per-leaf PTY wake hints for deferred reattach. */
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
+  /** From useAppStore: SSH sessions known live but not yet reattached; no other binding sees them. */
+  deferredSshSessionIdsByTabId?: Record<string, string>
   /** From useAppStore: per-tab live pane titles (for label resolution). */
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
   /** From useAppStore: false until renderer state can distinguish bound/orphan. */
   workspaceSessionReady: boolean
-  /** Repo display names by repo id for daemon-only groups. */
+  /** Project display names for sampled and daemon-only groups. */
   repoDisplayNameById: Map<string, string>
   /** Repo connectionId by repo id (null/missing == local). */
   repoConnectionIdById: Map<string, string | null>
+  /** Runtime execution host id by repo id (missing == not hosted by a paired server). */
+  repoRuntimeHostIdById: Map<string, string>
+  /** Process samples each paired server reported for its own workspaces. */
+  runtimeHostResources?: readonly RuntimeHostResourceSample[]
+  /** Browser inventory is open-only; the Resource Manager never scans it in the background. */
+  browserTabsByWorktree?: Record<string, BrowserWorkspace[]>
+  /** Canonical workspace names and grouping for every resource source. */
+  worktreeById?: ReadonlyMap<string, Worktree>
+  /** Ids present on more than one execution host; their catalog row cannot name a host. */
+  ambiguousWorktreeIds?: ReadonlySet<string>
+}
+
+export type RuntimeHostResourceSample = {
+  hostId: `runtime:${string}`
+  hostLabel: string
+  worktrees: readonly WorktreeMemory[]
 }

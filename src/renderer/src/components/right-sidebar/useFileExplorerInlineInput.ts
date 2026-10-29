@@ -4,18 +4,22 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { detectLanguage } from '@/lib/language-detect'
 import { dirname, joinPath } from '@/lib/path'
-import { getConnectionId } from '@/lib/connection-context'
 import { extractIpcErrorMessage, renameFileOnDisk } from '@/lib/rename-file'
-import type { InlineInput } from './FileExplorerRow'
+import type { InlineInput } from './file-explorer-inline-input-row'
 import type { TreeNode } from './file-explorer-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
-import { createRuntimePath, deleteRuntimePath } from '@/runtime/runtime-file-client'
-import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
+import { createRuntimePath, deleteRuntimePath } from '@/runtime/runtime-file-mutation-client'
+import {
+  captureFileExplorerOperationGuard,
+  getFileExplorerOperationOwner
+} from './file-explorer-operation-owner'
+import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 
 type UseFileExplorerInlineInputParams = {
   activeWorktreeId: string | null
   worktreePath: string | null
+  displayRootPath?: string | null
   expanded: Set<string>
   rowProjection: FileExplorerRowProjection
   scrollRef: React.RefObject<HTMLDivElement | null>
@@ -31,9 +35,11 @@ type UseFileExplorerInlineInputResult = {
   handleInlineSubmit: (value: string) => void
 }
 
+/** Positions creation input under the displayed root while retaining true workspace paths for edits and undo. */
 export function useFileExplorerInlineInput({
   activeWorktreeId,
   worktreePath,
+  displayRootPath = worktreePath,
   expanded,
   rowProjection,
   scrollRef,
@@ -66,17 +72,22 @@ export function useFileExplorerInlineInput({
     if (!inlineInput || inlineInput.type === 'rename') {
       return -1
     }
-    return rowProjection.getInsertIndexAfterSubtree(inlineInput.parentPath, worktreePath)
-  }, [inlineInput, rowProjection, worktreePath])
+    return rowProjection.getInsertIndexAfterSubtree(inlineInput.parentPath, displayRootPath)
+  }, [inlineInput, rowProjection, displayRootPath])
 
   const startNew = useCallback(
     (type: 'file' | 'folder', parentPath: string, depth: number) => {
-      if (activeWorktreeId && parentPath !== worktreePath && !expanded.has(parentPath)) {
+      if (activeWorktreeId && parentPath !== displayRootPath && !expanded.has(parentPath)) {
         toggleDir(activeWorktreeId, parentPath)
       }
-      setInlineInput({ parentPath, type, depth })
+      setInlineInput({
+        parentPath,
+        type,
+        depth,
+        operationOwner: getFileExplorerOperationOwner(activeWorktreeId)
+      })
     },
-    [activeWorktreeId, worktreePath, expanded, toggleDir]
+    [activeWorktreeId, displayRootPath, expanded, toggleDir]
   )
 
   const startRename = useCallback(
@@ -86,7 +97,8 @@ export function useFileExplorerInlineInput({
         type: 'rename',
         depth: node.depth,
         existingName: node.name,
-        existingPath: node.path
+        existingPath: node.path,
+        operationOwner: node.operationOwner
       }),
     []
   )
@@ -103,30 +115,38 @@ export function useFileExplorerInlineInput({
         return
       }
       const name = value.trim()
-      // No-op if the user submitted the same name (e.g. blur without editing)
       if (inlineInput.type === 'rename' && name === inlineInput.existingName) {
         setInlineInput(null)
         return
       }
       const run = async (): Promise<void> => {
-        const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-        const fileContext = {
-          settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),
-          worktreeId: activeWorktreeId,
-          worktreePath,
-          connectionId
-        }
         if (inlineInput.type === 'rename' && inlineInput.existingPath) {
           await renameFileOnDisk({
             oldPath: inlineInput.existingPath,
             newName: name,
             worktreeId: activeWorktreeId,
             worktreePath,
+            operationOwner: inlineInput.operationOwner,
             refreshDir
           })
         } else {
           const fullPath = joinPath(inlineInput.parentPath, name)
           try {
+            const operationGuard = captureFileExplorerOperationGuard(
+              activeWorktreeId,
+              inlineInput.operationOwner
+            )
+            const operationRoute = operationGuard.route
+            const fileContext = {
+              target: operationRoute.target,
+              worktreeId: activeWorktreeId,
+              worktreePath,
+              connectionId: operationRoute.connectionId,
+              expectedExecutionHostId: operationRoute.expectedExecutionHostId,
+              expectedSshTargetId: operationRoute.expectedSshTargetId,
+              expectedSshConnectionGeneration: operationRoute.expectedSshConnectionGeneration
+            }
+            operationGuard.assertCurrent()
             await createRuntimePath(
               fileContext,
               fullPath,
@@ -136,38 +156,77 @@ export function useFileExplorerInlineInput({
             if (inlineInput.type === 'folder') {
               commitFileExplorerOp({
                 undo: async () => {
-                  await deleteRuntimePath(fileContext, fullPath, true)
+                  const currentRoute = operationGuard.assertCurrent()
+                  await deleteRuntimePath(
+                    {
+                      ...fileContext,
+                      target: currentRoute.target,
+                      connectionId: currentRoute.connectionId
+                    },
+                    fullPath,
+                    true
+                  )
                   await refreshDir(parentForRefresh)
                 },
                 redo: async () => {
-                  await createRuntimePath(fileContext, fullPath, 'directory')
+                  const currentRoute = operationGuard.assertCurrent()
+                  await createRuntimePath(
+                    {
+                      ...fileContext,
+                      target: currentRoute.target,
+                      connectionId: currentRoute.connectionId
+                    },
+                    fullPath,
+                    'directory'
+                  )
                   await refreshDir(parentForRefresh)
                 }
               })
             } else {
               commitFileExplorerOp({
                 undo: async () => {
-                  await deleteRuntimePath(fileContext, fullPath)
+                  const currentRoute = operationGuard.assertCurrent()
+                  await deleteRuntimePath(
+                    {
+                      ...fileContext,
+                      target: currentRoute.target,
+                      connectionId: currentRoute.connectionId
+                    },
+                    fullPath
+                  )
                   await refreshDir(parentForRefresh)
                 },
                 redo: async () => {
-                  await createRuntimePath(fileContext, fullPath, 'file')
+                  const currentRoute = operationGuard.assertCurrent()
+                  await createRuntimePath(
+                    {
+                      ...fileContext,
+                      target: currentRoute.target,
+                      connectionId: currentRoute.connectionId
+                    },
+                    fullPath,
+                    'file'
+                  )
                   await refreshDir(parentForRefresh)
                 }
               })
             }
             await refreshDir(inlineInput.parentPath)
             if (inlineInput.type === 'file') {
-              openFile({
-                filePath: fullPath,
-                relativePath: worktreePath ? fullPath.slice(worktreePath.length + 1) : name,
-                worktreeId: activeWorktreeId,
-                language: detectLanguage(name),
-                mode: 'edit'
-              })
+              const runtimeEnvironmentId = runtimeTargetEnvironmentId(fileContext.target)
+              openFile(
+                {
+                  filePath: fullPath,
+                  relativePath: worktreePath ? fullPath.slice(worktreePath.length + 1) : name,
+                  worktreeId: activeWorktreeId,
+                  runtimeEnvironmentId: runtimeEnvironmentId ?? undefined,
+                  language: detectLanguage(name),
+                  mode: 'edit'
+                },
+                { suppressActiveRuntimeFallback: runtimeEnvironmentId === null }
+              )
             }
           } catch (err) {
-            // Refresh the directory even on failure so the tree stays consistent
             await refreshDir(inlineInput.parentPath)
             toast.error(extractIpcErrorMessage(err, `Failed to create '${name}'.`))
           }

@@ -1,9 +1,5 @@
-import {
-  DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
-  MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
-  MIN_SSH_RELAY_GRACE_PERIOD_SECONDS,
-  type SshTarget
-} from '../../../../shared/ssh-types'
+import type { SshConfigHostResolution, SshTarget } from '../../../../shared/ssh-types'
+import { isRemoteCliControlAllowed } from '../../../../shared/ssh-remote-cli-control'
 
 export type EditingTarget = {
   label: string
@@ -12,10 +8,13 @@ export type EditingTarget = {
   port: string
   username: string
   identityFile: string
+  gssapiAuthentication: boolean
   proxyCommand: string
   jumpHost: string
-  relayGracePeriodSeconds: string
-  relayKeepAliveUntilReset: boolean
+  systemSshConnectionReuse: boolean
+  systemSshProxyConnectionReuse: boolean
+  allowRemoteCliControl: boolean
+  reconnectOnLaunch: boolean
 }
 
 export const EMPTY_FORM: EditingTarget = {
@@ -25,15 +24,17 @@ export const EMPTY_FORM: EditingTarget = {
   port: '22',
   username: '',
   identityFile: '',
+  gssapiAuthentication: false,
   proxyCommand: '',
   jumpHost: '',
-  relayGracePeriodSeconds: String(DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS),
-  relayKeepAliveUntilReset: false
+  systemSshConnectionReuse: true,
+  systemSshProxyConnectionReuse: false,
+  allowRemoteCliControl: true,
+  reconnectOnLaunch: true
 }
 
 export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
-  // Why: manual targets store configHost as their host. Clear that implicit
-  // value on edit so changing Host recomputes the alias instead of keeping stale resolution.
+  // Clear implicit host aliases so editing Host cannot retain stale resolution.
   const configHost = target.configHost && target.configHost !== target.host ? target.configHost : ''
   return {
     label: target.label,
@@ -42,14 +43,31 @@ export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
     port: String(target.port),
     username: target.username,
     identityFile: target.identityFile ?? '',
+    gssapiAuthentication: target.gssapiAuthentication === true,
     proxyCommand: target.proxyCommand ?? '',
     jumpHost: target.jumpHost ?? '',
-    relayGracePeriodSeconds: String(
-      target.relayGracePeriodSeconds === 0
-        ? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
-        : (target.relayGracePeriodSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS)
-    ),
-    relayKeepAliveUntilReset: target.relayGracePeriodSeconds === 0
+    systemSshConnectionReuse: target.systemSshConnectionReuse !== false,
+    systemSshProxyConnectionReuse: target.systemSshProxyConnectionReuse === true,
+    allowRemoteCliControl: isRemoteCliControlAllowed(target),
+    reconnectOnLaunch: target.reconnectOnLaunch !== false
+  }
+}
+
+export function getEditingTargetFromSshConfigHost(host: SshConfigHostResolution): EditingTarget {
+  const configHost = host.alias !== host.hostname ? host.alias : ''
+  return {
+    ...EMPTY_FORM,
+    label: host.alias,
+    configHost,
+    // Absent HostName must retain the alias so OpenSSH resolves config User/Port/Identity.
+    host: host.hostname,
+    port: String(host.port),
+    username: host.username,
+    // Why: no scalar override lets connection-time ssh -G retain every IdentityFile.
+    identityFile: '',
+    gssapiAuthentication: host.gssapiAuthentication === true,
+    proxyCommand: host.proxyCommand ?? '',
+    jumpHost: host.jumpHost ?? ''
   }
 }
 
@@ -90,8 +108,7 @@ export function parseSshHostInput(rawInput: string): ParsedSshHostInput | null {
 
 export function applyParsedSshHostInput(draft: EditingTarget): EditingTarget {
   const parsed = parseSshHostInput(draft.host)
-  // Why: keep bad host:port text visible so the user can correct it after
-  // the save validator reports the invalid port.
+  // Retain invalid host:port text for correction after save validation.
   if (!parsed || parsed.invalidPort) {
     return draft
   }
@@ -116,7 +133,7 @@ export function getSshTargetDraftConnectionFields(draft: EditingTarget): {
   const host = parsed?.host ?? draft.host.trim()
   const configHost = draft.configHost.trim() || parsed?.configHost || host
   const username = draft.username.trim() || parsed?.username || ''
-  const parsedPort = parseInt(draft.port, 10)
+  const parsedPort = Number.parseInt(draft.port, 10)
   const port =
     parsed?.invalidPort === true
       ? Number.NaN
@@ -132,16 +149,31 @@ export function getSshTargetDraftConnectionFields(draft: EditingTarget): {
   }
 }
 
-export function parseRelayGracePeriodSeconds(draft: EditingTarget): number {
-  return draft.relayKeepAliveUntilReset ? 0 : parseInt(draft.relayGracePeriodSeconds, 10)
+export function hasAdvancedConnectionValues(form: EditingTarget): boolean {
+  return (
+    form.proxyCommand.trim().length > 0 ||
+    form.jumpHost.trim().length > 0 ||
+    !form.systemSshConnectionReuse ||
+    !form.allowRemoteCliControl ||
+    !form.reconnectOnLaunch
+  )
 }
 
-export function isRelayGracePeriodValid(draft: EditingTarget, graceSeconds: number): boolean {
+export function isSshTargetFormDirty(current: EditingTarget, baseline: EditingTarget): boolean {
   return (
-    draft.relayKeepAliveUntilReset ||
-    (!isNaN(graceSeconds) &&
-      graceSeconds >= MIN_SSH_RELAY_GRACE_PERIOD_SECONDS &&
-      graceSeconds <= MAX_SSH_RELAY_GRACE_PERIOD_SECONDS)
+    current.label !== baseline.label ||
+    current.configHost !== baseline.configHost ||
+    current.host !== baseline.host ||
+    current.port !== baseline.port ||
+    current.username !== baseline.username ||
+    current.identityFile !== baseline.identityFile ||
+    current.gssapiAuthentication !== baseline.gssapiAuthentication ||
+    current.proxyCommand !== baseline.proxyCommand ||
+    current.jumpHost !== baseline.jumpHost ||
+    current.systemSshConnectionReuse !== baseline.systemSshConnectionReuse ||
+    current.systemSshProxyConnectionReuse !== baseline.systemSshProxyConnectionReuse ||
+    current.allowRemoteCliControl !== baseline.allowRemoteCliControl ||
+    current.reconnectOnLaunch !== baseline.reconnectOnLaunch
   )
 }
 
@@ -151,8 +183,7 @@ function parseSshUrl(input: string): ParsedSshHostInput | null {
     if (url.protocol !== 'ssh:' || !url.hostname) {
       return null
     }
-    // Why: URL.hostname keeps IPv6 literals bracketed, but ssh2 and DNS
-    // resolution expect the bare address. The non-URL parser already strips.
+    // URL retains IPv6 brackets; ssh2 and DNS need bare addresses.
     const host = url.hostname.replace(/^\[|\]$/g, '')
     const port = url.port ? parsePort(url.port) : undefined
     if (url.port && port === undefined) {
@@ -202,8 +233,7 @@ function decodeSshUrlUsername(value: string): string | undefined {
   try {
     return decodeURIComponent(value)
   } catch {
-    // Why: malformed pasted SSH URLs should surface validation errors in the
-    // form, not throw during parsing before the user can fix the input.
+    // Malformed pasted usernames must remain editable rather than throwing during parsing.
     return value
   }
 }

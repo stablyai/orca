@@ -1,0 +1,2 @@
+#!/bin/sh
+exec "$(dirname "$0")/golden-stub-agent" "$@"

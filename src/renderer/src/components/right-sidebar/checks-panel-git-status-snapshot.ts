@@ -1,4 +1,5 @@
-import type { GitPushTarget, GitStatusEntry, GitUpstreamStatus } from '../../../../shared/types'
+import type { GitStatusEntry, GitUpstreamStatus } from '../../../../shared/git-status-types'
+import type { GitPushTarget } from '../../../../shared/worktree/types'
 
 export type ChecksPanelGitStatusContextInput = {
   repoId: string | null | undefined
@@ -13,17 +14,60 @@ export type ChecksPanelGitStatusContextInput = {
   runtimeEnvironmentId: string | null
   repoConnectionId: string | null
   pushTarget: GitPushTarget | null | undefined
+  // Separate local host/WSL distro contexts; SSH/runtime scopes already use host IDs.
+  localExecutionScope?: string | null
 }
 
 export type ChecksPanelGitStatusSnapshot = {
   contextKey: string
   hasUncommittedChanges: boolean
   remoteStatus: GitUpstreamStatus | undefined
+  gitIdentity?: {
+    head?: string
+    branch?: string | null
+  }
 }
 
 export type ChecksPanelGitStatusInputs = {
   hasUncommittedChanges: boolean | undefined
   remoteStatus: GitUpstreamStatus | undefined
+}
+
+export type ChecksPanelRefreshGitIdentitySnapshot =
+  | {
+      kind: 'missing'
+    }
+  | {
+      kind: 'same'
+    }
+  | {
+      kind: 'changed'
+      head?: string
+      branch: string | null
+    }
+// Fingerprint HEAD/dirty/upstream/base/execution-host so a stale snapshot can't keep an enabled Create open when any of them move.
+export function buildChecksPanelEligibilityGitFingerprint(input: {
+  headOid: string | null
+  hasUncommittedChanges: boolean | undefined
+  hasUpstream: boolean | undefined
+  ahead: number | undefined
+  behind: number | undefined
+  base: string | null
+  runtimeEnvironmentId: string | null
+  repoConnectionId: string | null
+  localExecutionScope: string | null
+}): string {
+  return JSON.stringify({
+    headOid: input.headOid ?? null,
+    hasUncommittedChanges: input.hasUncommittedChanges ?? null,
+    hasUpstream: input.hasUpstream ?? null,
+    ahead: input.ahead ?? null,
+    behind: input.behind ?? null,
+    base: input.base ?? null,
+    runtimeEnvironmentId: input.runtimeEnvironmentId ?? null,
+    repoConnectionId: input.repoConnectionId ?? null,
+    localExecutionScope: input.localExecutionScope ?? null
+  })
 }
 
 export function buildChecksPanelGitStatusContextKey(
@@ -34,8 +78,7 @@ export function buildChecksPanelGitStatusContextKey(
     worktreeId: input.worktreeId ?? '',
     worktreePath: input.worktreePath ?? '',
     branch: input.branch,
-    // Why: this key gates right-sidebar async commits too; link/unlink must
-    // make pre-change PR refreshes stale even when repo/branch are unchanged.
+    // Link/unlink must stale pending PR refreshes even when repo and branch stay unchanged.
     linkedGitHubPR: input.linkedGitHubPR ?? null,
     linkedGitLabMR: input.linkedGitLabMR ?? null,
     linkedBitbucketPR: input.linkedBitbucketPR ?? null,
@@ -43,6 +86,7 @@ export function buildChecksPanelGitStatusContextKey(
     linkedGiteaPR: input.linkedGiteaPR ?? null,
     runtimeEnvironmentId: input.runtimeEnvironmentId ?? '',
     repoConnectionId: input.repoConnectionId ?? '',
+    localExecutionScope: input.localExecutionScope ?? null,
     pushTarget: input.pushTarget
       ? {
           remoteName: input.pushTarget.remoteName,
@@ -117,4 +161,45 @@ export function readChecksPanelPublishActionGitStatus(input: {
     hasUncommittedChanges: (input.fallbackEntries?.length ?? 0) > 0,
     remoteStatus: input.fallbackRemoteStatus
   }
+}
+
+function canonicalBranchIdentity(branch: string | null | undefined): string {
+  return (branch ?? '').replace(/^refs\/heads\//, '').trim()
+}
+
+export function readChecksPanelRefreshGitIdentitySnapshot(input: {
+  snapshot: ChecksPanelGitStatusSnapshot | null
+  contextKey: string
+  currentBranch: string
+}): ChecksPanelRefreshGitIdentitySnapshot {
+  if (
+    !input.snapshot ||
+    input.snapshot.contextKey !== input.contextKey ||
+    !input.snapshot.gitIdentity ||
+    input.snapshot.gitIdentity.branch === undefined
+  ) {
+    return { kind: 'missing' }
+  }
+
+  if (
+    canonicalBranchIdentity(input.snapshot.gitIdentity.branch) ===
+    canonicalBranchIdentity(input.currentBranch)
+  ) {
+    return { kind: 'same' }
+  }
+
+  return {
+    kind: 'changed',
+    head: input.snapshot.gitIdentity.head,
+    branch: input.snapshot.gitIdentity.branch
+  }
+}
+
+export function hasChecksPanelGitStatusBranchChanged(input: {
+  observedBranch: string | null | undefined
+  currentBranch: string
+}): boolean {
+  return (
+    canonicalBranchIdentity(input.observedBranch) !== canonicalBranchIdentity(input.currentBranch)
+  )
 }

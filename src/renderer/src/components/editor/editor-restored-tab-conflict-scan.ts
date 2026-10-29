@@ -1,0 +1,255 @@
+// Re-derive restored drafts’ conflict banners from disk; guarded writes still protect newer content before the scan settles.
+import type { StoreApi } from 'zustand'
+import type { AppState } from '@/store'
+import type { OpenFile } from '@/store/slices/editor'
+import { getConnectionIdForFile } from '@/lib/connection-context'
+import { editorTabFileAccess } from '@/lib/local-file-access'
+import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
+import {
+  getRuntimeTargetForFileOwner,
+  requireRuntimeTargetForFileOwner
+} from '@/lib/file-owner-runtime-target'
+import { canAutoSaveOpenFile } from './editor-autosave'
+import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
+import { markFileChangedOnDisk } from './editor-changed-on-disk-mark'
+import { runtimePathsExist } from '@/runtime/runtime-path-existence-batch'
+import { getRecentSelfWrite } from './editor-self-write-registry'
+import { editorBufferSiblingViewIds } from '@/store/slices/editor/buffers/editor-buffer-views'
+
+type AppStoreApi = Pick<StoreApi<AppState>, 'getState' | 'subscribe'>
+
+// Retry fast then slow: reads fail while SSH/runtime transport is still coming up.
+const VERIFY_RETRY_MS = 2_000
+const VERIFY_SLOW_RETRY_MS = 15_000
+const VERIFY_FAST_ATTEMPTS = 30
+// Bound startup RPC concurrency so many restored drafts cannot overwhelm connection recovery.
+const MAX_CONCURRENT_VERIFY_READS = 3
+export const MAX_VERIFY_ATTEMPTS = VERIFY_FAST_ATTEMPTS + 10
+
+function needsDiskCheck(file: OpenFile): boolean {
+  return (
+    file.isDirty &&
+    file.lastKnownDiskSignature !== undefined &&
+    file.externalMutation !== 'changed' &&
+    canAutoSaveOpenFile(file)
+  )
+}
+
+export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
+  // Why: only a tab that arrives dirty (a restore, or a dirty tab's rekey) is checked; edits made here start in sync.
+  const seenFileIds = new Set<string>()
+  const inFlightFileIds = new Set<string>()
+  const attemptsByFileId = new Map<string, number>()
+  const retryTimers = new Set<ReturnType<typeof setTimeout>>()
+  // Queue IDs and reread live tabs; saved/reopened views can change while waiting for a slot.
+  const verifyQueue: string[] = []
+  let activeVerifyReads = 0
+  let disposed = false
+
+  const getFileConnectionId = (file: OpenFile): string | undefined => {
+    const connectionId = getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined
+    const externalSshTargetId = file.externalSshTargetId?.trim()
+    if (externalSshTargetId && connectionId !== externalSshTargetId) {
+      throw new Error('External SSH file owner changed')
+    }
+    return connectionId
+  }
+
+  // Probe only local/SSH ownership; client filesystem stats would falsely report runtime-host files missing.
+  const probeFileMissing = async (file: OpenFile): Promise<boolean> => {
+    const owner = getRuntimeTargetForFileOwner(
+      store.getState(),
+      file.worktreeId,
+      file.runtimeEnvironmentId
+    )
+    // No resolved owner means absence cannot be proved.
+    if (!owner) {
+      return false
+    }
+    if (owner.kind !== 'local') {
+      try {
+        const [row] = await runtimePathsExist(
+          {
+            target: owner,
+            worktreeId: file.worktreeId,
+            // Why: tabs keep their root implicitly as filePath minus relativePath.
+            worktreePath: file.filePath.slice(
+              0,
+              Math.max(0, file.filePath.length - file.relativePath.length - 1)
+            ),
+            connectionId: getFileConnectionId(file)
+          },
+          [file.filePath],
+          undefined,
+          // Why: only a per-path ENOENT on the owning host proves absence.
+          { codedAbsenceOnly: true }
+        )
+        return row !== undefined && 'exists' in row && !row.exists
+      } catch {
+        return false
+      }
+    }
+    try {
+      const connectionId = getFileConnectionId(file)
+      const access = connectionId ? undefined : editorTabFileAccess(store.getState(), file)
+      const exists = await globalThis.window?.api?.fs?.pathExists?.({
+        filePath: file.filePath,
+        connectionId,
+        ...(access ? { access } : {})
+      })
+      return exists === false
+    } catch {
+      // Why: a failed probe can't disprove existence — keep retrying.
+      return false
+    }
+  }
+
+  // A newer save/reload baseline invalidates this read’s evidence.
+  const unchangedSinceRead = (file: OpenFile): OpenFile | null => {
+    const liveFile = store.getState().openFiles.find((f) => f.id === file.id)
+    return liveFile &&
+      needsDiskCheck(liveFile) &&
+      liveFile.lastKnownDiskSignature === file.lastKnownDiskSignature
+      ? liveFile
+      : null
+  }
+
+  const verify = async (file: OpenFile): Promise<void> => {
+    // Keep dedupe markers only for scheduled retries so reopening the same view cannot inherit a stray marker.
+    let retryScheduled = false
+    try {
+      const state = store.getState()
+      const result = await readRuntimeFileContent({
+        target: requireRuntimeTargetForFileOwner(state, file.worktreeId, file.runtimeEnvironmentId),
+        filePath: file.filePath,
+        relativePath: file.relativePath,
+        worktreeId: file.worktreeId,
+        connectionId: getFileConnectionId(file),
+        expectedExternalSshTargetId: file.externalSshTargetId,
+        access: editorTabFileAccess(state, file)
+      })
+      attemptsByFileId.delete(file.id)
+      const liveFile = disposed ? null : unchangedSinceRead(file)
+      if (
+        !liveFile ||
+        result.isBinary ||
+        getDiskBaselineSignature(result.content) === file.lastKnownDiskSignature ||
+        // Why: disk already holds the draft, so the next save goes through clean.
+        result.content === store.getState().editorDrafts[file.id] ||
+        // Why: the tab's own save can land before it rebaselines.
+        getRecentSelfWrite(file.filePath, file.runtimeEnvironmentId)?.content === result.content
+      ) {
+        return
+      }
+      markFileChangedOnDisk(store.getState(), liveFile, {
+        connectionId: getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined,
+        origin: 'restore'
+      })
+    } catch {
+      if (disposed) {
+        return
+      }
+      if (await probeFileMissing(file)) {
+        attemptsByFileId.delete(file.id)
+        const liveFile = disposed ? null : unchangedSinceRead(file)
+        if (liveFile && liveFile.externalMutation !== 'deleted') {
+          store.getState().setExternalMutation(file.id, 'deleted')
+        }
+        return
+      }
+      if (disposed) {
+        return
+      }
+      const attempts = (attemptsByFileId.get(file.id) ?? 0) + 1
+      attemptsByFileId.set(file.id, attempts)
+      // Why stop silently: the banner is only early warning; the guarded save still refuses newer disk.
+      if (attempts >= MAX_VERIFY_ATTEMPTS) {
+        attemptsByFileId.delete(file.id)
+        return
+      }
+      retryScheduled = true
+      const timer = setTimeout(
+        () => {
+          retryTimers.delete(timer)
+          verifyQueue.push(file.id)
+          pumpVerifyQueue()
+        },
+        attempts < VERIFY_FAST_ATTEMPTS ? VERIFY_RETRY_MS : VERIFY_SLOW_RETRY_MS
+      )
+      retryTimers.add(timer)
+    } finally {
+      if (!retryScheduled) {
+        inFlightFileIds.delete(file.id)
+      }
+    }
+  }
+
+  const pumpVerifyQueue = (): void => {
+    while (!disposed && activeVerifyReads < MAX_CONCURRENT_VERIFY_READS && verifyQueue.length > 0) {
+      const fileId = verifyQueue.shift()!
+      // Recheck live eligibility after dequeueing; saved/reopened views release their dedupe marker when skipped.
+      const file = store.getState().openFiles.find((f) => f.id === fileId)
+      if (!file || !needsDiskCheck(file)) {
+        inFlightFileIds.delete(fileId)
+        attemptsByFileId.delete(fileId)
+        continue
+      }
+      activeVerifyReads += 1
+      const onSettled = (): void => {
+        activeVerifyReads -= 1
+        pumpVerifyQueue()
+      }
+      // Even unexpected rejection must release the concurrency slot or the queue stalls.
+      void verify(file).then(onSettled, onSettled)
+    }
+  }
+
+  const scan = (): void => {
+    if (disposed) {
+      return
+    }
+    const openFiles = store.getState().openFiles
+    const openIds = new Set(openFiles.map((file) => file.id))
+    for (const fileId of seenFileIds) {
+      if (!openIds.has(fileId)) {
+        seenFileIds.delete(fileId)
+      }
+    }
+    for (const file of openFiles) {
+      if (seenFileIds.has(file.id)) {
+        continue
+      }
+      seenFileIds.add(file.id)
+      // Why: views of one record share its disk version, so one read checks them all.
+      const siblingInFlight = editorBufferSiblingViewIds(store.getState(), file.id).some((id) =>
+        inFlightFileIds.has(id)
+      )
+      if (needsDiskCheck(file) && !inFlightFileIds.has(file.id) && !siblingInFlight) {
+        inFlightFileIds.add(file.id)
+        verifyQueue.push(file.id)
+      }
+    }
+    pumpVerifyQueue()
+  }
+
+  let previousOpenFiles = store.getState().openFiles
+  const unsubscribe = store.subscribe(() => {
+    const nextOpenFiles = store.getState().openFiles
+    if (nextOpenFiles === previousOpenFiles) {
+      return
+    }
+    previousOpenFiles = nextOpenFiles
+    scan()
+  })
+  scan()
+
+  return () => {
+    disposed = true
+    unsubscribe()
+    for (const timer of retryTimers) {
+      clearTimeout(timer)
+    }
+    retryTimers.clear()
+    verifyQueue.length = 0
+  }
+}

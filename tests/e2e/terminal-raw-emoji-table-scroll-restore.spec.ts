@@ -21,6 +21,7 @@ import { scrollActiveTerminalToText } from './artificial-opencode-active-termina
 import { nodeTerminalCommand } from './terminal-node-command'
 
 type BrowserTerminalPane = {
+  id: number
   terminal: {
     cols: number
     rows: number
@@ -180,7 +181,9 @@ function rawEmojiFixtureFrameTailMarker(runId: string): string {
 }
 
 async function setWideRenderedTableViewport(page: Page): Promise<void> {
-  await page.setViewportSize({ width: 1480, height: 820 })
+  const isWindows = await page.evaluate(() => navigator.userAgent.includes('Windows'))
+  // Allow macOS font/column variance; Windows goldens use the stable native viewport.
+  await page.setViewportSize({ width: isWindows ? 1480 : 1760, height: 820 })
   await page.waitForTimeout(250)
   await page.evaluate(() => {
     const store = window.__store
@@ -200,7 +203,7 @@ async function waitForActiveTerminalColumns(
     .poll(
       () =>
         page.evaluate(() => {
-          let pane: ReturnType<NonNullable<RawTableDebugWindow['getActiveTestPane']>> = null
+          let pane: BrowserTerminalPane | null = null
           try {
             pane = (window as RawTableDebugWindow).getActiveTestPane?.() ?? null
           } catch {
@@ -279,8 +282,7 @@ async function readTerminalRightEdgeOverpaint(page: Page): Promise<{
 
     const screenRect = screen.getBoundingClientRect()
     if (!rows) {
-      // Why: WebGL renders rows into a canvas, so DOM-span overpaint checks only
-      // apply when the DOM renderer is active. Buffer wrap checks still run below.
+      // Check DOM-span overpaint only for DOM rendering; WebGL paints canvas, while buffer-wrap checks apply to both.
       return {
         screenRight: screenRect.right,
         offenderCount: 0,
@@ -355,8 +357,7 @@ async function readVisibleSingerRowGeometry(page: Page): Promise<{
       (element.textContent ?? '').includes('Singer')
     ) as HTMLElement | undefined
     if (!row) {
-      // Why: xterm can repaint DOM rows between scroll and measurement; the
-      // terminal buffer still gives a stable right-edge bound for the golden.
+      // Use stable buffer right-edge bounds because DOM rows may repaint between scroll and measurement.
       return bufferGeometry
     }
     const rowRect = row.getBoundingClientRect()
@@ -419,7 +420,9 @@ async function readTerminalRenderDiagnostics(page: Page): Promise<{
 async function closeFeatureTips(page: Page): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
-    store?.getState().markFeatureTipsSeen(['orca-cli', 'cmd-j-palette', 'voice-dictation'])
+    store
+      ?.getState()
+      .markFeatureTipsSeen(['orca-cli', 'cmd-j-palette', 'voice-dictation', 'agent-session-search'])
     if (store?.getState().activeModal === 'feature-tips') {
       store.getState().closeModal()
     }
@@ -471,8 +474,7 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
     })
   })
 
-  // Why: `auto` should start on the fast renderer for ordinary terminal output;
-  // the emoji table golden below proves complex output does not disable it.
+  // Require auto to start fast and the complex emoji golden to retain that renderer.
   test('uses WebGL by default for ordinary terminal output when available @terminal-rendering-golden', async ({
     orcaPage
   }) => {
@@ -486,14 +488,28 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
     await sendToTerminal(orcaPage, ptyId, `printf ${JSON.stringify(`${marker}\\n`)}\r`)
     await waitForTerminalOutput(orcaPage, marker, 10_000)
 
-    const diagnostics = await readTerminalRenderDiagnostics(orcaPage)
+    const expectedWebgl = await expectAutoWebgl(orcaPage)
+    // Wait for async WebGL attachment and transient cursorHidden to settle before the single-shot golden.
+    // Keep hasComplexScriptOutput single-shot: its not-ready default is also false.
+    let diagnostics = await readTerminalRenderDiagnostics(orcaPage)
+    await expect
+      .poll(
+        async () => {
+          diagnostics = await readTerminalRenderDiagnostics(orcaPage)
+          return diagnostics.hasWebgl === expectedWebgl && diagnostics.cursorHidden === false
+        },
+        {
+          timeout: 15_000,
+          message: `terminal render diagnostics did not settle (expected hasWebgl=${expectedWebgl}, cursorHidden=false)`
+        }
+      )
+      .toBe(true)
     expect(diagnostics.hasComplexScriptOutput).toBe(false)
-    expect(diagnostics.hasWebgl).toBe(await expectAutoWebgl(orcaPage))
+    expect(diagnostics.hasWebgl).toBe(expectedWebgl)
     expect(diagnostics.cursorHidden).toBe(false)
   })
 
-  // Why: this is the minimal golden for the v1.4.51 regression. It fails if
-  // xterm underfits by one scrollbar column or counts ZWJ emoji as width 4.
+  // v1.4.51 minimal golden rejects one-scrollbar-column underfit and ZWJ emoji counted as width 4.
   test('keeps raw emoji box table aligned after restore and scroll @terminal-rendering-golden', async ({
     orcaPage,
     testRepoPath
@@ -521,12 +537,9 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
     try {
       const completionMarker = rawEmojiFixtureCompletionMarker(runId)
       const frameTailMarker = rawEmojiFixtureFrameTailMarker(runId)
-      // Why: the fixture marker is the shell-readiness signal here; an extra
-      // Ctrl+C/Ctrl+U preflight can race Windows ConPTY startup and eat input.
+      // Use fixture-marker readiness; extra Ctrl+C/Ctrl+U can race ConPTY startup and consume input.
       await sendToTerminal(orcaPage, ptyId, `${nodeTerminalCommand([scriptPath])}\r`)
-      // Why: Windows ConPTY can return the PowerShell prompt while xterm is
-      // still flushing synchronized output if the pane is hidden immediately.
-      // This golden is about restored table geometry, not shell-flush timing.
+      // Wait out synchronized output before hiding: PowerShell prompt return can precede xterm flush, unrelated to restored geometry.
       await waitForTerminalOutput(orcaPage, completionMarker, 20_000, 30_000)
       await expect
         .poll(() => getTerminalContent(orcaPage, 30_000), {
@@ -537,9 +550,10 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
       await switchToWorktree(orcaPage, secondWorktreeId)
       await waitForActiveTerminalManager(orcaPage, 30_000)
       await orcaPage.waitForTimeout(1_000)
+      // Widen before worktree return so immediate replay cannot wrap the table.
+      await setWideRenderedTableViewport(orcaPage)
       await switchToWorktree(orcaPage, firstWorktreeId)
-      // Why: activating another worktree can restore the right sidebar. This
-      // golden is about terminal renderer restore at a deliberately wide width.
+      // Keep the deliberate wide viewport despite worktree activation restoring the right sidebar.
       await ensureTerminalVisible(orcaPage)
       await waitForActiveTerminalManager(orcaPage, 30_000)
       await setWideRenderedTableViewport(orcaPage)
@@ -553,7 +567,22 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
 
       await scrollActiveTerminalToText(orcaPage, 'Singer')
       await closeFeatureTips(orcaPage)
-      const diagnostics = await readTerminalRenderDiagnostics(orcaPage)
+      const expectedWebgl = await expectAutoWebgl(orcaPage)
+      // Wait for async WebGL reattach/backoff and transient cursorHidden after restore.
+      // Keep geometry/wrap/overpaint assertions single-shot as the regression signal.
+      let diagnostics = await readTerminalRenderDiagnostics(orcaPage)
+      await expect
+        .poll(
+          async () => {
+            diagnostics = await readTerminalRenderDiagnostics(orcaPage)
+            return diagnostics.hasWebgl === expectedWebgl && diagnostics.cursorHidden === false
+          },
+          {
+            timeout: 15_000,
+            message: `terminal render diagnostics did not settle (expected hasWebgl=${expectedWebgl}, cursorHidden=false)`
+          }
+        )
+        .toBe(true)
       const overpaint = await readTerminalRightEdgeOverpaint(orcaPage)
       const wrapDiagnostics = await readTerminalBoxTableWrapDiagnostics(orcaPage)
       const singerGeometry = await readVisibleSingerRowGeometry(orcaPage)
@@ -579,7 +608,7 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
 
       expect(wrapDiagnostics.cols).toBeGreaterThanOrEqual(RAW_EMOJI_BOX_TABLE_WIDTH)
       expect(diagnostics.hasComplexScriptOutput).toBe(false)
-      expect(diagnostics.hasWebgl).toBe(await expectAutoWebgl(orcaPage))
+      expect(diagnostics.hasWebgl).toBe(expectedWebgl)
       expect(diagnostics.cursorHidden).toBe(false)
       expect(overpaint.offenders).toEqual([])
       expect(wrapDiagnostics.wrappedBoxLines).toEqual([])

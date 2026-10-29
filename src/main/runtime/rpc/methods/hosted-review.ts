@@ -1,50 +1,16 @@
-import { z } from 'zod'
-import { defineMethod, type RpcMethod } from '../core'
-import { requiredString } from '../schemas'
+import { defineMethod } from '../core'
+import { supportsHostedReviewCreation } from '../../../../shared/hosted-review-creation-providers'
+import { UNSUPPORTED_HOSTED_REVIEW_PROVIDER } from '../../../source-control/hosted-review-creation'
+import {
+  HostedReviewCreate,
+  HostedReviewCreationEligibility,
+  HostedReviewForBranch
+} from '../../../../shared/rpc-contract/hosted-review-params'
 
-const HostedReviewForBranch = z.object({
-  repo: requiredString('Missing repo selector'),
-  branch: requiredString('Missing branch'),
-  linkedGitHubPR: z.number().int().positive().nullable().optional(),
-  fallbackGitHubPR: z.number().int().positive().nullable().optional(),
-  linkedGitLabMR: z.number().int().positive().nullable().optional(),
-  linkedBitbucketPR: z.number().int().positive().nullable().optional(),
-  linkedAzureDevOpsPR: z.number().int().positive().nullable().optional(),
-  linkedGiteaPR: z.number().int().positive().nullable().optional()
-})
-
-const HostedReviewCreationEligibility = z.object({
-  repo: requiredString('Missing repo selector'),
-  worktree: z.string().min(1, 'Missing worktree selector').optional(),
-  branch: requiredString('Missing branch'),
-  base: z.string().nullable().optional(),
-  hasUncommittedChanges: z.boolean().optional(),
-  hasUpstream: z.boolean().optional(),
-  ahead: z.number().int().nonnegative().optional(),
-  behind: z.number().int().nonnegative().optional(),
-  linkedGitHubPR: z.number().int().positive().nullable().optional(),
-  fallbackGitHubPR: z.number().int().positive().nullable().optional(),
-  linkedGitLabMR: z.number().int().positive().nullable().optional(),
-  linkedBitbucketPR: z.number().int().positive().nullable().optional(),
-  linkedAzureDevOpsPR: z.number().int().positive().nullable().optional(),
-  linkedGiteaPR: z.number().int().positive().nullable().optional()
-})
-
-const HostedReviewCreate = z.object({
-  repo: requiredString('Missing repo selector'),
-  worktree: z.string().min(1, 'Missing worktree selector').optional(),
-  provider: z.enum(['github', 'gitlab', 'bitbucket', 'azure-devops', 'gitea', 'unsupported']),
-  base: requiredString('Missing base branch'),
-  head: z.string().optional(),
-  title: requiredString('Missing title'),
-  body: z.string().optional(),
-  draft: z.boolean().optional(),
-  useTemplate: z.boolean().optional()
-})
-
-export const HOSTED_REVIEW_METHODS: RpcMethod[] = [
+export const HOSTED_REVIEW_METHODS = [
   defineMethod({
     name: 'hostedReview.forBranch',
+    permission: 'workspace',
     params: HostedReviewForBranch,
     handler: async (params, { runtime }) => {
       const fallbackGitHubPR =
@@ -52,6 +18,10 @@ export const HOSTED_REVIEW_METHODS: RpcMethod[] = [
       return runtime.getHostedReviewForBranch({
         repoSelector: params.repo,
         branch: params.branch,
+        ...(params.admissionTier ? { admissionTier: params.admissionTier } : {}),
+        currentHeadOid: params.currentHeadOid ?? null,
+        ...(params.active === true ? { active: true } : {}),
+        ...(params.force === true ? { force: true } : {}),
         linkedGitHubPR: params.linkedGitHubPR ?? null,
         ...(fallbackGitHubPR !== null ? { fallbackGitHubPR } : {}),
         linkedGitLabMR: params.linkedGitLabMR ?? null,
@@ -63,6 +33,7 @@ export const HOSTED_REVIEW_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'hostedReview.getCreationEligibility',
+    permission: 'workspace',
     params: HostedReviewCreationEligibility,
     handler: async (params, { runtime }) => {
       const fallbackGitHubPR =
@@ -81,15 +52,21 @@ export const HOSTED_REVIEW_METHODS: RpcMethod[] = [
         linkedGitLabMR: params.linkedGitLabMR ?? null,
         linkedBitbucketPR: params.linkedBitbucketPR ?? null,
         linkedAzureDevOpsPR: params.linkedAzureDevOpsPR ?? null,
-        linkedGiteaPR: params.linkedGiteaPR ?? null
+        linkedGiteaPR: params.linkedGiteaPR ?? null,
+        wakeWslDistro: params.wakeWslDistro
       })
     }
   }),
   defineMethod({
     name: 'hostedReview.create',
+    permission: 'workspace',
     params: HostedReviewCreate,
-    handler: async (params, { runtime }) =>
-      runtime.createHostedReview({
+    handler: async (params, { runtime }) => {
+      // Refuse an unknown host-issued provider token here; schema rejection would be unreadable to the client.
+      if (!supportsHostedReviewCreation(params.provider)) {
+        return UNSUPPORTED_HOSTED_REVIEW_PROVIDER
+      }
+      return runtime.createHostedReview({
         repoSelector: params.repo,
         worktreeSelector: params.worktree,
         provider: params.provider,
@@ -100,5 +77,27 @@ export const HOSTED_REVIEW_METHODS: RpcMethod[] = [
         draft: params.draft,
         useTemplate: params.useTemplate
       })
+    }
+  }),
+  defineMethod({
+    name: 'hostedReview.createStacked',
+    permission: 'workspace',
+    params: HostedReviewCreate,
+    handler: async (params, { runtime }) => {
+      if (!supportsHostedReviewCreation(params.provider)) {
+        return UNSUPPORTED_HOSTED_REVIEW_PROVIDER
+      }
+      return runtime.createStackedHostedReview({
+        repoSelector: params.repo,
+        worktreeSelector: params.worktree,
+        provider: params.provider,
+        base: params.base,
+        head: params.head,
+        title: params.title,
+        body: params.body,
+        draft: params.draft,
+        useTemplate: params.useTemplate
+      })
+    }
   })
 ]

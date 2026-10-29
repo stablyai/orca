@@ -1,11 +1,11 @@
 import React, { type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import { buildCommitMessageGenerationParams } from './SourceControlTextGenerationDialog'
+import { buildCommitMessageGenerationParams } from './source-control/ai/text-generation-dialog'
 import {
   getDefaultSourceControlTextGenerationSaveTargetKey,
   SourceControlTextGenerationDialogForm
-} from './SourceControlTextGenerationDialogForm'
+} from './source-control/ai/text-generation-dialog-form'
 import {
   applyCommitMessageGenerationDefaults,
   applySourceControlTextGenerationDefaults
@@ -37,6 +37,37 @@ vi.mock('@/components/ui/select', () => ({
     React.createElement('button', null, children),
   SelectValue: () => React.createElement('span')
 }))
+
+/** The mocked chips serialize their previews into an attribute, so quotes arrive escaped. */
+function escapeHtml(value: string): string {
+  return value.replace(/"/g, '&quot;')
+}
+
+function renderTextGenerationForm(input: {
+  commandInputTemplate: string
+  linkedIssue: number | null
+}): string {
+  return renderToStaticMarkup(
+    React.createElement(SourceControlTextGenerationDialogForm, {
+      actionId: 'commitMessage',
+      generateLabel: 'Generate commit message',
+      settings: null,
+      repo: null,
+      baseParams: {
+        agentId: 'codex',
+        model: 'gpt-5.4-mini',
+        commandInputTemplate: input.commandInputTemplate
+      },
+      linkedIssue: input.linkedIssue,
+      saveTargets: [
+        { target: { type: 'global' }, label: 'Save as global default', successMessage: '' }
+      ],
+      onGenerate: () => {},
+      onOpenChange: () => {},
+      onSaveDefaults: () => {}
+    })
+  )
+}
 
 describe('buildCommitMessageGenerationParams', () => {
   it('defaults saved text-generation recipes to the global target when repo and global are available', () => {
@@ -77,6 +108,77 @@ describe('buildCommitMessageGenerationParams', () => {
     )
 
     expect(markup).toContain('You are generating a single git commit message.')
+  })
+
+  // Missing chip previews fall back to synthetic 123, falsely promising an unlinked workspace Fixes #123.
+  it.each([
+    { label: 'the linked issue', linkedIssue: 42, expected: '42' },
+    { label: 'an empty value when unlinked', linkedIssue: null, expected: '' }
+  ])('previews $label for a workspace-scoped dialog', ({ linkedIssue, expected }) => {
+    const markup = renderToStaticMarkup(
+      React.createElement(SourceControlTextGenerationDialogForm, {
+        actionId: 'commitMessage',
+        generateLabel: 'Generate',
+        settings: null,
+        repo: null,
+        baseParams: {
+          agentId: 'codex',
+          model: 'gpt-5.4-mini',
+          commandInputTemplate: '{basePrompt}'
+        },
+        linkedIssue,
+        saveTargets: [],
+        onGenerate: () => {},
+        onOpenChange: () => {},
+        onSaveDefaults: () => {}
+      })
+    )
+
+    expect(markup).toContain(escapeHtml(JSON.stringify({ linkedIssue: expected })))
+  })
+
+  it('omits the issue preview when no workspace is in scope', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(SourceControlTextGenerationDialogForm, {
+        actionId: 'commitMessage',
+        generateLabel: 'Generate',
+        settings: null,
+        repo: null,
+        baseParams: {
+          agentId: 'codex',
+          model: 'gpt-5.4-mini',
+          commandInputTemplate: '{basePrompt}'
+        },
+        saveTargets: [],
+        onGenerate: () => {},
+        onOpenChange: () => {},
+        onSaveDefaults: () => {}
+      })
+    )
+
+    expect(markup).not.toContain('linkedIssue')
+  })
+
+  // Repo/global recipe saves must not depend on the active workspace having a linked issue.
+  it.each([
+    { label: 'a linked workspace', linkedIssue: 42 },
+    { label: 'an unlinked workspace', linkedIssue: null }
+  ])('keeps a bare {linkedIssue} recipe runnable from $label', ({ linkedIssue }) => {
+    const markup = renderTextGenerationForm({
+      commandInputTemplate: '{linkedIssue}',
+      linkedIssue
+    })
+
+    // Empty-input copy appears after clicks; static markup can observe only the disabled gate.
+    expect(markup).toContain('Save defaults')
+    expect(markup).toContain('Generate commit message')
+    expect(markup).not.toContain('disabled=""')
+  })
+
+  it('still disables both actions for a template that renders empty for everyone', () => {
+    const markup = renderTextGenerationForm({ commandInputTemplate: '   ', linkedIssue: 42 })
+
+    expect(markup).toContain('disabled=""')
   })
 
   it('preserves the resolved model and thinking level for the selected agent', () => {

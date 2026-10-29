@@ -5,6 +5,7 @@ const BACKSLASH_CODE_UNIT = 0x5c
 const SEMICOLON_CODE_UNIT = 0x3b
 const OSC_TITLE_COMMANDS = new Set([0x30, 0x31, 0x32])
 export const MAX_OSC_TITLE_CHARS = 1024
+export const MAX_OSC_TITLES_PER_CHUNK = 4096
 
 type OscTitleParseResult =
   | { kind: 'title'; title: string; nextIndex: number }
@@ -56,8 +57,7 @@ function parseOscTitleAt(data: string, index: number): OscTitleParseResult {
 }
 
 function readBoundedOscTitle(data: string, titleStart: number, titleEnd: number): string {
-  // Why: PTY output can contain pasted or remote-controlled OSC titles; keep
-  // downstream title detection bounded while preserving trailing status words.
+  // Bound remote/pasted OSC title work while retaining trailing status words.
   const length = titleEnd - titleStart
   if (length <= MAX_OSC_TITLE_CHARS) {
     return data.slice(titleStart, titleEnd)
@@ -77,8 +77,7 @@ export function extractLastOscTitle(data: string): string | null {
 
   let last: string | null = null
   let searchStart = 0
-  // Why: raw PTY chunks can include large pasted content. Parse OSC titles
-  // directly instead of running a global regex over the whole chunk.
+  // Direct scanning avoids a global regex over arbitrarily large pasted PTY chunks.
   while (searchStart < data.length) {
     const start = data.indexOf('\x1b]', searchStart)
     if (start === -1) {
@@ -99,11 +98,21 @@ export function extractLastOscTitle(data: string): string | null {
 }
 
 export function extractAllOscTitles(data: string): string[] {
+  return scanAllOscTitles(data, (title) => title)
+}
+
+/** Every complete OSC title with the offset just past it, for ordering titles against other events. */
+export function extractAllOscTitleEntries(data: string): { title: string; end: number }[] {
+  return scanAllOscTitles(data, (title, end) => ({ title, end }))
+}
+
+function scanAllOscTitles<T>(data: string, make: (title: string, end: number) => T): T[] {
   if (!data.includes('\x1b]')) {
     return []
   }
 
-  const titles: string[] = []
+  const titles: T[] = []
+  let oldestTitleIndex = 0
   let searchStart = 0
   while (searchStart < data.length) {
     const start = data.indexOf('\x1b]', searchStart)
@@ -115,11 +124,19 @@ export function extractAllOscTitles(data: string): string[] {
       break
     }
     if (parsed.kind === 'title') {
-      titles.push(parsed.title)
+      const entry = make(parsed.title, parsed.nextIndex)
+      if (titles.length < MAX_OSC_TITLES_PER_CHUNK) {
+        titles.push(entry)
+      } else {
+        titles[oldestTitleIndex] = entry
+        oldestTitleIndex = (oldestTitleIndex + 1) % MAX_OSC_TITLES_PER_CHUNK
+      }
       searchStart = parsed.nextIndex
       continue
     }
     searchStart = parsed.nextIndex
   }
-  return titles
+  return oldestTitleIndex === 0
+    ? titles
+    : [...titles.slice(oldestTitleIndex), ...titles.slice(0, oldestTitleIndex)]
 }

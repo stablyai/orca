@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildTabAgentLaunchOptions,
+  buildTabAgentLaunchOptionsFromRows,
   findMatchingTabAgentLaunchOptions,
   orderTabLaunchAgents
 } from './tab-agent-launch-options'
@@ -12,6 +13,30 @@ describe('tab agent launch options', () => {
       'claude',
       'gemini'
     ])
+  })
+
+  it('excludes disabled agents from the launch list', () => {
+    expect(orderTabLaunchAgents(null, ['claude', 'codex', 'openclaude'], ['openclaude'])).toEqual([
+      'claude',
+      'codex'
+    ])
+  })
+
+  it('drops a disabled default agent instead of surfacing it first', () => {
+    const ordered = orderTabLaunchAgents(
+      'openclaude',
+      ['claude', 'codex', 'openclaude'],
+      ['openclaude']
+    )
+    expect(ordered).not.toContain('openclaude')
+    expect(ordered).toEqual(['claude', 'codex'])
+  })
+
+  it('keeps a disabled agent out of new-tab search results', () => {
+    const options = buildTabAgentLaunchOptions(
+      orderTabLaunchAgents('codex', ['claude', 'codex', 'openclaude'], ['openclaude'])
+    )
+    expect(findMatchingTabAgentLaunchOptions('open', options).map((o) => o.agent)).toEqual([])
   })
 
   it('matches detected agents by id, label, command, and command override', () => {
@@ -34,7 +59,6 @@ describe('tab agent launch options', () => {
   it('matches agents on a partial prefix so the launcher actually searches', () => {
     const options = buildTabAgentLaunchOptions(['claude', 'codex', 'gemini', 'antigravity'])
 
-    // Each is one character short of the full agent name.
     expect(findMatchingTabAgentLaunchOptions('gemin', options).map((o) => o.agent)).toEqual([
       'gemini'
     ])
@@ -47,9 +71,11 @@ describe('tab agent launch options', () => {
   })
 
   it('ranks an exact alias above weaker prefix matches', () => {
-    const options = buildTabAgentLaunchOptions(['codex', 'copilot', 'codebuff'])
+    const options = buildTabAgentLaunchOptions(['codebuff', 'codex', 'copilot'], {
+      codebuff: 'codex-tools'
+    })
 
-    // "co" prefixes all three; "codex" exactly matches one and must lead.
+    // The weaker codex-tools prefix starts first, so exact codex must move ahead.
     expect(findMatchingTabAgentLaunchOptions('codex', options)[0]?.agent).toBe('codex')
     expect(findMatchingTabAgentLaunchOptions('co', options).map((o) => o.agent)).toEqual(
       expect.arrayContaining(['codex', 'copilot', 'codebuff'])
@@ -59,8 +85,7 @@ describe('tab agent launch options', () => {
   it('does not match on a mid-string substring that would hijack file results', () => {
     const options = buildTabAgentLaunchOptions(['opencode', 'claude'])
 
-    // "ode" is inside "opencode" but not a prefix — agents rank above files, so
-    // a noisy mid-string hit must not surface.
+    // Agent rows outrank files, so broad mid-string hits must not hijack the result list.
     expect(findMatchingTabAgentLaunchOptions('ode', options)).toEqual([])
   })
 
@@ -69,9 +94,29 @@ describe('tab agent launch options', () => {
 
     // A lone "c" must not surface (and auto-launch) an agent.
     expect(findMatchingTabAgentLaunchOptions('c', options)).toEqual([])
-    // Two characters is enough to start searching.
     expect(findMatchingTabAgentLaunchOptions('co', options).map((o) => o.agent)).toEqual(
       expect.arrayContaining(['codex', 'copilot'])
     )
   })
+})
+
+it('projects the same CLI label, unavailable reason and stable chat ID as static rows', () => {
+  const unavailable = buildTabAgentLaunchOptionsFromRows([
+    { kind: 'chat-unavailable', agent: 'claude', reason: 'ssh' },
+    { kind: 'cli', agent: 'claude' },
+    { kind: 'cli', agent: 'codex', chat: true }
+  ])
+  expect(unavailable).toMatchObject([
+    { id: 'chat:claude', label: 'Claude', reason: 'No chat over SSH', disabled: true },
+    { id: 'cli:claude', label: 'Claude (CLI)', disabled: false },
+    { id: 'cli:codex', label: 'Codex (CLI)', disabled: false }
+  ])
+  // Typing the agent's name and pressing Enter launches its CLI, not the disabled chat.
+  expect(findMatchingTabAgentLaunchOptions('claude', unavailable)[0]?.id).toBe('cli:claude')
+  expect(
+    findMatchingTabAgentLaunchOptions('codex', unavailable).map((option) => [
+      option.id,
+      option.row?.kind
+    ])
+  ).toEqual([['cli:codex', 'cli']])
 })

@@ -4,7 +4,30 @@ export const EMULATOR_MANUAL_LAUNCH_STARTED_EVENT = 'orca:emulator-launch-starte
 export const EMULATOR_MANUAL_LAUNCH_FAILED_EVENT = 'orca:emulator-launch-failed'
 
 const manualLaunchesByWorktree = new Set<string>()
-const prelaunchedSessionsByWorktree = new Map<string, EmulatorStreamInfo>()
+type PrelaunchedSimulatorSession = {
+  info: EmulatorStreamInfo
+  rememberedAt: number
+}
+
+// Expire unconsumed handoffs so removed workspace IDs cannot retain stale stream URLs.
+const PRELAUNCHED_SIMULATOR_SESSION_TTL_MS = 30_000
+const PRELAUNCHED_SIMULATOR_SESSION_MAX = 16
+const prelaunchedSessionsByWorktree = new Map<string, PrelaunchedSimulatorSession>()
+
+function prunePrelaunchedSimulatorSessions(now = performance.now()): void {
+  for (const [worktreeId, entry] of prelaunchedSessionsByWorktree) {
+    if (now - entry.rememberedAt >= PRELAUNCHED_SIMULATOR_SESSION_TTL_MS) {
+      prelaunchedSessionsByWorktree.delete(worktreeId)
+    }
+  }
+  while (prelaunchedSessionsByWorktree.size > PRELAUNCHED_SIMULATOR_SESSION_MAX) {
+    const oldest = prelaunchedSessionsByWorktree.keys().next().value
+    if (oldest === undefined) {
+      return
+    }
+    prelaunchedSessionsByWorktree.delete(oldest)
+  }
+}
 
 export function beginManualSimulatorLaunch(worktreeId: string): void {
   manualLaunchesByWorktree.add(worktreeId)
@@ -25,13 +48,26 @@ export function rememberPrelaunchedSimulatorSession(
   if (!info?.streamUrl && !info?.wsUrl) {
     return
   }
-  prelaunchedSessionsByWorktree.set(worktreeId, info)
+  // Measure elapsed age monotonically so clock corrections cannot revive stale streams or discard fresh handoffs.
+  const rememberedAt = performance.now()
+  prelaunchedSessionsByWorktree.delete(worktreeId)
+  prelaunchedSessionsByWorktree.set(worktreeId, {
+    info,
+    rememberedAt
+  })
+  prunePrelaunchedSimulatorSessions(rememberedAt)
 }
 
 export function consumePrelaunchedSimulatorSession(worktreeId: string): EmulatorStreamInfo | null {
-  const info = prelaunchedSessionsByWorktree.get(worktreeId) ?? null
+  prunePrelaunchedSimulatorSessions()
+  const info = prelaunchedSessionsByWorktree.get(worktreeId)?.info ?? null
   prelaunchedSessionsByWorktree.delete(worktreeId)
   return info
+}
+
+export function resetSimulatorLaunchCoordinationForTests(): void {
+  manualLaunchesByWorktree.clear()
+  prelaunchedSessionsByWorktree.clear()
 }
 
 export function dispatchManualSimulatorLaunchStarted(worktreeId: string): void {
@@ -45,7 +81,10 @@ export function dispatchManualSimulatorLaunchFailed(worktreeId: string, message:
   })
 }
 
-function dispatchManualSimulatorLaunchEvent(type: string, detail: object): void {
+function dispatchManualSimulatorLaunchEvent(
+  type: string,
+  detail: { worktreeId: string; message?: string }
+): void {
   if (typeof window === 'undefined') {
     return
   }

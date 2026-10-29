@@ -1,9 +1,21 @@
-import { describeRuntimeCompatBlock, evaluateRuntimeCompat } from '../../../shared/protocol-compat'
+import { evaluateRuntimeCompat } from '../../../shared/protocol-compat'
+import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
 import {
   MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
   RUNTIME_PROTOCOL_VERSION
 } from '../../../shared/protocol-version'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
+
+/** Marker on the compat-gate block error. Tagged as a `.code` on a plain Error
+ *  (not a subclass) so the gate keeps throwing an `Error` — its other consumer,
+ *  the runtime-environment switch flow, reads only `.message` and is unaffected. */
+export const RUNTIME_COMPAT_BLOCK_CODE = 'runtime_compat_block'
+
+/** True when `error` is the protocol-compat block thrown by
+ *  `assertRuntimeStatusCompatible` (vs a transient transport/timeout error). */
+export function isRuntimeCompatBlockError(error: unknown): boolean {
+  return error instanceof Error && (error as { code?: string }).code === RUNTIME_COMPAT_BLOCK_CODE
+}
 
 export function assertRuntimeStatusCompatible(status: RuntimeStatus): void {
   const verdict = evaluateRuntimeCompat({
@@ -14,6 +26,18 @@ export function assertRuntimeStatusCompatible(status: RuntimeStatus): void {
       status.minCompatibleRuntimeClientVersion ?? status.minCompatibleMobileVersion
   })
   if (verdict.kind === 'blocked') {
-    throw new Error(describeRuntimeCompatBlock(verdict))
+    // Keep Error message while tagging code so callers distinguish protocol blocks from transient transport failures.
+    const error = new Error(describeRuntimeCompatBlock(verdict))
+    ;(error as { code?: string }).code = RUNTIME_COMPAT_BLOCK_CODE
+    throw error
+  }
+}
+
+export function isRuntimeStatusCompatible(status: RuntimeStatus): boolean {
+  try {
+    assertRuntimeStatusCompatible(status)
+    return true
+  } catch {
+    return false
   }
 }

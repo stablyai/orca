@@ -1,0 +1,210 @@
+import { useCallback, useMemo } from 'react'
+import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
+import { getRuntimeEnvironmentIdForRepo } from '@/lib/repo-runtime-owner'
+import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
+import type { AutomationDraft } from './AutomationEditorDialog'
+import { getAutomationHostTargetFromKey, type AutomationHostTarget } from './automation-host-client'
+import { getAutomationCreateRepos } from './automation-create-projects'
+import {
+  getRepoExecutionHostId,
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
+import { getVisibleAutomationSetupDecision } from './automation-setup-decision'
+import { capturedAutomationOwner, capturedAutomationOwnerKey } from './automation-captured-owner'
+import type { AutomationsPageListState } from './use-automations-page-list-state'
+import type { AutomationsPageLocalState } from './use-automations-page-local-state'
+import type { AutomationsPageStoreState } from './use-automations-page-store-state'
+
+/** Draft setup policy, selected history, and the page's legacy host target. */
+export function useAutomationsPageSetupState({
+  store,
+  local,
+  list
+}: {
+  store: AutomationsPageStoreState
+  local: AutomationsPageLocalState
+  list: AutomationsPageListState
+}) {
+  const { repos, settings, projectHostSetups, worktreesByRepo, pendingAutomationRunNavigation } =
+    store
+  const {
+    automationYamlHooksByRepoKey,
+    automationHookCheckPromisesRef,
+    setAutomationYamlHooksByRepoKey,
+    setupDecisionTouchedRef,
+    selectedAutomationRuns,
+    runHistoryReloadToken,
+    draft,
+    automationHostTargetKey,
+    selectedAutomationRunPageId
+  } = local
+  const {
+    selected,
+    selectedRow,
+    selectedAutomationRunsWithWorkspaceNames,
+    capturedAutomationOwners
+  } = list
+
+  const getDraftSetupDecisionDefault = useCallback(
+    (
+      candidate: Pick<AutomationDraft, 'projectId' | 'workspaceMode'>
+    ): AutomationDraft['setupDecision'] => {
+      // Derive edit setup from the selected destination; ambient repo-ID lookup can collide across authorities.
+      const selectedEditEntry =
+        local.editingAutomationId !== null && local.editingHostStableKey
+          ? list.hostCatalog.entries.find((entry) => entry.stableKey === local.editingHostStableKey)
+          : null
+      const selectedEditAuthority = selectedEditEntry?.stableRef.authority
+      const setupHostId =
+        selectedEditAuthority?.kind === 'runtime'
+          ? toRuntimeExecutionHostId(selectedEditAuthority.environmentId)
+          : undefined
+      const setupRepos =
+        selectedEditAuthority?.kind === 'runtime'
+          ? getAutomationCreateRepos(repos, {
+              kind: 'environment',
+              environmentId: selectedEditAuthority.environmentId
+            })
+          : repos
+      const setupProjectHostSetups = setupHostId
+        ? projectHostSetups.filter(
+            (setup) => setup.repoId !== candidate.projectId || setup.hostId === setupHostId
+          )
+        : projectHostSetups
+      const hookKey = `${setupHostId ?? getRuntimeEnvironmentIdForRepo({ repos, settings }, candidate.projectId) ?? 'local'}:${candidate.projectId}`
+      return getVisibleAutomationSetupDecision({
+        workspaceMode: candidate.workspaceMode,
+        repoId: candidate.projectId,
+        repos: setupRepos,
+        projectHostSetups: setupProjectHostSetups,
+        yamlHooks: automationYamlHooksByRepoKey[hookKey]
+      })
+    },
+    [
+      automationYamlHooksByRepoKey,
+      list.hostCatalog.entries,
+      local.editingAutomationId,
+      local.editingHostStableKey,
+      projectHostSetups,
+      repos,
+      settings
+    ]
+  )
+  const getAutomationHooksCacheKey = useCallback(
+    (repoId: string, hostId?: string): string => {
+      if (hostId) {
+        return `${hostId}:${repoId}`
+      }
+      return `${getRuntimeEnvironmentIdForRepo({ repos, settings }, repoId) ?? 'local'}:${repoId}`
+    },
+    [repos, settings]
+  )
+  const loadAutomationYamlHooksForRepo = useCallback(
+    async (
+      repoId: string,
+      hostId?: ExecutionHostId,
+      options: { background?: boolean } = {}
+    ): Promise<OrcaHooks | null> => {
+      const key = getAutomationHooksCacheKey(repoId, hostId)
+      if (Object.hasOwn(automationYamlHooksByRepoKey, key)) {
+        return automationYamlHooksByRepoKey[key] ?? null
+      }
+      // A save must not join a preview check that refused a stopped WSL distro.
+      const flightKey = options.background ? `${key}:background` : key
+      const existingPromise = automationHookCheckPromisesRef.current.get(flightKey)
+      if (existingPromise) {
+        return (await existingPromise).hooks
+      }
+      // Why: a repo id on two hosts has no single owner to inspect; never let focus pick one.
+      const ownerRows = hostId ? [] : repos.filter((repo) => repo.id === repoId)
+      const ownerHostId =
+        hostId ?? (ownerRows.length === 1 ? getRepoExecutionHostId(ownerRows[0]) : null)
+      const promise = (
+        ownerHostId
+          ? checkRuntimeHooks(ownerHostId, repoId, options)
+          : Promise.reject(new Error('The project host is unknown.'))
+      )
+        .then((result) => ({
+          hooks: result.status === 'error' ? null : ((result.hooks as OrcaHooks | null) ?? null),
+          ok: result.status !== 'error'
+        }))
+        .catch(() => ({ hooks: null, ok: false }))
+      automationHookCheckPromisesRef.current.set(flightKey, promise)
+      const { hooks, ok } = await promise
+      automationHookCheckPromisesRef.current.delete(flightKey)
+      if (!ok) {
+        return hooks
+      }
+      setAutomationYamlHooksByRepoKey((current) =>
+        Object.hasOwn(current, key) ? current : { ...current, [key]: hooks }
+      )
+      return hooks
+    },
+    [
+      automationHookCheckPromisesRef,
+      automationYamlHooksByRepoKey,
+      getAutomationHooksCacheKey,
+      repos,
+      setAutomationYamlHooksByRepoKey
+    ]
+  )
+  const getDraftSetupDecisionDefaultSignature = useCallback(
+    (candidate: Pick<AutomationDraft, 'projectId' | 'workspaceMode'>): string =>
+      [
+        candidate.workspaceMode,
+        candidate.projectId,
+        getDraftSetupDecisionDefault(candidate) ?? 'none'
+      ].join(':'),
+    [getDraftSetupDecisionDefault]
+  )
+  const markSetupDecisionTouched = useCallback((): void => {
+    setupDecisionTouchedRef.current = true
+  }, [setupDecisionTouchedRef])
+
+  const selectedRunsMatchSelection =
+    selectedRow !== null &&
+    selectedAutomationRuns.rowKey === selectedRow.key &&
+    selectedAutomationRuns.ownerKey ===
+      capturedAutomationOwnerKey(capturedAutomationOwner(capturedAutomationOwners, selectedRow.key))
+  const selectedRunsReady =
+    selectedRunsMatchSelection &&
+    selectedAutomationRuns.reloadToken === runHistoryReloadToken &&
+    (!pendingAutomationRunNavigation ||
+      selectedAutomationRuns.navigation === pendingAutomationRunNavigation)
+  const selectedRunsNotice = selectedRunsReady ? selectedAutomationRuns.notice : null
+  const selectedRuns = useMemo(
+    () =>
+      selected && selectedRunsMatchSelection
+        ? selectedAutomationRunsWithWorkspaceNames.filter((run) => run.automationId === selected.id)
+        : [],
+    [selected, selectedRunsMatchSelection, selectedAutomationRunsWithWorkspaceNames]
+  )
+  const selectedAutomationRunPage = selectedAutomationRunPageId
+    ? (selectedRuns.find((run) => run.id === selectedAutomationRunPageId) ?? null)
+    : null
+  const worktrees = useMemo(
+    () => worktreesByRepo[draft.projectId] ?? [],
+    [draft.projectId, worktreesByRepo]
+  )
+  const automationHostTarget: AutomationHostTarget | null = useMemo(
+    () => getAutomationHostTargetFromKey(automationHostTargetKey),
+    [automationHostTargetKey]
+  )
+
+  return {
+    getDraftSetupDecisionDefault,
+    getAutomationHooksCacheKey,
+    loadAutomationYamlHooksForRepo,
+    getDraftSetupDecisionDefaultSignature,
+    markSetupDecisionTouched,
+    selectedRuns,
+    selectedRunsReady,
+    selectedRunsNotice,
+    selectedAutomationRunPage,
+    worktrees,
+    automationHostTarget
+  }
+}
+
+export type AutomationsPageSetupState = ReturnType<typeof useAutomationsPageSetupState>

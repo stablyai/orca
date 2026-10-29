@@ -3,9 +3,12 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { RpcFailure, RpcResponse, RpcSuccess } from '../transport/types'
 import {
   buildMobilePrCreateParams,
-  createMobilePr,
+  getMobilePrCreateBlockMessage,
   mobileRepoSelectorFromWorktreeId,
-  resolveMobilePrPrefill
+  createMobilePr,
+  resolveMobilePrPrefill,
+  shouldPushBeforeMobilePrCreate,
+  type MobilePrPrefill
 } from './mobile-pr-create'
 
 function ok(result: unknown): RpcSuccess {
@@ -39,10 +42,11 @@ describe('buildMobilePrCreateParams', () => {
     expect(
       buildMobilePrCreateParams('repo-1::/tmp/wt', {
         provider: 'github',
-        base: 'main',
+        base: ' main ',
         title: '  Add feature  ',
         body: '   ',
-        draft: false
+        draft: false,
+        useTemplate: true
       })
     ).toEqual({
       repo: 'id:repo-1',
@@ -50,7 +54,8 @@ describe('buildMobilePrCreateParams', () => {
       provider: 'github',
       base: 'main',
       title: 'Add feature',
-      draft: false
+      draft: false,
+      useTemplate: true
     })
   })
 
@@ -67,114 +72,49 @@ describe('buildMobilePrCreateParams', () => {
   })
 })
 
-describe('createMobilePr', () => {
-  it('returns the url on success', async () => {
-    const client = clientWith([
-      ok({ ok: true, number: 42, url: 'https://github.com/o/r/pull/42' }),
-      ok({ worktree: { linkedPR: 42 } })
-    ])
-    await expect(
-      createMobilePr(client, 'repo-1::/tmp/wt', {
+describe('getMobilePrCreateBlockMessage', () => {
+  it('fails closed on an unavailable review lookup even when eligibility looks ready', () => {
+    expect(
+      getMobilePrCreateBlockMessage({
         provider: 'github',
         base: 'main',
-        title: 'T',
+        title: 'Add feature',
         body: '',
-        draft: false
+        canCreate: true,
+        blockedReason: null,
+        reviewLookupOutcome: 'unavailable'
       })
-    ).resolves.toEqual({ ok: true, number: 42, url: 'https://github.com/o/r/pull/42' })
-    expect(client.calls[0].method).toBe('hostedReview.create')
-    expect(client.calls[1]).toEqual({
-      method: 'worktree.set',
-      params: { worktree: 'id:repo-1::/tmp/wt', baseRef: 'main', linkedPR: 42 }
-    })
+    ).toBe(
+      'Orca could not confirm whether this branch already has a pull request. Try again in a moment.'
+    )
   })
 
-  it('links created merge requests through the provider-specific worktree field', async () => {
-    const client = clientWith([
-      ok({ ok: true, number: 7, url: 'https://gitlab.com/o/r/-/merge_requests/7' }),
-      ok({ worktree: { linkedGitLabMR: 7 } })
-    ])
-    await expect(
-      createMobilePr(client, 'repo-1::/tmp/wt', {
-        provider: 'gitlab',
-        base: 'main',
-        title: 'T',
-        body: '',
-        draft: false
-      })
-    ).resolves.toEqual({
-      ok: true,
-      number: 7,
-      url: 'https://gitlab.com/o/r/-/merge_requests/7'
-    })
-    expect(client.calls[1]).toEqual({
-      method: 'worktree.set',
-      params: { worktree: 'id:repo-1::/tmp/wt', baseRef: 'main', linkedGitLabMR: 7 }
-    })
-  })
-
-  it('keeps the created url when the metadata link refresh fails', async () => {
-    const client = clientWith([
-      ok({ ok: true, number: 42, url: 'https://github.com/o/r/pull/42' }),
-      fail('metadata failed')
-    ])
-
-    await expect(
-      createMobilePr(client, 'repo-1::/tmp/wt', {
+  it('fails closed when an older host sends no review-lookup outcome', () => {
+    expect(
+      getMobilePrCreateBlockMessage({
         provider: 'github',
         base: 'main',
-        title: 'T',
+        title: 'Add feature',
         body: '',
-        draft: false
+        canCreate: true,
+        blockedReason: null
       })
-    ).resolves.toEqual({
-      ok: true,
-      number: 42,
-      url: 'https://github.com/o/r/pull/42',
-      linkError: 'metadata failed'
-    })
+    ).toBe(
+      'Orca could not confirm whether this branch already has a pull request. Try again in a moment.'
+    )
   })
 
-  it('maps a host failure result to { ok:false }', async () => {
-    const client = clientWith([ok({ ok: false, code: 'needs_push', error: 'Push first' })])
-    await expect(
-      createMobilePr(client, 'repo-1::/tmp/wt', {
+  it('stays safely blocked for a reason added by a newer desktop contract', () => {
+    expect(
+      getMobilePrCreateBlockMessage({
         provider: 'github',
         base: 'main',
-        title: 'T',
+        title: 'Add feature',
         body: '',
-        draft: false
+        canCreate: false,
+        blockedReason: 'future_desktop_reason' as unknown as MobilePrPrefill['blockedReason']
       })
-    ).resolves.toEqual({ ok: false, error: 'Push first' })
-  })
-
-  it('maps an RPC transport failure to { ok:false }', async () => {
-    const client = clientWith([fail('disconnected')])
-    const result = await createMobilePr(client, 'repo-1::/tmp/wt', {
-      provider: 'github',
-      base: 'main',
-      title: 'T',
-      body: '',
-      draft: false
-    })
-    expect(result).toEqual({ ok: false, error: 'disconnected' })
-  })
-
-  it('normalizes a thrown sendRequest into { ok:false }', async () => {
-    const client = {
-      sendRequest: vi.fn(async () => {
-        throw new Error('socket hung up')
-      })
-    } as unknown as Pick<RpcClient, 'sendRequest'>
-    await expect(
-      createMobilePr(client, 'repo-1::/tmp/wt', {
-        provider: 'github',
-        base: 'main',
-        title: 'T',
-        body: '',
-        draft: false
-      })
-    ).resolves.toEqual({ ok: false, error: 'socket hung up' })
+    ).toBe('This branch is not ready for a pull request yet.')
   })
 })
 
@@ -188,6 +128,37 @@ describe('resolveMobilePrPrefill', () => {
     behind: 0
   }
 
+  it('sends back a provider token this build does not list, unchanged', async () => {
+    // Round-trip new provider tokens; enum fallback would make the host refuse its own provider.
+    const client = clientWith([
+      ok({
+        provider: 'codeberg',
+        canCreate: true,
+        review: null,
+        blockedReason: null,
+        nextAction: null,
+        defaultBaseRef: 'main',
+        title: 'Add feature',
+        body: '',
+        reviewLookupOutcome: 'not_found'
+      }),
+      ok({ ok: true, number: 12, url: 'https://codeberg.test/pr/12' }),
+      ok({ worktree: { id: 'wt' } })
+    ])
+    const prefill = await resolveMobilePrPrefill(client, 'repo-1::/tmp/wt', baseArgs)
+    expect(prefill.provider).toBe('codeberg')
+
+    await createMobilePr(client, 'repo-1::/tmp/wt', {
+      provider: prefill.provider,
+      base: prefill.base,
+      title: prefill.title,
+      body: prefill.body,
+      draft: false
+    })
+    const created = client.calls.find((call) => call.method === 'hostedReview.create')
+    expect(created?.params).toMatchObject({ provider: 'codeberg' })
+  })
+
   it('derives provider/base/title/body from eligibility (non-GitHub honored)', async () => {
     const client = clientWith([
       ok({
@@ -198,34 +169,128 @@ describe('resolveMobilePrPrefill', () => {
         nextAction: null,
         defaultBaseRef: 'develop',
         title: 'Add feature',
-        body: 'Body'
+        body: 'Body',
+        reviewLookupOutcome: 'not_found'
       })
     ])
     await expect(resolveMobilePrPrefill(client, 'repo-1::/tmp/wt', baseArgs)).resolves.toEqual({
       provider: 'gitlab',
       base: 'develop',
       title: 'Add feature',
-      body: 'Body'
+      body: 'Body',
+      canCreate: true,
+      blockedReason: null,
+      nextAction: null,
+      reviewLookupOutcome: 'not_found'
     })
   })
 
-  it('falls back to github/main when eligibility is unavailable', async () => {
+  it('marks needs_push eligibility for submit-time push parity', async () => {
+    const client = clientWith([
+      ok({
+        provider: 'github',
+        canCreate: false,
+        review: null,
+        blockedReason: 'needs_push',
+        nextAction: 'push',
+        defaultBaseRef: 'main',
+        title: 'Add feature',
+        body: '',
+        reviewLookupOutcome: 'not_found'
+      })
+    ])
+    const prefill = await resolveMobilePrPrefill(client, 'repo-1::/tmp/wt', baseArgs)
+    expect(shouldPushBeforeMobilePrCreate(prefill)).toBe(true)
+    expect(getMobilePrCreateBlockMessage(prefill)).toBeNull()
+  })
+
+  it('returns a blocked fallback when eligibility is unavailable', async () => {
     const client = clientWith([fail('nope')])
-    await expect(resolveMobilePrPrefill(client, 'repo-1::/tmp/wt', baseArgs)).resolves.toEqual({
+    const prefill = await resolveMobilePrPrefill(client, 'repo-1::/tmp/wt', baseArgs)
+    expect(prefill).toEqual({
       provider: 'github',
       base: 'main',
       title: 'feature/x',
-      body: ''
+      body: '',
+      // Missing canCreate means unresolved eligibility, not a determination that the branch is unready.
+      blockedReason: null,
+      nextAction: null,
+      reviewLookupOutcome: 'unavailable'
     })
+    expect(getMobilePrCreateBlockMessage(prefill)).not.toBeNull()
   })
 
-  it('falls back without calling the RPC when there is no branch', async () => {
+  // Use unavailable copy when eligibility cannot resolve; blocked copy requires an explicit canCreate: false.
+  const UNCONFIRMED =
+    'Orca could not confirm whether this branch already has a pull request. Try again in a moment.'
+
+  it.each([
+    { name: 'a malformed reply', responses: [ok({ provider: 7 })] },
+    { name: 'a refusal', responses: [fail('nope')] }
+  ])('asks the user to retry after $name', async ({ responses }) => {
+    const prefill = await resolveMobilePrPrefill(clientWith(responses), 'repo-1::/tmp/wt', baseArgs)
+    expect(prefill.canCreate).toBeUndefined()
+    expect(getMobilePrCreateBlockMessage(prefill)).toBe(UNCONFIRMED)
+  })
+
+  it('asks the user to retry after a transport rejection', async () => {
+    const rejecting = {
+      sendRequest: vi.fn(async () => {
+        throw new Error('offline')
+      })
+    }
+    const prefill = await resolveMobilePrPrefill(rejecting, 'repo-1::/tmp/wt', baseArgs)
+    expect(prefill.canCreate).toBeUndefined()
+    expect(getMobilePrCreateBlockMessage(prefill)).toBe(UNCONFIRMED)
+  })
+
+  it('still blocks when the host determined the branch is not ready', async () => {
+    const client = clientWith([
+      ok({
+        provider: 'github',
+        canCreate: false,
+        review: null,
+        blockedReason: 'dirty',
+        nextAction: 'commit',
+        defaultBaseRef: 'main',
+        reviewLookupOutcome: 'not_found'
+      })
+    ])
+    const prefill = await resolveMobilePrPrefill(client, 'repo-1::/tmp/wt', baseArgs)
+    expect(prefill.canCreate).toBe(false)
+    expect(getMobilePrCreateBlockMessage(prefill)).toBe(
+      'Commit changes before creating a pull request.'
+    )
+  })
+
+  it('threads reviewLookupOutcome from eligibility into the prefill and blocks needs_push', async () => {
+    const client = clientWith([
+      ok({
+        provider: 'github',
+        canCreate: false,
+        review: null,
+        blockedReason: 'needs_push',
+        nextAction: 'push',
+        defaultBaseRef: 'main',
+        title: 'Add feature',
+        body: '',
+        reviewLookupOutcome: 'unavailable'
+      })
+    ])
+    const prefill = await resolveMobilePrPrefill(client, 'repo-1::/tmp/wt', baseArgs)
+    expect(prefill.reviewLookupOutcome).toBe('unavailable')
+    expect(getMobilePrCreateBlockMessage(prefill)).not.toBeNull()
+  })
+
+  it('blocks without calling the RPC when there is no branch', async () => {
     const client = clientWith([])
     const result = await resolveMobilePrPrefill(client, 'repo-1::/tmp/wt', {
       ...baseArgs,
       branch: undefined
     })
     expect(result.provider).toBe('github')
+    expect(result.canCreate).toBe(false)
+    expect(result.blockedReason).toBe('detached_head')
     expect(client.calls).toEqual([])
   })
 })

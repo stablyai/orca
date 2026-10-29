@@ -1,0 +1,162 @@
+import type { AiVaultScope } from '../../../../shared/ai-vault-types'
+import { translate } from '@/i18n/i18n'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import {
+  canJumpToAiVaultSessionWorktree,
+  type AiVaultSessionWorktreeInfo,
+  type AiVaultSessionWorktreeStatus
+} from '../../../../shared/ai-vault-session-worktree'
+
+// Folder workspaces own sessions the way worktrees do, but a plain folder is never called a worktree.
+export function isAiVaultFolderWorkspaceId(workspaceId: string | null | undefined): boolean {
+  return Boolean(workspaceId && parseWorkspaceKey(workspaceId)?.type === 'folder')
+}
+
+export function aiVaultSessionWorkspaceHeading(workspaceId: string | null | undefined): string {
+  return isAiVaultFolderWorkspaceId(workspaceId)
+    ? translate('auto.components.right.sidebar.AiVaultSessionDetails.folder', 'Folder')
+    : translate('auto.components.right.sidebar.AiVaultSessionDetails.worktree', 'Worktree')
+}
+
+export function aiVaultResumeInSessionWorkspaceLabel(
+  workspaceId: string | null | undefined
+): string {
+  return isAiVaultFolderWorkspaceId(workspaceId)
+    ? translate(
+        'auto.components.right.sidebar.AiVaultSessionDetails.resumeInFolder',
+        'Resume in Folder'
+      )
+    : translate(
+        'auto.components.right.sidebar.AiVaultSessionDetails.resumeInWorktree',
+        'Resume in Worktree'
+      )
+}
+
+// Hide self-jumps; the Current worktree badge already identifies the destination.
+export function isAiVaultSessionInCurrentWorktree(
+  worktreeInfo: AiVaultSessionWorktreeInfo | null
+): boolean {
+  return worktreeInfo?.status === 'current'
+}
+
+export function aiVaultWorktreeJumpTooltip(
+  worktreeInfo: AiVaultSessionWorktreeInfo | null
+): string {
+  const folder = isAiVaultFolderWorkspaceId(worktreeInfo?.worktreeId)
+  if (canJumpToAiVaultSessionWorktree(worktreeInfo)) {
+    if (folder) {
+      return translate(
+        'auto.components.right.sidebar.AiVaultSessionWorktree.jumpToFolder',
+        'Jump to Folder'
+      )
+    }
+    return translate(
+      'auto.components.right.sidebar.AiVaultSessionWorktree.jumpToWorktree',
+      'Jump to Worktree'
+    )
+  }
+  if (!worktreeInfo) {
+    return translate(
+      'auto.components.right.sidebar.AiVaultSessionWorktree.noRecordedWorktree',
+      'No worktree was recorded for this session.'
+    )
+  }
+  if (worktreeInfo.status === 'archived') {
+    if (folder) {
+      return translate(
+        'auto.components.right.sidebar.AiVaultSessionWorktree.archivedFolderJumpUnavailable',
+        'This session is in an archived folder.'
+      )
+    }
+    return translate(
+      'auto.components.right.sidebar.AiVaultSessionWorktree.archivedJumpUnavailable',
+      'This session is in an archived worktree.'
+    )
+  }
+  if (worktreeInfo.status === 'unavailable') {
+    return translate(
+      'auto.components.right.sidebar.AiVaultSessionWorktree.noActiveWorktreeMatch',
+      'No active worktree matches this session.'
+    )
+  }
+  return translate(
+    'auto.components.right.sidebar.AiVaultSessionWorktree.noActiveWorktreeTarget',
+    'No active worktree is available.'
+  )
+}
+
+export function shouldShowAiVaultSessionWorktreeLine(
+  worktreeInfo: AiVaultSessionWorktreeInfo | null,
+  options?: { vaultScope?: AiVaultScope }
+): worktreeInfo is AiVaultSessionWorktreeInfo {
+  if (!worktreeInfo) {
+    return false
+  }
+  // Workspace scope already identifies the current worktree; omit its redundant row.
+  if (options?.vaultScope === 'workspace' && worktreeInfo.status === 'current') {
+    return false
+  }
+  return true
+}
+
+export function shouldShowAiVaultWorktreeStatusBadge(
+  status: AiVaultSessionWorktreeStatus,
+  options?: { vaultScope?: AiVaultScope }
+): boolean {
+  // Active repeats the branch label without adding information.
+  if (status === 'active') {
+    return false
+  }
+  // Workspace scope makes Current worktree redundant.
+  if (status === 'current' && options?.vaultScope === 'workspace') {
+    return false
+  }
+  return true
+}
+
+export function aiVaultWorktreeStatusLabel(
+  status: AiVaultSessionWorktreeStatus,
+  workspaceId?: string | null
+): string {
+  if (isAiVaultFolderWorkspaceId(workspaceId)) {
+    return aiVaultFolderStatusLabel(status)
+  }
+  if (status === 'current') {
+    return translate(
+      'auto.components.right.sidebar.AiVaultSessionWorktree.currentWorktree',
+      'Current worktree'
+    )
+  }
+  if (status === 'active') {
+    return translate(
+      'auto.components.right.sidebar.AiVaultSessionWorktree.activeWorktree',
+      'Active worktree'
+    )
+  }
+  if (status === 'archived') {
+    return translate(
+      'auto.components.right.sidebar.AiVaultSessionWorktree.archivedWorktree',
+      'Archived worktree'
+    )
+  }
+  return translate(
+    'auto.components.right.sidebar.AiVaultSessionWorktree.unavailableWorktree',
+    'Unavailable worktree'
+  )
+}
+
+function aiVaultFolderStatusLabel(status: AiVaultSessionWorktreeStatus): string {
+  if (status === 'current') {
+    return translate(
+      'auto.components.right.sidebar.AiVaultSessionWorktree.currentFolder',
+      'Current folder'
+    )
+  }
+  if (status === 'archived') {
+    return translate(
+      'auto.components.right.sidebar.AiVaultSessionWorktree.archivedFolder',
+      'Archived folder'
+    )
+  }
+  return translate('auto.components.right.sidebar.AiVaultSessionWorktree.activeFolder', 'Folder')
+}

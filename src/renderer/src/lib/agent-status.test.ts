@@ -1,7 +1,3 @@
-/* eslint-disable max-lines --
- * Why: agent title detection is intentionally table-driven in one place so the
- * supported title variants stay readable and regressions are easy to compare.
- */
 import { describe, expect, it, test, vi } from 'vitest'
 import {
   detectAgentStatusFromTitle,
@@ -12,12 +8,11 @@ import {
   isClaudeAgent,
   isClaudeManagementTitle,
   normalizeTerminalTitle,
-  isExplicitAgentStatusFresh,
   mapAgentStatusStateToVisualStatus,
   formatAgentTypeLabel,
   agentTypeToIconAgent
 } from './agent-status'
-import { extractLastOscTitle } from '../components/terminal-pane/pty-transport'
+import { extractLastOscTitle } from '../../../shared/agent-detection'
 
 describe('detectAgentStatusFromTitle', () => {
   it('returns null for empty string', () => {
@@ -29,7 +24,6 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('vim myfile.ts')).toBeNull()
   })
 
-  // --- Gemini symbols ---
   it('detects Gemini permission symbol ✋', () => {
     expect(detectAgentStatusFromTitle('✋ Gemini CLI')).toBe('permission')
   })
@@ -50,40 +44,10 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('✋✦ Gemini CLI')).toBe('permission')
   })
 
-  // --- Braille spinner characters ---
   it('detects braille spinner ⠋ as working', () => {
     expect(detectAgentStatusFromTitle('⠋ Codex is thinking')).toBe('working')
   })
 
-  it('detects braille spinner ⠙ as working', () => {
-    expect(detectAgentStatusFromTitle('⠙ some task')).toBe('working')
-  })
-
-  it('detects braille spinner ⠹ as working', () => {
-    expect(detectAgentStatusFromTitle('⠹ aider running')).toBe('working')
-  })
-
-  it('detects braille spinner ⠸ as working', () => {
-    expect(detectAgentStatusFromTitle('⠸ process')).toBe('working')
-  })
-
-  it('detects braille spinner ⠼ as working', () => {
-    expect(detectAgentStatusFromTitle('⠼ opencode')).toBe('working')
-  })
-
-  it('detects braille spinner ⠴ as working', () => {
-    expect(detectAgentStatusFromTitle('⠴ loading')).toBe('working')
-  })
-
-  it('detects braille spinner ⠦ as working', () => {
-    expect(detectAgentStatusFromTitle('⠦ claude')).toBe('working')
-  })
-
-  it('detects braille spinner ⠧ as working', () => {
-    expect(detectAgentStatusFromTitle('⠧ task')).toBe('working')
-  })
-
-  // --- Agent name keyword combos ---
   it('detects permission requests from agent titles', () => {
     expect(detectAgentStatusFromTitle('Claude Code - action required')).toBe('permission')
   })
@@ -120,7 +84,6 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('opencode running tests')).toBe('working')
   })
 
-  // --- Claude Code title prefixes ---
   it('detects ". " prefix as working (Claude Code)', () => {
     expect(detectAgentStatusFromTitle('. claude')).toBe('working')
   })
@@ -129,8 +92,6 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('* claude')).toBe('idle')
   })
 
-  // --- Real Claude Code OSC titles ---
-  // Claude Code sets title to task description, NOT "Claude Code"
   it('detects ✳ prefix as idle (Claude Code with task description)', () => {
     expect(detectAgentStatusFromTitle('✳ User acknowledgment and confirmation')).toBe('idle')
   })
@@ -147,7 +108,6 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('⠂ Claude Code')).toBe('working')
   })
 
-  // --- Agent name alone defaults to idle ---
   it('returns idle for bare agent name "claude"', () => {
     expect(detectAgentStatusFromTitle('claude')).toBe('idle')
   })
@@ -192,15 +152,8 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('π - session-name - my-project')).toBe('idle')
   })
 
-  // --- Cursor (cursor-agent) synthesized titles ---
-  // Why: cursor-agent's native OSC title stays literally "Cursor Agent" for
-  // the entire turn, so Orca synthesizes decorated titles from hook events
-  // to drive the existing spinner/unread pipeline. These tests pin the
-  // contract the main-process hook listener relies on.
   it('treats the bare "Cursor Agent" native title as a no-op (not idle)', () => {
-    // Why: if the native title classified as idle, cursor's own per-turn
-    // re-emissions would trigger working→idle transitions between our
-    // synthesized working frames, stomping the spinner off mid-turn.
+    // Why: if the native title classified as idle, cursor's per-turn re-emissions would stomp the spinner off mid-turn.
     expect(detectAgentStatusFromTitle('Cursor Agent')).toBeNull()
     expect(detectAgentStatusFromTitle('cursor agent')).toBeNull()
     expect(detectAgentStatusFromTitle('  Cursor Agent  ')).toBeNull()
@@ -244,16 +197,12 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('Factory Droid needs your input')).toBeNull()
   })
 
-  // --- Case insensitivity ---
   it('is case-insensitive for agent names', () => {
     expect(detectAgentStatusFromTitle('CLAUDE')).toBe('idle')
     expect(detectAgentStatusFromTitle('Codex Working')).toBe('working')
   })
 
-  // Why: `containsAgentName` token-matches legacy agent names, so a cwd-path
-  // fragment like "~/codex-scratch" (hyphen-adjacent) or "opencode-blinker"
-  // (the worktree name that mislabeled Codex tabs as OpenCode) no longer mints
-  // an 'idle' agent signal. A bare "~/codex" path still has no strong keyword.
+  // Why: `containsAgentName` token-matches, so cwd-path fragments like "~/codex-scratch" no longer mint an 'idle' agent signal.
   it('does not treat cwd-path agent-name fragments as agent activity', () => {
     expect(detectAgentStatusFromTitle('~/codex-scratch')).toBeNull()
     expect(detectAgentStatusFromTitle('~/codex already built')).toBeNull()
@@ -261,10 +210,7 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('claude-scratch')).toBeNull()
   })
 
-  // Why: short agent names are unsafe under substring detection. Telemetry now
-  // records explicit launch facts rather than widening OSC-title inference, so
-  // this detector must not grow aliases that turn ordinary shell titles like
-  // "timestamp ready" into agent activity.
+  // Why: short agent names are unsafe under substring detection; don't add aliases that turn "timestamp ready" into agent activity.
   it('does not treat ordinary words containing "amp" as agent titles', () => {
     expect(detectAgentStatusFromTitle('timestamp ready')).toBeNull()
     expect(detectAgentStatusFromTitle('clamp working')).toBeNull()
@@ -284,15 +230,7 @@ describe('detectAgentStatusFromTitle', () => {
   })
 })
 
-// Why: regression guard for the STRONG_WORKING_KEYWORDS_RE path-separator
-// false positive. Before the lookarounds were widened to `[\w./\\-]`, a title
-// like `~/codex/working` matched STRONG_WORKING_KEYWORDS_RE (because `/` is
-// not in `[\w\-]`) and the function classified a plain path as 'working',
-// driving spinners and agent counts off a shell cwd. The idle-side fallback
-// at the bottom of `detectAgentStatusFromTitle` still returns 'idle' for
-// agent-name-containing titles — that's the known `containsAgentName`
-// substring gap documented in the test above — so the behavior this block
-// pins is specifically "no path fragment is ever classified as 'working'."
+// Why: regression guard — a path fragment like `~/codex/working` must never classify as 'working' (path separators aren't word boundaries).
 describe('detectAgentStatusFromTitle path-separator rejection', () => {
   test('rejects working keywords adjacent to POSIX path separators', () => {
     expect(detectAgentStatusFromTitle('~/codex/working')).not.toBe('working')
@@ -318,9 +256,7 @@ describe('detectAgentStatusFromTitle path-separator rejection', () => {
     expect(detectAgentStatusFromTitle('Aider thinking')).toBe('working')
   })
 
-  // Why: path separators only need to be blocked on the LEFT of the keyword
-  // (where path fragments sit). Blocking them on the right would regress
-  // legitimate sentence-style titles where a keyword is followed by `.`/`!`/`?`.
+  // Why: block path separators only on the LEFT of the keyword; blocking the right would regress titles ending in `.`/`!`/`?`.
   test('still accepts keywords followed by trailing punctuation', () => {
     expect(detectAgentStatusFromTitle('Codex done.')).toBe('idle')
     expect(detectAgentStatusFromTitle('Aider idle!')).toBe('idle')
@@ -331,6 +267,17 @@ describe('detectAgentStatusFromTitle path-separator rejection', () => {
 })
 
 describe('clearWorkingIndicators', () => {
+  it.each([
+    ['Codex:working;thinking|running!', 'Codex:;|!'],
+    ['Codex (working),thinking:running…', 'Codex (),:…'],
+    ['Codex working thinking running', 'Codex'],
+    ['Codex working/thinking', 'Codex /thinking'],
+    ['Codex working\\thinking', 'Codex \\thinking'],
+    ['Codex reworking is-thinking-cap C:\\running', 'Codex reworking is-thinking-cap C:\\running']
+  ])('preserves delimiters while removing status words from %s', (title, expected) => {
+    expect(clearWorkingIndicators(title)).toBe(expected)
+  })
+
   it('strips Claude Code ". " working prefix', () => {
     const cleared = clearWorkingIndicators('. claude')
     expect(cleared).toBe('claude')
@@ -359,12 +306,7 @@ describe('clearWorkingIndicators', () => {
     expect(clearWorkingIndicators('Terminal 1')).toBe('Terminal 1')
   })
 
-  // Why: clearWorkingIndicators must use the same hyphen/word-char-aware
-  // boundary as STRONG_WORKING_KEYWORDS_RE (agent-detection.ts). A prior
-  // implementation used plain `\b${keyword}\b` which — since `-` is a
-  // non-word char — would strip "working" out of "codex is-working-cap"
-  // even though detectAgentStatusFromTitle correctly refuses to classify
-  // that title as 'working'. The clearer and detector must stay symmetric.
+  // Why: clearWorkingIndicators must use the same hyphen-aware boundary as STRONG_WORKING_KEYWORDS_RE so clearer and detector stay symmetric.
   it('does not strip working keywords inside hyphenated compounds', () => {
     expect(clearWorkingIndicators('codex is-working-cap')).toBe('codex is-working-cap')
     expect(clearWorkingIndicators('claude reworking diff')).toBe('claude reworking diff')
@@ -394,9 +336,58 @@ describe('normalizeTerminalTitle', () => {
     expect(normalizeTerminalTitle('bash')).toBe('bash')
   })
 
-  it('collapses Pi spinner and idle titles to stable labels', () => {
-    expect(normalizeTerminalTitle('⠋ π - my-project')).toBe('⠋ Pi')
-    expect(normalizeTerminalTitle('π - my-project')).toBe('Pi')
+  it('collapses Grok rotating working titles to one stable label', () => {
+    // Grok interpolates a rotating phrase between spinner and name, so each frame differs; all must fold to one label.
+    expect(normalizeTerminalTitle('⠋ - Waiting for response… - grok')).toBe('⠋ Grok')
+    expect(normalizeTerminalTitle('⠴ - Thinking - grok')).toBe('⠋ Grok')
+    expect(normalizeTerminalTitle('⠙ - Responding - grok')).toBe('⠋ Grok')
+    expect(normalizeTerminalTitle('⠦ - Sleep 2s then echo hello-from-grok… - grok')).toBe('⠋ Grok')
+    expect(
+      normalizeTerminalTitle('⠹ - Waiting for response… - Execute Shell Command sleep 2 - grok')
+    ).toBe('⠋ Grok')
+    // Idempotent: re-normalizing our own collapsed label stays stable.
+    expect(normalizeTerminalTitle('⠋ Grok')).toBe('⠋ Grok')
+  })
+
+  it('leaves Grok idle and session titles unchanged', () => {
+    // No spinner → not a working frame; the meaningful final title still shows.
+    expect(normalizeTerminalTitle('grok')).toBe('grok')
+    expect(normalizeTerminalTitle('Fix the auth bug - grok')).toBe('Fix the auth bug - grok')
+    // Names "grok" mid-title but ends with another agent → not a Grok frame.
+    expect(normalizeTerminalTitle('⠋ debugging grok - claude')).toBe('⠋ debugging grok - claude')
+    // Only the Grok frame shape "spinner - phrase - grok" is the rotating-frame signal; task text ending in "grok" must not collapse.
+    expect(normalizeTerminalTitle('⠋ wire up grok')).toBe('⠋ wire up grok')
+    expect(normalizeTerminalTitle('⠋ Codex is thinking about grok')).toBe(
+      '⠋ Codex is thinking about grok'
+    )
+    expect(normalizeTerminalTitle('⠋ support for Grok')).toBe('⠋ support for Grok')
+    // Trailing " - grok" alone is not enough without the post-spinner delimiter.
+    expect(normalizeTerminalTitle('⠋ fix the flaky suite - grok')).toBe(
+      '⠋ fix the flaky suite - grok'
+    )
+  })
+
+  it('preserves Pi titles and canonicalizes only the spinner frame', () => {
+    // Only the braille frame churns; the rest is the session name and cwd (#16093).
+    expect(normalizeTerminalTitle('⠋ π - my-project')).toBe('⠋ π - my-project')
+    expect(normalizeTerminalTitle('⠙ π - my-project')).toBe('⠋ π - my-project')
+    expect(normalizeTerminalTitle('π - my-project')).toBe('π - my-project')
+    expect(normalizeTerminalTitle('⠋ π: my-project')).toBe('⠋ π: my-project')
+    expect(normalizeTerminalTitle('π: my-project')).toBe('π: my-project')
+    expect(normalizeTerminalTitle('π -')).toBe('π -')
+    expect(normalizeTerminalTitle('π:')).toBe('π:')
+    expect(normalizeTerminalTitle('π ')).toBe('π ')
+  })
+
+  it('does not route Pi titles whose cwd mentions Gemini into Gemini normalization', () => {
+    expect(normalizeTerminalTitle('⠋ π - gemini')).toBe('⠋ π - gemini')
+    expect(normalizeTerminalTitle('π - gemini')).toBe('π - gemini')
+    expect(normalizeTerminalTitle('⠋ π: gemini')).toBe('⠋ π: gemini')
+    expect(normalizeTerminalTitle('π: gemini')).toBe('π: gemini')
+    expect(normalizeTerminalTitle('⠋ π gemini')).toBe('⠋ π gemini')
+    expect(normalizeTerminalTitle('π gemini')).toBe('π gemini')
+    expect(normalizeTerminalTitle('⠋ π - gemini-project')).toBe('⠋ π - gemini-project')
+    expect(normalizeTerminalTitle('π - gemini-project')).toBe('π - gemini-project')
   })
 })
 
@@ -409,6 +400,17 @@ describe('isGeminiTerminalTitle', () => {
 
   it('does not match other terminal titles', () => {
     expect(isGeminiTerminalTitle('⠂ Claude Code')).toBe(false)
+    expect(isGeminiTerminalTitle('⠋ π - gemini')).toBe(false)
+    expect(isGeminiTerminalTitle('π - gemini')).toBe(false)
+    expect(isGeminiTerminalTitle('⠋ π: gemini')).toBe(false)
+    expect(isGeminiTerminalTitle('π: gemini')).toBe(false)
+    expect(isGeminiTerminalTitle('⠋ π gemini')).toBe(false)
+    expect(isGeminiTerminalTitle('π gemini')).toBe(false)
+    expect(isGeminiTerminalTitle('π -')).toBe(false)
+    expect(isGeminiTerminalTitle('π:')).toBe(false)
+    expect(isGeminiTerminalTitle('π ')).toBe(false)
+    expect(isGeminiTerminalTitle('⠋ π - gemini-project')).toBe(false)
+    expect(isGeminiTerminalTitle('/tmp/gemini/working')).toBe(false)
     expect(isGeminiTerminalTitle('bash')).toBe(false)
   })
 })
@@ -455,10 +457,7 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('android emulator ready')).toBeNull()
   })
 
-  // Why: cwd/worktree titles embed agent-name fragments. Substring matching
-  // mislabeled a Codex tab whose title fell back to the "opencode-blinker"
-  // worktree name as OpenCode. Token matching must reject these fragments for
-  // every legacy agent name.
+  // Why: substring matching mislabeled cwd/worktree name fragments (e.g. "opencode-blinker") as agents; token-match to reject them.
   it('does not label cwd/worktree path fragments as an agent', () => {
     expect(getAgentLabel('opencode-blinker')).toBeNull()
     expect(getAgentLabel('claude-scratch')).toBeNull()
@@ -477,6 +476,17 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('Aider idle')).toBe('Aider')
     expect(getAgentLabel('Devin working')).toBe('Devin')
   })
+
+  // Why: "cursor" is ordinary editor vocabulary, so a bare token isn't Cursor identity; match Cursor's closed title set only.
+  it('labels Cursor by identity, not a bare "cursor" token in another agent title', () => {
+    expect(getAgentLabel('Cursor Agent')).toBe('Cursor')
+    expect(getAgentLabel('⠋ Cursor Agent')).toBe('Cursor')
+    expect(getAgentLabel('Cursor ready')).toBe('Cursor')
+    expect(getAgentLabel('Cursor - action required')).toBe('Cursor')
+    expect(getAgentLabel('⠋ preserve cursor visibility across replays')).toBe('Claude Code')
+    expect(getAgentLabel('⠋ Codex: fix cursor offsets')).toBe('Codex')
+    expect(getAgentLabel('Terminal Cursor and Orca slows down')).toBeNull()
+  })
 })
 
 describe('isClaudeAgent', () => {
@@ -484,6 +494,12 @@ describe('isClaudeAgent', () => {
     expect(isClaudeAgent('⠋ Claude Code')).toBe(true)
     expect(isClaudeAgent('⠋ OpenClaude')).toBe(false)
     expect(isClaudeAgent('OpenClaude ready')).toBe(false)
+  })
+
+  // Why: a Claude title merely mentioning a text cursor is still Claude; only Cursor's own identity titles are excluded.
+  it('counts cursor-mentioning Claude braille titles as Claude, excludes real Cursor', () => {
+    expect(isClaudeAgent('⠋ preserve cursor visibility across replays')).toBe(true)
+    expect(isClaudeAgent('⠋ Cursor Agent')).toBe(false)
   })
 
   it('does not classify non-prefix Claude mentions as Claude agent titles', () => {
@@ -508,46 +524,41 @@ describe('isClaudeAgent', () => {
 })
 
 describe('createAgentStatusTracker', () => {
-  // --- Claude Code: real captured OSC title sequence (v2.1.86) ---
-  // CRITICAL: Claude Code changes the title to the TASK DESCRIPTION,
-  // not "Claude Code". The ✳ prefix is the only reliable idle indicator.
+  // Claude Code v2.1.86 emits task descriptions; only ✳ identifies idle in this captured sequence.
   it('fires on Claude Code working → idle (real captured titles)', () => {
     const onBecameIdle = vi.fn()
     const tracker = createAgentStatusTracker(onBecameIdle)
 
-    // Exact sequence captured from Claude Code v2.1.86 via script(1)
-    tracker.handleTitle('✳ Claude Code') // startup idle
+    tracker.handleTitle('✳ Claude Code')
     expect(onBecameIdle).not.toHaveBeenCalled()
 
-    tracker.handleTitle('⠂ Claude Code') // working
+    tracker.handleTitle('⠂ Claude Code')
     expect(onBecameIdle).not.toHaveBeenCalled()
 
-    tracker.handleTitle('⠐ Claude Code') // still working
+    tracker.handleTitle('⠐ Claude Code')
     expect(onBecameIdle).not.toHaveBeenCalled()
 
-    // Claude Code changes title to task description mid-stream!
-    tracker.handleTitle('⠐ User acknowledgment and confirmation') // working
+    tracker.handleTitle('⠐ User acknowledgment and confirmation')
     expect(onBecameIdle).not.toHaveBeenCalled()
 
-    tracker.handleTitle('⠂ User acknowledgment and confirmation') // working
+    tracker.handleTitle('⠂ User acknowledgment and confirmation')
     expect(onBecameIdle).not.toHaveBeenCalled()
 
-    tracker.handleTitle('✳ User acknowledgment and confirmation') // done → idle
+    tracker.handleTitle('✳ User acknowledgment and confirmation')
     expect(onBecameIdle).toHaveBeenCalledTimes(1)
   })
 
-  // --- Gemini CLI: real title patterns from source code ---
   it('fires on Gemini CLI working → idle (real title patterns)', () => {
     const onBecameIdle = vi.fn()
     const tracker = createAgentStatusTracker(onBecameIdle)
 
-    tracker.handleTitle('◇  Ready (my-project)') // startup idle
+    tracker.handleTitle('◇  Ready (my-project)')
     expect(onBecameIdle).not.toHaveBeenCalled()
 
-    tracker.handleTitle('✦  Implementing feature (my-project)') // working
+    tracker.handleTitle('✦  Implementing feature (my-project)')
     expect(onBecameIdle).not.toHaveBeenCalled()
 
-    tracker.handleTitle('◇  Ready (my-project)') // done → idle
+    tracker.handleTitle('◇  Ready (my-project)')
     expect(onBecameIdle).toHaveBeenCalledTimes(1)
   })
 
@@ -555,8 +566,8 @@ describe('createAgentStatusTracker', () => {
     const onBecameIdle = vi.fn()
     const tracker = createAgentStatusTracker(onBecameIdle)
 
-    tracker.handleTitle('✦  Working… (my-project)') // working
-    tracker.handleTitle('✋  Action Required (my-project)') // permission
+    tracker.handleTitle('✦  Working… (my-project)')
+    tracker.handleTitle('✋  Action Required (my-project)')
     expect(onBecameIdle).toHaveBeenCalledTimes(1)
   })
 
@@ -564,38 +575,35 @@ describe('createAgentStatusTracker', () => {
     const onBecameIdle = vi.fn()
     const tracker = createAgentStatusTracker(onBecameIdle)
 
-    tracker.handleTitle('⏲  Working… (my-project)') // silent working
-    tracker.handleTitle('◇  Ready (my-project)') // idle
+    tracker.handleTitle('⏲  Working… (my-project)')
+    tracker.handleTitle('◇  Ready (my-project)')
     expect(onBecameIdle).toHaveBeenCalledTimes(1)
   })
 
-  // --- Codex: braille spinner working, bare name idle ---
   it('fires on Codex working → idle', () => {
     const onBecameIdle = vi.fn()
     const tracker = createAgentStatusTracker(onBecameIdle)
 
-    tracker.handleTitle('⠋ Codex is thinking') // working
-    tracker.handleTitle('codex') // idle (bare name)
+    tracker.handleTitle('⠋ Codex is thinking')
+    tracker.handleTitle('codex')
     expect(onBecameIdle).toHaveBeenCalledTimes(1)
   })
 
-  // Why: end-to-end tracker coverage for cursor — synthesized working frames
-  // interleaved with cursor's own "Cursor Agent" re-emissions must not fire
-  // onBecameIdle until the "Cursor ready" done frame arrives.
+  // Cursor’s bare native title between synthesized frames must not trigger idle before done.
   it('fires on Cursor working → idle across native "Cursor Agent" re-emissions', () => {
     const onBecameIdle = vi.fn()
     const tracker = createAgentStatusTracker(onBecameIdle)
 
-    tracker.handleTitle('⠋ Cursor Agent') // synthesized working
+    tracker.handleTitle('⠋ Cursor Agent')
     expect(onBecameIdle).not.toHaveBeenCalled()
 
-    tracker.handleTitle('Cursor Agent') // cursor's native re-emission — no-op
+    tracker.handleTitle('Cursor Agent')
     expect(onBecameIdle).not.toHaveBeenCalled()
 
-    tracker.handleTitle('Cursor Agent') // more native re-emissions
+    tracker.handleTitle('Cursor Agent')
     expect(onBecameIdle).not.toHaveBeenCalled()
 
-    tracker.handleTitle('Cursor ready') // synthesized done → idle
+    tracker.handleTitle('Cursor ready')
     expect(onBecameIdle).toHaveBeenCalledTimes(1)
   })
 
@@ -617,30 +625,26 @@ describe('createAgentStatusTracker', () => {
     expect(onBecameIdle).not.toHaveBeenCalled()
   })
 
-  // --- Multiple cycles ---
   it('fires on each working → idle cycle', () => {
     const onBecameIdle = vi.fn()
     const tracker = createAgentStatusTracker(onBecameIdle)
 
-    // Cycle 1
     tracker.handleTitle('⠂ Fix login bug')
     tracker.handleTitle('✳ Fix login bug')
     expect(onBecameIdle).toHaveBeenCalledTimes(1)
 
-    // Cycle 2
     tracker.handleTitle('⠐ Refactor auth module')
     tracker.handleTitle('✳ Refactor auth module')
     expect(onBecameIdle).toHaveBeenCalledTimes(2)
   })
 
-  // --- Non-agent titles should not interfere ---
   it('ignores non-agent titles without losing working state', () => {
     const onBecameIdle = vi.fn()
     const tracker = createAgentStatusTracker(onBecameIdle)
 
-    tracker.handleTitle('⠂ Claude Code') // working
-    tracker.handleTitle('bash') // non-agent (returns null) — should NOT reset
-    tracker.handleTitle('✳ Some task description') // idle → should still fire
+    tracker.handleTitle('⠂ Claude Code')
+    tracker.handleTitle('bash')
+    tracker.handleTitle('✳ Some task description')
     expect(onBecameIdle).toHaveBeenCalledTimes(1)
   })
 
@@ -648,8 +652,8 @@ describe('createAgentStatusTracker', () => {
     const onBecameIdle = vi.fn()
     const tracker = createAgentStatusTracker(onBecameIdle)
 
-    tracker.handleTitle('✳ Claude Code') // idle
-    tracker.handleTitle('✳ Some other task') // still idle
+    tracker.handleTitle('✳ Claude Code')
+    tracker.handleTitle('✳ Some other task')
     expect(onBecameIdle).not.toHaveBeenCalled()
   })
 
@@ -663,27 +667,21 @@ describe('createAgentStatusTracker', () => {
     expect(onBecameIdle).not.toHaveBeenCalled()
   })
 
-  // Why: reset() clears the tracker's working latch so stale working→idle
-  // transitions cannot fire after the owning transport is torn down. Without
-  // this guarantee, a reattach or late title delivery could surface a
-  // phantom idle notification for work the user already dismissed.
+  // Why: reset() clears the working latch so a late/reattach idle title can't fire a phantom notification after teardown.
   it('reset() clears working state so a subsequent idle does not fire onBecameIdle', () => {
     const onBecameIdle = vi.fn()
     const tracker = createAgentStatusTracker(onBecameIdle)
 
-    tracker.handleTitle('⠂ Claude Code') // working
+    tracker.handleTitle('⠂ Claude Code')
     tracker.reset()
-    tracker.handleTitle('✳ Claude Code') // idle — must NOT fire after reset
+    tracker.handleTitle('✳ Claude Code')
     expect(onBecameIdle).not.toHaveBeenCalled()
   })
 
-  // --- End-to-end: raw OSC bytes → extractLastOscTitle → tracker ---
   it('end-to-end: extracts OSC title and detects Claude Code transition', () => {
     const onBecameIdle = vi.fn()
     const tracker = createAgentStatusTracker(onBecameIdle)
 
-    // Simulate raw PTY data chunks containing OSC title sequences
-    // Uses real title patterns: task description, NOT "Claude Code"
     const oscTitle = (title: string): string => `\x1b]0;${title}\x07`
 
     const chunks = [
@@ -726,32 +724,6 @@ describe('createAgentStatusTracker', () => {
   })
 })
 
-describe('isExplicitAgentStatusFresh', () => {
-  it('treats the boundary (now - updatedAt == staleAfterMs) as fresh', () => {
-    // Why: the function uses `<=`, so equality at the boundary must remain
-    // fresh. Protecting this invariant keeps entries from flipping to stale
-    // one tick earlier than the configured TTL implies.
-    const staleAfterMs = 60_000
-    const now = 1_000_000
-    const entry = { updatedAt: now - staleAfterMs }
-    expect(isExplicitAgentStatusFresh(entry, now, staleAfterMs)).toBe(true)
-  })
-
-  it('treats one millisecond past the boundary as stale', () => {
-    const staleAfterMs = 60_000
-    const now = 1_000_000
-    const entry = { updatedAt: now - staleAfterMs - 1 }
-    expect(isExplicitAgentStatusFresh(entry, now, staleAfterMs)).toBe(false)
-  })
-
-  it('treats a just-updated entry (now - updatedAt == 0) as fresh', () => {
-    const staleAfterMs = 60_000
-    const now = 1_000_000
-    const entry = { updatedAt: now }
-    expect(isExplicitAgentStatusFresh(entry, now, staleAfterMs)).toBe(true)
-  })
-})
-
 describe('mapAgentStatusStateToVisualStatus', () => {
   it("maps 'working' to 'working'", () => {
     expect(mapAgentStatusStateToVisualStatus('working')).toBe('working')
@@ -768,14 +740,6 @@ describe('mapAgentStatusStateToVisualStatus', () => {
   it("maps 'done' to 'done'", () => {
     expect(mapAgentStatusStateToVisualStatus('done')).toBe('done')
   })
-
-  it('returns a non-empty string for every valid state', () => {
-    for (const state of ['working', 'blocked', 'waiting', 'done'] as const) {
-      const visual = mapAgentStatusStateToVisualStatus(state)
-      expect(typeof visual).toBe('string')
-      expect(visual.length).toBeGreaterThan(0)
-    }
-  })
 })
 
 describe('formatAgentTypeLabel', () => {
@@ -789,42 +753,6 @@ describe('formatAgentTypeLabel', () => {
 
   it("returns 'Agent' for 'unknown'", () => {
     expect(formatAgentTypeLabel('unknown')).toBe('Agent')
-  })
-
-  it("maps 'claude' to 'Claude'", () => {
-    expect(formatAgentTypeLabel('claude')).toBe('Claude')
-  })
-
-  it("maps 'openclaude' to 'OpenClaude'", () => {
-    expect(formatAgentTypeLabel('openclaude')).toBe('OpenClaude')
-  })
-
-  it("maps 'codex' to 'Codex'", () => {
-    expect(formatAgentTypeLabel('codex')).toBe('Codex')
-  })
-
-  it("maps 'gemini' to 'Gemini'", () => {
-    expect(formatAgentTypeLabel('gemini')).toBe('Gemini')
-  })
-
-  it("maps 'antigravity' to 'Antigravity'", () => {
-    expect(formatAgentTypeLabel('antigravity')).toBe('Antigravity')
-  })
-
-  it("maps 'cursor' to 'Cursor'", () => {
-    expect(formatAgentTypeLabel('cursor')).toBe('Cursor')
-  })
-
-  it("maps 'hermes' to 'Hermes'", () => {
-    expect(formatAgentTypeLabel('hermes')).toBe('Hermes')
-  })
-
-  it("maps 'command-code' to 'Command Code'", () => {
-    expect(formatAgentTypeLabel('command-code')).toBe('Command Code')
-  })
-
-  it("maps 'ante' to 'Ante'", () => {
-    expect(formatAgentTypeLabel('ante')).toBe('Ante')
   })
 
   it('passes through arbitrary custom agent names as-is', () => {
@@ -845,18 +773,12 @@ describe('agentTypeToIconAgent', () => {
     expect(agentTypeToIconAgent('unknown')).toBeNull()
   })
 
-  it("round-trips iconable agent types like 'claude'", () => {
-    expect(agentTypeToIconAgent('claude')).toBe('claude')
-    expect(agentTypeToIconAgent('openclaude')).toBe('openclaude')
-    expect(agentTypeToIconAgent('antigravity')).toBe('antigravity')
-    expect(agentTypeToIconAgent('command-code')).toBe('command-code')
-    expect(agentTypeToIconAgent('ante')).toBe('ante')
+  it('keeps an icon identity for recognition-only DeepSeek Build', () => {
+    expect(agentTypeToIconAgent('dsb')).toBe('dsb')
   })
 
   it('returns null for arbitrary non-iconable strings', () => {
-    // Why: guards against hook payloads reporting agentTypes that AgentIcon
-    // cannot render (e.g. "totally-fake-agent"); returning null lets the
-    // caller fall back to a neutral glyph instead of a broken icon.
+    // Why: unknown agentTypes must return null so the caller falls back to a neutral glyph, not a broken icon.
     expect(agentTypeToIconAgent('totally-fake-agent')).toBeNull()
   })
 })

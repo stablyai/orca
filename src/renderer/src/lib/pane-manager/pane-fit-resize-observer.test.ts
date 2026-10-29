@@ -2,8 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPaneInternal, ScrollState } from './pane-manager-types'
 import {
   attachPaneFitResizeObserver,
-  detachPaneFitResizeObserver
+  detachPaneFitResizeObserver,
+  requestStablePaneFit
 } from './pane-fit-resize-observer'
+import {
+  beginTerminalScrollIntentBufferRebuild,
+  endTerminalScrollIntentBufferRebuild
+} from './terminal-scroll-intent-rebuild'
+import { safeFitAndThen } from './pane-tree-ops'
 
 type ResizeObserverCallbackLike = ConstructorParameters<typeof ResizeObserver>[0]
 
@@ -66,6 +72,7 @@ function createPane(
     unicode11Addon: {} as never,
     webLinksAddon: {} as never,
     webglAddon: null,
+    imageAddon: null,
     ligaturesAddon: null,
     compositionHandler: null,
     debugLabel: null,
@@ -121,24 +128,69 @@ describe('attachPaneFitResizeObserver', () => {
     expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
   })
 
-  it('waits through a transient grid wobble before fitting', () => {
+  it('waits through a transient grid wobble before notifying settled callbacks', () => {
     const proposed = [
       { cols: 80, rows: 24 },
       { cols: 81, rows: 24 },
       { cols: 81, rows: 24 }
     ]
+    const onSettled = vi.fn()
     const pane = createPane(() => proposed.shift() ?? { cols: 81, rows: 24 })
 
-    attachPaneFitResizeObserver(pane)
-    mockResizeObservers[0]?.trigger()
-
+    requestStablePaneFit(pane, onSettled)
     flushAnimationFrames()
 
     expect(pane.fitAddon.fit).not.toHaveBeenCalled()
+    expect(onSettled).not.toHaveBeenCalled()
 
     flushAnimationFrames()
 
     expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
+    expect(onSettled).toHaveBeenCalledTimes(1)
+  })
+
+  it('notifies settled callbacks when the terminal already matches the stable grid', () => {
+    const onSettled = vi.fn()
+    const pane = createPane(() => ({ cols: 79, rows: 24 }))
+
+    requestStablePaneFit(pane, onSettled)
+    flushAnimationFrames()
+
+    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
+    expect(onSettled).toHaveBeenCalledTimes(1)
+  })
+
+  it('releases a hidden reattach continuation when the stable grid already matches', async () => {
+    const pane = createPane()
+    vi.mocked(pane.fitAddon.proposeDimensions).mockReturnValue(undefined)
+    const continuation = vi.fn()
+    const pending = safeFitAndThen(pane, 'reattach-pty-resize', continuation)
+
+    expect(continuation).not.toHaveBeenCalled()
+    vi.mocked(pane.fitAddon.proposeDimensions).mockReturnValue({ cols: 79, rows: 24 })
+    requestStablePaneFit(pane)
+    flushAnimationFrames()
+
+    await expect(pending.completion).resolves.toBe(true)
+    expect(continuation).toHaveBeenCalledTimes(1)
+    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
+  })
+
+  it('does not notify settled callbacks until a replay-deferred fit completes', async () => {
+    const onSettled = vi.fn()
+    const pane = createPane()
+    beginTerminalScrollIntentBufferRebuild(pane.terminal)
+
+    requestStablePaneFit(pane, onSettled)
+    flushAnimationFrames()
+
+    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
+    expect(onSettled).not.toHaveBeenCalled()
+    endTerminalScrollIntentBufferRebuild(pane.terminal)
+    await Promise.resolve()
+
+    expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
+    expect(onSettled).toHaveBeenCalledTimes(1)
   })
 
   it('skips observer fits while the terminal has no visible geometry', () => {

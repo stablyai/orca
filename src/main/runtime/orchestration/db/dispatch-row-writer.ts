@@ -1,0 +1,163 @@
+import type Database from '../../../sqlite/sync-database'
+import { DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL } from './pane-key-match'
+import type { OrcaSessionId } from '../../../../shared/orca-session-address'
+
+/** Centralize live-worker inserts to enforce depth; callers retain transactions, receipts and companion writes. */
+
+export const DISPATCH_CONTEXT_CLAIM_SQL = `INSERT INTO dispatch_contexts (
+  id, run_id, task_id, contract_version, launch_token_hash,
+  assignee_handle, assignee_pane_key, assignee_orca_session_id, process_incarnation,
+  creator_dispatch_id, creator_handle, creator_pane_key, creator_orca_session_id,
+  status, failure_count, depth, dispatched_at
+)
+SELECT ?, run_id, id, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'dispatched', ?, ?, datetime('now')
+FROM tasks
+WHERE id = ? AND status = 'ready'
+  AND NOT EXISTS (
+    SELECT 1 FROM dispatch_contexts active
+    WHERE active.assignee_handle = ?
+      AND active.status IN ('pending', 'dispatched')
+  )
+  AND (
+    ? IS NULL OR NOT EXISTS (
+      SELECT 1 FROM dispatch_contexts active
+      WHERE active.assignee_pane_key = ?
+        AND active.status IN ('pending', 'dispatched')
+    )
+  )
+  AND (
+    ? IS NULL OR NOT EXISTS (
+      SELECT 1 FROM dispatch_contexts active
+      WHERE active.assignee_pane_key IS NOT NULL
+        AND active.status IN ('pending', 'dispatched')
+        AND instr(active.assignee_pane_key, ':') > 1
+        AND ${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL} = ?
+    )
+  )`
+
+const STARTING_DISPATCH_CONTEXT_SQL = `INSERT INTO dispatch_contexts (
+   id, run_id, task_id, contract_version, launch_token_hash, retry_of_dispatch_id,
+   creator_dispatch_id, creator_handle, creator_pane_key, creator_orca_session_id, depth, status,
+   failure_count, dispatched_at
+ ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, datetime('now'))`
+
+const REMOTE_DISPATCH_ATTACHMENT_SQL = `INSERT INTO remote_dispatch_attachments (
+   dispatch_id, home_run_id, task_id, home_peer_fingerprint, protocol_version, runtime_epoch, depth
+ ) VALUES (?, ?, ?, ?, ?, ?, ?)`
+
+/** Missing depth would turn a worker into an apparent root. */
+function assertStampedDepth(depth: number): void {
+  if (!Number.isInteger(depth) || depth < 1) {
+    throw new Error(
+      `Refusing to write a live-worker row with depth ${depth}; expected an integer >= 1.`
+    )
+  }
+}
+
+/** Adopts an existing agent terminal, claiming a ready task atomically. */
+export function claimDispatchContextRow(
+  db: Database.Database,
+  params: {
+    id: string
+    contractVersion: number
+    launchTokenHash: string | null
+    assigneeHandle: string
+    assigneePaneKey: string | null
+    assigneeOrcaSessionId?: OrcaSessionId | null
+    processIncarnation: string | null
+    creatorDispatchId?: string | null
+    creatorHandle?: string | null
+    creatorPaneKey?: string | null
+    creatorOrcaSessionId?: OrcaSessionId | null
+    priorFailures: number
+    depth: number
+    taskId: string
+    paneSuffix: string | null
+  }
+): { changes: number | bigint } {
+  assertStampedDepth(params.depth)
+  return db
+    .prepare(DISPATCH_CONTEXT_CLAIM_SQL)
+    .run(
+      params.id,
+      params.contractVersion,
+      params.launchTokenHash,
+      params.assigneeHandle,
+      params.assigneePaneKey,
+      params.assigneeOrcaSessionId ?? null,
+      params.processIncarnation,
+      params.creatorDispatchId ?? null,
+      params.creatorHandle ?? null,
+      params.creatorPaneKey ?? null,
+      params.creatorOrcaSessionId ?? null,
+      params.priorFailures,
+      params.depth,
+      params.taskId,
+      params.assigneeHandle,
+      params.assigneePaneKey,
+      params.assigneePaneKey,
+      params.paneSuffix,
+      params.paneSuffix
+    )
+}
+
+/** Supervised `worker-start`, including every retry and the federated home side. */
+export function insertStartingDispatchContextRow(
+  db: Database.Database,
+  params: {
+    id: string
+    runId: string
+    taskId: string
+    contractVersion: number
+    launchTokenHash: string | null
+    depth: number
+    retryOfDispatchId?: string | null
+    creatorDispatchId?: string | null
+    creatorHandle?: string | null
+    creatorPaneKey?: string | null
+    creatorOrcaSessionId?: OrcaSessionId | null
+    priorFailures: number
+  }
+): void {
+  assertStampedDepth(params.depth)
+  db.prepare(STARTING_DISPATCH_CONTEXT_SQL).run(
+    params.id,
+    params.runId,
+    params.taskId,
+    params.contractVersion,
+    params.launchTokenHash,
+    params.retryOfDispatchId ?? null,
+    params.creatorDispatchId ?? null,
+    params.creatorHandle ?? null,
+    params.creatorPaneKey ?? null,
+    params.creatorOrcaSessionId ?? null,
+    params.depth,
+    params.priorFailures
+  )
+}
+
+/** The worker host's record of a live worker driven by a remote Run home. */
+export function insertRemoteDispatchAttachmentRow(
+  db: Database.Database,
+  params: {
+    dispatchId: string
+    runId: string
+    taskId: string
+    homePeerFingerprint: string
+    protocolVersion: number
+    runtimeEpoch: string
+    /** Home-computed depth; old clients default to 1. */
+    depth: number
+  }
+): void {
+  assertStampedDepth(params.depth)
+  db.prepare(REMOTE_DISPATCH_ATTACHMENT_SQL).run(
+    params.dispatchId,
+    params.runId,
+    params.taskId,
+    params.homePeerFingerprint,
+    params.protocolVersion,
+    params.runtimeEpoch,
+    params.depth
+  )
+}

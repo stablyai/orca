@@ -1,5 +1,10 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { colors, radii, spacing } from '../theme/mobile-theme'
+import { Pressable, View } from 'react-native'
+import { Monitor, Smartphone, type LucideIcon } from 'lucide-react-native'
+import type { Translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { colors, radii } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { MobileBrowserViewMode } from './browser-screencast-request'
 
 type Props = {
@@ -8,21 +13,34 @@ type Props = {
   onChange: (mode: MobileBrowserViewMode) => void
 }
 
-const VIEW_MODES: { id: MobileBrowserViewMode; label: string }[] = [
-  { id: 'web', label: 'Web' },
-  { id: 'mobile', label: 'Mobile' }
-]
+function viewModes(t: Translate): { id: MobileBrowserViewMode; label: string; icon: LucideIcon }[] {
+  return [
+    {
+      id: 'web',
+      label: t('browser.viewModeSwitch.webView', 'Show web website view'),
+      icon: Monitor
+    },
+    {
+      id: 'mobile',
+      label: t('browser.viewModeSwitch.mobileView', 'Show mobile website view'),
+      icon: Smartphone
+    }
+  ]
+}
 
 export function MobileBrowserViewModeSwitch({
   disabled,
   value,
   onChange
 }: Props): React.JSX.Element {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   return (
     <View style={styles.switch}>
-      {VIEW_MODES.map((mode) => (
+      {viewModes(t).map((mode) => (
         <ViewModeButton
           key={mode.id}
+          Icon={mode.icon}
           label={mode.label}
           selected={value === mode.id}
           disabled={disabled}
@@ -34,16 +52,19 @@ export function MobileBrowserViewModeSwitch({
 }
 
 function ViewModeButton({
+  Icon,
   disabled,
   label,
   onPress,
   selected
 }: {
+  Icon: LucideIcon
   disabled?: boolean
   label: string
   onPress: () => void
   selected: boolean
 }) {
+  useMobileColorScheme()
   return (
     <Pressable
       style={({ pressed }) => [
@@ -56,14 +77,14 @@ function ViewModeButton({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ selected, disabled }}
-      accessibilityLabel={`Show ${label.toLowerCase()} website view`}
+      accessibilityLabel={label}
     >
-      <Text style={[styles.buttonText, selected && styles.buttonTextSelected]}>{label}</Text>
+      <Icon size={14} color={selected ? colors.bgBase : colors.textSecondary} />
     </Pressable>
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   switch: {
     minHeight: 28,
     flexDirection: 'row',
@@ -74,11 +95,10 @@ const styles = StyleSheet.create({
   },
   button: {
     minHeight: 24,
-    minWidth: 52,
+    width: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.sm
+    borderRadius: radii.button
   },
   buttonPressed: {
     backgroundColor: colors.borderSubtle
@@ -86,15 +106,7 @@ const styles = StyleSheet.create({
   buttonSelected: {
     backgroundColor: colors.textPrimary
   },
-  buttonText: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '600'
-  },
-  buttonTextSelected: {
-    color: colors.bgBase
-  },
   disabled: {
     opacity: 0.35
   }
-})
+}))

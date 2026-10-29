@@ -1,4 +1,6 @@
-import { Buffer } from 'buffer'
+import type { ExecutionHostId } from '../../shared/execution-host'
+import { hostedReviewSshConnectionId } from '../source-control/hosted-review-execution-host'
+import { Buffer } from 'node:buffer'
 import type { CreateHostedReviewInput, CreateHostedReviewResult } from '../../shared/hosted-review'
 import {
   normalizeHostedReviewBaseRef,
@@ -9,6 +11,12 @@ import {
   requestHostedReviewJson
 } from '../source-control/hosted-review-api-request'
 import { readHostedPullRequestTemplate } from '../source-control/pull-request-template'
+import {
+  azureDevOpsApiVersionForOrigin,
+  isAzureDevOpsPreviewVersionRejection,
+  markAzureDevOpsPreviewApiVersionOrigin,
+  resolveAzureDevOpsGitApiBaseUrl
+} from './azure-devops-api-request'
 import { getAzureDevOpsPullRequestForBranch } from './client'
 import { mapAzureDevOpsPullRequest, type RawAzureDevOpsPullRequest } from './pull-request-mappers'
 import { getAzureDevOpsRepoRef, type AzureDevOpsRepoRef } from './repository-ref'
@@ -16,7 +24,6 @@ import { getAzureDevOpsRepoRef, type AzureDevOpsRepoRef } from './repository-ref
 const CREATE_REQUEST_TIMEOUT_MS = 60_000
 
 type AzureDevOpsCreateAuthConfig = {
-  apiBaseUrl: string | null
   pat: string | null
   accessToken: string | null
   username: string | null
@@ -27,16 +34,8 @@ function envValue(name: string): string | null {
   return value.length > 0 ? value : null
 }
 
-function normalizeApiBaseUrl(value: string): string {
-  return value
-    .trim()
-    .replace(/\/+$/, '')
-    .replace(/\/_apis$/i, '')
-}
-
 function getAuthConfig(): AzureDevOpsCreateAuthConfig {
   return {
-    apiBaseUrl: envValue('ORCA_AZURE_DEVOPS_API_BASE_URL'),
     pat: envValue('ORCA_AZURE_DEVOPS_TOKEN') ?? envValue('ORCA_AZURE_DEVOPS_PAT'),
     accessToken: envValue('ORCA_AZURE_DEVOPS_ACCESS_TOKEN'),
     username: envValue('ORCA_AZURE_DEVOPS_USERNAME')
@@ -60,11 +59,40 @@ function authHeaders(config: AzureDevOpsCreateAuthConfig): Record<string, string
 }
 
 function apiUrl(repo: AzureDevOpsRepoRef, path: string): URL {
-  const config = getAuthConfig()
-  const baseUrl = config.apiBaseUrl ? normalizeApiBaseUrl(config.apiBaseUrl) : repo.apiBaseUrl
+  const baseUrl = resolveAzureDevOpsGitApiBaseUrl(repo)
   const url = new URL(`${baseUrl.replace(/\/+$/, '')}${path}`)
-  url.searchParams.set('api-version', '7.1')
+  url.searchParams.set('api-version', azureDevOpsApiVersionForOrigin(url.origin))
   return url
+}
+
+// A preview-version rejection precedes PR creation, so retrying once is safe.
+async function requestCreatePullRequest(
+  repo: AzureDevOpsRepoRef,
+  path: string,
+  init: Omit<RequestInit, 'signal'>
+): Promise<RawAzureDevOpsPullRequest> {
+  const url = apiUrl(repo, path)
+  try {
+    return await requestHostedReviewJson<RawAzureDevOpsPullRequest>(
+      url,
+      init,
+      CREATE_REQUEST_TIMEOUT_MS
+    )
+  } catch (error) {
+    if (
+      url.searchParams.get('api-version')?.endsWith('-preview') ||
+      !(error instanceof HostedReviewApiRequestError) ||
+      !isAzureDevOpsPreviewVersionRejection(error.status, error.message)
+    ) {
+      throw error
+    }
+    markAzureDevOpsPreviewApiVersionOrigin(url.origin)
+    return requestHostedReviewJson<RawAzureDevOpsPullRequest>(
+      apiUrl(repo, path),
+      init,
+      CREATE_REQUEST_TIMEOUT_MS
+    )
+  }
 }
 
 function encodePathSegment(value: string): string {
@@ -97,21 +125,24 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
       ok: false,
       code: 'auth_required',
       error:
-        'Create PR failed: Azure DevOps is not authenticated. Next step: set ORCA_AZURE_DEVOPS_TOKEN in this environment.'
+        'Create PR failed: Azure DevOps is not authenticated. Next step: set ORCA_AZURE_DEVOPS_TOKEN in this environment.',
+      reason: 'auth_required'
     }
   }
   if (status === 409 || lower.includes('already exists') || lower.includes('active pull request')) {
     return {
       ok: false,
       code: 'already_exists',
-      error: 'A pull request already exists for this branch.'
+      error: 'A pull request already exists for this branch.',
+      reason: 'existing_review'
     }
   }
   if (error instanceof HostedReviewApiRequestError && error.timedOut) {
     return {
       ok: false,
       code: 'unknown_completion',
-      error: 'PR creation may have completed. Refreshing branch review state...'
+      error: 'PR creation may have completed. Refreshing branch review state...',
+      reason: 'creation_unconfirmed'
     }
   }
   if (status === 400 || status === 422 || lower.includes('validation')) {
@@ -119,14 +150,16 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
       ok: false,
       code: 'validation',
       error:
-        'Create PR failed: Azure DevOps rejected the pull request. Check the base branch and branch state, then try again.'
+        'Create PR failed: Azure DevOps rejected the pull request. Check the base branch and branch state, then try again.',
+      reason: 'rejected'
     }
   }
   return {
     ok: false,
     code: 'unknown',
     error:
-      'Create PR failed: Azure DevOps could not create the pull request. Try again in a moment.'
+      'Create PR failed: Azure DevOps could not create the pull request. Try again in a moment.',
+    reason: 'create_failed'
   }
 }
 
@@ -142,22 +175,27 @@ async function findExistingPullRequest(
 export async function createAzureDevOpsPullRequest(
   repoPath: string,
   input: CreateHostedReviewInput,
-  connectionId?: string | null
+  executionHostId: ExecutionHostId
 ): Promise<CreateHostedReviewResult> {
   if (input.provider !== 'azure-devops') {
     return {
       ok: false,
       code: 'unsupported_provider',
-      error: 'Creating reviews for this provider is not supported yet.'
+      error: 'Creating reviews for this provider is not supported yet.',
+      reason: 'provider_not_supported'
     }
   }
+
+  // The Azure DevOps REST calls run on this client; only the git reads under them are routed.
+  const connectionId = hostedReviewSshConnectionId(executionHostId)
 
   const repo = await getAzureDevOpsRepoRef(repoPath, connectionId)
   if (!repo) {
     return {
       ok: false,
       code: 'unsupported_provider',
-      error: 'Creating pull requests requires an Azure DevOps remote.'
+      error: 'Creating pull requests requires an Azure DevOps remote.',
+      reason: 'unsupported_provider'
     }
   }
 
@@ -168,14 +206,16 @@ export async function createAzureDevOpsPullRequest(
     return {
       ok: false,
       code: 'validation',
-      error: 'Create PR failed: base branch, head branch, and title are required.'
+      error: 'Create PR failed: base branch, head branch, and title are required.',
+      reason: 'base_head_title_required'
     }
   }
   if (head.toLowerCase() === base.toLowerCase()) {
     return {
       ok: false,
       code: 'validation',
-      error: 'Create PR failed: choose a different base branch before creating a pull request.'
+      error: 'Create PR failed: choose a different base branch before creating a pull request.',
+      reason: 'same_base_branch'
     }
   }
 
@@ -192,8 +232,9 @@ export async function createAzureDevOpsPullRequest(
   }
 
   try {
-    const raw = await requestHostedReviewJson<RawAzureDevOpsPullRequest>(
-      apiUrl(repo, `/_apis/git/repositories/${encodePathSegment(repo.repository)}/pullRequests`),
+    const raw = await requestCreatePullRequest(
+      repo,
+      `/_apis/git/repositories/${encodePathSegment(repo.repository)}/pullRequests`,
       {
         method: 'POST',
         headers: {
@@ -202,8 +243,7 @@ export async function createAzureDevOpsPullRequest(
           ...authHeaders(getAuthConfig())
         },
         body: JSON.stringify(requestBody)
-      },
-      CREATE_REQUEST_TIMEOUT_MS
+      }
     )
     const created = mapAzureDevOpsPullRequest(raw, 'neutral', repo.webBaseUrl)
     if (created) {
@@ -215,7 +255,8 @@ export async function createAzureDevOpsPullRequest(
       : {
           ok: false,
           code: 'unknown_completion',
-          error: 'PR creation may have completed. Refreshing branch review state...'
+          error: 'PR creation may have completed. Refreshing branch review state...',
+          reason: 'creation_unconfirmed'
         }
   } catch (error) {
     const classified = classifyCreateError(error)
@@ -229,6 +270,7 @@ export async function createAzureDevOpsPullRequest(
           ok: false,
           code: 'already_exists',
           error: 'A pull request already exists for this branch.',
+          reason: 'existing_review',
           existingReview: existing
         }
       }

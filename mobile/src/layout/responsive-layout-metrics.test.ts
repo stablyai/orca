@@ -16,7 +16,22 @@ describe('responsive layout metrics', () => {
     expect(getResponsiveLayoutMetrics(1180, 820)).toMatchObject({
       isLandscape: true,
       isTabletLayout: true,
-      isWideLayout: true
+      isWideLayout: true,
+      isLandscapePhone: false
+    })
+  })
+
+  it('splits an unfolded iPhone Duo in both holds and keeps its cover phone-like', () => {
+    expect(getResponsiveLayoutMetrics(951, 669)).toMatchObject({ isWideLayout: true })
+    expect(getResponsiveLayoutMetrics(669, 951)).toMatchObject({ isWideLayout: true })
+    expect(getResponsiveLayoutMetrics(466, 678)).toMatchObject({
+      isTabletLayout: false,
+      isWideLayout: false,
+      isLandscapePhone: false
+    })
+    expect(getResponsiveLayoutMetrics(678, 466)).toMatchObject({
+      isWideLayout: false,
+      isLandscapePhone: true
     })
   })
 
@@ -33,7 +48,11 @@ describe('responsive layout metrics', () => {
       isLandscape: true,
       isTabletLayout: false,
       isWideLayout: false,
+      isLandscapePhone: true,
       horizontalPadding: spacing.lg
     })
+    expect(getResponsiveLayoutMetrics(430, 932)).toMatchObject({ isLandscapePhone: false })
+    // A short, narrow web window is wider than tall but has no room for tabs in the top bar.
+    expect(getResponsiveLayoutMetrics(390, 350)).toMatchObject({ isLandscapePhone: false })
   })
 })

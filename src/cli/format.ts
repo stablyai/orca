@@ -1,8 +1,9 @@
+import type { CliStatusCaller } from '../shared/orchestration-caller-status'
 import type { CliStatusResult } from '../shared/runtime-types'
-import { computerUseErrorRecoveryData } from '../shared/computer-use-error-recovery'
 import { prepareComputerCliJsonResult } from './computer-format'
-import type { RuntimeRpcFailure, RuntimeRpcSuccess } from './runtime-client'
-import { RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
+import type { RuntimeRpcSuccess } from './runtime-client'
+
+export { formatCliError, reportCliError, type CliErrorContext } from './cli-error'
 
 export {
   formatBrowserProfileList,
@@ -37,17 +38,23 @@ export {
   formatTerminalList,
   formatTerminalRead,
   formatTerminalRename,
+  formatTerminalSetPaneTitle,
   formatTerminalSend,
   formatTerminalShow,
   formatTerminalSplit,
-  formatTerminalWait
+  formatTerminalWait,
+  terminalSendWarnings
 } from './terminal-format'
 export {
   formatAutomationList,
   formatAutomationRemoved,
   formatAutomationRun,
   formatAutomationRuns,
-  formatAutomationShow,
+  formatAutomationRunsPage,
+  formatAutomationShow
+} from './automation-format'
+export type { AutomationListPayload, AutomationShowPayload } from './automation-format'
+export {
   formatEnvironment,
   formatEnvironmentList,
   formatMemorySnapshot,
@@ -58,10 +65,6 @@ export {
   formatWorktreePs,
   formatWorktreeShow
 } from './workspace-format'
-
-type CliErrorContext = {
-  commandPath?: readonly string[]
-}
 
 export function printResult<TResult>(
   response: RuntimeRpcSuccess<TResult>,
@@ -75,91 +78,76 @@ export function printResult<TResult>(
   console.log(formatter(response.result))
 }
 
-export function formatCliError(error: unknown, context: CliErrorContext = {}): string {
-  const message = error instanceof Error ? error.message : String(error)
-  if (error instanceof RuntimeClientError && error.code === 'runtime_unavailable') {
-    return `${message}\nOrca is not running. Run 'orca open' first.`
+export type HostListEntry = {
+  kind: 'local' | 'ssh' | 'environment'
+  name: string
+  id: string
+  selector: string
+  platform?: string
+  machineName?: string
+  connected?: boolean
+  connectionStatus?: string
+}
+
+// Explicit host selectors prevent callers from using a display name on the wrong host scope.
+export function formatHostList(result: { hosts: HostListEntry[] }): string {
+  const kindLabel: Record<HostListEntry['kind'], string> = {
+    local: 'local',
+    ssh: 'ssh target',
+    environment: 'orca server'
   }
-  if (
-    error instanceof RuntimeClientError &&
-    error.code === 'invalid_argument' &&
-    context.commandPath?.[0] === 'computer'
-  ) {
-    return formatMessageWithNextSteps(
-      message,
-      computerUseErrorRecoveryData('invalid_argument')?.nextSteps ?? []
+  return result.hosts
+    .map(
+      (host) =>
+        `${kindLabel[host.kind].padEnd(11)} ${host.name}${host.machineName ? ` (${host.machineName})` : ''}  ${host.platform ?? 'platform unknown'}  ${formatHostConnection(host)}  ->  ${host.selector}`
     )
-  }
-  if (
-    error instanceof RuntimeRpcFailureError &&
-    error.response.error.code === 'runtime_unavailable'
-  ) {
-    return `${message}\nOrca is not running. Run 'orca open' first.`
-  }
-  if (error instanceof RuntimeRpcFailureError) {
-    const data = error.response.error.data
-    const nextSteps =
-      data && typeof data === 'object' && Array.isArray((data as { nextSteps?: unknown }).nextSteps)
-        ? (data as { nextSteps: unknown[] }).nextSteps.filter(
-            (step): step is string => typeof step === 'string'
-          )
-        : []
-    return formatMessageWithNextSteps(message, nextSteps)
-  }
-  return message
+    .join('\n')
 }
 
-export function reportCliError(error: unknown, json: boolean, context: CliErrorContext = {}): void {
-  if (json) {
-    if (error instanceof RuntimeRpcFailureError) {
-      console.log(JSON.stringify(error.response, null, 2))
-    } else {
-      const response: RuntimeRpcFailure = {
-        id: 'local',
-        ok: false,
-        error: {
-          code: error instanceof RuntimeClientError ? error.code : 'runtime_error',
-          message: error instanceof Error ? error.message : String(error),
-          data: localCliErrorData(error, context)
-        },
-        _meta: {
-          runtimeId: null
-        }
-      }
-      console.log(JSON.stringify(response, null, 2))
-    }
-  } else {
-    console.error(formatCliError(error, context))
-  }
+/** What one runtime calls itself; `machineName` is absent when the runtime predates the field. */
+export type HostNameResult = {
+  machineName?: string
+  platform?: string
 }
 
-function formatMessageWithNextSteps(message: string, nextSteps: readonly string[]): string {
-  if (nextSteps.length === 0) {
-    return message
-  }
-  return `${message}\n${nextSteps.map((step) => `Next step: ${step}`).join('\n')}`
+export function formatHostName(result: HostNameResult): string {
+  return `${result.machineName ?? 'unknown'}${result.platform ? ` (${result.platform})` : ''}`
 }
 
-function localCliErrorData(error: unknown, context: CliErrorContext): unknown {
-  if (
-    error instanceof RuntimeClientError &&
-    error.code === 'invalid_argument' &&
-    context.commandPath?.[0] === 'computer'
-  ) {
-    return computerUseErrorRecoveryData('invalid_argument')
+function formatHostConnection(host: HostListEntry): string {
+  if (host.kind !== 'ssh') {
+    return ''
   }
-  return undefined
+  if (host.connected === undefined) {
+    return `connection unknown${host.connectionStatus ? ` (${host.connectionStatus})` : ''}`
+  }
+  return host.connected
+    ? `connected${host.connectionStatus ? ` (${host.connectionStatus})` : ''}`
+    : `not connected${host.connectionStatus ? ` (${host.connectionStatus})` : ''}`
 }
 
 export function formatCliStatus(status: CliStatusResult): string {
   return [
+    ...(status.target && status.target.kind === 'environment'
+      ? [`target: environment ${status.target.environment}`]
+      : []),
     `appRunning: ${status.app.running}`,
     `pid: ${status.app.pid ?? 'none'}`,
+    `desktopWindowStatus: ${status.app.desktopWindowStatus ?? 'unknown'}`,
     `runtimeState: ${status.runtime.state}`,
     `runtimeReachable: ${status.runtime.reachable}`,
+    `runtimeConnectionState: ${status.runtime.connectionState ?? 'unknown'}`,
     `runtimeId: ${status.runtime.runtimeId ?? 'none'}`,
-    `graphState: ${status.graph.state}`
+    `graphState: ${status.graph.state}`,
+    ...(status.caller === undefined ? [] : [`orcaSessionId: ${formatStatusCaller(status.caller)}`])
   ].join('\n')
+}
+
+function formatStatusCaller(caller: CliStatusCaller): string {
+  if ('refusal' in caller) {
+    return `none (refused: ${caller.refusal.code})`
+  }
+  return `${caller.orcaSessionId}${caller.live ? '' : ' (not live)'}`
 }
 
 export function formatStatus(status: CliStatusResult): string {

@@ -1,14 +1,17 @@
-/* eslint-disable max-lines -- Why: this slice keeps optimistic note
-mutation, rollback, persistence ordering, and sent-state transitions together
-so every write follows the same queue and rollback invariants. */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { DiffComment, Worktree } from '../../../../shared/types'
-import { findWorktreeById, getRepoIdFromWorktreeId } from './worktree-helpers'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
-import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
+import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { isMarkdownComment } from '@/lib/diff-comment-compat'
+import {
+  enqueueDiffCommentPersist,
+  mutateDiffComments,
+  normalizeDiffComment
+} from './diff-comment-persistence'
+import {
+  readDiffCommentsForChange,
+  selectWorktreeDiffCommentsOrEmpty
+} from '../worktree-diff-comments-selector'
 
 export type DiffCommentsSlice = {
   getDiffComments: (worktreeId: string | null | undefined) => DiffComment[]
@@ -24,8 +27,17 @@ export type DiffCommentsSlice = {
     sentAt?: number
   ) => Promise<boolean>
   deleteDiffComment: (worktreeId: string, commentId: string) => Promise<void>
-  clearDiffComments: (worktreeId: string) => Promise<boolean>
-  clearDiffCommentsForFile: (worktreeId: string, filePath: string) => Promise<boolean>
+  clearDiffComments: (worktreeId: string, options?: DiffCommentsClearOptions) => Promise<boolean>
+  clearDiffCommentsForFile: (
+    worktreeId: string,
+    filePath: string,
+    options?: DiffCommentsClearOptions
+  ) => Promise<boolean>
+}
+
+export type DiffCommentsClearOptions = {
+  // Why: markdown notes hidden by the Markdown Review Notes setting must survive a clear the user can't see them in.
+  keepMarkdownNotes?: boolean
 }
 
 export type DiffCommentDeliverySnapshot = Pick<
@@ -35,41 +47,6 @@ export type DiffCommentDeliverySnapshot = Pick<
 
 function generateId(): string {
   return createBrowserUuid()
-}
-
-function normalizeDiffComment(comment: DiffComment): DiffComment {
-  const rawSource = (comment as { source?: unknown }).source
-  const source = rawSource === 'markdown' || rawSource === 'diff' ? rawSource : undefined
-  const rawStartLine = (comment as { startLine?: unknown }).startLine
-  const startLine =
-    Number.isInteger(rawStartLine) &&
-    typeof rawStartLine === 'number' &&
-    rawStartLine >= 1 &&
-    rawStartLine <= comment.lineNumber
-      ? rawStartLine
-      : undefined
-  const rawSelectedText = (comment as { selectedText?: unknown }).selectedText
-  const selectedText =
-    typeof rawSelectedText === 'string' && rawSelectedText.trim().length > 0
-      ? rawSelectedText.trim()
-      : undefined
-  const rawSentAt = (comment as { sentAt?: unknown }).sentAt
-  const sentAt =
-    typeof rawSentAt === 'number' && Number.isFinite(rawSentAt) && rawSentAt > 0
-      ? rawSentAt
-      : undefined
-
-  return {
-    ...comment,
-    ...(source !== undefined ? { source } : {}),
-    ...(source === undefined ? { source: undefined } : {}),
-    ...(selectedText !== undefined ? { selectedText } : {}),
-    ...(selectedText === undefined ? { selectedText: undefined } : {}),
-    ...(startLine !== undefined ? { startLine } : {}),
-    ...(startLine === undefined ? { startLine: undefined } : {}),
-    ...(sentAt !== undefined ? { sentAt } : {}),
-    ...(sentAt === undefined ? { sentAt: undefined } : {})
-  }
 }
 
 function deliverySnapshotMatches(
@@ -87,191 +64,21 @@ function deliverySnapshotMatches(
   )
 }
 
-// Why: return a stable reference when no comments exist so selectors don't
-// produce a fresh `[]` on every store update. A new array identity would
-// trigger re-renders in any consumer using referential equality.
-// Frozen + typed `readonly` so an accidental `list.push(...)` on the returned
-// value is both a runtime TypeError and a TypeScript compile error, preventing
-// the sentinel from being corrupted globally.
-const EMPTY_COMMENTS: readonly DiffComment[] = Object.freeze([])
-
-async function persist(
-  settings: AppState['settings'],
-  worktreeId: string,
-  diffComments: DiffComment[]
-): Promise<void> {
-  const target = getActiveRuntimeTarget(settings)
-  if (target.kind === 'local') {
-    await window.api.worktrees.updateMeta({
-      worktreeId,
-      updates: { diffComments }
-    })
-    return
+// Why: best-effort telemetry runs only after the note is on disk, so a throw here must not report a failed save.
+function recordReviewNoteInteraction(get: () => AppState): void {
+  try {
+    get().recordFeatureInteraction?.('review-notes')
+  } catch (err) {
+    console.error('Failed to record review-notes interaction:', err)
   }
-  await callRuntimeRpc(
-    target,
-    'worktree.set',
-    { worktree: toRuntimeWorktreeSelector(worktreeId), diffComments },
-    { timeoutMs: 15_000 }
-  )
-}
-
-function settingsForWorktreeOwner(state: AppState, worktreeId: string): AppState['settings'] {
-  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
-  return state.settings
-    ? { ...state.settings, activeRuntimeEnvironmentId: runtimeEnvironmentId }
-    : ({ activeRuntimeEnvironmentId: runtimeEnvironmentId } as AppState['settings'])
-}
-
-// Why: IPC writes from `persist` are not ordered with respect to each other.
-// If two mutations (e.g. rapid add then delete, or two adds) are in flight
-// concurrently, their `updateMeta` resolutions can arrive out of call order,
-// letting an older snapshot overwrite a newer one on disk. We serialize per
-// worktree so only one write runs at a time. We also defer reading the
-// snapshot until the queued work actually starts — at dequeue time we pull
-// the LATEST `diffComments` from the store — which collapses a burst of N
-// mutations into at most 2 in-flight writes per worktree (1 running + 1
-// queued) and guarantees the last disk write reflects the newest state.
-const persistQueueByWorktree: Map<string, Promise<void>> = new Map()
-
-// Why: chain each new write onto the prior promise for this worktree so
-// writes land in call order. We use `.then(..., ..)` with both handlers so a
-// failing previous write doesn't break the chain — we still proceed with the
-// next write. The queued work reads the latest list from the store via
-// `get()` at dequeue time (not via a captured parameter) so it writes the
-// most recent snapshot rather than a stale one from when it was enqueued.
-// The returned promise resolves/rejects when THIS specific write commits so
-// callers can preserve their optimistic-update + rollback flow.
-function enqueuePersist(worktreeId: string, get: () => AppState): Promise<void> {
-  const prior = persistQueueByWorktree.get(worktreeId) ?? Promise.resolve()
-  const run = async (): Promise<void> => {
-    const repoId = getRepoIdFromWorktreeId(worktreeId)
-    const repoList = get().worktreesByRepo[repoId]
-    const target = repoList?.find((w) => w.id === worktreeId)
-    const latest = (target?.diffComments ?? []).map(normalizeDiffComment)
-    await persist(settingsForWorktreeOwner(get(), worktreeId), worktreeId, latest)
-  }
-  const next = prior.then(run, run)
-  persistQueueByWorktree.set(worktreeId, next)
-  // Why: once this write settles, clear the queue entry only if no later
-  // write has been chained on top. Otherwise the map should keep pointing at
-  // the latest tail so subsequent enqueues chain onto the real in-flight
-  // tail, not a stale resolved promise. Use `then(cleanup, cleanup)` (not
-  // `finally`) so a rejection on `next` is fully consumed by this branch —
-  // otherwise the `.finally()` chain propagates the rejection as an
-  // unhandledRejection even though the caller `await`s `next` in its own
-  // try/catch.
-  const cleanup = (): void => {
-    if (persistQueueByWorktree.get(worktreeId) === next) {
-      persistQueueByWorktree.delete(worktreeId)
-    }
-  }
-  next.then(cleanup, cleanup)
-  return next
-}
-
-// Why: derive the next comment list from the latest store snapshot inside
-// the `set` updater so two concurrent writes (rapid add+delete, or a
-// delete-while-add-in-flight) can't clobber each other via a stale closure.
-function mutateComments(
-  set: Parameters<StateCreator<AppState, [], [], DiffCommentsSlice>>[0],
-  worktreeId: string,
-  mutate: (existing: DiffComment[]) => DiffComment[] | null
-): { previous: DiffComment[] | undefined; next: DiffComment[] } | null {
-  const repoId = getRepoIdFromWorktreeId(worktreeId)
-  let previous: DiffComment[] | undefined
-  let next: DiffComment[] | null = null
-  set((s) => {
-    const repoList = s.worktreesByRepo[repoId]
-    if (!repoList) {
-      return {}
-    }
-    const target = repoList.find((w) => w.id === worktreeId)
-    if (!target) {
-      return {}
-    }
-    previous = target.diffComments
-    const computed = mutate(previous ?? [])
-    if (computed === null) {
-      return {}
-    }
-    next = computed
-    const nextList: Worktree[] = repoList.map((w) =>
-      w.id === worktreeId ? { ...w, diffComments: computed } : w
-    )
-    return { worktreesByRepo: { ...s.worktreesByRepo, [repoId]: nextList } }
-  })
-  if (next === null) {
-    return null
-  }
-  return { previous, next }
-}
-
-// Why: if the IPC write fails, the optimistic renderer state drifts from
-// disk. Roll back so what the user sees always matches what will survive a
-// reload.
-//
-// Identity guard: we only revert when the current diffComments array is
-// strictly identical (===) to the `next` array this mutation produced. If
-// another mutation has already landed (e.g. Add B succeeded while Add A was
-// still in flight), it will have replaced the array with a different
-// identity. In that case we must leave the newer state alone — rolling back
-// to our stale `previous` would erase B along with the failed A.
-function rollback(
-  set: Parameters<StateCreator<AppState, [], [], DiffCommentsSlice>>[0],
-  worktreeId: string,
-  previous: DiffComment[] | undefined,
-  expectedCurrent: DiffComment[]
-): void {
-  const repoId = getRepoIdFromWorktreeId(worktreeId)
-  set((s) => {
-    const repoList = s.worktreesByRepo[repoId]
-    if (!repoList) {
-      return {}
-    }
-    const target = repoList.find((w) => w.id === worktreeId)
-    // Why: if the worktree was removed between the optimistic mutation and
-    // this rollback, there is nothing to restore. Bail out before remapping
-    // `repoList` so we don't allocate a new outer-array identity and trigger
-    // spurious subscriber notifications.
-    if (!target) {
-      return {}
-    }
-    // Why: only roll back if no other mutation landed since this one. If a
-    // later write already replaced the comments array with a different
-    // identity, our stale `previous` would erase that newer state.
-    if (target.diffComments !== expectedCurrent) {
-      return {}
-    }
-    const nextList: Worktree[] = repoList.map((w) =>
-      w.id === worktreeId ? { ...w, diffComments: previous } : w
-    )
-    return { worktreesByRepo: { ...s.worktreesByRepo, [repoId]: nextList } }
-  })
 }
 
 export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffCommentsSlice> = (
   set,
   get
 ) => ({
-  getDiffComments: (worktreeId) => {
-    // Why: accept null/undefined so callers with an optional active worktree
-    // can pass it through without allocating a fresh `[]` fallback each
-    // render, which would defeat the `EMPTY_COMMENTS` sentinel's referential
-    // stability and trigger spurious re-renders in useAppStore selectors.
-    if (!worktreeId) {
-      return EMPTY_COMMENTS as DiffComment[]
-    }
-    const worktree = findWorktreeById(get().worktreesByRepo, worktreeId)
-    if (!worktree?.diffComments) {
-      // Why: cast the frozen sentinel to the mutable `DiffComment[]` return
-      // type. The array is frozen at runtime so accidental mutation throws;
-      // the cast only hides the `readonly` marker from consumers that never
-      // mutate the list in practice.
-      return EMPTY_COMMENTS as DiffComment[]
-    }
-    return worktree.diffComments
-  },
+  // Why the shared selector: rendered surfaces and actions must read the same twin's notes.
+  getDiffComments: (worktreeId) => selectWorktreeDiffCommentsOrEmpty(get(), worktreeId),
 
   addDiffComment: async (input) => {
     const comment: DiffComment = normalizeDiffComment({
@@ -279,47 +86,30 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       id: generateId(),
       createdAt: Date.now()
     })
-    const result = mutateComments(set, input.worktreeId, (existing) => [...existing, comment])
+    const result = mutateDiffComments(set, input.worktreeId, (existing) => [...existing, comment])
     if (!result) {
       return null
     }
     try {
-      // Why: enqueue through the per-worktree queue so concurrent mutations
-      // cannot land on disk out of call order. The queued write reads the
-      // latest store snapshot at dequeue time, so it will reflect any newer
-      // mutation that landed after this one was enqueued.
-      await enqueuePersist(input.worktreeId, get)
-      get().recordFeatureInteraction?.('review-notes')
-      return comment
+      // Why: serialize through the per-worktree queue so concurrent writes can't land on disk out of call order.
+      await enqueueDiffCommentPersist(set, input.worktreeId, get, result)
     } catch (err) {
       console.error('Failed to persist diff comments:', err)
-      // Why: rollback's identity guard will no-op if a later mutation has
-      // already replaced the in-memory list, so losing a successful newer
-      // write is not possible here even though we queued in order.
-      rollback(set, input.worktreeId, result.previous, result.next)
       return null
     }
+    recordReviewNoteInteraction(get)
+    return comment
   },
 
   updateDiffComment: async (worktreeId, commentId, body) => {
-    // Why: trim trailing whitespace but reject an entirely-empty edit so we
-    // don't end up with a saved note that renders as a blank card. Callers
-    // should treat `false` as "edit not committed" and keep the editor open
-    // so the user can either type more or cancel explicitly.
+    // Why: reject an empty edit so we never save a note that renders as a blank card; false means "not committed", keep the editor open.
     const trimmed = body.trim()
     if (!trimmed) {
       return false
     }
 
-    // Why: look up the current state OUTSIDE mutateComments so we can
-    // distinguish "comment missing" (return false — likely an edit-while-
-    // deleted race; the card should keep its draft and not silently close)
-    // from "body unchanged" (return true — benign no-op; the card can close
-    // the editor without surfacing an error).
-    const repoId = getRepoIdFromWorktreeId(worktreeId)
-    const repoList = get().worktreesByRepo[repoId]
-    const target = repoList?.find((w) => w.id === worktreeId)
-    const existing = target?.diffComments ?? []
+    // Missing notes return false to keep draft; unchanged body returns true to close editor without mutation.
+    const existing = readDiffCommentsForChange(get(), worktreeId, [commentId])
     const existingIdx = existing.findIndex((c) => c.id === commentId)
     if (existingIdx === -1) {
       return false
@@ -328,32 +118,33 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       return true
     }
 
-    const result = mutateComments(set, worktreeId, (current) => {
-      const idx = current.findIndex((c) => c.id === commentId)
-      if (idx === -1) {
-        return null
-      }
-      if (current[idx].body === trimmed) {
-        return null
-      }
-      const next = current.slice()
-      // Why: editing a previously-sent note makes the agent's copy stale, so
-      // the note should become eligible for the next Send notes action.
-      next[idx] = { ...current[idx], body: trimmed, sentAt: undefined }
-      return next
-    })
+    const result = mutateDiffComments(
+      set,
+      worktreeId,
+      (current) => {
+        const idx = current.findIndex((c) => c.id === commentId)
+        if (idx === -1) {
+          return null
+        }
+        if (current[idx].body === trimmed) {
+          return null
+        }
+        const next = current.slice()
+        // Why: editing a sent note makes the agent's copy stale, so reset sentAt to re-queue it for the next Send.
+        next[idx] = { ...current[idx], body: trimmed, sentAt: undefined }
+        return next
+      },
+      [commentId]
+    )
     if (!result) {
-      // Why: between the pre-check and the set updater, the comment vanished
-      // or another mutation already wrote the same body. Treat as success so
-      // the caller closes its editor.
+      // Why: comment vanished or the same body was already written between pre-check and set; treat as success so the editor closes.
       return true
     }
     try {
-      await enqueuePersist(worktreeId, get)
+      await enqueueDiffCommentPersist(set, worktreeId, get, result)
       return true
     } catch (err) {
       console.error('Failed to persist diff comments:', err)
-      rollback(set, worktreeId, result.previous, result.next)
       return false
     }
   },
@@ -363,28 +154,30 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       return true
     }
     const snapshotsById = new Map(comments.map((comment) => [comment.id, comment]))
-    const result = mutateComments(set, worktreeId, (existing) => {
-      const next = existing.filter((comment) => {
-        const snapshot = snapshotsById.get(comment.id)
-        // Why: delivery is async. If the user edits a note before the prompt
-        // is accepted by the agent, the old snapshot was sent but the current
-        // note is a fresh pending note and must stay visible.
-        return !snapshot || !deliverySnapshotMatches(comment, snapshot)
-      })
-      return next.length === existing.length ? null : next
-    })
+    const result = mutateDiffComments(
+      set,
+      worktreeId,
+      (existing) => {
+        const next = existing.filter((comment) => {
+          const snapshot = snapshotsById.get(comment.id)
+          // Why: delivery is async; a note edited after its snapshot was sent is a fresh pending note that must stay visible.
+          return !snapshot || !deliverySnapshotMatches(comment, snapshot)
+        })
+        return next.length === existing.length ? null : next
+      },
+      snapshotsById.keys()
+    )
     if (!result) {
       return true
     }
     try {
-      await enqueuePersist(worktreeId, get)
-      get().recordFeatureInteraction?.('review-notes')
-      return true
+      await enqueueDiffCommentPersist(set, worktreeId, get, result)
     } catch (err) {
       console.error('Failed to persist diff comments:', err)
-      rollback(set, worktreeId, result.previous, result.next)
       return false
     }
+    recordReviewNoteInteraction(get)
+    return true
   },
 
   markDiffCommentsSent: async (worktreeId, commentIds, sentAt = Date.now()) => {
@@ -392,81 +185,89 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       return true
     }
     const ids = new Set(commentIds)
-    const result = mutateComments(set, worktreeId, (existing) => {
-      let changed = false
-      const next = existing.map((comment) => {
-        if (!ids.has(comment.id) || comment.sentAt === sentAt) {
-          return comment
-        }
-        changed = true
-        return { ...comment, sentAt }
-      })
-      return changed ? next : null
-    })
-    if (!result) {
-      return true
-    }
-    try {
-      await enqueuePersist(worktreeId, get)
-      get().recordFeatureInteraction?.('review-notes')
-      return true
-    } catch (err) {
-      console.error('Failed to persist diff comments:', err)
-      rollback(set, worktreeId, result.previous, result.next)
-      return false
-    }
-  },
-
-  deleteDiffComment: async (worktreeId, commentId) => {
-    const result = mutateComments(set, worktreeId, (existing) => {
-      const next = existing.filter((c) => c.id !== commentId)
-      return next.length === existing.length ? null : next
-    })
-    if (!result) {
-      return
-    }
-    try {
-      // Why: enqueue through the per-worktree queue so concurrent mutations
-      // cannot land on disk out of call order. See enqueuePersist for the
-      // ordering invariant.
-      await enqueuePersist(worktreeId, get)
-    } catch (err) {
-      console.error('Failed to persist diff comments:', err)
-      rollback(set, worktreeId, result.previous, result.next)
-    }
-  },
-
-  clearDiffComments: async (worktreeId) => {
-    const result = mutateComments(set, worktreeId, (existing) =>
-      existing.length === 0 ? null : []
+    const result = mutateDiffComments(
+      set,
+      worktreeId,
+      (existing) => {
+        let changed = false
+        const next = existing.map((comment) => {
+          if (!ids.has(comment.id) || comment.sentAt === sentAt) {
+            return comment
+          }
+          changed = true
+          return { ...comment, sentAt }
+        })
+        return changed ? next : null
+      },
+      ids
     )
     if (!result) {
       return true
     }
     try {
-      await enqueuePersist(worktreeId, get)
-      return true
+      await enqueueDiffCommentPersist(set, worktreeId, get, result)
     } catch (err) {
       console.error('Failed to persist diff comments:', err)
-      rollback(set, worktreeId, result.previous, result.next)
       return false
+    }
+    recordReviewNoteInteraction(get)
+    return true
+  },
+
+  deleteDiffComment: async (worktreeId, commentId) => {
+    const result = mutateDiffComments(
+      set,
+      worktreeId,
+      (existing) => {
+        const next = existing.filter((c) => c.id !== commentId)
+        return next.length === existing.length ? null : next
+      },
+      [commentId]
+    )
+    if (!result) {
+      return
+    }
+    try {
+      // Why: serialize through the per-worktree queue so concurrent writes can't land out of call order.
+      await enqueueDiffCommentPersist(set, worktreeId, get, result)
+    } catch (err) {
+      console.error('Failed to persist diff comments:', err)
     }
   },
 
-  clearDiffCommentsForFile: async (worktreeId, filePath) => {
-    const result = mutateComments(set, worktreeId, (existing) => {
-      const next = existing.filter((c) => c.filePath !== filePath)
+  clearDiffComments: async (worktreeId, options) => {
+    const result = mutateDiffComments(set, worktreeId, (existing) => {
+      const next = options?.keepMarkdownNotes ? existing.filter(isMarkdownComment) : []
       return next.length === existing.length ? null : next
     })
     if (!result) {
       return true
     }
     try {
-      await enqueuePersist(worktreeId, get)
+      await enqueueDiffCommentPersist(set, worktreeId, get, result)
       return true
     } catch (err) {
       console.error('Failed to persist diff comments:', err)
-      rollback(set, worktreeId, result.previous, result.next)
+      return false
+    }
+  },
+
+  clearDiffCommentsForFile: async (worktreeId, filePath, options) => {
+    const result = mutateDiffComments(set, worktreeId, (existing) => {
+      const next = existing.filter(
+        (c) =>
+          c.filePath !== filePath || (options?.keepMarkdownNotes === true && isMarkdownComment(c))
+      )
+      return next.length === existing.length ? null : next
+    })
+    if (!result) {
+      return true
+    }
+    try {
+      await enqueueDiffCommentPersist(set, worktreeId, get, result)
+      return true
+    } catch (err) {
+      console.error('Failed to persist diff comments:', err)
       return false
     }
   }

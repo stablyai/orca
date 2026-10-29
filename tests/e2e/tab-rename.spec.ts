@@ -1,10 +1,3 @@
-/**
- * E2E tests for inline tab renaming (double-click a tab to rename).
- *
- * User Prompt:
- * - double-click a tab to rename it inline
- */
-
 import { test, expect } from './helpers/orca-app'
 import {
   waitForSessionReady,
@@ -20,9 +13,7 @@ test.describe('Tab Rename (Inline)', () => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
-    // Why: clear any custom titles left by a previous test (the Electron app
-    // persists across tests in the worker) so tab locators key off the default
-    // title, not a stale rename like "My Custom Title".
+    // Clear stale custom titles so default-title locators remain deterministic.
     await orcaPage.evaluate(() => {
       const store = window.__store
       if (!store) {
@@ -48,18 +39,15 @@ test.describe('Tab Rename (Inline)', () => {
     const tabs = await getWorktreeTabs(page, worktreeId)
     const tab = tabs.find((entry) => entry.id === activeId)
     expect(tab).toBeDefined()
-    // Why: mirror what the UI renders (customTitle ?? title) so locators that
-    // key off the tab's visible text match what's actually on screen.
-    return tab!.customTitle ?? tab!.title ?? ''
+    // Why: getWorktreeTabs already folds customTitle into title, matching what the UI renders.
+    return tab!.title ?? ''
   }
 
   function tabLocatorByTitle(
     page: Parameters<typeof getActiveTabId>[0],
     title: string
   ): ReturnType<Parameters<typeof getActiveTabId>[0]['locator']> {
-    // Why: backslash first so the backslashes we introduce when escaping the
-    // double-quote aren't themselves re-escaped; both chars are CSS-selector
-    // metacharacters inside a double-quoted attribute value.
+    // Escape backslashes before quotes so newly inserted CSS escapes are not re-escaped.
     const escaped = title.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
     return page.locator(`[data-testid="sortable-tab"][data-tab-title="${escaped}"]`).first()
   }
@@ -126,7 +114,7 @@ test.describe('Tab Rename (Inline)', () => {
     expect(originalTitle.length).toBeGreaterThan(0)
 
     await tabLocatorByTitle(orcaPage, originalTitle).click({ button: 'right' })
-    await orcaPage.getByRole('menuitem', { name: 'Change Title', exact: true }).click()
+    await orcaPage.getByRole('menuitem', { name: /^Change Title(?:\s|$)/ }).click()
 
     const renameInput = orcaPage.getByRole('textbox', {
       name: `Rename tab ${originalTitle}`,
@@ -135,8 +123,7 @@ test.describe('Tab Rename (Inline)', () => {
     await expect(renameInput).toBeVisible()
     await expect(renameInput).toBeFocused()
 
-    // Why: after the context-menu path proves focus lands in the inline input,
-    // fill avoids per-keystroke timing races in the shared full-suite browser.
+    // After proving context-menu focus, fill avoids unrelated per-keystroke timing races.
     await renameInput.fill('Context Menu Title')
     await renameInput.press('Enter')
 
@@ -163,11 +150,7 @@ test.describe('Tab Rename (Inline)', () => {
     await renameInput.press('Escape')
 
     await expect(renameInput).toBeHidden()
-    // Why: the final assertion must be on user-observable DOM, not the store's
-    // customTitle field. A render-layer bug where the tab silently paints the
-    // in-progress "Should Be Discarded" text would leave customTitle null
-    // (Escape cleared it) yet flash the discarded label to the user — the
-    // original title must still be the one rendered on the tab.
+    // Assert the original rendered label; cleared customTitle alone can hide discarded edit text still on screen.
     await expect(tabLocatorByTitle(orcaPage, originalTitle)).toBeVisible()
     await expect
       .poll(async () => getActiveCustomTitle(orcaPage, worktreeId), { timeout: 3_000 })
@@ -177,15 +160,11 @@ test.describe('Tab Rename (Inline)', () => {
   test('renaming to an empty string resets the tab to its default title', async ({ orcaPage }) => {
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
 
-    // Snapshot the default (non-custom) title first so the DOM assertion later
-    // can verify the tab reverts to *this exact* rendered text — a store-only
-    // `customTitle === null` check would pass even if the rendered label was
-    // stuck on "Seeded Custom".
+    // Record the exact default label before seeding so reset must restore its DOM text.
     const defaultTitle = await getActiveTabTitle(orcaPage, worktreeId)
     expect(defaultTitle.length).toBeGreaterThan(0)
 
-    // Why: seed a custom title directly via the store so this test asserts the
-    // "empty string → reset" behavior independently from the double-click flow.
+    // Seed directly to isolate empty-string reset from double-click rename.
     await orcaPage.evaluate((targetWorktreeId) => {
       const store = window.__store
       if (!store) {
@@ -215,8 +194,6 @@ test.describe('Tab Rename (Inline)', () => {
     await renameInput.fill('')
     await renameInput.press('Enter')
 
-    // User-observable DOM assertion: the tab element must re-render with the
-    // original default title, not the "Seeded Custom" override.
     await expect(tabLocatorByTitle(orcaPage, defaultTitle)).toBeVisible()
     await expect
       .poll(async () => getActiveCustomTitle(orcaPage, worktreeId), { timeout: 3_000 })
@@ -226,8 +203,7 @@ test.describe('Tab Rename (Inline)', () => {
   test('clicking away (blur) commits the rename', async ({ orcaPage }) => {
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
 
-    // Why: need a second tab so we have something to click that isn't the
-    // rename input itself. Seed both with known titles so we can locate them.
+    // Create another titled tab as a deterministic blur target.
     await orcaPage.evaluate((targetWorktreeId) => {
       const store = window.__store
       if (!store) {
@@ -259,8 +235,7 @@ test.describe('Tab Rename (Inline)', () => {
     await expect(renameInput).toBeVisible()
 
     await renameInput.fill('Committed By Blur')
-    // Why: clicking the other tab triggers blur on the input, which should
-    // run commitRename and save the typed title before the focus shifts.
+    // Selecting another tab must commit on blur before focus moves.
     await tabLocatorByTitle(orcaPage, otherTab.title!).click()
 
     await expect(renameInput).toBeHidden()
@@ -296,10 +271,7 @@ test.describe('Tab Rename (Inline)', () => {
     await expect(renameInput).toBeVisible()
 
     await renameInput.fill('Committed By Right Click')
-    // Why: right-clicking the tab blurs the input (commitRename runs) and
-    // opens the context menu. We assert the rename was saved; the menu
-    // assertion is intentionally light because the menu markup is shared
-    // with other specs.
+    // Right-click must commit rename on blur; menu details have independent coverage.
     await tabLocator.click({ button: 'right' })
 
     await expect
@@ -308,19 +280,62 @@ test.describe('Tab Rename (Inline)', () => {
     await expect(renameInput).toBeHidden()
   })
 
+  test('terminal title updates do not resize neighboring tabs', async ({ orcaPage }) => {
+    const worktreeId = (await getActiveWorktreeId(orcaPage))!
+    const tabIds = await orcaPage.evaluate((targetWorktreeId) => {
+      const state = window.__store!.getState()
+      const existing = state.tabsByWorktree[targetWorktreeId] ?? []
+      for (let index = existing.length; index < 3; index += 1) {
+        state.createTab(targetWorktreeId, undefined, undefined, { activate: false })
+      }
+      const ids = (window.__store!.getState().tabsByWorktree[targetWorktreeId] ?? [])
+        .slice(0, 3)
+        .map((tab) => tab.id)
+      ids.forEach((id, index) => state.setTabCustomTitle(id, `Tab ${index + 1}`))
+      return ids
+    }, worktreeId)
+
+    const tabs = tabIds.map((id) =>
+      orcaPage.locator(`[data-testid="sortable-tab"][data-tab-id="${id}"]`)
+    )
+    await expect(tabs[2]!).toBeVisible()
+    const before = await Promise.all(
+      tabs.map((tab) => tab.evaluate((element) => element.getBoundingClientRect().width))
+    )
+    // Require width above the 88px shrink floor; otherwise stable widths can mask a failed definite tab width.
+    expect(
+      Math.min(...before),
+      'tabs must be above the 88px shrink floor for the stability check to mean anything'
+    ).toBeGreaterThan(88)
+
+    await orcaPage.evaluate(
+      ({ tabId }) => {
+        window
+          .__store!.getState()
+          .setTabCustomTitle(
+            tabId,
+            'Continuously changing generated terminal title that must remain constrained'
+          )
+      },
+      { tabId: tabIds[0] }
+    )
+    await expect(tabs[0]!).toContainText('Continuously changing generated terminal title')
+    const after = await Promise.all(
+      tabs.map((tab) => tab.evaluate((element) => element.getBoundingClientRect().width))
+    )
+
+    after.forEach((width, index) => expect(Math.abs(width - before[index]!)).toBeLessThanOrEqual(1))
+    await tabs[2]!.click()
+    await expect(tabs[2]!).toHaveAttribute('data-active', 'true')
+  })
+
   test('rename input stays at a usable width when many tabs are open', async ({ orcaPage }) => {
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
     const targetTabId = await getActiveTabId(orcaPage)
     expect(targetTabId).not.toBeNull()
     const targetTitle = 'Width Target Tab'
 
-    // Why: create enough terminal tabs that flex space runs out. 15 is well
-    // above the threshold at which the pre-fix input collapsed, and it keeps
-    // the test fast. The width fix pins the input to 72px (matching the
-    // slimmer tab title box), so even saturated, it should stay near that
-    // size — we assert ≥60px to allow a bit of slack for fonts/padding/
-    // containers differing between environments. The meaningful guarantee is
-    // that the input does not collapse to ~0 when flex space is saturated.
+    // Saturate flex space with 15 tabs and require ≥60px input width around the 72px target, rejecting collapse toward zero.
     await orcaPage.evaluate(
       ({ targetWorktreeId, targetTabId, targetTitle }) => {
         const store = window.__store
@@ -330,8 +345,7 @@ test.describe('Tab Rename (Inline)', () => {
         const state = store.getState()
         const existing = state.tabsByWorktree[targetWorktreeId] ?? []
         for (const [index, tab] of existing.entries()) {
-          // Why: shell-driven terminal title updates can race this crowded-tab
-          // assertion; custom titles keep the rename target stable.
+          // Use custom titles so shell updates cannot race crowded-tab selection.
           state.setTabCustomTitle(
             tab.id,
             tab.id === targetTabId ? targetTitle : `Width Filler ${index + 1}`
@@ -355,14 +369,10 @@ test.describe('Tab Rename (Inline)', () => {
     const tabLocator = tabLocatorByTitle(orcaPage, targetTitle)
     await tabLocator.scrollIntoViewIfNeeded()
     await expect(tabLocator).toBeVisible()
-    // Why: once 15 tabs are packed into the strip, the tab center can overlap
-    // the close affordance. Target the visible title text, which is the rename
-    // hit area users aim for.
+    // Target title text because packed tab centers can overlap close buttons.
     const tabTitle = tabLocator.getByText(targetTitle, { exact: true })
     await expect(tabTitle).toBeVisible()
-    // Why: this spec is about saturated-tab input width. The real pointer
-    // double-click path is covered above; dispatching the tab's own dblclick
-    // handler avoids pixel-level overlap flakes in the crowded strip.
+    // Dispatch dblclick to isolate saturated width; earlier tests cover real pointer double-click.
     await tabLocator.evaluate((element) => {
       element.dispatchEvent(
         new MouseEvent('dblclick', {
@@ -397,13 +407,9 @@ test.describe('Tab Rename (Inline)', () => {
     })
     await expect(renameInput).toBeVisible()
 
-    // Why: the outer tab's middle-click handler closes the tab. The rename
-    // input stops propagation + preventDefaults middle-click so the tab
-    // isn't closed while the user is editing.
+    // Middle-click must stop at the rename input instead of bubbling to tab close.
     await dispatchMiddleClickSequence(renameInput)
 
-    // The tab must still exist — no regression where editing-then-middle-click
-    // accidentally closes the tab out from under the input.
     await expect(renameInput).toBeVisible()
     await expect(tabLocatorByTitle(orcaPage, originalTitle)).toBeVisible()
     expect((await getWorktreeTabs(orcaPage, worktreeId)).length).toBe(tabsBefore)

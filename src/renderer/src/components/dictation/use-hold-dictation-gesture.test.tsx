@@ -1,11 +1,10 @@
 // @vitest-environment happy-dom
 
-import { createRef, type MutableRefObject } from 'react'
-import { act } from 'react'
+import { createRef, type MutableRefObject, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DictationState } from '../../../../shared/speech-types'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { DictationInsertionTarget } from './dictation-insertion-target'
 import { useHoldDictationGesture } from './use-hold-dictation-gesture'
 

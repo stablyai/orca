@@ -30,6 +30,14 @@ vi.mock('fs', () => ({
   existsSync: existsSyncMock
 }))
 
+function isConfigListSnapshotCommand(args: string[]): boolean {
+  return args[0] === 'config' && args[1] === '--list' && args[2] === '-z'
+}
+
+function emptyGitConfigSnapshot(): { stdout: string } {
+  return { stdout: 'core.repositoryformatversion\n0\0' }
+}
+
 import {
   clearEffectiveUpstreamNegativeStatusCache,
   clearEffectiveUpstreamStatusCacheForTests,
@@ -37,6 +45,11 @@ import {
   getEffectiveUpstreamStatusGenerationCountForTests,
   getStatus
 } from './status'
+import {
+  getEffectiveUpstreamStatusWriteGeneration,
+  readCachedEffectiveUpstreamStatus,
+  rememberEffectiveUpstreamStatus
+} from './source-control/effective-upstream-status-cache'
 
 describe('local upstream negative cache', () => {
   beforeEach(() => {
@@ -61,6 +74,9 @@ describe('local upstream negative cache', () => {
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error('fatal: no upstream configured for branch feature')
+      }
+      if (isConfigListSnapshotCommand(args)) {
+        return emptyGitConfigSnapshot()
       }
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature')) {
         if (originBranchExists) {
@@ -92,8 +108,10 @@ describe('local upstream negative cache', () => {
   it('keeps an older automatic negative probe from overwriting a strict positive result', async () => {
     let originBranchExists = false
     let deferredOriginReject: ((error: Error) => void) | null = null
+    let statusCommandCalls = 0
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args.includes('status')) {
+        statusCommandCalls += 1
         return {
           stdout: '# branch.oid abcdef1234567890\n# branch.head feature\n'
         }
@@ -103,6 +121,9 @@ describe('local upstream negative cache', () => {
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error('fatal: no upstream configured for branch feature')
+      }
+      if (isConfigListSnapshotCommand(args)) {
+        return emptyGitConfigSnapshot()
       }
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature')) {
         if (originBranchExists) {
@@ -123,6 +144,7 @@ describe('local upstream negative cache', () => {
 
     originBranchExists = true
     const strict = await getStatus('/repo', { bypassEffectiveUpstreamNegativeCache: true })
+    expect(statusCommandCalls).toBe(2)
     if (!deferredOriginReject) {
       throw new Error('expected deferred origin reject')
     }
@@ -162,6 +184,9 @@ describe('local upstream negative cache', () => {
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error(`fatal: no upstream configured for branch ${currentBranch}`)
+      }
+      if (isConfigListSnapshotCommand(args)) {
+        return emptyGitConfigSnapshot()
       }
       if (args[0] === 'rev-parse' && args.some((arg) => arg.startsWith('refs/remotes/origin/'))) {
         if (originBranchExists) {
@@ -224,6 +249,9 @@ describe('local upstream negative cache', () => {
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error(`fatal: no upstream configured for branch ${currentBranch}`)
       }
+      if (isConfigListSnapshotCommand(args)) {
+        return emptyGitConfigSnapshot()
+      }
       if (args[0] === 'rev-parse' && args.some((arg) => arg.startsWith('refs/remotes/origin/'))) {
         if (originBranchExists) {
           return { stdout: 'abc123\n' }
@@ -262,6 +290,56 @@ describe('local upstream negative cache', () => {
     expect(getEffectiveUpstreamStatusGenerationCountForTests()).toBeLessThanOrEqual(512)
   })
 
+  it('does not let an evicted strict probe republish a stale negative', async () => {
+    let deferredOriginReject: ((error: Error) => void) | null = null
+    const branchQueue = ['feature', ...Array.from({ length: 512 }, (_, index) => `other-${index}`)]
+    let currentBranch = 'feature'
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args.includes('status')) {
+        currentBranch = branchQueue.shift() ?? currentBranch
+        return {
+          stdout: `# branch.oid abcdef1234567890\n# branch.head ${currentBranch}\n`
+        }
+      }
+      if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
+        return { stdout: `${currentBranch}\n` }
+      }
+      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
+        throw new Error(`fatal: no upstream configured for branch ${currentBranch}`)
+      }
+      if (isConfigListSnapshotCommand(args)) {
+        return emptyGitConfigSnapshot()
+      }
+      if (args[0] === 'rev-parse' && args.some((arg) => arg.startsWith('refs/remotes/origin/'))) {
+        if (currentBranch === 'feature') {
+          return await new Promise<{ stdout: string }>((_, reject) => {
+            deferredOriginReject = reject
+          })
+        }
+        return { stdout: 'abc123\n' }
+      }
+      if (args[0] === 'rev-list' && args.some((arg) => arg.startsWith('HEAD...origin/'))) {
+        return { stdout: '0\t1\n' }
+      }
+      throw new Error(`unexpected git command: ${args.join(' ')}`)
+    })
+
+    const strict = getStatus('/repo', { bypassEffectiveUpstreamNegativeCache: true })
+    await vi.waitFor(() => expect(deferredOriginReject).toBeTruthy())
+    clearEffectiveUpstreamNegativeStatusCache({ worktreePath: '/repo', branchName: 'feature' })
+    for (let index = 0; index < 512; index += 1) {
+      await getStatus(`/repo-${index}`, { bypassEffectiveUpstreamNegativeCache: true })
+    }
+    if (!deferredOriginReject) {
+      throw new Error('expected deferred origin reject')
+    }
+    ;(deferredOriginReject as (error: Error) => void)(new Error('missing remote branch'))
+    await strict
+
+    expect(getEffectiveUpstreamStatusCacheCountForTests()).toBe(0)
+    expect(getEffectiveUpstreamStatusGenerationCountForTests()).toBe(512)
+  })
+
   it('bounds effective-upstream negative entries', async () => {
     let branchIndex = 0
     let currentBranch = 'feature-0'
@@ -278,6 +356,9 @@ describe('local upstream negative cache', () => {
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error(`fatal: no upstream configured for branch ${currentBranch}`)
+      }
+      if (isConfigListSnapshotCommand(args)) {
+        return emptyGitConfigSnapshot()
       }
       if (args[0] === 'rev-parse' && args.some((arg) => arg.startsWith('refs/remotes/origin/'))) {
         throw new Error('missing remote branch')
@@ -310,6 +391,9 @@ describe('local upstream negative cache', () => {
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error(`fatal: no upstream configured for branch ${currentBranch}`)
       }
+      if (isConfigListSnapshotCommand(args)) {
+        return emptyGitConfigSnapshot()
+      }
       if (args[0] === 'rev-parse' && args.includes(`refs/remotes/origin/${currentBranch}`)) {
         return { stdout: 'abc123\n' }
       }
@@ -325,5 +409,24 @@ describe('local upstream negative cache', () => {
 
     expect(getEffectiveUpstreamStatusCacheCountForTests()).toBe(0)
     expect(getEffectiveUpstreamStatusGenerationCountForTests()).toBe(512)
+  })
+
+  it('continues caching new negatives after generation eviction', () => {
+    const now = Date.now()
+    for (let index = 0; index < 513; index += 1) {
+      rememberEffectiveUpstreamStatus(
+        `positive-${index}`,
+        { hasUpstream: true, ahead: 0, behind: 1 },
+        now,
+        true,
+        0
+      )
+    }
+    const cacheKey = 'new-negative'
+    const writeGeneration = getEffectiveUpstreamStatusWriteGeneration(cacheKey)
+    const status = { hasUpstream: false, ahead: 0, behind: 0 }
+    rememberEffectiveUpstreamStatus(cacheKey, status, now, true, writeGeneration)
+
+    expect(readCachedEffectiveUpstreamStatus(cacheKey, now)).toEqual(status)
   })
 })

@@ -1,33 +1,68 @@
-import { BrowserWindow, ipcMain, nativeTheme } from 'electron'
+import { getClaudeAgentViewService } from '../claude/agent-view-service'
+import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import type { Store } from '../persistence'
-import type { GlobalSettings, PersistedState } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { PersistedState } from '../../shared/persisted-state-types'
 import { listSystemFontFamilies } from '../system-fonts'
 import { previewGhosttyImport } from '../ghostty/index'
 import { previewWarpThemeImport } from '../warp-themes'
 import { setMainUiLanguage } from '../i18n/main-i18n'
 import { rebuildAppMenu } from '../menu/register-app-menu'
+import { rebuildSystemTrayMenu } from '../tray/system-tray'
 import { track } from '../telemetry/client'
 import { SETTINGS_CHANGED_WHITELIST, type SettingsChangedKey } from '../../shared/telemetry-events'
 import type { AgentAwakeService } from '../agent-awake-service'
 import { sanitizeFloatingWorkspaceDirectorySetting } from './floating-workspace-directory'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
+import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { applyElectronProxySettings } from '../network/proxy-settings'
-import { normalizeProxyBypassRules, normalizeProxyUrl } from '../../shared/network-proxy'
+import { applyBrowserSessionProxies } from '../browser/browser-session-proxy'
+import { applyProxyToElectronUpdaterSession } from '../updater/electron-updater-proxy-session'
+import { browserSessionRegistry } from '../browser/browser-session-registry'
+import { sanitizeNetworkSettings } from './network-settings-sanitization'
 import { normalizeAppIconId } from '../../shared/app-icon'
 import { normalizeUiLanguage } from '../../shared/ui-language'
 import { applyAppIcon } from '../app-icon'
 import { normalizeTerminalCustomThemes } from '../../shared/terminal-custom-themes'
+import { normalizeDesktopTerminalScrollbackRows } from '../../shared/terminal-scrollback-policy'
+import { normalizeTerminalLineHeight } from '../../shared/terminal-line-height-settings'
 import { prepareLocalWorktreeRootsForRepos } from '../worktree-root-preparation'
+import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher'
+import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
+import { resolveEnvironment } from '../../shared/runtime-environment-store'
+import { readSettingsWithRuntimeEnvironmentPreference } from './runtime-environments/runtime-environment-preference'
+import { haveSameDisabledTuiAgents } from '../../shared/tui-agent-selection'
+import {
+  normalizeMobilePairingCustomAddress,
+  normalizeMobilePairingCustomAddresses
+} from '../../shared/mobile-pairing-custom-address'
+import {
+  computerAwakeSettingsForMode,
+  normalizeComputerAwakeMode
+} from '../../shared/computer-awake-mode'
+import { resolveAiVaultSearchSettings } from '../../shared/ai-vault-search-settings'
+import { applySessionSearchSettingsChange } from '../ai-vault-search/session-search-enablement'
+import { getRuntimeEnvironmentRegistryRoot } from './runtime-environments/runtime-environment-registry-root'
 
-// Why: the whitelist is the source-of-truth for which keys we emit on. Casting
-// to a Set once at module load lets the IPC handler's per-key membership
-// check stay O(1) without re-coercing the readonly tuple on every call.
 const SETTINGS_CHANGED_WHITELIST_SET = new Set<string>(SETTINGS_CHANGED_WHITELIST)
+const registryRoot = getRuntimeEnvironmentRegistryRoot
 
-// Why: fields that appear in the View > Appearance submenu need the menu
-// rebuilt after any update so the checkbox `checked` state stays in sync
-// with the persisted value. Electron doesn't reactively re-render menu
-// items when the backing state changes.
+type LegacyTerminalScrollbackSettingsUpdate = Partial<GlobalSettings> & {
+  terminalScrollbackBytes?: unknown
+}
+
+function sanitizeRendererSettingsUpdate(args: Partial<GlobalSettings>): Partial<GlobalSettings> {
+  const { terminalScrollbackBytes: _legacyScrollbackBytes, ...sanitizedArgs } =
+    args as LegacyTerminalScrollbackSettingsUpdate
+  void _legacyScrollbackBytes
+  // Plugin consent and enablement require main's reviewed-fingerprint handlers.
+  delete sanitizedArgs.pluginConsents
+  delete sanitizedArgs.disabledPlugins
+  return sanitizedArgs
+}
+
+// Electron menus do not react to settings; rebuild appearance checkboxes after writes.
 const APPEARANCE_MENU_KEYS: readonly (keyof GlobalSettings)[] = [
   'showTasksButton',
   'showAutomationsButton',
@@ -39,6 +74,18 @@ export function registerSettingsHandlers(
   store: Store,
   agentAwakeService?: AgentAwakeService
 ): void {
+  ipcMain.handle(
+    'agentAwake:getStatus',
+    () => agentAwakeService?.getStatus() ?? { mode: 'off', active: false }
+  )
+  agentAwakeService?.subscribe?.((status) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) {
+        window.webContents.send('agentAwake:changed', status)
+      }
+    }
+  })
+
   store.onSettingsChanged((updates, _settings, originWebContentsId) => {
     for (const window of BrowserWindow.getAllWindows()) {
       const isOrigin =
@@ -49,94 +96,176 @@ export function registerSettingsHandlers(
     }
   })
 
-  ipcMain.handle('settings:get', () => {
-    return store.getSettings()
+  ipcMain.handle('settings:get', () =>
+    readSettingsWithRuntimeEnvironmentPreference(store, registryRoot())
+  )
+
+  ipcMain.handle(
+    'settings:update-pr-bot-author-override',
+    (event, args: { author: string; isBot: boolean }) => {
+      const current = store.getSettings().prBotAuthorOverrides
+      const next = applyPRBotAuthorOverride(current, args.author, args.isBot)
+      store.updateSettings(
+        { prBotAuthorOverrides: next },
+        { notifyListeners: true, originWebContentsId: event.sender.id }
+      )
+      return store.getSettings()
+    }
+  )
+
+  // PTYs can bind before hydration; transport authority selection needs persisted settings synchronously.
+  ipcMain.on('settings:get-sync', (event) => {
+    event.returnValue = readSettingsWithRuntimeEnvironmentPreference(store, registryRoot())
   })
 
   ipcMain.handle('settings:set', async (event, args: Partial<GlobalSettings>) => {
-    const sanitizedArgs = { ...args }
-    // Why: Floating Workspace grants are trusted only when written by the
-    // main-process directory picker, never by renderer-provided settings IPC.
+    const sanitizedArgs = sanitizeRendererSettingsUpdate(args)
+    // Generic settings writers cannot change the server preference owned by Advanced controls.
+    delete sanitizedArgs.activeRuntimeEnvironmentId
+    // Only the main-process directory picker may grant trusted floating-workspace paths.
     delete sanitizedArgs.floatingTerminalTrustedCwds
+    if ('computerAwakeMode' in sanitizedArgs) {
+      Object.assign(
+        sanitizedArgs,
+        computerAwakeSettingsForMode(
+          normalizeComputerAwakeMode(
+            sanitizedArgs.computerAwakeMode,
+            sanitizedArgs.keepComputerAwakeWhileAgentsRun
+          )
+        )
+      )
+    } else if ('keepComputerAwakeWhileAgentsRun' in sanitizedArgs) {
+      Object.assign(
+        sanitizedArgs,
+        computerAwakeSettingsForMode(sanitizedArgs.keepComputerAwakeWhileAgentsRun ? 'auto' : 'off')
+      )
+    }
     if (typeof args.floatingTerminalCwd === 'string') {
       sanitizedArgs.floatingTerminalCwd = await sanitizeFloatingWorkspaceDirectorySetting(
         store,
         args.floatingTerminalCwd
       )
     }
-    if ('httpProxyUrl' in args) {
-      const proxyUrl = normalizeProxyUrl(args.httpProxyUrl)
-      sanitizedArgs.httpProxyUrl = proxyUrl.ok ? proxyUrl.value : ''
-    }
-    if ('httpProxyBypassRules' in args) {
-      sanitizedArgs.httpProxyBypassRules = normalizeProxyBypassRules(args.httpProxyBypassRules)
-    }
+    sanitizeNetworkSettings(args, sanitizedArgs)
     if ('appIcon' in args) {
       sanitizedArgs.appIcon = normalizeAppIconId(args.appIcon)
+    }
+    if ('aiVaultSearch' in args) {
+      sanitizedArgs.aiVaultSearch = resolveAiVaultSearchSettings(args)
     }
     if ('terminalCustomThemes' in args) {
       sanitizedArgs.terminalCustomThemes = normalizeTerminalCustomThemes(args.terminalCustomThemes)
     }
+    if ('terminalScrollbackRows' in args) {
+      sanitizedArgs.terminalScrollbackRows = normalizeDesktopTerminalScrollbackRows(
+        args.terminalScrollbackRows
+      )
+    }
+    if ('terminalLineHeight' in args) {
+      sanitizedArgs.terminalLineHeight = normalizeTerminalLineHeight(args.terminalLineHeight)
+    }
     if ('uiLanguage' in args) {
       sanitizedArgs.uiLanguage = normalizeUiLanguage(args.uiLanguage)
+    }
+    if ('mobilePairingCustomAddress' in args) {
+      sanitizedArgs.mobilePairingCustomAddress = normalizeMobilePairingCustomAddress(
+        args.mobilePairingCustomAddress
+      )
+    }
+    if ('mobilePairingCustomAddresses' in args) {
+      sanitizedArgs.mobilePairingCustomAddresses = normalizeMobilePairingCustomAddresses(
+        args.mobilePairingCustomAddresses
+      )
     }
     if (args.theme) {
       nativeTheme.themeSource = args.theme
     }
-    // Why: capture the pre-update value so we only emit when the value
-    // actually changes. The settings UI sometimes re-saves the same value
-    // (e.g. blur after a no-op edit), and a `settings_changed` event for a
-    // no-op flip would inflate the experimental-feature-adoption signal.
+    // No-op UI saves must not inflate settings_changed adoption telemetry.
     const before = store.getSettings()
-    const result = store.updateSettings(sanitizedArgs, {
+    const updateOptions = {
       notifyListeners: true,
       originWebContentsId: event.sender.id
-    })
-    if ('keepComputerAwakeWhileAgentsRun' in sanitizedArgs) {
-      agentAwakeService?.setEnabled(result.keepComputerAwakeWhileAgentsRun)
+    }
+    const result =
+      'alwaysForceDeleteWorktrees' in sanitizedArgs ||
+      'alwaysForceDeletePreservedBranches' in sanitizedArgs
+        ? await store.updateSettingsAndFlush(sanitizedArgs, updateOptions)
+        : store.updateSettings(sanitizedArgs, updateOptions)
+    if (
+      'experimentalAgentDashboardPopout' in sanitizedArgs &&
+      before.experimentalAgentDashboardPopout !== result.experimentalAgentDashboardPopout
+    ) {
+      track('agent_dashboard_enabled', {
+        enabled: result.experimentalAgentDashboardPopout === true
+      })
+    }
+    const proxySettingsChanged =
+      ('httpProxyUrl' in sanitizedArgs && before.httpProxyUrl !== result.httpProxyUrl) ||
+      ('httpProxyBypassRules' in sanitizedArgs &&
+        before.httpProxyBypassRules !== result.httpProxyBypassRules)
+    if (proxySettingsChanged) {
+      // Start every authority before yielding so requests cannot enter between their barriers.
+      const [defaultSessionResult, browserSessionsResult] = await Promise.allSettled([
+        applyElectronProxySettings(result),
+        applyBrowserSessionProxies(browserSessionRegistry.listProfiles(), result),
+        applyProxyToElectronUpdaterSession(result)
+      ])
+      if (defaultSessionResult.status === 'rejected') {
+        console.warn('[settings] failed to apply network proxy settings')
+      }
+      if (browserSessionsResult.status === 'rejected') {
+        console.warn('[settings] failed to apply network proxy settings to browser sessions')
+      }
     }
     if (
-      'agentStatusHooksEnabled' in sanitizedArgs &&
-      before.agentStatusHooksEnabled !== result.agentStatusHooksEnabled
+      'computerAwakeMode' in sanitizedArgs ||
+      'keepComputerAwakeWhileAgentsRun' in sanitizedArgs
     ) {
+      agentAwakeService?.setMode(
+        normalizeComputerAwakeMode(result.computerAwakeMode, result.keepComputerAwakeWhileAgentsRun)
+      )
+    }
+    await getClaudeAgentViewService().reconcile(result)
+    const hookSettingChanged =
+      ('agentStatusHooksEnabled' in sanitizedArgs &&
+        before.agentStatusHooksEnabled !== result.agentStatusHooksEnabled) ||
+      ('disabledTuiAgents' in sanitizedArgs &&
+        !haveSameDisabledTuiAgents(before.disabledTuiAgents, result.disabledTuiAgents))
+    if (hookSettingChanged) {
       try {
-        applyAgentStatusHooksEnabled(result.agentStatusHooksEnabled)
+        await applyAgentStatusHooksEnabled(result.agentStatusHooksEnabled, result, {
+          userInitiated: true,
+          shouldHydrateShellPath: app.isPackaged,
+          onInstallError: recordManagedHookInstallFailure,
+          shouldContinue: (agent) => isAgentStatusHooksEnabledForAgent(store.getSettings(), agent)
+        })
       } catch (error) {
-        console.warn('[settings] failed to apply agentStatusHooksEnabled:', error)
+        console.warn('[settings] failed to reconcile managed agent hooks:', error)
       }
     }
     if ('uiLanguage' in sanitizedArgs && before.uiLanguage !== result.uiLanguage) {
       await setMainUiLanguage(result.uiLanguage)
       rebuildAppMenu()
+      rebuildSystemTrayMenu()
     }
     if (
       ('workspaceDir' in sanitizedArgs && before.workspaceDir !== result.workspaceDir) ||
       ('nestWorkspaces' in sanitizedArgs && before.nestWorkspaces !== result.nestWorkspaces)
     ) {
       void prepareLocalWorktreeRootsForRepos(store)
+      scheduleCurrentWorktreeBaseDirectoryWatcherSync()
     }
     if (APPEARANCE_MENU_KEYS.some((key) => key in sanitizedArgs)) {
       rebuildAppMenu()
     }
-    if ('httpProxyUrl' in sanitizedArgs || 'httpProxyBypassRules' in sanitizedArgs) {
-      try {
-        await applyElectronProxySettings(result)
-      } catch {
-        console.warn('[settings] failed to apply network proxy settings')
-      }
-    }
     if ('appIcon' in sanitizedArgs && before.appIcon !== result.appIcon) {
       applyAppIcon(result.appIcon)
     }
+    if ('aiVaultSearch' in sanitizedArgs) {
+      applySessionSearchSettingsChange(before, result)
+    }
 
-    // Why: telemetry-plan.md§Settings — fire `settings_changed` only for
-    // whitelisted keys, with `value_kind` distinguishing booleans from
-    // string-enum settings. We deliberately do NOT send the raw value for
-    // non-enum settings; the whitelist is currently scoped to experimental
-    // toggles, all of which are booleans, so `value_kind === 'bool'` is
-    // the path the v1 enum has a slot for. If a non-bool whitelisted
-    // setting is ever added, extend the discriminator here at the same
-    // time the schema's `value_kind` enum gains the new value.
+    // Emit only allowlisted keys without raw values; new value kinds require matching schema support.
     for (const key of Object.keys(sanitizedArgs)) {
       if (!SETTINGS_CHANGED_WHITELIST_SET.has(key)) {
         continue
@@ -147,7 +276,7 @@ export function registerSettingsHandlers(
         continue
       }
       if (typeof afterValue !== 'boolean') {
-        // No non-bool whitelist entries today; skip rather than guess.
+        // Unsupported value kinds must not be guessed.
         continue
       }
       track('settings_changed', {
@@ -156,12 +285,27 @@ export function registerSettingsHandlers(
       })
     }
 
-    return result
+    return store.getSettings()
   })
 
-  ipcMain.handle('settings:listFonts', () => {
-    return listSystemFontFamilies()
-  })
+  ipcMain.handle(
+    'settings:set-active-runtime-environment-preference',
+    (event, args: { environmentId?: unknown }): GlobalSettings => {
+      const requestedEnvironmentId = args?.environmentId
+      if (requestedEnvironmentId !== null && typeof requestedEnvironmentId !== 'string') {
+        throw new Error('Invalid default host for new projects')
+      }
+      const requestedId = requestedEnvironmentId?.trim() || null
+      const environmentId =
+        requestedId === null ? null : resolveEnvironment(registryRoot(), requestedId).id
+      return store.updateSettings(
+        { activeRuntimeEnvironmentId: environmentId },
+        { notifyListeners: true, originWebContentsId: event.sender.id }
+      )
+    }
+  )
+
+  ipcMain.handle('settings:listFonts', () => listSystemFontFamilies())
 
   ipcMain.handle('settings:previewGhosttyImport', () => {
     return previewGhosttyImport(store)

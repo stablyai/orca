@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
-export const getTerminalTypographySearchEntries = createLocalizedCatalog(() => [
+const getTerminalTypographySearchEntryCatalog = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.terminal.search.5930244899', 'Font Size'),
     description: translate(
@@ -100,6 +100,14 @@ export const getTerminalTypographySearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getTerminalTypographySearchEntries = createLocalizedCatalog(() => [
+  ...getTerminalTypographySearchEntryCatalog()
+])
+
+export const getTerminalAdvancedTypographySearchEntries = createLocalizedCatalog(() =>
+  getTerminalTypographySearchEntryCatalog().slice(2)
+)
+
 export const getTerminalRenderingSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.terminal.search.13a2502dfc', 'GPU Acceleration'),
@@ -119,6 +127,55 @@ export const getTerminalRenderingSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.terminal.search.bc7ae1f7c0', 'rendering'),
       ...translateSearchKeyword('auto.components.settings.terminal.search.7d924d870d', 'graphics'),
       ...translateSearchKeyword('auto.components.settings.terminal.search.1abcf4d7de', 'linux')
+    ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.terminal.search.minimumContrast.title',
+      'Color Contrast'
+    ),
+    description: translate(
+      'auto.components.settings.terminal.search.minimumContrast.description',
+      'Improve text readability or preserve the colors chosen by terminal programs.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.minimumContrast.contrast',
+        'contrast'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.minimumContrast.minimum',
+        'minimum'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.minimumContrast.ratio',
+        'ratio'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.minimumContrast.readability',
+        'readability'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.minimumContrast.wcag',
+        'wcag'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.minimumContrast.powerline',
+        'powerline'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.minimumContrast.statusline',
+        'statusline'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.minimumContrast.dim',
+        'dim'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.minimumContrast.colors',
+        'colors'
+      )
     ]
   }
 ])

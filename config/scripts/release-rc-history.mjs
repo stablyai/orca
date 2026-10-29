@@ -25,7 +25,9 @@ export function rcNumberFromTag(base, tag) {
   }
 
   const suffix = tag.slice(prefix.length)
-  return /^\d+$/.test(suffix) ? Number(suffix) : null
+  // Suffixed RC tags must advance shared counter or next side-branch cut recomputes an existing tag and fails.
+  const match = /^(\d+)(?:\.[0-9A-Za-z]+)?$/.exec(suffix)
+  return match ? Number(match[1]) : null
 }
 
 export function rcNumberFromReleaseSubject(base, subject) {
@@ -34,7 +36,8 @@ export function rcNumberFromReleaseSubject(base, subject) {
     return null
   }
 
-  const match = /^(\d+)(?:\s|$)/.exec(subject.slice(prefix.length))
+  // Count suffixed RC commit subjects after tag deletion; otherwise explicit-version gate permits a release below clients’ current build.
+  const match = /^(\d+)(?:\.[0-9A-Za-z]+)?(?:\s|$)/.exec(subject.slice(prefix.length))
   return match ? Number(match[1]) : null
 }
 

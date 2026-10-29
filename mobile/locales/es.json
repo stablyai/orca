@@ -1,0 +1,8 @@
+{
+  "ios": {
+    "NSCameraUsageDescription": "Permite que Orca use la cámara para escanear códigos QR.",
+    "NSLocalNetworkUsageDescription": "Orca se conecta a la aplicación de escritorio en tu LAN.",
+    "NSMicrophoneUsageDescription": "Permite que Orca use tu micrófono para el dictado de voz y lo envíe a tu escritorio emparejado para transcribirlo.",
+    "NSPhotoLibraryUsageDescription": "Permite que Orca adjunte fotos de tu fototeca a una sesión de terminal en tu escritorio emparejado."
+  }
+}

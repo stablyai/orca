@@ -1,5 +1,6 @@
 import type { WorktreeDragGroup } from './worktree-manual-order'
-import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from './worktree-list-groups'
+import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from '../../../../shared/sidebar-list/group-keys'
+import { getNaturalWorktreeIds } from './natural-worktree-ids'
 
 export type WorktreeDragUnitGroup = WorktreeDragGroup & {
   units: { worktreeId: string; worktreeIds: string[] }[]
@@ -10,6 +11,7 @@ type WorktreeDragUnitRow =
   | { type: 'header'; key: string }
   | { type: 'item'; worktree: { id: string }; depth: number; sectionKey: string }
   | { type: 'imported-worktrees-card' }
+  | { type: 'new-external-worktrees-inbox' }
   | { type: 'pending-creation' }
   | { type: 'folder-workspace' }
 
@@ -18,6 +20,7 @@ export function getWorktreeDragUnitGroups(
 ): WorktreeDragUnitGroup[] {
   const groups: WorktreeDragUnitGroup[] = []
   let current: { key: string; units: WorktreeDragUnitGroup['units'] } | null = null
+  const naturalWorktreeIds = getNaturalWorktreeIds(rows)
 
   for (const row of rows) {
     if (row.type === 'header') {
@@ -32,12 +35,13 @@ export function getWorktreeDragUnitGroups(
     if (
       row.type === 'host-header' ||
       row.type === 'imported-worktrees-card' ||
+      row.type === 'new-external-worktrees-inbox' ||
       row.type === 'pending-creation' ||
       row.type === 'folder-workspace'
     ) {
       continue
     }
-    if (row.sectionKey === PINNED_GROUP_KEY) {
+    if (row.sectionKey === PINNED_GROUP_KEY && naturalWorktreeIds.has(row.worktree.id)) {
       continue
     }
     if (!current) {

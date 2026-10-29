@@ -11,7 +11,6 @@ type SyntheticOpenCodeLoadState = {
   errorMessage?: string
   intervalTimer?: number
   pendingTimers: number[]
-  quietUntil?: number
   stopped: boolean
 }
 
@@ -51,14 +50,9 @@ export async function startSyntheticOpenCodeInjection({
       state.intervalTimer = window.setInterval(() => {
         const frame = frameIndex
         frameIndex += 1
-        if (typeof state.quietUntil === 'number' && performance.now() < state.quietUntil) {
-          return
-        }
         for (let paneOffset = 0; paneOffset < paneKeys.length; paneOffset += panesPerTimerTask) {
           const paneBatch = paneKeys.slice(paneOffset, paneOffset + panesPerTimerTask)
-          // Why: real PTY chunks arrive over several renderer tasks, but not
-          // necessarily one browser timer per pane. Small batches keep the
-          // harness from creating either one giant callback or timer storms.
+          // Batch chunks like real PTY tasks without creating one giant callback or a per-pane timer storm.
           const timer = window.setTimeout(() => {
             state.pendingTimers = state.pendingTimers.filter((id) => id !== timer)
             if (state.stopped || state.errorMessage) {

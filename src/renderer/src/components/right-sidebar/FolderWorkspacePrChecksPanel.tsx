@@ -5,18 +5,16 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/types'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
 import { getAttachedWorktreesForFolderWorkspace } from './folder-workspace-attached-worktrees'
 import { FolderWorkspacePrChecksRow } from './FolderWorkspacePrChecksRow'
-import {
-  buildParentPrChecksProjection,
-  type ParentPrChecksRefreshOutcome,
-  type ParentPrChecksRow
-} from './parent-pr-checks-rows'
+import type { ParentPrChecksRefreshOutcome, ParentPrChecksRow } from './parent-pr-checks-row-types'
 import {
   getParentPrChecksRefreshCandidates,
   runLimitedParentPrChecksRefreshes
 } from './parent-pr-checks-refresh'
+import { createParentPrChecksProjectionSelector } from './parent-pr-checks-projection-selector'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type FolderWorkspacePrChecksPanelProps = {
   isVisible?: boolean
@@ -27,15 +25,12 @@ export default function FolderWorkspacePrChecksPanel({
 }: FolderWorkspacePrChecksPanelProps): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorkspaceKey = useAppStore((s) => s.activeWorkspaceKey)
-  const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
+  const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
   const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const repos = useAppStore((s) => s.repos)
   const settings = useAppStore((s) => s.settings)
-  const hostedReviewCache = useAppStore((s) => s.hostedReviewCache)
-  const prCache = useAppStore((s) => s.prCache)
-  const checksCache = useAppStore((s) => s.checksCache)
   const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
   const fetchPRChecks = useAppStore((s) => s.fetchPRChecks)
   const fetchPRCheckDetails = useAppStore((s) => s.fetchPRCheckDetails)
@@ -65,19 +60,17 @@ export default function FolderWorkspacePrChecksPanel({
       worktreesByRepo
     ]
   )
-  const projection = useMemo(
+  const projectionSelector = useMemo(
     () =>
-      buildParentPrChecksProjection({
+      createParentPrChecksProjectionSelector({
         worktrees: childWorktrees,
         repos,
         settings,
-        hostedReviewCache,
-        prCache,
-        checksCache,
         refreshOutcomes
       }),
-    [childWorktrees, repos, settings, hostedReviewCache, prCache, checksCache, refreshOutcomes]
+    [childWorktrees, repos, settings, refreshOutcomes]
   )
+  const projection = useAppStore(projectionSelector)
   const folderWorkspaceId = folderWorkspace?.id ?? null
   const headerSummary = useMemo(
     () => formatReviewChecksHeaderSummary(projection.summary),
@@ -116,8 +109,7 @@ export default function FolderWorkspacePrChecksPanel({
     if (candidates.length === 0) {
       return
     }
-    // Why: manual refresh should force exactly one generation; automatic
-    // refresh cycles after that must stay cache/staleness-aware.
+    // Force only the manual generation; subsequent automatic refreshes must honor cache staleness.
     const forceRefresh = manualRefreshGeneration > lastForcedManualRefreshGenerationRef.current
     if (forceRefresh) {
       lastForcedManualRefreshGenerationRef.current = manualRefreshGeneration
@@ -189,7 +181,7 @@ export default function FolderWorkspacePrChecksPanel({
           workflowRunId: check.workflowRunId,
           checkName: check.name,
           url: check.url,
-          prRepo: null
+          prRepo: row.githubRepository ?? null
         },
         { repoId: row.repo.id }
       )
@@ -314,34 +306,25 @@ function formatReviewChecksHeaderSummary(summary: {
 }
 
 function formatWorktreeCount(count: number): string {
-  return count === 1
-    ? translate(
-        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.oneWorktree',
-        '1 worktree'
-      )
-    : translate(
-        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.worktreeCount',
-        '{{value0}} worktrees',
-        { value0: count }
-      )
+  return translate(
+    'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.worktreeCountLabel',
+    '{{count}} worktrees',
+    { count, defaultValue_one: '{{count}} worktree' }
+  )
 }
 
 function formatFailingCount(count: number): string {
-  return count === 1
-    ? translate('auto.components.rightSidebar.FolderWorkspacePrChecksPanel.oneFailing', '1 failing')
-    : translate(
-        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.failingCount',
-        '{{value0}} failing',
-        { value0: count }
-      )
+  return translate(
+    'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.failingCountLabel',
+    '{{count}} failing',
+    { count, defaultValue_one: '{{count}} failing' }
+  )
 }
 
 function formatPendingCount(count: number): string {
-  return count === 1
-    ? translate('auto.components.rightSidebar.FolderWorkspacePrChecksPanel.onePending', '1 pending')
-    : translate(
-        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.pendingCount',
-        '{{value0}} pending',
-        { value0: count }
-      )
+  return translate(
+    'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.pendingCountLabel',
+    '{{count}} pending',
+    { count, defaultValue_one: '{{count}} pending' }
+  )
 }

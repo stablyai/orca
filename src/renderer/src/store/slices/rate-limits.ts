@@ -1,11 +1,13 @@
 import type { StateCreator } from 'zustand'
 import type { RateLimitRuntimeTarget, RateLimitState } from '../../../../shared/rate-limit-types'
+import { createEmptyRateLimitState } from '../../../../shared/rate-limit-state-factory'
 import type { AppState } from '../types'
 
 export type RateLimitSlice = {
   rateLimits: RateLimitState
   fetchRateLimits: () => Promise<void>
   refreshRateLimits: () => Promise<void>
+  refreshGrokRateLimits: () => Promise<void>
   refreshClaudeRateLimitsForTarget: (target: RateLimitRuntimeTarget) => Promise<void>
   refreshCodexRateLimitsForTarget: (target: RateLimitRuntimeTarget) => Promise<void>
   consumeCodexRateLimitResetCredit: () => Promise<void>
@@ -15,17 +17,7 @@ export type RateLimitSlice = {
 }
 
 export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice> = (set, get) => ({
-  rateLimits: {
-    claude: null,
-    codex: null,
-    gemini: null,
-    opencodeGo: null,
-    kimi: null,
-    claudeTarget: { runtime: 'host', wslDistro: null },
-    codexTarget: { runtime: 'host', wslDistro: null },
-    inactiveClaudeAccounts: [],
-    inactiveCodexAccounts: []
-  },
+  rateLimits: createEmptyRateLimitState(),
 
   fetchRateLimits: async () => {
     try {
@@ -42,6 +34,15 @@ export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice
       set({ rateLimits: state })
     } catch (error) {
       console.error('Failed to refresh rate limits:', error)
+    }
+  },
+
+  refreshGrokRateLimits: async () => {
+    try {
+      const state = await window.api.rateLimits.refreshGrok()
+      set({ rateLimits: state })
+    } catch (error) {
+      console.error('Failed to refresh Grok usage:', error)
     }
   },
 

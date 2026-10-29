@@ -1,5 +1,11 @@
-import { describe, expect, it } from 'vitest'
-import { parseAuthStatus } from './auth-diagnose'
+import { describe, expect, it, vi } from 'vitest'
+
+const { ghExecFileAsyncMock } = vi.hoisted(() => ({ ghExecFileAsyncMock: vi.fn() }))
+
+vi.mock('../git/runner', () => ({
+  ghExecFileAsync: ghExecFileAsyncMock
+}))
+import { diagnoseGhAuth, parseAuthStatus } from './auth-diagnose'
 
 describe('parseAuthStatus', () => {
   it('parses an env-shadowed login alongside a keyring login (real gh output)', () => {
@@ -82,10 +88,19 @@ ghe.acme.io
     expect(accounts[1].scopes).toContain('project')
   })
 
+  it('parses a ported GHES auth-status section', () => {
+    const text = `ghe.acme.io:8443
+  ✓ Logged in to ghe.acme.io:8443 account bob (keyring)
+  - Active account: true
+  - Token scopes: 'project', 'repo'
+`
+
+    expect(parseAuthStatus(text)).toEqual([
+      expect.objectContaining({ host: 'ghe.acme.io:8443', user: 'bob', active: true })
+    ])
+  })
+
   it('recovers host from the Logged-in line when the section header is missing', () => {
-    // gh prints a colon after the host on some versions; we tolerate it,
-    // but if the regex ever fails to match the header we still want
-    // accounts attributed to the host from the inline message.
     const text = `  ✓ Logged in to github.acme.io account carol (keyring)
   - Active account: true
   - Token scopes: 'project'
@@ -93,5 +108,48 @@ ghe.acme.io
     const accounts = parseAuthStatus(text)
     expect(accounts).toHaveLength(1)
     expect(accounts[0].host).toBe('github.acme.io')
+  })
+})
+
+describe('diagnoseGhAuth host scoping', () => {
+  const TWO_HOST_STATUS = `github.com
+  ✓ Logged in to github.com account alice (keyring)
+  - Active account: true
+  - Token scopes: 'project', 'read:org', 'repo'
+ghe.acme.io
+  ✓ Logged in to ghe.acme.io account bob (keyring)
+  - Active account: true
+  - Token scopes: 'repo'
+`
+
+  it('reports an unauthenticated required host and keeps scope advice host-scoped', async () => {
+    ghExecFileAsyncMock.mockResolvedValue({ stdout: TWO_HOST_STATUS, stderr: '' })
+
+    const diag = await diagnoseGhAuth('github.other-corp.com')
+
+    expect(diag.requiredHost).toBe('github.other-corp.com')
+    expect(diag.requiredHostAuthenticated).toBe(false)
+    expect(diag.activeAccount).toBeNull()
+  })
+
+  it("scopes the diagnosis to the required host's account", async () => {
+    ghExecFileAsyncMock.mockResolvedValue({ stdout: TWO_HOST_STATUS, stderr: '' })
+
+    const diag = await diagnoseGhAuth('GHE.Acme.IO')
+
+    expect(diag.requiredHost).toBe('ghe.acme.io')
+    expect(diag.requiredHostAuthenticated).toBe(true)
+    expect(diag.activeAccount?.user).toBe('bob')
+    expect(diag.missingScopes).toEqual(['project', 'read:org'])
+  })
+
+  it('keeps legacy host-less behavior byte-identical', async () => {
+    ghExecFileAsyncMock.mockResolvedValue({ stdout: TWO_HOST_STATUS, stderr: '' })
+
+    const diag = await diagnoseGhAuth()
+
+    expect(diag.requiredHost).toBeNull()
+    expect(diag.requiredHostAuthenticated).toBeNull()
+    expect(diag.activeAccount?.user).toBe('alice')
   })
 })

@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, FlatList, Pressable, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
-import type { GitHubAssignableUser } from '../../../../src/shared/types'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import type { GitHubAssignableUser } from '../../../../src/shared/github/pull-request-types'
 import type { RpcClient } from '../../transport/rpc-client'
 import { fetchAssignableUsers } from '../../session/github-pr-rpc'
 import { BottomDrawer } from '../BottomDrawer'
@@ -23,12 +25,10 @@ type Props = {
 type LoadState =
   | { status: 'idle' }
   | { status: 'loading' }
-  | { status: 'error'; message: string }
+  | { status: 'error'; message: string | null }
   | { status: 'loaded'; users: GitHubAssignableUser[] }
 
-// A search + FlatList of github.listAssignableUsers in a BottomDrawer (not a new
-// primitive). Seeded with already-requested/latest reviewers + author at the top.
-// Optimistic add/remove via onToggle.
+// Use mapped rows: VirtualizedList nested in PR ScrollView throws and can blank section. Seed reviewers/author first for easy unrequest.
 export function ReviewerPickerDrawer({
   visible,
   onClose,
@@ -38,6 +38,8 @@ export function ReviewerPickerDrawer({
   isRequested,
   onToggle
 }: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const [load, setLoad] = useState<LoadState>({ status: 'idle' })
   const [query, setQuery] = useState('')
 
@@ -47,16 +49,22 @@ export function ReviewerPickerDrawer({
     }
     let cancelled = false
     setLoad({ status: 'loading' })
-    void fetchAssignableUsers(client, worktreeId).then((outcome) => {
-      if (cancelled) {
-        return
-      }
-      setLoad(
-        outcome.ok
-          ? { status: 'loaded', users: outcome.result }
-          : { status: 'error', message: outcome.error }
-      )
-    })
+    void fetchAssignableUsers(client, worktreeId)
+      .then((outcome) => {
+        if (cancelled) {
+          return
+        }
+        setLoad(
+          outcome.ok
+            ? { status: 'loaded', users: outcome.result }
+            : { status: 'error', message: outcome.error }
+        )
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLoad({ status: 'error', message: null })
+        }
+      })
     return () => {
       cancelled = true
     }
@@ -67,7 +75,6 @@ export function ReviewerPickerDrawer({
       return []
     }
     const seed = new Set(seededLogins.map((l) => l.toLowerCase()))
-    // Seeded reviewers sort first so the user can quickly un-request them.
     const sorted = [...load.users].sort((a, b) => {
       const aSeed = seed.has(a.login.toLowerCase()) ? 0 : 1
       const bSeed = seed.has(b.login.toLowerCase()) ? 0 : 1
@@ -84,12 +91,14 @@ export function ReviewerPickerDrawer({
 
   return (
     <BottomDrawer visible={visible} onClose={onClose} dragContentToDismiss={false}>
-      <Text style={styles.pickerTitle}>Reviewers</Text>
+      <Text style={styles.pickerTitle}>
+        {t('pullRequest.reviewerPickerDrawer.title', 'Reviewers')}
+      </Text>
       <TextInput
         style={styles.pickerSearch}
         value={query}
         onChangeText={setQuery}
-        placeholder="Search people"
+        placeholder={t('pullRequest.reviewerPickerDrawer.searchPeople', 'Search people')}
         placeholderTextColor={colors.textMuted}
         autoCapitalize="none"
         autoCorrect={false}
@@ -100,27 +109,37 @@ export function ReviewerPickerDrawer({
         </View>
       ) : load.status === 'error' ? (
         <View style={styles.pickerStateArea}>
-          <Text style={styles.emptyText}>{load.message}</Text>
+          <Text style={styles.emptyText}>
+            {load.message ??
+              t('pullRequest.reviewerPickerDrawer.loadFailed', 'Failed to load people')}
+          </Text>
         </View>
       ) : ordered.length === 0 ? (
         <View style={styles.pickerStateArea}>
-          <Text style={styles.emptyText}>No matching people</Text>
+          <Text style={styles.emptyText}>
+            {t('pullRequest.reviewerPickerDrawer.noMatches', 'No matching people')}
+          </Text>
         </View>
       ) : (
-        <FlatList
-          style={styles.pickerList}
-          data={ordered}
-          keyExtractor={(u) => u.login}
-          keyboardShouldPersistTaps="handled"
-          renderItem={({ item }) => {
+        <View style={styles.pickerList}>
+          {ordered.map((item) => {
             const requested = isRequested(item.login)
             return (
               <Pressable
+                key={item.login}
                 style={styles.pickerRow}
                 onPress={() => onToggle(item.login)}
                 accessibilityRole="button"
                 accessibilityState={{ selected: requested }}
-                accessibilityLabel={`${requested ? 'Remove' : 'Request'} ${item.login}`}
+                accessibilityLabel={
+                  requested
+                    ? t('pullRequest.reviewerPickerDrawer.removeReviewer', 'Remove {{login}}', {
+                        login: item.login
+                      })
+                    : t('pullRequest.reviewerPickerDrawer.requestReviewer', 'Request {{login}}', {
+                        login: item.login
+                      })
+                }
               >
                 <View style={styles.rowTrailing}>
                   {requested ? (
@@ -134,8 +153,8 @@ export function ReviewerPickerDrawer({
                 </View>
               </Pressable>
             )
-          }}
-        />
+          })}
+        </View>
       )}
     </BottomDrawer>
   )

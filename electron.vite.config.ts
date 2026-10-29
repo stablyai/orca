@@ -1,22 +1,39 @@
-import { resolve } from 'path'
-import { defineConfig } from 'electron-vite'
+import { markdownParserAliases } from './config/build-plugins/markdown-parser-exports'
+import { createRequire } from 'node:module'
+import { resolve } from 'node:path'
+import { defineConfig, type UserConfig } from 'electron-vite'
+import type { Plugin, Rollup } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { createBootstrapFatalExitBanner } from './config/build-plugins/bootstrap-fatal-exit-banner'
+import { createBrowserExtensionWorkerShimPlugin } from './config/build-plugins/browser-extension-worker-shim'
+import { createMainLocaleSubsetPlugin } from './config/build-plugins/main-locale-subset'
+import { createPdfjsViewerAssetsPlugin } from './config/build-plugins/pdfjs-viewer-assets'
+import { createProcessHostDevRebuildPlugin } from './config/build-plugins/process-host-dev-rebuild'
+import { createViteCacheRetentionPlugin } from './config/build-plugins/vite-cache-retention'
+import { MAIN_BUILD_ENTRY_POINTS } from './config/build-plugins/main-build-entry-points'
+import { createPlainNodeEntryGuardPlugin } from './config/build-plugins/plain-node-entry-guard'
+import { createDevServeConfig } from './config/build-plugins/dev-serve-config'
+import { resolveBuildSourceCommit } from './config/scripts/build-source-commit.mjs'
 
-// Why: the telemetry transport is gated by two compile-time constants that
-// only the official CI release workflow sets. Contributor / `pnpm dev` /
-// third-party rebuilds must substitute literal `null` at these sites so
-// `IS_OFFICIAL_BUILD` in `src/main/telemetry/client.ts` evaluates `false`
-// at module load and the track() wrapper short-circuits to console-mirror.
-// The substitution happens at compile time — there is no runtime env-var
-// fallback — so a curious contributor cannot spoof transmission with a
-// shell export.
-//
-// CI injects real values via GitHub Actions secrets
-// (ORCA_BUILD_IDENTITY='stable' | 'rc', ORCA_POSTHOG_WRITE_KEY=phc_...);
-// every other build path resolves these env vars to undefined, which the
-// JSON.stringify below folds to the literal `null`. Ambient declarations
-// for the two constants live in `src/types/build-constants.d.ts`.
+const BUNDLED_MAIN_DEPENDENCIES = new Set([
+  'stream-json',
+  'stream-chain',
+  '@xterm/headless',
+  '@xterm/addon-serialize',
+  'tldts',
+  'smol-toml',
+  'yaml',
+  'fflate',
+  // Linear save confirmation; bundled like orcad so packaging needs no extra node_modules.
+  'unified',
+  'remark-parse',
+  'remark-gfm',
+  // Windows NSIS copies app.asar before external resources; bootstrap must not race resources/node_modules.
+  'zod'
+])
+// Official CI alone injects ORCA_BUILD_IDENTITY (stable|rc) and ORCA_POSTHOG_WRITE_KEY secrets; other builds substitute literal null.
+// Compile-time substitution gates telemetry at module load without runtime env fallback; declarations live in src/types/build-constants.d.ts.
 const orcaBuildIdentity = process.env.ORCA_BUILD_IDENTITY
 const ORCA_BUILD_IDENTITY_LITERAL =
   orcaBuildIdentity === 'stable' || orcaBuildIdentity === 'rc'
@@ -33,6 +50,27 @@ const ORCA_DIAGNOSTICS_TOKEN_URL_LITERAL =
     ? JSON.stringify(orcaDiagnosticsTokenUrl)
     : 'null'
 
+const darkBuildSwitches: {
+  darkBuildDefines: () => Record<string, string>
+  darkBuildMarkers: () => { fileName: string; text: string }[]
+} = createRequire(import.meta.url)('./config/dark-build-switches.cjs')
+const DARK_BUILD_DEFINES = darkBuildSwitches.darkBuildDefines()
+
+/** Marks a dark switched-on main build so packaging refuses it. */
+function createDarkBuildMarkerPlugin(): Plugin {
+  return {
+    name: 'orca-dark-build-marker',
+    generateBundle() {
+      for (const marker of darkBuildSwitches.darkBuildMarkers()) {
+        this.emitFile({ type: 'asset', fileName: marker.fileName, source: marker.text })
+      }
+    }
+  }
+}
+
+// Pin official skill installs to the bundled commit on every channel; main installs, renderer prints the command.
+const ORCA_BUILD_COMMIT_LITERAL = JSON.stringify(resolveBuildSourceCommit())
+
 function createStartupDiagnosticsBanner(chunkName: string): string {
   return `
 ;(() => {
@@ -48,10 +86,8 @@ function createStartupDiagnosticsBanner(chunkName: string): string {
       return '"<unserializable>"'
     }
   }
-  let closeSync
   let diagnosticFileDescriptor
-  let openSync
-  let writeSync
+  let closeSync, openSync, writeSync
   try {
     const fs = require('node:fs')
     closeSync = fs.closeSync
@@ -147,60 +183,68 @@ function createStartupDiagnosticsBanner(chunkName: string): string {
 `
 }
 
-function createStartupDiagnosticsBootstrapPlugin() {
-  return {
-    name: 'orca-startup-diagnostics-bootstrap',
-    generateBundle(_options, bundle) {
-      const mainChunk = bundle['index.js']
-      if (!mainChunk || mainChunk.type !== 'chunk') {
-        return
-      }
-
-      // Why: source-level startup diagnostics run after Rollup's generated
-      // prelude and require() list. Mutate the final emitted chunk so macOS
-      // launch failures can identify the earliest JS boundary reached.
-      mainChunk.code = createStartupDiagnosticsBanner(mainChunk.fileName) + mainChunk.code
-    }
+// postBanner lands after minification and Rolldown shifts index.js.map past it, keeping crash traces on the right line.
+function createMainBootstrapPostBanner(chunk: Rollup.RenderedChunk): string {
+  if (chunk.fileName !== 'index.js') {
+    return ''
   }
+  if (!chunk.moduleIds.some((id) => resolve(id) === MAIN_BUILD_ENTRY_POINTS.index)) {
+    throw new Error('Main startup must stay in index.js so __dirname resolves app assets')
+  }
+  // Source guards run after Rollup’s require prelude, too late to handle missing bootstrap dependencies.
+  return createBootstrapFatalExitBanner() + createStartupDiagnosticsBanner(chunk.fileName)
 }
 
-export default defineConfig({
+// Dev-only unminified main bundle exposes function names in V8 profiles; releases and pnpm build never read this flag.
+const MAIN_MINIFY: 'oxc' | false = process.env.ORCA_UNMINIFIED_MAIN === '1' ? false : 'oxc'
+
+export const electronViteConfig: UserConfig = {
   main: {
     build: {
-      // Why: daemon-entry.js is asar-unpacked so child_process.fork() can
-      // execute it from disk. Node's module resolution from the unpacked
-      // directory cannot reach into app.asar, so pure-JS dependencies used
-      // by the daemon must be bundled rather than externalized.
+      // Use Rolldown’s in-process oxc minifier; esbuild mode depends on an undeclared hoisted package.
+      minify: MAIN_MINIFY,
+      // Hidden maps omit sourceMappingURL because packaging strips them; release CI uploads maps for crash decoding.
+      sourcemap: 'hidden',
+      // PR fixtures discard maps; official releases must always retain them.
+      ...(process.env.ORCA_CI_MAIN_SOURCEMAPS === '0' &&
+      orcaBuildIdentity !== 'stable' &&
+      orcaBuildIdentity !== 'rc'
+        ? { sourcemap: false }
+        : {}),
+      // Forked daemon-entry.js must be unpacked; its Node resolver cannot reach app.asar, and startup-critical JS must survive partial Windows resource copies.
       externalizeDeps: {
-        exclude: ['@xterm/headless', '@xterm/addon-serialize']
+        exclude: [...BUNDLED_MAIN_DEPENDENCIES]
       },
       rollupOptions: {
-        input: {
-          index: resolve('src/main/index.ts'),
-          'daemon-entry': resolve('src/main/daemon/daemon-entry.ts'),
-          'computer-sidecar': resolve('src/main/computer/sidecar-entry.ts'),
-          'stt-worker': resolve('src/main/speech/stt-worker.ts'),
-          'warp-theme-parser-worker': resolve('src/main/warp-themes/warp-theme-parser-worker.ts'),
-          'file-watcher-worker': resolve('src/main/runtime/file-watcher-worker.ts'),
-          // Why: electron-vite cleans out/main in dev. The dev CLI imports
-          // this path for `orca agent hooks ...`, so it must survive rebuilds.
-          'agent-hooks/managed-agent-hook-controls': resolve(
-            'src/main/agent-hooks/managed-agent-hook-controls.ts'
-          )
+        input: MAIN_BUILD_ENTRY_POINTS,
+        // CLI builds replace exported entries; keep their internals separate without moving startup paths.
+        preserveEntrySignatures: 'exports-only',
+        // Electron and sidecar launchers require stable CommonJS paths despite Rolldown’s SSR ESM default.
+        output: {
+          // V8 stores a whole script as UTF-16 when any char is above U+00FF; escaping keeps sources one-byte (half the memory).
+          charset: 'ascii',
+          format: 'cjs',
+          entryFileNames: '[name].js',
+          chunkFileNames: 'chunks/[name]-[hash].js',
+          postBanner: createMainBootstrapPostBanner
         },
-        plugins: [createStartupDiagnosticsBootstrapPlugin()]
+        plugins: [
+          createPlainNodeEntryGuardPlugin(),
+          createProcessHostDevRebuildPlugin(),
+          createDarkBuildMarkerPlugin(),
+          createBrowserExtensionWorkerShimPlugin(),
+          createMainLocaleSubsetPlugin()
+        ]
       }
     },
-    // Why: compile-time substitution for the telemetry gate. See the block
-    // above for the full rationale.
     define: {
       ORCA_BUILD_IDENTITY: ORCA_BUILD_IDENTITY_LITERAL,
       ORCA_POSTHOG_WRITE_KEY: ORCA_POSTHOG_WRITE_KEY_LITERAL,
-      ORCA_DIAGNOSTICS_TOKEN_URL: ORCA_DIAGNOSTICS_TOKEN_URL_LITERAL
+      ORCA_DIAGNOSTICS_TOKEN_URL: ORCA_DIAGNOSTICS_TOKEN_URL_LITERAL,
+      ORCA_BUILD_COMMIT: ORCA_BUILD_COMMIT_LITERAL,
+      ...DARK_BUILD_DEFINES
     },
-    // Why: @xterm/headless declares "exports": null in package.json, which
-    // prevents Vite's default resolver from finding the CJS entry. Point
-    // directly at the published main file so the bundler can inline it.
+    // @xterm/headless declares exports:null; point Vite directly at its published CJS main to permit inlining.
     resolve: {
       alias: {
         '@xterm/headless': resolve('node_modules/@xterm/headless/lib-headless/xterm-headless.js'),
@@ -213,20 +257,62 @@ export default defineConfig({
   preload: {
     build: {
       externalizeDeps: {
-        exclude: ['@electron-toolkit/preload']
+        exclude: ['zod']
+      },
+      rollupOptions: {
+        // Unminified preload keeps dependency JSDoc whose em dashes would force two-byte storage in every renderer.
+        output: { charset: 'ascii', comments: { legal: true, annotation: true, jsdoc: false } }
       }
     }
   },
   renderer: {
+    // Shared node_modules installs must not share dependency optimization state across worktrees.
+    cacheDir: resolve('.cache/vite/renderer'),
+    define: {
+      ORCA_BUILD_COMMIT: ORCA_BUILD_COMMIT_LITERAL,
+      ...DARK_BUILD_DEFINES
+    },
     resolve: {
       alias: {
+        ...markdownParserAliases,
         '@renderer': resolve('src/renderer/src'),
         '@': resolve('src/renderer/src')
       }
     },
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      react(),
+      tailwindcss(),
+      createPdfjsViewerAssetsPlugin(),
+      createViteCacheRetentionPlugin()
+    ],
     worker: {
-      format: 'es'
+      format: 'es',
+      rollupOptions: {
+        output: { charset: 'ascii' }
+      }
+    },
+    build: {
+      manifest: true,
+      reportCompressedSize: false,
+      modulePreload: { polyfill: true },
+      minify: 'oxc',
+      target: 'es2020',
+      // Give pop-out dashboard its own HTML/React root with shared preload API; retain index or overriding input drops electron-vite’s default entry.
+      rollupOptions: {
+        // Shared chunks must not import HTML entries that mount another React root.
+        preserveEntrySignatures: 'strict',
+        output: { charset: 'ascii' },
+        input: {
+          index: resolve('src/renderer/index.html'),
+          popout: resolve('src/renderer/popout.html'),
+          space: resolve('src/renderer/space.html'),
+          web: resolve('src/renderer/web-index.html')
+        }
+      }
     }
   }
-})
+}
+
+export default defineConfig(({ command }) =>
+  command === 'serve' ? createDevServeConfig(electronViteConfig) : electronViteConfig
+)

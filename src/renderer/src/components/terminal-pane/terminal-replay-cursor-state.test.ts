@@ -1,17 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import {
+  CONFIRMED_SHELL_MODE_RESET,
+  POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
   POST_REPLAY_LIVE_SNAPSHOT_RESET,
   POST_REPLAY_MODE_RESET,
   POST_REPLAY_REATTACH_RESET,
   RESET_KITTY_KEYBOARD_PROTOCOL
-} from './layout-serialization'
+} from '../../../../shared/terminal-mode-reset-profiles'
 
 const OLD_REATTACH_RESET_WITHOUT_CURSOR_STYLE = '\x1b[?25h\x1b[?1004l'
 
 type DecPrivateCursorState = {
   cursorStyle?: string
   cursorBlink?: boolean
+  sendFocus?: boolean
 }
 
 type KittyKeyboardState = {
@@ -27,10 +30,12 @@ type XtermWithCoreService = Terminal & {
     coreService?: {
       decPrivateModes?: DecPrivateCursorState
       kittyKeyboard?: KittyKeyboardState
+      isCursorHidden?: boolean
     }
     _coreService?: {
       decPrivateModes?: DecPrivateCursorState
       kittyKeyboard?: KittyKeyboardState
+      isCursorHidden?: boolean
     }
   }
 }
@@ -39,6 +44,15 @@ function readDecPrivateCursorState(term: Terminal): DecPrivateCursorState {
   const core = (term as XtermWithCoreService)._core
   const cursorState = core?.coreService?.decPrivateModes ?? core?._coreService?.decPrivateModes
   return cursorState ? { ...cursorState } : {}
+}
+
+function readCursorHidden(term: Terminal): boolean | undefined {
+  const core = (term as XtermWithCoreService)._core
+  return core?.coreService?.isCursorHidden ?? core?._coreService?.isCursorHidden
+}
+
+function readSendFocus(term: Terminal): boolean | undefined {
+  return readDecPrivateCursorState(term).sendFocus
 }
 
 function readKittyKeyboardState(term: Terminal): KittyKeyboardState | null {
@@ -60,10 +74,11 @@ function writeTerminal(term: Terminal, data: string): Promise<void> {
 }
 
 describe('terminal replay state reset', () => {
-  it('includes Kitty keyboard protocol reset in replay reset bundles', () => {
+  it('resets Kitty keyboard state only in the process-ended bundles', () => {
     expect(RESET_KITTY_KEYBOARD_PROTOCOL).toBe('\x1b[<99u\x1b[=0u')
     expect(POST_REPLAY_MODE_RESET).toContain(RESET_KITTY_KEYBOARD_PROTOCOL)
-    expect(POST_REPLAY_REATTACH_RESET).toContain(RESET_KITTY_KEYBOARD_PROTOCOL)
+    expect(CONFIRMED_SHELL_MODE_RESET).toContain(RESET_KITTY_KEYBOARD_PROTOCOL)
+    expect(POST_REPLAY_REATTACH_RESET).not.toContain(RESET_KITTY_KEYBOARD_PROTOCOL)
     expect(POST_REPLAY_LIVE_SNAPSHOT_RESET).not.toContain(RESET_KITTY_KEYBOARD_PROTOCOL)
   })
 
@@ -123,7 +138,7 @@ describe('terminal replay state reset', () => {
     }
   })
 
-  it('clears active-buffer Kitty keyboard state after live reattach replay', async () => {
+  it("keeps a live app's Kitty keyboard state through the live reattach reset", async () => {
     const term = new Terminal({
       cols: 80,
       rows: 24,
@@ -133,19 +148,124 @@ describe('terminal replay state reset', () => {
 
     try {
       await writeTerminal(term, '\x1b[=31u\x1b[>15u')
-      expect(readKittyKeyboardState(term)).toMatchObject({
-        flags: 15,
-        mainStack: [31]
-      })
-
       await writeTerminal(term, POST_REPLAY_REATTACH_RESET)
-      // Why: after renderer reattach, the next Ctrl+C must not inherit a stale
-      // Kitty CSI-u encoder state from the replayed TUI snapshot.
+      expect(readKittyKeyboardState(term)).toMatchObject({ flags: 15, mainStack: [31] })
+    } finally {
+      term.dispose()
+    }
+  })
+
+  it('clears active-buffer Kitty keyboard state with the confirmed-shell reset', async () => {
+    const term = new Terminal({
+      cols: 80,
+      rows: 24,
+      allowProposedApi: true,
+      vtExtensions: { kittyKeyboard: true }
+    })
+
+    try {
+      await writeTerminal(term, '\x1b[=31u\x1b[>15u')
+      await writeTerminal(term, CONFIRMED_SHELL_MODE_RESET)
       expect(readKittyKeyboardState(term)).toMatchObject({
         flags: 0,
         mainFlags: 0,
         mainStack: []
       })
+    } finally {
+      term.dispose()
+    }
+  })
+
+  it('resets hidden cursor visibility after ordinary reattach replay', async () => {
+    const term = new Terminal({
+      cols: 80,
+      rows: 24,
+      allowProposedApi: true
+    })
+
+    try {
+      await writeTerminal(term, '\x1b[?25l')
+      expect(readCursorHidden(term)).toBe(true)
+
+      await writeTerminal(term, POST_REPLAY_REATTACH_RESET)
+
+      expect(readCursorHidden(term)).toBe(false)
+    } finally {
+      term.dispose()
+    }
+  })
+
+  it('resets focus reporting after ordinary reattach replay', async () => {
+    const term = new Terminal({
+      cols: 80,
+      rows: 24,
+      allowProposedApi: true
+    })
+    try {
+      await writeTerminal(term, '\x1b[?1004h')
+      expect(readSendFocus(term)).toBe(true)
+
+      await writeTerminal(term, POST_REPLAY_REATTACH_RESET)
+
+      expect(readSendFocus(term)).toBe(false)
+    } finally {
+      term.dispose()
+    }
+  })
+
+  it('resets hidden cursor visibility after live agent reattach replay', async () => {
+    const term = new Terminal({
+      cols: 80,
+      rows: 24,
+      allowProposedApi: true
+    })
+
+    try {
+      await writeTerminal(term, '\x1b[?25l')
+      expect(readCursorHidden(term)).toBe(true)
+
+      await writeTerminal(term, POST_REPLAY_LIVE_AGENT_REATTACH_RESET)
+
+      // False-positive agent identity must not leave shell cursors hidden; live agents can hide again on repaint.
+      expect(readCursorHidden(term)).toBe(false)
+    } finally {
+      term.dispose()
+    }
+  })
+
+  it('preserves live focus reporting after live agent reattach replay', async () => {
+    const term = new Terminal({
+      cols: 80,
+      rows: 24,
+      allowProposedApi: true
+    })
+    try {
+      await writeTerminal(term, '\x1b[?1004h')
+      expect(readSendFocus(term)).toBe(true)
+
+      await writeTerminal(term, POST_REPLAY_LIVE_AGENT_REATTACH_RESET)
+
+      // Live TUIs can require focus events to repaint their own hidden-cursor caret after reattach.
+      expect(readSendFocus(term)).toBe(true)
+    } finally {
+      term.dispose()
+    }
+  })
+
+  it('shows the cursor after cold-restore replay reset', async () => {
+    const term = new Terminal({
+      cols: 80,
+      rows: 24,
+      allowProposedApi: true
+    })
+
+    try {
+      await writeTerminal(term, '\x1b[?25l')
+      expect(readCursorHidden(term)).toBe(true)
+
+      await writeTerminal(term, POST_REPLAY_MODE_RESET)
+
+      expect(readCursorHidden(term)).toBe(false)
     } finally {
       term.dispose()
     }
@@ -167,6 +287,36 @@ describe('terminal replay state reset', () => {
         flags: 15,
         mainStack: [31]
       })
+    } finally {
+      term.dispose()
+    }
+  })
+
+  it('disarms mouse input when a hidden replay lands on the normal shell buffer', async () => {
+    const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+    try {
+      await writeTerminal(term, '\x1b[?1003h\x1b[?1006h\x1b[?1049hTUI FRAME\x1b[?1049lSHELL MARKER')
+      expect(term.buffer.active.type).toBe('normal')
+      expect(term.modes.mouseTrackingMode).toBe('any')
+
+      await writeTerminal(term, POST_REPLAY_REATTACH_RESET)
+
+      expect(term.buffer.active.type).toBe('normal')
+      expect(term.modes.mouseTrackingMode).toBe('none')
+      expect(term.buffer.active.getLine(0)?.translateToString()).toContain('SHELL MARKER')
+    } finally {
+      term.dispose()
+    }
+  })
+
+  it('preserves mouse input for a live alternate-screen replay', async () => {
+    const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+    try {
+      await writeTerminal(term, '\x1b[?1003h\x1b[?1006h\x1b[?1049hLIVE TUI')
+      await writeTerminal(term, POST_REPLAY_LIVE_SNAPSHOT_RESET)
+
+      expect(term.buffer.active.type).toBe('alternate')
+      expect(term.modes.mouseTrackingMode).toBe('any')
     } finally {
       term.dispose()
     }

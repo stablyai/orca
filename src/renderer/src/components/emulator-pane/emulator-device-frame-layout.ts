@@ -5,6 +5,8 @@ export type StreamSize = {
   height: number
 }
 
+export type EmulatorDeviceVisualOrientation = 'portrait' | 'landscape'
+
 export type PaneSize = {
   width: number
   height: number
@@ -23,6 +25,12 @@ export type DeviceFrameLayout = {
   sideButtonThickness: number
 }
 
+export type VisualStreamGeometry = {
+  aspectRatio: number
+  size: StreamSize | null
+  streamRotation: -90 | 0 | 90
+}
+
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value))
 const FIT_MARGIN_PX = 0.5
@@ -38,6 +46,37 @@ export function resolveDeviceFrameKind(
     return 'phone'
   }
   return screenAspectRatio > 0.62 && screenAspectRatio < 1.62 ? 'tablet' : 'phone'
+}
+
+export function resolveVisualScreenAspectRatio(
+  streamSize: StreamSize | null,
+  visualOrientation: EmulatorDeviceVisualOrientation
+): number {
+  return resolveVisualStreamGeometry(streamSize, visualOrientation).aspectRatio
+}
+
+export function resolveVisualStreamGeometry(
+  streamSize: StreamSize | null,
+  visualOrientation: EmulatorDeviceVisualOrientation
+): VisualStreamGeometry {
+  // The physical frame/input rect must follow successful rotation even when serve-sim retains the old canvas dimensions.
+  const width = streamSize?.width ?? 9
+  const height = streamSize?.height ?? 19
+  const shortSide = Math.min(width, height)
+  const longSide = Math.max(width, height)
+  const visualSize =
+    visualOrientation === 'landscape'
+      ? { width: longSide, height: shortSide }
+      : { width: shortSide, height: longSide }
+  const streamIsLandscape = streamSize ? streamSize.width > streamSize.height : false
+  const visualIsLandscape = visualOrientation === 'landscape'
+  const streamRotation =
+    streamSize && streamIsLandscape !== visualIsLandscape ? (visualIsLandscape ? 90 : -90) : 0
+  return {
+    aspectRatio: visualSize.width / visualSize.height,
+    size: streamSize ? visualSize : null,
+    streamRotation
+  }
 }
 
 function fitScreenToPane(paneSize: PaneSize | null, aspectRatio: number): PaneSize | null {
@@ -87,8 +126,7 @@ export function fitDeviceFrameToPane(
       return null
     }
     const chrome = measureChrome(screenSize, kind)
-    // Why: fractional aspect-ratio math can overshoot the pane by a sub-pixel,
-    // which shows up as clipped hardware in split panes.
+    // Leave room for fractional aspect-ratio rounding or split panes clip sub-pixel hardware edges.
     const availableWidth = Math.max(
       1,
       paneSize.width - chrome.hardwareOutset * 2 - chrome.bezel * 2 - FIT_MARGIN_PX

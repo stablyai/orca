@@ -1,5 +1,5 @@
-import { createHash } from 'crypto'
-import path from 'path'
+import { createHash } from 'node:crypto'
+import path from 'node:path'
 import type { AppIdentity } from '../../shared/app-identity'
 
 const BASE_APP_NAME = 'Orca'
@@ -8,6 +8,13 @@ const MAX_LABEL_LENGTH = 80
 
 export type DevInstanceIdentity = AppIdentity & {
   appUserModelId: string
+  // Keep the macOS safeStorage Keychain name stable across dev branches and distinct from production.
+  appName: string
+}
+
+/** Electron fixes the Keychain service before ready. Rename dev only; packaged forks must retain their CFBundleName-derived encryption keys. */
+export function shouldApplyPreReadyAppName(identity: Pick<AppIdentity, 'isDev'>): boolean {
+  return identity.isDev
 }
 
 function cleanEnvValue(value: string | undefined): string | null {
@@ -22,7 +29,7 @@ function cleanEnvValue(value: string | undefined): string | null {
 
 function lastPathSegment(value: string): string {
   const normalized = value.replace(/\\/g, '/')
-  return normalized.split('/').filter(Boolean).at(-1) ?? value
+  return normalized.split('/').findLast(Boolean) ?? value
 }
 
 function formatLabel(branch: string | null, worktreeName: string | null): string | null {
@@ -50,6 +57,7 @@ export function getDevInstanceIdentity(
   if (!isDev) {
     return {
       name: BASE_APP_NAME,
+      appName: BASE_APP_NAME,
       isDev: false,
       devLabel: null,
       devBranch: null,
@@ -71,6 +79,8 @@ export function getDevInstanceIdentity(
 
   return {
     name: dockTitle,
+    // Share one dev Keychain key; branch identity remains in the display name.
+    appName: `${BASE_APP_NAME} Dev`,
     isDev: true,
     devLabel,
     devBranch: branch,

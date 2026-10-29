@@ -1,0 +1,112 @@
+/** Mouse close once bypassed the running-process confirmation used by Cmd+W (#10142); both paths must enforce the same guard. */
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const {
+  requestPinnedTabCloseConfirmMock,
+  getStateMock,
+  inspectRuntimeTerminalProcessMock,
+  isWebRuntimeSessionActiveMock,
+  resolveHostSessionTabIdForWebSessionTabMock
+} = vi.hoisted(() => ({
+  requestPinnedTabCloseConfirmMock: vi.fn(),
+  getStateMock: vi.fn(),
+  inspectRuntimeTerminalProcessMock: vi.fn(),
+  isWebRuntimeSessionActiveMock: vi.fn(() => false),
+  resolveHostSessionTabIdForWebSessionTabMock: vi.fn<() => string | null>(() => null)
+}))
+
+vi.mock('@/store', () => ({
+  useAppStore: { getState: getStateMock }
+}))
+
+vi.mock('@/runtime/web-runtime-session-tab-lifecycle', () => ({
+  activateWebRuntimeSessionTab: vi.fn(),
+  closeWebRuntimeSessionTab: vi.fn()
+}))
+vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+  createWebRuntimeSessionTerminal: vi.fn()
+}))
+vi.mock('@/runtime/web-runtime-session-environment', () => ({
+  isWebRuntimeSessionActive: isWebRuntimeSessionActiveMock
+}))
+vi.mock('../../../../shared/terminal-surface-id', () => ({
+  isWebTerminalSurfaceTabId: vi.fn(() => false),
+  toHostSessionTabId: vi.fn((tabId: string) => tabId)
+}))
+
+vi.mock('@/runtime/web-session-tabs-sync/tracking-lifecycle', () => ({
+  getLatestWebSessionTabsPublicationEpoch: vi.fn(() => 'epoch-1')
+}))
+vi.mock('@/runtime/web-session-tabs-sync/tracking-mappings', () => ({
+  resolveHostSessionTabIdForWebSessionTab: resolveHostSessionTabIdForWebSessionTabMock
+}))
+
+vi.mock('@/runtime/runtime-terminal-inspection', () => ({
+  inspectRuntimeTerminalProcess: inspectRuntimeTerminalProcessMock
+}))
+
+import { closeTerminalTab } from './terminal-tab-actions'
+import { terminalOwnerRows } from './terminal-tab-owner-rows.test-fixture'
+
+function stateWithBusyTerminalTab(closeTab: () => void): Record<string, unknown> {
+  return {
+    settings: { activeRuntimeEnvironmentId: null, confirmClosePinnedTab: true },
+    ...terminalOwnerRows(null),
+    tabsByWorktree: { 'wt-1': [{ id: 'tab-busy' }, { id: 'tab-other' }] },
+    unifiedTabsByWorktree: {
+      'wt-1': [
+        { id: 'tab-busy', entityId: 'tab-busy', contentType: 'terminal', isPinned: false },
+        { id: 'tab-other', entityId: 'tab-other', contentType: 'terminal', isPinned: false }
+      ]
+    },
+    ptyIdsByTabId: { 'tab-busy': ['pty-busy'] },
+    terminalLayoutsByTabId: { 'tab-busy': { ptyIdsByLeafId: { leaf: 'pty-busy' } } },
+    agentStatusByPaneKey: {},
+    openFiles: [],
+    browserTabsByWorktree: {},
+    activeWorktreeId: 'wt-1',
+    activeTabId: 'tab-busy',
+    closeTab,
+    requestPinnedTabCloseConfirm: requestPinnedTabCloseConfirmMock,
+    setActiveTab: vi.fn(),
+    setActiveFile: vi.fn(),
+    setActiveTabType: vi.fn(),
+    setActiveBrowserTab: vi.fn(),
+    setActiveWorktree: vi.fn()
+  }
+}
+
+describe('#10142 close confirmation policy is the same for keyboard and mouse', () => {
+  const closeTab = vi.fn()
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getStateMock.mockReturnValue(stateWithBusyTerminalTab(closeTab))
+    isWebRuntimeSessionActiveMock.mockReturnValue(false)
+    resolveHostSessionTabIdForWebSessionTabMock.mockReturnValue(null)
+    inspectRuntimeTerminalProcessMock.mockResolvedValue({
+      foregroundProcess: 'sleep',
+      hasChildProcesses: true
+    })
+  })
+
+  it('mouse close routes a pinned tab through its confirmation guard', () => {
+    const state = stateWithBusyTerminalTab(closeTab)
+    ;(state.unifiedTabsByWorktree as Record<string, { isPinned: boolean }[]>)[
+      'wt-1'
+    ]![0]!.isPinned = true
+    getStateMock.mockReturnValue(state)
+
+    closeTerminalTab('tab-busy')
+
+    expect(requestPinnedTabCloseConfirmMock).toHaveBeenCalled()
+    expect(closeTab).not.toHaveBeenCalled()
+  })
+
+  it('mouse close (X button / middle-click) does not drop a busy tab without confirmation', async () => {
+    closeTerminalTab('tab-busy')
+    await Promise.resolve()
+
+    expect(closeTab).not.toHaveBeenCalled()
+  })
+})

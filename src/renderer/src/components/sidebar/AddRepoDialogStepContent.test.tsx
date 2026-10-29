@@ -4,7 +4,7 @@ import type { ComponentProps } from 'react'
 import { Dialog } from '@/components/ui/dialog'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AddRepoDialogStepContent } from './AddRepoDialogStepContent'
-import type { NestedRepoScanResult } from '../../../../shared/types'
+import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
 
 const nestedScan: NestedRepoScanResult = {
   selectedPath: '/workspace/platform',
@@ -29,7 +29,6 @@ function renderStepContent(overrides: Partial<StepContentProps>): string {
     step: 'nested',
     isRuntimeEnvironmentActive: false,
     activeRuntimeEnvironmentId: null,
-    isSshLikely: false,
     repoCount: 1,
     isAdding: false,
     addProjectBusyLabel: null,
@@ -47,7 +46,6 @@ function renderStepContent(overrides: Partial<StepContentProps>): string {
     remotePath: '',
     remoteError: null,
     isAddingRemote: false,
-    isScanningRemoteNested: false,
     nestedScan,
     nestedSelectedPaths: new Set(nestedScan.repos.map((repo) => repo.path)),
     nestedGroupName: 'platform',
@@ -69,9 +67,7 @@ function renderStepContent(overrides: Partial<StepContentProps>): string {
     onSelectTarget: vi.fn(),
     onRemotePathChange: vi.fn(),
     onAddRemoteRepo: vi.fn(),
-    onOpenSshSettings: vi.fn(),
     onConnectTarget: vi.fn(),
-    onStopRemoteNestedScan: vi.fn(),
     onCloneUrlChange: vi.fn(),
     onCloneDestinationChange: vi.fn(),
     onPickCloneDestination: vi.fn(),
@@ -79,6 +75,7 @@ function renderStepContent(overrides: Partial<StepContentProps>): string {
     onNestedGroupNameChange: vi.fn(),
     onNestedSelectedPathsChange: vi.fn(),
     onImportNestedRepos: vi.fn(),
+    onOpenNestedRootFolder: vi.fn(),
     onCreateNameChange: vi.fn(),
     onCreateParentChange: vi.fn(),
     onPickCreateParent: vi.fn(),
@@ -100,24 +97,33 @@ function renderNestedStep(repoCount: number): string {
 }
 
 describe('AddRepoDialogStepContent nested imports', () => {
-  it('asks the monorepo question when no repos exist yet', () => {
+  it('asks the grouping question when no repos exist yet', () => {
     const html = renderNestedStep(0)
 
-    expect(html).toContain('Is this a monorepo?')
-    expect(html).toContain('aria-label="Monorepo name"')
-    expect(html).toContain('Yes, import as monorepo')
+    expect(html).toContain('Group these repositories?')
+    expect(html).toContain('aria-label="Group name"')
+    expect(html).toContain('Yes, import as group')
     expect(html).toContain('No, import separately')
     expect(html).not.toContain('>Import</button>')
   })
 
-  it('shows the same monorepo import controls after a repo already exists', () => {
+  it('shows the same grouping import controls after a repo already exists', () => {
     const html = renderNestedStep(1)
 
-    expect(html).toContain('Is this a monorepo?')
-    expect(html).toContain('aria-label="Monorepo name"')
-    expect(html).toContain('Yes, import as monorepo')
+    expect(html).toContain('Group these repositories?')
+    expect(html).toContain('aria-label="Group name"')
+    expect(html).toContain('Yes, import as group')
     expect(html).toContain('No, import separately')
     expect(html).not.toContain('>Import</button>')
+  })
+
+  it('offers opening the parent folder when nested import selection is empty', () => {
+    const html = renderStepContent({ nestedSelectedPaths: new Set() })
+
+    expect(html).toContain('No repositories are selected')
+    expect(html).toContain('Open as Folder')
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>No, import separately<\/button>/)
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Yes, import as group<\/button>/)
   })
 
   it('offers host browsing for remote create project locations', () => {
@@ -131,19 +137,16 @@ describe('AddRepoDialogStepContent nested imports', () => {
     expect(html).toContain('host folder not selected')
   })
 
-  it('uses manual path entry for SSH create project locations', () => {
-    const html = renderStepContent({
-      step: 'create',
-      manualCreateParentEntry: true,
-      selectedSshTargetId: 'openclaw-2',
-      activeRuntimeEnvironmentId: null
-    })
-
-    expect(html).toContain('Create a new project')
-    expect(html).toContain('placeholder="/home/user/projects"')
-    expect(html).toContain('aria-label="Browse host filesystem"')
-    expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*aria-label="Browse host filesystem"/)
-    expect(html).not.toContain('Choose parent folder')
+  it('opens the host browser for a filled path that Windows did not hand over', () => {
+    const remote = {
+      step: 'server-path' as const,
+      isRuntimeEnvironmentActive: true,
+      activeRuntimeEnvironmentId: 'env-1',
+      serverPath: '/home/me/app'
+    }
+    const browser = 'Navigate to a directory and click Select to choose it.'
+    expect(renderStepContent(remote)).toContain(browser)
+    expect(renderStepContent({ ...remote, serverPathPrefilled: true })).not.toContain(browser)
   })
 
   it('offers host browsing for remote clone destinations', () => {
@@ -157,102 +160,11 @@ describe('AddRepoDialogStepContent nested imports', () => {
     expect(html).toContain('aria-label="Browse host filesystem"')
   })
 
-  it('offers SSH browsing for selected-host clone destinations', () => {
-    const html = renderStepContent({
-      step: 'clone',
-      selectedSshTargetId: 'openclaw-2',
-      selectedHostLabel: 'openclaw 2'
-    })
+  it('falls back to the start step when no paired server reaches the SSH hosts', () => {
+    const html = renderStepContent({ step: 'remote', selectedTargetId: 'openclaw-2' })
 
-    expect(html).toContain('Clone from URL')
-    expect(html).toContain('choose where to clone it on openclaw 2')
-    expect(html).toContain('Parent folder')
-    expect(html).toContain('aria-label="Browse host filesystem"')
-    expect(html).not.toContain('aria-label="Choose folder"')
-  })
-
-  it('hides the SSH target chooser after a host was already selected', () => {
-    const html = renderStepContent({
-      step: 'remote',
-      lockSshTargetSelection: true,
-      selectedTargetId: 'openclaw-2',
-      sshTargets: [
-        {
-          id: 'github',
-          label: 'github.com',
-          host: 'github.com',
-          port: 22,
-          username: 'git',
-          state: {
-            targetId: 'github',
-            status: 'connected',
-            error: null,
-            reconnectAttempt: 0
-          }
-        },
-        {
-          id: 'openclaw-2',
-          label: 'openclaw 2',
-          host: 'openclaw.example.com',
-          port: 22,
-          username: 'dev',
-          state: {
-            targetId: 'openclaw-2',
-            status: 'connected',
-            error: null,
-            reconnectAttempt: 0
-          }
-        }
-      ]
-    })
-
-    expect(html).toContain('Open project on SSH host')
-    expect(html).toContain('openclaw 2')
-    expect(html).toContain('Host path')
-    expect(html).not.toContain('SSH target')
-    expect(html).not.toContain('github.com')
-    expect(html).not.toContain('Connect')
-  })
-
-  it('shows a connect affordance for a selected disconnected SSH host', () => {
-    const html = renderStepContent({
-      step: 'remote',
-      lockSshTargetSelection: true,
-      selectedTargetId: 'openclaw-2',
-      sshTargets: [
-        {
-          id: 'openclaw-2',
-          label: 'openclaw 2',
-          host: 'openclaw.example.com',
-          port: 22,
-          username: 'dev',
-          state: {
-            targetId: 'openclaw-2',
-            status: 'disconnected',
-            error: null,
-            reconnectAttempt: 0
-          }
-        }
-      ]
-    })
-
-    expect(html).toContain('openclaw 2')
-    expect(html).toContain('is disconnected')
-    expect(html).toContain('Connect')
-    expect(html).not.toContain('SSH target')
-    expect(html).toContain('placeholder="/home/user/project"')
-    expect(html).toContain('disabled=""')
-  })
-
-  it('uses SSH-aware copy on the add step when an SSH host is selected', () => {
-    const html = renderStepContent({
-      step: 'add',
-      browseHostKind: 'ssh'
-    })
-
-    expect(html).toContain('Open project on SSH host')
-    expect(html).toContain('Existing Git repository or folder on this SSH host')
-    expect(html).not.toContain('Local project, Git repo, or folder with many repos')
+    expect(html).toContain('Browse folder')
+    expect(html).not.toContain('Host path')
   })
 
   it('uses the standard add step for remote Orca server hosts', () => {
@@ -270,5 +182,17 @@ describe('AddRepoDialogStepContent nested imports', () => {
     expect(html).not.toContain('Browse host')
     expect(html).not.toContain('Create on host')
     expect(html).not.toContain('Want to import many repos at once?')
+  })
+
+  it('opens the in-app filesystem browser for a paired runtime', () => {
+    const html = renderStepContent({
+      step: 'server-path',
+      isRuntimeEnvironmentActive: true,
+      activeRuntimeEnvironmentId: 'paired-host'
+    })
+
+    expect(html).toContain('Browse host filesystem')
+    expect(html).toContain('Navigate to a directory and click Select to choose it.')
+    expect(html).toContain('Select folder')
   })
 })

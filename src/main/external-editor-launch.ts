@@ -1,31 +1,46 @@
+import { quotePosixShellUnlessPlain } from '../shared/shell-argument-quoting'
+import { spawn, type ChildProcess } from 'node:child_process'
+import { spawnProcess } from '@orca/process-host'
 import { existsSync } from 'node:fs'
-import { basename, posix, win32 } from 'node:path'
+import { posix, win32 } from 'node:path'
+import { parseWslUncPath } from '../shared/wsl-paths'
+import { isVsCodeLauncherExecutable } from '../shared/remote-ssh-editor-launcher'
 import { resolveCliCommand } from './codex-cli/command'
-import { getCmdExePath } from './win32-utils'
+import { envWithoutAppImageRuntime } from './pty/appimage-terminal-env'
+import {
+  getLauncherBaseName,
+  hasMatchingOuterQuotes,
+  stripMatchingQuotes
+} from './editor-launcher-name'
+import {
+  isJetBrainsConsoleShim,
+  resolveColocatedJetBrainsGuiExecutable
+} from './jetbrains-windows-gui-launchers'
+import { findInstalledVsCodeCli } from './vscode-cli-install-paths'
+import { getCmdExePath, getSpawnArgsForWindows } from './win32-utils'
 
 export const EXTERNAL_EDITOR_CLI_COMMAND = 'code'
 const WINDOWS_CONSOLE_EDITORS = new Set(['nvim', 'vim'])
 
-export type ExternalEditorLaunchSpec =
-  | {
-      kind: 'executable'
-      hideWindowsConsole: boolean
-      spawnCmd: string
-      spawnArgs: string[]
-    }
-  | {
-      kind: 'shell'
-      hideWindowsConsole: boolean
-      spawnCmd: string
-      spawnArgs: string[]
-    }
-
-function escapePosixPathForShell(pathValue: string): string {
-  if (/^[a-zA-Z0-9_./@:-]+$/.test(pathValue)) {
-    return pathValue
-  }
-  return `'${pathValue.replace(/'/g, "'\\''")}'`
+export type ExternalEditorExecutableLaunchSpec = {
+  kind: 'executable'
+  hideWindowsConsole: boolean
+  /** Detach Windows GUI shims via start /B only when required; start re-parses quoted argv. */
+  detachedGui?: boolean
+  spawnCmd: string
+  spawnArgs: string[]
 }
+
+export type ExternalEditorShellLaunchSpec = {
+  kind: 'shell'
+  hideWindowsConsole: boolean
+  spawnCmd: string
+  spawnArgs: string[]
+}
+
+export type ExternalEditorLaunchSpec =
+  | ExternalEditorExecutableLaunchSpec
+  | ExternalEditorShellLaunchSpec
 
 function escapeWindowsPathForShell(pathValue: string): string {
   return /^[a-zA-Z0-9_./@:\\-]+$/.test(pathValue) ? pathValue : `"${pathValue}"`
@@ -34,42 +49,7 @@ function escapeWindowsPathForShell(pathValue: string): string {
 function escapePathForShell(pathValue: string, platform: NodeJS.Platform): string {
   return platform === 'win32'
     ? escapeWindowsPathForShell(pathValue)
-    : escapePosixPathForShell(pathValue)
-}
-
-function getLauncherBaseName(command: string, options: { shellCommand?: boolean } = {}): string {
-  const normalized = options.shellCommand
-    ? getLeadingShellCommandToken(command)
-    : stripMatchingQuotes(command)
-  const name = normalized.includes('\\') ? win32.basename(normalized) : basename(normalized)
-  return name.replace(/\.(?:cmd|exe|bat)$/i, '').toLowerCase()
-}
-
-function getLeadingShellCommandToken(command: string): string {
-  const trimmed = command.trim()
-  const quote = trimmed[0]
-  if (quote === '"' || quote === "'") {
-    const closingIndex = trimmed.indexOf(quote, 1)
-    if (closingIndex > 0) {
-      return trimmed.slice(1, closingIndex)
-    }
-  }
-  return trimmed.split(/\s+/, 1)[0] ?? ''
-}
-
-function stripMatchingQuotes(value: string): string {
-  const trimmed = value.trim()
-  const quote = trimmed[0]
-  if ((quote === '"' || quote === "'") && trimmed.endsWith(quote)) {
-    return trimmed.slice(1, -1)
-  }
-  return trimmed
-}
-
-function hasMatchingOuterQuotes(value: string): boolean {
-  const trimmed = value.trim()
-  const quote = trimmed[0]
-  return (quote === '"' || quote === "'") && trimmed.endsWith(quote)
+    : quotePosixShellUnlessPlain(pathValue)
 }
 
 function isWindowsExecutablePath(command: string): boolean {
@@ -93,8 +73,7 @@ function isDirectExecutablePath(
   if (!/\s/.test(unquoted) || hasMatchingOuterQuotes(command)) {
     return true
   }
-  // Why: unquoted POSIX paths can contain spaces, but so can shell commands
-  // with arguments. Only an existing path is safe to treat as one executable.
+  // An unquoted POSIX path with spaces is ambiguous; only treat existing files as executables.
   return platform === 'win32' ? isWindowsExecutablePath(unquoted) : fileExists(unquoted)
 }
 
@@ -106,17 +85,84 @@ function shouldShowWindowsConsole(
   return platform === 'win32' && WINDOWS_CONSOLE_EDITORS.has(getLauncherBaseName(command, options))
 }
 
-function buildExecutableArgs(editorCommand: string, pathValue: string): string[] {
-  if (getLauncherBaseName(editorCommand) === 'cursor') {
-    // Why: Cursor can route bare folder launches through the last active
-    // workbench. A new window keeps "Open in Cursor" scoped to this worktree.
-    return ['--new-window', pathValue]
+function buildExecutableArgs(
+  editorCommand: string,
+  pathValue: string,
+  platform: NodeJS.Platform
+): string[] {
+  const isCursor = getLauncherBaseName(editorCommand) === 'cursor'
+  const targetArgs = buildWslRemoteTargetArgs(editorCommand, pathValue, platform, isCursor)
+  // Cursor may reuse the last workbench; a new window preserves this workspace target.
+  return isCursor ? ['--new-window', ...targetArgs] : targetArgs
+}
+
+function buildWslRemoteTargetArgs(
+  editorCommand: string,
+  pathValue: string,
+  platform: NodeJS.Platform,
+  isCursor: boolean
+): string[] {
+  if (platform !== 'win32' || !(isCursor || isVsCodeLauncherExecutable(editorCommand))) {
+    return [pathValue]
   }
-  return [pathValue]
+  const wslPath = parseWslUncPath(pathValue)
+  // Both editors interpret WSL UNC paths as local Windows folders without --remote.
+  return wslPath ? ['--remote', `wsl+${wslPath.distro}`, wslPath.linuxPath] : [pathValue]
 }
 
 function isCompoundShellCommand(command: string): boolean {
   return /\s/.test(command)
+}
+
+function preferJetBrainsGuiExecutable(
+  editorCommand: string,
+  platform: NodeJS.Platform,
+  fileExists: (path: string) => boolean
+): string {
+  if (platform !== 'win32') {
+    return editorCommand
+  }
+  return resolveColocatedJetBrainsGuiExecutable(editorCommand, fileExists) ?? editorCommand
+}
+
+function resolveEditorCliCommand(
+  command: string,
+  platform: NodeJS.Platform,
+  fileExists: (path: string) => boolean
+): string {
+  const resolved = resolveCliCommand(command, { platform })
+  return resolved === command
+    ? (findInstalledVsCodeCli(command, platform, fileExists) ?? command)
+    : resolved
+}
+
+function resolveSimpleEditorCommand(
+  command: string,
+  platform: NodeJS.Platform,
+  fileExists: (path: string) => boolean
+): string {
+  return preferJetBrainsGuiExecutable(
+    resolveEditorCliCommand(command, platform, fileExists),
+    platform,
+    fileExists
+  )
+}
+
+function buildExecutableLaunchSpec(
+  editorCommand: string,
+  pathValue: string,
+  platform: NodeJS.Platform
+): ExternalEditorExecutableLaunchSpec {
+  const spec: ExternalEditorExecutableLaunchSpec = {
+    kind: 'executable',
+    hideWindowsConsole: !shouldShowWindowsConsole(editorCommand, platform),
+    spawnCmd: editorCommand,
+    spawnArgs: buildExecutableArgs(editorCommand, pathValue, platform)
+  }
+  if (spec.hideWindowsConsole && isJetBrainsConsoleShim(editorCommand, platform)) {
+    spec.detachedGui = true
+  }
+  return spec
 }
 
 function buildShellLaunchSpec(
@@ -126,6 +172,7 @@ function buildShellLaunchSpec(
 ): ExternalEditorLaunchSpec {
   const shellCommand = `${command} ${escapePathForShell(pathValue, platform)}`
   if (platform === 'win32') {
+    // Do not wrap shell commands in start: it consumes quoted titles and can leave cmd /K running.
     return {
       kind: 'shell',
       hideWindowsConsole: !shouldShowWindowsConsole(command, platform, { shellCommand: true }),
@@ -151,24 +198,100 @@ export function resolveExternalEditorLaunchSpec(
   const trimmed = command?.trim() || EXTERNAL_EDITOR_CLI_COMMAND
 
   if (isDirectExecutablePath(trimmed, platform, fileExists)) {
-    const editorCommand = stripMatchingQuotes(trimmed)
-    return {
-      kind: 'executable',
-      hideWindowsConsole: !shouldShowWindowsConsole(editorCommand, platform),
-      spawnCmd: editorCommand,
-      spawnArgs: buildExecutableArgs(editorCommand, pathValue)
-    }
+    // Upgrade explicit JetBrains paths to a colocated GUI executable, just like PATH-resolved names.
+    return buildExecutableLaunchSpec(
+      preferJetBrainsGuiExecutable(stripMatchingQuotes(trimmed), platform, fileExists),
+      pathValue,
+      platform
+    )
   }
 
   if (isCompoundShellCommand(trimmed)) {
     return buildShellLaunchSpec(trimmed, pathValue, platform)
   }
 
-  const editorCommand = resolveCliCommand(trimmed, { platform })
-  return {
-    kind: 'executable',
-    hideWindowsConsole: !shouldShowWindowsConsole(editorCommand, platform),
-    spawnCmd: editorCommand,
-    spawnArgs: buildExecutableArgs(editorCommand, pathValue)
+  return buildExecutableLaunchSpec(
+    resolveSimpleEditorCommand(trimmed, platform, fileExists),
+    pathValue,
+    platform
+  )
+}
+
+/** The executable a remote launch would spawn; null for compound shell commands, which carry no single launcher. */
+export function resolveExternalEditorExecutable(
+  command: string | undefined,
+  options: { platform?: NodeJS.Platform; fileExists?: (path: string) => boolean } = {}
+): string | null {
+  const platform = options.platform ?? process.platform
+  const fileExists = options.fileExists ?? existsSync
+  const trimmed = command?.trim() || EXTERNAL_EDITOR_CLI_COMMAND
+  if (isDirectExecutablePath(trimmed, platform, fileExists)) {
+    return stripMatchingQuotes(trimmed)
   }
+  return isCompoundShellCommand(trimmed)
+    ? null
+    : resolveEditorCliCommand(trimmed, platform, fileExists)
+}
+
+function startExternalEditorProcess(launchSpec: ExternalEditorLaunchSpec): ChildProcess {
+  const detachedOptions = {
+    detached: true,
+    stdio: 'ignore',
+    // AppImage exports ARGV0, APPDIR, and mount PATH entries that editor shells must not inherit.
+    env: process.platform === 'linux' ? envWithoutAppImageRuntime(process.env) : undefined
+  } as const
+  if (launchSpec.kind === 'shell') {
+    const { spawnCmd, spawnArgs, hideWindowsConsole } = launchSpec
+    return hideWindowsConsole
+      ? spawnProcess({ program: spawnCmd, args: spawnArgs, ...detachedOptions })
+      : spawn(spawnCmd, spawnArgs, { ...detachedOptions, windowsHide: false })
+  }
+  if (launchSpec.hideWindowsConsole && !launchSpec.detachedGui) {
+    // process-host preserves quoting for batch launchers and arguments containing spaces.
+    return spawnProcess({
+      program: launchSpec.spawnCmd,
+      args: launchSpec.spawnArgs,
+      ...detachedOptions
+    })
+  }
+  const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(
+    launchSpec.spawnCmd,
+    launchSpec.spawnArgs,
+    {
+      detachedGui: launchSpec.detachedGui === true
+    }
+  )
+  if (!launchSpec.hideWindowsConsole) {
+    // process-host hides consoles; Windows terminal editors need a visible console.
+    return spawn(spawnCmd, spawnArgs, { ...detachedOptions, windowsHide: false })
+  }
+  return spawnProcess({ program: spawnCmd, args: spawnArgs, ...detachedOptions })
+}
+
+export async function launchExternalEditor(launchSpec: ExternalEditorLaunchSpec): Promise<void> {
+  await new Promise<void>((resolvePromise, rejectPromise) => {
+    const child = startExternalEditorProcess(launchSpec)
+    let settled = false
+    function cleanup(): void {
+      child.off('error', onError)
+      child.off('spawn', onSpawn)
+    }
+    function settle(callback: () => void): void {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanup()
+      callback()
+    }
+    function onError(error: Error): void {
+      settle(() => rejectPromise(error))
+    }
+    function onSpawn(): void {
+      child.unref()
+      settle(resolvePromise)
+    }
+    child.once('error', onError)
+    child.once('spawn', onSpawn)
+  })
 }

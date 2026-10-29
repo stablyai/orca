@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react'
+import React, { useCallback } from 'react'
 import { Copy, ExternalLink, FolderOpen, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -14,9 +14,9 @@ import {
   resolvePortOpenInOrcaBrowser
 } from '@/lib/workspace-port-actions'
 import type { WorkspacePortGroup } from '@/lib/workspace-port-groups'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { useLocalhostLabelRouteForPort } from '@/lib/workspace-port-localhost-label-selector'
+import { useWorktreeRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
 import { useAppStore } from '@/store'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
 import { translate } from '@/i18n/i18n'
 
@@ -66,6 +66,7 @@ function PortAction({
   )
 }
 
+/** One port row in the status-bar popover, with open/copy/stop actions on its owner host. */
 export function PortRow({
   port,
   activeWorktreeId,
@@ -76,23 +77,23 @@ export function PortRow({
   external?: boolean
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
-  const runtimeEnvironmentId = useAppStore((s) =>
-    getRuntimeEnvironmentIdForWorktree(
-      s,
-      port.kind === 'workspace' ? port.owner.worktreeId : activeWorktreeId
-    )
-  )
+  const localhostLabelRoute = useLocalhostLabelRouteForPort(port)
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const setRemoteBrowserPageHandle = useAppStore((s) => s.setRemoteBrowserPageHandle)
-  const setWorkspacePortScan = useAppStore((s) => s.setWorkspacePortScan)
-  const setWorkspacePortScanForKey = useAppStore((s) => s.setWorkspacePortScanForKey)
+  const replaceWorkspacePortScans = useAppStore((s) => s.replaceWorkspacePortScans)
   const setWorkspacePortScanRefreshing = useAppStore((s) => s.setWorkspacePortScanRefreshing)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
-  const runtimeTarget = useMemo(
-    () => getActiveRuntimeTarget({ ...settings, activeRuntimeEnvironmentId: runtimeEnvironmentId }),
-    [runtimeEnvironmentId, settings]
+  const runtimeTarget = useWorktreeRuntimeTarget(
+    port.kind === 'workspace' ? port.owner.worktreeId : activeWorktreeId
   )
-  const processLabel = port.processName ?? (port.pid ? `PID ${port.pid}` : 'Unknown process')
+  const processLabel =
+    port.processName ??
+    (port.pid
+      ? `PID ${port.pid}`
+      : translate(
+          'auto.components.status.bar.ports.status.popover.rows.unknownProcess',
+          'Unknown process'
+        ))
   const canStop = canStopWorkspacePort(port)
   const openBrowserLabel = translate(
     'auto.components.status.bar.ports.status.popover.rows.085f4f0334',
@@ -105,8 +106,7 @@ export function PortRow({
       recordFeatureInteraction('ports')
       const openInOrcaBrowser = resolvePortOpenInOrcaBrowser({
         settings,
-        // Why: keyboard activations have detail=0; only pointer clicks carry
-        // the modifier intent for the system-browser escape hatch.
+        // Keyboard activation has no pointer modifier intent for the system-browser escape hatch.
         event: event.detail > 0 ? event : null,
         isMac: navigator.userAgent.includes('Mac')
       })
@@ -116,7 +116,8 @@ export function PortRow({
         runtimeTarget,
         createBrowserTab,
         setRemoteBrowserPageHandle,
-        openInOrcaBrowser
+        openInOrcaBrowser,
+        localhostLabelRoute
       }).then((result) => {
         if (!result.ok) {
           toast.error(
@@ -132,6 +133,7 @@ export function PortRow({
     [
       activeWorktreeId,
       createBrowserTab,
+      localhostLabelRoute,
       port,
       recordFeatureInteraction,
       runtimeTarget,
@@ -183,8 +185,7 @@ export function PortRow({
         )
         const refreshResult = await refreshWorkspacePortScanAfterStop({
           runtimeTarget,
-          setWorkspacePortScan,
-          setWorkspacePortScanForKey,
+          replaceWorkspacePortScans,
           getWorkspacePortScansByKey: () => useAppStore.getState().workspacePortScansByKey,
           setWorkspacePortScanRefreshing
         })
@@ -206,8 +207,7 @@ export function PortRow({
       port,
       recordFeatureInteraction,
       runtimeTarget,
-      setWorkspacePortScan,
-      setWorkspacePortScanForKey,
+      replaceWorkspacePortScans,
       setWorkspacePortScanRefreshing
     ]
   )

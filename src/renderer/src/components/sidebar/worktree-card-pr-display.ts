@@ -1,6 +1,25 @@
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import { translate } from '@/i18n/i18n'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
 
 type LinkedReviewMetadataProvider = Exclude<HostedReviewInfo['provider'], 'unsupported'>
+
+export function isCachedMergedBranchPRCurrentForWorktree(
+  cachedPR: PRInfo | HostedReviewInfo | null | undefined,
+  worktree: Pick<Worktree, 'head'>
+): boolean {
+  return (
+    cachedPR?.state === 'merged' &&
+    typeof cachedPR.headSha === 'string' &&
+    cachedPR.headSha.length > 0 &&
+    typeof worktree.head === 'string' &&
+    worktree.head.length > 0 &&
+    // A merged PR still belongs to a worktree behind web/update-branch commits; match main’s containment rule.
+    (cachedPR.headSha === worktree.head || cachedPR.confirmedContainedHeadOid === worktree.head)
+  )
+}
 
 type LinkedReviewNumbers = {
   linkedPR: number | null
@@ -23,6 +42,9 @@ export type WorktreeCardPrDisplay =
 
 type WorktreeCardPrDisplayOptions = {
   reviewHintKey?: string
+  /** GitHub PR number proven by a branch-scoped lookup. */
+  branchLookupGitHubPRNumber?: number | null
+  suppressedGitHubPR?: number | null
 }
 
 function getLinkedReviewNumber(
@@ -48,13 +70,24 @@ function makeLinkedReviewFallback(
   number: number,
   review: HostedReviewInfo | null | undefined
 ): WorktreeCardPrDisplay {
-  const label = provider === 'gitlab' ? 'MR' : 'PR'
+  const isMergeRequest = provider === 'gitlab'
+  const unavailable = isMergeRequest
+    ? translate(
+        'auto.components.sidebar.worktreeCardPrDisplay.mrDetailsUnavailable',
+        'MR details unavailable'
+      )
+    : translate(
+        'auto.components.sidebar.worktreeCardPrDisplay.prDetailsUnavailable',
+        'PR details unavailable'
+      )
+  const loading = isMergeRequest
+    ? translate('auto.components.sidebar.worktreeCardPrDisplay.loadingMr', 'Loading MR...')
+    : translate('auto.components.sidebar.worktreeCardPrDisplay.loadingPr', 'Loading PR...')
   return {
     provider,
     number,
-    // Why: linked review metadata is persisted before provider details are cached.
-    // Keep the row visible on cold first render while the lookup catches up.
-    title: review === null ? `${label} details unavailable` : `Loading ${label}...`
+    // Persisted review links must remain visible while provider details warm up.
+    title: review === null ? unavailable : loading
   }
 }
 
@@ -74,6 +107,21 @@ export function getWorktreeCardPrDisplay(
     linkedAzureDevOpsPR,
     linkedGiteaPR
   }
+  const hasLinkedReview =
+    linkedPR !== null ||
+    linkedGitLabMR !== null ||
+    linkedBitbucketPR !== null ||
+    linkedAzureDevOpsPR !== null ||
+    linkedGiteaPR !== null
+  if (
+    review?.provider === 'github' &&
+    isGitHubPRSuppressed(
+      { linkedPR, suppressedGitHubPR: options.suppressedGitHubPR ?? null },
+      review.number
+    )
+  ) {
+    return null
+  }
   if (review) {
     if (review.provider === 'unsupported') {
       return review
@@ -83,8 +131,16 @@ export function getWorktreeCardPrDisplay(
       if (review.provider !== 'github' && review.provider !== 'gitlab') {
         return review
       }
-      // Why: GitHub/GitLab linked lookups can outlive the worktree metadata
-      // that requested them. A neutral branch lookup is safe to show unlinked.
+      // Why: GitHub refreshes retain a linked-style request hint; trust only the separately recorded branch-lookup provenance.
+      if (
+        !hasLinkedReview &&
+        review.provider === 'github' &&
+        options.branchLookupGitHubPRNumber != null &&
+        options.branchLookupGitHubPRNumber === review.number
+      ) {
+        return review
+      }
+      // Linked lookups can outlive their requesting metadata; only neutral branch results are safe when unlinked.
       return options.reviewHintKey === '' ? review : null
     }
     if (review.number === linkedReviewNumber) {

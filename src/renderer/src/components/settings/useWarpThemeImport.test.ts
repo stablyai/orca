@@ -1,5 +1,6 @@
+import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   MAX_TERMINAL_CUSTOM_THEMES,
   type WarpThemeImportPreview
@@ -29,7 +30,7 @@ function resetMockState() {
 }
 
 vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+  const actual = await vi.importActual<typeof ReactModule>('react')
   return {
     ...actual,
     useEffect: (effect: () => void | (() => void)) => {
@@ -111,7 +112,6 @@ describe('useWarpThemeImport', () => {
         expect.objectContaining({ id: 'warp:tokyo-night', name: 'Tokyo Night' })
       ]
     })
-    // Success is reported via a toast, and the modal closes itself.
     expect(toastSuccess).toHaveBeenCalledWith('Imported 1 theme')
 
     resetMockState()

@@ -4,6 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import WorktreeCreationPanel from './WorktreeCreationPanel'
+import type { PendingWorktreeCreation } from '@/lib/pending-worktree-creation'
 
 const mocks = vi.hoisted(() => ({
   state: {
@@ -12,6 +13,7 @@ const mocks = vi.hoisted(() => ({
         creationId: 'create-1',
         phase: 'creating',
         status: 'creating',
+        startedAt: Date.now(),
         indeterminate: false,
         loaderVisible: true,
         request: {
@@ -27,7 +29,7 @@ const mocks = vi.hoisted(() => ({
           quickTelemetry: null
         }
       }
-    }
+    } as Record<string, PendingWorktreeCreation>
   }
 }))
 
@@ -62,6 +64,26 @@ async function renderPanel(reserveCollapsedSidebarHeaderSpace: boolean): Promise
 describe('WorktreeCreationPanel', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
+    mocks.state.pendingWorktreeCreations['create-1'] = {
+      creationId: 'create-1',
+      phase: 'creating',
+      status: 'creating',
+      startedAt: Date.now(),
+      indeterminate: false,
+      loaderVisible: true,
+      request: {
+        repoId: 'repo-1',
+        name: 'new-workspace',
+        displayName: 'New workspace',
+        setupDecision: 'skip',
+        agent: null,
+        pendingFirstAgentMessageRename: false,
+        note: '',
+        startupPlan: null,
+        quickPrompt: '',
+        quickTelemetry: null
+      }
+    }
   })
 
   afterEach(() => {
@@ -99,5 +121,83 @@ describe('WorktreeCreationPanel', () => {
     )
 
     expect(title?.closest('div')?.previousElementSibling).toBeNull()
+  })
+
+  it('shows provisioning logs while a VM recipe is running', async () => {
+    mocks.state.pendingWorktreeCreations['create-1'] = {
+      ...mocks.state.pendingWorktreeCreations['create-1'],
+      phase: 'provisioning-vm',
+      provisioningLog: 'creating sandbox\nstarting orca serve\n'
+    }
+
+    const container = await renderPanel(false)
+
+    expect(container.textContent).toContain('Provisioning VM')
+    expect(container.querySelector('pre')?.textContent).toBe(
+      'creating sandbox\nstarting orca serve\n'
+    )
+    expect(container.querySelector('pre')?.className).toContain('h-72')
+    const cancel = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Cancel'
+    )
+    expect(cancel).toBeTruthy()
+  })
+
+  it('surfaces the captured recipe output when a VM recipe fails', async () => {
+    mocks.state.pendingWorktreeCreations['create-1'] = {
+      ...mocks.state.pendingWorktreeCreations['create-1'],
+      phase: 'provisioning-vm',
+      status: 'error',
+      error: 'Recipe exited with code 1.',
+      provisioningLog: 'pulling image…\nERROR: no space left on device\n'
+    }
+
+    const container = await renderPanel(false)
+
+    expect(container.textContent).toContain('Couldn’t create worktree')
+    expect(container.textContent).toContain('Recipe exited with code 1.')
+    const log = container.querySelector('pre')
+    expect(log?.textContent).toBe('pulling image…\nERROR: no space left on device\n')
+    expect(log?.className).toContain('h-72')
+    expect(container.textContent).toContain('Retry')
+  })
+
+  it("shows git's checkout meter as a labelled bar while the checkout runs", async () => {
+    mocks.state.pendingWorktreeCreations['create-1'] = {
+      ...mocks.state.pendingWorktreeCreations['create-1'],
+      checkoutProgress: { percent: 42, completed: 420, total: 1000 }
+    }
+
+    const container = await renderPanel(false)
+
+    const bar = container.querySelector('[role="progressbar"]')
+    expect(bar?.getAttribute('aria-valuenow')).toBe('42')
+    const label = document.getElementById(bar?.getAttribute('aria-labelledby') ?? '')
+    expect(label?.textContent).toBe('Checking out files… 42%')
+  })
+
+  it('shows no bar when git printed no checkout meter, or after the create failed', async () => {
+    expect((await renderPanel(false)).querySelector('[role="progressbar"]')).toBeNull()
+
+    mocks.state.pendingWorktreeCreations['create-1'] = {
+      ...mocks.state.pendingWorktreeCreations['create-1'],
+      status: 'error',
+      error: 'git worktree add failed',
+      checkoutProgress: { percent: 42, completed: 420, total: 1000 }
+    }
+    expect((await renderPanel(false)).querySelector('[role="progressbar"]')).toBeNull()
+  })
+
+  it('omits the recipe output panel for a non-VM creation failure', async () => {
+    mocks.state.pendingWorktreeCreations['create-1'] = {
+      ...mocks.state.pendingWorktreeCreations['create-1'],
+      status: 'error',
+      error: 'git worktree add failed'
+    }
+
+    const container = await renderPanel(false)
+
+    expect(container.textContent).toContain('git worktree add failed')
+    expect(container.querySelector('pre')).toBeNull()
   })
 })

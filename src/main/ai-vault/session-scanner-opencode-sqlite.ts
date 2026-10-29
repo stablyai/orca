@@ -1,37 +1,27 @@
 import type { AiVaultSession, AiVaultSessionPreviewMessage } from '../../shared/ai-vault-types'
+import { createAccumulator, finalizeSession, updateTimeline } from './session-scanner-accumulator'
+import { addPreviewMessage } from './session-scanner-messages'
 import {
-  addPreviewMessage,
-  createAccumulator,
-  finalizeSession,
-  updateTimeline
-} from './session-scanner-accumulator'
+  normalizeFullFirstUserPromptText,
+  shouldCaptureFullFirstUserPrompt
+} from './session-scanner-first-user-prompt'
+import { readOpenCodeDatabase } from './session-scanner-opencode-sqlite-open'
+import { readPartDataRow, readSessionRow } from './session-scanner-opencode-sqlite-rows'
+import {
+  canCountOpenCodeMessages,
+  canReadOpenCodeMessageParts
+} from './session-scanner-opencode-sqlite-schema'
 import { normalizeTitleText } from './session-scanner-values'
-import SyncDatabase from '../sqlite/sync-database'
+import { zcodeVisibleMessageFilter } from './session-scanner-zcode-visibility'
+import { zcodeTranscriptOrder } from './session-scanner-zcode-order'
+import type SyncDatabase from '../sqlite/sync-database'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
 
-// Why: OpenCode 1.17.x migrated session storage from per-session JSON files
-// to a single SQLite DB at ~/.local/share/opencode/opencode.db. This module
-// parses individual sessions from the DB into AiVaultSession objects. The
-// discovery layer (listing candidates) lives in
-// session-scanner-opencode-sqlite-discovery.ts.
-
 const OPENCODE_SQLITE_PREVIEW_LIMIT = 5
-
-type SessionRow = {
-  id: string
-  title: string | null
-  directory: string | null
-  time_created: number
-  time_updated: number
-  model_json: string | null
-  agent: string | null
-  tokens_input: number
-  tokens_output: number
-  tokens_reasoning: number
-  tokens_cache_read: number
-  cost: number
-  message_count: number
-}
+// Bound previews to recent messages to avoid scanning large historical tool blobs; worker timeout caps residual work.
+const OPENCODE_SQLITE_PREVIEW_MESSAGE_WINDOW = 100
+// Bounds a pathological single message; a real typed prompt is a handful of parts.
+const FIRST_USER_PROMPT_PART_LIMIT = 512
 
 type PreviewRow = {
   role: string | null
@@ -39,14 +29,6 @@ type PreviewRow = {
   time_created: number
   summary_title: string | null
   summary_body: string | null
-}
-
-function openReadonlyDatabase(dbPath: string): SyncDatabase {
-  const db = new SyncDatabase(dbPath, { readonly: true, fileMustExist: true })
-  // Why: belt-and-suspenders guard so a bug in the SELECT list can never
-  // mutate the user's opencode.db.
-  db.pragma('query_only = ON')
-  return db
 }
 
 function canReadOpenCodeSessions(db: SyncDatabase): boolean {
@@ -65,18 +47,11 @@ function sessionNumberColumnSelect(db: SyncDatabase, columnName: string): string
   return columnExists(db, 'session', columnName) ? `s.${columnName}` : '0'
 }
 
-function canCountOpenCodeMessages(db: SyncDatabase): boolean {
-  return (
-    tableExists(db, 'message') &&
-    columnExists(db, 'message', 'session_id') &&
-    columnExists(db, 'message', 'data')
-  )
-}
-
-function buildSessionQuery(db: SyncDatabase): string {
+function buildSessionQuery(db: SyncDatabase, agent: 'opencode' | 'zcode'): string {
   const messageCountSubquery = canCountOpenCodeMessages(db)
     ? `(SELECT COUNT(*) FROM message m
         WHERE m.session_id = s.id
+          ${zcodeVisibleMessageFilter(agent)}
           AND json_extract(m.data, '$.role') IN ('user','assistant'))`
     : '0'
   return `SELECT s.id,
@@ -110,8 +85,7 @@ function extractModelId(modelJson: string | null): string | null {
     if (!record) {
       return null
     }
-    // Why: OpenCode 1.17.x stores model as {"id":"glm-5.2","providerID":"..."}.
-    // Older schemas used {"modelID":"..."}; accept both.
+    // Accept current id and older modelID model-reference spellings.
     return (
       (typeof record.id === 'string' && record.id.trim()) ||
       (typeof record.modelID === 'string' && record.modelID.trim()) ||
@@ -129,7 +103,7 @@ function mapPreviewRole(role: string | null): AiVaultSessionPreviewMessage['role
   return 'unknown'
 }
 
-function extractPartText(partData: string): string | null {
+export function extractPartText(partData: string): string | null {
   try {
     const parsed = JSON.parse(partData) as unknown
     const record =
@@ -148,15 +122,58 @@ function extractPartText(partData: string): string | null {
   }
 }
 
-function buildPreviewQuery(db: SyncDatabase): string | null {
-  if (
-    !canCountOpenCodeMessages(db) ||
-    !tableExists(db, 'part') ||
-    !columnExists(db, 'message', 'id') ||
-    !columnExists(db, 'part', 'message_id') ||
-    !columnExists(db, 'part', 'time_created') ||
-    !columnExists(db, 'part', 'data')
-  ) {
+function readFirstUserPromptFromOpenCodeDb(
+  db: SyncDatabase,
+  sessionId: string,
+  agent: 'opencode' | 'zcode'
+): string | null {
+  if (!canReadOpenCodeMessageParts(db)) {
+    return null
+  }
+
+  try {
+    // Restrict parts to the earliest user message with text; spanning turns would contaminate the first prompt.
+    const rows = db
+      .prepare(
+        `SELECT p.data AS part_data
+         FROM part p
+         WHERE p.message_id = (
+                 SELECT m.id
+                 FROM message m
+                 JOIN part fp ON fp.message_id = m.id
+                 WHERE m.session_id = ?
+                   ${zcodeVisibleMessageFilter(agent)}
+                   AND json_extract(m.data, '$.role') = 'user'
+                   AND json_extract(fp.data, '$.type') = 'text'
+                 ORDER BY ${zcodeTranscriptOrder(db, agent, 'message', 'm', 'ASC')}
+                 LIMIT 1
+               )
+           AND json_extract(p.data, '$.type') = 'text'
+         ORDER BY ${zcodeTranscriptOrder(db, agent, 'part', 'p', 'ASC')}
+         LIMIT ${FIRST_USER_PROMPT_PART_LIMIT}`
+      )
+      .all(sessionId)
+      .map(readPartDataRow)
+      .filter((row): row is { part_data: string } => row !== null)
+
+    const parts: string[] = []
+    for (const row of rows) {
+      const text = extractPartText(row.part_data)
+      if (text) {
+        parts.push(text)
+      }
+    }
+    if (parts.length === 0) {
+      return null
+    }
+    return normalizeFullFirstUserPromptText(parts.join('\n'))
+  } catch {
+    return null
+  }
+}
+
+function buildPreviewQuery(db: SyncDatabase, agent: 'opencode' | 'zcode'): string | null {
+  if (!canReadOpenCodeMessageParts(db)) {
     return null
   }
   return `SELECT json_extract(m.data, '$.role') AS role,
@@ -164,100 +181,112 @@ function buildPreviewQuery(db: SyncDatabase): string | null {
                  p.time_created,
                  json_extract(m.data, '$.summary.title') AS summary_title,
                  json_extract(m.data, '$.summary.body') AS summary_body
-          FROM message m
+          FROM (SELECT ${agent === 'zcode' ? 'm.rowid AS rowid, m.*' : 'm.id, m.data'} FROM message m
+                WHERE m.session_id = ?
+                ${zcodeVisibleMessageFilter(agent)}
+                ORDER BY ${zcodeTranscriptOrder(db, agent, 'message', 'm', 'DESC')}
+                LIMIT ${OPENCODE_SQLITE_PREVIEW_MESSAGE_WINDOW}) m
           JOIN part p ON p.message_id = m.id
-          WHERE m.session_id = ?
-            AND json_extract(m.data, '$.role') IN ('user','assistant')
+          WHERE json_extract(m.data, '$.role') IN ('user','assistant')
             AND json_extract(p.data, '$.type') = 'text'
-          ORDER BY p.time_created DESC
+          ORDER BY ${
+            agent === 'zcode'
+              ? `${zcodeTranscriptOrder(db, agent, 'message', 'm', 'DESC')}, ${zcodeTranscriptOrder(db, agent, 'part', 'p', 'DESC')}`
+              : 'p.time_created DESC'
+          }
           LIMIT ?`
 }
 
-/**
- * Parse a single OpenCode session from the SQLite database into an
- * `AiVaultSession`. Reads session metadata (title, cwd, model, tokens, cost)
- * and up to 5 preview messages by joining the `message` and `part` tables.
- * The database is opened read-only with `PRAGMA query_only = ON` as a
- * belt-and-suspenders guard against mutations.
- * @param args.dbPath - Absolute path to the opencode.db file.
- * @param args.sessionId - The session ID (primary key in the `session` table).
- * @param args.platform - The platform to use for resume command generation.
- * @returns The parsed `AiVaultSession`, or `null` if the session does not exist
- *   or the database lacks the required schema.
- */
+/** Read session metadata and a bounded preview; absent sessions or required schema yield null. */
 export async function parseOpenCodeSqliteSession(args: {
   dbPath: string
   sessionId: string
   platform: NodeJS.Platform
+  agent?: 'opencode' | 'zcode'
 }): Promise<AiVaultSession | null> {
-  const { dbPath, sessionId, platform } = args
-  let db: SyncDatabase | null = null
-  try {
-    db = openReadonlyDatabase(dbPath)
-    if (!canReadOpenCodeSessions(db)) {
-      return null
-    }
-    const row = db.prepare(buildSessionQuery(db)).get(sessionId) as SessionRow | undefined
-    if (!row || row.id !== sessionId) {
-      return null
-    }
+  return readOpenCodeDatabase({
+    dbPath: args.dbPath,
+    read: (db) => readOpenCodeSqliteSession({ db, ...args })
+  })
+}
 
-    const mtimeMs =
-      typeof row.time_updated === 'number' && row.time_updated > 0
-        ? row.time_updated
-        : row.time_created
-    // Why: discovery uses a synthetic db#session path only for parser routing.
-    // The UI's log open/reveal actions need a real filesystem path.
-    const accumulator = createAccumulator({
-      agent: 'opencode',
-      file: {
-        path: dbPath,
-        mtimeMs,
-        modifiedAt: new Date(mtimeMs).toISOString()
-      },
-      sessionId
-    })
-    accumulator.title = normalizeTitleText(row.title ?? '')
-    accumulator.cwd = row.directory
-    accumulator.model = extractModelId(row.model_json)
-    accumulator.totalTokens =
-      (row.tokens_input ?? 0) + (row.tokens_output ?? 0) + (row.tokens_reasoning ?? 0)
-    accumulator.messageCount = row.message_count ?? 0
-    updateTimeline(accumulator, row.time_created)
-    updateTimeline(accumulator, row.time_updated)
+export function readOpenCodeSqliteSession(args: {
+  db: SyncDatabase
+  dbPath: string
+  sessionId: string
+  platform: NodeJS.Platform
+  agent?: 'opencode' | 'zcode'
+}): AiVaultSession | null {
+  const { db, dbPath, sessionId, platform } = args
+  if (!canReadOpenCodeSessions(db)) {
+    return null
+  }
+  const agent = args.agent ?? 'opencode'
+  const row = readSessionRow(db.prepare(buildSessionQuery(db, agent)).get(sessionId))
+  if (!row || row.id !== sessionId) {
+    return null
+  }
 
-    const previewSql = buildPreviewQuery(db)
-    if (previewSql) {
-      const previewRows = db
-        .prepare(previewSql)
-        .all(sessionId, OPENCODE_SQLITE_PREVIEW_LIMIT) as PreviewRow[]
-      // Why: query returns newest-first; push in chronological order so the
-      // accumulator's ring buffer keeps the newest OPENCODE_SQLITE_PREVIEW_LIMIT
-      // messages.
-      for (let i = previewRows.length - 1; i >= 0; i--) {
-        const previewRow = previewRows[i]
-        if (!previewRow) {
-          continue
-        }
-        const text = extractPartText(previewRow.part_data)
-        if (!text) {
-          continue
-        }
-        addPreviewMessage(accumulator, {
-          role: mapPreviewRole(previewRow.role),
-          text,
-          timestamp: previewRow.time_created
-        })
-        if (previewRow.role === 'user' && !accumulator.title) {
-          accumulator.title =
-            normalizeTitleText(previewRow.summary_title ?? '') ||
-            normalizeTitleText(previewRow.summary_body ?? '')
-        }
+  const mtimeMs =
+    typeof row.time_updated === 'number' && row.time_updated > 0
+      ? row.time_updated
+      : row.time_created
+  // Keep a real database path for UI open/reveal actions; synthetic db#session paths only route parsing.
+  const accumulator = createAccumulator({
+    agent: args.agent ?? 'opencode',
+    file: {
+      path: dbPath,
+      mtimeMs,
+      modifiedAt: new Date(mtimeMs).toISOString()
+    },
+    sessionId
+  })
+  accumulator.title = normalizeTitleText(row.title ?? '')
+  accumulator.cwd = row.directory
+  accumulator.model = extractModelId(row.model_json)
+  accumulator.totalTokens =
+    (row.tokens_input ?? 0) + (row.tokens_output ?? 0) + (row.tokens_reasoning ?? 0)
+  accumulator.messageCount = row.message_count ?? 0
+  updateTimeline(accumulator, row.time_created)
+  updateTimeline(accumulator, row.time_updated)
+
+  const previewSql = buildPreviewQuery(db, agent)
+  if (previewSql) {
+    // Probe one extra row because SQL windowing prevents the accumulator from detecting omitted previews.
+    const probedRows = db
+      .prepare(previewSql)
+      .all(sessionId, OPENCODE_SQLITE_PREVIEW_LIMIT + 1) as PreviewRow[]
+    if (probedRows.length > OPENCODE_SQLITE_PREVIEW_LIMIT) {
+      accumulator.previewMessagesTruncated = true
+    }
+    const previewRows = probedRows.slice(0, OPENCODE_SQLITE_PREVIEW_LIMIT)
+    // Reverse newest-first query results before pushing into the chronological preview ring.
+    for (let i = previewRows.length - 1; i >= 0; i--) {
+      const previewRow = previewRows[i]
+      if (!previewRow) {
+        continue
+      }
+      const text = extractPartText(previewRow.part_data)
+      if (!text) {
+        continue
+      }
+      addPreviewMessage(accumulator, {
+        role: mapPreviewRole(previewRow.role),
+        text,
+        timestamp: previewRow.time_created
+      })
+      if (previewRow.role === 'user' && !accumulator.title) {
+        accumulator.title =
+          normalizeTitleText(previewRow.summary_title ?? '') ||
+          normalizeTitleText(previewRow.summary_body ?? '')
       }
     }
-
-    return finalizeSession(accumulator, platform)
-  } finally {
-    db?.close()
   }
+
+  // On-demand copy needs the earliest real prompt, which may lie outside the recent preview window.
+  if (shouldCaptureFullFirstUserPrompt()) {
+    accumulator.firstUserPrompt = readFirstUserPromptFromOpenCodeDb(db, sessionId, agent)
+  }
+
+  return finalizeSession(accumulator, platform)
 }

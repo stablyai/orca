@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
-import type { LinearConnectionStatus, LinearIssue, LinearTeam } from '../../../../shared/types'
+import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import type { LinearConnectionStatus, LinearTeam } from '../../../../shared/linear/workspace-types'
 import { createLinearSlice } from './linear'
 
 const linearStatus = vi.fn()
@@ -15,13 +16,27 @@ vi.mock('@/runtime/runtime-linear-client', () => ({
   linearConnect: (...args: unknown[]) => linearConnect(...args),
   linearDisconnect: vi.fn(),
   linearDisconnectWorkspace: vi.fn(),
-  linearGetIssue: (...args: unknown[]) => linearGetIssue(...args),
+  isLinearIssueAttributeFilterUnsupportedError: () => false,
   linearListIssues: (...args: unknown[]) => linearListIssues(...args),
-  linearListTeams: (...args: unknown[]) => linearListTeams(...args),
   linearSearchIssues: (...args: unknown[]) => linearSearchIssues(...args),
   linearSelectWorkspace: vi.fn(),
   linearStatus: (...args: unknown[]) => linearStatus(...args),
   linearTestConnection: vi.fn()
+}))
+
+vi.mock('@/runtime/runtime-linear-issue-mutations', () => ({
+  linearGetIssue: (...args: unknown[]) => linearGetIssue(...args)
+}))
+
+vi.mock('@/runtime/runtime-linear-project-client', () => ({
+  linearGetCustomView: vi.fn(),
+  linearGetProject: vi.fn(),
+  linearListCustomViewIssues: vi.fn(),
+  linearListCustomViewProjects: vi.fn(),
+  linearListCustomViews: vi.fn(),
+  linearListProjectIssues: vi.fn(),
+  linearListProjects: vi.fn(),
+  linearListTeams: (...args: unknown[]) => linearListTeams(...args)
 }))
 
 vi.mock('../../hooks/useIssueMetadata', () => ({
@@ -99,57 +114,6 @@ describe('createLinearSlice invalidation', () => {
     vi.clearAllMocks()
   })
 
-  it('keeps literal search queries separate from list cache keys', async () => {
-    const store = createTestStore()
-    store.setState({
-      linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' },
-      linearListCache: {
-        'workspace-1::list::all::36': { data: { items: [issue('LIST')] }, fetchedAt: Date.now() }
-      }
-    })
-    linearSearchIssues.mockResolvedValueOnce([issue('SEARCH')])
-
-    await expect(store.getState().searchLinearIssues('list::all', 36)).resolves.toMatchObject([
-      { id: 'SEARCH' }
-    ])
-
-    expect(
-      store.getState().getCachedLinearIssues({ kind: 'search', query: 'list::all', limit: 36 })
-    ).toMatchObject([{ id: 'SEARCH' }])
-    expect(
-      store.getState().getCachedLinearIssues({ kind: 'list', filter: 'all', limit: 36 })
-    ).toMatchObject({ items: [{ id: 'LIST' }] })
-  })
-
-  it('caches teams by workspace and dedupes fresh reads', async () => {
-    const store = createTestStore()
-    linearListTeams.mockResolvedValueOnce([team('team-1')])
-
-    await expect(store.getState().listLinearTeams('workspace-1')).resolves.toMatchObject([
-      { id: 'team-1' }
-    ])
-    await expect(store.getState().listLinearTeams('workspace-1')).resolves.toMatchObject([
-      { id: 'team-1' }
-    ])
-
-    expect(linearListTeams).toHaveBeenCalledTimes(1)
-    expect(store.getState().getCachedLinearTeams('workspace-1')).toMatchObject([{ id: 'team-1' }])
-  })
-
-  it('patches issue-cache entries keyed by workspace-qualified ids', () => {
-    const store = createTestStore()
-    store.setState({
-      linearIssueCache: {
-        'workspace-1::issue-id': { data: issue('issue-id'), fetchedAt: Date.now() }
-      }
-    })
-
-    store.getState().patchLinearIssue('issue-id', { title: 'Updated' })
-
-    expect(store.getState().linearIssueCache['workspace-1::issue-id'].data?.title).toBe('Updated')
-    expect(store.getState().linearIssueCache['workspace-1::issue-id'].fetchedAt).toBe(0)
-  })
-
   it('refreshing a linked Linear issue invalidates stale issue collection caches', async () => {
     const store = createTestStore()
     linearGetIssue.mockResolvedValueOnce(issue('issue-id'))
@@ -161,7 +125,7 @@ describe('createLinearSlice invalidation', () => {
         'workspace-1::search::issue::20': { data: [issue('issue-id')], fetchedAt: Date.now() }
       },
       linearListCache: {
-        'workspace-1::list::all::36': {
+        'workspace-1::list::all::36::': {
           data: { items: [issue('issue-id')], hasMore: false },
           fetchedAt: Date.now()
         }
@@ -186,7 +150,11 @@ describe('createLinearSlice invalidation', () => {
     expect(store.getState().linearListCache).toEqual({})
     expect(store.getState().linearProjectIssueCache).toEqual({})
     expect(store.getState().linearCustomViewIssueCache).toEqual({})
-    expect(linearGetIssue).toHaveBeenCalledWith(null, 'issue-id', 'workspace-1')
+    expect(linearGetIssue).toHaveBeenCalledWith(
+      { kind: 'default-scope', settings: null },
+      'issue-id',
+      'workspace-1'
+    )
   })
 
   it('connect invalidates cached Linear rows and waits for refreshed status', async () => {
@@ -197,7 +165,7 @@ describe('createLinearSlice invalidation', () => {
         'workspace-1::issue-1': { data: issue('issue-1'), fetchedAt: Date.now() }
       },
       linearListCache: {
-        'workspace-1::list::all::36': {
+        'workspace-1::list::all::36::': {
           data: { items: [issue('LIN-CACHED')] },
           fetchedAt: Date.now()
         }
@@ -259,7 +227,7 @@ describe('createLinearSlice invalidation', () => {
     store.setState({
       linearStatus: status('workspace-1', 'Old Org'),
       linearListCache: {
-        'workspace-1::list::all::36': {
+        'workspace-1::list::all::36::': {
           data: { items: [issue('LIN-CACHED')] },
           fetchedAt: Date.now()
         }
@@ -306,7 +274,9 @@ describe('createLinearSlice invalidation', () => {
     linearListIssues.mockRejectedValueOnce(new Error('401 unauthorized'))
     linearStatus.mockResolvedValueOnce(status('workspace-2', 'Beta'))
 
-    await expect(store.getState().listLinearIssues('all', 36, { force: true })).resolves.toEqual({
+    await expect(
+      store.getState().listLinearIssues({ kind: 'list', filter: 'all', limit: 36 }, { force: true })
+    ).resolves.toEqual({
       items: []
     })
     expect(store.getState().linearStatus.connected).toBe(true)

@@ -1,0 +1,160 @@
+import { useMemo } from 'react'
+import { Plug, Files, GitBranch, ListChecks, Workflow } from 'lucide-react'
+import { useAppStore } from '@/store'
+import { useRepoById } from '@/store/selectors'
+import { isFolderRepo } from '../../../../shared/repo-kind'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { getVisibleRightSidebarActivityItems } from './right-sidebar-activity-visibility'
+import { getPluginPanelActivityItems } from './plugin-panel-activity-items'
+import {
+  getPortsPanelOwnerKey,
+  portsPanelHostForOwnerKey,
+  portsPanelReachesSshHost
+} from './ports-panel-host'
+import {
+  collectInstalledPluginTabKeys,
+  usePluginPanels,
+  usePluginPanelsStore,
+  type PluginPanelsFetchStatus
+} from '@/store/plugin-panels'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { AgentSessionHistoryIcon } from './agent-session-history-icon'
+import type { ActivityBarItem } from './activity-bar-buttons'
+
+export type RightSidebarActivityItems = {
+  visibleItems: ActivityBarItem[]
+  activeFolderWorkspaceKey: string | null
+  pluginSystemEnabled: boolean
+  pluginFetchStatus: PluginPanelsFetchStatus
+  installedPluginTabKeys: Set<string>
+}
+
+export function useRightSidebarActivityItems({
+  rightSidebarOpen
+}: {
+  rightSidebarOpen: boolean
+}): RightSidebarActivityItems {
+  const languageRevision = useUiLanguageRevision()
+  const explorerShortcut = useShortcutLabel('sidebar.explorer.toggle')
+  const sourceControlShortcut = useShortcutLabel('sidebar.sourceControl.toggle')
+  const checksShortcut = useShortcutLabel('sidebar.checks.toggle')
+  const portsShortcut = useShortcutLabel('sidebar.ports.toggle')
+  const activeWorktreeId = useAppStore((s) => (rightSidebarOpen ? s.activeWorktreeId : null))
+  // Hide Git-only tabs for folder workspaces.
+  const activeWorktree = useAppStore((s) =>
+    activeWorktreeId ? (s.getKnownWorktreeById(activeWorktreeId) ?? null) : null
+  )
+  const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
+  const activeWorkspaceScope = parseWorkspaceKey(activeWorktreeId ?? '')
+  const isFolderWorkspace = activeWorkspaceScope?.type === 'folder'
+  const isFolder = isFolderWorkspace || (activeRepo ? isFolderRepo(activeRepo) : false)
+  // Why the owner: a managed server's workspace names its server, not an SSH connection.
+  const hasSshHost = useAppStore((s) =>
+    portsPanelReachesSshHost(
+      portsPanelHostForOwnerKey(getPortsPanelOwnerKey(s, activeWorktreeId)),
+      s.runtimeEnvironments
+    )
+  )
+  const pluginSystemEnabled = useAppStore((s) => s.settings?.pluginSystemEnabled === true)
+  const pluginPanels = usePluginPanels()
+  const visiblePluginPanels = useMemo(
+    () => (pluginSystemEnabled ? pluginPanels : []),
+    [pluginPanels, pluginSystemEnabled]
+  )
+  const installedPlugins = usePluginPanelsStore((s) => s.plugins)
+  const pluginFetchStatus = usePluginPanelsStore((s) => s.fetchStatus)
+  const pluginPanelErrors = usePluginPanelsStore((s) => s.panelErrors)
+  const installedPluginTabKeys = useMemo(
+    () => collectInstalledPluginTabKeys(installedPlugins),
+    [installedPlugins]
+  )
+
+  const activityItems = useMemo<ActivityBarItem[]>(
+    () => [
+      {
+        id: 'explorer',
+        icon: Files,
+        title: translate('auto.components.right.sidebar.index.8bc2bbc3a0', 'Explorer'),
+        shortcut: explorerShortcut === 'Unassigned' ? '' : explorerShortcut
+      },
+      {
+        id: 'vault',
+        icon: AgentSessionHistoryIcon,
+        title: translate('auto.components.right.sidebar.index.aiVaultSessionHistory', 'Agents'),
+        shortcut: ''
+      },
+      {
+        id: 'workspaces',
+        icon: Workflow,
+        title: translate(
+          'auto.components.right.sidebar.index.folderWorkspaces',
+          'Attached worktrees'
+        ),
+        shortcut: '',
+        folderOnly: true
+      },
+      {
+        id: 'pr-checks',
+        icon: ListChecks,
+        title: translate('auto.components.right.sidebar.index.parentPrChecks', 'PR Checks'),
+        shortcut: '',
+        folderOnly: true
+      },
+      {
+        id: 'source-control',
+        icon: GitBranch,
+        title: translate('auto.components.right.sidebar.index.0314901467', 'Source Control'),
+        shortcut: sourceControlShortcut === 'Unassigned' ? '' : sourceControlShortcut,
+        gitOnly: true
+      },
+      {
+        id: 'checks',
+        icon: ListChecks,
+        title: translate('auto.components.right.sidebar.index.83a10e3c44', 'Checks'),
+        shortcut: checksShortcut === 'Unassigned' ? '' : checksShortcut,
+        gitOnly: true
+      },
+      {
+        id: 'ports',
+        icon: Plug,
+        title: translate('auto.components.right.sidebar.index.441733b630', 'Ports'),
+        shortcut: portsShortcut === 'Unassigned' ? '' : portsShortcut,
+        sshOnly: true
+      },
+      // Append plugin tabs to preserve built-in navigation positions.
+      ...getPluginPanelActivityItems(visiblePluginPanels, pluginPanelErrors)
+    ],
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+    [
+      checksShortcut,
+      explorerShortcut,
+      pluginPanelErrors,
+      visiblePluginPanels,
+      portsShortcut,
+      sourceControlShortcut,
+      languageRevision
+    ]
+  )
+
+  const visibleItems = useMemo(
+    () =>
+      getVisibleRightSidebarActivityItems(activityItems, {
+        isFolder,
+        isFolderWorkspace,
+        hasSshHost
+      }),
+    [activityItems, isFolder, isFolderWorkspace, hasSshHost]
+  )
+
+  const activeFolderWorkspaceKey = isFolderWorkspace ? (activeWorktreeId ?? null) : null
+
+  return {
+    visibleItems,
+    activeFolderWorkspaceKey,
+    pluginSystemEnabled,
+    pluginFetchStatus,
+    installedPluginTabKeys
+  }
+}

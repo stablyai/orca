@@ -1,28 +1,10 @@
-// Why: persist the data needed to render the home page so cold-start /
-// resume-from-background paints instantly with the last known good
-// values, then updates in place when fresh RPC data arrives. Without
-// this, Resume and Account-usage cards flash empty for ~1s while the
-// WebSocket reconnects and the first responses come back.
+// Seed cold-start/resume cards from persisted last-good snapshot, then update via RPC; avoids ~1s empty flash while reconnecting.
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import type { AccountsSnapshot } from '../components/AccountUsage'
+// Persist canonical countsProvenAt so rehydrated counts retain freshness evidence.
+import type { HostWorktreeInfo } from '../worktree/home-worktree-info'
 
 const STORAGE_KEY = 'orca:home-snapshot:v1'
-
-type WorktreeSummary = {
-  worktreeId: string
-  repo: string
-  branch: string
-  displayName: string
-  liveTerminalCount: number
-  status?: 'working' | 'active' | 'permission' | 'done' | 'inactive'
-}
-
-type HostWorktreeInfo = {
-  hostId: string
-  totalWorktrees: number
-  activeCount: number
-  lastActiveWorktree: WorktreeSummary | null
-}
 
 export type HomeSnapshot = {
   worktreeInfo: Record<string, HostWorktreeInfo>
@@ -58,8 +40,7 @@ export async function loadHomeSnapshot(): Promise<HomeSnapshot | null> {
   }
 }
 
-// Why: throttle writes so a flurry of streamed account-snapshot updates
-// (one per provider fetch finishing) doesn't hammer AsyncStorage.
+// Throttle AsyncStorage writes during per-provider streamed snapshot bursts.
 export function saveHomeSnapshot(snapshot: HomeSnapshot): void {
   memoryCache = snapshot
   if (writeTimer) {

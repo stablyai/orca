@@ -1,28 +1,15 @@
-import type {
-  CheckStatus,
-  GitLabIssueInfo,
-  GitLabWorkItem,
-  MRInfo,
-  MRState
-} from '../../shared/types'
+import type { CheckStatus } from '../../shared/github/pull-request-types'
+import type { GitLabIssueInfo, GitLabWorkItem, MRInfo, MRState } from '../../shared/gitlab-types'
 import {
   mapGitLabPipelineJobStatusToCheckStatus,
   mapGitLabPipelineJobStatusToConclusion
 } from '../../shared/gitlab-pipeline-checks'
+import { summarizeProviderChecks } from '../../shared/provider-check-summary'
 
-// ── Pipeline job mapping (GitLab REST `/pipelines/:id/jobs`) ────────
-// Why: GitLab pipeline jobs roughly map to GitHub check-runs, but use a
-// single `status` field that combines lifecycle + outcome. We split it
-// into PRCheckDetail's status + conclusion shape so the renderer can
-// share a row with the GitHub side.
+// Split GitLab's combined job lifecycle/outcome into the common check-row shape.
 
 export const mapPipelineJobStatusToCheckStatus = mapGitLabPipelineJobStatusToCheckStatus
 export const mapPipelineJobStatusToConclusion = mapGitLabPipelineJobStatusToConclusion
-
-// ── MR state mapping ────────────────────────────────────────────────
-// Why: glab returns the API state directly. Apply the draft flag (or a
-// `Draft:` title prefix, which is GitLab's title-based draft convention)
-// so the UI sees a single discriminator.
 
 export function mapMRState(state: string, isDraft?: boolean, title?: string): MRState {
   const s = state?.toLowerCase()
@@ -35,18 +22,12 @@ export function mapMRState(state: string, isDraft?: boolean, title?: string): MR
   if (s === 'locked') {
     return 'locked'
   }
-  // Why: GitLab supports drafts via either a boolean field (newer API) or
-  // a `Draft:` / `WIP:` title prefix (legacy). Either signal counts.
+  // Accept modern draft flags and legacy Draft:/WIP: title prefixes.
   if (isDraft || (title && /^(draft|wip):\s*/i.test(title))) {
     return 'draft'
   }
   return 'opened'
 }
-
-// ── Issue mapping ────────────────────────────────────────────────────
-// glab issue view returns: { iid, title, state, web_url, labels: [{name}] | string[] }
-// `state` is already lowercase 'opened' | 'closed' so the mapping is
-// mostly a normalization shim.
 
 export function mapGitLabIssueInfo(data: {
   iid?: number
@@ -60,8 +41,7 @@ export function mapGitLabIssueInfo(data: {
   description?: string | null
   author?: { username?: string | null; avatar_url?: string | null } | null
 }): GitLabIssueInfo {
-  // Why: glab CLI flips between exposing `iid` and `number` depending on
-  // command + --output flag combination. Accept both.
+  // glab commands vary between iid and number field names.
   const number = data.iid ?? data.number ?? 0
   const labels = (data.labels ?? []).map((l) => (typeof l === 'string' ? l : l.name))
   return {
@@ -71,17 +51,12 @@ export function mapGitLabIssueInfo(data: {
     url: data.web_url ?? data.url ?? '',
     labels,
     ...(data.updated_at ? { updatedAt: data.updated_at } : {}),
-    // Why: same description / author optional plumbing as mapMRInfo —
-    // list payloads strip these so callers can tell "absent" from "blank".
+    // Preserve absent list metadata separately from known blank detail fields.
     ...(typeof data.description === 'string' ? { description: data.description } : {}),
     ...(data.author?.username ? { author: data.author.username } : {}),
     ...(data.author?.avatar_url ? { authorAvatarUrl: data.author.avatar_url } : {})
   }
 }
-
-// ── MR info mapping ──────────────────────────────────────────────────
-// Why: parallel to mapPRState's role for GitHub. glab returns iid +
-// web_url + state + draft + sha + has_conflicts.
 
 type GitLabMRRaw = {
   iid?: number
@@ -96,53 +71,80 @@ type GitLabMRRaw = {
   sha?: string
   has_conflicts?: boolean
   detailed_merge_status?: string
+  /** Deprecated since GitLab 15.6, but the only merge signal older instances return. */
+  merge_status?: string
   description?: string | null
   target_branch?: string
   author?: { username?: string | null; avatar_url?: string | null } | null
+  head_pipeline?: { status?: string } | null
+  pipeline?: { status?: string } | null
 }
 
 export function mapMRInfo(data: GitLabMRRaw, pipelineStatus: CheckStatus): MRInfo {
+  const mergeable = deriveMergeable(data)
+  const mergeStateStatus = deriveMergeStateStatus(data, mergeable)
   return {
     number: data.iid ?? data.number ?? 0,
     title: data.title,
     state: mapMRState(data.state, data.draft, data.title),
     url: data.web_url ?? data.url ?? '',
-    pipelineStatus,
+    pipelineStatus: settleManualPipelineStatus(data, pipelineStatus),
     updatedAt: data.updated_at ?? data.updatedAt ?? '',
-    mergeable: deriveMergeable(data),
+    mergeable,
+    ...(mergeStateStatus ? { mergeStateStatus } : {}),
     headSha: data.sha,
     baseRefName: data.target_branch,
-    // Why: detail-endpoint payloads include `description`; list endpoints
-    // strip it. Pass through what's present rather than coercing missing
-    // values to '' so downstream UIs can distinguish "no body authored"
-    // from "this came from a list and the body is unknown".
+    // Preserve unknown list bodies as absent, distinct from known empty descriptions.
     ...(typeof data.description === 'string' ? { description: data.description } : {}),
     ...(data.author?.username ? { author: data.author.username } : {}),
     ...(data.author?.avatar_url ? { authorAvatarUrl: data.author.avatar_url } : {})
   }
 }
 
+// A mergeable manual pipeline has no automatic work outstanding, but its manual stage has not passed.
+function settleManualPipelineStatus(data: GitLabMRRaw, pipelineStatus: CheckStatus): CheckStatus {
+  const raw = (data.head_pipeline ?? data.pipeline)?.status?.toLowerCase()
+  return raw === 'manual' &&
+    data.detailed_merge_status === 'mergeable' &&
+    data.has_conflicts !== true
+    ? 'neutral'
+    : pipelineStatus
+}
+
 function deriveMergeable(data: GitLabMRRaw): MRInfo['mergeable'] {
   if (data.has_conflicts === true) {
     return 'CONFLICTING'
   }
-  // Why: detailed_merge_status is GitLab's richest signal. Treat
-  // 'mergeable' as the only positive value — every other state
-  // (checking, ci_must_pass, draft_status, etc.) is an unknown from the
-  // user's POV because it may flip without warning.
+  // Only positive mergeable is stable enough to enable merging; pending prerequisites remain unknown.
   if (data.detailed_merge_status === 'mergeable') {
     return 'MERGEABLE'
   }
   if (data.detailed_merge_status === 'broken_status' || data.detailed_merge_status === 'conflict') {
     return 'CONFLICTING'
   }
+  // GitLab <15.6 supplies only legacy merge_status; trust its positive value while conflicts use has_conflicts.
+  if (data.detailed_merge_status === undefined && data.merge_status === 'can_be_merged') {
+    return 'MERGEABLE'
+  }
   return 'UNKNOWN'
 }
 
-// ── Pipeline rollup (parallel to GitHub deriveCheckStatus) ──────────
-// Why: GitLab returns a single pipeline `status` for the head commit; we
-// can also receive an array of jobs and roll them up the same way the
-// GitHub side does. Accept either shape.
+function deriveMergeStateStatus(
+  data: GitLabMRRaw,
+  mergeable: MRInfo['mergeable']
+): string | undefined {
+  if (mergeable === 'CONFLICTING') {
+    return 'conflict'
+  }
+  if (mergeable === 'MERGEABLE') {
+    return 'mergeable'
+  }
+  const status = data.detailed_merge_status?.toLowerCase()
+  if (!status) {
+    return undefined
+  }
+  return status
+}
 
 export function derivePipelineStatus(
   rollup: { status?: string }[] | { status?: string } | string | null | undefined
@@ -156,39 +158,19 @@ export function derivePipelineStatus(
   if (!Array.isArray(rollup)) {
     return classifyPipelineString(rollup.status ?? '')
   }
-  if (rollup.length === 0) {
-    return 'neutral'
-  }
-  let hasFailure = false
-  let hasPending = false
-  for (const job of rollup) {
-    const s = job.status?.toLowerCase()
-    if (s === 'failed') {
-      hasFailure = true
-    } else if (
-      s === 'created' ||
-      s === 'pending' ||
-      s === 'running' ||
-      s === 'waiting_for_resource' ||
-      s === 'preparing' ||
-      s === 'scheduled'
-    ) {
-      hasPending = true
-    }
-  }
-  if (hasFailure) {
-    return 'failure'
-  }
-  if (hasPending) {
-    return 'pending'
-  }
-  return 'success'
+  // Share rollup rules so pipeline cards cannot diverge from Checks rows.
+  const { state } = summarizeProviderChecks(
+    rollup.map((job) => {
+      const s = job.status?.toLowerCase() ?? ''
+      return {
+        status: mapPipelineJobStatusToCheckStatus(s),
+        conclusion: mapPipelineJobStatusToConclusion(s)
+      }
+    })
+  )
+  // The public status type uses neutral for no check results.
+  return state === 'none' ? 'neutral' : state
 }
-
-// ── Raw → GitLabWorkItem mapping ────────────────────────────────────
-// Why: list endpoints return MR / issue records; the picker consumes a
-// unified GitLabWorkItem. Mirrors the GitHub side where MainWorkItem is
-// produced from PR / issue REST + GraphQL responses.
 
 type GitLabMRRawForWorkItem = {
   id?: number
@@ -203,12 +185,11 @@ type GitLabMRRawForWorkItem = {
   target_branch?: string
   author?: { username?: string | null } | null
   labels?: ({ name: string } | string)[]
-  /** Why: source_project_id !== target_project_id signals a fork MR.
-   *  GitLab list endpoints include both — the picker uses this flag the
-   *  same way GitHub's isCrossRepository disables fork-MR start points
-   *  when the workspace flow can't safely resolve the head. */
+  /** Different source/target projects identify fork MRs whose start points may need special routing. */
   source_project_id?: number
   target_project_id?: number
+  has_conflicts?: boolean
+  detailed_merge_status?: string
 }
 
 export function mapMRToWorkItem(
@@ -219,8 +200,7 @@ export function mapMRToWorkItem(
   const labels = (data.labels ?? []).map((l) => (typeof l === 'string' ? l : l.name))
   const number = data.iid ?? 0
   return {
-    // Why: id needs to be unique across providers in the picker. Prefix
-    // 'gitlab-mr-' so a GitHub PR #5 and a GitLab MR !5 don't collide.
+    // Provider prefix prevents equal GitHub PR and GitLab MR numbers from colliding.
     id: `gitlab-mr-${data.id ?? `${repoId}-${number}`}`,
     type: 'mr',
     number,
@@ -237,6 +217,9 @@ export function mapMRToWorkItem(
       data.target_project_id !== undefined &&
       data.source_project_id !== data.target_project_id,
     repoId,
+    ...(data.has_conflicts !== undefined || data.detailed_merge_status !== undefined
+      ? { mergeable: deriveMergeable(data) }
+      : {}),
     ...(projectRef ? { projectRef } : {})
   }
 }
@@ -260,8 +243,6 @@ export function mapIssueToWorkItem(
 ): GitLabWorkItem {
   const labels = (data.labels ?? []).map((l) => (typeof l === 'string' ? l : l.name))
   const number = data.iid ?? 0
-  // Issues only ever resolve to 'opened' or 'closed' (issue state space is
-  // narrower than MRs); coerce defensively without inventing values.
   const state = data.state?.toLowerCase() === 'opened' ? 'opened' : 'closed'
   return {
     id: `gitlab-issue-${data.id ?? `${repoId}-${number}`}`,
@@ -283,9 +264,14 @@ function classifyPipelineString(status: string): CheckStatus {
   if (s === 'success') {
     return 'success'
   }
-  if (s === 'failed') {
+  if (s === 'failed' || s === 'action_required') {
     return 'failure'
   }
+  // Pipeline manual means a required human trigger; report pending because merge can still be blocked.
+  if (s === 'manual') {
+    return 'pending'
+  }
+  // Preserve neutral skipped/canceled pipeline tones, independently of job-rollup classification.
   if (
     s === 'created' ||
     s === 'pending' ||

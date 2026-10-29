@@ -3,6 +3,7 @@ import type {
   ProviderRateLimits,
   ProviderRateLimitStatus
 } from '../../../../shared/rate-limit-types'
+import { createEmptyRateLimitState } from '../../../../shared/rate-limit-state-factory'
 import {
   getVisibleUsageProvider,
   hasUsageProviderSettings,
@@ -30,18 +31,16 @@ function provider(
 describe('isProviderConfigured', () => {
   it('hides a provider whose state has not loaded yet', () => {
     expect(isProviderConfigured(null)).toBe(false)
+    expect(isProviderConfigured(undefined)).toBe(false)
   })
 
   it('hides an unconfigured (unavailable) provider', () => {
-    // The bug: Gemini OAuth off / OpenCode Go cookie unset returns a non-null
-    // `unavailable` object, which previously slipped past the `!== null` gate
-    // and rendered a "--" bar for a provider the user never configured.
+    // Unavailable snapshots are non-null even when the provider was never configured.
     expect(isProviderConfigured(provider('unavailable'))).toBe(false)
   })
 
   it('hides a first-load fetching provider until it has proven usage data', () => {
-    // The initial fetch marks every provider as `fetching`; without prior data
-    // that state is not proof the user configured Gemini or OpenCode Go.
+    // A first fetch without prior data cannot prove configuration.
     expect(isProviderConfigured(provider('fetching'))).toBe(false)
   })
 
@@ -70,11 +69,25 @@ function usageSettings(overrides: Partial<UsageProviderSettings> = {}): UsagePro
     claudeManagedAccounts: [],
     opencodeSessionCookie: '',
     geminiCliOAuthEnabled: false,
+    antigravityUsageConfigured: false,
+    minimaxCookieConfigured: false,
+    minimaxApiKeyConfigured: false,
+    opencodeGoApiKeyConfigured: false,
+    grokAuthConfigured: false,
+    cursorAuthConfigured: false,
+    zcodePlanApiKeyConfigured: false,
     ...overrides
   }
 }
 
 describe('hasUsageProviderSettings', () => {
+  it('keeps a linked GLM plan visible without CLI detection or a first quota result', () => {
+    const settings = usageSettings({ zcodePlanApiKeyConfigured: true })
+    expect(hasUsageProviderSettings(settings)).toBe(true)
+    expect(getVisibleUsageProvider('zcode', null, settings)?.status).toBe('fetching')
+    expect(getVisibleUsageProvider('zcode', null, usageSettings())).toBeNull()
+  })
+
   it('treats persisted managed accounts as configured usage providers', () => {
     expect(
       hasUsageProviderSettings(
@@ -117,6 +130,20 @@ describe('hasUsageProviderSettings', () => {
     expect(
       hasUsageProviderSettings(usageSettings({ opencodeSessionCookie: ' session=abc ' }))
     ).toBe(true)
+    // Antigravity’s checked item and PATH detection prove setup without Gemini OAuth.
+    expect(hasUsageProviderSettings(usageSettings({ antigravityUsageConfigured: true }))).toBe(true)
+    // Only main can report OpenCode keys held in environment or CLI storage.
+    expect(hasUsageProviderSettings(usageSettings({ opencodeGoApiKeyConfigured: true }))).toBe(true)
+    expect(
+      hasUsageProviderSettingsForProvider(
+        'opencode-go',
+        usageSettings({ opencodeGoApiKeyConfigured: true })
+      )
+    ).toBe(true)
+    expect(hasUsageProviderSettingsForProvider('opencode-go', usageSettings())).toBe(false)
+    expect(hasUsageProviderSettings(usageSettings({ minimaxCookieConfigured: true }))).toBe(true)
+    expect(hasUsageProviderSettings(usageSettings({ minimaxApiKeyConfigured: true }))).toBe(true)
+    expect(hasUsageProviderSettings(usageSettings({ grokAuthConfigured: true }))).toBe(true)
   })
 
   it('does not treat empty or unloaded settings as configured', () => {
@@ -146,6 +173,60 @@ describe('hasUsageProviderSettingsForProvider', () => {
     ).toBe(true)
     expect(hasUsageProviderSettingsForProvider('claude', usageSettings())).toBe(false)
     expect(hasUsageProviderSettingsForProvider('kimi', usageSettings())).toBe(false)
+    expect(hasUsageProviderSettingsForProvider('grok', usageSettings())).toBe(false)
+  })
+
+  it('treats the checked Antigravity item as the durable Antigravity signal', () => {
+    expect(
+      hasUsageProviderSettingsForProvider(
+        'antigravity',
+        usageSettings({ antigravityUsageConfigured: true })
+      )
+    ).toBe(true)
+    // Antigravity reads agy usage independently of Gemini OAuth.
+    expect(
+      hasUsageProviderSettingsForProvider(
+        'antigravity',
+        usageSettings({ geminiCliOAuthEnabled: true })
+      )
+    ).toBe(false)
+    expect(hasUsageProviderSettingsForProvider('antigravity', usageSettings())).toBe(false)
+    expect(hasUsageProviderSettingsForProvider('antigravity', null)).toBe(false)
+  })
+
+  it('treats minimaxCookieConfigured as the durable signal for MiniMax', () => {
+    expect(
+      hasUsageProviderSettingsForProvider(
+        'minimax',
+        usageSettings({ minimaxCookieConfigured: true })
+      )
+    ).toBe(true)
+    expect(hasUsageProviderSettingsForProvider('minimax', usageSettings())).toBe(false)
+    expect(hasUsageProviderSettingsForProvider('minimax', null)).toBe(false)
+  })
+
+  it('treats minimaxApiKeyConfigured as a parallel durable signal for MiniMax', () => {
+    // MiniMax API-key-only setup must remain visible while its usage snapshot is pending.
+    expect(
+      hasUsageProviderSettingsForProvider(
+        'minimax',
+        usageSettings({ minimaxApiKeyConfigured: true })
+      )
+    ).toBe(true)
+    expect(
+      hasUsageProviderSettingsForProvider(
+        'minimax',
+        usageSettings({ minimaxApiKeyConfigured: false, minimaxCookieConfigured: false })
+      )
+    ).toBe(false)
+  })
+
+  it('treats grokAuthConfigured as the durable signal for Grok', () => {
+    expect(
+      hasUsageProviderSettingsForProvider('grok', usageSettings({ grokAuthConfigured: true }))
+    ).toBe(true)
+    expect(hasUsageProviderSettingsForProvider('grok', usageSettings())).toBe(false)
+    expect(hasUsageProviderSettingsForProvider('grok', null)).toBe(false)
   })
 })
 
@@ -205,20 +286,138 @@ describe('getVisibleUsageProvider', () => {
 
   it('hides providers with no live data or durable configuration', () => {
     expect(getVisibleUsageProvider('codex', null, usageSettings())).toBe(null)
+    expect(getVisibleUsageProvider('grok', undefined, usageSettings())).toBe(null)
     expect(getVisibleUsageProvider('gemini', provider('fetching'), usageSettings())).toBe(null)
+  })
+
+  it('creates a pending snapshot when an older main process omits a configured provider', () => {
+    expect(
+      getVisibleUsageProvider('grok', undefined, usageSettings({ grokAuthConfigured: true }))
+    ).toMatchObject({ provider: 'grok', status: 'fetching' })
+  })
+
+  it('keeps MiniMax visible while the snapshot is pending when a cookie is configured', () => {
+    const visible = getVisibleUsageProvider(
+      'minimax',
+      null,
+      usageSettings({ minimaxCookieConfigured: true })
+    )
+    expect(visible).toMatchObject({
+      provider: 'minimax',
+      status: 'fetching',
+      session: null,
+      weekly: null
+    })
+  })
+
+  it('keeps Grok visible while the snapshot is pending when CLI auth is configured', () => {
+    const visible = getVisibleUsageProvider(
+      'grok',
+      null,
+      usageSettings({ grokAuthConfigured: true })
+    )
+    expect(visible).toMatchObject({
+      provider: 'grok',
+      status: 'fetching',
+      session: null,
+      weekly: null
+    })
+  })
+
+  it('keeps MiniMax visible when the fetch returns unavailable for a configured cookie', () => {
+    const unavailable = provider('unavailable', {
+      provider: 'minimax',
+      error: 'MiniMax session expired. Replace the MiniMax cookie in Settings.'
+    })
+    expect(
+      getVisibleUsageProvider(
+        'minimax',
+        unavailable,
+        usageSettings({ minimaxCookieConfigured: true })
+      )
+    ).toBe(unavailable)
+  })
+
+  it('hides MiniMax when no cookie is configured and the snapshot is empty', () => {
+    expect(getVisibleUsageProvider('minimax', null, usageSettings())).toBe(null)
+    expect(
+      getVisibleUsageProvider(
+        'minimax',
+        provider('unavailable', { provider: 'minimax' }),
+        usageSettings()
+      )
+    ).toBe(null)
+  })
+
+  it('keeps Antigravity visible from the checked item alone while the snapshot is pending', () => {
+    const visible = getVisibleUsageProvider(
+      'antigravity',
+      null,
+      usageSettings({ antigravityUsageConfigured: true })
+    )
+    expect(visible).toMatchObject({
+      provider: 'antigravity',
+      status: 'fetching',
+      session: null,
+      weekly: null
+    })
+  })
+
+  it('hides Antigravity when its status item is unchecked', () => {
+    // An unavailable Antigravity snapshot cannot replace the checked-item setup signal.
+    expect(getVisibleUsageProvider('antigravity', null, usageSettings())).toBe(null)
+    expect(
+      getVisibleUsageProvider(
+        'antigravity',
+        provider('unavailable', { provider: 'antigravity' }),
+        usageSettings()
+      )
+    ).toBe(null)
   })
 })
 
 describe('isUsageEmptyState', () => {
+  it('keeps the Cursor bar visible on a local session before the first snapshot', () => {
+    // Main’s on-disk credential flag keeps Cursor visible before its first snapshot.
+    const pending = getVisibleUsageProvider(
+      'cursor',
+      null,
+      usageSettings({ cursorAuthConfigured: true })
+    )
+    expect(pending).toMatchObject({ provider: 'cursor', status: 'fetching' })
+    expect(getVisibleUsageProvider('cursor', null, usageSettings())).toBeNull()
+  })
+
+  it('hides the Cursor bar when no local session exists, even on an unavailable snapshot', () => {
+    const unavailable = provider('unavailable', { provider: 'cursor' })
+    expect(getVisibleUsageProvider('cursor', unavailable, usageSettings())).toBeNull()
+    expect(
+      getVisibleUsageProvider('cursor', unavailable, usageSettings({ cursorAuthConfigured: true }))
+    ).toBe(unavailable)
+  })
+
+  it('keeps a failing Cursor refresh visible so the error is not silently hidden', () => {
+    const failing = provider('error', { provider: 'cursor' })
+    expect(getVisibleUsageProvider('cursor', failing, usageSettings())).toBe(failing)
+  })
+
   it('waits for provider snapshots before showing the setup CTA', () => {
+    expect(isUsageEmptyState(createEmptyRateLimitState(), usageSettings())).toBe(false)
+  })
+
+  it('treats provider keys omitted by an older main process as pending', () => {
     expect(
       isUsageEmptyState(
         {
-          claude: null,
-          codex: null,
-          gemini: null,
-          opencodeGo: null,
-          kimi: null
+          claude: provider('unavailable', { provider: 'claude' }),
+          codex: provider('unavailable', { provider: 'codex' }),
+          gemini: provider('unavailable'),
+          opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
+          kimi: provider('unavailable', { provider: 'kimi' }),
+          antigravity: undefined,
+          minimax: undefined,
+          grok: undefined,
+          cursor: undefined
         },
         usageSettings()
       )
@@ -233,7 +432,12 @@ describe('isUsageEmptyState', () => {
           codex: provider('fetching', { provider: 'codex' }),
           gemini: provider('unavailable'),
           opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
-          kimi: provider('unavailable', { provider: 'kimi' })
+          kimi: provider('unavailable', { provider: 'kimi' }),
+          antigravity: provider('unavailable', { provider: 'antigravity' }),
+          minimax: provider('unavailable', { provider: 'minimax' }),
+          grok: provider('unavailable', { provider: 'grok' }),
+          cursor: provider('unavailable', { provider: 'cursor' }),
+          zcode: provider('unavailable', { provider: 'zcode' })
         },
         usageSettings()
       )
@@ -248,7 +452,12 @@ describe('isUsageEmptyState', () => {
           codex: provider('unavailable', { provider: 'codex' }),
           gemini: provider('unavailable'),
           opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
-          kimi: provider('unavailable', { provider: 'kimi' })
+          kimi: provider('unavailable', { provider: 'kimi' }),
+          antigravity: provider('unavailable', { provider: 'antigravity' }),
+          minimax: provider('unavailable', { provider: 'minimax' }),
+          grok: provider('unavailable', { provider: 'grok' }),
+          cursor: provider('unavailable', { provider: 'cursor' }),
+          zcode: provider('unavailable', { provider: 'zcode' })
         },
         usageSettings({
           codexManagedAccounts: [
@@ -267,21 +476,28 @@ describe('isUsageEmptyState', () => {
   })
 
   it('waits for settings before showing the setup CTA', () => {
-    expect(
-      isUsageEmptyState(
-        {
-          claude: null,
-          codex: null,
-          gemini: null,
-          opencodeGo: null,
-          kimi: null
-        },
-        null
-      )
-    ).toBe(false)
+    expect(isUsageEmptyState(createEmptyRateLimitState(), null)).toBe(false)
   })
 
   it('shows the setup CTA for a loaded profile with no configured usage provider', () => {
+    const settledProviders = {
+      claude: provider('unavailable', { provider: 'claude' }),
+      codex: provider('unavailable', { provider: 'codex' }),
+      gemini: provider('unavailable'),
+      opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
+      kimi: provider('unavailable', { provider: 'kimi' }),
+      antigravity: null,
+      minimax: provider('unavailable', { provider: 'minimax' }),
+      grok: provider('unavailable', { provider: 'grok' }),
+      cursor: provider('unavailable', { provider: 'cursor' }),
+      zcode: provider('unavailable', { provider: 'zcode' })
+    }
+    expect(isUsageEmptyState(settledProviders, usageSettings())).toBe(true)
+    expect(isUsageEmptyState({ ...settledProviders, zcode: undefined }, usageSettings())).toBe(true)
+    expect(isUsageEmptyState({ ...settledProviders, zcode: null }, usageSettings())).toBe(false)
+  })
+
+  it('does not show the setup CTA while checked Antigravity usage is awaiting a snapshot', () => {
     expect(
       isUsageEmptyState(
         {
@@ -289,7 +505,32 @@ describe('isUsageEmptyState', () => {
           codex: provider('unavailable', { provider: 'codex' }),
           gemini: provider('unavailable'),
           opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
-          kimi: provider('unavailable', { provider: 'kimi' })
+          kimi: provider('unavailable', { provider: 'kimi' }),
+          antigravity: null,
+          grok: provider('unavailable', { provider: 'grok' }),
+          minimax: provider('unavailable', { provider: 'minimax' }),
+          cursor: provider('unavailable', { provider: 'cursor' }),
+          zcode: provider('unavailable', { provider: 'zcode' })
+        },
+        usageSettings({ antigravityUsageConfigured: true })
+      )
+    ).toBe(false)
+  })
+
+  it('still shows the setup CTA when no agent is detected, even with the Antigravity item checked', () => {
+    expect(
+      isUsageEmptyState(
+        {
+          claude: provider('unavailable', { provider: 'claude' }),
+          codex: provider('unavailable', { provider: 'codex' }),
+          gemini: provider('unavailable'),
+          opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
+          kimi: provider('unavailable', { provider: 'kimi' }),
+          antigravity: null,
+          grok: provider('unavailable', { provider: 'grok' }),
+          minimax: provider('unavailable', { provider: 'minimax' }),
+          cursor: provider('unavailable', { provider: 'cursor' }),
+          zcode: provider('unavailable', { provider: 'zcode' })
         },
         usageSettings()
       )

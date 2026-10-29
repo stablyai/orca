@@ -2,6 +2,8 @@ import React from 'react'
 import { createPortal } from 'react-dom'
 import { Copy } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { addViewportSizeChangeListener } from '@/hooks/viewport-size-change-listener'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 type SelectedTextCopyMenuProps = {
   children: React.ReactNode
@@ -56,14 +58,15 @@ export function SelectedTextCopyMenu({
     }
 
     window.addEventListener('pointerdown', close)
-    window.addEventListener('keydown', handleKeyDown, true)
+    addAppKeyListener('keydown', handleKeyDown)
     window.addEventListener('scroll', close, true)
-    window.addEventListener('resize', close)
+    // Reveal repaint emits size-unchanged resize events; only real viewport changes should close the menu.
+    const removeViewportListener = addViewportSizeChangeListener(close)
     return () => {
       window.removeEventListener('pointerdown', close)
-      window.removeEventListener('keydown', handleKeyDown, true)
+      removeAppKeyListener('keydown', handleKeyDown)
       window.removeEventListener('scroll', close, true)
-      window.removeEventListener('resize', close)
+      removeViewportListener()
     }
   }, [menu])
 
@@ -73,8 +76,7 @@ export function SelectedTextCopyMenu({
       return
     }
 
-    // Why: allowing the event through reopens the workspace card menu. Render
-    // this through a body portal so transformed hovercards cannot offset it.
+    // Stop card-menu propagation; portal outside transformed hovercards to keep coordinates correct.
     event.preventDefault()
     event.stopPropagation()
     event.nativeEvent.stopImmediatePropagation()

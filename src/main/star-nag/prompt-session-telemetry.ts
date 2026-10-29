@@ -1,4 +1,4 @@
-import { type StarNagOutcome, type StarNagPromptMode } from '../../shared/star-nag-telemetry'
+import type { StarNagOutcome, StarNagPromptMode } from '../../shared/star-nag-telemetry'
 import type { EventProps } from '../../shared/telemetry-events'
 import { track } from '../telemetry/client'
 

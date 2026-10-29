@@ -1,7 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { ghExecFileAsyncMock, acquireMock, releaseMock } = vi.hoisted(() => ({
+const {
+  ghExecFileAsyncMock,
+  getOwnerRepoMock,
+  getEnterpriseGitHubRepoSlugMock,
+  acquireMock,
+  releaseMock
+} = vi.hoisted(() => ({
   ghExecFileAsyncMock: vi.fn(),
+  getOwnerRepoMock: vi.fn(),
+  getEnterpriseGitHubRepoSlugMock: vi.fn(),
   acquireMock: vi.fn(),
   releaseMock: vi.fn()
 }))
@@ -10,9 +18,17 @@ vi.mock('./gh-utils', () => ({
   execFileAsync: vi.fn(),
   ghExecFileAsync: ghExecFileAsyncMock,
   gitExecFileAsync: vi.fn(),
-  getOwnerRepo: vi.fn(),
+  getOwnerRepo: getOwnerRepoMock,
   getIssueOwnerRepo: vi.fn(),
-  getOwnerRepoForRemote: vi.fn(),
+  getOwnerRepoForRemote: (
+    repoPath: string,
+    remoteName: string,
+    connectionId?: string | null,
+    localGitOptions?: unknown
+  ) =>
+    remoteName === 'origin'
+      ? getOwnerRepoMock(repoPath, connectionId, localGitOptions)
+      : Promise.resolve(null),
   resolveIssueSource: vi.fn(),
   ghRepoExecOptions: vi.fn((context) =>
     context.connectionId
@@ -31,11 +47,26 @@ vi.mock('./gh-utils', () => ({
   _resetOwnerRepoCache: vi.fn()
 }))
 
-import { setPRFileViewed } from './client'
+vi.mock('./github-enterprise-repository', () => ({
+  getEnterpriseGitHubRepoSlug: getEnterpriseGitHubRepoSlugMock,
+  isGitHubHostAuthenticated: vi.fn().mockResolvedValue(true)
+}))
+
+import { setPRFileViewed } from './client/update/pr-file-viewed'
+
+import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
+
+beforeEach(() => {
+  _resetOriginGitHubApiRepositoryCache()
+})
 
 describe('setPRFileViewed', () => {
   beforeEach(() => {
     ghExecFileAsyncMock.mockReset()
+    getOwnerRepoMock.mockReset()
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'orca' })
+    getEnterpriseGitHubRepoSlugMock.mockReset()
+    getEnterpriseGitHubRepoSlugMock.mockResolvedValue(null)
     acquireMock.mockReset()
     releaseMock.mockReset()
     acquireMock.mockResolvedValue(undefined)
@@ -59,7 +90,10 @@ describe('setPRFileViewed', () => {
     expect(args.find((arg: string) => arg.startsWith('query='))).toContain('markFileAsViewed')
     expect(args).toContain('pullRequestId=PR_kwDO123')
     expect(args).toContain('path=src/app.ts')
-    expect(ghExecFileAsyncMock.mock.calls[0][1]).toEqual({ cwd: '/repo-root' })
+    expect(ghExecFileAsyncMock.mock.calls[0][1]).toEqual({
+      cwd: '/repo-root',
+      host: 'github.com'
+    })
     expect(releaseMock).toHaveBeenCalledTimes(1)
   })
 
@@ -95,7 +129,53 @@ describe('setPRFileViewed', () => {
 
     expect(ghExecFileAsyncMock.mock.calls[0][1]).toEqual({
       cwd: '/repo-root',
+      host: 'github.com',
       wslDistro: 'Ubuntu'
     })
+  })
+
+  it('routes SSH-backed GitHub Enterprise file-viewed mutations to the Enterprise host', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce(null)
+    getEnterpriseGitHubRepoSlugMock.mockResolvedValueOnce({
+      owner: 'team',
+      repo: 'orca',
+      host: 'github.acme-corp.com'
+    })
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '{}' })
+
+    await expect(
+      setPRFileViewed({
+        repoPath: '/remote/repo',
+        connectionId: 'ssh-1',
+        pullRequestId: 'PR_enterprise',
+        path: 'src/enterprise.ts',
+        viewed: true
+      })
+    ).resolves.toBe(true)
+
+    // Hostname injection happens inside the real runner, after this mocked boundary.
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      expect.arrayContaining(['api', 'graphql', 'pullRequestId=PR_enterprise']),
+      { host: 'github.acme-corp.com' }
+    )
+    const [args] = ghExecFileAsyncMock.mock.calls[0]
+    expect(args).not.toContain('--hostname')
+  })
+
+  it('refuses an unresolved local file-viewed mutation', async () => {
+    getOwnerRepoMock.mockResolvedValue(null)
+    getEnterpriseGitHubRepoSlugMock.mockResolvedValue(null)
+
+    await expect(
+      setPRFileViewed({
+        repoPath: '/repo-root',
+        prRepo: { owner: 'team', repo: 'orca' },
+        pullRequestId: 'PR_unresolved',
+        path: 'src/app.ts',
+        viewed: true
+      })
+    ).resolves.toBe(false)
+
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })
 })

@@ -3,6 +3,10 @@ import type {
   RuntimeClientEventStreamMessage
 } from '../../../shared/runtime-client-events'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import { isRuntimeSubscriptionReplayResponse } from '../../../shared/runtime-subscription-replay'
+import { admitSshConnectionState } from '../../../shared/ssh-retained-payload-admission'
+import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
+import { subscribeRuntimeEnvironment } from './runtime-environment-pairing-refresh'
 
 export type RuntimeClientEventSubscription = {
   unsubscribe: () => void
@@ -11,17 +15,20 @@ export type RuntimeClientEventSubscription = {
 export async function subscribeRuntimeClientEvents(
   environmentId: string,
   onEvent: (event: RuntimeClientEvent) => void,
-  onError: (error: unknown) => void = console.warn
+  onError: (error: unknown) => void = console.warn,
+  // Control-outage events are lost, not queued. First replay-tagged response is the only signal to resync event-derived mirrors such as per-environment SSH state.
+  onReplayedAfterReconnect?: () => void
 ): Promise<RuntimeClientEventSubscription> {
-  const handle = await window.api.runtimeEnvironments.subscribe(
+  const handle = await subscribeRuntimeEnvironment(
     {
       selector: environmentId,
       method: 'runtime.clientEvents.subscribe',
-      timeoutMs: 15_000
+      timeoutMs: 15_000,
+      expectedEnvironmentPairingRevision: getRuntimeEnvironmentRevision(environmentId)
     },
     {
       onResponse: (response) => {
-        handleRuntimeClientEventResponse(response, onEvent, onError)
+        handleRuntimeClientEventResponse(response, onEvent, onError, onReplayedAfterReconnect)
       },
       onError
     }
@@ -32,14 +39,38 @@ export async function subscribeRuntimeClientEvents(
 function handleRuntimeClientEventResponse(
   response: RuntimeRpcResponse<unknown>,
   onEvent: (event: RuntimeClientEvent) => void,
-  onError: (error: unknown) => void
+  onError: (error: unknown) => void,
+  onReplayedAfterReconnect?: () => void
 ): void {
   if (response.ok === false) {
     onError(response.error)
     return
   }
+  if (isRuntimeSubscriptionReplayResponse(response)) {
+    onReplayedAfterReconnect?.()
+  }
   const message = response.result as RuntimeClientEventStreamMessage
-  if (message.type === 'ready' || message.type === 'end') {
+  if (message.type === 'ready') {
+    for (const sshState of message.snapshot?.sshStates ?? []) {
+      const state = admitSshConnectionState(sshState.state, sshState.targetId)
+      if (state) {
+        onEvent({ type: 'sshStateChanged', targetId: sshState.targetId, state })
+      } else {
+        onError(new Error('Invalid retained SSH connection state'))
+      }
+    }
+    return
+  }
+  if (message.type === 'end') {
+    return
+  }
+  if (message.type === 'sshStateChanged') {
+    const state = admitSshConnectionState(message.state, message.targetId)
+    if (state) {
+      onEvent({ type: 'sshStateChanged', targetId: message.targetId, state })
+    } else {
+      onError(new Error('Invalid retained SSH connection state'))
+    }
     return
   }
   if (isRuntimeClientEvent(message)) {
@@ -53,7 +84,14 @@ function isRuntimeClientEvent(
   return (
     message.type === 'reposChanged' ||
     message.type === 'worktreesChanged' ||
+    message.type === 'nativeChatLaunchDraftResolved' ||
+    message.type === 'terminalSideEffects' ||
+    message.type === 'sshStateChanged' ||
+    message.type === 'automationsChanged' ||
+    message.type === 'browserProfilesChanged' ||
     message.type === 'linearLinkedIssueUpdated' ||
-    message.type === 'activateWorktree'
+    message.type === 'activateWorktree' ||
+    message.type === 'worktreeTerminalSleepState' ||
+    message.type === 'workspaceViewChanged'
   )
 }

@@ -1,42 +1,41 @@
-import { stat } from 'fs/promises'
-import { createReadStream } from 'fs'
-import { homedir } from 'os'
-import { basename, dirname, join } from 'path'
-import { createInterface } from 'readline'
+import { homedir } from 'node:os'
+import { basename, dirname, join } from 'node:path'
+import { createInterface } from 'node:readline'
+import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
+import { openTranscriptReadStream, wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { asRecord, extractString } from './session-scanner-values'
+import {
+  KimiSessionIndexCache,
+  KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS,
+  KIMI_WORK_DIR_CACHE_TTL_MS
+} from './session-scanner-kimi-index-cache'
 
-// Why: Kimi Code stores sessions under <KIMI_CODE_HOME>/sessions/, mirroring the
-// CLI's own `KIMI_CODE_HOME ?? ~/.kimi-code` resolution (see kimi-fetcher.ts).
+export { KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS, KIMI_WORK_DIR_CACHE_TTL_MS }
+
 export function resolveKimiSessionsDir(override?: string): string {
   if (override?.trim()) {
     return override.trim()
   }
-  const home = process.env.KIMI_CODE_HOME?.trim() || join(homedir(), '.kimi-code')
+  const home = resolveAbsoluteDirOverride(process.env.KIMI_CODE_HOME, join(homedir(), '.kimi-code'))
   return join(home, 'sessions')
 }
 
-// Layout: <home>/sessions/wd_<name>_<hash>/session_<uuid>/state.json
-// The session id is the session directory name (it keeps the `session_` prefix,
-// which is exactly what `kimi --session <id>` expects).
+// Keep the session_ directory prefix: kimi --session expects it as part of the ID.
 export function kimiSessionIdFromStatePath(statePath: string): string {
   return basename(dirname(statePath))
 }
 
-// Walk up from a session's state.json to the Kimi home directory so the
-// top-level session_index.jsonl (which holds the real workDir) can be located
-// without trusting absolute paths embedded in state.json.
+// Derive the index from the discovered layout rather than trusting paths embedded in state.json.
 export function kimiSessionIndexPathFromStatePath(statePath: string): string {
-  const sessionDir = dirname(statePath) // .../session_<uuid>
-  const workspaceDir = dirname(sessionDir) // .../wd_<name>_<hash>
-  const sessionsDir = dirname(workspaceDir) // .../sessions
-  const home = dirname(sessionsDir) // .../<KIMI_CODE_HOME>
+  const sessionDir = dirname(statePath)
+  const workspaceDir = dirname(sessionDir)
+  const sessionsDir = dirname(workspaceDir)
+  const home = dirname(sessionsDir)
   return join(home, 'session_index.jsonl')
 }
 
-// Why: the primary agent transcript lives at <sessionDir>/agents/<id>/wire.jsonl.
-// The id is the key in state.json's `agents` map whose `type` is "main"; default
-// to "main" when the map is missing so a malformed state.json still resolves a
-// plausible path.
+// Resolve the root main agent from state; use agents/main when no matching agent is recorded.
 export function kimiPrimaryAgentWirePath(
   statePath: string,
   stateRecord: Record<string, unknown> | null
@@ -55,48 +54,55 @@ export function kimiPrimaryAgentWirePath(
   return join(dirname(statePath), 'agents', primaryId, 'wire.jsonl')
 }
 
-type WorkDirCacheEntry = {
-  mtimeMs: number
-  map: Promise<Map<string, string>>
-}
-
-// Why: every session under one Kimi home shares a single session_index.jsonl.
-// Re-reading it once per session would be O(n^2); memoize by path + mtime so a
-// scan reads the index at most once and the cache self-invalidates when Kimi
-// appends a new session (mtime bump).
-const workDirCacheByIndexPath = new Map<string, WorkDirCacheEntry>()
+// Share parsed indexes by path and file identity; one home can hold many sessions.
+const workDirCacheByIndexPath = new KimiSessionIndexCache()
 
 export function clearKimiSessionIndexCache(): void {
   workDirCacheByIndexPath.clear()
 }
 
+export function hasKimiSessionIndexCacheEntryForTests(indexPath: string): boolean {
+  return workDirCacheByIndexPath.has(indexPath)
+}
+
 export async function readKimiWorkDirBySessionId(indexPath: string): Promise<Map<string, string>> {
-  let mtimeMs: number
+  const generation = workDirCacheByIndexPath.beginRead()
+  let identity: Awaited<ReturnType<typeof wslGatedStat>>
   try {
-    mtimeMs = (await stat(indexPath)).mtimeMs
+    identity = await wslGatedStat(indexPath, 'scan')
   } catch {
-    // Missing index (e.g. user deleted it): sessions still list, just without cwd.
+    // Failed index stats leave sessions listed without cwd; discard cached enrichment for retry.
+    workDirCacheByIndexPath.delete(indexPath, generation)
     return new Map()
   }
 
-  const cached = workDirCacheByIndexPath.get(indexPath)
-  if (cached && cached.mtimeMs === mtimeMs) {
-    return cached.map
-  }
-
-  const map = parseKimiSessionIndex(indexPath)
-  workDirCacheByIndexPath.set(indexPath, { mtimeMs, map })
-  return map
+  return workDirCacheByIndexPath.get(
+    indexPath,
+    {
+      changeTimeMs: identity.ctimeMs,
+      mtimeMs: identity.mtimeMs,
+      sizeBytes: identity.size
+    },
+    generation,
+    () =>
+      parseKimiSessionIndex(indexPath).then(({ map, refused }) => {
+        // Evict inside the shared loader so every concurrent caller retries refused reads without a signature change.
+        if (refused) {
+          workDirCacheByIndexPath.delete(indexPath, generation)
+        }
+        return map
+      })
+  )
 }
 
-async function parseKimiSessionIndex(indexPath: string): Promise<Map<string, string>> {
+async function parseKimiSessionIndex(
+  indexPath: string
+): Promise<{ map: Map<string, string>; refused: boolean }> {
   const map = new Map<string, string>()
-  // Why: never reject. This promise is memoized and shared by every session
-  // under one Kimi home; a mid-read failure (file deleted after stat, EACCES)
-  // must degrade to whatever was parsed so the other sessions still list.
+  // Share partial results after read failure so one broken index does not hide every session under its home.
   try {
     const lines = createInterface({
-      input: createReadStream(indexPath, { encoding: 'utf-8' }),
+      input: openTranscriptReadStream(indexPath, { encoding: 'utf-8' }, 'scan'),
       crlfDelay: Infinity
     })
     for await (const line of lines) {
@@ -116,8 +122,8 @@ async function parseKimiSessionIndex(indexPath: string): Promise<Map<string, str
         map.set(sessionId, workDir)
       }
     }
-  } catch {
-    // Return the partial map gathered before the read error.
+  } catch (error) {
+    return { map, refused: error instanceof WslTranscriptFsError }
   }
-  return map
+  return { map, refused: false }
 }

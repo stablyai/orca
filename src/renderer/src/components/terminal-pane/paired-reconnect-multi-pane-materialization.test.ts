@@ -1,0 +1,184 @@
+/** STA-3107: multiplex close races six pane recoveries; every pane must regain a host handle, including parked PTYs requiring session.tabs.activate (STA-3002). */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+// These transport fixtures never read abandoned-launch ownership from the app store.
+const appStore = vi.hoisted(() => ({
+  getState: vi.fn(() => {
+    throw new Error('These transport fixtures must not read app-store ownership')
+  })
+}))
+
+vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
+
+afterEach(() => {
+  expect(appStore.getState).not.toHaveBeenCalled()
+})
+
+import {
+  TerminalStreamOpcode,
+  decodeTerminalStreamFrame,
+  decodeTerminalStreamJson
+} from '../../../../shared/terminal-stream-protocol'
+import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
+
+type SubscriptionCallbacks = {
+  onResponse: (response: unknown) => void
+  onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
+  onError?: (error: { code: string; message: string }) => void
+  onClose?: () => void
+}
+
+const PANE_COUNT = 6
+const HOST_TAB_IDS = Array.from({ length: PANE_COUNT }, (_, index) => `host-tab-${index + 1}`)
+
+describe('paired client sleep/wake with several remote terminal tabs', () => {
+  const runtimeCall = vi.fn()
+  const runtimeSubscribe = vi.fn()
+  const subscriptionSendBinary = vi.fn()
+  let subscriptionCallbacks: SubscriptionCallbacks | null = null
+  /** Host handle currently published for each host tab; null models a parked surface. */
+  let hostHandleByTabId = new Map<string, string | null>()
+
+  function subscribedHandles(): string[] {
+    return subscriptionSendBinary.mock.calls
+      .map((call) => decodeTerminalStreamFrame(call[0]))
+      .flatMap((frame) => {
+        if (frame?.opcode !== TerminalStreamOpcode.Subscribe) {
+          return []
+        }
+        const payload = decodeTerminalStreamJson<{ terminal: string }>(frame.payload)
+        return payload ? [payload.terminal] : []
+      })
+  }
+
+  function surfaceFor(hostTabId: string): Record<string, unknown> {
+    const handle = hostHandleByTabId.get(hostTabId) ?? null
+    return {
+      type: 'terminal',
+      id: `${hostTabId}::pane:1`,
+      parentTabId: hostTabId,
+      leafId: 'pane:1',
+      title: 'Terminal',
+      isActive: false,
+      ...(handle ? { status: 'ready', terminal: handle } : { status: 'pending' })
+    }
+  }
+
+  function inventory(): unknown {
+    return {
+      ok: true,
+      result: {
+        worktree: 'wt-1',
+        publicationEpoch: 'epoch-1',
+        snapshotVersion: 2,
+        activeGroupId: null,
+        activeTabId: null,
+        activeTabType: null,
+        tabs: HOST_TAB_IDS.map(surfaceFor)
+      }
+    }
+  }
+
+  beforeEach(() => {
+    vi.resetModules()
+    vi.doUnmock('../../runtime/remote-runtime-terminal-multiplexer')
+    vi.doMock('@/runtime/web-runtime-session-snapshot', () => ({
+      refreshWebRuntimeSessionTabsSnapshot: vi.fn(async () => {})
+    }))
+    vi.clearAllMocks()
+    subscriptionCallbacks = null
+    subscriptionSendBinary.mockReset()
+    hostHandleByTabId = new Map(
+      HOST_TAB_IDS.map((hostTabId, index) => [hostTabId, `terminal-${index + 1}`])
+    )
+
+    runtimeCall.mockImplementation(async (request: { method: string; params?: unknown }) => {
+      if (request.method === 'session.tabs.activate') {
+        const params = request.params as { tabId: string }
+        // Why: activation is the only call that mints a PTY for a parked surface.
+        if (!hostHandleByTabId.get(params.tabId)) {
+          hostHandleByTabId.set(params.tabId, `${params.tabId}-respawned`)
+        }
+        return inventory()
+      }
+      if (request.method === 'session.tabs.list') {
+        return inventory()
+      }
+      return { ok: true, result: {} }
+    })
+    runtimeSubscribe.mockImplementation(
+      async (_args: unknown, callbacks: SubscriptionCallbacks) => {
+        subscriptionCallbacks = callbacks
+        queueMicrotask(() => callbacks.onResponse({ ok: true, result: { type: 'ready' } }))
+        return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
+      }
+    )
+    stubRuntimeEnvironmentBridge({ call: runtimeCall, subscribe: runtimeSubscribe })
+  })
+
+  async function attachAllPanes(): Promise<
+    { hostTabId: string; transport: { getPtyId: () => string | null; destroy?: () => void } }[]
+  > {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const panes = HOST_TAB_IDS.map((hostTabId) => {
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: `web-terminal-${hostTabId}`,
+        leafId: 'pane:1'
+      })
+      transport.attach({
+        existingPtyId: `remote:env-1@@${hostHandleByTabId.get(hostTabId)}`,
+        cols: 80,
+        rows: 24,
+        callbacks: {}
+      })
+      return { hostTabId, transport }
+    })
+    await vi.waitFor(() => expect(subscribedHandles()).toHaveLength(PANE_COUNT))
+    return panes
+  }
+
+  it('rebinds every pane after the shared multiplex connection drops', async () => {
+    const panes = await attachAllPanes()
+    const before = subscribedHandles().length
+
+    // Laptop closed: the single multiplex socket dies, taking all six streams.
+    subscriptionCallbacks?.onClose?.()
+
+    await vi.waitFor(() =>
+      expect(subscribedHandles().length).toBeGreaterThanOrEqual(before + PANE_COUNT)
+    )
+    const afterReconnect = subscribedHandles().slice(before)
+    expect(new Set(afterReconnect).size, `resubscribes: ${JSON.stringify(afterReconnect)}`).toBe(
+      PANE_COUNT
+    )
+    for (const pane of panes) {
+      expect(pane.transport.getPtyId(), `pane ${pane.hostTabId} bound the wrong handle`).toBe(
+        `remote:env-1@@${hostHandleByTabId.get(pane.hostTabId)}`
+      )
+      pane.transport.destroy?.()
+    }
+  })
+
+  it('re-materializes a pane whose host PTY was parked while the client slept', async () => {
+    const panes = await attachAllPanes()
+    const before = subscribedHandles().length
+    // The host still lists this surface, but its PTY was parked while the client slept.
+    const parked = HOST_TAB_IDS[2]!
+    hostHandleByTabId.set(parked, null)
+
+    subscriptionCallbacks?.onClose?.()
+
+    await vi.waitFor(() =>
+      expect(subscribedHandles().length).toBeGreaterThanOrEqual(before + PANE_COUNT)
+    )
+    const afterReconnect = subscribedHandles().slice(before)
+    const evidence = `resubscribes: ${JSON.stringify(afterReconnect)}`
+    expect(afterReconnect, evidence).toContain(`${parked}-respawned`)
+    for (const pane of panes) {
+      expect(pane.transport.getPtyId(), `pane ${pane.hostTabId} bound the wrong handle`).toBe(
+        `remote:env-1@@${hostHandleByTabId.get(pane.hostTabId)}`
+      )
+      pane.transport.destroy?.()
+    }
+  })
+})

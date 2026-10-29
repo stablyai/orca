@@ -1,17 +1,19 @@
-import { lstat, readFile } from 'fs/promises'
-import { homedir } from 'os'
-import { posix, win32 } from 'path'
-import { isWindowsAbsolutePathLike } from '../shared/cross-platform-path'
-import type { GitWorktreeInfo, OrcaWorkspaceLayout, Repo, WorktreeMeta } from '../shared/types'
-import { matchesStrongOrcaCreatePath } from '../shared/worktree-ownership'
-import { areWorktreePathsEqual } from './ipc/worktree-logic'
+import { lstat, stat, readFile, realpath } from 'node:fs/promises'
+import type { WorktreeMeta } from '../shared/worktree/meta-types'
+import type { GitWorktreeInfo } from '../shared/worktree/types'
+import { NESTED_WORKTREE_REMOVAL_PREFIX } from '../shared/worktree/nested-removal'
+import { areWorktreePathsEqual } from './git/worktree-path-comparison'
+import {
+  containsPath,
+  getPathOps,
+  isHomeDirectoryRemovalPath,
+  isRemovalHomeAuthorityResolved,
+  type WorktreeRemovalHomeAuthority
+} from './worktree-removal-home-guard'
 import {
   gitFileProvesOrphanedWorktreeDirectory,
-  type ReadPath,
-  type StatPath
+  type WorktreeProofAccess
 } from './worktree-orphan-gitdir-proof'
-
-type PathOps = typeof posix
 
 const ORCA_CREATION_SOURCES = new Set<NonNullable<WorktreeMeta['orcaCreationSource']>>([
   'desktop',
@@ -23,7 +25,9 @@ const ORCA_OWNED_PROVENANCE_META_KEYS = [
   'orcaCreatedAt',
   'orcaCreationSource',
   'orcaCreationWorkspaceLayout',
-  'automationProvenance'
+  'automationProvenance',
+  'cliProvenance',
+  'creatorProvenance'
 ] as const
 type UnregisteredOrcaCleanupMeta = Pick<
   WorktreeMeta,
@@ -42,24 +46,11 @@ export const ORPHANED_WORKTREE_DIRECTORY_MESSAGE =
 export const UNREGISTERED_MISSING_WORKTREE_MESSAGE =
   'Worktree is no longer registered with Git and its directory is already gone.'
 
-function getPathOps(...paths: string[]): PathOps {
-  // Why: forward-slash UNC roots need win32 ops; POSIX joins collapse `//Server` to `/Server`.
-  return paths.some(isWindowsAbsolutePathLike) ? win32 : posix
-}
-
-function containsPath(parentPath: string, childPath: string, pathOps: PathOps): boolean {
-  const relativePath = pathOps.relative(parentPath, childPath)
-  // Why: `..name` is a valid child name; only `..` and `../...` escape.
-  return (
-    relativePath === '' ||
-    (!!relativePath &&
-      relativePath !== '..' &&
-      !relativePath.startsWith(`..${pathOps.sep}`) &&
-      !pathOps.isAbsolute(relativePath))
-  )
-}
-
-export function isDangerousWorktreeRemovalPath(worktreePath: string, repoPath: string): boolean {
+export function isDangerousWorktreeRemovalPath(
+  worktreePath: string,
+  repoPath: string,
+  home: WorktreeRemovalHomeAuthority
+): boolean {
   if (!worktreePath.trim()) {
     return true
   }
@@ -80,16 +71,17 @@ export function isDangerousWorktreeRemovalPath(worktreePath: string, repoPath: s
     return true
   }
 
-  const homePath = homedir()
-  return !!homePath && containsPath(resolvedWorktreePath, pathOps.resolve(homePath), pathOps)
+  // Preserve raw syntax so the home guard can also apply the target path's own rules.
+  return isHomeDirectoryRemovalPath(worktreePath, pathOps, home)
 }
 
 export function getRegisteredDeletableWorktree(
   repoPath: string,
   requestedWorktreePath: string,
-  worktrees: readonly GitWorktreeInfo[]
+  worktrees: readonly GitWorktreeInfo[],
+  home: WorktreeRemovalHomeAuthority
 ): GitWorktreeInfo {
-  const worktree = findRegisteredDeletableWorktree(repoPath, requestedWorktreePath, worktrees)
+  const worktree = findRegisteredDeletableWorktree(repoPath, requestedWorktreePath, worktrees, home)
   if (!worktree) {
     throw new Error(`Refusing to delete unregistered worktree path: ${requestedWorktreePath}`)
   }
@@ -99,13 +91,18 @@ export function getRegisteredDeletableWorktree(
 export function findRegisteredDeletableWorktree(
   repoPath: string,
   requestedWorktreePath: string,
-  worktrees: readonly GitWorktreeInfo[]
+  worktrees: readonly GitWorktreeInfo[],
+  home: WorktreeRemovalHomeAuthority
 ): GitWorktreeInfo | null {
   const worktree = worktrees.find((item) => areWorktreePathsEqual(item.path, requestedWorktreePath))
   if (!worktree) {
     return null
   }
-  if (worktree.isMainWorktree || isDangerousWorktreeRemovalPath(worktree.path, repoPath)) {
+  if (
+    !isRemovalHomeAuthorityResolved(home) ||
+    worktree.isMainWorktree ||
+    isDangerousWorktreeRemovalPath(worktree.path, repoPath, home)
+  ) {
     throw new Error(`Refusing to delete protected worktree path: ${worktree.path}`)
   }
   assertWorktreeDoesNotContainRegisteredWorktree(worktree.path, worktrees)
@@ -114,7 +111,7 @@ export function findRegisteredDeletableWorktree(
 
 export function assertWorktreeDoesNotContainRegisteredWorktree(
   worktreePath: string,
-  worktrees: readonly GitWorktreeInfo[]
+  worktrees: readonly Pick<GitWorktreeInfo, 'path'>[]
 ): void {
   const nestedWorktree = worktrees.find((item) => {
     if (areWorktreePathsEqual(item.path, worktreePath)) {
@@ -123,22 +120,28 @@ export function assertWorktreeDoesNotContainRegisteredWorktree(
     return containsPath(worktreePath, item.path, getPathOps(worktreePath, item.path))
   })
   if (nestedWorktree) {
-    // Why: `git worktree remove --force` treats nested worktrees as ordinary
-    // untracked directories and deletes their working files while leaving Git
-    // with a prunable child worktree record.
-    throw new Error(
-      `Refusing to delete worktree because it contains another registered worktree: ${nestedWorktree.path}`
-    )
+    // Git remove --force deletes nested worktree files as untracked directories, leaving their registrations behind.
+    throw new Error(`${NESTED_WORKTREE_REMOVAL_PREFIX} ${nestedWorktree.path}`)
   }
 }
 
 export async function canSafelyRemoveOrphanedWorktreeDirectory(
   worktreePath: string,
   repoPath: string,
-  statPath: StatPath = lstat,
-  readPath: ReadPath = (path) => readFile(path, 'utf8')
+  home: WorktreeRemovalHomeAuthority,
+  access: WorktreeProofAccess = {
+    statPath: lstat,
+    layoutStatPath: stat,
+    readPath: (path) => readFile(path, 'utf8'),
+    realPath: realpath
+  }
 ): Promise<boolean> {
-  if (isDangerousWorktreeRemovalPath(worktreePath, repoPath)) {
+  // A .git file can also belong to a dotfiles home; unknown host home must never authorize deletion.
+  if (!isRemovalHomeAuthorityResolved(home)) {
+    return false
+  }
+
+  if (isDangerousWorktreeRemovalPath(worktreePath, repoPath, home)) {
     return false
   }
 
@@ -149,16 +152,12 @@ export async function canSafelyRemoveOrphanedWorktreeDirectory(
     worktreePath,
     repoPath,
     pathOps,
-    statPath,
-    readPath
+    access
   })
 }
 
 export function canCleanupUnregisteredOrcaWorktreeDirectory(args: {
   meta: UnregisteredOrcaCleanupMeta | null | undefined
-  worktreePath: string
-  repo: Pick<Repo, 'path'>
-  knownOrcaLayouts: readonly OrcaWorkspaceLayout[]
 }): boolean {
   if (hasCurrentOrcaCreationProvenance(args.meta)) {
     return true
@@ -168,9 +167,8 @@ export function canCleanupUnregisteredOrcaWorktreeDirectory(args: {
     return true
   }
 
-  // Why: profiles created before explicit provenance can still contain Orca
-  // workspaces at the repo-specific workspaceDir/<repo>/<name> path shape.
-  return matchesStrongOrcaCreatePath(args.worktreePath, args.knownOrcaLayouts, args.repo)
+  // Users can create ordinary Git worktrees under Orca's root; path shape alone does not prove ownership.
+  return false
 }
 
 function hasCurrentOrcaCreationProvenance(
