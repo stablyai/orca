@@ -14,7 +14,6 @@ import { Button } from '@/components/ui/button'
 import { SwitchIndicator } from '@/components/ui/switch'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
-import type { AppState } from '@/store/types'
 import { getAllWorktreesFromState } from '@/store/selectors'
 import { translate } from '@/i18n/i18n'
 import { toSshExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
@@ -40,32 +39,38 @@ type HostRemoveDialogProps = {
   target: NonNullable<HostRemovalTarget> | { kind: 'wsl'; environmentId: string }
 }
 
-// Closed per-host dialogs skip catalog churn; the last open value survives the exit animation.
-function useOpenRetainedSelection<T>(open: boolean, select: (state: AppState) => T): T | null {
-  const live = useAppStore((s) => (open ? select(s) : null))
-  const [retained, setRetained] = useState(live)
-  if (live !== null && live !== retained) {
-    setRetained(live)
-  }
-  return live ?? retained
+export function HostRemoveDialog(props: HostRemoveDialogProps): React.JSX.Element {
+  const [busy, setBusy] = useState(false)
+  return (
+    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
+      <DialogContent surface="security" className="sm:max-w-md">
+        <HostRemoveDialogBody {...props} busy={busy} setBusy={setBusy} />
+      </DialogContent>
+    </Dialog>
+  )
 }
 
-export function HostRemoveDialog({
+// Radix unmounts the body after its exit animation, releasing catalog subscriptions and snapshots.
+function HostRemoveDialogBody({
   open,
   onOpenChange,
   hostId,
   label,
-  target
-}: HostRemoveDialogProps): React.JSX.Element {
-  const [busy, setBusy] = useState(false)
+  target,
+  busy,
+  setBusy
+}: HostRemoveDialogProps & {
+  busy: boolean
+  setBusy: (busy: boolean) => void
+}): React.JSX.Element {
   // Keep workspaces by default; destructive remote removal requires explicit Advanced opt-in.
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [deleteWorkspaces, setDeleteWorkspaces] = useState(false)
   const mountedRef = useMountedRef()
 
   const repos = useAppStore((s) => s.repos)
-  const worktreesByRepo = useOpenRetainedSelection(open, selectWorktreesByRepo)
-  const detectedWorktreesByRepo = useOpenRetainedSelection(open, selectDetectedWorktreesByRepo)
+  const worktreesByRepo = useAppStore(selectWorktreesByRepo)
+  const detectedWorktreesByRepo = useAppStore(selectDetectedWorktreesByRepo)
 
   const sshResolution = useMemo(() => {
     if (target.kind !== 'ssh' || !worktreesByRepo) {
@@ -120,7 +125,7 @@ export function HostRemoveDialog({
   }
 
   const runSshRemoval = async (): Promise<void> => {
-    if (target.kind === 'runtime') {
+    if (busy || target.kind === 'runtime') {
       return
     }
     setBusy(true)
@@ -132,9 +137,6 @@ export function HostRemoveDialog({
         )
         // Keep the host if workspace cleanup fails so stranded rows remain reachable for retry.
         if (failedIds.length > 0) {
-          if (mountedRef.current) {
-            setBusy(false)
-          }
           toast.error(
             translate(
               'auto.components.sidebar.HostRemoveDialog.workspacesFailed',
@@ -169,9 +171,7 @@ export function HostRemoveDialog({
             )
       )
     } finally {
-      if (mountedRef.current) {
-        setBusy(false)
-      }
+      setBusy(false)
     }
   }
 
@@ -210,101 +210,90 @@ export function HostRemoveDialog({
   )
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent surface="security" className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>
-            {translate(
-              'auto.components.sidebar.HostRemoveDialog.3c4d5e6f7a',
-              'Remove {{value0}}?',
-              {
-                value0: label
-              }
-            )}
-          </DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
-        </DialogHeader>
+    <>
+      <DialogHeader>
+        <DialogTitle>
+          {translate('auto.components.sidebar.HostRemoveDialog.3c4d5e6f7a', 'Remove {{value0}}?', {
+            value0: label
+          })}
+        </DialogTitle>
+        <DialogDescription>{description}</DialogDescription>
+      </DialogHeader>
 
-        {target.kind === 'ssh' && hasWorkspaces ? (
-          <div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setAdvancedOpen((v) => !v)}
-              aria-expanded={advancedOpen}
-              className="-ml-2 text-xs"
-            >
-              {translate('auto.components.sidebar.HostRemoveDialog.advanced', 'Advanced')}
-              <ChevronDown
-                className={cn('size-4 transition-transform', advancedOpen && 'rotate-180')}
-              />
-            </Button>
-            <div
-              className={cn(
-                'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
-                advancedOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
-              )}
-              aria-hidden={!advancedOpen}
-            >
-              <div className="min-h-0">
-                <div className="flex items-start gap-3 px-1 pt-1">
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={deleteWorkspaces}
-                    onClick={() => setDeleteWorkspaces((v) => !v)}
-                    className="group mt-0.5 flex shrink-0 cursor-pointer items-center rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                  >
-                    <SwitchIndicator checked={deleteWorkspaces} />
-                  </button>
-                  <span className="min-w-0 flex-1 text-xs leading-snug">
-                    <span className="font-medium text-foreground">{deleteOptionLabel}</span>
-                    <span className="mt-0.5 block text-muted-foreground">
-                      {translate(
-                        'auto.components.sidebar.HostRemoveDialog.alsoForgetLocalHint',
-                        'Clears them from Orca only. Remote files, worktrees, and branches are left untouched.'
-                      )}
-                    </span>
+      {target.kind === 'ssh' && hasWorkspaces ? (
+        <div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setAdvancedOpen((v) => !v)}
+            aria-expanded={advancedOpen}
+            className="-ml-2 text-xs"
+          >
+            {translate('auto.components.sidebar.HostRemoveDialog.advanced', 'Advanced')}
+            <ChevronDown
+              className={cn('size-4 transition-transform', advancedOpen && 'rotate-180')}
+            />
+          </Button>
+          <div
+            className={cn(
+              'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
+              advancedOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+            )}
+            aria-hidden={!advancedOpen}
+          >
+            <div className="min-h-0">
+              <div className="flex items-start gap-3 px-1 pt-1">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={deleteWorkspaces}
+                  onClick={() => setDeleteWorkspaces((v) => !v)}
+                  className="group mt-0.5 flex shrink-0 cursor-pointer items-center rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                >
+                  <SwitchIndicator checked={deleteWorkspaces} />
+                </button>
+                <span className="min-w-0 flex-1 text-xs leading-snug">
+                  <span className="font-medium text-foreground">{deleteOptionLabel}</span>
+                  <span className="mt-0.5 block text-muted-foreground">
+                    {translate(
+                      'auto.components.sidebar.HostRemoveDialog.alsoForgetLocalHint',
+                      'Clears them from Orca only. Remote files, worktrees, and branches are left untouched.'
+                    )}
                   </span>
-                </div>
+                </span>
               </div>
             </div>
           </div>
-        ) : null}
+        </div>
+      ) : null}
 
-        <RemovalUnsavedFilesNotice targets={unsavedTargets} enabled={open} />
+      <RemovalUnsavedFilesNotice targets={unsavedTargets} enabled={open} />
 
-        <DialogFooter className="gap-2 sm:gap-2">
+      <DialogFooter className="gap-2 sm:gap-2">
+        <Button type="button" variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>
+          {translate('auto.components.sidebar.HostRemoveDialog.6f7a8b9c0d', 'Cancel')}
+        </Button>
+        {target.kind === 'runtime' ? (
           <Button
             type="button"
-            variant="outline"
-            disabled={busy}
-            onClick={() => onOpenChange(false)}
+            variant="destructive"
+            onClick={() => handleRemoveRuntime(target.environmentId)}
           >
-            {translate('auto.components.sidebar.HostRemoveDialog.6f7a8b9c0d', 'Cancel')}
+            {translate('auto.components.sidebar.HostRemoveDialog.7a8b9c0d1e', 'Open settings')}
           </Button>
-          {target.kind === 'runtime' ? (
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={() => handleRemoveRuntime(target.environmentId)}
-            >
-              {translate('auto.components.sidebar.HostRemoveDialog.7a8b9c0d1e', 'Open settings')}
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={busy}
-              onClick={() => void runSshRemoval()}
-            >
-              {busy ? <Loader2 className="size-3.5 animate-spin" /> : null}
-              {translate('auto.components.sidebar.HostRemoveDialog.8b9c0d1e2f', 'Remove host')}
-            </Button>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        ) : (
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={busy}
+            onClick={() => void runSshRemoval()}
+          >
+            {busy ? <Loader2 className="size-3.5 animate-spin" /> : null}
+            {translate('auto.components.sidebar.HostRemoveDialog.8b9c0d1e2f', 'Remove host')}
+          </Button>
+        )}
+      </DialogFooter>
+    </>
   )
 }

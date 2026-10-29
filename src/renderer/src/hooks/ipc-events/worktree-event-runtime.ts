@@ -101,6 +101,7 @@ export function createWorktreeEventRuntime(
     ) {
       // Why: the host published the saved values, so refetching the repo would only re-download them (#27268).
       const { executionHostId, sortOrders, sortOrderFence } = options
+      const submittedListing = selectWorktreesByRepo(useAppStore.getState())[repoId]
       // Awaiting keeps this repo's later events (renames, structural refreshes) behind the patch.
       const outcome = await sortOrderBatch.submit({
         repoId,
@@ -108,6 +109,7 @@ export function createWorktreeEventRuntime(
         sortOrders,
         isCurrent: () =>
           sortOrderFence === runtimeSortOrderFence(sortOrderOwner.environmentId) &&
+          selectWorktreesByRepo(useAppStore.getState())[repoId] === submittedListing &&
           hasHostRowsForSortOrders(useAppStore.getState(), repoId, executionHostId, sortOrders)
       })
       if (outcome === 'disposed') {

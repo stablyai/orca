@@ -13,6 +13,7 @@ import {
 } from '../../store/slices/worktrees-slice-test-fixtures'
 import { replaceRuntimeEnvironmentRevisions } from '../../runtime/runtime-environment-revision'
 import { advanceRuntimeEnvironmentConnectionGeneration } from '../../store/slices/runtime-status-connection-generation'
+import { WORKTREE_SORT_ORDER_BATCH_WINDOW_MS } from './worktree-sort-order-publication-batch'
 import { createWorktreeEventRuntime } from './worktree-event-runtime'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import {
@@ -73,6 +74,7 @@ afterEach(() => {
     unsubscribe()
   }
   vi.restoreAllMocks()
+  vi.useRealTimers()
 })
 
 describe('remote worktree event lineage refresh', () => {
@@ -385,6 +387,43 @@ describe('order-only refresh with actual store actions', () => {
     expect(store.getState().sortEpoch).toBe(beforeEpoch)
     expect(runtimeEnvironmentCall.mock.calls.length).toBe(readsBefore)
   })
+
+  it.each([true, false])(
+    'fences only the submitted repository listing (same repository: %s)',
+    async (sameRepo) => {
+      vi.useFakeTimers()
+      const h = createActualActionFixture()
+      await h.warm()
+      const fetch = vi.spyOn(store.getState(), 'fetchWorktrees')
+      const publishedOrders: number[] = []
+      const unsubscribe = store.subscribe((state) => {
+        publishedOrders.push(state.worktreesByRepo.repo[0].sortOrder)
+      })
+      unsubs.push(unsubscribe)
+      h.queue.enqueue({
+        repoId: 'repo',
+        executionHostId: 'runtime:env-1',
+        sortOrderOnly: true,
+        sortOrders: [{ worktreeId: h.worktree.id, sortOrder: 99 }]
+      })
+      h.setOrder(42)
+      if (sameRepo) {
+        await store.getState().fetchWorktrees('repo', { executionHostId: 'runtime:env-1' })
+        expect(store.getState().worktreesByRepo.repo[0].sortOrder).toBe(42)
+      } else {
+        store.setState((state) => ({
+          worktreesByRepo: { ...state.worktreesByRepo, unrelated: [] }
+        }))
+      }
+      fetch.mockClear()
+      await vi.advanceTimersByTimeAsync(WORKTREE_SORT_ORDER_BATCH_WINDOW_MS)
+      expect(store.getState().worktreesByRepo.repo[0].sortOrder).toBe(sameRepo ? 42 : 99)
+      expect(fetch).toHaveBeenCalledTimes(sameRepo ? 1 : 0)
+      if (sameRepo) {
+        expect(publishedOrders).not.toContain(99)
+      }
+    }
+  )
 
   it('refetches instead of patching when the connection changes inside the batch window', async () => {
     const h = createActualActionFixture()
