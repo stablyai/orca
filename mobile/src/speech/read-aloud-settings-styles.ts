@@ -56,13 +56,6 @@ export const readAloudStyles = themedStyleSheet(() => ({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.bgRaised
   },
-  diagnostics: {
-    marginTop: spacing.lg,
-    paddingHorizontal: spacing.xs,
-    fontSize: typography.bodySize - 3,
-    lineHeight: 18,
-    color: colors.textMuted
-  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

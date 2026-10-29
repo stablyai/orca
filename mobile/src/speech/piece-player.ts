@@ -1,5 +1,5 @@
 import type { Piece } from './reader-model'
-import { logSpeechEvent, recordSpeechDiagnostics } from './speech-diagnostics'
+import { logSpeechEvent } from './speech-diagnostics'
 import { playChime, speakUtterance, type UtteranceCallbacks } from './tts-engine'
 
 const RETRIES_PER_PIECE = 1
@@ -23,7 +23,6 @@ export function playPieceRun(run: PieceRun, attempt = 0): void {
   const position = `${index + 1}/${count}`
   const handlers: UtteranceCallbacks = {
     onStart: () => {
-      recordSpeechDiagnostics({ lastSpokenAt: Date.now() })
       if (index === 0 || attempt > 0) {
         logSpeechEvent(`speaking ${position}${attempt > 0 ? ' (retry)' : ''}`)
       }
@@ -35,7 +34,6 @@ export function playPieceRun(run: PieceRun, attempt = 0): void {
     },
     onError: (error) => {
       const message = error?.message ?? 'unknown error'
-      recordSpeechDiagnostics({ lastError: `TTS: ${message}` })
       logSpeechEvent(`piece ${position} failed: ${message}`)
       if (!owns()) {
         return

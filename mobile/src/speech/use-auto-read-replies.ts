@@ -24,7 +24,7 @@ import {
 } from './project-name-announcement'
 import { useReadScopePreference } from './read-scope-preference'
 import { expireHolds, speakReply } from './reply-speaker'
-import { recordSpeechDiagnostics } from './speech-diagnostics'
+import { logSpeechEvent } from './speech-diagnostics'
 
 // Why: on screen, the workspace list's worktree.ps cadence; off screen, slower to spare battery.
 const FOREGROUND_POLL_MS = 3_000
@@ -222,14 +222,8 @@ export function useAutoReadReplies(): void {
       try {
         const known = rpc.getAllClients()
         const connected = known.filter(({ client }) => client.getState() === 'connected')
-        let lastError: string | null = null
         const rows = await Promise.all(
-          connected.map(({ hostId, client }) =>
-            readAgentRows(hostId, client).catch((error: unknown) => {
-              lastError = error instanceof Error ? error.message : String(error)
-              return null
-            })
-          )
+          connected.map(({ hostId, client }) => readAgentRows(hostId, client).catch(() => null))
         )
         if (cancelled) {
           return
@@ -251,15 +245,6 @@ export function useAutoReadReplies(): void {
           baselineRef.current = found.baseline
           hostsSeen.add(hostId)
           newReplies.push(...found.newReplies)
-        })
-        recordSpeechDiagnostics({
-          lastPollAt: Date.now(),
-          knownHosts: known.length,
-          connectedHosts: connected.length,
-          agentRows: agents.length,
-          newReplies: newReplies.length,
-          ...(newReplies.length > 0 ? { lastNewReplyAt: Date.now() } : {}),
-          ...(lastError ? { lastError } : {})
         })
         for (const reply of newReplies) {
           const message = withoutNativeChatVisualDirectiveLines(reply.message)
@@ -300,10 +285,7 @@ export function useAutoReadReplies(): void {
           }
         }
       } catch (error) {
-        recordSpeechDiagnostics({
-          lastPollAt: Date.now(),
-          lastError: error instanceof Error ? error.message : String(error)
-        })
+        logSpeechEvent(`check failed: ${error instanceof Error ? error.message : String(error)}`)
       } finally {
         inFlight = false
       }

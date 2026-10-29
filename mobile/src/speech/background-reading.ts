@@ -7,7 +7,7 @@ import {
 } from '../storage/speech-preferences'
 import { isAutoReadPaused, setAutoReadPaused } from './auto-read-pause'
 import { setBackgroundReadingActive } from './background-reading-state'
-import { recordSpeechDiagnostics } from './speech-diagnostics'
+import { logSpeechEvent } from './speech-diagnostics'
 import { voiceNativeModule } from './voice-native-module'
 
 // Why: matches the auto-reader's background poll interval.
@@ -62,11 +62,8 @@ export function useBackgroundReadingService(wanted: boolean, onTick: () => void)
     if (!wanted || native === null) {
       return
     }
-    const subscription = native.addListener('onTick', () => {
-      recordSpeechDiagnostics({ lastTickAt: Date.now() })
-      onTick()
-    })
-    // Why: only the auto-read pause comes through the service; reading buttons use `reader-controls.ts`.
+    const subscription = native.addListener('onTick', onTick)
+    // Why: the service brings only the auto-read pause; reading buttons use `reader-controls.ts`.
     const pauseButton = native.addListener('onAutoReadToggle', () =>
       setAutoReadPaused(!isAutoReadPaused())
     )
@@ -81,7 +78,6 @@ export function useBackgroundReadingService(wanted: boolean, onTick: () => void)
   useEffect(() => {
     const native = background()
     if (native === null) {
-      recordSpeechDiagnostics({ service: 'unavailable' })
       return
     }
     const sync = () => {
@@ -92,26 +88,21 @@ export function useBackgroundReadingService(wanted: boolean, onTick: () => void)
           native.stop()
         }
         setBackgroundReadingActive(false)
-        recordSpeechDiagnostics({ service: 'off' })
         return
       }
       if (native.isRunning()) {
         setBackgroundReadingActive(true)
-        recordSpeechDiagnostics({ service: 'running' })
         return
       }
       if (AppState.currentState !== 'active') {
         setBackgroundReadingActive(false)
-        recordSpeechDiagnostics({ service: 'stopped off screen' })
         return
       }
       const started = native.start('Orca', 'Reading agent replies aloud', TICK_MS)
       setBackgroundReadingActive(started)
-      recordSpeechDiagnostics(
-        started
-          ? { service: 'running', serviceStartedAt: Date.now() }
-          : { service: 'refused by Android' }
-      )
+      if (!started) {
+        logSpeechEvent('background service refused by Android')
+      }
     }
     sync()
     const subscription = AppState.addEventListener('change', (state) => {

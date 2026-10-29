@@ -26,7 +26,6 @@ import { useChimeMode, useProjectNameMode } from './project-name-announcement'
 import { useReadScopePreference } from './read-scope-preference'
 import { useHeadphonesOnly, useLinkReading } from './reading-preferences'
 import { playChimeSample } from './reply-speaker'
-import { describeSpeechDiagnostics, useSpeechDiagnostics } from './speech-diagnostics'
 import { useSpeechOptions } from './speech-options'
 
 const READ_SCOPES: { scope: ReadScope; label: string; sublabel: string }[] = [
@@ -103,7 +102,6 @@ export default function ReadAloudSettingsScreen() {
   const { value: headphonesOnly, setValue: setHeadphonesOnly } = useHeadphonesOnly()
   const { value: linkReading, setValue: setLinkReading } = useLinkReading()
   const autoReadPaused = useAutoReadPaused()
-  const diagnostics = useSpeechDiagnostics()
   const speechOptions = useSpeechOptions()
   const [picker, setPicker] = useState<VoicePicker | null>(null)
 
@@ -336,10 +334,6 @@ export default function ReadAloudSettingsScreen() {
             )
           })}
         </View>
-
-        <Text style={styles.diagnostics} selectable>
-          {describeSpeechDiagnostics(diagnostics)}
-        </Text>
       </ScrollView>
 
       <ReadAloudVoicePickers
