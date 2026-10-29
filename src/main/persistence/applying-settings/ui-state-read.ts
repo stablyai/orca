@@ -23,6 +23,7 @@ import { normalizeBrowserPageZoomLevel } from '../../../shared/browser-page-zoom
 import { normalizeFeatureTipIds } from '../../../shared/feature-tips'
 import { normalizeContextualTourIds } from '../../../shared/contextual-tours'
 import { normalizeFeatureInteractions } from '../../../shared/feature-interactions'
+import { normalizeGitHubTaskPrimaryAction } from '../../../shared/github-task-primary-action'
 import {
   normalizeGroupBy,
   normalizeProjectOrderBy,
@@ -75,6 +76,7 @@ export function getPersistedUI(
     featureTipsSeenIds: normalizeFeatureTipIds(state.ui?.featureTipsSeenIds),
     contextualToursSeenIds: normalizeContextualTourIds(state.ui?.contextualToursSeenIds),
     featureInteractions: normalizeFeatureInteractions(state.ui?.featureInteractions),
+    githubTaskPrimaryAction: normalizeGitHubTaskPrimaryAction(state.ui?.githubTaskPrimaryAction),
     activeView: activeView
   }
 }

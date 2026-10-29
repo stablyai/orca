@@ -9,6 +9,10 @@ import {
 import { PER_REPO_FETCH_LIMIT } from '../../../../../shared/work-items'
 import { isGitRepoKind } from '../../../../../shared/repo-kind'
 import { presetToQuery } from './ui-slice-hydration-sanitizers'
+import {
+  DEFAULT_GITHUB_TASK_PRIMARY_ACTION,
+  normalizeGitHubTaskPrimaryAction
+} from '../../../../../shared/github-task-primary-action'
 
 const LINEAR_TASK_PREFETCH_LIMIT = 36
 
@@ -28,6 +32,7 @@ export function createUiTaskActions(set: UISliceSet, get: UISliceGet): Partial<U
     setActiveView: (view) => set({ activeView: view }),
     taskPageData: {},
     taskResumeState: undefined,
+    githubTaskPrimaryAction: DEFAULT_GITHUB_TASK_PRIMARY_ACTION,
     taskListPosition: null,
     githubTaskDrawerWorkItem: null,
     newWorkspaceDraft: null,
@@ -185,6 +190,15 @@ export function createUiTaskActions(set: UISliceSet, get: UISliceGet): Partial<U
         const next = { ...s.taskResumeState, ...updates }
         window.api.ui.set({ taskResumeState: next }).catch(console.error)
         return { taskResumeState: next }
+      }),
+    setGitHubTaskPrimaryAction: (action) =>
+      set((s) => {
+        const next = normalizeGitHubTaskPrimaryAction(action)
+        if (s.githubTaskPrimaryAction === next) {
+          return s
+        }
+        window.api.ui.set({ githubTaskPrimaryAction: next }).catch(console.error)
+        return { githubTaskPrimaryAction: next }
       }),
     setTaskListPosition: (taskListPosition) => set({ taskListPosition }),
     setGithubTaskDrawerWorkItem: (item) => set({ githubTaskDrawerWorkItem: item }),

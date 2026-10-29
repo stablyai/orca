@@ -14,6 +14,7 @@ import type { LaunchSource } from '../../../../../shared/telemetry-events'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { TaskResumeState, TopLevelView } from '../../../../../shared/ui-chrome-types'
+import type { GitHubTaskPrimaryAction } from '../../../../../shared/github-task-primary-action'
 
 export type PendingSidebarWorktreeReveal = {
   worktreeId: string
@@ -166,6 +167,8 @@ export type UISliceCore = {
   taskPageData: TaskPageData
   taskResumeState: TaskResumeState | undefined
   setTaskResumeState: (updates: Partial<TaskResumeState>) => void
+  githubTaskPrimaryAction: GitHubTaskPrimaryAction
+  setGitHubTaskPrimaryAction: (action: GitHubTaskPrimaryAction) => void
   taskListPosition: { contextKey: string; page: number; scrollTop: number } | null
   setTaskListPosition: (position: UISliceCore['taskListPosition']) => void
   githubTaskDrawerWorkItem: GitHubWorkItem | null

@@ -36,6 +36,7 @@ import { parsePersistedAutomationHostFilter } from '../../../../../shared/automa
 import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
 import { normalizeBrowserPageZoomLevel } from '../../../../../shared/browser-page-zoom'
+import { normalizeGitHubTaskPrimaryAction } from '../../../../../shared/github-task-primary-action'
 import { normalizeKagiSessionLink } from '../../../../../shared/browser-url'
 import { isReleaseChannel } from '../../../../../shared/release-channel'
 import {
@@ -221,6 +222,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(ui.browserDefaultZoomLevel),
           browserKagiSessionLink: normalizeKagiSessionLink(ui.browserKagiSessionLink ?? ''),
           browserDevToolsDock: normalizeBrowserDevToolsDockLayout(ui.browserDevToolsDock),
+          githubTaskPrimaryAction: normalizeGitHubTaskPrimaryAction(ui.githubTaskPrimaryAction),
           taskResumeState: sanitizeTaskResumeState(ui.taskResumeState),
           featureTipsSeenIds: normalizeFeatureTipIds(ui.featureTipsSeenIds),
           featureInteractions: normalizeFeatureInteractions(ui.featureInteractions),

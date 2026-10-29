@@ -26,6 +26,7 @@ import type {
   WorkspaceHostScope,
   WorktreeCardProperty
 } from './ui-chrome-types'
+import type { GitHubTaskPrimaryAction } from './github-task-primary-action'
 import type { WorkspaceStatusDefinition } from './worktree/types'
 import type { PersistedAutomationHostFilter } from './automation-host-filter'
 import type { PendingRuntimeRepoRemoval } from './pending-runtime-repo-removal'
@@ -249,6 +250,8 @@ export type PersistedUIState = {
   sidekickId?: string
   customSidekicks?: CustomPet[]
   sidekickSize?: number
+  /** Last Tasks → GitHub split-button choice; absent means Start for new users. */
+  githubTaskPrimaryAction?: GitHubTaskPrimaryAction
   /** Page-position state for Tasks: only transient tabs/searches (source/repo/team/project selections use their own settings paths). */
   taskResumeState?: TaskResumeState
   workspaceCleanup?: WorkspaceCleanupUIState
