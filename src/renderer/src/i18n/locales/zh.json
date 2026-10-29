@@ -106,6 +106,26 @@
         "runAdministratorHelp": "管理员指南",
         "standardStatus": "标准用户",
         "unknownAdministrator": "无法确定"
+      },
+      "limit": {
+        "label": "运行中终端的最大数量",
+        "description": "限制此主机上所有项目中正在运行的终端数量。",
+        "system": "系统 PTY 上限：{{value}}",
+        "unknown": "无法获取",
+        "shared": "与其他终端应用共享。这是总容量，并非可用数量。",
+        "disconnected": "此主机已断开连接。请重新连接以查看或更改终端上限。",
+        "unsupported": "此主机的终端服务尚不支持更改此上限。",
+        "environment": "此 Orca 实例的终端上限由环境变量设置。要在此编辑，请先移除此主机上的相应环境设置。",
+        "savedUnreadable": "无法读取此主机已保存的终端上限。当前使用 {{value}}。输入数值并按 Enter 键即可替换。",
+        "failed": "无法确认终端上限。请重试。",
+        "retry": "重试",
+        "unit": "个终端",
+        "search": {
+          "limit": "限制",
+          "maximum": "最大值",
+          "pty": "pty",
+          "capacity": "容量"
+        }
       }
     },
     "appearance": {
@@ -1359,10 +1379,7 @@
       },
       "claudeAgentRowView": {
         "subagentNavigationSetup": "请在“设置 → 智能体”中启用 Claude 子智能体导航，然后在 Orca 中启动 Claude 2.1.300+。检查 keybindings.json 是否仍将 Ctrl+Alt+G、H 或 V 绑定到 command:orca-agent-view。",
-        "permissionPrompt": "请先回应 Claude 的权限提示，再切换智能体。",
-        "agentUnavailable": "Claude 无法打开此智能体。它可能已不可用。",
-        "closeDialog": "Claude 未切换视图。请关闭所有打开的对话框后重试。",
-        "hostUnavailable": "此主机上无法使用子智能体导航。请更新 Orca 并在此窗格中重启 Claude。"
+        "permissionPrompt": "请先回应 Claude 的权限提示，再切换智能体。"
       },
       "wslHostWindowsDriveRefusal": {
         "addOnThisComputer": "在此计算机上添加",
@@ -11223,8 +11240,8 @@
           "managedOverSshHelp": "此桌面通过 SSH 更新此服务器。请在远程 Orca 服务器中该服务器所在行使用“更新”。"
         },
         "BrowserLinkRoutingSetting": {
-          "description": "在 Orca 内置浏览器中打开来自终端、Markdown 和编辑器的 http(s) 链接。{{shortcut}} 始终使用系统浏览器。",
-          "descriptionBase": "在 Orca 内置浏览器中打开来自终端、Markdown 和编辑器的 http(s) 链接。"
+          "description": "在 Orca 内置浏览器中打开 Orca 各处的 http(s) 链接。登录页面和 {{shortcut}} 始终使用系统浏览器。",
+          "descriptionBase": "在 Orca 内置浏览器中打开 Orca 各处的 http(s) 链接。登录页面仍会在系统浏览器中打开。"
         },
         "BrowserLinkRoutingModifierSetting": {
           "titleSystem": "按住 Shift 在系统浏览器中打开",
@@ -16555,7 +16572,8 @@
                     "annotations": {
                       "0c7b9b2b7a": "已复制",
                       "c937229f19": "截图",
-                      "1f5cb19034": "添加了注释"
+                      "1f5cb19034": "添加了注释",
+                      "limitReached": "已达到 {{limit}} 条注释的上限。请发送、删除或清除一些后再添加。"
                     }
                   }
                 }
@@ -16570,7 +16588,10 @@
                     "024467ceac": "取消",
                     "449d2c2629": "注释意图",
                     "38d320108c": "折叠注释",
-                    "9f209891a7": "展开注释"
+                    "9f209891a7": "展开注释",
+                    "includePageDetails": "包含页面详情",
+                    "copyFeedback": "复制反馈",
+                    "copyFeedbackWithPageDetails": "复制反馈及页面详情"
                   }
                 }
               }
@@ -18231,7 +18252,7 @@
         "historyInOtherAccount": "此聊天的历史记录位于另一个 Claude 账户中。请切换回该账户以继续此聊天。",
         "claudeAccountFolderMissing": "所选 Claude 账户的文件夹不存在。请重新登录该账户或选择其他账户。",
         "claudeAccountSetupFailed": "无法设置所选 Claude 账户。请重试或选择其他账户。",
-        "agentCommandNotRunnable": "{{agent}} 在设置 → 智能体中的命令必须是 Orca 能找到的程序路径或名称，且不能包含参数或变量。请修改或重置。",
+        "agentCommandNotRunnable": "设置 → 智能体中{{agent}}的“命令”必须以 Orca 能找到的程序开头。不支持变量、管道或其他 shell 语法；请在“环境”设置中配置变量。请修改或重置命令。",
         "runtimeNotInstalled": "运行此聊天的计算机上未安装 {{agent}}。请在最新版本的 Orca 中从聊天里安装。",
         "fullAccessAsRoot": "{{agent}} 以 root 身份运行时不会使用完全访问。请在运行此聊天的计算机的“设置”→“智能体”中为 {{agent}} 选择其他权限，然后开始新的聊天。",
         "launchPreparationFailed": "Orca 无法在运行此聊天的计算机上准备启动 {{agent}}。",

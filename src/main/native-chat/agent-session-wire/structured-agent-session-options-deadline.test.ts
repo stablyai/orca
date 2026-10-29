@@ -44,7 +44,7 @@ it('keeps one legacy deadline across an optional join and current resting read',
       claude: createClaudeModelCatalogProbe({
         resolveLaunchArgs: resolving,
         resolveInheritedEnv: environment,
-        resolveCommand: () => '/fixture/claude',
+        resolveCommand: () => ({ command: '/fixture/claude', prefixArgs: [] }),
         resolveAuthPolicy: () => ({ account: 'system' })
       })
     }

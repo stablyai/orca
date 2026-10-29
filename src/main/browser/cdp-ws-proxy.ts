@@ -297,6 +297,12 @@ export class CdpWsProxy {
       void this.navigation.reloadWithLifecycle(client, clientId, msg.params ?? {}, msg.sessionId)
       return
     }
+    // The guest debugger outlives this client, so nothing would resume workers or frames left waiting.
+    if (msg.method === 'Target.setAutoAttach') {
+      const params = { ...msg.params, waitForDebuggerOnStart: false }
+      this.debuggerChannel.forwardCommand(client, clientId, msg.method, params, msg.sessionId)
+      return
+    }
     this.debuggerChannel.forwardCommand(
       client,
       clientId,

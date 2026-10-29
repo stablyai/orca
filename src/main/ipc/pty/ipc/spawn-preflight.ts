@@ -94,7 +94,8 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
     resolveStartupCwd: ctx.deps.resolvePtySpawnStartupCwd,
     ...(args.wslPassiveRestore === true
       ? {
-          passiveWslRestore: {
+          wslStartHold: {
+            wslPassiveRestore: true,
             sessionId: ctx.effectiveSessionId,
             isNewSession: ctx.ownsNewIncarnation,
             attachOnly: args.attachOnlyView === true

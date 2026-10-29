@@ -26,6 +26,7 @@ import {
   AgentPermissionMenu,
   type AgentPermissionChoiceRow
 } from './AgentPermissionChoiceControls'
+import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
 
 type AgentAvailability = 'enabled' | 'disabled'
 
@@ -232,6 +233,7 @@ export function AgentCatalogRow({
             <a
               href={homepageUrl}
               target="_blank"
+              onClick={openAppHttpLinkFromAnchor}
               rel="noopener noreferrer"
               title={
                 isDetected

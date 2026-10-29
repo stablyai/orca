@@ -62,6 +62,7 @@ export type MobileStructuredAgentSessionArgs = {
   hostSupport: StructuredAgentSessionHostSupport | null
   agent: string | null
   /** What the session reported for its `/` menu; undefined until read or on an older host. */
+  onCommandsChanged?: () => void
   sessionCommands?: readonly AgentSessionSlashCommand[]
   composerScopeKey?: string | null
   appendComposerText?: (text: string) => boolean

@@ -326,6 +326,26 @@
         "runAdministratorHelp": "Guide de l'administrateur",
         "standardStatus": "Utilisateur standard",
         "unknownAdministrator": "Impossible de déterminer"
+      },
+      "limit": {
+        "label": "Nombre maximal de terminaux actifs",
+        "description": "Limite les terminaux actifs de tous les projets sur cet hôte.",
+        "system": "Limite PTY du système : {{value}}",
+        "unknown": "Indisponible",
+        "shared": "Partagée avec les autres applications de terminal. Il s’agit de la capacité totale, pas des places libres.",
+        "disconnected": "Cet hôte est déconnecté. Reconnectez-le pour consulter ou modifier sa limite de terminaux.",
+        "unsupported": "Le service de terminal de cet hôte ne permet pas encore de modifier cette limite.",
+        "environment": "L’environnement définit la limite de terminaux de cette instance d’Orca. Supprimez cette configuration sur cet hôte pour la modifier ici.",
+        "savedUnreadable": "Impossible de lire la limite de terminaux enregistrée sur cet hôte. Valeur utilisée : {{value}}. Saisissez une valeur et appuyez sur Entrée pour la remplacer.",
+        "failed": "Impossible de confirmer la limite de terminaux. Réessayez.",
+        "retry": "Réessayer",
+        "unit": "terminaux",
+        "search": {
+          "limit": "limite",
+          "maximum": "maximum",
+          "pty": "pty",
+          "capacity": "capacité"
+        }
       }
     },
     "appearance": {
@@ -1576,10 +1596,7 @@
       },
       "claudeAgentRowView": {
         "subagentNavigationSetup": "Activez la navigation des sous-agents Claude dans Paramètres → Agents, puis lancez Claude 2.1.300+ dans Orca. Vérifiez que keybindings.json associe toujours Ctrl+Alt+G, H ou V à command:orca-agent-view.",
-        "permissionPrompt": "Répondez à la demande d’autorisation de Claude avant de changer d’agent.",
-        "agentUnavailable": "Claude ne peut pas ouvrir cet agent. Il n'est peut-être plus disponible.",
-        "closeDialog": "Claude n'a pas changé de vue. Fermez toute boîte de dialogue ouverte et réessayez.",
-        "hostUnavailable": "La navigation entre sous-agents n'est pas disponible sur cet hôte. Mettez Orca à jour et redémarrez Claude dans ce volet."
+        "permissionPrompt": "Répondez à la demande d’autorisation de Claude avant de changer d’agent."
       },
       "dropFailureReason": {
         "tooLarge": "Trop volumineux pour être envoyé vers cet hôte.",
@@ -11708,8 +11725,8 @@
           "managedOverSshHelp": "Ce bureau met à jour ce serveur via SSH. Utilisez Mettre à jour sur sa ligne dans Serveurs Orca distants."
         },
         "BrowserLinkRoutingSetting": {
-          "description": "Ouvre les liens http(s) dans le navigateur intégré d'Orca — depuis le terminal, le markdown et l'éditeur. {{shortcut}} utilise toujours votre navigateur système.",
-          "descriptionBase": "Ouvre les liens http(s) dans le navigateur intégré d'Orca — depuis le terminal, le markdown et l'éditeur."
+          "description": "Ouvre les liens http(s) de tout Orca dans son navigateur intégré. Les pages de connexion et {{shortcut}} utilisent toujours votre navigateur système.",
+          "descriptionBase": "Ouvre les liens http(s) de tout Orca dans son navigateur intégré. Les pages de connexion s'ouvrent toujours dans votre navigateur système."
         },
         "BrowserLinkRoutingModifierSetting": {
           "titleSystem": "Maintenez Shift pour ouvrir dans votre navigateur web",
@@ -17183,7 +17200,8 @@
                     "annotations": {
                       "0c7b9b2b7a": "Copied",
                       "c937229f19": "Capture effectuée",
-                      "1f5cb19034": "Annotation ajoutée"
+                      "1f5cb19034": "Annotation ajoutée",
+                      "limitReached": "Limite de {{limit}} annotations atteinte. Envoyez, supprimez ou effacez-en pour en ajouter d’autres."
                     }
                   }
                 }
@@ -17198,7 +17216,10 @@
                     "024467ceac": "Annuler",
                     "449d2c2629": "Intention d'annotation",
                     "38d320108c": "Réduire les annotations",
-                    "9f209891a7": "Développer les annotations"
+                    "9f209891a7": "Développer les annotations",
+                    "includePageDetails": "Inclure les détails de la page",
+                    "copyFeedback": "Copier les commentaires",
+                    "copyFeedbackWithPageDetails": "Copier les commentaires avec les détails de la page"
                   }
                 }
               }
@@ -18927,7 +18948,7 @@
         "historyInOtherAccount": "L'historique de ce chat se trouve dans un autre compte Claude. Revenez à ce compte pour le poursuivre.",
         "claudeAccountFolderMissing": "Le dossier du compte Claude sélectionné est introuvable. Reconnectez-vous à ce compte ou choisissez-en un autre.",
         "claudeAccountSetupFailed": "Le compte Claude sélectionné n'a pas pu être configuré. Réessayez ou choisissez un autre compte.",
-        "agentCommandNotRunnable": "{{agent}} : la Commande dans Paramètres → Agents doit être le chemin ou le nom d'un programme qu'Orca peut trouver, sans arguments ni variables. Modifiez-la ou réinitialisez-la.",
+        "agentCommandNotRunnable": "La Commande de {{agent}} dans Réglages → Agents doit commencer par un programme qu’Orca peut trouver. Les variables, tubes et autres syntaxes shell ne sont pas pris en charge ; utilisez le réglage Environnement pour les variables. Modifiez-la ou réinitialisez-la.",
         "runtimeNotInstalled": "{{agent}} n'est pas installé sur l'ordinateur qui exécute ce chat. Installez-le depuis le chat dans une version récente d'Orca.",
         "fullAccessAsRoot": "{{agent}} n'utilisera pas l'Accès complet tant qu'il s'exécute en tant que root. Choisissez une autre autorisation pour {{agent}} dans Paramètres → Agents pour l'ordinateur qui exécute ce chat, puis démarrez un nouveau chat.",
         "launchPreparationFailed": "Orca n'a pas pu préparer le démarrage de {{agent}} sur l'ordinateur qui exécute ce chat.",

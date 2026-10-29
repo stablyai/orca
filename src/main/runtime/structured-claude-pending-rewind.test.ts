@@ -120,7 +120,7 @@ beforeEach(async () => {
     resolveWorkspacePath: async (id) => `/repos/${id}`,
     resolveLaunch: createClaudeStructuredLaunchResolver({
       store,
-      resolveCommand: () => '/usr/local/bin/claude',
+      resolveCommand: () => ({ command: '/usr/local/bin/claude', prefixArgs: [] }),
       resolveLaunchArgs: () => [],
       resolveAuthPolicy: () => ({ account: 'system' })
     }),

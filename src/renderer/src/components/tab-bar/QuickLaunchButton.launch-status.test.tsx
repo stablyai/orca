@@ -460,7 +460,7 @@ function registerLaunch(
     promise: new Promise(() => undefined),
     visibilityUnknown: false,
     cancelled: false,
-    selection: { held: {} }
+    selection: {}
   } satisfies StructuredLaunchState)
 }
 

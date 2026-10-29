@@ -106,7 +106,10 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
-    const workspace = await this.resolveTerminalWorkspaceLaunchScope(request.worktree)
+    // An explicit ensure is the caller's own act (automatic is refused above), as its spawn below.
+    const workspace = await this.resolveTerminalWorkspaceLaunchScope(request.worktree, undefined, {
+      wslUserAct: true
+    })
     const namespace = this.getAgentSessionExecutionNamespace(workspace, request.agent)
     if (
       !namespace ||

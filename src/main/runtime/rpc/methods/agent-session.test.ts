@@ -228,7 +228,8 @@ describe('agent session RPC methods', () => {
       'id:worktree-1',
       undefined,
       false,
-      expect.any(Function)
+      expect.any(Function),
+      { wslUserAct: true }
     )
     expect(createTerminal).toHaveBeenCalledWith('id:worktree-1', {
       wslUserAct: true,

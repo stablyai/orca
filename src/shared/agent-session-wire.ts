@@ -224,6 +224,11 @@ export type AgentSessionStatusSummary = {
   /** The chat's saved permission mode; a client re-reads options when it or `model` moves. */
   permissionMode?: string
   runtimePermission?: { fence: number; mode: string | null } | null
+  /** The chat's saved effort, Fast and speed picks, encoded; another device's pick moves them so a
+   *  client re-reads options. Absent from older hosts. */
+  effort?: string
+  fastMode?: string
+  serviceTier?: string
   /** The tool the running turn is inside, else the last one it used. Absent unless `status`
    *  is 'working'. */
   toolName?: string
@@ -429,7 +434,10 @@ export type AgentSessionSlashCommand = {
 }
 
 /** Per-session provider commands; older hosts return method_not_found and clients retain their curated catalog. */
-export type AgentSessionCommandsResult = { commands?: AgentSessionSlashCommand[] }
+export type AgentSessionCommandsResult = {
+  commands?: AgentSessionSlashCommand[]
+  commandsPending?: boolean
+}
 
 export type AgentSessionContinuationContext =
   | { status: 'current'; capturedText?: string; transcriptPath?: string }

@@ -76,7 +76,11 @@ export async function prepareRuntimePtySpawn(
     projectRuntimeSource: { kind: 'store', store: ctx.deps.store },
     preAdopted: ctx.preAdoptedStablePane !== null,
     getSettings: ctx.deps.getSettings,
-    resolveStartupCwd: ctx.deps.resolvePtySpawnStartupCwd
+    resolveStartupCwd: ctx.deps.resolvePtySpawnStartupCwd,
+    // Default-deny, as spawn-options' `wslBackgroundStart`: held before the cwd probe and any provider.
+    ...(args.wslUserAct === true
+      ? {}
+      : { wslStartHold: { wslBackgroundStart: true, sessionId: ctx.sessionId } })
   })
   ctx.cwd = target.cwd
   ctx.requestedCwd = target.requestedCwd

@@ -118,6 +118,7 @@ export type StructuredAgentSessionEndedEvent = {
   /** Absent means provider exit without extra detail; host faults retain their own classification. */
   failure?: SubmissionRejectionFact
   cause: 'unexpected-exit' | 'requested-close'
+  deathEvidenceKind?: 'kill-delivered'
   /** Execution-host observations from a requested provider close, when available. */
   processExit?: {
     root: 'live' | 'unverifiable' | 'exited'

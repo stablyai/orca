@@ -9,6 +9,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 type MissingRepo = { owner: string; repo: string; url: string | null }
 
@@ -48,8 +49,8 @@ export function ProjectMissingRepoDialog({
           {missingRepo?.url ? (
             <Button
               variant="outline"
-              onClick={() => {
-                void window.api.shell.openUrl(missingRepo.url!)
+              onClick={(event) => {
+                openAppHttpLink(missingRepo.url!, { event })
                 onClose()
               }}
             >

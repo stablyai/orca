@@ -55,8 +55,11 @@ type PtySpawnStartupArgs = {
     cwd: string | undefined,
     missingDirFallback?: TerminalStartupCwdMissingDirFallback
   ) => string | undefined
-  /** A restore the user did not ask for; held here, before any provider or cwd probe can boot WSL. */
-  passiveWslRestore?: Pick<PtySpawnOptions, 'sessionId' | 'isNewSession' | 'attachOnly'>
+  /** A restore or background start the user did not ask for; held here, before any provider or cwd probe can boot WSL. */
+  wslStartHold?: Pick<
+    PtySpawnOptions,
+    'wslPassiveRestore' | 'wslBackgroundStart' | 'sessionId' | 'isNewSession' | 'attachOnly'
+  >
 }
 
 export async function resolvePtySpawnStartupTarget(
@@ -73,10 +76,10 @@ export async function resolvePtySpawnStartupTarget(
       args.shellOverride,
       process.env.COMSPEC || 'powershell.exe'
     )
-  if (args.passiveWslRestore && !args.preAdopted) {
+  if (args.wslStartHold && !args.preAdopted) {
     // E9: whichever provider runs (daemon, degraded or off), and before the cwd probe's `wsl.exe`.
     await holdPassiveRestoreOfStoppedWslDistro(
-      { ...args.passiveWslRestore, wslPassiveRestore: true },
+      args.wslStartHold,
       resolveWslSessionContext({
         cwd: args.cwd,
         sessionId: args.sessionId,

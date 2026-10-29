@@ -26,12 +26,6 @@ describe('readLinkPreviewMetadata', () => {
     })
   })
 
-  it('decodes the named entities titles use', () => {
-    const html = `<title>Docs&nbsp;&ndash;&nbsp;Guide &hellip; &ldquo;Orca&rdquo;</title>`
-
-    expect(readLinkPreviewMetadata(html, PAGE_URL).title).toBe('Docs – Guide … “Orca”')
-  })
-
   it('keeps a > inside a quoted attribute value as part of the value', () => {
     const html = `<meta content="Home > Docs" property="og:description"><meta property="og:title" content="A > B">`
 

@@ -376,6 +376,10 @@ jobs:
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: node config/scripts/check-reliability-gates.mjs
 
+      - name: Check compiled CSS :has() restyle scope
+        if: needs.code_paths.outputs.static_analysis == 'true'
+        run: node config/scripts/check-has-restyle-scope.mjs
+
       - name: Enforce dead design-system classes
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: node node_modules/oxlint/bin/oxlint --config config/oxlint-dead-classes.json src/renderer

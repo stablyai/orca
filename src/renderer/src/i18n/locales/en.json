@@ -571,6 +571,26 @@
         "administratorSearchDescription": "See Orca’s Windows permissions or restart with administrator approval.",
         "administratorApproval": "Windows will ask for approval. Use your usual account."
       },
+      "limit": {
+        "label": "Maximum running terminals",
+        "description": "Limits your running terminals across projects on this host.",
+        "system": "System PTY limit: {{value}}",
+        "unknown": "Unavailable",
+        "shared": "Shared with other terminal apps. This is total capacity, not free slots.",
+        "disconnected": "This host is disconnected. Reconnect to view or change its terminal limit.",
+        "unsupported": "This host’s terminal service does not support changing this limit yet.",
+        "environment": "This Orca instance has a terminal limit set by its environment. Remove the override on this host to edit it here.",
+        "savedUnreadable": "Couldn’t read this host’s saved terminal limit. Using {{value}}. Enter a value and press Enter to replace it.",
+        "failed": "Couldn’t confirm the terminal limit. Try again.",
+        "retry": "Retry",
+        "unit": "terminals",
+        "search": {
+          "limit": "limit",
+          "maximum": "maximum",
+          "pty": "pty",
+          "capacity": "capacity"
+        }
+      },
       "wordSeparators": {
         "description": "Characters treated as word boundaries for double-click selection, including space.",
         "noSpaceHint": "No space included — double-click will select across spaces."
@@ -1856,11 +1876,12 @@
         }
       },
       "claudeAgentRowView": {
+        "openParentConversation": "Open parent conversation",
+        "parentViewFailed": "Claude could not open the parent conversation. Try again in the Claude pane.",
+        "childViewFailed": "Claude could not open this agent. Try again in the Claude pane.",
+        "parentNavigationSetup": "Claude could not open the parent conversation. Enable subagent navigation in Settings → Agents, then restart Claude in this pane.",
         "subagentNavigationSetup": "Enable Claude subagent navigation in Settings → Agents, then launch Claude 2.1.300+ in Orca. Check that keybindings.json still binds Ctrl+Alt+G, H, or V to command:orca-agent-view.",
-        "permissionPrompt": "Answer Claude’s permission prompt before switching agents.",
-        "agentUnavailable": "Claude cannot open this agent. It may no longer be available.",
-        "closeDialog": "Claude did not switch views. Close any open dialog and try again.",
-        "hostUnavailable": "Subagent navigation is unavailable on this host. Update Orca and restart Claude in this pane."
+        "permissionPrompt": "Answer Claude’s permission prompt before switching agents."
       },
       "wslHostWindowsDriveRefusal": {
         "addOnThisComputer": "Add on this computer",
@@ -11898,8 +11919,8 @@
           "managedOverSshHelp": "This desktop updates this server over SSH. Use Update on its row in Remote Orca Servers."
         },
         "BrowserLinkRoutingSetting": {
-          "description": "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor. {{shortcut}} always uses your system browser.",
-          "descriptionBase": "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor."
+          "description": "Open http(s) links from anywhere in Orca in its built-in browser. Sign-in pages and {{shortcut}} always use your system browser.",
+          "descriptionBase": "Open http(s) links from anywhere in Orca in its built-in browser. Sign-in pages still open in your system browser."
         },
         "BrowserLinkRoutingModifierSetting": {
           "titleSystem": "Hold Shift to open in your web browser",
@@ -17148,12 +17169,17 @@
                 "chatPaneRight": "chat pane right",
                 "splitChatDown": "split chat down",
                 "newChatBelow": "new chat below",
-                "chatPaneBelow": "chat pane below"
+                "chatPaneBelow": "chat pane below",
+                "browserRight": "browser right",
+                "splitBrowser": "split browser",
+                "browserSplit": "browser split"
               },
               "splitChatRight": "Split Chat Right",
               "splitChatRightDescription": "Open a new chat in a split pane to the right.",
               "splitChatDown": "Split Chat Down",
-              "splitChatDownDescription": "Open a new chat in a split pane below."
+              "splitChatDownDescription": "Open a new chat in a split pane below.",
+              "newBrowserTabSplitRight": "New Browser Tab in Right Split",
+              "newBrowserTabSplitRightDescription": "Open a browser tab in a new split to the right."
             }
           },
           "palette": {
@@ -17361,7 +17387,8 @@
                     "annotations": {
                       "0c7b9b2b7a": "Copied",
                       "c937229f19": "Screenshotted",
-                      "1f5cb19034": "Annotation added"
+                      "1f5cb19034": "Annotation added",
+                      "limitReached": "Limit of {{limit}} annotations reached. Send, delete or clear some to add more."
                     }
                   }
                 }
@@ -17376,7 +17403,10 @@
                     "024467ceac": "Cancel",
                     "449d2c2629": "Annotation intent",
                     "38d320108c": "Collapse annotations",
-                    "9f209891a7": "Expand annotations"
+                    "9f209891a7": "Expand annotations",
+                    "includePageDetails": "Include page details",
+                    "copyFeedback": "Copy feedback",
+                    "copyFeedbackWithPageDetails": "Copy feedback with page details"
                   }
                 }
               }
@@ -19068,7 +19098,7 @@
         "historyInOtherAccount": "This chat's history is in another Claude account. Switch back to that account to continue it.",
         "claudeAccountFolderMissing": "The selected Claude account's folder is missing. Sign in to it again or choose another account.",
         "claudeAccountSetupFailed": "The selected Claude account could not be set up. Try again or choose another account.",
-        "agentCommandNotRunnable": "{{agent}}'s Command in Settings → Agents must be a program path or name Orca can find, with no arguments or variables. Change it or reset it.",
+        "agentCommandNotRunnable": "{{agent}}'s Command in Settings → Agents must start with a program Orca can find. Variables, pipes and other shell syntax aren't supported; use the Environment setting for variables. Change it or reset it.",
         "runtimeNotInstalled": "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
         "fullAccessAsRoot": "{{agent}} won't use Full access while it runs as root. Choose another permission for {{agent}} in Settings → Agents for the computer running this chat, then start a new chat.",
         "launchPreparationFailed": "Orca couldn't prepare {{agent}} to start on the computer running this chat.",
@@ -19710,7 +19740,12 @@
       },
       "agentMessage": {
         "messageFrom": "Message from",
-        "unnamedSender": "an agent"
+        "unnamedSender": "an agent",
+        "goToAgent": "Go to agent",
+        "messageFromCoordinator": "Message from your coordinator",
+        "showMore": "Show more",
+        "taskFromCoordinator": "Task from your coordinator",
+        "updateFromWorker": "Update from your worker"
       },
       "goal": {
         "placeholder": "Describe your goal, define measurable outcomes for best results",
@@ -19814,6 +19849,7 @@
         "reconnect": "Reconnect",
         "stopped": "{{distro}} is stopped",
         "start": "Start",
+        "startFailed": "Couldn’t start {{distro}}. Check it in Settings → Remote Orca Servers.",
         "unverifiable": "Orca couldn't check whether {{distro}} is running",
         "startToSend": "Start {{distro}} to send."
       },
@@ -21369,7 +21405,9 @@
         "agy": "agy",
         "google": "google",
         "accounts": "accounts"
-      }
+      },
+      "windowsChanged": "The host default account changed. Select a saved account to apply it again.",
+      "windowsSessions": "Select applies and verifies the host default agy credential. Command choices and later account changes are handled by agy. Existing sessions may keep their previous account."
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",
@@ -22340,7 +22378,8 @@
       "terminalSplitRight": "Split terminal right",
       "terminalSplitDown": "Split terminal down",
       "terminalSwitchInputSource": "Switch input source / language (native)",
-      "newAgentTab": "New {{agent}} tab"
+      "newAgentTab": "New {{agent}} tab",
+      "tabNewBrowserSplitRight": "New browser tab in right split"
     },
     "group": {
       "global": "Global",

@@ -1822,10 +1822,7 @@
       },
       "claudeAgentRowView": {
         "subagentNavigationSetup": "Die Navigation zwischen Claude-Subagenten unter Einstellungen → Agenten aktivieren, dann Claude 2.1.300+ in Orca starten. Prüfen, ob keybindings.json Ctrl+Alt+G, H oder V weiterhin command:orca-agent-view zuweist.",
-        "permissionPrompt": "Vor dem Wechseln zwischen Agenten Claudes Berechtigungsabfrage beantworten.",
-        "agentUnavailable": "Claude kann diesen Agenten nicht öffnen. Möglicherweise ist er nicht mehr verfügbar.",
-        "closeDialog": "Claude hat die Ansicht nicht gewechselt. Alle offenen Dialoge schließen und erneut versuchen.",
-        "hostUnavailable": "Die Subagenten-Navigation ist auf diesem Host nicht verfügbar. Orca aktualisieren und Claude in diesem Bereich neu starten."
+        "permissionPrompt": "Vor dem Wechseln zwischen Agenten Claudes Berechtigungsabfrage beantworten."
       },
       "wslHostWindowsDriveRefusal": {
         "addOnThisComputer": "Auf diesem Computer hinzufügen",
@@ -11843,8 +11840,8 @@
           "managedOverSshHelp": "Dieser Desktop aktualisiert diesen Server über SSH. In dessen Zeile unter „Entfernte Orca-Server“ auf „Aktualisieren“ klicken."
         },
         "BrowserLinkRoutingSetting": {
-          "description": "http(s)-Links aus dem Terminal, Markdown und dem Editor im integrierten Browser von Orca öffnen. {{shortcut}} verwendet immer den Systembrowser.",
-          "descriptionBase": "http(s)-Links aus dem Terminal, Markdown und dem Editor im integrierten Browser von Orca öffnen."
+          "description": "http(s)-Links aus ganz Orca im integrierten Browser von Orca öffnen. Anmeldeseiten und {{shortcut}} verwenden immer den Systembrowser.",
+          "descriptionBase": "http(s)-Links aus ganz Orca im integrierten Browser von Orca öffnen. Anmeldeseiten öffnen sich weiterhin im Systembrowser."
         },
         "BrowserLinkRoutingModifierSetting": {
           "titleSystem": "Shift gedrückt halten, um im Webbrowser zu öffnen",
@@ -16958,7 +16955,8 @@
                     "annotations": {
                       "0c7b9b2b7a": "Kopiert",
                       "c937229f19": "Screenshot erstellt",
-                      "1f5cb19034": "Anmerkung hinzugefügt"
+                      "1f5cb19034": "Anmerkung hinzugefügt",
+                      "limitReached": "Limit von {{limit}} Anmerkungen erreicht. Senden, entfernen oder löschen Sie einige, um weitere hinzuzufügen."
                     }
                   }
                 }
@@ -16973,7 +16971,10 @@
                     "024467ceac": "Abbrechen",
                     "449d2c2629": "Zweck der Anmerkung",
                     "38d320108c": "Anmerkungen einklappen",
-                    "9f209891a7": "Anmerkungen ausklappen"
+                    "9f209891a7": "Anmerkungen ausklappen",
+                    "includePageDetails": "Seitendetails einbeziehen",
+                    "copyFeedback": "Feedback kopieren",
+                    "copyFeedbackWithPageDetails": "Feedback mit Seitendetails kopieren"
                   }
                 }
               }

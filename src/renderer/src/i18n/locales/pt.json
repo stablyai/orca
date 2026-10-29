@@ -1465,6 +1465,9 @@
         "openManageSessions": "Abrir Gerenciar sessões",
         "administratorSearchDescription": "Veja as permissões do Orca no Windows ou reinicie com aprovação de administrador.",
         "administratorApproval": "O Windows pedirá aprovação. Use sua conta habitual."
+      },
+      "limit": {
+        "savedUnreadable": "Não foi possível ler o limite de terminais salvo neste host. Usando {{value}}. Digite um valor e pressione Enter para substituí-lo."
       }
     },
     "agents": {
@@ -2706,10 +2709,7 @@
       },
       "claudeAgentRowView": {
         "subagentNavigationSetup": "Ative a navegação de subagentes do Claude em Configurações → Agentes e depois inicie o Claude 2.1.300+ no Orca. Verifique se o keybindings.json ainda associa Ctrl+Alt+G, H ou V a command:orca-agent-view.",
-        "permissionPrompt": "Responda à solicitação de permissão do Claude antes de trocar de agente.",
-        "agentUnavailable": "O Claude não consegue abrir este agente. Ele pode não estar mais disponível.",
-        "closeDialog": "O Claude não trocou de visualização. Feche qualquer diálogo aberto e tente novamente.",
-        "hostUnavailable": "A navegação de subagentes não está disponível neste host. Atualize o Orca e reinicie o Claude neste painel."
+        "permissionPrompt": "Responda à solicitação de permissão do Claude antes de trocar de agente."
       },
       "dropFailureReason": {
         "tooLarge": "Grande demais para enviar a este host.",
@@ -8579,8 +8579,8 @@
           "c64497148a": "O clique com o botão direito cola a área de transferência. Control-clique abre o menu de contexto."
         },
         "BrowserLinkRoutingSetting": {
-          "description": "Abre links http(s) no navegador integrado do Orca — do terminal, markdown e editor. {{shortcut}} sempre usa o seu navegador do sistema.",
-          "descriptionBase": "Abre links http(s) no navegador integrado do Orca — do terminal, markdown e editor."
+          "description": "Abre links http(s) de qualquer lugar do Orca no navegador integrado. Páginas de login e {{shortcut}} sempre usam o navegador do sistema.",
+          "descriptionBase": "Abre links http(s) de qualquer lugar do Orca no navegador integrado. Páginas de login continuam abrindo no navegador do sistema."
         },
         "TerminalRenderingSection": {
           "6d4c55bacc": "Imagens Inline",
@@ -17018,7 +17018,8 @@
                     "annotations": {
                       "0c7b9b2b7a": "Copiado",
                       "c937229f19": "Capturado",
-                      "1f5cb19034": "Anotação adicionada"
+                      "1f5cb19034": "Anotação adicionada",
+                      "limitReached": "Limite de {{limit}} anotações atingido. Envie, exclua ou limpe algumas para adicionar mais."
                     }
                   }
                 }
@@ -17033,7 +17034,10 @@
                     "024467ceac": "Cancelar",
                     "449d2c2629": "Intenção da anotação",
                     "38d320108c": "Recolher anotações",
-                    "9f209891a7": "Expandir anotações"
+                    "9f209891a7": "Expandir anotações",
+                    "includePageDetails": "Incluir detalhes da página",
+                    "copyFeedback": "Copiar feedback",
+                    "copyFeedbackWithPageDetails": "Copiar feedback com detalhes da página"
                   }
                 }
               }
@@ -20111,7 +20115,7 @@
         "historyInOtherAccount": "O histórico deste chat está em outra conta do Claude. Volte para essa conta para continuar.",
         "claudeAccountFolderMissing": "A pasta da conta do Claude selecionada não foi encontrada. Entre nela novamente ou escolha outra conta.",
         "claudeAccountSetupFailed": "Não foi possível configurar a conta do Claude selecionada. Tente novamente ou escolha outra conta.",
-        "agentCommandNotRunnable": "O Comando de {{agent}} em Configurações → Agentes deve ser o caminho ou nome de um programa que o Orca possa encontrar, sem argumentos nem variáveis. Altere-o ou redefina-o.",
+        "agentCommandNotRunnable": "O Comando do {{agent}} em Configurações → Agentes deve começar com um programa que o Orca consiga encontrar. Variáveis, pipes e outras sintaxes de shell não são compatíveis; use a configuração Ambiente para variáveis. Altere ou redefina o comando.",
         "runtimeNotInstalled": "{{agent}} não está instalado no computador que executa este chat. Instale-o pelo chat em uma versão atual do Orca.",
         "fullAccessAsRoot": "{{agent}} não usará Acesso total enquanto for executado como root. Escolha outra permissão para {{agent}} em Configurações → Agentes para o computador que executa este chat e inicie um novo chat.",
         "launchPreparationFailed": "O Orca não conseguiu preparar a inicialização de {{agent}} no computador que executa este chat.",

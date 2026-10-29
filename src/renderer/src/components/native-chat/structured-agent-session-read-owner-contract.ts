@@ -31,6 +31,7 @@ export type StructuredAgentSessionReadOwner = {
   getSnapshot: () => StructuredAgentSessionReadSnapshot
   loadOlder: () => Promise<NativeChatOlderPageResult>
   subscribe: (listener: () => void) => () => void
+  subscribeCommandsChanged: (listener: () => void) => () => void
 }
 
 export type StructuredAgentSessionAdmission = {

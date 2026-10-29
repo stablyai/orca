@@ -187,14 +187,17 @@ export abstract class OrcaRuntimeWithFailedStartPanes extends OrcaRuntimeWithCre
     worktreeSelector: string,
     created: dependencies.Worktree | undefined,
     pane: FailedStartPane,
-    { title }: dependencies.TerminalCreateOptions,
+    { title, wslUserAct }: dependencies.TerminalCreateOptions,
     error: unknown
   ): Promise<void> {
     if (error instanceof PaneOwnerContentionError) {
       // Another owner's terminal runs in the pane; the window attaches to it.
       return
     }
-    const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector, created)
+    // The failed start's own act: a user's start may wake the distro; background stays held.
+    const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector, created, {
+      wslUserAct: wslUserAct === true
+    })
     const create = { type: 'createTerminalTab' as const, workspace: workspace.id, ...pane }
     const reply = await this.applyLayoutCommand(title ? { ...create, title } : create)
     // `tab_exists`: the start wrote this pane before failing and kept it.

@@ -118,7 +118,8 @@ export const TERMINAL_LIFECYCLE_METHODS = [
             leafId: params.leafId,
             ...(params.spawnIntent ? { spawnIntent: params.spawnIntent } : {}),
             ...(preAllocatedHandle ? { preAllocatedHandle } : {})
-          })
+          }),
+        { wslUserAct: true }
       )
       // Switch point. A CLI start is work in the workspace; a window or phone tab is a person opening one.
       if (

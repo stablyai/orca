@@ -149,7 +149,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       resolveLaunch: createCodexStructuredLaunchResolver({
         store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
         resolveWorkspacePath: async () => '/work/repo',
-        resolveCommand: () => 'codex',
+        resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
         resolveLaunchArgs: () => []
       })
     })

@@ -13,6 +13,7 @@ import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from './agent-chat-permission-mo
 import { usesInstalledAgentModelCatalog } from './agent-model-catalog-ownership'
 import { structuredAgentSessionShownModel } from './structured-agent-session-option-snapshot'
 import type { SessionOptionValue } from './native-chat/input/native-chat-session-options'
+import type { AgentSessionAcceptedInputSources } from './agent-session-options-result'
 import type {
   AgentSessionModelCatalogResult,
   AgentSessionOptionsResult
@@ -53,6 +54,10 @@ export type StructuredAgentSessionOptionState = {
   /** Live-answer IDs verified by the agent’s listing; extra rows name the chat’s own model, not listed capabilities. Old hosts omit this. */
   verifiedModelIds?: readonly string[]
   record: StructuredAgentSessionOptionRecord
+  optionsAnswerPresent?: true
+  acceptedInputSources?: Partial<
+    Record<keyof AgentSessionAcceptedInputSources, 'saved' | 'seeded' | 'policy' | 'picked'>
+  >
   /** The last answer came from a host that marks no defaults, whose own tier rule it shows. */
   olderHost?: true
   /** Resumed chats show host defaults without sending them; new chats pin their shown default on first send. */
@@ -75,6 +80,7 @@ export function createStructuredAgentSessionOptionState(
     catalog: seedCatalog ?? null,
     catalogSource: seedCatalog ? 'seed' : null,
     record: createStructuredAgentSessionOptionRecord(agent),
+    acceptedInputSources: {},
     permissionMode: null,
     pendingId: null
   }
@@ -151,7 +157,18 @@ export function applyStructuredAgentSessionModelCatalog(
       ...(namesDefault ? { defaultModelIsCliDefault: true } : {})
     },
     ...(installed ? { verifiedModelIds: finishedListingIds(catalog) } : {}),
-    catalogSource: state.catalogSource === 'live' ? 'live' : 'host'
+    catalogSource: state.catalogSource === 'live' ? 'live' : 'host',
+    acceptedInputSources: state.optionsAnswerPresent
+      ? state.acceptedInputSources
+      : {
+          ...(namesDefault ? { model: 'policy', effort: 'policy' } : {}),
+          fastMode: 'policy',
+          ...Object.fromEntries(
+            Object.entries(state.acceptedInputSources ?? {}).filter(
+              ([, source]) => source !== 'policy'
+            )
+          )
+        }
   }
 }
 
@@ -185,12 +202,14 @@ export function applyStructuredAgentSessionOptions(
   )
   return {
     ...state,
+    optionsAnswerPresent: true,
     catalog: installed ? state.catalog : structuredAgentSessionOptionCatalog(seed, result),
     fastModeRestricted:
       installed &&
       result.fastModeSupport?.supported === false &&
       result.fastModeSupport.reason !== 'model-not-supported',
     catalogSource: installed && state.catalogSource === 'seed' ? 'seed' : 'live',
+    acceptedInputSources: current.acceptedInputSources,
     olderHost: current.defaulted === undefined ? true : undefined,
     defaultsUnsent: current.defaulted !== undefined && !launch.newLaunch ? true : undefined,
     verifiedModelIds: installed
@@ -216,7 +235,8 @@ function structuredAgentSessionControlsModelId(
 export function commitStructuredAgentSessionOption(
   state: StructuredAgentSessionOptionState,
   id: string,
-  value: string
+  value: string,
+  origin: 'picked' | 'seeded' = 'picked'
 ): StructuredAgentSessionOptionState {
   if (id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID) {
     return { ...state, permissionMode: value, reportedPermissionMode: undefined, pendingId: null }
@@ -230,18 +250,26 @@ export function commitStructuredAgentSessionOption(
   }
   // Keep other picks after a model change; the host reconciles independent values.
   state.record.values[id] = { value: decoded, source: 'dispatched' }
-  return { ...state, pendingId: null }
+  return {
+    ...state,
+    acceptedInputSources:
+      state.acceptedInputSources === undefined
+        ? undefined
+        : { ...state.acceptedInputSources, [id]: origin },
+    pendingId: null
+  }
 }
 
 export function commitStructuredAgentSessionOptionValues(
   state: StructuredAgentSessionOptionState,
-  values: Readonly<Record<string, string>>
+  values: Readonly<Record<string, string>>,
+  origin: 'picked' | 'seeded' = 'picked'
 ): StructuredAgentSessionOptionState {
   let next = state
   for (const id of STRUCTURED_LAUNCH_OPTION_IDS) {
     const value = values[id]
     if (value !== undefined) {
-      next = commitStructuredAgentSessionOption(next, id, value)
+      next = commitStructuredAgentSessionOption(next, id, value, origin)
     }
   }
   return next

@@ -249,7 +249,7 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
         hostId: 'local',
         claimKeyId: 'key-1',
         resolveWorkspacePath: async () => directory,
-        resolveClaudeCommand: () => '/usr/local/bin/claude',
+        resolveClaudeCommand: () => ({ command: '/usr/local/bin/claude', prefixArgs: [] }),
         resolveLaunchArgs: () => [],
         resolveClaudeAuthPolicy: () => ({ account: 'system' }),
         openClaudeConnection: openConnection,

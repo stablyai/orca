@@ -67,6 +67,7 @@ export type ClaudeStructuredSessionEvent =
       sessionId: string
       reason: string
       failure?: SubmissionRejectionFact
+      deathEvidenceKind?: 'kill-delivered'
       /** Present for first-hand child exits so the host can fence recovery. */
       cause?: 'unexpected-exit' | 'requested-close'
       fence?: number

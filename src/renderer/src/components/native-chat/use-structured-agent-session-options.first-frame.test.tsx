@@ -3,6 +3,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as HostCapability from '@/runtime/structured-agent-session-host-capability'
+import type * as LaunchOptions from '@/lib/structured-agent-session-launch-options'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn(), coherent: false }))
 
@@ -19,7 +20,8 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 vi.mock('./native-chat-session-option-settings-write', () => ({
   enqueueSessionOptionSettingsWrite: vi.fn()
 }))
-vi.mock('@/lib/structured-agent-session-launch-options', () => ({
+vi.mock('@/lib/structured-agent-session-launch-options', async (original) => ({
+  ...(await original<typeof LaunchOptions>()),
   holdStructuredAgentSessionLaunchOption: vi.fn(),
   getStructuredAgentSessionLaunchSelection: () => null
 }))
@@ -116,7 +118,6 @@ function renderNewChat(args: {
       mutate: vi.fn(),
       launch: {
         kind: 'new',
-        heldOptions: {},
         worktree: 'id:wt-1',
         ...(args.explicitOptions ? { explicitOptions: args.explicitOptions } : {}),
         ...(args.seedOptions ? { seedOptions: args.seedOptions } : {})
@@ -360,11 +361,13 @@ it('refuses typed literals while the current fence awaits options, then accepts 
   const pending = deferred<AgentSessionOptionsResult>()
   let reads = 0
   mocks.call.mockImplementation((_target: unknown, method: string) =>
-    method === 'agentSession.options'
-      ? ++reads === 1
-        ? Promise.resolve({ models: [], current: {} })
-        : pending.promise
-      : Promise.resolve({ origin: 'unknown' })
+    method === 'agentSession.setOption'
+      ? Promise.resolve({ ok: true, value: { options: { model: 'literal' } } })
+      : method === 'agentSession.options'
+        ? ++reads === 1
+          ? Promise.resolve({ models: [], current: {} })
+          : pending.promise
+        : Promise.resolve({ origin: 'unknown' })
   )
   const mutate = vi.fn().mockResolvedValue({
     status: 'accepted',
@@ -394,10 +397,20 @@ it('refuses typed literals while the current fence awaits options, then accepts 
     expect(await view.result.current.setStructuredOption('model', 'literal')).toBe(false)
   )
   expect(mutate).not.toHaveBeenCalled()
+  expect(mocks.call.mock.calls.filter((call) => call[1] === 'agentSession.setOption')).toEqual([])
   await act(async () => pending.resolve({ models: [], current: {} }))
   await act(async () =>
     expect(await view.result.current.setStructuredOption('model', 'literal')).toBe(true)
   )
-  expect(mutate).toHaveBeenCalledTimes(1)
+  expect(mocks.call).toHaveBeenCalledWith(
+    LOCAL_TARGET,
+    'agentSession.setOption',
+    {
+      envelope: expect.objectContaining({ sessionId: 'locked-chat', expectedRuntimeFence: 2 }),
+      key: 'model',
+      value: 'literal'
+    },
+    {}
+  )
   view.unmount()
 })

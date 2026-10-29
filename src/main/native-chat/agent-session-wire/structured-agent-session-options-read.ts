@@ -10,6 +10,7 @@ import { structuredAgentSessionThreadGoalReport } from './structured-agent-sessi
 // Saved choices, catalog defaults and actual execution reports remain separate facts.
 
 import type { AgentSessionOptionsResult } from '../../../shared/agent-session-wire'
+import type { AgentSessionAcceptedInputSources } from '../../../shared/agent-session-options-result'
 import { journalOpenReadRefusal } from '../agent-session-journal/journal-open-failure'
 import type { StructuredAgentSessionLiveOptions } from './structured-agent-session-adapter'
 import {
@@ -112,10 +113,8 @@ export async function readStructuredAgentSessionOptions(
     ...options.current,
     ...(model !== undefined ? { model } : {}),
     effort: saved.effort ?? options.current.effort,
-    fastMode:
-      saved.fastMode !== undefined
-        ? selected.current.fastMode
-        : (options.current.fastMode ?? selected.current.fastMode),
+    fastMode: selected.current.fastMode ?? options.current.fastMode,
+    // The saved tier as the shared speed rule runs it under the saved model.
     serviceTier:
       saved.serviceTier !== undefined
         ? selected.current.serviceTier
@@ -126,11 +125,26 @@ export async function readStructuredAgentSessionOptions(
     key === 'model' && !options.current.model
       ? displayDefault !== undefined || selected.current.defaulted?.includes(key) === true
       : options.current.defaulted?.includes(key) === true
-  const defaulted =
-    (agent !== 'codex' || !live || options.current.model) &&
-    structuredAgentSessionNeverSent(record, session.journal)
-      ? []
-      : (['model', 'effort'] as const).filter((key) => saved[key] === undefined && defaultedBy(key))
+  const neverSent = structuredAgentSessionNeverSent(record, session.journal)
+  const defaultKeys = (['model', 'effort'] as const).filter(
+    (key) => saved[key] === undefined && defaultedBy(key)
+  )
+  const pinsDefaults = neverSent && (agent !== 'codex' || !live || !!options.current.model)
+  const defaulted = pinsDefaults ? [] : defaultKeys
+  const acceptedInputSources: AgentSessionAcceptedInputSources = {}
+  for (const key of ['model', 'effort', 'fastMode', 'serviceTier'] as const) {
+    if (current[key] !== undefined && saved[key] !== undefined) {
+      acceptedInputSources[key] = 'saved'
+    }
+  }
+  for (const key of defaultKeys) {
+    if (pinsDefaults && current[key] !== undefined) {
+      acceptedInputSources[key] = 'policy'
+    }
+  }
+  if (saved.fastMode === undefined && selected.current.fastMode === false) {
+    acceptedInputSources.fastMode = 'policy'
+  }
   const confirmed = options.current.confirmed?.filter((key) =>
     key === 'model' || key === 'effort' || key === 'fastMode' || key === 'serviceTier'
       ? current[key] === options.current[key]
@@ -177,6 +191,7 @@ export async function readStructuredAgentSessionOptions(
       : {}),
     current: {
       ...current,
+      acceptedInputSources,
       defaulted,
       confirmed,
       ...(options.current.fastModeState ? { fastModeState: options.current.fastModeState } : {}),

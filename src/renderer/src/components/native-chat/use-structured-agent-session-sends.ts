@@ -1,3 +1,7 @@
+import type {
+  StructuredAgentSessionSendControl,
+  StructuredAgentSessionAttachment
+} from '../../../../shared/structured-agent-session-send-mutation'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/structured-agent-session-host-capability'
 import { AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
 import type { StructuredAgentSessionSendRequest } from './structured-agent-session-send-slot'
@@ -6,7 +10,6 @@ import type {
   AgentJournalCursor,
   AgentJournalSubmission
 } from '../../../../shared/agent-session-journal-types'
-import type { StructuredAgentSessionAttachment } from '../../../../shared/structured-agent-session-send-mutation'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   structuredAgentSessionQueueRequest,
@@ -43,6 +46,7 @@ export function useStructuredAgentSessionSends(args: {
   /** The chat reads Stopping: a send made now is drawn after the turn being stopped. */
   stopping?: boolean
   /** The composer's model and effort each send carries; undefined to a host that takes none. */
+  sendSelection?: () => Pick<StructuredAgentSessionSendControl, 'options' | 'selection'>
   sendOptions?: () => Readonly<Record<string, string>> | undefined
 }) {
   const {
@@ -53,6 +57,7 @@ export function useStructuredAgentSessionSends(args: {
     queue,
     queuedMessageIds,
     sendOptions,
+    sendSelection,
     sessionId,
     stopping,
     submissions,
@@ -111,7 +116,7 @@ export function useStructuredAgentSessionSends(args: {
         return false
       }
       const delivery = structuredAgentSessionQueueRequest(queue)
-      const options = sendOptions?.()
+      const captured = sendSelection?.() ?? { options: sendOptions?.() }
       const sent = sendStructuredAgentSessionMessage({
         sessionId,
         target,
@@ -122,7 +127,7 @@ export function useStructuredAgentSessionSends(args: {
           ? { usageLimitContinuationOfTurnItemId: request.usageLimitContinuationOfTurnItemId }
           : {}),
         ...(delivery ? { delivery } : {}),
-        ...(options ? { options } : {}),
+        ...captured,
         ...(takesSkills && request?.skills?.length ? { skills: request.skills } : {}),
         ...(stopping ? { sentWhileStopping: true as const } : {})
       })
@@ -141,7 +146,17 @@ export function useStructuredAgentSessionSends(args: {
         ? 'queued'
         : true
     },
-    [isWorking, queue, queuedMessageIds, sendOptions, sessionId, stopping, takesSkills, target]
+    [
+      isWorking,
+      queue,
+      queuedMessageIds,
+      sendSelection,
+      sendOptions,
+      sessionId,
+      stopping,
+      takesSkills,
+      target
+    ]
   )
 
   return {

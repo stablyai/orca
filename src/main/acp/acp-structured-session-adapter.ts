@@ -4,6 +4,7 @@ import type { AgentSessionExecutionLocation } from '../../shared/agent-session-r
 import {
   AgentSessionAcquisitionExitProvenError,
   AgentSessionAcquisitionExitUnprovenError,
+  AgentSessionAcquisitionRootExitObservedError,
   AgentSessionAcquisitionRefusal,
   AgentSessionPreSpawnError,
   isAgentSessionPreSpawnError,
@@ -103,7 +104,7 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
         },
         onConnectionLost: (session, error) => this.children.connectionLost(session, error),
         onSettled: (settlement) => this.deps.onDispatchSettledLate?.({ sessionId, ...settlement }),
-        forceClose: (id) => void this.forceCloseSession(id)
+        forceClose: (id) => this.children.stopAfterFailure(id)
       })
       if (attempt.signal.aborted) {
         session.dispose()
@@ -123,6 +124,9 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
         // Retain failed cleanup for retry before another child can spawn.
         this.children.starts.retainFailed(sessionId, connection)
         throw new AgentSessionAcquisitionExitUnprovenError(error)
+      }
+      if (connection?.lastCloseResult?.killDelivered && !connection.exited) {
+        throw new AgentSessionAcquisitionRootExitObservedError(error, 'kill-delivered')
       }
       if (attempt.signal.aborted) {
         const closed = new Error(
@@ -236,7 +240,7 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
   answerPrompt: SessionAdapter['answerPrompt'] = (input) =>
     this.live(input.sessionId).prompts.answer(input)
 
-  async setOption(input: SetOptionInput): Promise<Readonly<Record<string, string>>> {
+  async setOption(input: SetOptionInput) {
     const session = this.live(input.sessionId)
     const write = session.options.write(input.key, input.value)
     if (!write) {
@@ -260,10 +264,8 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
   canSetOptionWhileIdle = (input: SetOptionInput): boolean =>
     childState.canSetAcpOptionWhileIdle(this.children.sessions.get(input.sessionId), input)
 
-  readOptions = async (input: { sessionId: string; fence: number }) => {
-    const session = this.live(input.sessionId)
-    return readAcpLiveOptions(session, session.spec.permissionModeConfig?.values)
-  }
+  readOptions = async (input: { sessionId: string; fence: number }) =>
+    readAcpLiveOptions(this.live(input.sessionId), this.deps.spec.permissionModeConfig?.values)
 
   readCommands = (sessionId: string) => {
     const session = this.children.sessions.get(sessionId)
@@ -308,7 +310,7 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
   hasOwnedAcquisition = (sessionId: string): boolean =>
     this.children.sessions.has(sessionId) ||
     this.children.starts.failedSessionIds().includes(sessionId)
-  forceCloseSession = (sessionId: string): Promise<boolean> => this.children.stop(sessionId, false)
+  forceCloseSession = (sessionId: string): Promise<boolean> => this.children.close(sessionId, false)
 
   async closeAll(): Promise<void> {
     await this.children.closeAll([

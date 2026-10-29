@@ -461,6 +461,12 @@ describe('scanAiVaultSessions', () => {
       `cd '/tmp/kiro' && kiro-cli chat --tui --resume-id '${KIRO_FIXTURE_SESSION_ID}'`
     )
 
+    expect(result.sessions.find((session) => session.agent === 'rovo')).toMatchObject({
+      filePath: join(roots.rovoSessionsDir, 'rovo-session', 'metadata.json'),
+      messageCount: 1,
+      previewMessages: [expect.objectContaining({ text: 'Rovo title' })]
+    })
+
     const ompSession = result.sessions.find((session) => session.agent === 'omp')
     expect(ompSession?.model).toBe('gpt-5.4-mini')
     expect(ompSession?.totalTokens).toBe(160)

@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react'
 import { cn } from '@/lib/utils'
-import { viewClaudeAgentFromRow } from '@/lib/claude-agent-row-view'
+import { opensClaudeParentConversation, viewClaudeAgentFromRow } from '@/lib/claude-agent-row-view'
 import { useClaudeAgentRowView } from './use-claude-agent-row-view'
 import {
   AgentStateDot,
@@ -244,6 +244,14 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       data-focused-agent-pane={highlighted ? 'true' : undefined}
       data-current={view?.current ? 'true' : undefined}
       aria-current={view?.current ? 'true' : undefined}
+      aria-description={
+        opensClaudeParentConversation(agent)
+          ? translate(
+              'auto.lib.claudeAgentRowView.openParentConversation',
+              'Open parent conversation'
+            )
+          : undefined
+      }
       data-agent-send-target={sendTargetStatus}
       title={titleParts.length > 0 ? titleParts.join(' • ') : undefined}
       role={participatesInLineage ? 'treeitem' : undefined}

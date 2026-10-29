@@ -120,8 +120,10 @@ test('a stopped WSL distro boots only for Start or New Terminal, never for a ter
     await stoppedCard.first().getByRole('button', { name: 'Start', exact: true }).click()
     await expect
       .poll(() => fakeWslConnects(connectLogFile).length, { timeout: 60_000 })
-      .toBeGreaterThan(connectsBeforeStart)
+      .toBe(connectsBeforeStart + 1)
     await expect(stoppedCard).toHaveCount(0, { timeout: 60_000 })
+    // One Start is one connect: a second would rerun the server's launch in the distro.
+    expect(fakeWslConnects(connectLogFile)).toHaveLength(connectsBeforeStart + 1)
     await page.screenshot({ path: testInfo.outputPath('wsl-host-terminal-after-start.png') })
 
     // New Terminal on the stopped host is the user acting on it too.
@@ -131,9 +133,10 @@ test('a stopped WSL distro boots only for Start or New Terminal, never for a ter
     await openNewTerminal(page)
     await expect
       .poll(() => fakeWslConnects(connectLogFile).length, { timeout: 60_000 })
-      .toBeGreaterThan(connectsBeforeNewTerminal)
+      .toBe(connectsBeforeNewTerminal + 1)
     await expect.poll(() => terminals.count(), { timeout: 60_000 }).toBeGreaterThan(terminalCount)
     await expect(stoppedCard).toHaveCount(0, { timeout: 60_000 })
+    expect(fakeWslConnects(connectLogFile)).toHaveLength(connectsBeforeNewTerminal + 1)
     await page.screenshot({ path: testInfo.outputPath('wsl-host-terminal-new-terminal.png') })
   } finally {
     await desktop.dispose()

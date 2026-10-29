@@ -7,7 +7,7 @@ import { isVisibleJiraCreateField } from '@/components/task-page/jira/task-page-
 import {
   compareJiraProjectsByDisplayLabel,
   getJiraProjectSelectionKey
-} from '@/components/task-page-jira-project-selection'
+} from '@/components/task-page/jira/task-page-jira-project-selection'
 
 import type { TaskPageJiraCreationStatePreludeModel } from './use-task-page-jira-creation-state'
 

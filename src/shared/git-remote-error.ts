@@ -1,3 +1,4 @@
+import { stripAnsiEscapeSequences } from './ansi-escape-sequences'
 import { isPushHookFailure } from './source-control-push-failure'
 
 // Why: strip `user:password@` on any scheme, but a lone `user@` only on HTTP(S) — SSH's git@host user-info is required, so stripping breaks the URL.
@@ -6,6 +7,7 @@ const HTTPS_TOKEN_URL_PATTERN = /(https?:\/\/)[^\s/@:]+@/gi
 const SUBMODULE_PUSH_FAILURE_PATTERN = /Unable to push submodule ['"](.+?)['"]/i
 const SUBMODULE_PUSH_FAILURE_SENTINEL_PATTERN =
   /failed to push all needed submodules|Unable to push submodule/i
+const STALE_LEASE_REJECTION_PATTERN = /^[ \t]*![ \t]+\[rejected\][^\r\n]*\(stale info\)[ \t]*$/m
 const SUBMODULE_REMOTE_CHANGED_PATTERN =
   /non-fast-forward|fetch first|updates were rejected|remote contains work that you do not have/i
 const NORMALIZED_SUBMODULE_PUSH_FAILURE_PATTERN =
@@ -165,8 +167,11 @@ export function normalizeGitErrorMessage(error: unknown, operation?: GitRemoteOp
     return 'Push rejected: remote has newer commits (non-fast-forward). Please pull or sync first.'
   }
 
-  if (operation === 'push' && isPushHookFailure(raw)) {
-    // Why: pre-push hook output is the actionable part, printed before git's generic "failed to push some refs" tail line.
+  if (
+    operation === 'push' &&
+    (STALE_LEASE_REJECTION_PATTERN.test(stripAnsiEscapeSequences(raw)) || isPushHookFailure(raw))
+  ) {
+    // Lease rejection and pre-push hook details precede Git's generic "failed to push some refs" tail line.
     return raw.trim()
   }
 

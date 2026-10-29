@@ -106,6 +106,26 @@
         "runAdministratorHelp": "管理者ガイド",
         "standardStatus": "標準ユーザー",
         "unknownAdministrator": "判定できません"
+      },
+      "limit": {
+        "label": "実行中のターミナルの上限",
+        "description": "このホスト上の全プロジェクトで実行中のターミナル数を制限します。",
+        "system": "システムのPTY上限: {{value}}",
+        "unknown": "取得できません",
+        "shared": "他のターミナルアプリと共有されます。空き数ではなく総容量です。",
+        "disconnected": "このホストは切断されています。再接続してターミナルの上限を確認または変更してください。",
+        "unsupported": "このホストのターミナルサービスは、まだ上限の変更に対応していません。",
+        "environment": "このOrcaインスタンスのターミナル上限は環境変数で設定されています。ここで編集するには、このホストの環境変数による設定を削除してください。",
+        "savedUnreadable": "このホストに保存されたターミナル上限を読み取れませんでした。{{value}} を使用しています。値を入力し、Enter キーを押して置き換えてください。",
+        "failed": "ターミナルの上限を確認できませんでした。もう一度お試しください。",
+        "retry": "再試行",
+        "unit": "ターミナル",
+        "search": {
+          "limit": "上限",
+          "maximum": "最大",
+          "pty": "pty",
+          "capacity": "容量"
+        }
       }
     },
     "appearance": {
@@ -1350,10 +1370,7 @@
       },
       "claudeAgentRowView": {
         "subagentNavigationSetup": "設定 → Agent で Claude のサブ Agent ナビゲーションを有効にしてから、Orca で Claude 2.1.300 以降を起動してください。keybindings.json で Ctrl+Alt+G、H、または V が引き続き command:orca-agent-view に割り当てられていることを確認してください。",
-        "permissionPrompt": "Agent を切り替える前に、Claude の権限確認に応答してください。",
-        "agentUnavailable": "Claude はこの Agent を開けません。すでに利用できなくなっている可能性があります。",
-        "closeDialog": "Claude はビューを切り替えませんでした。開いているダイアログを閉じて、もう一度お試しください。",
-        "hostUnavailable": "このホストではサブ Agent ナビゲーションを利用できません。Orca を更新し、このペインで Claude を再起動してください。"
+        "permissionPrompt": "Agent を切り替える前に、Claude の権限確認に応答してください。"
       },
       "dropFailureReason": {
         "tooLarge": "このホストにアップロードするには大きすぎます。",
@@ -11223,8 +11240,8 @@
           "managedOverSshHelp": "このサーバーはこのデスクトップから SSH で更新されます。リモート Orca サーバーの行にある「更新」を使ってください。"
         },
         "BrowserLinkRoutingSetting": {
-          "description": "ターミナル、Markdown、エディターの http(s) リンクを Orca の組み込みブラウザで開きます。{{shortcut}} は常にシステムブラウザを使用します。",
-          "descriptionBase": "ターミナル、Markdown、エディターの http(s) リンクを Orca の組み込みブラウザで開きます。"
+          "description": "Orca 内のあらゆる場所の http(s) リンクを組み込みブラウザで開きます。サインインページと {{shortcut}} は常にシステムブラウザを使用します。",
+          "descriptionBase": "Orca 内のあらゆる場所の http(s) リンクを組み込みブラウザで開きます。サインインページは引き続きシステムブラウザで開きます。"
         },
         "BrowserLinkRoutingModifierSetting": {
           "titleSystem": "Shift を押しながらクリックすると Web ブラウザで開きます",
@@ -16555,7 +16572,8 @@
                     "annotations": {
                       "0c7b9b2b7a": "コピーしました",
                       "c937229f19": "スクリーンショット",
-                      "1f5cb19034": "注釈を追加しました"
+                      "1f5cb19034": "注釈を追加しました",
+                      "limitReached": "注釈は {{limit}} 件までです。追加するには、いくつか送信、削除、またはクリアしてください。"
                     }
                   }
                 }
@@ -16570,7 +16588,10 @@
                     "024467ceac": "キャンセル",
                     "449d2c2629": "注釈の意図",
                     "38d320108c": "注釈を折りたたむ",
-                    "9f209891a7": "注釈を展開"
+                    "9f209891a7": "注釈を展開",
+                    "includePageDetails": "ページの詳細を含める",
+                    "copyFeedback": "フィードバックをコピー",
+                    "copyFeedbackWithPageDetails": "ページの詳細付きでフィードバックをコピー"
                   }
                 }
               }
@@ -18266,7 +18287,7 @@
         "historyInOtherAccount": "このチャットの履歴は別の Claude アカウントにあります。続けるには、そのアカウントに切り替えてください。",
         "claudeAccountFolderMissing": "選択した Claude アカウントのフォルダーが見つかりません。もう一度サインインするか、別のアカウントを選択してください。",
         "claudeAccountSetupFailed": "選択した Claude アカウントを設定できませんでした。もう一度試すか、別のアカウントを選択してください。",
-        "agentCommandNotRunnable": "[設定] → [Agent] にある {{agent}} の [コマンド] には、Orca が見つけられるプログラムのパスまたは名前を、引数や変数なしで指定する必要があります。変更するか、[リセット] してください。",
+        "agentCommandNotRunnable": "設定 → Agent にある {{agent}} の「コマンド」は、Orca が見つけられるプログラムで始める必要があります。変数、パイプなどのシェル構文には対応していません。変数には「環境」設定を使用してください。コマンドを変更するかリセットしてください。",
         "runtimeNotInstalled": "{{agent}} はこのチャットを実行しているコンピューターにインストールされていません。最新バージョンの Orca でチャットからインストールしてください。",
         "fullAccessAsRoot": "{{agent}} は root として実行されている間はフルアクセスを使用しません。このチャットを実行しているコンピューターの [設定 → Agent] で {{agent}} に別の権限を選択してから、新しいチャットを開始してください。",
         "launchPreparationFailed": "Orca は、このチャットを実行しているコンピューターで {{agent}} の起動を準備できませんでした。",

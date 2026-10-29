@@ -98,7 +98,9 @@ export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSpli
       return this.keepSplitThatCannotStart(source, opts, new Error('runtime_unavailable'))
     }
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(
-      `id:${source.worktreeId}`
+      `id:${source.worktreeId}`,
+      undefined,
+      { wslUserAct: opts.wslUserAct === true }
     ).catch((error: unknown) => this.keepSplitThatCannotStart(source, opts, error))
     const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
     const result = await spawnInAdmittedPane(this.store, controller, {

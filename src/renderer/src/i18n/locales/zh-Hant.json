@@ -1772,10 +1772,7 @@
       },
       "claudeAgentRowView": {
         "subagentNavigationSetup": "請先在「設定」→「代理程式」啟用 Claude 子代理程式導覽，再於 Orca 中啟動 Claude 2.1.300+。請確認 keybindings.json 仍將 Ctrl+Alt+G、H 或 V 繫結至 command:orca-agent-view。",
-        "permissionPrompt": "切換代理程式前，請先回應 Claude 的權限提示。",
-        "agentUnavailable": "Claude 無法開啟此代理程式。該代理程式可能已無法使用。",
-        "closeDialog": "Claude 未切換檢視。請關閉所有已開啟的對話方塊，再試一次。",
-        "hostUnavailable": "此主機無法使用子代理程式導覽。請更新 Orca，並在此窗格中重新啟動 Claude。"
+        "permissionPrompt": "切換代理程式前，請先回應 Claude 的權限提示。"
       },
       "wslHostWindowsDriveRefusal": {
         "addOnThisComputer": "在這台電腦上新增",
@@ -11666,8 +11663,8 @@
           "managedOverSshHelp": "這臺電腦會透過 SSH 更新此伺服器。請在「遠端 Orca 伺服器」中，點選此伺服器所在列的「更新」。"
         },
         "BrowserLinkRoutingSetting": {
-          "description": "在 Orca 內建瀏覽器中開啟來自終端機、Markdown 和編輯器的 http(s) 連結。{{shortcut}} 始終使用系統瀏覽器。",
-          "descriptionBase": "在 Orca 內建瀏覽器中開啟來自終端機、Markdown 和編輯器的 http(s) 連結。"
+          "description": "在 Orca 內建瀏覽器中開啟 Orca 各處的 http(s) 連結。登入頁面和 {{shortcut}} 始終使用系統瀏覽器。",
+          "descriptionBase": "在 Orca 內建瀏覽器中開啟 Orca 各處的 http(s) 連結。登入頁面仍會在系統瀏覽器中開啟。"
         },
         "BrowserLinkRoutingModifierSetting": {
           "titleSystem": "按住 Shift 在系統瀏覽器中開啟",
@@ -16730,7 +16727,8 @@
                     "annotations": {
                       "0c7b9b2b7a": "已複製",
                       "c937229f19": "已截圖",
-                      "1f5cb19034": "新增了註解"
+                      "1f5cb19034": "新增了註解",
+                      "limitReached": "已達到 {{limit}} 則註解的上限。請傳送、刪除或清除一些後再新增。"
                     }
                   }
                 }
@@ -16745,7 +16743,10 @@
                     "024467ceac": "取消",
                     "449d2c2629": "註解意圖",
                     "38d320108c": "摺疊註解",
-                    "9f209891a7": "展開註解"
+                    "9f209891a7": "展開註解",
+                    "includePageDetails": "包含頁面詳細資料",
+                    "copyFeedback": "複製回饋",
+                    "copyFeedbackWithPageDetails": "複製回饋及頁面詳細資料"
                   }
                 }
               }

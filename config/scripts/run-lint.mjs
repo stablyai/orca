@@ -21,6 +21,7 @@ export const LINT_STEPS = [
   'verify:mobile-localization-coverage',
   'lint:ast-grep-gates',
   'check:main-sync-spawn-ratchet',
+  'check:has-restyle-scope',
   'lint:js-plugins',
   'oxlint',
   'check:dead-classes',

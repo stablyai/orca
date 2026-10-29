@@ -275,7 +275,7 @@ function useComputerUsePermissionStatus(enabled: boolean): {
     const refresh = (): void => {
       setStatus((current) => ({ ...current, checking: true }))
       window.api.computerUsePermissions
-        .getStatus()
+        .getStatus({ background: true })
         .then((next) => {
           if (stale) {
             return
