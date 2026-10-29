@@ -33,6 +33,11 @@ export const uiStateAndMenuCommandsApi = {
     ipcRenderer.on('ui:closeSettings', listener)
     return () => ipcRenderer.removeListener('ui:closeSettings', listener)
   },
+  onNewBrowserTab: (callback: () => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent) => callback()
+    ipcRenderer.on('ui:newBrowserTab', listener)
+    return () => ipcRenderer.removeListener('ui:newBrowserTab', listener)
+  },
   consumePendingOpenSettings: (): Promise<boolean> =>
     ipcRenderer.invoke('ui:consumePendingOpenSettings'),
   onQuitAndStopAllSessions: (callback: () => void): (() => void) => {

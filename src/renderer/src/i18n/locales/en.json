@@ -24429,6 +24429,7 @@
       "workspaceCreate": "Create worktree",
       "workspaceRename": "Rename worktree",
       "voiceDictation": "Dictation",
+      "voiceControl": "Voice Control",
       "sidebarExplorerToggle": "Show Explorer",
       "sidebarFocusWorktreeList": "Focus worktree list",
       "tabNewTerminal": "New terminal tab",

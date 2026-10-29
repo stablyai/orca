@@ -86,6 +86,8 @@ function prepareVoiceDispatch(
     coordinatorHandle: VOICE_CONTROL_HANDLE,
     workerHandle: args.handle,
     canDispatchSubWorkers: false,
+    // Voice dispatches report through the mailbox reply pump, not heartbeats.
+    heartbeatIntervalMinutes: null,
     // Why: agents inside a dev app must reach the dev runtime's socket, not production.
     devMode: process.env.ORCA_USER_DATA_PATH?.includes('orca-dev'),
     ...(args.cliCommand !== undefined ? { cliCommand: args.cliCommand } : {})

@@ -91,6 +91,8 @@ export type UiCommandEventApi = {
   onOpenSettings: (callback: () => void) => () => void
   /** Voice navigate_ui's close-settings verb — the settings back button, over IPC. */
   onCloseSettings: (callback: () => void) => () => void
+  /** Voice navigate_ui's new-browser-tab verb — the lane #31859 deleted with its last listener. Optional: the web client has no menu-driven new-tab intent. */
+  onNewBrowserTab?: (callback: () => void) => () => void
   /** Consumes a one-shot tray/menu-bar "open settings" intent queued before mount. */
   consumePendingOpenSettings: () => Promise<boolean>
   /** Main confirmed Quit Completely; consume the request before acting. */

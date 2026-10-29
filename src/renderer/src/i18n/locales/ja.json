@@ -22484,6 +22484,7 @@
       "workspaceCreate": "ワークツリーを作成",
       "workspaceRename": "ワークツリー名を変更",
       "voiceDictation": "ディクテーション",
+      "voiceControl": "音声コントロール",
       "sidebarExplorerToggle": "エクスプローラを表示",
       "sidebarFocusWorktreeList": "ワークツリーリストにフォーカス",
       "tabNewTerminal": "新規ターミナルタブ",

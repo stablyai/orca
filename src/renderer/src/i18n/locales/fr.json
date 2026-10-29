@@ -23176,6 +23176,7 @@
       "workspaceCreate": "Créer un worktree",
       "workspaceRename": "Renommer le worktree",
       "voiceDictation": "Dictée",
+      "voiceControl": "Contrôle vocal",
       "sidebarExplorerToggle": "Afficher l'explorateur",
       "sidebarFocusWorktreeList": "Placer le focus sur la liste des worktrees",
       "tabNewTerminal": "Nouvel onglet de terminal",

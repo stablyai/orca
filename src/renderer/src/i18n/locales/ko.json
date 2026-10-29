@@ -22476,6 +22476,7 @@
       "workspaceCreate": "워크트리 만들기",
       "workspaceRename": "워크트리 이름 바꾸기",
       "voiceDictation": "받아쓰기",
+      "voiceControl": "음성 제어",
       "sidebarExplorerToggle": "탐색기 표시",
       "sidebarFocusWorktreeList": "워크트리 목록에 포커스",
       "tabNewTerminal": "새 터미널 탭",
