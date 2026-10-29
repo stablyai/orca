@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { parse as parseToml } from 'smol-toml'
+import { createAgentHookMemorySftp } from '../agent-hooks/agent-hook-memory-sftp.test-fixture'
 
 const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
@@ -19,6 +20,7 @@ import {
   getJcodeManagedCommand,
   getJcodeManagedScriptFileName,
   getJcodeManagedScriptPath,
+  getJcodeRemoteManagedCommand,
   JCODE_HOOK_EVENTS
 } from './hook-settings'
 import { tomlQuoteString } from './hook-config'
@@ -117,11 +119,12 @@ describe('JcodeHookService', () => {
     const service = new JcodeHookService()
     const configPath = getJcodeConfigPath()
     mkdirSync(dirname(configPath), { recursive: true })
-    writeFileSync(
-      configPath,
-      `[hooks]\nturn_end = ${tomlQuoteString(getJcodeManagedCommand(stalePath))}\n`,
-      'utf8'
-    )
+    // Write the stale entry in the form its own platform installs.
+    const platform = vi.spyOn(process, 'platform', 'get')
+    platform.mockReturnValue(stalePath.endsWith('.cmd') ? 'win32' : 'linux')
+    const staleCommand = getJcodeManagedCommand(stalePath)
+    platform.mockRestore()
+    writeFileSync(configPath, `[hooks]\nturn_end = ${tomlQuoteString(staleCommand)}\n`, 'utf8')
 
     const status = service.getStatus()
     expect(status.state).toBe('partial')
@@ -255,5 +258,52 @@ describe('JcodeHookService', () => {
     expect(existsSync(getJcodeManagedScriptPath())).toBe(true)
     const after = readFileSync(getJcodeConfigPath(), 'utf8')
     expect(after).not.toContain(getJcodeManagedScriptPath())
+  })
+
+  it('rewrites a bare-path install from before the missing-script guard, once per event', () => {
+    const configPath = getJcodeConfigPath()
+    // The pre-guard form: the script path alone, quoted for jcode's tokenizer.
+    const legacy = tomlQuoteString(`'${getJcodeManagedScriptPath()}'`)
+    mkdirSync(dirname(configPath), { recursive: true })
+    writeFileSync(
+      configPath,
+      `[hooks]\n${JCODE_HOOK_EVENTS.map((event) =>
+        event === 'pre_tool'
+          ? `${event} = ["~/gates/pre-tool.sh", ${legacy}]`
+          : `${event} = ${legacy}`
+      ).join('\n')}\n`,
+      'utf8'
+    )
+    const service = new JcodeHookService()
+    expect(service.getStatus().detail).toContain('Managed hook command outdated')
+
+    expect(service.install().state).toBe('installed')
+    const guarded = getJcodeManagedCommand(getJcodeManagedScriptPath())
+    expect(guarded.startsWith('/bin/sh -c ')).toBe(process.platform !== 'win32')
+    expect(parseToml(readFileSync(configPath, 'utf8')).hooks).toEqual(
+      Object.fromEntries(
+        JCODE_HOOK_EVENTS.map((event) => [
+          event,
+          event === 'pre_tool' ? ['~/gates/pre-tool.sh', guarded] : guarded
+        ])
+      )
+    )
+  })
+
+  it('rewrites a remote bare-path install to the guarded command, once per event', async () => {
+    const remoteScript = '/home/dev/.orca/agent-hooks/jcode-hook.sh'
+    const legacy = tomlQuoteString(`'${remoteScript}'`)
+    const { sftp, fs } = createAgentHookMemorySftp({
+      '/home/dev/.jcode/config.toml': `[hooks]\n${JCODE_HOOK_EVENTS.map((event) => `${event} = [${legacy}, ${legacy}]`).join('\n')}\n`
+    })
+
+    const status = await new JcodeHookService().installRemote(sftp, '/home/dev')
+
+    expect(status.state).toBe('installed')
+    expect(parseToml(fs.files.get('/home/dev/.jcode/config.toml') ?? '').hooks).toEqual(
+      Object.fromEntries(
+        JCODE_HOOK_EVENTS.map((event) => [event, [getJcodeRemoteManagedCommand(remoteScript)]])
+      )
+    )
   })
 })

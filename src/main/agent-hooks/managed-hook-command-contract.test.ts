@@ -218,7 +218,7 @@ const buildersByAgent = new Map<string, CommandBuilders>([
     }
   ],
   [
-    // jcode directly executes parsed argv; shell wrappers would become an invalid program name.
+    // jcode directly executes parsed argv, so its POSIX guard is an explicit `/bin/sh -c` argument.
     'jcode',
     {
       local: (path) => [getJcodeManagedCommand(path)],

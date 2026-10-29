@@ -1,6 +1,7 @@
 // Honor JCODE_HOME so hooks land in the config jcode actually reads.
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { wrapPosixHookCommand } from '../agent-hooks/posix-hook-command'
 
 const JCODE_SCRIPT_BASE = 'jcode-hook'
 
@@ -40,15 +41,26 @@ export function getSharedJcodeScriptPath(scriptFileName: string): string {
   return join(homedir(), '.orca', 'agent-hooks', scriptFileName)
 }
 
-// jcode tokenizes commands before direct execution; quote paths to preserve Windows separators and spaces.
+// jcode tokenizes commands before direct execution; quote to preserve Windows separators and spaces.
+function quoteJcodeArgument(value: string): string {
+  return value.includes("'")
+    ? `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`
+    : `'${value}'`
+}
+
+// Run POSIX hooks through the shared missing-script guard, so a removed script is a silent no-op.
+function getJcodePosixManagedCommand(scriptPath: string): string {
+  return `/bin/sh -c ${quoteJcodeArgument(wrapPosixHookCommand(scriptPath))}`
+}
+
 export function getJcodeManagedCommand(scriptPath: string): string {
-  return scriptPath.includes("'")
-    ? `"${scriptPath.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`
-    : `'${scriptPath}'`
+  return process.platform === 'win32'
+    ? quoteJcodeArgument(scriptPath)
+    : getJcodePosixManagedCommand(scriptPath)
 }
 
 export function getJcodeRemoteManagedCommand(scriptPath: string): string {
-  return getJcodeManagedCommand(scriptPath)
+  return getJcodePosixManagedCommand(scriptPath)
 }
 
 // Normalize Windows separators before matching the managed script.
