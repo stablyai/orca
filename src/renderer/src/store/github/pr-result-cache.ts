@@ -1,3 +1,4 @@
+import type { LinkedReviewClearScope } from './linked-review-clear'
 import type { AppState } from '../types'
 import type { RuntimeFocusSettings } from '../../../../shared/github/github-cache-key'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
@@ -74,14 +75,15 @@ export function deletePRRefreshStartedEntry(sequence: number | undefined, cacheK
 
 export function setPRRefreshStartedHostedReviewEntry(
   key: string,
-  entry: AppState['hostedReviewCache'][string] | undefined
+  entry: AppState['hostedReviewCache'][string] | undefined,
+  clearScope?: LinkedReviewClearScope
 ): void {
-  if (entry === undefined) {
+  if (entry === undefined && clearScope === undefined) {
     prRefreshStartedHostedReviewEntries.delete(key)
     return
   }
   prRefreshStartedHostedReviewEntries.delete(key)
-  prRefreshStartedHostedReviewEntries.set(key, entry)
+  prRefreshStartedHostedReviewEntries.set(key, { entry, clearScope })
   while (prRefreshStartedHostedReviewEntries.size > PR_REFRESH_STARTED_HOSTED_REVIEW_ENTRY_MAX) {
     const oldest = prRefreshStartedHostedReviewEntries.keys().next()
     if (oldest.done) {

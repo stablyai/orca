@@ -1,5 +1,3 @@
-import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../../../../shared/worktree/hosted-review-links'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
@@ -14,11 +12,8 @@ import { githubHostedReviewFallbackPRNumber, prLookupHintKey } from './pr-result
 import { nextLookupGeneration } from '../lookup-generation-sequence'
 import { inflightPRRequests, prRequestGenerations } from './request-coordination'
 import { getGitHubSourceTarget, settingsForGitHubRepoOwner } from './work-item-routing'
-import { findWorktreeById } from './worktree-refresh'
-import {
-  shouldApplyDivergedLinkedPRClear,
-  shouldClearDivergedLinkedMergedPR
-} from '../../../../shared/github/linked-pr-staleness'
+import { captureLinkedReviewClearScope, clearLinkedReview } from './linked-review-clear'
+import { shouldClearDivergedLinkedMergedPR } from '../../../../shared/github/linked-pr-staleness'
 import { startPullRequestLookup } from './pull-request-execution'
 
 export const createPullRequestActions = (
@@ -82,9 +77,8 @@ export const createPullRequestActions = (
         linkedPRNumber != null &&
         cached?.data?.headDivergedFromMergedPRAtOid != null
       ) {
-        const executionHostId = repo ? getRepoExecutionHostId(repo) : undefined
-        const currentHeadOid =
-          findWorktreeById(get(), options.worktreeId, executionHostId)?.head ?? null
+        const scope = captureLinkedReviewClearScope(get(), options.worktreeId, repo)
+        const currentHeadOid = scope?.workspace.head ?? null
         if (
           shouldClearDivergedLinkedMergedPR({
             pr: cached.data,
@@ -92,19 +86,11 @@ export const createPullRequestActions = (
             requestHeadOid: currentHeadOid
           })
         ) {
-          void get().updateWorktreeMeta(
-            options.worktreeId,
-            CLEARED_HOSTED_REVIEW_SELECTION_UPDATES,
-            {
-              executionHostId,
-              shouldApply: (worktree) =>
-                shouldApplyDivergedLinkedPRClear({
-                  worktree,
-                  linkedPRNumber,
-                  branch,
-                  requestHeadOid: currentHeadOid
-                })
-            }
+          clearLinkedReview(
+            get,
+            scope,
+            { linkedPRNumber, branch, requestHeadOid: currentHeadOid },
+            'diverged'
           )
         }
       }

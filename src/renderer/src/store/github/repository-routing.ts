@@ -7,6 +7,7 @@ import type {
 import type { Repo } from '../../../../shared/repo-types'
 import { runtimeTargetForOwnerEnvironment } from '../../runtime/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { hasUniqueIndexedRepositoryHost } from '@/lib/worktree-runtime-owner-index'
 import { getGitHubRepoLookupIndex } from '../slices/github-repo-lookup-index'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -108,8 +109,14 @@ export function findRepoForGitHubOwner(
   if (!executionHostId) {
     return lookup.findByIdOrPath(repoId, repoPath)
   }
-  const repo = lookup.findOnHost(executionHostId, repoId, repoPath)
-  if (!repo || (repoId && repo.id !== repoId)) {
+  const ownerHostId = normalizeExecutionHostId(executionHostId)
+  const repo = ownerHostId ? lookup.findOnHost(ownerHostId, repoId, repoPath) : undefined
+  if (
+    !ownerHostId ||
+    !repo ||
+    (repoId && repo.id !== repoId) ||
+    !hasUniqueIndexedRepositoryHost(state.repos, repo.id, ownerHostId)
+  ) {
     throw new Error(
       'The repository is no longer available on its owning host. Reconnect and retry.'
     )

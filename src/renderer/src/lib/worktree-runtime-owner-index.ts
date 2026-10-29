@@ -275,3 +275,10 @@ export function findIndexedProjectGroupOwner<T extends ProjectGroupOwnerRecord>(
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the index is built from and cached on this exact array, so its owner is one of the caller's T rows.
   return resolution.kind === 'resolved' ? (resolution.owner as T) : null
 }
+
+export {
+  findIndexedReviewRepository,
+  hasUniqueIndexedRepositoryHost,
+  hasIndexedRepository,
+  resolveIndexedSshRepositoryHost
+} from './repository-owner-index'

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { forgeOwnerHostIdForWorkspace } from '../../runtime/forge-credential-target'
 import type { PRComment } from '../../../../shared/github/comment-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
@@ -299,14 +300,25 @@ describe('PR panel with local and remote copies of one project', () => {
     }
   )
 
-  it.each(['ssh', 'runtime'] as const)(
+  it.each(['ssh', 'runtime', 'paired-legacy', 'paired-stamped'] as const)(
     'mutates the %s owner comment cache and preserves the same-ID twin',
     async (host) => {
       const remoteRepo: Repo = {
         ...localRepo,
         ...(host === 'ssh' ? { connectionId: 'builder' } : { executionHostId: 'runtime:server' })
       }
-      const { store, hostId } = setup(remoteRepo)
+      if (host.startsWith('paired')) {
+        remoteRepo.connectionId = 'builder'
+      }
+      const { store, hostId, worktree } = setup(remoteRepo)
+      const workspace = host.startsWith('paired')
+        ? {
+            ...worktree,
+            hostId: 'ssh:builder' as const,
+            ...(host === 'paired-stamped' ? { runtimeOwnerEnvironmentId: 'server' } : {})
+          }
+        : worktree
+      store.setState({ worktreesByRepo: { project: [workspace] } })
       const comment: PRComment = {
         id: 1,
         author: 'reviewer',
@@ -320,7 +332,10 @@ describe('PR panel with local and remote copies of one project', () => {
       }
       const reply = { ...comment, id: 2, body: 'Reply' }
       const conversation = { ...comment, id: 3, body: 'Conversation' }
-      const options = { repoId: remoteRepo.id, repoOwnerExecutionHostId: hostId }
+      const options = {
+        repoId: remoteRepo.id,
+        repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(remoteRepo, workspace)
+      }
       const suffix = prCommentsCacheSuffix(remotePR.number)
       const localKey = `project::${suffix}`
       const remoteKey = `${hostId}::project::${suffix}`
@@ -371,7 +386,7 @@ describe('PR panel with local and remote copies of one project', () => {
         1, 2, 3
       ])
       expect(store.getState().commentsCache[localKey]).toBe(localEntry)
-      if (host === 'runtime') {
+      if (host !== 'ssh') {
         expect(mockApi.gh.resolveReviewThread).not.toHaveBeenCalled()
         expect(mockApi.gh.addIssueComment).not.toHaveBeenCalled()
         expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
@@ -411,7 +426,10 @@ describe('PR panel with local and remote copies of one project', () => {
     const pr = await store.getState().fetchPRForBranch(pairedRepo.path, branch, {
       force: true,
       repoId: pairedRepo.id,
-      repoOwnerExecutionHostId: getRepoExecutionHostId(pairedRepo),
+      repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(pairedRepo, {
+        ...worktree,
+        hostId: 'ssh:builder'
+      }),
       worktreeId: worktree.id,
       linkedPRNumber: remotePR.number,
       reason: 'manual'
@@ -422,6 +440,42 @@ describe('PR panel with local and remote copies of one project', () => {
       remotePR.number
     )
     expect(store.getState().prCache[`project::${branch}`]?.data).toEqual(localPR)
+  })
+
+  it('skips passive refreshes when a host-only API cannot distinguish nested SSH repository twins', () => {
+    const pairedRepo: Repo = {
+      ...localRepo,
+      executionHostId: 'runtime:server',
+      connectionId: 'builder'
+    }
+    const { store, worktree } = setup(pairedRepo)
+    store.setState({
+      repos: [pairedRepo, { ...pairedRepo, connectionId: 'other' }],
+      worktreesByRepo: {
+        project: [{ ...worktree, hostId: 'ssh:builder', runtimeOwnerEnvironmentId: 'server' }]
+      }
+    })
+    expect(getVisibleHostedReviewRefreshTargets(store.getState(), store.getState)).toEqual([])
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('returns normal mutation failures when the selected repository owner is gone', async () => {
+    const { store } = setup({ ...localRepo, executionHostId: 'runtime:server' })
+    const options = { repoId: localRepo.id, repoOwnerExecutionHostId: 'runtime:missing' }
+    await expect(
+      store.getState().addPRConversationComment(localRepo.path, 22, 'comment', options)
+    ).resolves.toMatchObject({ ok: false })
+    await expect(
+      store.getState().addPRReviewCommentReply(localRepo.path, 22, 1, 'reply', options)
+    ).resolves.toMatchObject({ ok: false })
+    await expect(
+      store.getState().setPRCommentReaction(localRepo.path, 22, 'subject', '+1', true, options)
+    ).resolves.toBe(false)
+    await expect(
+      store.getState().resolveReviewThread(localRepo.path, 22, 'thread', true, options)
+    ).resolves.toBe(false)
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(mockApi.gh.addIssueComment).not.toHaveBeenCalled()
   })
 
   it('refuses a missing owner instead of loading the local copy', async () => {

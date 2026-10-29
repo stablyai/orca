@@ -12,11 +12,21 @@ import {
 import type { OpenCheckRunDetailsState } from '../../../../../../shared/editor-tab-view-types'
 import { loadGitLabJobLogDetails } from '@/runtime/gitlab-job-trace-client'
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
-import { findWorktreeById, getRepoIdFromWorktreeId } from '../../worktree-helpers'
+import { resolveReviewRepository } from '@/lib/review-owner'
+import {
+  findIndexedWorktreeOwner,
+  findIndexedWorktreeOwnerForHost
+} from '@/lib/worktree-runtime-owner-index'
+import {
+  getOpenFileExecutionHostId,
+  hasOpenFileExecutionHostEvidence
+} from '@/lib/unified-tab-host-ownership'
 import type { OpenFile } from '../types/open-file'
 import { openWorkspaceEditorItem } from '../tabs/workspace-editor-item'
 import { reconcileCheckDetailsReadingCache } from '@/components/editor/check-details-reading-cache'
 import { selectWorktreesByRepo } from '../../../workspace-record-selectors'
+import { resolveWorktreeOperationRoute } from '@/lib/worktree-operation-route'
+import { captureWorktreeOperationGenerationSnapshot } from '@/lib/worktree-operation-generation'
 
 export function createCheckRunDetailsActions(
   set: EditorSet,
@@ -44,6 +54,22 @@ export function createCheckRunDetailsActions(
         | undefined
       set((s) => {
         const existing = s.openFiles.find((f) => f.id === id)
+        const route =
+          existing && hasOpenFileExecutionHostEvidence(existing)
+            ? null
+            : resolveWorktreeOperationRoute(
+                { ...s, worktreesByRepo: selectWorktreesByRepo(s) },
+                worktreeId
+              )
+        const ownership = route
+          ? {
+              runtimeEnvironmentId: route.runtimeEnvironmentId,
+              operationProvenance: {
+                generation: captureWorktreeOperationGenerationSnapshot(route),
+                ownershipProjection: 'explicit' as const
+              }
+            }
+          : {}
         if (existing) {
           const existingDetails = existing.checkRunDetails
           const incomingIsStale =
@@ -62,6 +88,7 @@ export function createCheckRunDetailsActions(
               f.id === id
                 ? {
                     ...f,
+                    ...ownership,
                     mode: 'check-details' as const,
                     relativePath: label,
                     language: 'plaintext',
@@ -82,6 +109,7 @@ export function createCheckRunDetailsActions(
           filePath: id,
           relativePath: label,
           worktreeId,
+          ...ownership,
           language: 'plaintext',
           isDirty: false,
           mode: 'check-details',
@@ -191,9 +219,15 @@ export function createCheckRunDetailsActions(
           requestId
         })
       }
-      const worktree = findWorktreeById(selectWorktreesByRepo(state), file.worktreeId)
-      const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(file.worktreeId)
-      const repo = state.repos.find((candidate) => candidate.id === repoId)
+      const worktrees = selectWorktreesByRepo(state)
+      const worktree = hasOpenFileExecutionHostEvidence(file)
+        ? findIndexedWorktreeOwnerForHost(
+            worktrees,
+            file.worktreeId,
+            getOpenFileExecutionHostId(file)
+          )
+        : findIndexedWorktreeOwner(worktrees, file.worktreeId)
+      const repo = worktree ? resolveReviewRepository(state.repos, worktree) : null
       if (!repo?.path) {
         patch({
           details: checkRunDetails.details,
@@ -210,12 +244,13 @@ export function createCheckRunDetailsActions(
       }
       patch({ details: checkRunDetails.details, loading: true, error: null })
       try {
+        const repoOwnerExecutionHostId = forgeOwnerHostIdForWorkspace(repo, worktree)
         // GitLab jobs require GitLab trace; GitHub check-runs returns null and blanks the refreshed tab.
         const details = check.gitlabJobId
           ? await loadGitLabJobLogDetails({
               repoPath: repo.path,
               repoId: repo.id,
-              repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, worktree),
+              repoOwnerExecutionHostId,
               check,
               // Why: a fork MR's job lives in the source project, not the repo's own.
               projectRef: checkRunDetails.gitlabProjectRef ?? null
@@ -229,7 +264,7 @@ export function createCheckRunDetailsActions(
                 url: check.url,
                 prRepo: checkRunDetails.githubRepository ?? null
               },
-              { repoId: repo.id }
+              { repoId: repo.id, repoOwnerExecutionHostId }
             )
         patch({
           details,

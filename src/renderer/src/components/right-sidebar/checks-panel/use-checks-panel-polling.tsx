@@ -82,7 +82,6 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
         prCacheKey,
         fetchPRChecks,
         isCurrentAsyncResult,
-        activeWorktree,
         setChecksLoading,
         setChecks,
         setChecksError,
@@ -140,9 +139,7 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
         if (!isWslDistroNotRunningRefusal(err)) {
           console.warn('Failed to fetch PR checks:', err)
         }
-        setChecksError(
-          checksPanelLoadErrorMessage(err, forgeOwnerHostIdForWorkspace(repo, activeWorktree))
-        )
+        setChecksError(checksPanelLoadErrorMessage(err, getRepoExecutionHostId(repo)))
         policyRef.current.fail()
         pollIntervalRef.current = Math.min(Math.max(60_000, pollIntervalRef.current * 2), 900_000)
       } finally {
@@ -246,10 +243,7 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
           console.warn('Failed to fetch GitLab MR checks:', err)
         }
         // One MR details request contains both pipeline and discussion; report failure for both.
-        const message = checksPanelLoadErrorMessage(
-          err,
-          forgeOwnerHostIdForWorkspace(repo, activeWorktree)
-        )
+        const message = checksPanelLoadErrorMessage(err, getRepoExecutionHostId(repo))
         setChecksError(message)
         setCommentsError(message)
         policyRef.current.fail()

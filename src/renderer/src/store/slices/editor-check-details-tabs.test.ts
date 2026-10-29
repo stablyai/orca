@@ -41,66 +41,86 @@ vi.mock('@/runtime/gitlab-job-trace-client', () => ({
 }))
 
 describe('createEditorSlice conflict status reconciliation', () => {
-  it('reloads an open check-details tab from the hosted provider', async () => {
-    const fetchPRCheckDetails = vi.fn().mockResolvedValue({
-      name: 'verify',
-      status: 'completed',
-      conclusion: 'success',
-      url: null,
-      detailsUrl: null,
-      startedAt: null,
-      completedAt: null,
-      title: 'Build passed',
-      summary: null,
-      text: null,
-      annotations: [],
-      jobs: []
-    })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const store = createStore<any>()((...args: any[]) => ({
-      activeWorktreeId: 'wt-1',
-      repos: [{ id: 'repo-1', path: '/repo' }],
-      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo' }] },
-      fetchPRCheckDetails,
-      ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
-    })) as unknown as StoreApi<AppState>
-    const check = {
-      name: 'verify',
-      status: 'completed' as const,
-      conclusion: 'failure' as const,
-      url: null,
-      checkRunId: 42
-    }
-    const githubRepository = { owner: 'upstream', repo: 'project' }
-
-    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
-      details: null,
-      loading: false,
-      error: null,
-      githubRepository
-    })
-
-    await store.getState().reloadOpenCheckRunDetailsTab('wt-1::check-details::check-run:42')
-
-    expect(fetchPRCheckDetails).toHaveBeenCalledWith(
-      '/repo',
-      expect.objectContaining({
-        checkRunId: 42,
-        checkName: 'verify',
-        prRepo: githubRepository
-      }),
-      { repoId: 'repo-1' }
-    )
-    expect(store.getState().openFiles).toContainEqual(
-      expect.objectContaining({
-        id: 'wt-1::check-details::check-run:42',
-        checkRunDetails: expect.objectContaining({
-          loading: false,
-          details: expect.objectContaining({ title: 'Build passed', conclusion: 'success' })
-        })
+  it.each(['local', 'runtime:server'] as const)(
+    'reloads a check-details tab opened on %s after selecting its twin',
+    async (executionHostId) => {
+      const fetchPRCheckDetails = vi.fn().mockResolvedValue({
+        name: 'verify',
+        status: 'completed',
+        conclusion: 'success',
+        url: null,
+        detailsUrl: null,
+        startedAt: null,
+        completedAt: null,
+        title: 'Build passed',
+        summary: null,
+        text: null,
+        annotations: [],
+        jobs: []
       })
-    )
-  })
+      const store = createEditorTabsStore()
+      const localRepo = store.getState().repos[0]
+      const localWorktree = store.getState().worktreesByRepo['repo-1'][0]
+      store.setState({
+        activeWorkspaceExecutionHostId: executionHostId,
+        repos: [localRepo, { ...localRepo, path: '/remote', executionHostId: 'runtime:server' }],
+        worktreesByRepo: {
+          'repo-1': [
+            localWorktree,
+            {
+              ...localWorktree,
+              path: '/remote',
+              hostId: 'runtime:server',
+              runtimeOwnerEnvironmentId: 'server'
+            }
+          ]
+        },
+        fetchPRCheckDetails
+      })
+      const main = await drawTabsFromMain(store)
+      const check = {
+        name: 'verify',
+        status: 'completed' as const,
+        conclusion: 'failure' as const,
+        url: null,
+        checkRunId: 42
+      }
+      const githubRepository = { owner: 'upstream', repo: 'project' }
+
+      store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+        details: null,
+        loading: false,
+        error: null,
+        githubRepository
+      })
+      await main.settle()
+
+      store.setState({
+        activeWorkspaceExecutionHostId: executionHostId === 'local' ? 'runtime:server' : 'local'
+      })
+      await store.getState().reloadOpenCheckRunDetailsTab('wt-1::check-details::check-run:42')
+
+      expect(fetchPRCheckDetails).toHaveBeenCalledWith(
+        executionHostId === 'local' ? '/repo' : '/remote',
+        expect.objectContaining({
+          checkRunId: 42,
+          checkName: 'verify',
+          prRepo: githubRepository
+        }),
+        { repoId: 'repo-1', repoOwnerExecutionHostId: executionHostId }
+      )
+      expect(store.getState().openFiles).toContainEqual(
+        expect.objectContaining({
+          id: 'wt-1::check-details::check-run:42',
+          checkRunDetails: expect.objectContaining({
+            loading: false,
+            details: expect.objectContaining({ title: 'Build passed', conclusion: 'success' })
+          })
+        })
+      )
+      main.close()
+    }
+  )
 
   it('stops loading when an open check-details tab loses its repository', async () => {
     const fetchPRCheckDetails = vi.fn()
@@ -140,7 +160,14 @@ describe('createEditorSlice conflict status reconciliation', () => {
   })
 
   // GitLab job refresh must use GitLab trace, not GitHub check-runs or the open tab blanks (#7732).
-  it('reloads an open GitLab job tab through the job trace client', async () => {
+  it.each([
+    'local',
+    'runtime',
+    'paired-ssh',
+    'pinned-runtime',
+    'pinned-local',
+    'pinned-paired-ssh'
+  ] as const)('reloads an open GitLab job tab through its %s owner', async (owner) => {
     loadGitLabJobLogDetailsMock.mockReset()
     loadGitLabJobLogDetailsMock.mockResolvedValue({
       name: 'test: unit',
@@ -178,6 +205,31 @@ describe('createEditorSlice conflict status reconciliation', () => {
       fetchPRCheckDetails,
       ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
     })) as unknown as StoreApi<AppState>
+    if (owner !== 'local') {
+      const local = store.getState().worktreesByRepo['repo-1'][0]
+      store.setState({
+        repos: [
+          ...store.getState().repos,
+          {
+            ...store.getState().repos[0],
+            path: '/remote',
+            executionHostId: 'runtime:server',
+            ...(owner.endsWith('paired-ssh') ? { connectionId: 'builder' } : {})
+          }
+        ],
+        worktreesByRepo: {
+          'repo-1': [
+            ...(owner.startsWith('pinned-') ? [local] : []),
+            {
+              ...local,
+              path: '/remote',
+              hostId: owner.endsWith('paired-ssh') ? 'ssh:builder' : 'runtime:server',
+              runtimeOwnerEnvironmentId: 'server'
+            }
+          ]
+        }
+      })
+    }
     const check = {
       name: 'test: unit',
       status: 'completed' as const,
@@ -186,17 +238,39 @@ describe('createEditorSlice conflict status reconciliation', () => {
       gitlabJobId: 42
     }
 
+    if (owner.startsWith('pinned-')) {
+      store.setState({
+        activeWorkspaceExecutionHostId: owner === 'pinned-local' ? 'local' : 'runtime:server'
+      })
+    }
+
     store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
       details: null,
       loading: false,
       error: null
     })
+    if (owner.startsWith('pinned-')) {
+      store.setState({
+        activeWorkspaceExecutionHostId: owner === 'pinned-local' ? 'runtime:server' : 'local'
+      })
+      store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+        details: null,
+        loading: false,
+        error: null
+      })
+    }
 
     await store.getState().reloadOpenCheckRunDetailsTab('wt-1::check-details::gitlab-job:42')
 
     expect(fetchPRCheckDetails).not.toHaveBeenCalled()
     expect(loadGitLabJobLogDetailsMock).toHaveBeenCalledWith(
-      expect.objectContaining({ repoPath: '/repo', repoId: 'repo-1', check })
+      expect.objectContaining({
+        repoPath: owner === 'local' || owner === 'pinned-local' ? '/repo' : '/remote',
+        repoId: 'repo-1',
+        repoOwnerExecutionHostId:
+          owner === 'local' || owner === 'pinned-local' ? 'local' : 'runtime:server',
+        check
+      })
     )
     expect(store.getState().openFiles).toContainEqual(
       expect.objectContaining({
@@ -210,6 +284,44 @@ describe('createEditorSlice conflict status reconciliation', () => {
         })
       })
     )
+  })
+
+  it('refuses to reload an unqualified check tab when worktree owners conflict', async () => {
+    loadGitLabJobLogDetailsMock.mockReset()
+    const store = createEditorTabsStore()
+    const local = store.getState().worktreesByRepo['repo-1'][0]
+    store.setState({
+      repos: [
+        ...store.getState().repos,
+        { ...store.getState().repos[0], executionHostId: 'runtime:server' }
+      ],
+      worktreesByRepo: {
+        'repo-1': [
+          local,
+          { ...local, hostId: 'runtime:server', runtimeOwnerEnvironmentId: 'server' }
+        ]
+      }
+    })
+    const check = {
+      name: 'test: unit',
+      status: 'completed' as const,
+      conclusion: 'failure' as const,
+      url: null,
+      gitlabJobId: 42
+    }
+    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+      details: null,
+      loading: false,
+      error: null
+    })
+
+    await store.getState().reloadOpenCheckRunDetailsTab('wt-1::check-details::gitlab-job:42')
+
+    expect(loadGitLabJobLogDetailsMock).not.toHaveBeenCalled()
+    expect(store.getState().openFiles[0].checkRunDetails).toMatchObject({
+      loading: false,
+      error: 'Repository details are unavailable for this check.'
+    })
   })
 
   // Fork MR job traces live in source project; retain stored project ref on reload (#7732).

@@ -7,14 +7,13 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
   parseExecutionHostId,
-  toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
-import { resolveExactWorktreeRoute } from '@/lib/worktree-owner-route'
+import { resolveReviewRepository, reviewRepositoryMatchesWorkspace } from '@/lib/review-owner'
 import {
-  findIndexedRepoOwner,
-  findIndexedRepoOwnerForHost,
+  findIndexedReviewRepository,
+  hasUniqueIndexedRepositoryHost,
   worktreeOwnerHostIds
 } from '@/lib/worktree-runtime-owner-index'
 import { prCacheKey } from './cache-identity'
@@ -47,7 +46,7 @@ export function findWorktreeById(
     if (worktree.hostId || worktree.runtimeOwnerEnvironmentId) {
       return (
         worktreeOwnerHostIds(worktree).includes(hostId) ||
-        legacyPairedRepoOwnerHostId(state, worktree) === hostId
+        matchesLegacyReviewRepository(state, worktree, hostId)
       )
     }
     const repoHosts = lookupIndex.repoHostIdsByRepoId.get(worktree.repoId)
@@ -59,22 +58,19 @@ export function findWorktreeById(
   return matches.length === 1 ? matches[0] : null
 }
 
-/**
- * Older paired listings stamped only the physical `ssh:` host. Recover the one server whose repo
- * proxies that target, as operation routing does; a direct repo keeps the row, rival proxies stay unowned.
- */
-function legacyPairedRepoOwnerHostId(state: AppState, worktree: Worktree): ExecutionHostId | null {
-  const host = parseExecutionHostId(worktree.hostId)
+function matchesLegacyReviewRepository(
+  state: AppState,
+  worktree: Worktree,
+  hostId: ExecutionHostId
+): boolean {
   if (
     worktree.runtimeOwnerEnvironmentId?.trim() ||
-    host?.kind !== 'ssh' ||
-    findIndexedRepoOwnerForHost(state.repos, worktree.repoId, host.id)
+    parseExecutionHostId(worktree.hostId)?.kind !== 'ssh'
   ) {
-    return null
+    return false
   }
-  const owner = resolveExactWorktreeRoute(state, worktree)
-  const environmentId = owner.kind === 'resolved' ? owner.route.runtimeEnvironmentId : null
-  return environmentId ? toRuntimeExecutionHostId(environmentId) : null
+  const repo = findIndexedReviewRepository(state.repos, worktree.repoId, hostId, worktree.hostId)
+  return Boolean(repo && reviewRepositoryMatchesWorkspace(repo, worktree))
 }
 
 type WorktreeLookupEntry = {
@@ -179,16 +175,11 @@ export function buildPRRefreshCandidate(
   repoPath?: string,
   repoOverride?: Repo
 ): GitHubPRRefreshCandidate | null {
-  const unqualifiedOwner = findIndexedRepoOwner(state.repos, worktree.repoId)
-  const hostId = worktree.runtimeOwnerEnvironmentId
-    ? toRuntimeExecutionHostId(worktree.runtimeOwnerEnvironmentId)
-    : (legacyPairedRepoOwnerHostId(state, worktree) ??
-      normalizeExecutionHostId(worktree.hostId) ??
-      (unqualifiedOwner ? getRepoExecutionHostId(unqualifiedOwner) : LOCAL_EXECUTION_HOST_ID))
-  const repo =
-    repoOverride ??
-    (hostId ? findIndexedRepoOwnerForHost(state.repos, worktree.repoId, hostId) : null)
-  if (!repo) {
+  const repo = resolveReviewRepository(state.repos, worktree, repoOverride)
+  if (
+    !repo ||
+    !hasUniqueIndexedRepositoryHost(state.repos, repo.id, getRepoExecutionHostId(repo))
+  ) {
     return null
   }
   if (isMacAppDataPath(repoPath ?? repo.path)) {

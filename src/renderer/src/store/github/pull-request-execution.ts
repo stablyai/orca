@@ -1,4 +1,3 @@
-import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../../../../shared/worktree/hosted-review-links'
 import type { StateCreator } from 'zustand'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { AppState } from '../types'
@@ -26,17 +25,12 @@ import { isWslHostOffForForge, withForgeHostOffSkip } from './wsl-host-off-forge
 import { cachedPRCandidateFields } from './pr-refresh-cached-candidate-fields'
 import { lookupPRForBranchOverIpc } from './pr-for-branch-ipc-fallback'
 import { setGitHubPRResultCaches, shouldPreserveExistingPRForFallbackMiss } from './pr-result-cache'
+import { findWorktreeById, isStaleExactLinkedPRLookup } from './worktree-refresh'
 import {
-  findUniqueWorktreeById,
-  findWorktreeById,
-  isStaleExactLinkedPRLookup
-} from './worktree-refresh'
-import {
-  shouldApplyBranchMismatchedLinkedPRClear,
-  shouldApplyDivergedLinkedPRClear,
   shouldClearBranchMismatchedLinkedOpenPR,
   shouldClearDivergedLinkedMergedPR
 } from '../../../../shared/github/linked-pr-staleness'
+import { captureLinkedReviewClearScope, clearLinkedReview } from './linked-review-clear'
 export function startPullRequestLookup(args: {
   set: Parameters<StateCreator<AppState>>[0]
   get: Parameters<StateCreator<AppState>>[1]
@@ -91,6 +85,10 @@ export function startPullRequestLookup(args: {
       const candidateWorktree = options?.worktreeId
         ? findWorktreeById(get(), options.worktreeId, executionHostId)
         : null
+      const clearScope =
+        linkedPRNumber != null
+          ? captureLinkedReviewClearScope(get(), options?.worktreeId, repo)
+          : undefined
       const requestHeadOid = candidateWorktree?.head ?? null
       let transportFailed = false
       const response = runtimeRepo
@@ -195,31 +193,16 @@ export function startPullRequestLookup(args: {
         if (skippedStaleLinkedPRLookup) {
           return null
         }
-        const linkedPRWorktree =
-          options?.worktreeId && linkedPRNumber != null
-            ? findUniqueWorktreeById(get(), options.worktreeId, ownerHostId)
-            : null
+        const linkedPRWorktree = clearScope
+          ? findWorktreeById(get(), clearScope.workspace.id, executionHostId)
+          : null
         if (
           options?.worktreeId &&
           linkedPRWorktree &&
           linkedPRNumber != null &&
           shouldClearDivergedLinkedMergedPR({ pr, linkedPRNumber, requestHeadOid })
         ) {
-          // Why: only clear the durable link that produced this exact probe; drift means the stale result no longer owns the worktree.
-          void get().updateWorktreeMeta(
-            options.worktreeId,
-            CLEARED_HOSTED_REVIEW_SELECTION_UPDATES,
-            {
-              shouldApply: () =>
-                shouldApplyDivergedLinkedPRClear({
-                  worktree:
-                    findUniqueWorktreeById(get(), options.worktreeId!, ownerHostId) ?? undefined,
-                  linkedPRNumber,
-                  branch,
-                  requestHeadOid
-                })
-            }
-          )
+          clearLinkedReview(get, clearScope, { linkedPRNumber, branch, requestHeadOid }, 'diverged')
         }
         if (
           options?.worktreeId &&
@@ -233,21 +216,12 @@ export function startPullRequestLookup(args: {
             pushTargetBranch: linkedPRWorktree.pushTarget?.branchName ?? null
           })
         ) {
-          void get().updateWorktreeMeta(
-            options.worktreeId,
-            CLEARED_HOSTED_REVIEW_SELECTION_UPDATES,
-            {
-              // Why: the branch-scoped PR refetch below updates both caches; the generic metadata refresh would duplicate provider work.
-              suppressHostedReviewRefresh: true,
-              shouldApply: () =>
-                shouldApplyBranchMismatchedLinkedPRClear({
-                  worktree:
-                    findUniqueWorktreeById(get(), options.worktreeId!, ownerHostId) ?? undefined,
-                  linkedPRNumber,
-                  branch,
-                  requestHeadOid
-                })
-            }
+          clearLinkedReview(
+            get,
+            clearScope,
+            { linkedPRNumber, branch, requestHeadOid },
+            'branch-mismatch',
+            true
           )
           // Re-resolve by branch now so Checks recover this refresh instead of serving the stale linked PR.
           void get().fetchPRForBranch(repoPath, branch, {
