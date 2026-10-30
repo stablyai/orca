@@ -60,7 +60,7 @@ it.each(['accepted', 'pending', 'oldest'] as const)(
           )
         },
         {
-          // SAFETY: the installed-host path does not read the runtime.
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installed-host registry path never reads runtime methods.
           runtime: {} as RpcContext['runtime'],
           clientId: QUEUED_RIG_CALLER.callerKey,
           clientKind: 'runtime',
