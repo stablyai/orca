@@ -133,6 +133,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:inspectProcess')
   ipcMain.removeHandler('pty:confirmForegroundProcess')
   ipcMain.removeHandler('pty:isCodexOnSharedServer')
+  ipcMain.removeHandler('pty:inspectCodexComputerUseRuntime')
   ipcMain.removeHandler('pty:disableCodexSharedServerAutoStart')
   ipcMain.removeHandler('pty:stopCodexSharedServer')
   ipcMain.removeHandler('pty:openedBeforeClaudeAccounts')
