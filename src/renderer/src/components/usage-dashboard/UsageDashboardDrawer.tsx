@@ -2,7 +2,7 @@ import { useCallback, type CSSProperties } from 'react'
 import { X } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { translate } from '@/i18n/i18n'
 import { trackSidebarLiveWidth } from '@/components/sidebar/sidebar-live-width'
 import {
@@ -41,7 +41,7 @@ export default function UsageDashboardDrawer({
         ref={trackSidebarLiveWidth}
         aria-describedby={undefined}
         // Why: the drawer expands from the sidebar edge instead of covering the sidebar.
-        className="w-[480px] max-w-[calc(100vw-var(--workspace-sidebar-live-width,0px))] bg-worktree-sidebar p-0 sm:max-w-[calc(100vw-var(--workspace-sidebar-live-width,0px))]"
+        className="w-[480px] max-w-[calc(100vw-var(--workspace-sidebar-live-width,0px))] sm:max-w-[calc(100vw-var(--workspace-sidebar-live-width,0px))]"
         overlayStyle={{
           top: WORKSPACE_TOP_CHROME_HEIGHT,
           bottom: drawerBottom,
@@ -63,25 +63,21 @@ export default function UsageDashboardDrawer({
           event.preventDefault()
         }}
       >
-        <SheetHeader className="border-b border-worktree-sidebar-border px-4 py-3">
-          <div className="flex items-center justify-between gap-2">
-            <SheetTitle className="text-sm">
-              {translate(
-                'auto.components.usageDashboard.UsageDashboardDrawer.title',
-                'Token usage'
-              )}
-            </SheetTitle>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              type="button"
-              aria-label={translate('auto.components.ui.sheet.1189e9fe0a', 'Close')}
-              onClick={handleClose}
-            >
-              <X className="size-3.5" />
-            </Button>
-          </div>
-        </SheetHeader>
+        {/* Why: header chrome lives on a plain wrapper; SheetHeader/SheetTitle own their own spacing and type. */}
+        <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+          <SheetTitle>
+            {translate('auto.components.usageDashboard.UsageDashboardDrawer.title', 'Token usage')}
+          </SheetTitle>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            type="button"
+            aria-label={translate('auto.components.ui.sheet.1189e9fe0a', 'Close')}
+            onClick={handleClose}
+          >
+            <X className="size-3.5" />
+          </Button>
+        </div>
         <div className="flex min-h-0 flex-1 scrollbar-sleek flex-col overflow-y-auto">
           <UsageDashboardDrawerContent />
         </div>
