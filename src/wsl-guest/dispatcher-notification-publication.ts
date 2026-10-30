@@ -28,13 +28,11 @@ export abstract class RelayDispatcherNotificationPublication extends RelayDispat
         }
         frame ??= this.prepareFrame(msg)
         if (method === 'pty.replay') {
-          // Why: replay is never re-sent, so it takes the control lane where overflow is fatal — the
-          // writer closes the client and reconnect reloads history rather than stranding a short buffer.
+          // Replay overflow stays fatal: reconnect reloads history, whereas silent loss strands a short buffer.
           this.enqueuePreparedFrame(client, frame, 'control')
           continue
         }
-        // Why: closing can never make an oversized frame sendable — the producer regenerates it after
-        // reattach and re-kills the link, turning a recoverable drop into an endless reconnect loop.
+        // Do not close on oversized producer frames; regenerating the same frame after reattach causes a reconnect loop.
         if (!this.publishPreparedToClient(client, frame, 'ordinary')) {
           this.logDroppedProducerNotification(client, method, frame.frameBytes)
         }
@@ -42,14 +40,12 @@ export abstract class RelayDispatcherNotificationPublication extends RelayDispat
     })
   }
 
-  // Why: producer-lane publication for a single client; notifyClient/tryNotifyClient use the control lane,
-  // which floods must never occupy. Rejection drops the frame and never closes the client.
+  // Use the producer lane for best-effort frames; rejection drops them without closing the client.
   publishProducerNotification(
     clientId: number,
     method: string,
     params?: Record<string, unknown>,
-    // Why: a caller that recovers from rejection itself (the watcher emitter re-sends the batch in
-    // chunks) would otherwise log "Dropped" for a frame it goes on to deliver in full.
+    // Let self-recovering callers suppress drop logs when they will split and deliver the full batch.
     options?: { logDrop?: boolean }
   ): boolean {
     if (this.disposed) {
@@ -71,7 +67,6 @@ export abstract class RelayDispatcherNotificationPublication extends RelayDispat
     if (this.publishPreparedToClient(client, frame, 'ordinary')) {
       return true
     }
-    // Why: same diagnostics as notify() — a producer that drops here must not do so silently.
     if (options?.logDrop !== false) {
       this.logDroppedProducerNotification(client, method, frame.frameBytes)
     }
@@ -138,12 +133,8 @@ export abstract class RelayDispatcherNotificationPublication extends RelayDispat
     }
   }
 
-  /**
-   * Bulk-lane notification: sends are serialized per client and the promise
-   * resolves only after the sink accepted the frame (backpressure), so bulk
-   * producers await between frames and never starve interactive frames.
-   * With `clientId`, targets only that client — broadcasting would let one slow secondary stall everyone.
-   */
+  // Serialize bulk sends per client and await sink admission so producers cannot starve interactive traffic.
+  // Target clientId explicitly when one slow secondary must not block healthy clients.
   notifyBulk(
     method: string,
     params?: Record<string, unknown>,
@@ -197,8 +188,7 @@ export abstract class RelayDispatcherNotificationPublication extends RelayDispat
     return Promise.all(waits).then(() => {})
   }
 
-  // Why: one line per generation, method and drop reason — a flooding producer retries every batch and would
-  // spam stderr, but a transient queue-full drop must not consume the slot a real over-capacity drop needs.
+  // Log once per generation/method/reason; queue-full retries must not suppress a later over-capacity diagnostic.
   private logDroppedProducerNotification(client: RelayClient, method: string, bytes: number): void {
     const capacity = client.writer.producerFrameCapacity
     const overCapacity = bytes > capacity

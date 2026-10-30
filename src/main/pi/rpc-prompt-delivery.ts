@@ -15,7 +15,7 @@ type Submission = {
   bytes: number
   accepted: boolean
   retries: number
-  /** Pi's last sign-in refusal, while the prompt waits to be re-sent. */
+  /** Retain sign-in refusal until resubmission. */
   signInRefusal?: string
 }
 type DeliveryDeps = {
@@ -29,7 +29,6 @@ type DeliveryDeps = {
   refused?: () => void
 }
 
-/** Idless prompt acknowledgements are FIFO and may wait indefinitely on extension dialogs. */
 export function piRpcFailureFact(error: string) {
   return agentSessionFailureFact(
     error.startsWith('No API key found for ') ? 'notSignedIn' : 'providerRejected',
@@ -140,7 +139,7 @@ export class PiRpcPromptDelivery {
         return
       }
       this.remove(submission)
-      // Pi checks sign-in before it records a prompt (0.84.0 onward), so this one never reached it.
+      // Pi 0.84+ rejects sign-in before recording a prompt, proving it never reached the agent.
       const settledFact =
         fact.kind === 'notSignedIn' && !submission.accepted
           ? { ...fact, neverReachedAgent: true as const }
@@ -168,7 +167,7 @@ export class PiRpcPromptDelivery {
     }
     this.retries.clear()
     for (const submission of this.pending) {
-      // Waiting out a sign-in refusal, not yet re-sent: every reply so far proved Pi never had it.
+      // No resubmission followed sign-in refusal, so the agent still never received this prompt.
       if (submission.signInRefusal !== undefined) {
         this.deps.settled(
           submission.id,

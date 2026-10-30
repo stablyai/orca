@@ -51,7 +51,7 @@ import { forceDeleteLocalBranch, removeWorktree } from './worktree'
 const mockGitCommands = createGitCommandMocker(gitExecFileAsyncMock)
 const getGitCalls = createGitCallReader(gitExecFileAsyncMock)
 
-// Why: removal argv carries core.longpaths on Windows; pin a non-Windows default for exact argv.
+// Pin non-Windows argv; Windows removal also sets core.longpaths.
 let platformSpy: MockInstance<() => NodeJS.Platform>
 
 beforeEach(() => {

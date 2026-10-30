@@ -22,7 +22,6 @@ export function createAccumulator(args: {
   agent: AiVaultAgent
   file: FileWithMtime
   sessionId: string
-  // Where every decoded message goes; absent for one-shot parses with no reader.
   messages?: TranscriptMessageSink
 }): SessionAccumulator {
   return {
@@ -51,10 +50,6 @@ export function createAccumulator(args: {
   }
 }
 
-/**
- * The session identity a fold holds right now. Null until it has an id, which
- * every supported format writes in the opening lines of the transcript.
- */
 export function accumulatorSessionIdentity(
   accumulator: SessionAccumulator
 ): TranscriptSessionIdentity | null {
@@ -65,8 +60,7 @@ export function accumulatorSessionIdentity(
   return {
     sessionId,
     cwd: accumulator.cwd,
-    // The generated fallback is `finalizeSession`'s, not this one's: a title
-    // that is still absent mid-read is better said to be absent.
+    // Defer generated fallback titles until finalization so missing mid-read titles stay absent.
     title: accumulator.title ?? accumulator.fallbackTitle,
     createdAt: accumulator.createdAt,
     updatedAt: accumulator.updatedAt
@@ -77,9 +71,7 @@ export function cloneSessionAccumulator(accumulator: SessionAccumulator): Sessio
   return { ...accumulator, previewMessages: [...accumulator.previewMessages] }
 }
 
-// Resumable fold for parsers whose only parse state is the accumulator itself
-// (cursor, copilot, droid, openclaw/pi, gemini-jsonl). Parsers with extra
-// closure state (claude, codex) build their own ResumableSessionParseState.
+// Use only when the accumulator contains all parser state; closure state needs a custom resume implementation.
 export function accumulatorFoldResumeState(
   accumulator: SessionAccumulator,
   consumeRecordLine: (accumulator: SessionAccumulator, line: string) => void
@@ -92,11 +84,7 @@ export function accumulatorFoldResumeState(
     touchFile: (file) => {
       accumulator.modifiedAt = file.modifiedAt
     },
-    // Finalize a snapshot: the live accumulator (and its preview array) keeps
-    // accumulating appended lines after this session object is handed out.
-    // A sibling file's metadata is merged onto this result by the parse cache,
-    // never into the fold, so re-merging it later starts from what the
-    // transcript alone said (see session-scanner-sidecar-enrichment.ts).
+    // Snapshot so appends cannot change published previews and sidecar merges stay outside the live fold.
     finalize: (platform, options) =>
       finalizeSession(cloneSessionAccumulator(accumulator), platform, options)
   }
@@ -162,11 +150,7 @@ export function finalizeSession(
   }
 }
 
-/**
- * The title a session gets when neither the transcript nor the agent named it.
- * Exported so a later merge can tell "the fold found no title" from a real one
- * without re-deriving the string (session-scanner-sidecar-enrichment.ts).
- */
+/** Shared fallback lets sidecar enrichment distinguish generated titles from transcript titles. */
 export function generatedSessionTitle(agent: AiVaultAgent, sessionId: string): string {
   return `${aiVaultAgentLabel(agent)} ${sessionId.slice(0, 8)}`
 }
@@ -197,11 +181,7 @@ export function updateLatestLocation(
   accumulator: SessionAccumulator,
   record: Record<string, unknown>
 ): void {
-  // Why: a session's representative cwd is its START directory, not its latest.
-  // `claude --resume <id>` only finds the transcript under the project dir keyed
-  // by the start cwd, and history grouping/filtering key off the session origin;
-  // a later drifted cwd broke resume for sessions that changed directory (#9361).
-  // Transcripts are append-only, so the first record carrying a cwd is the start.
+  // Keep the first cwd: resume lookup and history grouping depend on the session origin (#9361).
   if (accumulator.cwd === null) {
     const startCwd = extractString(record.cwd)
     if (startCwd) {

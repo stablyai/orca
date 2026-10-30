@@ -49,7 +49,6 @@ describe('buildWindowsPowerShellSpawnAttempts', () => {
       }
     })
     expect(attempts.map((a) => a.shellPath)).toEqual([PWSH7, WINDOWS_POWERSHELL, CMD])
-    // PowerShell links use -EncodedCommand; cmd.exe uses /K chcp.
     expect(attempts[0].shellArgs).toContain('-EncodedCommand')
     expect(attempts[1].shellArgs).toContain('-EncodedCommand')
     expect(attempts[2].shellArgs[0]).toBe('/K')
@@ -68,11 +67,10 @@ describe('buildWindowsPowerShellSpawnAttempts', () => {
         isRealExecutable: (p) => p === aliasStub || p === WINDOWS_POWERSHELL
       }
     })
-    // The bare/alias pwsh.exe must never be the primary spawn target.
+    // Store alias stubs cannot be primary ConPTY targets.
     expect(attempts[0].shellPath).toBe(WINDOWS_POWERSHELL)
     expect(attempts.map((a) => a.shellPath)).not.toContain(aliasStub)
     expect(attempts.map((a) => a.shellPath)).not.toContain('pwsh.exe')
-    // Every attempt is an absolute path ConPTY can launch.
     for (const attempt of attempts) {
       expect(pathWin32.isAbsolute(attempt.shellPath)).toBe(true)
     }

@@ -1,7 +1,3 @@
-// The SDK requests behind the model, effort and permission pickers and the context meter, against
-// the live CLI: CI meets them only through stand-ins, which pin the shape we read, not the one the
-// CLI sends. Runs only where a signed-in Claude CLI exists, like the rest of the real-CLI suite.
-
 import { randomUUID } from 'node:crypto'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -19,21 +15,19 @@ import {
   claudeStructuredPermissionOptions
 } from './claude-structured-launch-resolution'
 import { listedModels } from './claude-structured-model-catalog'
-import {
-  ClaudeStructuredSessionAdapter,
-  type ClaudeStructuredSessionEvent
-} from './claude-structured-session-adapter'
+import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import {
   realClaudeAuthenticated,
   realClaudeAvailable,
   realClaudeCommand,
   realClaudeLaunchHome
 } from './claude-real-cli-availability-test-support'
-import { claudeStartupSettled } from './claude-structured-session-test-support'
+import { claudeStartupSettled } from './claude-structured-startup-settled-test-support'
 import { journal } from './claude-context-usage-test-support'
 
 const SESSION_ID = 'real-cli-options'
-// The SDK's effort scale, low to high; the CLI's list order is not a contract.
+// CLI effort order is unspecified.
 const EFFORT_SCALE = ['low', 'medium', 'high', 'xhigh', 'max']
 
 function identity(providerSessionId: string, leafUuid: string | null): AgentSessionJournalIdentity {
@@ -78,7 +72,6 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI options', () =
       const adapter = new ClaudeStructuredSessionAdapter({
         resolveLaunch: async ({ identity: launchIdentity, permissionMode }) => {
           const permission = claudeStructuredPermissionOptions(permissionMode ?? 'ask')
-          // A relaunch resumes the transcript the first launch wrote, as the host's resolver does.
           const resumes = launches++ > 0
           return {
             pathToClaudeCodeExecutable: realClaudeCommand,
@@ -97,6 +90,7 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI options', () =
                 ? claudeProviderHandleLeafUuid(launchIdentity.providerHandle)
                 : null,
             resumesTranscript: resumes,
+            cliFlag: async () => 'supported' as const,
             continuesChain: resumes
           }
         },
@@ -144,8 +138,7 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI options', () =
         })
         await claudeStartupSettled(adapter, SESSION_ID)
 
-        // A row without `value` or `resolvedModel` silently turns off the admit check, the effort
-        // guard and model confirmation.
+        // Missing resolved IDs disable admission, effort validation and model confirmation.
         const connection = adapter['sessions'].get(SESSION_ID)?.connection
         if (!connection) {
           throw new Error('no live Claude connection')
@@ -167,9 +160,7 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI options', () =
           throw new Error('neither haiku nor sonnet lists an effort level')
         }
 
-        // The production send path: list_models, set_model, apply_flag_settings and get_settings.
-        // `ranOptions` carries only what the CLI reported; it names the resolved id, so an alias
-        // pick reports no model and the recorder falls back to the message's own pick.
+        // ranOptions may omit an alias pick; message metadata retains the requested model.
         const firstTurn = events.length
         const outcome = await send(
           'real-cli-options-1',
@@ -184,7 +175,6 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI options', () =
         expect(await until(() => results(firstTurn).length > 0, 90_000)).toBe(true)
         expect(results(firstTurn)[0]).toMatchObject({ subtype: 'success', is_error: false })
         expect(inits(firstTurn)[0]?.model).toBe(pick.resolvedModel)
-        // Effort is read only through get_settings; no frame carries it, init included.
         expect(frames(0).filter((frame) => 'effortLevel' in frame)).toEqual([])
         await expect(
           adapter.readOptions({ sessionId: SESSION_ID, fence: 1 })
@@ -196,7 +186,6 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI options', () =
           }
         })
 
-        // The turn end asks get_context_usage; an answer Orca cannot read blanks the meter silently.
         expect(await until(() => contextReport() !== undefined, 10_000)).toBe(true)
         const report = contextReport()
         if (!report) {
@@ -207,8 +196,7 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI options', () =
         expect(report.model).toMatch(/\S/u)
         expect(baseModelId(report.model)).toBe(baseModelId(pick.resolvedModel))
 
-        // Orca never sends set_permission_mode: it retires the child and resumes it under the new
-        // flag with the saved picks, so the CLI must read its mode at launch.
+        // Permission changes relaunch the child with saved options instead of a live control request.
         await adapter.closeSession(SESSION_ID)
         const resumedTurn = events.length
         await adapter.acquire({

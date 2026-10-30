@@ -1,6 +1,3 @@
-// How an ACP agent's chats pin their account: what a new chat records, and how a launch points the
-// agent at the account its record pinned. Both run on the machine that runs the agent.
-
 import { chmod, mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
@@ -12,21 +9,18 @@ import { resolveStructuredEnvAccountHomePath } from '../runtime/structured-agent
 type AccountPin = { accountHomeVariable: string } | { accountLocatorKind: 'opencode' }
 
 export type AcpAccountBinding = {
-  /** What the agent's definition says its records pin. */
   pin: AccountPin
-  /** The account a new chat pins: the current selection, read without side effects. */
+  /** Resolves the current selection without side effects. */
   resolve(input: {
     launchEnv: NodeJS.ProcessEnv
     stateDirectory: string
   }): Promise<AgentSessionAccountHome>
-  /** `env` pointed at the pinned account; throws for an account of another kind. */
+  /** Throws if the pinned account belongs to another kind. */
   environment(home: AgentSessionAccountHome, env: Record<string, string>): Record<string, string>
-  /** Readies the account a start's `env` points at, before every spawn; reads never call it. */
+  /** Runs before every spawn, never on reads. */
   prepare?(env: Readonly<Record<string, string>>): Promise<void>
 }
 
-/** An agent whose account is one config directory named by `variable`, with a default under the
- *  user's home. */
 export function directoryAccountBinding(
   variable: string,
   defaultHome: (homePath: string) => string
@@ -46,9 +40,7 @@ export function directoryAccountBinding(
   }
 }
 
-/** An agent whose account is a folder Orca keeps for it on each host, which the agent signs in to
- *  itself. It keeps that sign-in there in plain text, so every start makes the folder and
- *  `privateSubfolders` owner-only, whatever made them first. */
+/** Restricts plaintext sign-in folders to their owner before every spawn. */
 export function hostFolderAccountBinding(
   variable: string,
   folderName: string,

@@ -101,8 +101,7 @@ describe('pane terminal output scheduler', () => {
     vi.advanceTimersByTime(50)
 
     expect(writes.map((data) => data.length)).toEqual([16 * 1024, 4 * 1024])
-    // Why 2: every slice now carries a completion callback (it settles the
-    // write-pipeline stall watch); onParsed still fires only with the final one.
+    // Both slices carry health-settling callbacks; only the final one fires onParsed.
     expect(parseCallbacks).toHaveLength(2)
     expect(onParsed).not.toHaveBeenCalled()
 
@@ -259,9 +258,7 @@ describe('pane terminal output scheduler', () => {
     expect(terminals[1].write).toHaveBeenCalledWith('pane-1', expect.any(Function))
     expect(terminals[2].write).not.toHaveBeenCalled()
 
-    // Why: a terminal with leftover bytes is deleted/re-set after each drain
-    // chunk, moving it to the back of the Map so a big burst cannot starve
-    // other queued panes.
+    // Reinsert residual entries at the Map’s tail so one burst cannot starve queued siblings.
     vi.advanceTimersByTime(16)
     expect(terminals[2].write).toHaveBeenCalledWith('pane-2', expect.any(Function))
     expect(terminals[0].write).toHaveBeenCalledTimes(2)
@@ -354,9 +351,7 @@ describe('pane terminal output scheduler', () => {
 
     expect(terminal.write).not.toHaveBeenCalled()
 
-    // Why 8: promoted backlogs use the parse-clocked high-priority budget
-    // (HIGH_PRIORITY_MAX_WRITES_PER_DRAIN) so a visible flood drains at the
-    // parser's pace instead of a fixed 2-write drip.
+    // Promoted backlogs get eight parse-clocked writes, not the fixed two-write cadence.
     vi.advanceTimersByTime(0)
     expect(terminal.write).toHaveBeenCalledTimes(8)
     expect(debug?.snapshot()).toMatchObject({

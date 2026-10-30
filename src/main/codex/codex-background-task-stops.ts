@@ -1,7 +1,3 @@
-// A Codex chat's background Stop: a sub-agent row stops by interrupting its run and its
-// descendants' runs (`codex-subagent-interrupts.ts`), and a command row, or a process one of those
-// sub-agents holds, by its app-server's background terminals (`codex-background-terminals.ts`).
-
 import { CodexAppServerTimeoutError } from './codex-app-server-session'
 import {
   boundedTimeout,
@@ -14,8 +10,7 @@ import type { AgentSessionBackgroundTaskStops } from '../../shared/agent-child-w
 
 type StopTally = { stopped: number; survived: boolean }
 
-/** A sub-agent stops by its own turn's interrupt on any Codex; a command row offers its Stop only
- *  once the app-server proved it can terminate background terminals. */
+/** Subagent interrupts are always available; command stops require background-terminal support. */
 export function codexBackgroundTaskStops(
   session: CodexSession | undefined
 ): AgentSessionBackgroundTaskStops | undefined {
@@ -33,9 +28,7 @@ function distinctTerminals(
   return [...byKey.values()]
 }
 
-/** Stops the sub-agents and backgrounded commands the named tasks are, while `session` is still
- *  the one the host asked about. Cancelled when at least one is gone; throws, after trying every
- *  other, when one got no answer and none was shown still running. */
+/** A confirmed survivor takes precedence over request failures; cancelled means at least one stopped. */
 export async function stopCodexBackgroundTasks(
   sessions: Map<string, CodexSession>,
   input: { sessionId: string; fence: number; taskIds: readonly string[] },
@@ -44,7 +37,7 @@ export async function stopCodexBackgroundTasks(
   const session = requireLiveCodexSession(sessions, input.sessionId)
   const { backgroundTasks } = session
   const subagents = backgroundTasks.subagentStopTargets(input.taskIds)
-  // Interrupting a turn leaves the processes it started running, so a sub-agent's go too.
+  // Turn interrupts leave child processes running, so stop their terminals too.
   const terminals = distinctTerminals([
     ...backgroundTasks.backgroundProcesses(input.taskIds),
     ...subagents.terminals

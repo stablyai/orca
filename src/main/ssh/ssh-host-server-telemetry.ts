@@ -1,8 +1,4 @@
-/**
- * Connect-decision telemetry: which server each SSH connect chose and why, plus conversion and
- * deploy failures. Every raw code is narrowed onto a fixed enum here, so nothing a host or user
- * named can reach an event; unrecognised codes become `other`.
- */
+/** Narrow raw connect/setup codes to fixed enums; unknowns become other, never host/user strings. */
 import type { EventProps } from '../../shared/telemetry-events'
 import {
   SSH_HOST_SERVER_FAILURE_VALUES,

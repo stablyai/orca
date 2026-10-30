@@ -1,9 +1,9 @@
+import type { AgentType } from './agent-status-types'
 import type { AgentSessionOptionCatalog } from './agent-session-option-catalog'
-import type { SessionOptionDescriptor } from './native-chat-session-options'
-import type { TrackedNativeChatSessionOption } from './native-chat-session-option-state'
+import type { SessionOptionDescriptor } from './native-chat/input/native-chat-session-options'
+import type { TrackedNativeChatSessionOption } from './native-chat/input/native-chat-session-option-state'
 
-/** A model the list lacks has no effort menu, so the chat's own effort under it shows read-only:
- *  no list says which levels it takes, and a send carries the value unchanged. */
+/** Unlisted models expose current effort read-only and send it unchanged; no listing proves which alternatives they accept. */
 export function withUnlistedEffort(
   catalog: AgentSessionOptionCatalog,
   /** The model the picker draws the chat's controls under. */
@@ -11,11 +11,14 @@ export function withUnlistedEffort(
   effort: TrackedNativeChatSessionOption | undefined,
   /** The ids the chat's own options answer lists; absent from an older host. */
   listed: readonly string[] | undefined,
-  snapshot: SessionOptionDescriptor[]
+  snapshot: SessionOptionDescriptor[],
+  agent: AgentType
 ): SessionOptionDescriptor[] {
+  if (!modelId || typeof effort?.value !== 'string') {
+    return snapshot
+  }
   if (
-    !modelId ||
-    typeof effort?.value !== 'string' ||
+    agent !== 'pi' &&
     snapshot.some(
       (entry) =>
         entry.id === 'effort' &&
@@ -29,7 +32,7 @@ export function withUnlistedEffort(
     .find((model) => model.id === modelId)
     ?.options.find((option) => option.id === 'effort')
   if (
-    listed?.includes(modelId) &&
+    (listed?.includes(modelId) || (agent === 'pi' && !listed)) &&
     offered?.kind.type === 'select' &&
     offered.kind.choices.some((choice) => choice.value === effort.value)
   ) {

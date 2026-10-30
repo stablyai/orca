@@ -5,16 +5,7 @@ import type * as NodeOs from 'node:os'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-// STA-4737: three shared Codex modules decided a file was absent from a read
-// that had merely failed, and then overwrote or deleted it. These are the paths
-// where the collapse costs the user data, not just a retry.
-
-/**
- * One denial, modelled coherently across every call that can observe it. A path
- * under an ACL denial throws from `readFileSync`/`statSync` AND reports `false`
- * from `existsSync`. Faulting one call but not another lets a test pass against
- * code that still consults the one left healthy.
- */
+// Model denials across all filesystem APIs so fallback reads cannot hide a missing guard.
 const denials = vi.hoisted(() => {
   const state = {
     paths: new Set<string>(),
@@ -142,10 +133,7 @@ describe('STA-4737 the config mirror must not overwrite a runtime config it coul
   const SYSTEM_CONFIG = 'model = "system-model"\n'
   const RUNTIME_CONFIG = 'model = "user-picked"\n\n[mcp_servers.local]\ncommand = "run-me"\n'
 
-  // Why: with no baseline, promotion returns an empty plan without reading the
-  // runtime config at all, so the mirror is the only thing standing between a
-  // denied read and an overwrite. This is the ordinary state for a runtime home
-  // seeded outside the mirror.
+  // Without a baseline, promotion skips the read, leaving the mirror responsible for refusal.
   it('leaves a denied runtime config exactly as it found it', () => {
     realFs.writeFileSync(systemConfigPath(), SYSTEM_CONFIG, 'utf-8')
     realFs.writeFileSync(runtimeConfigPath(), RUNTIME_CONFIG, 'utf-8')
@@ -153,16 +141,10 @@ describe('STA-4737 the config mirror must not overwrite a runtime config it coul
 
     syncSystemConfigIntoManagedCodexHome()
 
-    // Before the fix the mirror read "no runtime config yet" and replaced this
-    // whole file with a fresh copy of the system one.
     expect(realFs.readFileSync(runtimeConfigPath(), 'utf-8')).toBe(RUNTIME_CONFIG)
   })
 
-  // Why: promotion runs first and refuses on the same denied file, so it alone
-  // covers the case above. This drives the mirror's OWN guard, which is what
-  // stands between a write and a file that became unreadable in the window
-  // between promotion reading it and the mirror rewriting it — the exact shape
-  // of a scanner taking the file mid-pass.
+  // Isolate the mirror guard from promotion, which can also refuse the denied read.
   it('refuses its own write when the runtime config is denied after promotion succeeded', async () => {
     realFs.writeFileSync(systemConfigPath(), SYSTEM_CONFIG, 'utf-8')
     realFs.writeFileSync(runtimeConfigPath(), RUNTIME_CONFIG, 'utf-8')
@@ -172,7 +154,7 @@ describe('STA-4737 the config mirror must not overwrite a runtime config it coul
       const actual = await importOriginal<typeof CodexSettingsPromotion>()
       return {
         ...actual,
-        // Promotion already read the file successfully and had nothing to do.
+        // Simulate a successful promotion read before the file becomes unreadable.
         promoteCodexRuntimeSettingsToSystem: () => ({
           conflicts: new Map(),
           runtimeValuesToPreserve: new Map()
@@ -195,8 +177,6 @@ describe('STA-4737 the config mirror must not overwrite a runtime config it coul
 
     syncSystemConfigIntoManagedCodexHome()
 
-    // Why: absence is a real answer, and seeding it is the mirror's job. A fix
-    // that refused here would break first launch for everyone.
     expect(realFs.readFileSync(runtimeConfigPath(), 'utf-8')).toContain('model = "system-model"')
   })
 
@@ -218,8 +198,6 @@ describe('STA-4737 the config mirror must not overwrite a runtime config it coul
 describe('STA-4737 promotion must not rebuild a system config it could not read', () => {
   function seedPromotableRuntimeChange(): void {
     realFs.writeFileSync(systemConfigPath(), 'model = "old-model"\n', 'utf-8')
-    // The baseline records what Orca last mirrored; the later edit then reads as
-    // an in-Codex change that must be promoted back to ~/.codex.
     realFs.writeFileSync(runtimeConfigPath(), 'model = "old-model"\n', 'utf-8')
     snapshotCodexRuntimeSettingsBaseline(runtimeHome())
     realFs.writeFileSync(runtimeConfigPath(), 'model = "new-model"\n', 'utf-8')
@@ -230,7 +208,6 @@ describe('STA-4737 promotion must not rebuild a system config it could not read'
     const before = realFs.readFileSync(systemConfigPath(), 'utf-8')
     denials.deny(systemConfigPath())
 
-    // Why: the caller turns a refusal into its existing "stall and retry" null.
     expect(
       promoteCodexRuntimeSettingsToSystem({
         runtimeHomePath: runtimeHome(),
@@ -238,8 +215,6 @@ describe('STA-4737 promotion must not rebuild a system config it could not read'
       })
     ).toBeNull()
 
-    // Before the fix, the unreadable config counted as absent and was replaced
-    // by a reconstruction built from Orca's runtime copy.
     expect(realFs.readFileSync(systemConfigPath(), 'utf-8')).toBe(before)
   })
 
@@ -251,8 +226,6 @@ describe('STA-4737 promotion must not rebuild a system config it could not read'
       systemHomePath: systemHome()
     })
 
-    // Why: the anchor. Without it, "returns null and writes nothing" would pass
-    // against a promotion that had simply stopped working.
     expect(plan).not.toBeNull()
     expect(realFs.readFileSync(systemConfigPath(), 'utf-8')).toContain('model = "new-model"')
   })
@@ -267,7 +240,6 @@ describe('STA-4737 the resource sync must not delete a mirror whose source it co
     const targetPath = join(runtimeHome(), AGENTS_ENTRY)
     realFs.writeFileSync(sourcePath, MIRRORED, 'utf-8')
     realFs.writeFileSync(targetPath, MIRRORED, 'utf-8')
-    // Orca owns this copy, which is what entitles the sync to remove it.
     markCopiedResource(runtimeHome(), AGENTS_ENTRY, sourcePath)
     return { sourcePath, targetPath }
   }
@@ -281,16 +253,13 @@ describe('STA-4737 the resource sync must not delete a mirror whose source it co
       managedHomePath: runtimeHome()
     })
 
-    // Before the fix, `existsSync` reported the denied source as gone and the
-    // managed copy was deleted on the next launch.
     expect(realFs.existsSync(targetPath)).toBe(true)
     expect(realFs.readFileSync(targetPath, 'utf-8')).toBe(MIRRORED)
   })
 
   it('keeps the mirrored copy when the source becomes unreadable after stat', () => {
     const { sourcePath, targetPath } = seedOwnedMirrorCopy()
-    // A Windows sharing violation can leave metadata readable while content
-    // reads fail; stat success must not authorize deleting the fallback copy.
+    // Windows sharing violations can allow stat while denying content reads.
     denials.denyReads(sourcePath)
 
     syncCodexGlobalInstructionsIntoManagedHome({
@@ -323,8 +292,6 @@ describe('STA-4737 the resource sync must not delete a mirror whose source it co
       managedHomePath: runtimeHome()
     })
 
-    // Why: removing Orca's own copy of a resource the user deleted is the
-    // point of this path. Refusing here would strand stale instructions.
     expect(realFs.existsSync(targetPath)).toBe(false)
   })
 })

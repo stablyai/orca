@@ -4,6 +4,11 @@
   "family": "aiVault.history-screen",
   "namedDeltas": [],
   "values": {
+    "0180d22edc2e": {
+      "name": "worktree.ps#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"supportsWorktreeVisibilitySourceDefaults\":true}}"
+    },
     "03106dceb986": {
       "name": "status.get#1",
       "ordinal": 2,
@@ -65,25 +70,18 @@
         }
       }
     },
-    "3a91d2093c6e": {
+    "222a3ba1d974": {
       "name": "worktree.ps#1",
       "ordinal": 3,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"supportsWorktreeVisibilitySourceDefaults\":true}}"
-    },
-    "3aaa7e04cda5": {
-      "name": "aiVault.listSessions#1",
-      "ordinal": 7,
       "args": [
         {
           "name": "method",
-          "value": "aiVault.listSessions"
+          "value": "worktree.ps"
         },
         {
           "name": "params",
           "value": {
-            "force": false,
-            "limit": 500,
-            "scopePaths": ["/repo/feature"]
+            "limit": 10000
           }
         },
         {
@@ -94,9 +92,39 @@
         }
       ],
       "settlement": {
-        "status": "pending",
-        "startedAt": 0
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "worktrees": [
+              {
+                "path": "/repo/feature",
+                "repoId": "repo-1",
+                "worktreeId": "wt-history"
+              },
+              {
+                "path": "/repo/sibling",
+                "repoId": "repo-1",
+                "worktreeId": "wt-2"
+              }
+            ]
+          }
+        }
       }
+    },
+    "40fa6811eb00": {
+      "name": "streams-registered-at-teardown",
+      "ordinal": 10,
+      "value": [
+        {
+          "cancelled": false,
+          "method": "agentSession.subscribeStatus",
+          "payload": "agentSession.subscribeStatus#1"
+        }
+      ]
     },
     "471bd606315a": {
       "name": "status.get#1",
@@ -128,66 +156,6 @@
           "ok": true,
           "result": {
             "$rpc": "null"
-          }
-        }
-      }
-    },
-    "4cebf6258ec1": {
-      "name": "worktree.ps#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.ps"
-        },
-        {
-          "name": "params",
-          "value": {
-            "limit": 10000
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "4d676e55076c": {
-      "name": "status.get#2",
-      "ordinal": 5,
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "capabilities": ["aiVault.v1"]
           }
         }
       }
@@ -260,6 +228,105 @@
         }
       }
     },
+    "613355526cb5": {
+      "name": "aiVault.listSessions#1",
+      "ordinal": 9,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"]}}"
+    },
+    "7368414c8786": {
+      "name": "worktree.ps#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.ps"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 10000
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "79fc75a7b709": {
+      "name": "aiVault.listSessions#1",
+      "ordinal": 8,
+      "args": [
+        {
+          "name": "method",
+          "value": "aiVault.listSessions"
+        },
+        {
+          "name": "params",
+          "value": {
+            "force": false,
+            "limit": 500,
+            "scopePaths": ["/repo/feature"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "Connection closed",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "7a008ca8521f": {
+      "name": "status.get#2",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "capabilities": ["aiVault.v1"]
+          }
+        }
+      }
+    },
     "7b715c94cd95": {
       "name": "status.get#1",
       "ordinal": 2,
@@ -294,6 +361,17 @@
           }
         }
       }
+    },
+    "7e8b2964ad63": {
+      "name": "streams-registered-at-teardown",
+      "ordinal": 8,
+      "value": [
+        {
+          "cancelled": false,
+          "method": "agentSession.subscribeStatus",
+          "payload": "agentSession.subscribeStatus#1"
+        }
+      ]
     },
     "824e7d747f2a": {
       "name": "status.get#1",
@@ -330,18 +408,20 @@
         }
       }
     },
-    "8d930b47bf2f": {
-      "name": "worktree.ps#1",
-      "ordinal": 1,
+    "98d7022b1300": {
+      "name": "aiVault.listSessions#1",
+      "ordinal": 8,
       "args": [
         {
           "name": "method",
-          "value": "worktree.ps"
+          "value": "aiVault.listSessions"
         },
         {
           "name": "params",
           "value": {
-            "limit": 10000
+            "force": false,
+            "limit": 500,
+            "scopePaths": ["/repo/feature"]
           }
         },
         {
@@ -352,26 +432,39 @@
         }
       ],
       "settlement": {
-        "status": "fulfilled",
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "9b8c00f534c6": {
+      "name": "status.get#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
         "startedAt": 0,
         "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "worktrees": [
-              {
-                "path": "/repo/feature",
-                "repoId": "repo-1",
-                "worktreeId": "wt-history"
-              },
-              {
-                "path": "/repo/sibling",
-                "repoId": "repo-1",
-                "worktreeId": "wt-2"
-              }
-            ]
-          }
+        "error": {
+          "category": "Error",
+          "message": "Connection closed",
+          "isRpcDeliveryUnknown": true
         }
       }
     },
@@ -440,6 +533,11 @@
           }
         }
       }
+    },
+    "a26eb8ffaa7c": {
+      "name": "status.get#2",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     },
     "a5e3c1935fd2": {
       "name": "status.get#1",
@@ -510,10 +608,37 @@
         }
       }
     },
-    "cee4e3edb0a1": {
+    "ba8394a4ce03": {
       "name": "status.get#2",
       "ordinal": 6,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "Connection closed",
+          "isRpcDeliveryUnknown": true
+        }
+      }
     },
     "d22bb2f62cea": {
       "crash": {
@@ -568,10 +693,10 @@
         }
       }
     },
-    "d3c3ce66625d": {
-      "name": "aiVault.listSessions#1",
-      "ordinal": 8,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"]}}"
+    "e28c488ce6b2": {
+      "name": "agentSession.subscribeStatus#1",
+      "ordinal": 1,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.subscribeStatus\",\"params\":{}}"
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -588,128 +713,362 @@
       {
         "id": "aivault-history-screen-worktrees.prelude:worktrees-pending",
         "observation": {
-          "sender": ["4cebf6258ec1", "03106dceb986"],
-          "payloads": ["3a91d2093c6e", "4d68bff46cff"],
+          "sender": ["03106dceb986", "7368414c8786"],
+          "payloads": ["e28c488ce6b2", "4d68bff46cff", "0180d22edc2e"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "d22bb2f62cea",
           "effects": []
+        }
+      },
+      {
+        "id": "aivault-history-screen-worktrees.prelude:cleanup",
+        "observation": {
+          "sender": ["9b8c00f534c6", "222a3ba1d974", "ba8394a4ce03"],
+          "payloads": ["e28c488ce6b2", "4d68bff46cff", "0180d22edc2e", "a26eb8ffaa7c"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "d22bb2f62cea",
+          "effects": ["7e8b2964ad63"]
         }
       },
       {
         "id": "aivault-history-screen-worktrees.normal:worktrees-listed",
         "observation": {
-          "sender": ["8d930b47bf2f", "acf501fa9958", "4d676e55076c", "3aaa7e04cda5"],
-          "payloads": ["3a91d2093c6e", "4d68bff46cff", "cee4e3edb0a1", "d3c3ce66625d"],
+          "sender": ["acf501fa9958", "222a3ba1d974", "7a008ca8521f", "98d7022b1300"],
+          "payloads": [
+            "e28c488ce6b2",
+            "4d68bff46cff",
+            "0180d22edc2e",
+            "a26eb8ffaa7c",
+            "613355526cb5"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "d22bb2f62cea",
           "effects": []
+        }
+      },
+      {
+        "id": "aivault-history-screen-worktrees.normal:cleanup",
+        "observation": {
+          "sender": ["acf501fa9958", "222a3ba1d974", "7a008ca8521f", "79fc75a7b709"],
+          "payloads": [
+            "e28c488ce6b2",
+            "4d68bff46cff",
+            "0180d22edc2e",
+            "a26eb8ffaa7c",
+            "613355526cb5"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "d22bb2f62cea",
+          "effects": ["40fa6811eb00"]
         }
       },
       {
         "id": "aivault-history-screen-worktrees.result-absent:worktrees-listed",
         "observation": {
-          "sender": ["8d930b47bf2f", "59290155f27a", "4d676e55076c", "3aaa7e04cda5"],
-          "payloads": ["3a91d2093c6e", "4d68bff46cff", "cee4e3edb0a1", "d3c3ce66625d"],
+          "sender": ["59290155f27a", "222a3ba1d974", "7a008ca8521f", "98d7022b1300"],
+          "payloads": [
+            "e28c488ce6b2",
+            "4d68bff46cff",
+            "0180d22edc2e",
+            "a26eb8ffaa7c",
+            "613355526cb5"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "d22bb2f62cea",
           "effects": []
+        }
+      },
+      {
+        "id": "aivault-history-screen-worktrees.result-absent:cleanup",
+        "observation": {
+          "sender": ["59290155f27a", "222a3ba1d974", "7a008ca8521f", "79fc75a7b709"],
+          "payloads": [
+            "e28c488ce6b2",
+            "4d68bff46cff",
+            "0180d22edc2e",
+            "a26eb8ffaa7c",
+            "613355526cb5"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "d22bb2f62cea",
+          "effects": ["40fa6811eb00"]
         }
       },
       {
         "id": "aivault-history-screen-worktrees.result-null:worktrees-listed",
         "observation": {
-          "sender": ["8d930b47bf2f", "471bd606315a", "4d676e55076c", "3aaa7e04cda5"],
-          "payloads": ["3a91d2093c6e", "4d68bff46cff", "cee4e3edb0a1", "d3c3ce66625d"],
+          "sender": ["471bd606315a", "222a3ba1d974", "7a008ca8521f", "98d7022b1300"],
+          "payloads": [
+            "e28c488ce6b2",
+            "4d68bff46cff",
+            "0180d22edc2e",
+            "a26eb8ffaa7c",
+            "613355526cb5"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "d22bb2f62cea",
           "effects": []
+        }
+      },
+      {
+        "id": "aivault-history-screen-worktrees.result-null:cleanup",
+        "observation": {
+          "sender": ["471bd606315a", "222a3ba1d974", "7a008ca8521f", "79fc75a7b709"],
+          "payloads": [
+            "e28c488ce6b2",
+            "4d68bff46cff",
+            "0180d22edc2e",
+            "a26eb8ffaa7c",
+            "613355526cb5"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "d22bb2f62cea",
+          "effects": ["40fa6811eb00"]
         }
       },
       {
         "id": "aivault-history-screen-worktrees.inner-ok-missing:worktrees-listed",
         "observation": {
-          "sender": ["8d930b47bf2f", "9efd8381401a", "4d676e55076c", "3aaa7e04cda5"],
-          "payloads": ["3a91d2093c6e", "4d68bff46cff", "cee4e3edb0a1", "d3c3ce66625d"],
+          "sender": ["9efd8381401a", "222a3ba1d974", "7a008ca8521f", "98d7022b1300"],
+          "payloads": [
+            "e28c488ce6b2",
+            "4d68bff46cff",
+            "0180d22edc2e",
+            "a26eb8ffaa7c",
+            "613355526cb5"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "d22bb2f62cea",
           "effects": []
+        }
+      },
+      {
+        "id": "aivault-history-screen-worktrees.inner-ok-missing:cleanup",
+        "observation": {
+          "sender": ["9efd8381401a", "222a3ba1d974", "7a008ca8521f", "79fc75a7b709"],
+          "payloads": [
+            "e28c488ce6b2",
+            "4d68bff46cff",
+            "0180d22edc2e",
+            "a26eb8ffaa7c",
+            "613355526cb5"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "d22bb2f62cea",
+          "effects": ["40fa6811eb00"]
         }
       },
       {
         "id": "aivault-history-screen-worktrees.inner-false-string-error:worktrees-listed",
         "observation": {
-          "sender": ["8d930b47bf2f", "7b715c94cd95", "4d676e55076c", "3aaa7e04cda5"],
-          "payloads": ["3a91d2093c6e", "4d68bff46cff", "cee4e3edb0a1", "d3c3ce66625d"],
+          "sender": ["7b715c94cd95", "222a3ba1d974", "7a008ca8521f", "98d7022b1300"],
+          "payloads": [
+            "e28c488ce6b2",
+            "4d68bff46cff",
+            "0180d22edc2e",
+            "a26eb8ffaa7c",
+            "613355526cb5"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "d22bb2f62cea",
           "effects": []
+        }
+      },
+      {
+        "id": "aivault-history-screen-worktrees.inner-false-string-error:cleanup",
+        "observation": {
+          "sender": ["7b715c94cd95", "222a3ba1d974", "7a008ca8521f", "79fc75a7b709"],
+          "payloads": [
+            "e28c488ce6b2",
+            "4d68bff46cff",
+            "0180d22edc2e",
+            "a26eb8ffaa7c",
+            "613355526cb5"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "d22bb2f62cea",
+          "effects": ["40fa6811eb00"]
         }
       },
       {
         "id": "aivault-history-screen-worktrees.inner-false-object-error:worktrees-listed",
         "observation": {
-          "sender": ["8d930b47bf2f", "d302f4eada82", "4d676e55076c", "3aaa7e04cda5"],
-          "payloads": ["3a91d2093c6e", "4d68bff46cff", "cee4e3edb0a1", "d3c3ce66625d"],
+          "sender": ["d302f4eada82", "222a3ba1d974", "7a008ca8521f", "98d7022b1300"],
+          "payloads": [
+            "e28c488ce6b2",
+            "4d68bff46cff",
+            "0180d22edc2e",
+            "a26eb8ffaa7c",
+            "613355526cb5"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "d22bb2f62cea",
           "effects": []
+        }
+      },
+      {
+        "id": "aivault-history-screen-worktrees.inner-false-object-error:cleanup",
+        "observation": {
+          "sender": ["d302f4eada82", "222a3ba1d974", "7a008ca8521f", "79fc75a7b709"],
+          "payloads": [
+            "e28c488ce6b2",
+            "4d68bff46cff",
+            "0180d22edc2e",
+            "a26eb8ffaa7c",
+            "613355526cb5"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "d22bb2f62cea",
+          "effects": ["40fa6811eb00"]
         }
       },
       {
         "id": "aivault-history-screen-worktrees.outer-refused:worktrees-listed",
         "observation": {
-          "sender": ["8d930b47bf2f", "824e7d747f2a", "4d676e55076c", "3aaa7e04cda5"],
-          "payloads": ["3a91d2093c6e", "4d68bff46cff", "cee4e3edb0a1", "d3c3ce66625d"],
+          "sender": ["824e7d747f2a", "222a3ba1d974", "7a008ca8521f", "98d7022b1300"],
+          "payloads": [
+            "e28c488ce6b2",
+            "4d68bff46cff",
+            "0180d22edc2e",
+            "a26eb8ffaa7c",
+            "613355526cb5"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "d22bb2f62cea",
           "effects": []
+        }
+      },
+      {
+        "id": "aivault-history-screen-worktrees.outer-refused:cleanup",
+        "observation": {
+          "sender": ["824e7d747f2a", "222a3ba1d974", "7a008ca8521f", "79fc75a7b709"],
+          "payloads": [
+            "e28c488ce6b2",
+            "4d68bff46cff",
+            "0180d22edc2e",
+            "a26eb8ffaa7c",
+            "613355526cb5"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "d22bb2f62cea",
+          "effects": ["40fa6811eb00"]
         }
       },
       {
         "id": "aivault-history-screen-worktrees.outer-refused-no-message:worktrees-listed",
         "observation": {
-          "sender": ["8d930b47bf2f", "a5e3c1935fd2", "4d676e55076c", "3aaa7e04cda5"],
-          "payloads": ["3a91d2093c6e", "4d68bff46cff", "cee4e3edb0a1", "d3c3ce66625d"],
+          "sender": ["a5e3c1935fd2", "222a3ba1d974", "7a008ca8521f", "98d7022b1300"],
+          "payloads": [
+            "e28c488ce6b2",
+            "4d68bff46cff",
+            "0180d22edc2e",
+            "a26eb8ffaa7c",
+            "613355526cb5"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "d22bb2f62cea",
           "effects": []
+        }
+      },
+      {
+        "id": "aivault-history-screen-worktrees.outer-refused-no-message:cleanup",
+        "observation": {
+          "sender": ["a5e3c1935fd2", "222a3ba1d974", "7a008ca8521f", "79fc75a7b709"],
+          "payloads": [
+            "e28c488ce6b2",
+            "4d68bff46cff",
+            "0180d22edc2e",
+            "a26eb8ffaa7c",
+            "613355526cb5"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "d22bb2f62cea",
+          "effects": ["40fa6811eb00"]
         }
       },
       {
         "id": "aivault-history-screen-worktrees.method-not-found:worktrees-listed",
         "observation": {
-          "sender": ["8d930b47bf2f", "1675b1df2d81", "4d676e55076c", "3aaa7e04cda5"],
-          "payloads": ["3a91d2093c6e", "4d68bff46cff", "cee4e3edb0a1", "d3c3ce66625d"],
+          "sender": ["1675b1df2d81", "222a3ba1d974", "7a008ca8521f", "98d7022b1300"],
+          "payloads": [
+            "e28c488ce6b2",
+            "4d68bff46cff",
+            "0180d22edc2e",
+            "a26eb8ffaa7c",
+            "613355526cb5"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "d22bb2f62cea",
           "effects": []
+        }
+      },
+      {
+        "id": "aivault-history-screen-worktrees.method-not-found:cleanup",
+        "observation": {
+          "sender": ["1675b1df2d81", "222a3ba1d974", "7a008ca8521f", "79fc75a7b709"],
+          "payloads": [
+            "e28c488ce6b2",
+            "4d68bff46cff",
+            "0180d22edc2e",
+            "a26eb8ffaa7c",
+            "613355526cb5"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "d22bb2f62cea",
+          "effects": ["40fa6811eb00"]
         }
       },
       {
         "id": "aivault-history-screen-worktrees.transport-rejection:worktrees-listed",
         "observation": {
-          "sender": ["8d930b47bf2f", "51e670a85520", "4d676e55076c", "3aaa7e04cda5"],
-          "payloads": ["3a91d2093c6e", "4d68bff46cff", "cee4e3edb0a1", "d3c3ce66625d"],
+          "sender": ["51e670a85520", "222a3ba1d974", "7a008ca8521f", "98d7022b1300"],
+          "payloads": [
+            "e28c488ce6b2",
+            "4d68bff46cff",
+            "0180d22edc2e",
+            "a26eb8ffaa7c",
+            "613355526cb5"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -718,15 +1077,57 @@
         }
       },
       {
+        "id": "aivault-history-screen-worktrees.transport-rejection:cleanup",
+        "observation": {
+          "sender": ["51e670a85520", "222a3ba1d974", "7a008ca8521f", "79fc75a7b709"],
+          "payloads": [
+            "e28c488ce6b2",
+            "4d68bff46cff",
+            "0180d22edc2e",
+            "a26eb8ffaa7c",
+            "613355526cb5"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "d22bb2f62cea",
+          "effects": ["40fa6811eb00"]
+        }
+      },
+      {
         "id": "aivault-history-screen-worktrees.transport-rejection-no-message:worktrees-listed",
         "observation": {
-          "sender": ["8d930b47bf2f", "9cfa291517f9", "4d676e55076c", "3aaa7e04cda5"],
-          "payloads": ["3a91d2093c6e", "4d68bff46cff", "cee4e3edb0a1", "d3c3ce66625d"],
+          "sender": ["9cfa291517f9", "222a3ba1d974", "7a008ca8521f", "98d7022b1300"],
+          "payloads": [
+            "e28c488ce6b2",
+            "4d68bff46cff",
+            "0180d22edc2e",
+            "a26eb8ffaa7c",
+            "613355526cb5"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "d22bb2f62cea",
           "effects": []
+        }
+      },
+      {
+        "id": "aivault-history-screen-worktrees.transport-rejection-no-message:cleanup",
+        "observation": {
+          "sender": ["9cfa291517f9", "222a3ba1d974", "7a008ca8521f", "79fc75a7b709"],
+          "payloads": [
+            "e28c488ce6b2",
+            "4d68bff46cff",
+            "0180d22edc2e",
+            "a26eb8ffaa7c",
+            "613355526cb5"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "d22bb2f62cea",
+          "effects": ["40fa6811eb00"]
         }
       }
     ]

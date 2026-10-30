@@ -27,16 +27,28 @@ import {
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 
-// ── Shared status helpers ────────────────────────────────────────────
-
 export const STATUS_LABELS: Record<SshConnectionStatus, string> = {
-  disconnected: 'Disconnected',
-  connecting: 'Connecting…',
-  'auth-failed': 'Auth failed',
-  'deploying-relay': 'Deploying relay…',
-  connected: 'Connected',
-  reconnecting: 'Reconnecting…',
-  'reconnection-failed': 'Reconnection failed',
+  get disconnected() {
+    return translate('settings.ssh.status.disconnected', 'Disconnected')
+  },
+  get connecting() {
+    return translate('settings.ssh.status.connecting', 'Connecting…')
+  },
+  get 'auth-failed'() {
+    return translate('settings.ssh.status.auth-failed', 'Auth failed')
+  },
+  get 'deploying-relay'() {
+    return translate('settings.ssh.status.deploying-relay', 'Deploying relay…')
+  },
+  get connected() {
+    return translate('settings.ssh.status.connected', 'Connected')
+  },
+  get reconnecting() {
+    return translate('settings.ssh.status.reconnecting', 'Reconnecting…')
+  },
+  get 'reconnection-failed'() {
+    return translate('settings.ssh.status.reconnection-failed', 'Reconnection failed')
+  },
   get error() {
     return translate('auto.components.settings.SshTargetCard.18968ede9e', 'Error')
   }
@@ -59,8 +71,6 @@ export function statusColor(status: SshConnectionStatus): string {
   }
 }
 
-// ── SshTargetCard ────────────────────────────────────────────────────
-
 type SshTargetCardProps = {
   target: SshTarget
   state: SshConnectionState | undefined
@@ -76,7 +86,6 @@ type SshTargetCardProps = {
   onServerChanged?: () => void
 }
 
-/** One compact host row: select, name and endpoint, live status, one primary action, and a menu. */
 export function SshTargetCard({
   target,
   state,
@@ -105,8 +114,7 @@ export function SshTargetCard({
     isManagedServerSshHost(target) || state?.managedServer?.kind === 'managed'
 
   const handleCardRef = useCallback((node: HTMLDivElement | null): void => {
-    // Why: SSH target actions can resolve after the card is removed; the root
-    // ref gives async completions the same stale-write guard without an Effect.
+    // Root attachment guards async completions after card removal without a passive effect.
     mountedRef.current = node !== null
   }, [])
 
@@ -179,10 +187,9 @@ export function SshTargetCard({
     if (status !== 'disconnected' || actionInFlight === 'connect') {
       return button
     }
-    // Why: a column of identical "Connect" words on resting rows scans as noise; it appears on
-    // hover or keyboard focus and keeps its width so nothing shifts.
+    // Reveal repetitive Connect labels on hover/focus while retaining width to avoid shifts.
     return (
-      <span className="opacity-0 transition-opacity group-hover/row:opacity-100 group-has-[:focus-visible]/row:opacity-100">
+      <span className="opacity-0 transition-opacity group-hover/row:opacity-100 [[class~='group/row']:has(:focus-visible)_&]:opacity-100">
         {button}
       </span>
     )
@@ -208,7 +215,7 @@ export function SshTargetCard({
             }
           )}
           onClick={(event) => {
-            // Why: Radix toggles on click with no modifier info; selection owns the state instead.
+            // Selection owns modifier-aware state; suppress Radix’s modifier-blind click toggle.
             event.preventDefault()
             onSelectClick(target.id, event.shiftKey)
           }}
@@ -223,7 +230,7 @@ export function SshTargetCard({
               {translate('auto.components.settings.SshTargetCard.orcaServer', 'Orca server')}
             </Badge>
           ) : null}
-          {/* Why the separator sits outside the mono spans: a monospace "·" reads visibly wider. */}
+          {/* Keep the separator outside monospace spans so its width stays compact. */}
           <span className="min-w-0 truncate text-xs text-muted-foreground">
             <span className="font-mono">{endpoint}</span>
             {keyName ? (
@@ -234,13 +241,12 @@ export function SshTargetCard({
             ) : null}
           </span>
         </div>
-        {/* Why not truncate: host key failures put the remedy (`ssh-keygen -R <host>`) at the end,
-            and a one-line clamp with no tooltip made it unreachable even on hover. */}
+        {/* Wrap host-key errors so the trailing recovery command remains reachable. */}
         {/* An unserved host's status line below says why, translated; this is its English twin. */}
         {state?.error && state.managedServer?.kind !== 'relay' ? (
           <p className="mt-0.5 text-xs text-destructive [overflow-wrap:anywhere]">{state.error}</p>
         ) : null}
-        <SshTargetServerStatusLine target={target} state={state} />
+        <SshTargetServerStatusLine target={target} state={state} onOpenDialog={setServerDialog} />
       </div>
 
       <div className="flex shrink-0 items-center gap-2">

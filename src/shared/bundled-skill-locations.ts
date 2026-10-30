@@ -2,7 +2,6 @@ import type { BundledSkillLeaveReason, BundledSkillOp } from './bundled-skill-pl
 import { isBundledSkillLeaveReason } from './bundled-skill-plan'
 import { SKILL_INSTALL_PROVIDERS } from './skill-install-providers'
 
-/** What Update does, or did nothing, at one location. */
 export type BundledSkillLocationState =
   | 'update'
   | 'repair'
@@ -22,7 +21,7 @@ export type BundledSkillLocation = {
   place: { kind: 'shared' } | { kind: 'agents'; names: string[] }
   state: BundledSkillLocationState
   reason: BundledSkillLeaveReason | null
-  /** Whether Replace / `--force` may back it up and put Orca's copy in its place. */
+  /** Replace/--force may back up this location and install Orca’s copy. */
   replaceable: boolean
 }
 

@@ -5,8 +5,7 @@ import type {
   SqlRow
 } from '../database.js'
 
-// Every statement a relay path issues, in order, so its round trips are counted rather than
-// described. BEGIN and COMMIT are recorded too: each is a trip to a remote database.
+// Count real round trips including BEGIN/COMMIT rather than inferring from query counts.
 export class StatementRecordingDatabase implements RelayDatabase {
   readonly dialect: RelayDatabase['dialect']
   // A statement this matches fails as a dropped connection would, before reaching the database.
@@ -25,7 +24,11 @@ export class StatementRecordingDatabase implements RelayDatabase {
     return await this.inner.query(sql, params)
   }
 
-  async queryLocked(sql: string, params: unknown[] = [], options: RelayLockOptions = {}): Promise<SqlRow[]> {
+  async queryLocked(
+    sql: string,
+    params: unknown[] = [],
+    options: RelayLockOptions = {}
+  ): Promise<SqlRow[]> {
     this.statements.push(`${normalized(sql)} [locked]`)
     return await this.inner.queryLocked(sql, params, options)
   }
@@ -36,16 +39,17 @@ export class StatementRecordingDatabase implements RelayDatabase {
   ): Promise<T> {
     this.statements.push('BEGIN')
     try {
-      return await this.inner.transaction(
-        async (transaction) => {
-          const recording = new StatementRecordingDatabase(transaction, this.statements)
-          recording.failing = this.failing
-          return await operation(recording)
-        },
-        options
-      )
-    } finally {
+      const result = await this.inner.transaction(async (transaction) => {
+        const recording = new StatementRecordingDatabase(transaction, this.statements)
+        recording.failing = this.failing
+        return await operation(recording)
+      }, options)
+
       this.statements.push('COMMIT')
+      return result
+    } catch (error) {
+      this.statements.push('ROLLBACK')
+      throw error
     }
   }
 

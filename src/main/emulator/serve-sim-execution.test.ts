@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const electronMocks = vi.hoisted(() => ({
+const appEnvironmentMocks = vi.hoisted(() => ({
   getAppPath: vi.fn(),
   getPath: vi.fn(),
   getVersion: vi.fn()
@@ -12,12 +12,8 @@ const materializerMocks = vi.hoisted(() => ({
   materializeServeSimRuntime: vi.fn()
 }))
 
-vi.mock('electron', () => ({
-  app: {
-    getAppPath: electronMocks.getAppPath,
-    getPath: electronMocks.getPath,
-    getVersion: electronMocks.getVersion
-  }
+vi.mock('../../shared/app-environment', () => ({
+  getAppEnvironment: () => appEnvironmentMocks
 }))
 vi.mock('./serve-sim-runtime-materializer', () => materializerMocks)
 
@@ -54,9 +50,9 @@ beforeEach(async () => {
   cleanupPaths.push(root)
   setProcessProperty('platform', 'linux')
   setProcessProperty('resourcesPath', join(root, 'resources'))
-  electronMocks.getAppPath.mockReset().mockReturnValue(join(root, 'app'))
-  electronMocks.getPath.mockReset().mockReturnValue(join(root, 'user-data'))
-  electronMocks.getVersion.mockReset().mockReturnValue('test-version')
+  appEnvironmentMocks.getAppPath.mockReset().mockReturnValue(join(root, 'app'))
+  appEnvironmentMocks.getPath.mockReset().mockReturnValue(join(root, 'user-data'))
+  appEnvironmentMocks.getVersion.mockReset().mockReturnValue('test-version')
   materializerMocks.materializeServeSimRuntime.mockReset()
 })
 
@@ -79,7 +75,7 @@ describe('resolveServeSimExecutable', () => {
       baseArgs: [legacyEntry],
       usesElectronAsNode: true
     })
-    expect(electronMocks.getAppPath).not.toHaveBeenCalled()
+    expect(appEnvironmentMocks.getAppPath).not.toHaveBeenCalled()
   })
 
   it('uses the deduplicated Resources/node_modules/serve-sim package', async () => {
@@ -92,7 +88,7 @@ describe('resolveServeSimExecutable', () => {
       baseArgs: [packagedEntry],
       usesElectronAsNode: true
     })
-    expect(electronMocks.getAppPath).not.toHaveBeenCalled()
+    expect(appEnvironmentMocks.getAppPath).not.toHaveBeenCalled()
   })
 
   it('materializes either packaged resource location on macOS', async () => {
@@ -113,7 +109,7 @@ describe('resolveServeSimExecutable', () => {
   })
 
   it('preserves the app node_modules development fallback', async () => {
-    const appPackageDir = join(electronMocks.getAppPath(), 'node_modules', 'serve-sim')
+    const appPackageDir = join(appEnvironmentMocks.getAppPath(), 'node_modules', 'serve-sim')
     const appEntry = await createServeSimPackage(appPackageDir)
 
     expect(resolveServeSimExecutable()).toEqual({

@@ -1,6 +1,8 @@
 import { translate } from '@/i18n/i18n'
 import type { AgentLaunchPaneOutcome } from '../../../../shared/agent-launch-pane-verdict'
+import { stripClientEnvironmentFooter } from '../../../../shared/client-environment-info'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { tuiAgentDisplayName } from '../../../../shared/tui-agent-display-names'
 
 /** What the pane shows, if its tab keeps a final launch outcome for this leaf. */
 export function agentLaunchPaneOutcomeForLeaf(
@@ -12,39 +14,94 @@ export function agentLaunchPaneOutcomeForLeaf(
 }
 
 /** The recorded reason in words a user can act on; null when it names nothing they can fix. */
-function notStartedReason(code: string): string | null {
+function notStartedReason(code: string, agent: string): string | null {
   if (code.includes('ENOENT')) {
     return translate(
       'auto.components.terminal.pane.AgentLaunchPaneNotice.commandNotFound',
-      "Its command wasn't found on this machine."
+      "{{agent}} couldn't start because its command wasn't found on this machine.",
+      { agent }
     )
   }
   if (code === 'agent_session_exited_during_start') {
     return translate(
       'auto.components.terminal.pane.AgentLaunchPaneNotice.exitedDuringStart',
-      'It exited while starting.'
+      '{{agent}} exited while starting.',
+      { agent }
     )
   }
   if (code === 'worktree_not_found') {
     return translate(
       'auto.components.terminal.pane.AgentLaunchPaneNotice.workspaceGone',
-      'Its workspace is no longer available.'
+      "{{agent}} couldn't start because its workspace is no longer available.",
+      { agent }
     )
   }
   return null
 }
 
-export function agentLaunchPaneNoticeText(refusal: AgentLaunchPaneOutcome): string {
+export function agentLaunchPaneNoticeText(
+  refusal: AgentLaunchPaneOutcome,
+  agentId?: string | null
+): string {
+  const agent =
+    tuiAgentDisplayName(agentId ?? '') ??
+    translate('auto.components.terminal.pane.AgentLaunchPaneNotice.agent', 'The agent')
   if (refusal.kind === 'unconfirmed') {
     return translate(
       'auto.components.terminal.pane.AgentLaunchPaneNotice.unconfirmed',
-      "Couldn't confirm the agent started."
+      "Couldn't confirm {{agent}} started. Check its terminal before trying again.",
+      { agent }
     )
   }
-  const lead = translate(
-    'auto.components.terminal.pane.AgentLaunchPaneNotice.notStarted',
-    "The agent couldn't start."
-  )
-  const reason = notStartedReason(refusal.code)
-  return reason ? `${lead} ${reason}` : lead
+  const reason =
+    notStartedReason(refusal.code, agent) ??
+    translate(
+      'auto.components.terminal.pane.AgentLaunchPaneNotice.notStarted',
+      "{{agent}} couldn't start.",
+      { agent }
+    )
+  const action =
+    refusal.code === 'worktree_not_found'
+      ? translate(
+          'auto.components.terminal.pane.AgentLaunchPaneNotice.restoreWorkspace',
+          'Restore the workspace folder or open an available workspace, then try again.'
+        )
+      : translate(
+          'auto.components.terminal.pane.AgentLaunchPaneNotice.tryInTerminal',
+          'Run it in a terminal in this folder to see why, then try again.'
+        )
+  return `${reason} ${action}`
+}
+
+function startupCode(line: string): string | undefined {
+  return line.match(/\b(?:agent_(?:session|launch)_[a-z0-9_]+|worktree_not_found)\b/)?.[0]
+}
+
+export function isAgentLaunchOnlyError(error: string): boolean {
+  const lines = stripClientEnvironmentFooter(error)
+    .split('\n')
+    .filter((line) => line.trim().length > 0)
+  return lines.length > 0 && lines.every((line) => startupCode(line) !== undefined)
+}
+
+/** Older hosts send startup reasons as strings, sometimes wrapped in an IPC error. */
+export function agentLaunchErrorText(error: string, agentId?: string | null): string | null {
+  let found = false
+  const text = error
+    .split('\n')
+    .map((line) => {
+      const code = startupCode(line)
+      if (!code) {
+        return line
+      }
+      found = true
+      // Only these producer contracts prove failure without an attempt's typed host outcome.
+      const outcome: AgentLaunchPaneOutcome =
+        code === 'agent_session_exited_during_start' || code === 'worktree_not_found'
+          ? { kind: 'not-started', code }
+          : { kind: 'unconfirmed' }
+      return agentLaunchPaneNoticeText(outcome, agentId)
+    })
+    .join('\n')
+  return found ? text : null
 }

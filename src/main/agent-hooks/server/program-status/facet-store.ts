@@ -4,27 +4,21 @@ import {
 } from '../../../../shared/program-status/facet'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 
-// Why a bound: one entry per pane that ever ran an OSC 7501 program; stale panes age out first.
+// Bound retained facets across long sessions; evict the least recently changed first.
 const MAX_PROGRAM_STATUS_FACETS = 1024
 
 type StoredProgramStatus = {
   facet: ProgramStatusFacet
-  /** From the ordered lifecycle reports; a facet holds only a chunk's last one. */
+  /** Ordered lifecycle state; chunk facets retain only their last report. */
   working?: boolean
-  /** When the program last entered `working`: evidence of new work after a hook-settled turn. */
+  /** New working evidence can supersede a hook-settled turn. */
   workingSince?: number
 }
 
-/**
- * Each pane's latest OSC 7501 facet, kept apart from the status rows. A row's producer (hook or OSC)
- * owns its state; this map is owned by the OSC 7501 channel alone and is stitched onto rows only as
- * they are published, so it is never persisted and never compared as a row change. It also keeps when
- * the program last entered `working` (noteState), which relies on a chunk's facet arriving first.
- */
+/** Runtime-only facets are stitched at publication; noteState requires the chunk's facet first. */
 export class ProgramStatusFacetStore {
   private readonly byPaneKey = new Map<string, StoredProgramStatus>()
 
-  /** Returns whether the pane's facet changed. `null` removes it. */
   set(paneKey: string, facet: ProgramStatusFacet | null): boolean {
     const previous = this.byPaneKey.get(paneKey)
     if (facet === null) {
@@ -48,8 +42,7 @@ export class ProgramStatusFacetStore {
     return this.byPaneKey.get(paneKey)?.facet
   }
 
-  /** Records the program's projected lifecycle state, in report order, and returns when it last
-   *  entered `working`. */
+  /** Return the latest working transition time while consuming states in report order. */
   noteState(paneKey: string, state: AgentStatusState, at: number): number | undefined {
     const stored = this.byPaneKey.get(paneKey)
     if (stored === undefined) {
@@ -66,7 +59,6 @@ export class ProgramStatusFacetStore {
     this.byPaneKey.delete(paneKey)
   }
 
-  /** A pane remint keeps the program's facet with its row. */
   move(fromPaneKey: string, toPaneKey: string): void {
     const stored = this.byPaneKey.get(fromPaneKey)
     if (stored === undefined) {
@@ -80,7 +72,7 @@ export class ProgramStatusFacetStore {
     this.byPaneKey.clear()
   }
 
-  /** A copy of `row` carrying its pane's facet. The stored row is never mutated. */
+  /** Stitch without mutating the stored row. */
   stitch<T extends { paneKey: string; programStatus?: ProgramStatusFacet }>(row: T): T {
     const facet = this.byPaneKey.get(row.paneKey)?.facet
     if (facet === row.programStatus) {

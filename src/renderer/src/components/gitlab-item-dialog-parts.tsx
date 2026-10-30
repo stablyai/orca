@@ -4,13 +4,14 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import type {
   GitLabAssignableUser,
   GitLabPipelineJob,
   GitLabWorkItem,
   MRComment
 } from '../../../shared/gitlab-types'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export type JobTraceState = {
   loading: boolean
@@ -18,7 +19,6 @@ export type JobTraceState = {
   error?: string
 }
 
-// Why: GitLab MR / issue states map onto a coarser palette than GitHub.
 export const STATE_TONE: Record<GitLabWorkItem['state'], string> = {
   opened: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
   closed: 'bg-rose-500/15 text-rose-700 dark:text-rose-300',
@@ -27,9 +27,7 @@ export const STATE_TONE: Record<GitLabWorkItem['state'], string> = {
   draft: 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
 }
 
-// Why: pipeline job statuses map to one of four visual buckets — keep
-// the mapping local so the renderer doesn't depend on the backend's
-// shared mapper module (which is main-process only).
+// Keep status tones in the renderer to avoid importing the main-process mapper.
 export function jobStatusTone(status: string): string {
   switch (status) {
     case 'success':
@@ -167,7 +165,11 @@ export function CommentCard({
                 : translate('auto.components.GitLabItemDialog.4168eb2c51', 'Resolve')}
             </Button>
           ) : null}
-          <span>{comment.createdAt ? new Date(comment.createdAt).toLocaleDateString() : ''}</span>
+          <span>
+            {comment.createdAt
+              ? new Date(comment.createdAt).toLocaleDateString(getIntlLocale())
+              : ''}
+          </span>
         </div>
       </div>
       {comment.path ? (
@@ -221,8 +223,6 @@ export function PipelineJobRow({
           {job.status}
         </span>
         <span className="text-right text-[11px] text-muted-foreground">
-          {/* Why: durations come back as seconds; show "Nm Ns" for >60s
-              and "Ns" otherwise. null = job hasn't finished. */}
           {typeof job.duration === 'number'
             ? job.duration >= 60
               ? `${Math.floor(job.duration / 60)}m ${Math.floor(job.duration % 60)}s`
@@ -248,7 +248,7 @@ export function PipelineJobRow({
               type="button"
               variant="ghost"
               size="icon-xs"
-              onClick={() => void window.api.shell.openUrl(job.webUrl)}
+              onClick={(event) => openAppHttpLink(job.webUrl, { event })}
               title={translate('auto.components.GitLabItemDialog.032ae1312b', 'Open job in GitLab')}
             >
               <ExternalLink className="size-3" />

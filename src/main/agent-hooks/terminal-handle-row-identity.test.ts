@@ -32,8 +32,7 @@ describe('the terminal handle a status row is stamped with', () => {
   })
 
   it('survives a later write that resolved no handle', () => {
-    // Only main's OSC parse resolves one; an HTTP hook post for the same pane carries none and
-    // must not erase the row's only join back to its terminal.
+    // HTTP hooks lack OSC terminal handles and must not erase the row's terminal association.
     const server = new AgentHookServer()
     ingest(server)
     ingest(server, { terminalHandle: undefined, payload: { state: 'done', prompt: 'ship it' } })
@@ -210,7 +209,6 @@ describe('the terminal handle a status row is stamped with', () => {
     if (!row) {
       throw new Error('expected seeded status row')
     }
-    // A settled main agent whose only live work is a child agent: the boundary is derived from these facts.
     const childOnlyRow = {
       ...row,
       claudeRunningNonAgentTask: false,

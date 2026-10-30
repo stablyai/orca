@@ -13,6 +13,7 @@ import {
   normalizeOptionsForAction
 } from './normalization'
 import { hasModifier, normalizeKeyToken } from './parser'
+import { keybindingValidationFailure } from './keybinding-diagnostic-copy'
 
 const MODIFIER_KEYS = new Set([
   'Alt',
@@ -77,12 +78,12 @@ export function logicalKeyTokenFromInput(input: KeybindingInput): string | null 
 }
 
 export function canUsePhysicalCodeFallback(input: KeybindingInput): boolean {
-  // Why: layout-aware shortcuts trust real logical keys; physical code is only a fallback when the platform can't report the produced key.
+  // Prefer real logical keys for layout-aware shortcuts; physical code is fallback only when the produced key is unavailable.
   return PHYSICAL_CODE_FALLBACK_KEYS.has(input.key ?? '')
 }
 
 export function isLatinShortcutKey(key: string): boolean {
-  // Why: A-Z / 0-9 are the only chars a Latin shortcut names; a non-Latin char (Cyrillic с, Greek π) is never a Latin remap, so physical-code fallback is safe.
+  // Non-Latin characters such as с/π cannot name Latin shortcuts; physical fallback is safe for A–Z/0–9 remaps.
   if (key.length !== 1) {
     return false
   }
@@ -94,7 +95,7 @@ export function shouldUseNonLatinShortcutPhysicalFallback(
   input: KeybindingInput,
   platform: NodeJS.Platform
 ): boolean {
-  // Why: non-Latin layouts report non-Latin logical keys for physical letters (#6274), breaking Ctrl/Meta shortcuts; fall back to the physical code.
+  // Non-Latin logical letters break Ctrl/Meta shortcuts on Windows/Linux; use physical fallback (#6274).
   if (getKeybindingPlatform(platform) === 'darwin') {
     return false
   }
@@ -117,7 +118,7 @@ export function shouldUseImeProcessChordPhysicalFallback(
   input: KeybindingInput,
   platform: NodeJS.Platform
 ): boolean {
-  // Why: a chord pressed while an IME has marked text reports key 'Process' (#28159); a modifier chord isn't IME text, so match its physical code.
+  // IME-marked text reports Process; modifier chords still need physical matching (#28159).
   if (input.key !== 'Process') {
     return false
   }
@@ -234,7 +235,7 @@ export function keybindingFromInputWithOptions(
   }
   const key = keyTokenFromInput(input, platform)
   if (!key) {
-    return { ok: false, error: 'Press a key, not only a modifier.' }
+    return keybindingValidationFailure('modifierOnly')
   }
 
   const isMac = getKeybindingPlatform(platform) === 'darwin'

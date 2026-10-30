@@ -1,11 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * The All-hosts groups render a host that answered with nothing next to a host
- * nobody could ask. These tests pin the difference, because a shared "no rows"
- * sentence made the second read as the first — a claim about storage that no
- * request ever backed.
- */
+/** Distinguish an answered empty host from an unreachable host whose storage nobody queried. */
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'

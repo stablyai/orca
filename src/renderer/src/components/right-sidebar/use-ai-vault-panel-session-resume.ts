@@ -16,7 +16,6 @@ import {
   withAiVaultCurrentWorktreeStatus
 } from './ai-vault-session-worktree'
 
-/** Where each listed session lives and where it would resume, relative to the panel's workspace. */
 export function useAiVaultPanelSessionResume(args: {
   sessions: readonly AiVaultSession[]
   repos: readonly Repo[]
@@ -26,14 +25,14 @@ export function useAiVaultPanelSessionResume(args: {
   settings: AppState['settings']
 }) {
   const { sessions, repos, allWorktrees, workspaceId, resumeTargetState, settings } = args
-  // Folder workspaces own their sessions by cwd too, so they resume and jump like a worktree.
+  // Folder workspaces also own sessions by cwd for resume and jump.
   const ownerWorkspaces = useAiVaultSessionOwnerWorkspaces(allWorktrees, resumeTargetState)
   const sessionWorktreeById = useAiVaultSessionWorktreeMap({
     sessions,
     repos,
     worktrees: ownerWorkspaces
   })
-  // `current` is stamped per row at read time so the map above stays cached.
+  // Stamp current per row to preserve the cached ownership map.
   const getSessionWorktreeInfo = useCallback(
     (session: AiVaultSession) =>
       withAiVaultCurrentWorktreeStatus(sessionWorktreeById.get(session.id) ?? null, workspaceId),
@@ -64,10 +63,7 @@ export function useAiVaultPanelSessionResume(args: {
       }),
     [getSessionRowResumeArgs]
   )
-  // Resuming into a chat asks a different question from resuming into a terminal: not "can this
-  // workspace host a PTY" but "will the provider still find this conversation from the workspace we
-  // would run it in". The workspace it targets is the session's own when that is open, because
-  // Claude looks its transcript up under a directory derived from the launch cwd.
+  // Chat resume must preserve the session’s workspace: Claude finds transcripts through launch-cwd-derived paths.
   const getSessionResumeInChat = useCallback(
     (session: AiVaultSession): AiVaultResumeInChatEligibility =>
       resolveAiVaultHistoryRowResume({ ...getSessionRowResumeArgs(session), settings })

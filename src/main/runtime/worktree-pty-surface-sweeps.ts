@@ -1,10 +1,4 @@
-/**
- * The two PTY-surface sweeps `killAllProcessesForWorktree` fans out to.
- *
- * Split from the teardown entry point so that file stays under the line ceiling once the
- * structured-session sweep joined it. Each function owns one registration surface: the installed
- * provider's session list, and the local pty-registry.
- */
+/** Sweep provider sessions and local registry independently of the teardown entrypoint to avoid a dependency cycle. */
 
 import type { IPtyProvider } from '../providers/pty-provider-contract'
 import { listRegisteredPtys } from '../memory/pty-registry'
@@ -12,8 +6,7 @@ import { worktreePtyOwnership } from '../providers/worktree-pty-ownership'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import { teardownRpcDeadline } from './worktree-teardown-deadline'
 
-// Why: normal inventories still coalesce into one process scan, while a stale
-// or pathological inventory cannot fan out unbounded provider/RPC shutdowns.
+// Bound provider/RPC fanout while allowing normal shutdown requests to coalesce into one process scan.
 const WORKTREE_TEARDOWN_CONCURRENCY = 32
 
 export async function sweepProviderByPrefix(
@@ -32,8 +25,7 @@ export async function sweepProviderByPrefix(
     ? await provider.listProcesses({ deadlineMs: rpcDeadline, worktreeId })
     : await provider.listProcesses({ deadlineMs: rpcDeadline, worktreeId }).catch(() => [])
   const ownedSessions = sessions.filter(worktreePtyOwnership(worktreeId))
-  // Why: agent shutdown snapshots coalesce only when requests begin together;
-  // bounded concurrency avoids serial process scans without unbounded fanout.
+  // Concurrent starts coalesce shutdown process scans; the bound prevents unbounded fanout.
   const stopped = await mapWithConcurrency(
     ownedSessions,
     WORKTREE_TEARDOWN_CONCURRENCY,
@@ -104,8 +96,7 @@ export async function sweepRegistryForWorktree(
 
 export function clearStoppedPtyState(ptyId: string, onPtyStopped?: (ptyId: string) => void): void {
   try {
-    // Why: daemon shutdown does not always fan a local pty:exit event back
-    // through pty.ts, but removed worktrees must immediately drop memory rows.
+    // Daemon shutdown may omit local pty:exit; removal must still drop memory rows.
     onPtyStopped?.(ptyId)
   } catch {
     /* cleanup is best-effort and must not block git-level removal */

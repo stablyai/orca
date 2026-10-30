@@ -46,8 +46,7 @@ export async function releaseFederatedWorker(args: {
   requestId: string
 }): Promise<WorkerReleaseReceipt & { remoteOutput?: unknown }> {
   const cache = getOrchestrationPeerCapabilityCache(args.runtime)
-  // This capability states that the host writes a durable archive before it closes anything;
-  // `method_not_found` cannot express that, so release still asks the advertisement.
+  // Require advertised durable pre-close archives; method_not_found alone cannot promise that safety.
   const capability = await cache.resolve({
     peerFingerprint: args.federated.peer_fingerprint,
     expectedRuntimeEpoch: args.federated.remote_runtime_epoch,
@@ -114,8 +113,7 @@ export async function releaseFederatedWorker(args: {
     return receipt
   }
   try {
-    // Keep this idempotent so a fresh request converges the home projection without
-    // issuing another terminal close after the execution host confirmed release.
+    // Converge the home projection idempotently without repeating a host-confirmed terminal close.
     applyConfirmedFederatedReleaseHomeProjection(args.runtime, args.dispatchId)
     return receipt
   } catch (error) {
@@ -169,8 +167,7 @@ function applyConfirmedFederatedReleaseHomeProjection(
         }
       })
     }
-    // The remote handle is an execution-host fact; clear it after confirmation
-    // so a subsequent home read cannot route another close to a stale handle.
+    // Clear the host handle only after confirmation so later home reads cannot close a stale target.
     db.db
       .prepare(
         `UPDATE federated_dispatches

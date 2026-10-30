@@ -29,7 +29,7 @@ import { createRateLimitSlice } from './rate-limits'
 import { createSshSlice } from './ssh'
 import { createRuntimeEnvironmentSshSlice } from './runtime-environment-ssh'
 import { createWslHostsSlice } from './wsl-hosts'
-import { createAgentStatusSlice } from './agent-status'
+import { createAgentStatusSlice } from './agent-status/agent-status'
 import { createPaneForegroundAgentSlice } from './pane-foreground-agent'
 import { createDiffCommentsSlice } from './diffComments'
 import { createDetectedAgentsSlice } from './detected-agents'
@@ -128,9 +128,7 @@ export function seedStore(
   store: ReturnType<typeof createTestStore>,
   state: Partial<AppState>
 ): void {
-  // The cascade tests intentionally centralize the default repo fixture here
-  // so the test files can stay under the enforced max-lines limit without
-  // disabling the lint rule and hiding further growth.
+  // Centralize fixture to keep cascade suites within max-lines limits without suppressing growth checks.
   store.setState({
     repos: [{ ...TEST_REPO, executionHostId: 'local' }],
     ...state

@@ -3,8 +3,7 @@ const SHARED_STUB_SOURCE = 'skill-stubs/_shared/cli-resolution.md'
 const BLOCK_DEFINITION_PATTERN = /^<!-- block: (?<id>[a-z][a-z0-9-]*) -->$/u
 const INSERTION_MARKER_PATTERN = /^<!-- shared: (?<id>\S+) -->$/u
 
-// Lines before the first `<!-- block: -->` are the fragment's own header comment and are
-// not projected. Input must already be LF-normalized.
+// Skip fragment header before first block marker; require LF-normalized input.
 function parseSharedStubBlocks(markdown, sourcePath) {
   const blocks = new Map()
   let open = null
@@ -40,8 +39,7 @@ function parseSharedStubBlocks(markdown, sourcePath) {
   return blocks
 }
 
-// Why: an insertion that silently vanished would let a stub drop the safety ladder while the
-// generator stayed green, so an unknown marker and a missing or repeated insertion both throw.
+// Throw on unknown marker or missing/duplicate insertion: silent drop could remove safety ladder while generator stays green.
 function renderSharedStubBody(stubBody, { blocks, sourcePath }) {
   const insertions = new Map()
   const composed = stubBody

@@ -11,10 +11,7 @@ export type SshTargetSelection = {
   clear: () => void
 }
 
-/**
- * Multi-select over the visible SSH host rows, in display order. Only visible ids count, so a
- * bulk action can never reach a host the filter hides or a reload removed.
- */
+/** Restrict bulk actions to visible IDs so filtering/removal cannot leave hidden targets selected. */
 export function useSshTargetSelection(visibleIds: readonly string[]): SshTargetSelection {
   const [rawSelected, setRawSelected] = useState<ReadonlySet<string>>(new Set())
   const anchorRef = useRef<string | null>(null)
@@ -25,7 +22,7 @@ export function useSshTargetSelection(visibleIds: readonly string[]): SshTargetS
 
   const click = useCallback(
     (targetId: string, shiftKey: boolean): void => {
-      // Why read first: the updater may run later (or twice in StrictMode), after the anchor moved.
+      // Capture the anchor before deferred/StrictMode updater execution can observe a different one.
       const anchorId = anchorRef.current
       setRawSelected((prev) =>
         applySshTargetSelectionClick({
@@ -69,7 +66,7 @@ export function useSshTargetSelection(visibleIds: readonly string[]): SshTargetS
     if (!hasSelection) {
       return
     }
-    // Why capture: Settings closes on a bubbling Escape; with rows selected, Escape clears them first.
+    // Capture Escape to clear selected rows before bubbling can close Settings.
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape' || event.isComposing || hasVisibleOverlay()) {
         return

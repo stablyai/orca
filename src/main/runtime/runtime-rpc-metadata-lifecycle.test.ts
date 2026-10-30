@@ -48,9 +48,7 @@ describe('OrcaRuntimeRpcServer', () => {
   })
 
   it('reclaims runtime metadata clobbered by a second instance that has since died', async () => {
-    // Why: #7848 — a launch that slips past the single-instance lock republishes
-    // orca-runtime.json with its own pid, so the CLI reports stale_bootstrap
-    // against this still-serving runtime once that instance exits.
+    // A second instance can replace metadata then exit; reclaim it so CLI finds this still-serving runtime (#7848).
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
     const server = new OrcaRuntimeRpcServer({ methods: [], runtime, userDataPath })
@@ -73,8 +71,7 @@ describe('OrcaRuntimeRpcServer', () => {
 
   it('leaves runtime metadata owned by a live sibling runtime untouched', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    // Why: a synthetic owned pid frees the always-alive process.pid to stand in for
-    // the sibling — Windows never assigns pid 1, so hardcoding it there reads as dead.
+    // Use a synthetic owned pid and process.pid as live sibling; Windows never assigns pid 1.
     const server = new OrcaRuntimeRpcServer({
       methods: [],
       runtime: new OrcaRuntimeService(),
@@ -109,7 +106,7 @@ describe('OrcaRuntimeRpcServer', () => {
     if (!watch) {
       throw new Error('start() must arm the metadata ownership watch')
     }
-    // Why: the republish guard alone would keep this test green, so assert the timer teardown itself.
+    // Assert timer cancellation too; republish guard alone masks leaked intervals.
     const watchStop = vi.spyOn(watch, 'stop')
     await server.stop()
 
@@ -128,8 +125,7 @@ describe('OrcaRuntimeRpcServer', () => {
   })
 
   it('drops a republish from an ownership read that lands after the server stopped', async () => {
-    // Why: the read is off-thread now, so a tick can outlive stop(); the cleared
-    // activeTransports guard — not the interval teardown — is what stops it republishing.
+    // In-flight async reads can outlive stop; activeTransports must prevent late republish.
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
     const server = new OrcaRuntimeRpcServer({ methods: [], runtime, userDataPath, pid: 1001 })

@@ -19,9 +19,9 @@ describe('mobile agent catalog', () => {
     }
   })
 
-  it('uses the bundled Claude icon path for Claude Agent Teams', () => {
-    expect(MOBILE_AGENT_CATALOG.find((agent) => agent.id === 'claude-agent-teams')).toEqual(
-      expect.not.objectContaining({ faviconDomain: expect.any(String) })
-    )
+  it('keeps Claude Agent Teams in the catalog without a favicon domain', () => {
+    const teams = MOBILE_AGENT_CATALOG.find((agent) => agent.id === 'claude-agent-teams')
+    expect(teams).toBeDefined()
+    expect(teams).not.toHaveProperty('faviconDomain')
   })
 })

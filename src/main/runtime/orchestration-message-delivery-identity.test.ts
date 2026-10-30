@@ -114,7 +114,7 @@ async function driveToLiveIdle(runtime: OrcaRuntimeService): Promise<void> {
   await runtime.listTerminals()
   runtime.onPtyData(PTY_ID, '\x1b]0;Codex working\x07', 1)
   runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 2)
-  // Why: the snapshot awaits the headless model's write chain, so both chunks are parsed.
+  // Await the model's write chain so both chunks are parsed.
   await runtime.serializeMainTerminalBuffer(PTY_ID)
 }
 

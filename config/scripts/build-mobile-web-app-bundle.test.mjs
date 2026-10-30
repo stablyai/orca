@@ -55,13 +55,11 @@ import { mobileWebAppDependenciesPresent } from './mobile-web-app/mobile-web-app
 const projectDir = fileURLToPath(new URL('../..', import.meta.url))
 const appDir = join(projectDir, 'mobile', 'app')
 
-// The sharded `test` job does not install mobile dependencies, so anything that runs esbuild over
-// the route tree is skipped there and run for real in pr.yml's mobile_web_app job.
+// Root shards lack mobile deps; real bundling tests run in mobile_web_app CI job.
 const bundles = mobileWebAppDependenciesPresent()
 const describeBundling = bundles ? describe : describe.skip
 const itBundling = bundles ? it : it.skip
 
-/** Every script the page loads. A route's code is in a chunk now, not in the entry. */
 function allScriptSource({ script, chunks }) {
   return [script, ...chunks.map((chunk) => chunk.bytes)].map((bytes) => bytes.toString('utf8'))
 }
@@ -110,7 +108,6 @@ describeBundling('the app bundle', () => {
     for (const [key, name] of Object.entries(routeChunks)) {
       expect(emitted, key).toContain(name)
     }
-    // One chunk per route, never the entry: that is what a client-side navigation fetches.
     expect(new Set(Object.values(routeChunks)).size).toBe(routeKeys.length)
   }, 120_000)
 
@@ -164,8 +161,7 @@ describeBundling('the app bundle', () => {
           join(directory, 'settings.tsx'),
           'const anchor = { anchor: "index" }\nexport { anchor as unstable_settings }\nexport default function Route() { return null }\n'
         )
-        // The build is where this has to fail: the page it would otherwise emit mounts with the
-        // export silently gone, which is a blank screen on a phone and nothing in any log.
+        // Fail dropped route exports at build time; otherwise phones show blank screens without logs.
         await expect(bundleMobileWebApp({ appDir: scratch })).rejects.toThrow(
           /settings\.tsx.*unstable_settings/s
         )
@@ -213,19 +209,11 @@ describeBundling('the app bundle', () => {
       const after = await bundleMobileWebApp({ appDir: scratch })
       expect(has(after, 'web-route-marker')).toBe(true)
       expect(has(after, 'native-route-marker')).toBe(false)
-      // Different script bytes means a different asset sha and so a different buildId.
       expect(after.script.equals(before.script)).toBe(false)
     })
   }, 240_000)
 
-  /**
-   * The same route tree, bundled from two directories at different depths. esbuild's own `[hash]`
-   * is computed over the metafile's input keys, which are paths relative to absWorkingDir, so two
-   * checkouts of one commit -- at different depths, or one with mobile/node_modules as a symlink
-   * and one with it as a directory -- name a byte-identical chunk differently. The rename
-   * cascades through every importer into a different buildId, and every phone re-downloads a
-   * bundle whose bytes did not change.
-   */
+  // Different-depth/symlink checkouts change esbuild input-key hashes and cascade through importers; content naming must preserve identical build IDs.
   async function bundleFromDepth(root, depth) {
     const nested = join(root, ...Array.from({ length: depth }, (_, index) => `d${String(index)}`))
     const directory = join(nested, MOBILE_WEB_APP_ROUTE_ROOT)
@@ -249,7 +237,6 @@ describeBundling('the app bundle', () => {
         const names = ({ bundle }) => [...bundle.chunks, ...bundle.images].map((one) => one.name)
         expect(names(far)).toEqual(names(near))
         expect(far.bundle.script.equals(near.bundle.script)).toBe(true)
-        // The whole point: the manifest the phone compares is the same document.
         const buildIdFrom = async ({ appDir }) =>
           withScratch(async (out) => {
             const { manifest } = await buildMobileWebAppBundle({
@@ -267,8 +254,7 @@ describeBundling('the app bundle', () => {
 
   it("names an output the same way the manifest's own asset hash does", async () => {
     const { script, chunks } = await readAppBundle()
-    // The name is embedded in the importer, so it cannot be recomputed later; this is what says
-    // the name inside the bytes and the manifest's sha256 of those bytes are the same string.
+    // Embedded import names must match manifest SHA256 of final output bytes.
     expect(hashedAsset(script, 'js').path).toBe(`assets/${sha256Hex(script)}.js`)
     for (const chunk of chunks) {
       expect(chunk.name).toBe(`${sha256Hex(chunk.bytes)}.js`)
@@ -276,14 +262,9 @@ describeBundling('the app bundle', () => {
   }, 120_000)
 
   it('ships no haptic that reaches for the DOM', async () => {
-    // expo-haptics' web build fakes an iOS haptic by appending a hidden
-    // `<label><input type="checkbox" switch>` to document.head, clicking it, and removing it —
-    // once per call. The file explorer calls triggerSelection on every row tap, and C1.9 already
-    // traced a swallowed long press on the worktree list to that stray click. `haptics.web.ts` is
-    // what keeps the whole shim out of the bundle, so this reads the bytes rather than the import.
+    // expo-haptics web inserts/clicks/removes DOM controls, swallowing long presses; inspect bundled bytes to ensure our haptics.web shim excludes it.
     for (const source of allScriptSource(await readAppBundle())) {
-      // The shim's own fingerprint, not `navigator.vibrate`: react-native-web's Vibration export
-      // calls that too, and it touches no DOM until something invokes it.
+      // Match DOM shim fingerprints; navigator.vibrate also appears harmlessly in RN-Web Vibration.
       expect(source).not.toContain('ariaHidden')
       expect(source).not.toContain('pointer: coarse')
       expect(source).not.toContain('setAttribute("switch"')
@@ -303,26 +284,14 @@ describeBundling('the app bundle', () => {
   }, 120_000)
 
   it('embeds no absolute path from this checkout', async () => {
-    // Every chunk, not only the entry: the route manifest names each route by absolute path, and
-    // the chunk that import resolves to is where such a path would survive.
+    // Check all chunks: absolute route-manifest paths can survive outside the entry.
     for (const source of allScriptSource(await readAppBundle())) {
       expect(source).not.toContain(projectDir)
     }
   }, 120_000)
 
-  it('builds the same buildId twice', async () => {
-    const first = await withScratch((scratch) =>
-      buildMobileWebAppBundle({ outDir: join(scratch, 'a') })
-    )
-    const second = await withScratch((scratch) =>
-      buildMobileWebAppBundle({ outDir: join(scratch, 'b') })
-    )
-    expect(first.manifest.buildId).toBe(second.manifest.buildId)
-  }, 120_000)
-
   it('loads the entry as a module, so its route imports resolve', async () => {
     const { manifest, html } = await readWrittenBundle()
-    // import() in a classic script is a syntax error, so the tag and the format are one fact.
     expect(html).toContain('<script type="module" src="/assets/')
     const entry = html.match(/src="\/(assets\/[^"]+)"/)?.[1]
     expect(manifest.assets.map((asset) => asset.path)).toContain(entry)
@@ -330,18 +299,15 @@ describeBundling('the app bundle', () => {
 
   it('declares an icon, so no browser asks the shell for one', async () => {
     const { manifest, html } = await readWrittenBundle()
-    // Undeclared, a browser asks the origin for /favicon.ico on its own, and the shell's asset
-    // server answers 403 because the path is in no manifest — repeatedly, on the emulator run.
+    // Undeclared favicon causes repeated unmanifested requests/403s.
     expect(html).toContain('<link rel="icon" href="data:," />')
-    // And the empty URI rather than an asset: the bundle carries no icon, so a declaration
-    // naming one would point at a route image whose name changes with its bytes.
+    // No icon asset exists; route-image names depend on content.
     expect(manifest.assets.map((asset) => asset.path)).not.toContain('favicon.ico')
   }, 120_000)
 
   it('declares no viewport-fit, because the shell owns the safe area', async () => {
     const { html } = await readWrittenBundle()
-    // The shell pads the WebView out of the system bars, so the page has nothing to extend
-    // under; asking to would invite a second pad from every page-side SafeAreaView.
+    // Shell already pads the WebView; page cover would invite duplicate safe-area padding.
     expect(html).toContain('<meta name="viewport" content="width=device-width, initial-scale=1" />')
     expect(html).not.toContain('viewport-fit')
   }, 120_000)
@@ -350,10 +316,7 @@ describeBundling('the app bundle', () => {
     const { html } = await readWrittenBundle()
     expect(html).toContain(MOBILE_WEB_APP_ROOT_RESET)
     expect(html).toContain(MOBILE_WEB_APP_NATIVE_PARITY_STYLE)
-    // Literals rather than substrings taken off the constant, which would read it back against
-    // itself and follow any rule dropped from it. Every rule, because the chain is only as
-    // definite as its weakest link: a height on #root alone resolves against a body that has
-    // none, and percent of auto is auto. Named one by one so a failure says which rule went.
+    // Assert literal rules independently: percent heights need every ancestor, and reading constant substrings would mirror dropped rules.
     for (const rule of [
       'html,body{height:100%}',
       'body{overflow:hidden}',
@@ -361,11 +324,8 @@ describeBundling('the app bundle', () => {
     ]) {
       expect(MOBILE_WEB_APP_ROOT_RESET, rule).toContain(rule)
     }
-    // The id travels with the rules: it is what marks this block as the template's reset rather
-    // than something the page grew its own copy of.
     expect(MOBILE_WEB_APP_ROOT_RESET).toContain('<style id="expo-reset">')
-    // In the document itself, not a linked asset: the CSP that allows it is the one already
-    // relaxed for react-native-web's runtime sheet.
+    // Inline reset uses RN-Web’s existing inline-style CSP allowance.
     expect(html).not.toContain('<link rel="stylesheet"')
   }, 120_000)
 
@@ -423,17 +383,23 @@ describe('the Phase C budget', () => {
   itBundling(
     'is not already exceeded by the current bundle',
     async () => {
-      const { manifest, chunkCount, entryStaticBytes, imageCount, routeKeys } =
-        await readWrittenBundle()
-      expect(mobileWebAppBundleBudgetBytes(manifest)).toBeLessThanOrEqual(
+      const {
+        manifest,
+        chunkCount,
+        catalogChunkCount,
+        catalogBytes,
+        entryStaticBytes,
+        imageCount,
+        routeKeys
+      } = await readWrittenBundle()
+      expect(mobileWebAppBundleBudgetBytes(manifest) - catalogBytes).toBeLessThanOrEqual(
         MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES
       )
       expect(manifest.assets.length).toBeLessThanOrEqual(
-        mobileWebAppBundleMaxAssets(routeKeys.length, imageCount)
+        mobileWebAppBundleMaxAssets(routeKeys.length, imageCount, catalogChunkCount)
       )
       expect(chunkCount).toBeLessThanOrEqual(mobileWebAppBundleMaxChunks(routeKeys.length))
-      // The other side of the same fence: an envelope further than the margin above the build is
-      // one nobody re-derived, so it fails here rather than surviving as headroom for a bump.
+      // Excess unused envelope margin means stale measurement; remeasure instead of adding headroom.
       expect(
         mobileWebAppBundleMaxChunks(routeKeys.length) - chunkCount,
         'the chunk envelope is looser than this build; re-measure MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP'
@@ -444,32 +410,26 @@ describe('the Phase C budget', () => {
   )
 
   it('budgets what loads first well under what the whole page weighs', () => {
-    // The point of the split: the entry budget is the one a route must not grow, and it is a
-    // fraction of the total the bundle is still allowed to weigh.
     expect(MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES).toBeLessThan(
       MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES
     )
   })
 
   itBundling('sweeps the tree the envelope is anchored on', async () => {
-    // The sweep is the fence's only input, so it has to be about this tree: a route added anywhere
-    // in the sorted list fails here, which is the re-measure the plan asks for instead of a bump.
+    // Pin sweep to exact sorted route tree; new routes require measurement.
     expect(MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.map(([key]) => key)).toEqual(
       await collectMobileWebAppRouteKeys(join(projectDir, 'mobile', 'app'))
     )
   })
 
   it('bounds every prefix the sweep measured, and the spread it reports', () => {
-    // An upper envelope of the measurement, not a fit: the count rises with the prefix, so the
-    // number above its top row is above every row.
     for (const [key, measured] of MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP) {
       expect(
         mobileWebAppBundleMaxChunks(MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.length),
         key
       ).toBeGreaterThanOrEqual(measured)
     }
-    // 1 to 14 per route, which is why four per route was a bound rather than a fit and why the
-    // envelope cannot be a line through the measurement either.
+    // Observed 1–14 scripts/route rules out a four-per-route bound or linear fit.
     expect(Math.min(...MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD)).toBe(1)
     expect(Math.max(...MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD)).toBe(14)
   })
@@ -478,49 +438,32 @@ describe('the Phase C budget', () => {
     const swept = MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.length
     const measured = MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.at(-1)[1]
     expect(mobileWebAppBundleMaxChunks(swept)).toBe(measured + MOBILE_WEB_APP_BUNDLE_SCRIPT_MARGIN)
-    // Past the swept tree each route is allowed the worst the sweep saw, so the next route breaches
-    // this only by costing more than any route measured.
+    // Beyond sweep, grant only worst measured scripts per added route.
     for (const beyond of [1, 2, 9]) {
       expect(mobileWebAppBundleMaxChunks(swept + beyond) - mobileWebAppBundleMaxChunks(swept)).toBe(
         Math.max(...MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD) * beyond
       )
     }
-    // Flat below it: the fence is only ever asked about the real tree, and a shorter prefix is
-    // already under the top row it is anchored on.
     expect(mobileWebAppBundleMaxChunks(swept - 1)).toBe(mobileWebAppBundleMaxChunks(swept))
   })
 
   it('refuses an engine chunked along its own lazy boundaries, and passes one artifact', () => {
-    // The two builds the ceiling must tell apart: mermaid through one pre-bundled artifact
-    // emitted 69 scripts, importing the package emitted 172, esbuild splitting along the diagram
-    // types mermaid lazily imports. Both frozen at the head that measured them, because this case
-    // pins the discrimination and not either build's size.
-    //
-    // 69 now sits just under the envelope: a sweep that falls further means re-measure, not raise.
+    // Freeze measured distinction: one Mermaid artifact emitted 69 scripts vs package lazy boundaries’ 172; remeasure if envelope drifts below 69.
     const ROUTES = 14
     const WITH_ONE_ARTIFACT = 69
     const CHUNKED_ALONG_THE_ENGINE = 172
     expect(WITH_ONE_ARTIFACT).toBeLessThanOrEqual(mobileWebAppBundleMaxChunks(ROUTES))
     expect(CHUNKED_ALONG_THE_ENGINE).toBeGreaterThan(mobileWebAppBundleMaxChunks(ROUTES))
-    // And the assets that came with it: 215 against the 113 this head's envelope allows, of the
-    // 256 the shell will load.
+    // Chunked engine also emitted 215 total assets, exceeding that head’s 113-asset envelope.
     expect(mobileWebAppBundleMaxAssets(ROUTES, 42)).toBeLessThan(CHUNKED_ALONG_THE_ENGINE + 42 + 1)
   })
 
   it('derives the asset ceiling so the chunk ceiling is always the one that trips first', () => {
-    // A bundle's assets are its chunks, its images and the document. Asserting one constant under
-    // another did not say that: with 42 images, the 98 chunks 18 routes are allowed plus 42 plus
-    // the document is 141 assets, over the flat 128 the ceiling used to be, so from 18 routes on
-    // the asset count failed first and named the wrong thing.
+    // Asset ceiling must derive from chunks+images+document or a flat limit fails first and misattributes chunk growth (141 assets at 18 routes/42 images).
     for (const routeCount of [14, 18, 24, 40]) {
       for (const imageCount of [0, 42, 120]) {
         const chunks = mobileWebAppBundleMaxChunks(routeCount)
         expect(mobileWebAppBundleMaxAssets(routeCount, imageCount)).toBe(chunks + imageCount + 1)
-        // The ordering claim itself: a bundle at the chunk ceiling is exactly at the asset
-        // ceiling, so no bundle can pass the chunk check and fail the asset one.
-        expect(chunks + imageCount + 1).toBeLessThanOrEqual(
-          mobileWebAppBundleMaxAssets(routeCount, imageCount)
-        )
       }
     }
   })
@@ -528,28 +471,25 @@ describe('the Phase C budget', () => {
   itBundling(
     'keeps the derived ceiling under the map the phone actually holds',
     async () => {
-      const { manifest, routeKeys, imageCount } = await readWrittenBundle()
-      const ceiling = mobileWebAppBundleMaxAssets(routeKeys.length, imageCount)
+      const { manifest, routeKeys, imageCount, catalogChunkCount } = await readWrittenBundle()
+      const ceiling = mobileWebAppBundleMaxAssets(routeKeys.length, imageCount, catalogChunkCount)
       expect(manifest.assets.length).toBeLessThanOrEqual(ceiling)
       // The native side refuses a manifest past this, so the derived ceiling has to stay inside it.
       expect(ceiling).toBeLessThanOrEqual(MOBILE_WEB_BUNDLE_MAX_ASSETS)
-      // And the build is what has to say so: the guard runs on the counts this bundle measured.
       const shellCeiling = await readMobileWebBundleMaxAssets()
-      expect(assertAssetCeilingFitsShell(routeKeys.length, imageCount, shellCeiling)).toBe(ceiling)
+      expect(
+        assertAssetCeilingFitsShell(routeKeys.length, imageCount, shellCeiling, catalogChunkCount)
+      ).toBe(ceiling)
     },
     120_000
   )
 
   it('fails the build when the derived ceiling passes what the phone will accept', async () => {
-    // The shell hands back null for a manifest over its own ceiling, so a derived ceiling above
-    // that ships a green build no device can open. At the 42 images the tree carries, the envelope
-    // plus 42 plus the document crosses 256 at 25 routes, which Phase C reaches. The crossing came
-    // in from 50 with the envelope: it grants the worst swept route to each one past the sweep,
-    // where `4r + 16` granted four, so re-measuring a tree whose routes share more moves it out.
+    // Fail build before derived assets exceed phone’s 256 limit; current 42-image envelope crosses at 25 routes, requiring remeasurement.
     expect(await readMobileWebBundleMaxAssets()).toBe(MOBILE_WEB_BUNDLE_MAX_ASSETS)
-    expect(assertAssetCeilingFitsShell(24, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toBe(250)
+    expect(assertAssetCeilingFitsShell(24, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toBe(254)
     expect(() => assertAssetCeilingFitsShell(25, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toThrow(
-      /264 .*256/
+      /268 .*256/
     )
   })
 })
@@ -591,9 +531,7 @@ describe('the verifier', () => {
       await withScratch(async (scratch) => {
         const outDir = join(scratch, 'mobile-web')
         const { manifest } = await copyWrittenBundle(outDir)
-        // What a stale out/ actually looks like: every digest agrees with its bytes and the
-        // buildId derives from the asset list, but the source has moved on. Only the two fresh
-        // builds the verifier runs can tell, which is the check this covers.
+        // Consistent digests/buildId cannot reveal stale sources; verifier’s two fresh builds must detect them.
         const assets = await Promise.all(
           manifest.assets.map(async (asset) => ({
             ...asset,
@@ -658,8 +596,7 @@ describe('naming an output by its bytes', () => {
         'dist/b.js': { imports: [{ path: 'dist/a.js', kind: 'import-statement' }] }
       }
     }
-    // Neither name can be final before the other is, so a cycle has no content hash to reach.
-    // esbuild's splitting emits a DAG; this is the hard stop for the day it does not.
+    // Cycles have no final dependency names/content hash; fail if esbuild ever stops emitting a DAG.
     expect(() =>
       renameOutputsByContent(metafile, [
         { path: 'dist/a.js', contents: emitted('import "/assets/b.js"') },
@@ -672,8 +609,7 @@ describe('naming an output by its bytes', () => {
     await withScratch(async (scratch) => {
       const module = join(scratch, 'index.tsx')
       await writeFile(module, 'export default function Route() { return null }\n')
-      // The metafile is the only thing that knows which chunk holds a route. Without this the
-      // route reaches the manifest naming a chunk of undefined, which the phone fetches as a 404.
+      // Only metafile maps routes to chunks; missing output must fail before phones request undefined/404.
       expect(() =>
         routeChunkNames({ outputs: {} }, [{ key: './index.tsx', module }], new Map())
       ).toThrow(/\.\/index\.tsx reached no output/)

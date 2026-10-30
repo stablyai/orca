@@ -8,10 +8,7 @@ import {
   type ProjectRef
 } from './gl-utils'
 
-// ── Discussion → MRComment flattening ──────────────────────────────
-// GitLab returns discussions with nested notes; the dialog renders a
-// flat conversation. We drop system notes ("X assigned the MR", auto-
-// generated changelog entries) since they aren't user-authored content.
+// Flatten discussion notes for the conversation, excluding system-generated activity.
 
 type GitLabRawNote = {
   id?: number
@@ -36,8 +33,6 @@ export function flattenDiscussions(discussions: GitLabRawDiscussion[]): MRCommen
     const notes = discussion.notes ?? []
     for (const note of notes) {
       if (note.system === true) {
-        // Why: skip GitLab's auto-generated activity entries — they
-        // would dominate a busy MR's conversation tab if rendered.
         continue
       }
       out.push({
@@ -55,8 +50,6 @@ export function flattenDiscussions(discussions: GitLabRawDiscussion[]): MRCommen
       })
     }
   }
-  // Why: oldest-first matches gitlab.com's conversation rendering and
-  // makes "what's new" intuitive when polling for updates later.
   return out.sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''))
 }
 
@@ -73,8 +66,7 @@ export async function fetchDiscussions(
     [
       'api',
       ...glabHostnameArgs(projectRef, connectionId),
-      // Why: detail drawers need a bounded recent conversation snapshot.
-      // Walking every historic discussion can retain and render huge note sets.
+      // Bound detail loads to a recent page rather than retaining every historic discussion.
       `projects/${encodedProject(projectRef.path)}/${resource}/${iid}/discussions?per_page=100`
     ],
     glabRepoExecOptions(repoPath, connectionId, localGitOptions)

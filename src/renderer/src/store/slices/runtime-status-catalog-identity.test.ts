@@ -14,8 +14,7 @@ vi.mock('sonner', () => ({
   toast: { warning: vi.fn(), dismiss: vi.fn() }
 }))
 
-// Why: production rows carry nested endpoints. A scalar-only fixture reconciles even
-// when the walker is broken, which is how a redact-only or Object.is fix stays green.
+// Nested endpoints expose broken reconciliation that scalar fixtures or Object.is-only fixes miss.
 const pairingRevision = 1_700_000_000_000
 const knownEndpoint: KnownRuntimeEnvironment['endpoints'][number] = {
   id: 'ws-a',

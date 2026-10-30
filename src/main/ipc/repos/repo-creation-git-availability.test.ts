@@ -1,7 +1,4 @@
-/**
- * `repos:isGitAvailable` gates the create dialog's Git option. Only a spawn that never started may
- * answer `false`; everything else rejects so the renderer's existing `unknown` branch is reachable.
- */
+/** Only failure to start proves Git absent; other failures must reach the renderer as unknown. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({ gitExecFileAsyncMock: vi.fn() }))

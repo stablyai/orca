@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict'
 import { performance } from 'node:perf_hooks'
 import { platform, release } from 'node:os'
 import {
@@ -72,6 +73,20 @@ function median(values: readonly number[]): number {
 }
 
 function benchmarkCase(entry: BenchmarkCase): BenchmarkResult {
+  const payload = prepareJsonRpcPayload(entry.message)
+  assert.equal(
+    HEADER_LENGTH + payload.byteLength,
+    encodeLegacyJsonRpcFrame(entry.message, 0, 0).length
+  )
+  for (let target = 0; target < entry.targets; target++) {
+    const id = target + 37
+    const ack = 19
+    assert.deepEqual(
+      encodePreparedJsonRpcFrame(payload, id, ack),
+      encodeLegacyJsonRpcFrame(entry.message, id, ack),
+      `${entry.name}: prepared frame differs for target ${target}`
+    )
+  }
   const legacy = (iteration: number): void => runLegacy(entry.message, entry.targets, iteration)
   const prepared = (iteration: number): void => runPrepared(entry.message, entry.targets, iteration)
   for (let warmup = 0; warmup < 3; warmup++) {
@@ -160,7 +175,7 @@ const lines = [
   ),
   `checksum=${checksum}`,
   'Limitations: in-process framing only; excludes dispatcher scheduling, sink/network I/O, and tail-GC.',
-  'Legacy is the exact pre-change framing composition retained in this script, not a separate checkout.',
+  'Legacy models a separate size estimate and JSON serialization per target using the current frame encoder.',
   'The two-target rows model dispatcher fan-out; watcher batches and file streams are commonly single-target.'
 ]
 process.stdout.write(`${lines.join('\n')}\n`)

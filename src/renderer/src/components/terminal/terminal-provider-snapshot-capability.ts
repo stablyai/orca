@@ -17,10 +17,7 @@ const UNKNOWN_CAPABILITY_RETRY_MS = 1_000
 const UNKNOWN_CAPABILITY_MAX_RETRY_MS = 30_000
 /** 1/2/4/8/16/30/30 s — ~91 s of daemon-startup grace, then a slow re-ask. */
 const UNKNOWN_CAPABILITY_MAX_ATTEMPTS = 8
-// Why re-askable: a permanent settle turned a slow daemon start into
-// session-long eviction exemption for every local pty — force-park could free
-// nothing until app restart. Unknown stays exempt (pane stays mounted), but a
-// recovered daemon is consulted again within one slow cycle.
+// Unknown stays mounted but re-askable; permanent settlement would prevent force-parking even after daemon recovery.
 const SETTLED_UNKNOWN_REASK_MS = 5 * 60_000
 const CAPABILITY_RESOLUTION_TIMEOUT_MS = 1_000
 let lastSynchronizedLivePtyIds: readonly string[] | null = null
@@ -77,8 +74,7 @@ function refreshEarliestUnknownCapabilityRetry(): void {
   }
 }
 
-// Unknown routes decay to a slow cadence after the startup ladder — never a
-// permanent verdict, which the eviction-exemption path would inherit for life.
+// Unknown routes decay to slow re-asks, never permanent lifetime eviction exemptions.
 function backOffUnknownCapability(ptyId: string, nowMs: number): void {
   const attempts = Math.min(
     (unknownCapabilityAttemptsByPtyId.get(ptyId) ?? 0) + 1,
@@ -175,25 +171,20 @@ export async function synchronizeTerminalProviderSnapshotCapabilities(
       resolved = await resolveSnapshotCapabilityBatch(resolve, batch)
     } catch {
       if (generation !== synchronizationGeneration) {
-        // Why 0, not null: null ends a caller's timer chain, but the winning
-        // pass may leave unknowns behind with nobody scheduled to re-ask (the
-        // startup refresh ignores its return value). Re-checking immediately
-        // is cheap — the early-outs above collapse it when nothing is pending.
+        // Return zero to preserve a superseded caller’s retry chain; the winning startup pass ignores its return value.
         if (capabilityChanged) {
           publishCapabilityChange()
         }
         return 0
       }
-      // Why: unknown capability must keep the pane mounted. Do not cache the
-      // failure as supported; back off before retrying daemon startup.
+      // Unknown capability retains panes; back off startup failures instead of caching false support.
       for (const id of batch) {
         backOffUnknownCapability(id, nowMs)
       }
       continue
     }
     if (generation !== synchronizationGeneration) {
-      // Why 0: see the catch above — a superseded pass must keep its caller's
-      // timer chain alive, or the 5-minute re-ask dies with it.
+      // Supersession must preserve the caller’s timer chain for later slow re-asks.
       if (capabilityChanged) {
         publishCapabilityChange()
       }

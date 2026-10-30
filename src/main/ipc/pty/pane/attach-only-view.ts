@@ -6,7 +6,7 @@ import {
   hiddenRendererPtyDropEpisode,
   isRuntimeOwnedHiddenRendererPty,
   markRuntimeOwnedHiddenRendererPty
-} from '../../pty-hidden-delivery-gate'
+} from '../delivery/pty-hidden-delivery-gate'
 import { attachingRendererViewPtys } from '../delivery/visibility-state'
 import type {
   IPtyProvider,
@@ -14,10 +14,7 @@ import type {
   PtySpawnResult
 } from '../../../providers/pty-provider-contract'
 
-/**
- * Layout-owner build: a window view of a pane with no recorded owner attaches to the terminal it
- * names, or starts nothing; main starts a pane whose terminal is gone.
- */
+/** A view with no recorded owner may attach only to its named terminal; main owns fresh starts. */
 export async function attachViewWithoutOwner(
   provider: IPtyProvider,
   spawnOptions: PtySpawnOptions
@@ -37,16 +34,11 @@ export async function attachViewWithoutOwner(
   }
 }
 
-/** The spawn's attach-only flag; a build without the switch keeps today's start. */
 export function attachOnlyViewOf(args: { attachOnlyView?: unknown }): true | undefined {
   return ORCA_LAYOUT_OWNER_IS_MAIN && args.attachOnlyView === true ? true : undefined
 }
 
-/**
- * Layout-owner build: main starts the pane hidden, dropping its output until a view attaches. A
- * visible view keeps main's start from hiding it, and unmarks one already hidden before attaching,
- * so its attach snapshot holds every dropped byte and the view paints once.
- */
+/** Visible attaches keep main-started PTYs unhidden before snapshot capture, covering dropped bytes in one paint. */
 export async function attachViewAfterHiddenStart<T extends object>(
   ptyId: string,
   setHidden: (id: string, hidden: boolean) => void,
@@ -64,7 +56,7 @@ export async function attachViewAfterHiddenStart<T extends object>(
   try {
     attached = await attach()
   } catch (error) {
-    // Why: until a view attaches, main must keep answering the pane's startup queries.
+    // Until a view attaches, main must continue answering startup queries.
     const keptVisibleByThisAttach = hiddenByMain || attaching.skippedHide
     if (
       keptVisibleByThisAttach &&
@@ -80,7 +72,7 @@ export async function attachViewAfterHiddenStart<T extends object>(
       attachingRendererViewPtys.delete(ptyId)
     }
   }
-  // Why a snapshot of the same id: a local attach carries none, and another id's drops may postdate it.
+  // Retire drops only with a same-PTY snapshot; other IDs may have newer gaps.
   if (
     hiddenByMain &&
     'id' in attached &&

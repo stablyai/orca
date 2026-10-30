@@ -1,6 +1,8 @@
 import { Pressable, Switch, Text, View } from 'react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { WorkspaceCreateSetupDecision } from '../tasks/workspace-create-params'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { newWorktreeFormStyles as styles } from './new-worktree-form-styles'
 import type { SetupRunPolicy } from './new-worktree-modal-types'
 
@@ -21,14 +23,20 @@ export function NewWorkspaceSetupScriptField({
   onDecisionChange: (decision: Exclude<WorkspaceCreateSetupDecision, 'inherit'>) => void
   onRunSetupChange: (run: boolean) => void
 }) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   return (
     <View style={styles.field}>
       <View style={styles.setupHeader}>
-        <Text style={styles.label}>Setup script</Text>
+        <Text style={styles.label}>
+          {t('components.newWorkspaceSetupScriptField.label', 'Setup script')}
+        </Text>
         {source ? (
           <View style={styles.sourceBadge}>
             <Text style={styles.sourceBadgeText}>
-              {source === 'orca.yaml' ? 'ORCA.YAML' : 'HOOKS'}
+              {source === 'orca.yaml'
+                ? 'ORCA.YAML'
+                : t('components.newWorkspaceSetupScriptField.hooks', 'HOOKS')}
             </Text>
           </View>
         ) : null}
@@ -43,7 +51,9 @@ export function NewWorkspaceSetupScriptField({
               ]}
               onPress={() => onDecisionChange('run')}
             >
-              <Text style={styles.setupChoiceText}>Run</Text>
+              <Text style={styles.setupChoiceText}>
+                {t('components.newWorkspaceSetupScriptField.run', 'Run')}
+              </Text>
             </Pressable>
             <Pressable
               style={[
@@ -52,12 +62,16 @@ export function NewWorkspaceSetupScriptField({
               ]}
               onPress={() => onDecisionChange('skip')}
             >
-              <Text style={styles.setupChoiceText}>Skip</Text>
+              <Text style={styles.setupChoiceText}>
+                {t('components.newWorkspaceSetupScriptField.skip', 'Skip')}
+              </Text>
             </Pressable>
           </View>
         ) : (
           <View style={styles.setupToggleRow}>
-            <Text style={styles.setupToggleLabel}>Run setup command</Text>
+            <Text style={styles.setupToggleLabel}>
+              {t('components.newWorkspaceSetupScriptField.runSetupCommand', 'Run setup command')}
+            </Text>
             <Switch
               value={runSetup}
               onValueChange={onRunSetupChange}

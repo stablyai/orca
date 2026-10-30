@@ -1,9 +1,6 @@
 // @vitest-environment happy-dom
 
-// Cmd/Ctrl+Enter in an empty composer: steer the newest queued draft when one
-// exists; with nothing queued, or with text or images in the composer, the
-// chord stays what it always was — a send.
-// The primary modifier follows the platform (⌘ on Mac, Ctrl elsewhere).
+// Empty-composer Cmd/Ctrl+Enter steers the newest card; other cases retain ordinary send behavior.
 
 import { renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'

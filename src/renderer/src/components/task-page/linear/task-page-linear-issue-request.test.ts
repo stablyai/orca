@@ -84,8 +84,7 @@ describe('task-page-linear-issue-request', () => {
     ).toBe(true)
   })
 
-  // Why: the list cache is workspace-keyed, so B's warm entry is already correct —
-  // forcing would mean a round trip behind a blocking spinner on every switch.
+  // Workspace-keyed warm caches must not trigger a blocking forced round trip on every switch.
   it('does not force on a workspace switch, even when each workspace has its own filter', () => {
     expect(
       shouldForceLinearIssueListRead({
@@ -103,7 +102,6 @@ describe('task-page-linear-issue-request', () => {
         next: { workspaceId: 'ws-1', teamId: 'team-b' }
       })
     ).toBe(true)
-    // Why: a workspace switch swaps in that workspace's own persisted filter.
     expect(
       shouldClearTeamDerivedFacets({
         previous: { workspaceId: 'ws-1', teamId: 'team-a' },

@@ -57,8 +57,13 @@ describe('buildHttpLinkActions', () => {
   })
 
   it('falls back to a generic label when no destination is known', () => {
-    const actions = buildHttpLinkActions(undefined, () => {})
+    const opened: (string | undefined)[] = []
+    const actions = buildHttpLinkActions(undefined, (destination) => {
+      opened.push(destination)
+    })
     expect(actions.primary.label).toBe('Open link')
     expect(actions.alternate).toBeUndefined()
+    void actions.primary.run()
+    expect(opened).toEqual([undefined])
   })
 })

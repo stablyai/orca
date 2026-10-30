@@ -31,7 +31,7 @@ describe('OrcaRuntimeService', () => {
       badgeColor: 'blue',
       addedAt: 1,
       kind: 'folder' as const,
-      // removeManagedWorktree executes inside this selected runtime, where PTYs are local ids.
+      // This selected runtime owns removal; its PTY ids are local.
       executionHostId: 'runtime:env-1' as const
     }
     const rootWorktreeId = 'folder-repo::/workspace/folder'
@@ -291,7 +291,6 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('creates a runtime local worktree from the detected default when the persisted base is stale', async () => {
-    // Regression: a stale persisted repo base must fall back to the detected default.
     const runtime = new OrcaRuntimeService(store)
     const createdWorktree = {
       path: '/tmp/workspaces/cli-refresh-fails',
@@ -491,7 +490,6 @@ describe('OrcaRuntimeService', () => {
       if (args[0] === 'rev-parse' && args.includes('--git-common-dir')) {
         return { stdout: '/tmp/repo/.git\n', stderr: '' }
       }
-      // No local remote-tracking base ref -> nothing to fall back on.
       if (args[0] === 'rev-parse' && args[1] === '--verify') {
         throw new Error('missing ref')
       }
@@ -536,7 +534,6 @@ describe('OrcaRuntimeService', () => {
       if (args[0] === 'rev-parse' && args.includes('--git-common-dir')) {
         return { stdout: '/tmp/repo/.git\n', stderr: '' }
       }
-      // Only the local branch exists; there is no `refs/remotes/origin/main` yet.
       if (args[0] === 'rev-parse' && args.includes('refs/heads/main^{commit}')) {
         return { stdout: 'main-sha\n', stderr: '' }
       }
@@ -608,8 +605,7 @@ describe('OrcaRuntimeService', () => {
       branchNameOverride: 'feature/something'
     })
 
-    // Why: an explicit branch override adopts the local branch before the conflict
-    // probe, so no lazy adoption callback is handed to getBranchConflictKind.
+    // Explicit branch overrides adopt before conflict probing, leaving no lazy-adopt callback.
     expect(getBranchConflictKind).toHaveBeenCalledWith(
       TEST_REPO_PATH,
       'feature/something',

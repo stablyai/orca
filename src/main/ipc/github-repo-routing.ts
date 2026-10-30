@@ -15,6 +15,7 @@ import {
   getLocalProjectGhExecOptions,
   type LocalProjectGhExecOptions
 } from '../project-runtime-git-options'
+import { guardWslUncPathAccess, WslDistroStoppedError } from '../wsl/wsl-unc-access-gate'
 
 export type GitHubRepoScopedArgs = {
   repoPath: string
@@ -26,7 +27,6 @@ type RegisteredRepoValidationResult =
   | { kind: 'ok'; repo: Repo }
   | { kind: 'denied'; reason: PRRefreshValidationDenialReason; message: string }
 
-/** A registered-repo lookup: the caller's path and id, plus the host it believes owns the row. */
 type RegisteredRepoQuery = {
   repoPath: string
   repoId?: string | null
@@ -49,7 +49,7 @@ function validateRegisteredRepo(
       message: 'Access denied: unknown repository path'
     }
   }
-  // Why id and path together: a twin's rows share the id, so the first id match can be the other host.
+  // Same-ID twins can live on different hosts; match path as well as ID.
   const pathRows = (repoId ? idRows : repos).filter(
     (candidate) => resolve(candidate.path) === resolvedRepoPath
   )
@@ -115,7 +115,6 @@ export function assertRegisteredGitHubRepo(
   return assertRegisteredRepo(registeredRepoQuery(args), store)
 }
 
-/** A manual PR refresh resolves its twin the way the automatic queue does. */
 export function assertRegisteredPRRefreshCandidateRepo(
   candidate: GitHubPRRefreshCandidate,
   store: Store
@@ -123,7 +122,7 @@ export function assertRegisteredPRRefreshCandidateRepo(
   return assertRegisteredRepo(prRefreshCandidateQuery(candidate), store)
 }
 
-/** Pure: a project is still registered at the candidate's path on its execution host (the queue key's identity). */
+/** Match the queue identity: registered path plus execution host. */
 export function isPRRefreshCandidateRegistered(
   candidate: GitHubPRRefreshCandidate,
   repos: readonly Repo[]
@@ -145,6 +144,30 @@ export function getGitHubLocalGitOptionArgs(
 ): [] | [LocalProjectGhExecOptions] {
   const localGitOptions = getLocalProjectGhExecOptions(store, repo)
   return Object.keys(localGitOptions).length > 0 ? [localGitOptions] : []
+}
+
+/**
+ * gh (and its git remote probe) for a WSL repo runs in that distro, which boots it when stopped.
+ * A poll refuses instead (E9); `wake` marks a user act, e.g. Refresh, that may start it.
+ * `retryStartsIt: false` words the refusal for surfaces whose Retry is itself a background read.
+ */
+export async function readGitHubRepoUnlessWslStopped<T>(
+  store: Store,
+  repo: Repo,
+  read: () => Promise<T>,
+  options: { wake?: boolean; retryStartsIt?: boolean } = {}
+): Promise<T> {
+  try {
+    return await guardWslUncPathAccess(repo.path, read, {
+      wake: options.wake,
+      wslDistro: getLocalProjectGhExecOptions(store, repo).wslDistro
+    })
+  } catch (error) {
+    if (options.retryStartsIt === false && error instanceof WslDistroStoppedError) {
+      throw new WslDistroStoppedError(error.distro, { retryStartsIt: false })
+    }
+    throw error
+  }
 }
 
 export function applyRegisteredRepoToPRRefreshCandidate(

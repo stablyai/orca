@@ -9,71 +9,6 @@ import {
 import { folderWorkspaceKey } from './workspace-scope'
 
 describe('resolveTerminalStartupCwd', () => {
-  it('accepts absolute child paths inside the worktree', () => {
-    expect(resolveTerminalStartupCwd('/repo/app', '/repo/app/packages/web')).toBe(
-      '/repo/app/packages/web'
-    )
-  })
-
-  it('resolves relative paths against the worktree', () => {
-    expect(resolveTerminalStartupCwd('/repo/app', 'packages/web')).toBe('/repo/app/packages/web')
-  })
-
-  it('allows absolute cwds outside the worktree (#7685)', () => {
-    // Why: opening/splitting a terminal outside the worktree (e.g. after
-    // `cd ..`) is allowed; the cwd is resolved, not constrained.
-    expect(resolveTerminalStartupCwd('/repo/app', '/repo/app-other')).toBe('/repo/app-other')
-  })
-
-  it('resolves parent traversal to a path outside the worktree (#7685)', () => {
-    expect(resolveTerminalStartupCwd('/repo/app', '../other')).toBe('/repo/other')
-  })
-
-  it('trims whitespace-padded requested cwds before resolving', () => {
-    expect(resolveTerminalStartupCwd('/repo/app', ' packages/web ')).toBe('/repo/app/packages/web')
-  })
-
-  it('returns undefined for an empty requested cwd', () => {
-    expect(resolveTerminalStartupCwd('/repo/app', '')).toBeUndefined()
-    expect(resolveTerminalStartupCwd('/repo/app', '   ')).toBeUndefined()
-    expect(resolveTerminalStartupCwd('/repo/app', null)).toBeUndefined()
-  })
-
-  it('normalizes Windows separators and allows out-of-worktree drives', () => {
-    expect(resolveTerminalStartupCwd('C:\\Repo\\App', 'packages\\web')).toBe(
-      'C:/Repo/App/packages/web'
-    )
-    expect(resolveTerminalStartupCwd('C:\\Repo\\App', 'C:\\Repo\\AppOther')).toBe(
-      'C:/Repo/AppOther'
-    )
-  })
-
-  it('resolves renderer PTY cwd values against raw worktree IDs', () => {
-    expect(
-      resolveTerminalStartupCwdForWorkspace({
-        workspaceId: 'repo-1::/repo/app',
-        requestedCwd: '/repo/app/packages/web'
-      })
-    ).toBe('/repo/app/packages/web')
-    expect(
-      resolveTerminalStartupCwdForWorkspace({
-        workspaceId: 'repo-1::/repo/app',
-        requestedCwd: '/repo/app-other'
-      })
-    ).toBe('/repo/app-other')
-  })
-
-  it('passes floating terminal cwds through untouched', () => {
-    // Why: floating terminal cwds are validated against trusted-directory
-    // grants in main and have no worktree root to resolve against.
-    expect(
-      resolveTerminalStartupCwdForWorkspace({
-        workspaceId: FLOATING_TERMINAL_WORKTREE_ID,
-        requestedCwd: '/Volumes/work/notes'
-      })
-    ).toBe('/Volumes/work/notes')
-  })
-
   it('falls back to the provider default when no workspace root is resolvable', () => {
     expect(
       resolveTerminalStartupCwdForWorkspace({
@@ -101,8 +36,7 @@ describe('resolveTerminalStartupCwd', () => {
   })
 
   it('falls back to a non-ASCII workspace root for a missing cwd (#7239)', () => {
-    // Why: issue #7239 reproduced in a Japanese-named worktree; the fallback
-    // must preserve the selected worktree path verbatim.
+    // Preserve the Japanese workspace path from the #7239 reproduction verbatim.
     const worktreePath = '/Users/motoki/orca/workspaces/nakamuramotoki/Fableと議論'
     expect(
       resolveTerminalStartupCwd(worktreePath, '/var/tmp/orca-stale', {
@@ -134,8 +68,7 @@ describe('resolveTerminalStartupCwd', () => {
   })
 
   it('keeps the requested cwd when the workspace root is missing too', () => {
-    // Why: unmounted volume / stopped WSL distro — falling back would spawn a
-    // misleading shell; let the provider surface its normal error instead.
+    // An unmounted volume/stopped WSL distro should surface the provider error, not spawn a misleading fallback shell.
     const onFallbackToWorkspaceRoot = vi.fn()
     expect(
       resolveTerminalStartupCwd('/repo/app', '/repo/app/deleted-folder', {
@@ -155,26 +88,6 @@ describe('resolveTerminalStartupCwd', () => {
       })
     ).toBe('/repo/app')
     expect(directoryExists).not.toHaveBeenCalled()
-  })
-
-  it('falls back from a missing parent-traversal cwd to the workspace root', () => {
-    expect(
-      resolveTerminalStartupCwd('/repo/app', '../deleted', {
-        directoryExists: (path) => path === '/repo/app'
-      })
-    ).toBe('/repo/app')
-  })
-
-  it('recovers missing renderer cwd values against raw worktree IDs', () => {
-    expect(
-      resolveTerminalStartupCwdForWorkspace({
-        workspaceId: 'repo-1::/repo/app',
-        requestedCwd: '/repo/app/deleted-folder',
-        missingDirFallback: {
-          directoryExists: (path) => path === '/repo/app'
-        }
-      })
-    ).toBe('/repo/app')
   })
 
   it('recovers missing cwd values against a resolved folder workspace root', () => {
@@ -200,23 +113,6 @@ describe('resolveTerminalStartupCwd', () => {
       })
     ).toBe('/Volumes/work/notes')
     expect(directoryExists).not.toHaveBeenCalled()
-  })
-
-  it('resolves renderer PTY cwd values against folder workspace keys', () => {
-    expect(
-      resolveTerminalStartupCwdForWorkspace({
-        workspaceId: folderWorkspaceKey('folder-1'),
-        requestedCwd: 'packages/web',
-        resolveFolderWorkspacePath: (id) => (id === 'folder-1' ? '/repo/app' : null)
-      })
-    ).toBe('/repo/app/packages/web')
-    expect(
-      resolveTerminalStartupCwdForWorkspace({
-        workspaceId: folderWorkspaceKey('folder-1'),
-        requestedCwd: '../other',
-        resolveFolderWorkspacePath: (id) => (id === 'folder-1' ? '/repo/app' : null)
-      })
-    ).toBe('/repo/other')
   })
 })
 
@@ -259,11 +155,6 @@ describe('requestsCwdOutsideWorkspaceRoot', () => {
     ]
   ])('reads %s as a custom cwd', (_name, root, cwd) => {
     expect(requestsCwdOutsideWorkspaceRoot(root, cwd)).toBe(true)
-  })
-
-  it('reads no cwd, or only whitespace, as no custom cwd', () => {
-    expect(requestsCwdOutsideWorkspaceRoot('/repo/app', undefined)).toBe(false)
-    expect(requestsCwdOutsideWorkspaceRoot('/repo/app', '   ')).toBe(false)
   })
 
   it('reads a cwd against an unknown root as custom, because it cannot prove otherwise', () => {

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { fireEvent, render, screen, cleanup, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { JiraConnectionStatus } from '../../../shared/jira-types'
+import type { JiraConnectionStatus } from '../../../shared/jira/jira-types'
 import { JiraConnectDialog } from './jira-connect-dialog'
 import { getEnvironmentRuntimeContextKey } from '@/lib/provider-runtime-context'
 

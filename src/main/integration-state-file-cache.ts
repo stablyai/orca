@@ -14,7 +14,6 @@ function readStamp(path: string): string | null {
   }
 }
 
-// Every Orca process on a host reads the same integration state files.
 export function createIntegrationStateFileCache<T>(args: {
   filePath: () => string
   readFromDisk: () => T

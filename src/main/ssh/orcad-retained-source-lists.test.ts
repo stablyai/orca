@@ -25,6 +25,7 @@ vi.mock('../../shared/app-environment', () => ({
 
 const { isFrozenOrcadSourceSessionPartition, visibleProjectGroups, visibleProjectHostSetups } =
   await import('./orcad-retained-source')
+const { visibleSessionHostIds } = await import('./orcad-retained-source-session')
 
 const FENCED: SshTarget = {
   id: 'ssh-box',
@@ -108,6 +109,26 @@ describe('lists while a converted host keeps its source rows', () => {
     ])
   })
 
+  // #33539: adopting the hidden source's session at startup restored tabs closed on the server.
+  it('leaves the hidden host session out of the partition census until the host changes', () => {
+    const hostIds: ExecutionHostId[] = ['local', 'ssh:ssh-box', 'ssh:other', 'runtime:env-1']
+    expect(visibleSessionHostIds(catalog([FENCED]), hostIds)).toEqual([
+      'local',
+      'ssh:other',
+      'runtime:env-1'
+    ])
+    const changed = { ...FENCED, orcadFence: { environmentId: 'env-1', sourceChangedAt: 'x' } }
+    expect(visibleSessionHostIds(catalog([changed]), hostIds)).toEqual(hostIds)
+    // A fenced move that has not committed still shows its repos, so their session stays too.
+    const inFlight = mkdtempSync(join(tmpdir(), 'orcad-retained-lists-'))
+    try {
+      writeOrcadMigrationSourceCutover(inFlight, orcadMigrationCutoverFixture('m-1', FENCED.id))
+      expect(visibleSessionHostIds(catalog([FENCED]), hostIds, () => inFlight)).toEqual(hostIds)
+    } finally {
+      rmSync(inFlight, { recursive: true, force: true })
+    }
+  })
+
   it('shows them until the migration commits, while freezing the session from the fence on', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orcad-retained-lists-'))
     try {
@@ -173,7 +194,7 @@ describe('project host setups of a converted host', () => {
   })
   afterEach(() => rmSync(dir, { recursive: true, force: true }))
 
-  // #30859: the server lists its own setup under the same id, so ours made every host show twice.
+  // #30859: retained setup rows duplicated the server's same-id host setups.
   it('hides the setups the hidden source rows own, and keeps local ones', () => {
     expect(visibleProjectHostSetups(store([FENCED])).map((entry) => entry.id)).toEqual([
       'repo-local'

@@ -77,7 +77,7 @@ export async function getPRChecksViaRestFallback(
         .map(mapRestCommitStatus)
         .filter((check): check is PRCheckDetail => check !== null && !checkRunNames.has(check.name))
     } catch (err) {
-      // Why: REST fallback is already degraded; keep the richer check-run rows if legacy-status enrichment fails.
+      // Keep richer check-run rows when best-effort legacy-status enrichment fails.
       console.warn('getPRChecks REST status fallback failed:', err)
     }
 
@@ -117,11 +117,7 @@ export async function getPRChecksViaRestFallback(
   }
 }
 
-/**
- * Get detailed check statuses for a PR.
- * Uses GitHub's combined GraphQL rollup so check runs and legacy commit statuses
- * arrive in one cached request; suite-only approval blockers are included too.
- */
+/** Read the combined GraphQL rollup, including legacy statuses and suite-only approval blockers. */
 async function readPRChecks(
   repoPath: string,
   prNumber: number,
@@ -151,7 +147,7 @@ async function readPRChecks(
       }
       const { stdout } = await ghExecFileAsync(fallbackArgs, ghOptions).catch((err: unknown) => {
         const { stderr } = extractExecError(err)
-        // Why: `gh pr checks` exits non-zero when a PR has no check runs yet; treat that as empty, not a load failure.
+        // gh pr checks signals an empty run set with nonzero exit.
         if (stderr.toLowerCase().includes('no checks reported')) {
           return { stdout: '[]', stderr }
         }
@@ -182,7 +178,7 @@ async function readPRChecks(
     if (canUseGraphQLRollup) {
       await acquire()
       try {
-        // Why: --cache 60s saves rate-limit budget during polling; explicit refresh skips it for fresh data.
+        // Explicit refresh bypasses the polling cache.
         const cacheArgs = options?.noCache ? [] : ['--cache', '60s']
         const { stdout } = await ghExecFileAsync(
           [
@@ -209,7 +205,7 @@ async function readPRChecks(
           return checks
         }
       } catch (err) {
-        // Why: fall back to older `gh pr checks` when GitHub's richer rollup query is unavailable.
+        // Older CLI/API schemas may require the legacy gh pr checks path.
         console.warn('getPRChecks via GraphQL rollup failed, falling back to gh pr checks:', err)
       } finally {
         release()

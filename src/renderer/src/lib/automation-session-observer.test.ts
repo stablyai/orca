@@ -64,8 +64,7 @@ describe('observeExistingAutomationSession', () => {
   })
 
   it('skips the duplicate OSC store write for local PTYs under main authority', async () => {
-    // Why: main already parses OSC 9999 for local/SSH PTYs and routes it to
-    // the store via agentStatus:set; writing here too would race that path.
+    // Main already routes local/SSH OSC 9999 through agentStatus:set; a renderer write would race it.
     const onAgentStatus = vi.fn()
     const { observeExistingAutomationSession } = await import('./automation-session-observer')
 
@@ -152,8 +151,7 @@ describe('observeExistingAutomationSession', () => {
   })
 
   it('reports a runtime wait that carried no status as unverified, not as a clean exit', async () => {
-    // `exitCode ?? 0` fabricated a clean finish out of an absent status, so a
-    // host that answered without one was read as a completed automation.
+    // Absent exit status must not become a fabricated clean automation finish via ?? 0.
     state.terminalLayoutsByTabId = {
       'tab-1': { ptyIdsByLeafId: { [LEAF_ID]: 'remote:env-1@@terminal-9' } }
     }

@@ -1,7 +1,4 @@
-/**
- * `orca serve` on this machine's orcad slot. Whether to (and the slot itself) is decided
- * app-side by `src/main/orcad/orcad-local-serve-selection.ts`; the CLI only asks and runs.
- */
+/** The app selects the local serve runtime; the CLI runs that selection. */
 import { dirname, join } from 'node:path'
 import { runProcess, spawnProcess } from '@orca/process-host'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
@@ -21,7 +18,6 @@ import { SPEECH_RECOGNIZER_DIR_ENV } from '../../shared/speech-recognizer-packag
 /** A first run may download and verify the pinned Node; bound it well past that. */
 const SELECTION_TIMEOUT_MS = 10 * 60_000
 
-/** Asks the app's own entry, run on the app's executable as plain Node, which host to serve on. */
 export async function resolveLocalServeRuntime(
   options: {
     executable: string
@@ -31,8 +27,7 @@ export async function resolveLocalServeRuntime(
   },
   run: typeof runProcess = runProcess
 ): Promise<ServeRuntimeSelection> {
-  // Why: only packaged macOS serve can take a remote app update, through Electron's updater and
-  // this CLI's supervisor; orcad has no updater, so switching would drop that.
+  // orcad has no updater; keep Electron for packaged macOS update handoffs.
   if (options.usesMacUpdateHandoff) {
     return {
       kind: 'electron',
@@ -46,8 +41,7 @@ export async function resolveLocalServeRuntime(
       program: options.executable,
       args: [entry, FLAGS.userData, options.userDataPath, FLAGS.appRoot, options.appRoot],
       env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
-      // Why inherit stderr: a first run may download the pinned Node, and that progress is the
-      // only sign `orca serve` is not hung.
+      // Show pinned-Node download progress so first-run selection does not appear hung.
       stdio: ['ignore', 'pipe', 'inherit'],
       timeoutMs: SELECTION_TIMEOUT_MS
     })
@@ -74,7 +68,7 @@ export function serveWithOrcad(
   baseEnv: NodeJS.ProcessEnv,
   /** The app's browser client; the slot does not carry one, so orcad serves it from here. */
   webClientRoot?: string,
-  /** The app's speech recognizer; the slot does not carry one either. */
+  /** orcad’s slot has no speech recognizer; use the app’s copy. */
   speechRecognizerDir?: string
 ): Promise<number> {
   const spec: ProcessSpec = {

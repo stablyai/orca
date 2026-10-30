@@ -80,7 +80,7 @@ function renderPersistence() {
       controller as unknown as Parameters<typeof useTerminalPaneLayoutPersistence>[0]
     )
   )
-  return { hook, push }
+  return { hook, push, setTabLayout }
 }
 
 afterEach(() => {
@@ -146,5 +146,20 @@ describe('terminal layout title persist', () => {
     }
     // The pane follows the layout's titles main's frame writes (use-host-pane-title-sync.ts).
     expect(push).not.toHaveBeenCalled()
+  })
+})
+
+describe('terminal layout persist with host-retired panes', () => {
+  it('keeps a host-retired pane out of the layout it writes while that pane is still mounted', () => {
+    const { hook, push, setTabLayout } = renderPersistence()
+    hook.result.current.hostRetiredLeafIdsRef.current = new Set([RIGHT])
+
+    hook.result.current.changePaneTitle(1, 'build')
+
+    const written = setTabLayout.mock.lastCall?.[1]
+    expect(written?.root).toEqual({ type: 'leaf', leafId: LEFT })
+    expect(written?.activeLeafId).toBe(LEFT)
+    expect(written?.ptyIdsByLeafId).toEqual({ [LEFT]: 'remote:host:1' })
+    expect(push.mock.lastCall?.[0].layout.root).toEqual({ type: 'leaf', leafId: LEFT })
   })
 })

@@ -15,6 +15,8 @@ export async function runGitRepoCommands<T>(commands: GitRepoCommands<T>): Promi
     try {
       const { stdout } = await gitExecFileAsync(command.args, {
         cwd: command.cwd,
+        // Host Git on purpose: read-only detection of whether and where a folder is a repo.
+        hostGit: true,
         timeout: 15_000
       })
       step = commands.next(stdout)
@@ -30,7 +32,8 @@ export function runGitRepoCommandsSync<T>(commands: GitRepoCommands<T>): T {
   while (!step.done) {
     const command = step.value
     try {
-      step = commands.next(gitExecFileSync(command.args, { cwd: command.cwd }))
+      // Host Git on purpose: read-only detection of whether and where a folder is a repo.
+      step = commands.next(gitExecFileSync(command.args, { cwd: command.cwd, hostGit: true }))
     } catch (error) {
       step = commands.throw(error)
     }

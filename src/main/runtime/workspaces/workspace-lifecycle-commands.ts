@@ -28,7 +28,6 @@ import type { WorkspaceLifecycleQueue } from './workspace-lifecycle-queue'
 
 type RemovalFlag = 'force' | 'runHooks' | 'allowUnverifiedPtyStop' | 'allowFailedArchiveHook'
 
-/** One key per host's copy of a workspace, the same one its terminals sleep under. */
 export function workspaceLifecycleKey(hostId: ExecutionHostId, worktreeId: string): string {
   return hostSleepKey(hostId, worktreeId)
 }
@@ -49,7 +48,6 @@ type ObservingRuntime = {
   ) => Promise<unknown>
 }
 
-/** Runs `command` in its workspace's queue, or directly in a build with none. */
 export function runWorkspaceLifecycleCommand<T>(
   queue: WorkspaceLifecycleQueue | null,
   key: string,
@@ -60,7 +58,6 @@ export function runWorkspaceLifecycleCommand<T>(
 
 const LIVENESS_UNAVAILABLE = 'terminal_liveness_unavailable'
 
-/** A thrown terminal command that lost the host's liveness answer; any other error is definite. */
 export function terminalLostContact(error: unknown): boolean {
   return error instanceof Error && error.message === LIVENESS_UNAVAILABLE
 }
@@ -87,7 +84,6 @@ export function deleteLostContact(error: unknown): boolean {
   )
 }
 
-/** Re-reads the workspace's terminal liveness; throws only while the host still cannot answer. */
 export function observeTerminals(runtime: ObservingRuntime, selector: string) {
   return async (): Promise<void> => {
     try {
@@ -101,7 +97,6 @@ export function observeTerminals(runtime: ObservingRuntime, selector: string) {
   }
 }
 
-/** The sync key of an `id:` selector routed by the repo rows; null when only a lookup can say. */
 export function explicitKey(
   repos: readonly LaunchHostRepo[],
   selector: string,
@@ -126,7 +121,6 @@ export function explicitKey(
   )
 }
 
-/** The key a lookup finds: the workspace's own host, else as the repo rows route it. */
 async function lookedUpKey(
   runtime: LifecycleRuntime,
   selector: string,
@@ -147,7 +141,6 @@ async function lookedUpKey(
   )
 }
 
-/** `terminal.sleep`, `terminal.closeAll` and `worktree.sleep` as queued commands, in arrival order. */
 export function queueTerminalWorkspaceCommand<T>(
   runtime: LifecycleRuntime,
   selector: string,
@@ -163,16 +156,12 @@ export function queueTerminalWorkspaceCommand<T>(
     : queue.submitResolving(() => lookedUpKey(runtime, selector), command)
 }
 
-/**
- * `worktree.rm`: keyed by the workspace's resolved id, whatever selector named it, so a delete by
- * name waits for that workspace's running sleep. A workspace no lookup finds runs unqueued.
- */
+/** Resolve the workspace id before queueing so name-based deletes wait for its sleep; unresolved workspaces run unqueued. */
 export function queueWorkspaceDelete<T>(
   runtime: LifecycleRuntime & ObservingRuntime,
   selector: string,
   hostId: string | undefined,
   requested: Partial<Record<RemovalFlag, boolean>>,
-  /** Called with the normalized flags, plus the caller's host when it named one. */
   run: (removal: Record<RemovalFlag, boolean> & { hostId?: string }) => Promise<T>
 ): Promise<T> {
   const removal: Record<RemovalFlag, boolean> = {

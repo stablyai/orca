@@ -65,12 +65,11 @@ describe('browserManager viewport on a guest whose renderer crashed', () => {
       rendererWebContentsId
     })
 
-    // Chromium would segfault the main process on this write (its view is gone with the renderer).
+    // Device-metrics writes against a crashed renderer can crash main.
     setRendererCrashed(true)
     await expect(browserManager.setViewportOverride('tab-crashed', PHONE)).resolves.toBe(false)
     expect(metricsWrites(debuggerSendCommand)).toEqual([])
 
-    // The reloaded page's dom-ready reapplies the store's preset.
     setRendererCrashed(false)
     await expect(browserManager.setViewportOverride('tab-crashed', PHONE)).resolves.toBe(true)
     expect(metricsWrites(debuggerSendCommand)).toEqual([

@@ -14,7 +14,6 @@ const ICONS_BY_NAME: Record<AgentChatPermissionModeIconName, LucideIcon> = {
   ShieldAlert
 }
 
-// A static record, not a lookup function: render must index it, not call it.
 export const NATIVE_CHAT_PERMISSION_MODE_ICONS = {
   ask: ICONS_BY_NAME[AGENT_CHAT_PERMISSION_MODE_ICON_NAMES.ask],
   'accept-edits': ICONS_BY_NAME[AGENT_CHAT_PERMISSION_MODE_ICON_NAMES['accept-edits']],
@@ -42,12 +41,6 @@ export function nativeChatPermissionModeDescription(
 ): string {
   switch (mode) {
     case 'ask':
-      if (agent === 'codex') {
-        return translate(
-          'components.native-chat.composer.permissionAskCodexDescription',
-          'Edits files and runs commands in this workspace; asks before anything else'
-        )
-      }
       if (agent !== 'claude') {
         return translate(
           'components.native-chat.composer.permissionAskSharedDescription',

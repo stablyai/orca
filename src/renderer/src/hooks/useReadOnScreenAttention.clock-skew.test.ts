@@ -9,12 +9,8 @@ import { makeTab, makeTabGroup, makeUnifiedTab } from '../store/slices/store-ses
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 
-// Why: the hook re-scans on every store write and advances its diff refs to the PRE-write snapshot,
-// so its ref guard never suppresses the rescan an ack triggers. It only terminated because
-// acknowledgeAgents returned the same object within one millisecond — a scan costing >=1ms with a
-// turn stamped ahead of the local clock (SSH/remote host) re-acked forever (React #185).
+// Synchronous ack re-entry once repeated forever when remote turn time led local clock and scans crossed millisecond boundaries (React #185); slice guards retained pre-write snapshots.
 
-// These suites isolate synchronous acknowledgement and layout behavior.
 vi.mock('./agent-auto-ack-presence', async (importOriginal) => ({
   ...(await importOriginal<typeof AgentAutoAckPresence>()),
   createAutoAckPresenceCheck: (_read: unknown, onPresent: () => void) => ({
@@ -93,7 +89,7 @@ describe('useReadOnScreenAttention — clock-skewed execution host', () => {
   beforeEach(() => {
     realAcknowledgeAgents = useAppStore.getState().acknowledgeAgents
     vi.spyOn(document, 'hasFocus').mockReturnValue(true)
-    // Why a ticking clock: the loop self-terminated only while Date.now() stayed on one millisecond.
+    // Advance Date.now: frozen single-millisecond time would hide the ack loop.
     let clock = NOW
     vi.spyOn(Date, 'now').mockImplementation(() => clock++)
   })

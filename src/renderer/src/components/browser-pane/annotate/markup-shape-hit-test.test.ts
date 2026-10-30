@@ -119,8 +119,7 @@ describe('shapesTouchedBySweep', () => {
       const angle = (degrees * Math.PI) / 180
       return { x: 800 + (600 + grow) * Math.cos(angle), y: 400 + (300 + grow) * Math.sin(angle) }
     }
-    // Odd angles on purpose: a coarse polygon approximation drifts furthest from
-    // the true outline between its vertices.
+    // Use odd angles where polygon approximations diverge most from the true outline.
     for (const degrees of [0, 11.25, 33.75, 101.25, 137, 222, 303.75]) {
       expect(touches(ellipse, outline(degrees))).toBe(true)
     }

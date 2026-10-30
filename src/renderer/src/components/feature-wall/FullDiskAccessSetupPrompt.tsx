@@ -26,7 +26,6 @@ const FULL_DISK_ACCESS_PERMISSION_ID: DeveloperPermissionId = 'full-disk-access'
 export function isFullDiskAccessSetupVisible(
   status: DeveloperPermissionStatus | undefined
 ): boolean {
-  // Why: once granted there is nothing left to do, so the card would only take space.
   return status !== undefined && status !== 'unsupported' && !isFullDiskAccessReady(status)
 }
 
@@ -127,8 +126,7 @@ function useFullDiskAccessStatus(): FullDiskAccessStatusState & { refresh: () =>
     if (!isMac) {
       return
     }
-    // Why: users grant Full Disk Access outside Orca, so focus is the first
-    // cheap signal that System Settings may have changed the permission state.
+    // Refresh on focus because users grant permission outside Orca.
     window.addEventListener('focus', refreshIfLive)
     return () => {
       window.removeEventListener('focus', refreshIfLive)

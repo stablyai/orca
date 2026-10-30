@@ -43,7 +43,6 @@ import type {
 } from '../../shared/worktree/types'
 
 export type WorktreeApi = {
-  list: (args: { repoId: string }) => Promise<Worktree[]>
   /** Retired names prevent path reuse; fully spent tiers are compacted into a watermark. */
   listRetiredNames: (args: { repoId: string }) => Promise<RetiredNameRegistry>
   listDetected: {
@@ -60,7 +59,8 @@ export type WorktreeApi = {
     args: ForgetRemovedWorktreesForExecutionHostArgs
   ) => Promise<ForgetRemovedWorktreesForExecutionHostResult>
   cancelListDetected?: (args: { providerRequestId: ProviderRequestId }) => Promise<void>
-  listAll: () => Promise<Worktree[]>
+  /** User act: scan a local repo inside its WSL distro's user-act scope, which may start it. */
+  scanStartingWslDistro?: (args: { repoId: string }) => Promise<void>
   create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
   adoptProvisionedRoot: (args: AdoptProvisionedRootArgs) => Promise<CreateWorktreeResult>
   /** Local creates report progress by creationId; remote/runtime creates emit nothing. */
@@ -72,6 +72,8 @@ export type WorktreeApi = {
     headRefName?: string
     baseRefName?: string
     isCrossRepository?: boolean
+    /** The user creating or launching from the PR: it may start a stopped WSL distro. */
+    wakeWslDistro?: boolean
   }) => Promise<GitHubPrStartPoint | { error: string }>
   /** Same-project MRs return a remote branch; forks fetch the MR head ref and return its SHA. */
   resolveMrBase: (args: {
@@ -80,6 +82,8 @@ export type WorktreeApi = {
     sourceBranch?: string
     targetBranch?: string
     isCrossRepository?: boolean
+    /** The user creating from the MR: it may start a stopped WSL distro. */
+    wakeWslDistro?: boolean
   }) => Promise<
     { baseBranch: string; compareBaseRef?: string; pushTarget?: GitPushTarget } | { error: string }
   >
@@ -90,7 +94,12 @@ export type WorktreeApi = {
   sleep: (request: WorkspaceSleepRequest) => Promise<WorkspaceSleepOutcome[]>
   sleepReopened: (worktreeId: string) => Promise<void>
   /** True once running, so the renderer's subsequent spawn reattaches. */
-  resumeSleptPane: (pane: { worktreeId: string; tabId: string; leafId: string }) => Promise<boolean>
+  resumeSleptPane: (
+    pane: { worktreeId: string; tabId: string; leafId: string },
+    automatic?: boolean
+  ) => Promise<boolean>
+  /** Drops main's workspace-sleep record only while no tab holds its pane. */
+  retireStrandedSleepRecord: (args: { worktreeId: string; paneKey: string }) => Promise<void>
   remove: (args: {
     worktreeId: string
     hostId?: ExecutionHostId

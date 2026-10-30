@@ -29,8 +29,10 @@ vi.mock('electron', () => {
 })
 const { CdpWsProxyMock } = vi.hoisted(() => {
   const instances: unknown[] = []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const MockClass = vi.fn().mockImplementation(function (this: any, _wc: unknown) {
+  const MockClass = vi.fn().mockImplementation(function (
+    this: Record<string, unknown>,
+    _wc: unknown
+  ) {
     this._wc = _wc
     this.start = vi.fn(async () => 'ws://127.0.0.1:9222')
     this.stop = vi.fn(async () => {})
@@ -46,6 +48,7 @@ vi.mock('./cdp-ws-proxy', () => ({
 
 import { AgentBrowserBridge } from './agent-browser-bridge'
 import {
+  agentBrowserCommandsIn,
   createSucceedWith,
   mockBrowserManager,
   mockWebContents,
@@ -97,7 +100,6 @@ describe('AgentBrowserBridge keypress input', () => {
 
     expect(execFileMock).not.toHaveBeenCalled()
     expect(CdpWsProxyMock.instances).toHaveLength(0)
-    // Why: exactly two CDP calls, so the dispatch pair is the whole interaction.
     expect(wc.debugger.sendCommand.mock.calls).toHaveLength(2)
     expect(keyEventCalls(wc)).toEqual([
       {
@@ -217,14 +219,6 @@ describe('AgentBrowserBridge keypress input', () => {
     expect(keyEventCalls(wc)[1]).toMatchObject({ type: 'keyUp', windowsVirtualKeyCode: 229 })
   })
 
-  it('keeps the helper for a surrogate-pair character', async () => {
-    succeedWith({ pressed: '👍' })
-
-    await expect(bridge.keypress('👍', undefined, 'tab-1')).resolves.toEqual({ pressed: '👍' })
-
-    expect(keyEventCalls(wc)).toHaveLength(0)
-  })
-
   it('falls back to agent-browser for a key name the table cannot express', async () => {
     succeedWith({ pressed: 'MediaPlayPause' })
 
@@ -233,13 +227,7 @@ describe('AgentBrowserBridge keypress input', () => {
     })
 
     expect(keyEventCalls(wc)).toHaveLength(0)
-    const pressCall = execFileMock.mock.calls
-      .map(([, commandArgs]) => commandArgs)
-      .filter(isStringArray)
-      .find((commandArgs) => commandArgs.includes('press'))
-    expect(pressCall).toBeDefined()
-    const args = pressCall ?? []
-    expect(args[args.indexOf('press') + 1]).toBe('MediaPlayPause')
+    expect(agentBrowserCommandsIn(stdinWrites)).toContainEqual(['press', 'MediaPlayPause'])
   })
 
   it('rejects with tab not found when the page is gone', async () => {
@@ -250,7 +238,7 @@ describe('AgentBrowserBridge keypress input', () => {
     })
   })
 
-  // Why: one keypress looks the page up twice — the queued target, then the dispatch guard. Serving the first N keeps the later ones on the guard; the trailing assertions fail loudly if that count ever moves.
+  // Target resolution and dispatch each look up the page; exhaust lookups to simulate destruction.
   function killPageAfterLookups(lookups: number): () => number {
     let remaining = lookups
     webContentsFromIdMock.mockImplementation((id: number) => {

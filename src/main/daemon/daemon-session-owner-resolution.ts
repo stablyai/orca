@@ -43,7 +43,7 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
     this.providers = [...providers]
   }
 
-  // Why no epoch bump on its own: a proven-gone provider lists nothing, so in-flight inventories stay valid.
+  // Proven-gone providers contribute no rows, so removing them leaves in-flight inventories valid.
   private forgetProvider(provider: T): void {
     const index = this.providers.indexOf(provider)
     if (index !== -1) {

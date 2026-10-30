@@ -8,6 +8,7 @@ import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import { showGitLabMutationError } from '../gitlab-item-dialog-parts'
 import type { GitLabDialogRepoSelector } from './gitlab-item-dialog-types'
 import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 export function useGitLabPrimaryActions(
   item: GitLabWorkItem | null,
@@ -42,7 +43,7 @@ export function useGitLabPrimaryActions(
         }
       } else {
         if (mountedRef.current) {
-          toast.error(res.error)
+          toast.error(codeHostErrorText(res))
         }
       }
     } catch (error) {
@@ -75,7 +76,7 @@ export function useGitLabPrimaryActions(
         }
       } else {
         if (mountedRef.current) {
-          toast.error(res.error)
+          toast.error(codeHostErrorText(res))
         }
       }
     } catch (error) {
@@ -108,7 +109,7 @@ export function useGitLabPrimaryActions(
         }
       } else {
         if (mountedRef.current) {
-          toast.error(res.error)
+          toast.error(codeHostErrorText(res))
         }
       }
     } catch (error) {
@@ -138,8 +139,6 @@ export function useGitLabPrimaryActions(
     }
     setCommentSubmitting(true)
     try {
-      // Why: the IPC for issue comments takes `number`, MR takes `iid`.
-      // Branch on the item type to hit the right channel.
       const res =
         item.type === 'mr'
           ? await gitLabApiFor(repoSelector).addMRComment({
@@ -162,7 +161,7 @@ export function useGitLabPrimaryActions(
         }
       } else {
         if (mountedRef.current) {
-          toast.error(res.error)
+          toast.error(codeHostErrorText(res))
         }
       }
     } catch (error) {

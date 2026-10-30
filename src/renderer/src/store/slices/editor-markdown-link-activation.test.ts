@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
 import { createEditorStore, ownedEditorFileId } from './editor-slice-test-harness'
 import type { AppState } from '../types'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
@@ -7,7 +8,6 @@ import {
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
@@ -377,9 +377,8 @@ describe('createEditorSlice activateMarkdownLink', () => {
   it('reveals active-runtime markdown line anchors on the owner-qualified tab id', async () => {
     const store = createEditorStore()
     pathExistsMock.mockResolvedValue(true)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the store under test reads only these fields of the partial state.
     store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-active' } as AppState['settings'],
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'env-active' },
       // The server's rows are stamped as they land; focus alone never names a file's owner.
       worktreesByRepo: {
         'wt-1': [
@@ -404,7 +403,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
           mode: 'edit'
         }
       ]
-    } as Partial<AppState>)
+    })
     const activeRuntimeFileId = ownedEditorFileId('/repo/docs/guide.md', 'wt-1', 'env-active')
 
     await store.getState().activateMarkdownLink('./guide.md#L10', {

@@ -1,7 +1,3 @@
-/**
- * The connect that converts a relay-era SSH host, and the source's retention across reconnects,
- * shared by the runtime relay-era cell and the upgraded-profile cell.
- */
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from './orca-app'
 import { readPersistedProfileState } from './persisted-profile-state'
@@ -12,7 +8,7 @@ const CONVERT_TIMEOUT_MS = 8 * 60_000
 
 const RECONNECT_STEP_TIMEOUT_MS = 6 * 60_000
 
-/** Returns what the connect itself resolved to; a step that hangs fails naming itself. */
+// Bound each connect/disconnect step so a hang identifies its phase.
 export async function reconnect(page: Page, targetId: string): Promise<string> {
   for (const step of ['disconnect', 'connect'] as const) {
     const run = page.evaluate(
@@ -72,7 +68,6 @@ function isManaged(server: unknown): boolean {
   )
 }
 
-/** The relay-era catalog rows this profile still holds for the host. */
 function sourceRows(
   userData: string,
   targetId: string
@@ -121,7 +116,6 @@ export type ConvertedHost = {
   sessionFilePath: string
 }
 
-/** Connects with the template in place, then proves conversion and retention. */
 export async function convertAndRetain(
   page: Page,
   userData: string,
@@ -163,7 +157,6 @@ export async function convertAndRetain(
   expect(await serverCall(page, environment!.id, 'folderWorkspace.list')).toContain(
     jsonText(host.folderPath)
   )
-  // The relay-era editor tab moved with the session; the server lists it for every client.
   await expect
     .poll(
       async () =>
@@ -178,7 +171,7 @@ export async function convertAndRetain(
     jsonText(host.sessionFilePath)
   )
 
-  // 3. Source retained for a downgrade: kept and hidden, and still so after another connect.
+  // Keep source state for downgrade, hidden across repeated connects.
   const expectRetained = async (): Promise<void> => {
     expect(findOrcadMigrationSourceCutoverForTarget(userData, host.targetId)).toMatchObject({
       phase: 'destination-committed',

@@ -35,8 +35,7 @@ vi.mock('./runtime-environments/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: (...args: Parameters<typeof callRuntimeEnvironment>) =>
     callRuntimeEnvironment(...args)
 }))
-// Why: see filesystem-runtime-upload-staging.test.ts — a real over-limit fixture
-// would allocate gigabytes on Windows.
+// Lower test caps avoid allocating gigabytes on Windows; see filesystem/filesystem-runtime-upload-staging.test.ts.
 vi.mock('./runtime-import-limits', async (importOriginal) => ({
   ...(await importOriginal<RuntimeImportLimitsModule>()),
   REMOTE_IMPORT_MAX_FILE_BYTES: 2 * 1024 * 1024
@@ -62,7 +61,7 @@ function uploadedBytes(): Buffer {
   return Buffer.concat(chunkCalls().map((call) => Buffer.from(call.contentBase64, 'base64')))
 }
 
-/** Mirrors what staging records, so tests exercise the real identity contract. */
+/** Measure the same source identity as production staging. */
 async function stagedIdentity(filePath: string): Promise<StagedRuntimeUploadFileIdentity> {
   const stat = await lstat(filePath)
   return {
@@ -85,7 +84,6 @@ async function baseArgs(sourceRootPath: string, entryPath?: string) {
   }
 }
 
-/** A path whose identity was never measured; every field is deliberately absent. */
 function unstagedArgs(sourceRootPath: string, entryPath?: string) {
   return {
     userDataPath: '/user-data',
@@ -205,7 +203,7 @@ describe('streamExternalFileToRuntime', () => {
     const filePath = join(workDir, 'clip.mp4')
     await writeFile(filePath, Buffer.alloc(3 * 1024 * 1024))
 
-    // Why: relativePath here is '.upload.tmp', a path the user never chose.
+    // Errors must name the source, not the hidden .upload.tmp destination.
     await expect(streamExternalFileToRuntime(await baseArgs(filePath))).rejects.toThrow(
       "'clip.mp4' is 3 MB, over the 2 MB per-file remote import limit"
     )
@@ -284,7 +282,6 @@ describe('streamExternalFileToRuntime', () => {
     await expect(
       streamExternalFileToRuntime({ ...(await baseArgs(filePath)), signal: controller.signal })
     ).rejects.toThrow('window closed')
-    // One slice went out before the abort; the other three never do.
     expect(chunkCalls()).toHaveLength(1)
   })
 
@@ -346,8 +343,7 @@ describe('streamExternalFileToRuntime', () => {
   it.skipIf(process.platform === 'win32')(
     'refuses a regular file reached through a symlinked directory inside the root',
     async () => {
-      // Why: the symlink guard only lstats the entry itself, which sees a plain
-      // file here — realpath containment is the only thing that catches this.
+      // lstat sees a plain file under a symlinked parent; only realpath containment catches the escape.
       const outsideDir = join(workDir, 'outside')
       await mkdir(outsideDir)
       await writeFile(join(outsideDir, 'secret.txt'), 'secret')

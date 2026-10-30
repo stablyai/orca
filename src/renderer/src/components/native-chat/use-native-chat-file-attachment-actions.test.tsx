@@ -8,7 +8,7 @@ let pickAttachments: ReturnType<typeof vi.fn>
 function renderProbe(
   attachExternalPaths: (paths: string[]) => void
 ): () => { pickAttachments: () => void } {
-  const { result } = renderHook(() => useNativeChatFileAttachmentActions(attachExternalPaths))
+  const { result } = renderHook(() => useNativeChatFileAttachmentActions(() => attachExternalPaths))
   return () => result.current
 }
 

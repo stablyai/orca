@@ -65,7 +65,6 @@ describe('warmWindowsConptyOnce', () => {
     expect(args).toEqual(['/c', 'exit'])
     expect(options).toMatchObject({ useConptyDll: true, cols: 2, rows: 1 })
 
-    // A clean exit must not leave the kill timer to fire later.
     fireExit()
     expect(proc.kill).not.toHaveBeenCalled()
   })

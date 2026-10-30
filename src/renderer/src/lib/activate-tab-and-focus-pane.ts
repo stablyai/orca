@@ -22,10 +22,7 @@ export function activateTabAndFocusPane(
 ): void {
   const { setActiveTab, setActiveTabType, tabsByWorktree, activeWorktreeId } =
     useAppStore.getState()
-  // Why: selecting a terminal tab is independent from the visible surface;
-  // force Terminal first so tab-only activation reveals the full log.
-  // Scoped to the tab's owner: a reveal that lands after a worktree switch must not retype another worktree.
-  // An id no worktree owns yet keeps the on-screen worktree, as before scoping.
+  // Reveal Terminal for tab-only activation, scoped to its owner so a late reveal cannot change another workspace’s surface.
   setActiveTabType(
     'terminal',
     resolveActiveTabOwnerWorktreeId(tabsByWorktree, activeWorktreeId, tabId) ?? activeWorktreeId
@@ -35,8 +32,7 @@ export function activateTabAndFocusPane(
   if (leafId === null) {
     return
   }
-  // Why: defer one frame so the new TerminalPane has mounted its
-  // FOCUS_TERMINAL_PANE_EVENT listener before we dispatch.
+  // Wait one frame for the new TerminalPane’s focus-event listener to mount.
   pendingFocusPaneFrameId = requestAnimationFrame(() => {
     pendingFocusPaneFrameId = null
     const detail: FocusTerminalPaneDetail = {

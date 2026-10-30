@@ -14,7 +14,6 @@ function providerWhoseShutdown(shutdown: () => Promise<void>): IPtyProvider {
   return { shutdown } as unknown as IPtyProvider
 }
 
-// The commit records ownership at its start, before the save whose failure leads here.
 describe('discarding a spawn whose binding failed to save', () => {
   afterEach(() => {
     ptyOwnership.delete(PTY_ID)
@@ -45,7 +44,7 @@ describe('discarding a spawn whose binding failed to save', () => {
     )
   })
 
-  // QA687: an unmarked discard's exit read as the agent ending and removed the user's tab.
+  // Unmarked cleanup exits once looked like agent completion and removed the user's tab (QA687).
   it('retires the PTY once the host acknowledged the shutdown, as a stop that keeps the tab', async () => {
     const intentionalPtyStops = new TerminalIntentionalStops()
     const runtime = await discard(() => Promise.resolve(), {

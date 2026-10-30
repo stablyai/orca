@@ -1,16 +1,24 @@
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionSlashCommand } from '../../../shared/agent-session-wire'
 
-/** The `/` surface of a chat whose agent is not running, read where the provider reads its own on
- *  this host. `read` is undefined until known; `onChange` fires when it changes. */
+export type AtRestCommandChange = { retired: (record: AgentSessionRecord) => boolean }
+
+/** Read resting commands on their execution host; undefined until known, onChange when changed. */
 export type StructuredAgentSessionAtRestCommands = {
   retireContext?(workspaceId?: string): void
   dispose?(): void
+  closeAll?(): Promise<void>
+  snapshot?(record: AgentSessionRecord): {
+    commands?: AgentSessionSlashCommand[]
+    commandsPending: boolean
+    retryableFailure?: boolean
+  }
   read(record: AgentSessionRecord): AgentSessionSlashCommand[] | undefined
-  onChange(listener: () => void): () => void
-  /** Captures the current answer within `budgetMs`, following ownership changes. */
+  onChange(listener: (change?: AtRestCommandChange) => void): () => void
+  /** Follow owner changes within one shared read deadline. */
   settled?(
     record: AgentSessionRecord,
-    budgetMs: number
+    budgetMs: number,
+    independent?: boolean
   ): Promise<AgentSessionSlashCommand[] | undefined>
 }

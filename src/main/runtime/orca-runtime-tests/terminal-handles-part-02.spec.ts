@@ -42,7 +42,6 @@ describe('OrcaRuntimeService', () => {
     const stableHandle = before.terminals[0].handle
     const waiting = runtime.waitForTerminal(stableHandle, { condition: 'exit', timeoutMs: 30_000 })
 
-    // Re-key WITHOUT a renderer reload (e.g. a pane moved across tabs) while the same PTY stays live under a new leaf.
     runtime.syncWindowGraph(TEST_WINDOW_ID, {
       tabs: [
         {
@@ -74,7 +73,7 @@ describe('OrcaRuntimeService', () => {
   it('keeps a live CLI waiter pending when a re-keyed shared handle transfers to the live leaf', async () => {
     const runtime = createRuntime()
     const tabId = 'tab-1'
-    // Unlike the leaf-unique case, a shared ptyId-keyed handle re-keyed to a live leaf must transfer WITHOUT rejecting the in-flight CLI waiter.
+    // Re-keying a shared PTY handle must preserve its in-flight waiter.
     runtime.preAllocateHandleForPty('pty-agent')
     runtime.attachWindow(TEST_WINDOW_ID)
     runtime.syncWindowGraph(TEST_WINDOW_ID, {
@@ -116,7 +115,6 @@ describe('OrcaRuntimeService', () => {
         }
       )
 
-    // Re-key WITHOUT a renderer reload while the same agent PTY stays live under a new leaf.
     runtime.syncWindowGraph(TEST_WINDOW_ID, {
       tabs: [
         {
@@ -140,22 +138,18 @@ describe('OrcaRuntimeService', () => {
 
     // Let any synchronous stale-handle rejection propagate.
     await new Promise<void>((resolve) => setImmediate(resolve))
-    // The shared handle belongs to leaf-new now, so the CLI's live waiter must stay pending (a blanket invalidateLeafHandle would reject it as stale).
+    // The transferred shared handle must keep its CLI waiter pending.
     expect(settled).toBeNull()
-    // The same handle still resolves to the live PTY under the new leaf.
     await expect(runtime.showTerminal(sharedHandle)).resolves.toMatchObject({
       ptyId: 'pty-agent'
     })
 
-    // Abort only for teardown; the assertion above already proved it was pending.
     abort.abort()
     await waiting
     expect(settled).toBe('rejected')
   })
   it('recovers a moved SSH pane through the tab it now sits in, not the one its lease froze', async () => {
-    // `detachTerminalPaneToTab` moves a live pane and the lease keeps naming the tab it LEFT.
-    // Matching on that frozen tabId refused the pane's real coordinates outright, so a moved pane
-    // could only ever be "recovered" through coordinates it had already abandoned.
+    // A moved pane's current coordinates override the lease's frozen old tabId.
     const leaseTabId = 'tab-before-move'
     const currentTabId = 'tab-after-move'
     const appPtyId = 'ssh:ssh-target@@pty-8'
@@ -188,10 +182,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('refuses a moved SSH pane addressed through the tab it left', async () => {
-    // The other half: a viewer on a stale mirror asks under the OLD tab, whose layout no longer
-    // holds this leaf. Accepting it binds one leaf in two tabs and leaves the PTY under the current
-    // tab orphaned with its agent still running. The handle CAS happens to refuse first here, so
-    // the lease resolver is asserted directly - it is the independent second refusal.
+    // Old-tab coordinates must refuse the moved leaf; otherwise one PTY binds into two tabs.
     const leaseTabId = 'tab-stale-mirror'
     const currentTabId = 'tab-moved-to'
     const appPtyId = 'ssh:ssh-target@@pty-9'
@@ -202,7 +193,6 @@ describe('OrcaRuntimeService', () => {
       leafId: HEADLESS_LEAF_ID
     })
     const staleHandle = runtime.resolveTerminalPane(stalePaneKey, TEST_WORKTREE_ID).handle
-    // The move: same leaf, same PTY, new tab.
     movePaneFirst(runtime, leaseTabId, {
       worktreeId: TEST_WORKTREE_ID,
       tabId: currentTabId,
@@ -232,9 +222,7 @@ describe('OrcaRuntimeService', () => {
   })
 })
 
-// Which `expired` SSH leases may answer "this pane is still recoverable". A pane accumulates leases
-// as it re-leases under new relay ids, so the pane coordinates alone name several and the reader
-// has to pick the ELIGIBLE orphan rather than the first id match.
+// Several leases can share pane coordinates; select an eligible orphan rather than the first match.
 
 const TARGET = 'ssh-target'
 const TAB_ID = 'tab-candidacy'
@@ -285,33 +273,27 @@ const pane = { parentTabId: TAB_ID, leafId: HEADLESS_LEAF_ID }
 
 describe('recent expired SSH lease candidacy', () => {
   it('reports a plain expired orphan', () => {
-    // Control: `expired` carrying no retirement mark is an orphan whose reattach merely lost
-    // contact, which is exactly what the recovery affordance exists for.
     const reader = readerWithLeases([leaseFor('pty-1')])
 
     expect(reader.hasRecentExpiredSshLeasePane(TEST_WORKTREE_ID, pane)).toBe(true)
   })
 
   it('does not report a pane whose only recent lease was superseded', () => {
-    // `supersededBy` names the lease that won this pane, so the id no longer routes to the shell
-    // this lease describes. `recoverTerminalPane` refuses it, so reporting it here offers a paired
-    // viewer a recovery that cannot succeed.
+    // A superseded lease no longer routes to its original shell and cannot offer recovery.
     const reader = readerWithLeases([leaseFor('pty-1', { supersededBy: 'pty-2' })])
 
     expect(reader.hasRecentExpiredSshLeasePane(TEST_WORKTREE_ID, pane)).toBe(false)
   })
 
   it('does not report a pane whose only recent lease had its relay id recycled', () => {
-    // Same shape, other mark: the relay handed this id to a different shell, so adopting through
-    // it would hand the pane a stranger's process.
+    // A recycled relay id belongs to another shell and must never be adopted.
     const reader = readerWithLeases([leaseFor('pty-1', { relayIdRecycled: true })])
 
     expect(reader.hasRecentExpiredSshLeasePane(TEST_WORKTREE_ID, pane)).toBe(false)
   })
 
   it('picks the eligible orphan over a superseded predecessor that matches first', () => {
-    // The pane's coordinates name both leases and the predecessor is stored first, so a reader
-    // that took the first match would answer with the one lease that cannot be reattached.
+    // Store the superseded lease first to catch first-match recovery.
     const reader = readerWithLeases([
       leaseFor('pty-1', { supersededBy: 'pty-2' }),
       leaseFor('pty-2')
@@ -346,7 +328,6 @@ describe('recent expired SSH lease candidacy', () => {
         tabs
       )
     ).toBe(true)
-    // One sweep answers all eight tabs; the per-tab reader used to sweep once per tab.
     expect(sweeps).toBe(1)
     expect([...reader.collectRecentExpiredSshLeaseTabIds(TEST_WORKTREE_ID)]).toEqual([TAB_ID])
   })

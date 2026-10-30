@@ -14,7 +14,6 @@ function deferred<T = void>() {
   return { promise, resolve, reject }
 }
 
-/** A command that records when it starts and finishes only when released. */
 function gated<T>(
   log: string[],
   name: string,
@@ -116,10 +115,8 @@ describe('WorkspaceLifecycleQueue', () => {
     const waking = queue.submit(KEY, wake.command)
     await flush()
     const deleting = queue.submit(KEY, remove.command)
-    // Acknowledged at once: its hint replaces the queued ones.
     expect(queue.hints()).toEqual({ [KEY]: { kind: 'delete', queuedBehind: 0 } })
     await expect(waking).rejects.toThrow(WORKSPACE_DELETED_ERROR)
-    // A command after the delete is refused, not run on a workspace about to go.
     await expect(queue.submit(KEY, wake.command)).rejects.toThrow(WORKSPACE_DELETED_ERROR)
     expect(log).toEqual(['start sleep'])
 
@@ -167,12 +164,11 @@ describe('WorkspaceLifecycleQueue', () => {
         }
       }
     }
-    // The requester gets the unconfirmed reply (today's toast); the workspace stays as observed.
+    // Return the unconfirmed result but preserve observed state while paused.
     expect(await queue.submit(KEY, sleep)).toEqual({ postStopVerified: false })
     expect(queue.pausedKeys().includes(KEY)).toBe(true)
     expect(queue.hints()).toEqual({ [KEY]: { kind: 'sleep', queuedBehind: 0, paused: true } })
 
-    // A command issued while paused waits behind the pause; it is neither refused nor run.
     const woke: string[] = []
     const waking = queue.submit(KEY, {
       kind: 'wake',
@@ -186,7 +182,6 @@ describe('WorkspaceLifecycleQueue', () => {
     expect(woke).toEqual([])
     expect(queue.hints()).toEqual({ [KEY]: { kind: 'wake', queuedBehind: 0, paused: true } })
 
-    // Still silent on the next ask; then the owner answers and the queue carries on.
     retry()
     await flush()
     expect(log).toEqual(['sleep', 'observe', 'observe'])
@@ -343,7 +338,7 @@ describe('WorkspaceLifecycleQueue', () => {
     const queue = new WorkspaceLifecycleQueue()
     const log: string[] = []
     const sleep = gated(log, 'sleep', 'sleep', 'slept')
-    // The requester drops its reply (a phone disconnect); the command still runs to its end.
+    // A disconnected requester must not cancel the running command.
     void queue.submit(KEY, sleep.command).catch(() => {})
     await flush()
     sleep.release()
@@ -471,7 +466,6 @@ describe('WorkspaceLifecycleQueue create fencing', () => {
 })
 
 describe('WorkspaceLifecycleQueue membership', () => {
-  /** A listing whose fresh scan the test applies by hand. */
   function listing() {
     const waiters: (() => void)[] = []
     return {
@@ -487,7 +481,7 @@ describe('WorkspaceLifecycleQueue membership', () => {
     const creation = queue.openCreate({ creationId: 'c1', repoId: 'repo-1', keyOf: () => KEY })
     creation.named('repo-1::/wt')
     creation.close()
-    // A scan that started before the create ended cannot drop the row: the creation still shows.
+    // A scan started before creation ended cannot retire the creation row.
     expect(queue.creationsSnapshot().creations).toEqual({
       c1: { repoId: 'repo-1', worktreeId: 'repo-1::/wt' }
     })
@@ -497,7 +491,7 @@ describe('WorkspaceLifecycleQueue membership', () => {
     rows.applyFreshScan()
     expect(queue.creationsSnapshot().creations).toEqual({})
     expect(queue.hints()).toEqual({})
-    // One synchronous bump, inside the listing's apply: the feed flushes both together.
+    // Publish membership and creation changes together in one revision.
     expect(bumps).toHaveLength(1)
   })
 

@@ -6,6 +6,17 @@ import { extractLastOscTitle } from '../../../../shared/osc-title-extraction'
 import type { RuntimeTerminalDataMeta } from '../../runtime-terminal-stream-consumers'
 
 export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector {
+  private readonly ptyLifecycleCancellation = new Map<string, AbortController>()
+
+  protected getPtyLifecycleSignal(ptyId: string): AbortSignal {
+    let controller = this.ptyLifecycleCancellation.get(ptyId)
+    if (!controller) {
+      controller = new AbortController()
+      this.ptyLifecycleCancellation.set(ptyId, controller)
+    }
+    return controller.signal
+  }
+
   protected recordAgentPromptLifecycleState(ptyId: string, status: AgentStatus | null): void {
     if (status === 'permission') {
       this.recordAgentPromptPermissionObservation(ptyId)
@@ -87,6 +98,9 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
 
   protected advancePtyLifecycleGeneration(ptyId: string): void {
     this.ptyLifecycleGenerationById.set(ptyId, this.nextPtyLifecycleGeneration++)
+    const cancellation = this.ptyLifecycleCancellation.get(ptyId)
+    this.ptyLifecycleCancellation.delete(ptyId)
+    cancellation?.abort()
     this.clearAgentPromptCorrelationForPty(ptyId)
     // A stop intent belongs to one process incarnation; never let it label a
     // replacement process when the provider reports a generation reset.

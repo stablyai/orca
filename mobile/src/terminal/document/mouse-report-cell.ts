@@ -2,15 +2,9 @@ import { getCellHeight, getCellWidth, getTotalScale } from './cell-metrics'
 import { viewportPoint } from './viewport-cell'
 import type { TerminalDocumentScope } from './document-scope'
 
-/** Where a viewport point lands in the terminal's cell grid, for an xterm mouse report. */
 export type MouseReportCell = { col: number; row: number; x: number; y: number }
 
-/**
- * Maps a viewport point to a mouse-report cell, or null when there is no grid to map onto.
- *
- * Reads through the pan offset and the total scale rather than the element's box: the surface is a
- * transformed layer, so its on-screen geometry is not the geometry xterm reports in.
- */
+// Undo pan/scale instead of using the transformed element box; xterm reports untransformed grid coordinates.
 export function viewportToMouseReportCell(
   scope: TerminalDocumentScope,
   clientX: number,

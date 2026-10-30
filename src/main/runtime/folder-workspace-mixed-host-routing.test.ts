@@ -9,6 +9,7 @@ import {
 } from '../../shared/folder-workspace-host-routing.test-fixture'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { LayoutApplyOutcome } from '../../shared/workspace-layout/workspace-layout-command-types'
 import { localDesktopSession } from '../../shared/workspace-layout/workspace-layout-profile.test-fixture'
 import {
   emptySession,
@@ -18,6 +19,7 @@ import {
 import { OrcaRuntimeService } from './orca-runtime'
 import { WorkspaceLayoutStream } from './workspace-layout-stream'
 import { collectLayoutEvents } from './workspace-layout-stream-events.test-fixture'
+import { partialRuntimeStore, storeRepo } from './runtime-store-partial-fixture'
 
 const mocks = vi.hoisted(() => ({ layoutOwnerIsMain: true }))
 vi.mock('../../shared/layout-owner-switch', () => ({
@@ -30,24 +32,26 @@ function runtimeWithMixedFolder(
   folder: FolderWorkspace = MIXED_FOLDER,
   groups: readonly ProjectGroup[] = [MIXED_GROUP]
 ) {
-  const repos = ROUTING_REPOS
+  const repos = ROUTING_REPOS.map(storeRepo)
   const partitions = new Map<ExecutionHostId, WorkspaceSessionState>([
     ['local', localDesktopSession()],
     ['ssh:target-1', emptySession()]
   ])
-  const applyLayoutCommand = vi.fn(async () => ({ ok: true, result: {} }))
+  const applyLayoutCommand = vi.fn(async (): Promise<LayoutApplyOutcome> => ({
+    ok: true,
+    result: {}
+  }))
   const store = {
     getRepos: () => repos,
     getRepo: (id: string) => repos.find((repo) => repo.id === id),
-    getProjectGroups: () => groups,
+    getProjectGroups: () => [...groups],
     getFolderWorkspaces: () => [folder],
     getWorkspaceSessionHostIds: () => [...partitions.keys()],
     getWorkspaceSession: (hostId: ExecutionHostId) => partitions.get(hostId) ?? emptySession(),
     onWorkspaceSessionWritten: () => () => {},
     applyLayoutCommand
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: routing, the stream and apply read only these store methods.
-  return { runtime: new OrcaRuntimeService(store as never), applyLayoutCommand }
+  return { runtime: new OrcaRuntimeService(partialRuntimeStore(store)), applyLayoutCommand }
 }
 
 const RATIOS = {
@@ -90,7 +94,6 @@ describe('the same folder in a window-owned build', () => {
     mocks.layoutOwnerIsMain = false
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { runtime } = runtimeWithMixedFolder()
-    // Today's whole-projection failure: no workspace is published.
     expect(runtime.subscribeWorkspaceLayouts(() => {}).snapshot).toEqual([])
   })
 })
@@ -101,7 +104,6 @@ describe('a workspace the router throws on', () => {
     const writeListeners = new Set<(hostId: ExecutionHostId | null) => void>()
     const store = {
       getWorkspaceSession: () => session,
-      // Two partitions hold the workspace, so the router throws twice in one projection.
       getWorkspaceSessionHostIds: (): ExecutionHostId[] => ['local', 'ssh:target-1'],
       onWorkspaceSessionWritten: (listener: (hostId: ExecutionHostId | null) => void) => {
         writeListeners.add(listener)

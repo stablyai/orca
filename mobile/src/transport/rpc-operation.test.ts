@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { RpcResponse } from './types'
 import { FakeSession } from './mobile-endpoint-supervisor-test-fakes'
 import {
@@ -149,8 +149,7 @@ describe('transport rejection stays on the promise channel', () => {
     expect(isRpcDeliveryUnknown(caught)).toBe(true)
   })
 
-  // The cutover predicate matches class or exact message because instanceof misses across
-  // bundle copies; a clone from another copy must still read as a cutover through the descriptor.
+  // instanceof misses foreign bundle copies; cutover detection must also accept the exact message.
   it('keeps a cutover error from another bundle copy recognisable', async () => {
     class ForeignBundleCutoverError extends Error {}
     const error = new ForeignBundleCutoverError('RPC interrupted by connection migration')
@@ -166,25 +165,31 @@ describe('transport rejection stays on the promise channel', () => {
   })
 
   it('fails a Promise.all group immediately instead of waiting for a stalled peer', async () => {
-    const error = new Error('socket closed')
-    const failing = new FakeSession('connected')
-    failing.sendRequest.mockRejectedValue(error)
-    const stalled = new FakeSession('connected')
-    stalled.sendRequest.mockReturnValue(new Promise<RpcResponse>(() => {}))
+    vi.useFakeTimers()
+    try {
+      const error = new Error('socket closed')
+      const failing = new FakeSession('connected')
+      failing.sendRequest.mockRejectedValue(error)
+      const stalled = new FakeSession('connected')
+      stalled.sendRequest.mockReturnValue(new Promise<RpcResponse>(() => {}))
 
-    const group = Promise.all([
-      runRpcOperation(failing, workspaceListOrThrow, {}),
-      runRpcOperation(stalled, workspaceListOrThrow, {})
-    ])
-    const raced = await Promise.race([
-      group.then(
-        () => 'resolved' as const,
-        (caught: unknown) => caught
-      ),
-      new Promise((resolve) => setTimeout(() => resolve('still waiting'), 50))
-    ])
+      const group = Promise.all([
+        runRpcOperation(failing, workspaceListOrThrow, {}),
+        runRpcOperation(stalled, workspaceListOrThrow, {})
+      ])
+      const raced = Promise.race([
+        group.then(
+          () => 'resolved' as const,
+          (caught: unknown) => caught
+        ),
+        new Promise((resolve) => setTimeout(() => resolve('still waiting'), 50))
+      ])
 
-    expect(raced).toBe(error)
+      await vi.advanceTimersByTimeAsync(50)
+      expect(await raced).toBe(error)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('only captures a rejection when a caller names the all-settled helper', async () => {
@@ -295,14 +300,15 @@ describe('an incompatible reply', () => {
       {}
     ).catch((thrown: unknown) => thrown)
 
-    expect(caught).toBeInstanceOf(RpcIncompatibleReplyError)
-    expect((caught as RpcIncompatibleReplyError).method).toBe('worktree.ps')
-    expect((caught as RpcIncompatibleReplyError).operationName).toBe('test.workspaceListOrThrow')
-    expect((caught as RpcIncompatibleReplyError).issues.length).toBeGreaterThan(0)
+    if (!(caught instanceof RpcIncompatibleReplyError)) {
+      throw new Error('expected an incompatible-reply error')
+    }
+    expect(caught.method).toBe('worktree.ps')
+    expect(caught.operationName).toBe('test.workspaceListOrThrow')
+    expect(caught.issues.length).toBeGreaterThan(0)
   })
 
-  // A reply nobody can read says nothing about what the host did, so it must not look like
-  // either of the two errors the mutation retry loops replay on.
+  // Unreadable replies prove no mutation failure and must not match errors that authorize retry.
   it('authorizes no retry', async () => {
     const caught = await runRpcOperation(
       connectedSession(incompatible),
@@ -310,6 +316,7 @@ describe('an incompatible reply', () => {
       {}
     ).catch((thrown: unknown) => thrown)
 
+    expect(caught).toBeInstanceOf(RpcIncompatibleReplyError)
     expect(isRpcDeliveryUnknown(caught)).toBe(false)
     expect(isLogicalClientCutoverError(caught)).toBe(false)
   })
@@ -320,7 +327,6 @@ describe('an incompatible reply', () => {
     ).resolves.toBeNull()
   })
 
-  // `message` reaches toasts and screen copy, so the machine token lives on `code`/`name` instead.
   it('carries readable copy in the message and the token on code and name', async () => {
     const caught = await runRpcOperation(
       connectedSession(incompatible),

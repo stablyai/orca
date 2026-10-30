@@ -14,11 +14,8 @@ import type {
   CreatedHostedReview,
   HostedReviewCreatedContext
 } from './hosted-review-creation-state'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
-/**
- * Settles a freshly created hosted review: pins the link onto the worktree, force-refreshes the
- * review caches, and (unless suppressed) reveals it in the Checks tab.
- */
 export function useSourceControlHostedReviewCreated({
   activeRepo,
   activeWorktreeId,
@@ -127,7 +124,7 @@ export function useSourceControlHostedReviewCreated({
                 'Open on {{value0}}',
                 { value0: copy.providerName }
               ),
-              onClick: () => window.api.shell.openUrl(result.url)
+              onClick: () => openAppHttpLink(result.url, { worktreeId })
             }
           }
         )
@@ -157,7 +154,7 @@ export function useSourceControlHostedReviewCreated({
   }, [setRightSidebarOpen, setRightSidebarTab])
 
   const handleBranchChangedByPullRequestGeneration = useCallback(async (): Promise<void> => {
-    // Why: AI PR detail generation may rebase before summarizing, so refresh status if HEAD moved before the user submits the draft.
+    // AI detail generation may rebase; refresh moved HEAD before the user submits.
     await refreshActiveGitStatusAfterMutation()
   }, [refreshActiveGitStatusAfterMutation])
 

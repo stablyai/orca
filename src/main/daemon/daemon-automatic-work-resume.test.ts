@@ -26,7 +26,6 @@ describe('daemon automatic-work resume', () => {
   it('clears a same-boot crash pause the daemon carried over, on request', async () => {
     directory = mkdtempSync(join(tmpdir(), 'daemon-automatic-work-resume-'))
     const markerPath = join(directory, 'daemon.automatic-work-run.json')
-    // The previous daemon died with automatic work running in this boot.
     writeFileSync(
       markerPath,
       JSON.stringify({
@@ -60,7 +59,7 @@ describe('daemon automatic-work resume', () => {
     const resumed = await client.request<Record<string, unknown>>('resumeAutomaticWork', undefined)
     const after = await client.request<{ mode: { kind: string } }>('automaticWorkStatus', undefined)
 
-    // Windows cannot tell a new boot from the same one, so it never pauses (Fast Startup).
+    // Fast Startup makes Windows boot identity ambiguous, so startup never pauses restores.
     if (process.platform === 'win32') {
       expect(before.mode).toEqual({ kind: 'normal' })
       expect(resumed).toMatchObject({ cleared: null })
@@ -92,7 +91,7 @@ describe('daemon automatic-work resume', () => {
     })
     await client.ensureConnected()
     const markerBefore = readFileSync(markerPath, 'utf8')
-    // A successor took the canonical socket before the loss watchdog noticed.
+    // Replace the endpoint before the loss watchdog can latch it.
     vi.spyOn(server['endpoint'], 'hasLostOwnership').mockReturnValue(true)
 
     await expect(client.request('resumeAutomaticWork', undefined)).rejects.toThrow(

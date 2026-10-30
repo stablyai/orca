@@ -18,7 +18,8 @@ import {
   getOptionalNumberFlag,
   getOptionalStringFlag,
   getRequiredFiniteNumber,
-  getRequiredStringFlag
+  getRequiredStringFlag,
+  getRequiredStringFlagAllowingEmpty
 } from '../flags'
 import { getBrowserCommandTarget } from '../selectors'
 
@@ -50,7 +51,7 @@ export const BROWSER_INTERACT_HANDLERS: Record<string, CommandHandler> = {
   },
   fill: async ({ flags, client, cwd, json }) => {
     const element = getRequiredStringFlag(flags, 'element')
-    const value = getRequiredStringFlag(flags, 'value')
+    const value = getRequiredStringFlagAllowingEmpty(flags, 'value')
     const target = await getBrowserCommandTarget(flags, cwd, client)
     const result = await client.call<BrowserFillResult>('browser.fill', {
       element,
@@ -67,7 +68,7 @@ export const BROWSER_INTERACT_HANDLERS: Record<string, CommandHandler> = {
   },
   select: async ({ flags, client, cwd, json }) => {
     const element = getRequiredStringFlag(flags, 'element')
-    const value = getRequiredStringFlag(flags, 'value')
+    const value = getRequiredStringFlagAllowingEmpty(flags, 'value')
     const target = await getBrowserCommandTarget(flags, cwd, client)
     const result = await client.call<BrowserSelectResult>('browser.select', {
       element,

@@ -2,6 +2,10 @@ import { findSqliteRuntimeTests } from './vitest-sqlite-runtime-scan.mjs'
 
 // SQLite publication, native bindings, worker IPC, socket liveness, and V8 retention use Node.
 const NODE_RUNTIME_INCLUDE = [
+  // Exercise the native fetch error and abort contracts used by the Linear SDK in Electron.
+  'src/main/linear/linear-request-recovery.test.ts',
+  'src/main/linear/linear-issue-detail-deadline.test.ts',
+  'tests/e2e/linear-cli-recovery.unit.test.ts',
   'src/main/runtime/structured-agent-cli-writers.test.ts',
   'config/scripts/vitest-sqlite-runtime-boundary.test.ts',
   'config/scripts/cloud-security-history-workflow.test.mjs',
@@ -23,12 +27,21 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ai-vault/session-scanner-scope-walk.test.ts',
   // Electron main bridges streams with Node's implementation.
   'src/main/host/electron-http-client.test.ts',
+  'src/main/browser/extensions/browser-extension-native-host-process-backpressure.test.ts',
   'src/main/daemon/daemon-init-provider-installation.test.ts',
   'src/main/orcad/orcad-daemon-teardown-linux.test.ts',
   'src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts',
   'src/renderer/src/lib/react-commit-cascade-observer.test.ts',
   'src/renderer/src/lib/react-commit-cascade-telemetry.test.ts',
+  // Asserts payloads are collected; Bun's GC scans the stack conservatively and may keep one alive.
+  'src/shared/ws-inbound-message-queue.test.ts',
+  'src/renderer/src/lib/ai-vault-tab-title-sync-inputs.test.ts',
+  'src/renderer/src/components/sidebar/HostRemoveDialog.test.tsx',
+  // Asserts an observer survives a forced collection; conservative retention would hide a lost one.
+  'config/scripts/happy-dom-mutation-observer-retention.test.ts',
   // These reach Node SQLite through a shared helper or a dynamic import, which the scan skips.
+  'src/main/claude/claude-transcript-catch-up.test.ts',
+  'src/main/claude/claude-transcript-duration.test.ts',
   'tests/e2e/native-chat-startup-option-pickers.unit.test.ts',
   'src/main/ai-vault/session-document-consumer-replacement.test.ts',
   'src/main/ai-vault-search/session-search-dependent-transcripts.test.ts',
@@ -43,6 +56,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/runtime/worker-terminal-wrap-provenance.test.ts',
   'tests/e2e/cross-version-wire/agent-session-clear-old-client.unit.test.ts',
   'tests/e2e/cross-version-wire/agent-session-clear-old-tab-mirror.unit.test.ts',
+  'tests/e2e/cross-version-wire/host-model-catalog-released-phone.unit.test.ts',
   'src/main/acp/acp-structured-host-live-listing.test.ts',
   'src/main/acp/acp-structured-host-configured-default.test.ts',
   'src/main/pi/rpc-session-adapter.test.ts',
@@ -58,6 +72,8 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/acp/acp-timeline-turn-failures.test.ts',
   'src/main/acp/acp-structured-session-adapter.test.ts',
   'src/main/acp/acp-structured-session-adapter-resume.test.ts',
+  // Counts real V8 Inspector coverage alongside delegated operation counters.
+  'src/main/acp/acp-history-scaling.test.ts',
   'src/main/acp/acp-structured-host-start-aborts.test.ts',
   'src/main/acp/acp-conversation-copy.test.ts',
   'src/main/pi/rpc-turn-races.test.ts',
@@ -89,6 +105,10 @@ const NODE_RUNTIME_INCLUDE = [
   'src/**/*.node-pty.test.ts',
   'src/**/node-pty-*.test.ts',
   'src/**/*.live-shell.test.ts',
+  // These drive live zsh through node-pty and rely on Node's native PTY stream delivery.
+  'src/main/shell-startup-feature-channel.test.ts',
+  'src/main/daemon/shell-ready.test.ts',
+  'src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
   'src/**/*real-pty*.test.ts',
   'src/**/*-native.test.ts',
   'src/**/*retention*.test.ts',
@@ -101,10 +121,11 @@ const NODE_RUNTIME_INCLUDE = [
   // Times V8 string flattening, which is what Electron main runs.
   'src/main/runtime/terminal-tail-redraw-wall-time.test.ts',
   'src/main/agent-hooks/server-transport-interference.test.ts',
-  'src/main/plugins/plugin-worker-supervision.integration.test.ts',
+  'src/main/plugins/workers/plugin-worker-supervision.integration.test.ts',
   // Reconciliation loads the real native Parcel watcher; Bun can abort on Linux ARM.
   'src/main/plugins/plugin-service-reconciliation.test.ts',
   'src/main/usage/usage-scan-worker-event-loop.test.ts',
+  'src/main/ipc/command-path-directory-worker.test.ts',
   // Asserts Node's spawn-failure close signal and that a dead worker closes its children's pipes.
   'src/main/worker-thread-child-process/worker-thread-child-process.test.ts',
   'src/main/git/command-runner/worker-exec-file.test.ts',
@@ -121,7 +142,10 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ai-vault-search/session-search-fts5-contract.test.ts',
   'src/main/foreign-sqlite-readers/**/*.test.ts',
   'src/main/browser/*cookie*.test.ts',
-  'src/main/browser/cookies/sources/browser-cookie-validation.test.ts',
+  'src/main/browser/cookies/*cookie*.test.ts',
+  'src/main/browser/cookies/sources/browser-cookie-decryption.test.ts',
+  'src/main/browser/cookies/sources/browser-cookie-import-undecryptable.test.ts',
+  'src/main/browser/cookies/sources/browser-cookie-source-partition.test.ts',
   // Playwright's CDP transport needs Node's WebSocket implementation.
   'src/main/browser/browser-popup-adapter-compatibility.electron.test.ts',
   'src/main/browser/popup-origin-chrome.electron.test.ts',
@@ -147,6 +171,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/renderer/src/components/right-sidebar/parent-pr-checks-projection-selector.test.ts',
   'src/renderer/src/store/github/cache-persistence.test.ts',
   'src/main/native-chat/agent-session-journal/**/*.test.ts',
+  'src/main/native-chat/agent-session-wire/structured-agent-session-terminal-writer-acquire.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-status-feed.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-status-feed-conversation-name.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-status-first-input-identity.test.ts',
@@ -155,17 +180,16 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/native-chat/agent-session-wire/structured-agent-session-permission-mode.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-queued-legacy-import.test.ts',
   'src/main/runtime/agent-session-conversation-name-store.test.ts',
-  'src/main/runtime/structured-session-mail-redrive-wiring.test.ts',
   'src/main/runtime/rpc/ws-transport.test.ts',
   'src/main/runtime/rpc/dispatcher-transport-parity.test.ts',
   'src/main/runtime/rpc/methods/structured-agent-session-visual.test.ts',
   // Bun resolves 'ws' to its built-in client, which bypasses the patched package.
   'src/main/runtime/rpc/ws-empty-payload-frame-write.test.ts',
-  'src/shared/remote-runtime-client.test.ts',
-  'src/shared/remote-runtime-connect-bound.test.ts',
+  'src/shared/remote-runtime/remote-runtime-client.test.ts',
+  'src/shared/remote-runtime/remote-runtime-connect-bound.test.ts',
   // Bun's built-in ws client ignores maxPayload; the product opener only runs on Node.
-  'src/shared/remote-runtime-request-websocket.test.ts',
-  'src/shared/remote-runtime-subscription-connect-bound.test.ts',
+  'src/shared/remote-runtime/requests/remote-runtime-request-websocket.test.ts',
+  'src/shared/remote-runtime/requests/remote-runtime-subscription-connect-bound.test.ts',
   'src/main/codex/codex-shared-server-probe.test.ts',
   'src/main/opencode/opencode-launch-model-context-supervision.test.ts',
   'src/main/hermes/hermes-config-remote-adapter.test.ts',
@@ -175,10 +199,13 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ipc/renderer-shutdown-checkpoint-sleep-records.test.ts',
   'src/main/runtime/structured-agent-session-startup-tab-restore.test.ts',
   'src/main/runtime/structured-agent-session-windowless-layout-host.test.ts',
-  'src/shared/remote-runtime-shared-control-connection.test.ts',
+  'src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts',
   'src/main/runtime/mobile-cloud-relay/relay-control-client.test.ts',
-  'src/main/ipc/filesystem-watcher-ignore-real.test.ts',
+  'src/main/ipc/filesystem/watchers/filesystem-watcher-ignore-real.test.ts',
   'src/main/ipc/runtime-environments/runtime-environment-preference.test.ts',
+  // Real fs.watch file bindings; Bun's watcher is not the one Electron runs.
+  'src/main/ipc/rebinding-file-watch.test.ts',
+  'src/main/ipc/parcel-watcher-shallow-file-subscription.test.ts',
   'src/main/ipc/runtime-environments/runtime-environment-transport-routing-tailscale-hint.test.ts',
   'src/renderer/src/components/emulator-pane/emulator-device-frame-visibility.test.tsx',
   'src/main/claude/claude-agent-sdk-contract-pins.test.ts',
@@ -188,6 +215,7 @@ const NODE_RUNTIME_INCLUDE = [
   'config/scripts/vitest-node-runtime-pool.test.ts'
 ]
 
-export function getNodeRuntimeInclude() {
-  return [...NODE_RUNTIME_INCLUDE, ...findSqliteRuntimeTests()]
+/** `filters` limits the SQLite import scan to the tests a filtered CLI run can select. */
+export function getNodeRuntimeInclude({ filters } = {}) {
+  return [...NODE_RUNTIME_INCLUDE, ...findSqliteRuntimeTests({ filters })]
 }

@@ -4,7 +4,7 @@ import {
   createAgentSessionDeltaCoalescer
 } from './agent-session-delta-coalescer'
 
-/** Drives the window by hand so the test asserts scheduling, not wall time. */
+/** Drive scheduling without wall-clock timing. */
 function manualClock() {
   const pending: { run: () => void; ms: number }[] = []
   return {

@@ -25,13 +25,7 @@ function isAgentLaunch(args: {
   return recognizeAgentLaunchCommand(command) !== null
 }
 
-// Why: jcode paints its own theme and fires its OSC 10/11 burst before its TUI
-// input loop is ready, so the cooked reply (`10;rgb:…`) lands in the composer as
-// pre-typed text (same class as #12112, which fixed opencode).
-//
-// Why all three signals and not just launchAgent: a pane can name jcode through the
-// telemetry kind or the command alone (a `jcode` quick-launch carries no launchAgent),
-// and those panes leak exactly the same composer text.
+// jcode queries before TUI input is ready; suppress cooked replies via agent, telemetry kind or quick-launch command.
 export function agentSkipsStartupOscColorQueryReplies(args: {
   launchAgent?: unknown
   telemetry?: { agent_kind?: unknown } | undefined
@@ -51,16 +45,22 @@ export function getStartupTerminalIngressIntent(args: {
   command?: string
   launchConfig?: SleepingAgentLaunchConfig
   terminalColorQueryReplies?: unknown
+  launcherColorQueryReplies?: unknown
+  launcherViewAttributes?: unknown
   terminalKittyKeyboardProtocol?: boolean
 }) {
-  // Why colours for every PTY: an agent typed into a plain shell later queries too, and these
-  // seed an owner that has not been pushed the host's viewer colours yet.
-  const colors = agentSkipsStartupOscColorQueryReplies(args)
+  const skipColors = agentSkipsStartupOscColorQueryReplies(args)
+  // Seed every PTY: agents launched later from plain shells can also query before viewer colors arrive.
+  const colors = skipColors
     ? {}
     : (normalizeColorQueryReplyColors(args.terminalColorQueryReplies) ?? {})
+  const launcherColors = skipColors
+    ? null
+    : normalizeColorQueryReplyColors(args.launcherColorQueryReplies)
   return parsePtyStartupIngressIntent({
     kittyKeyboardProtocol: args.terminalKittyKeyboardProtocol === true && isAgentLaunch(args),
     colors,
+    ...(launcherColors ? { launcherColors, launcherAttributes: args.launcherViewAttributes } : {}),
     deadlineMs: 5_000
   })
 }

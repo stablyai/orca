@@ -5,46 +5,30 @@ import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/orca-session-addres
 
 export type PreambleParams = {
   taskId: string
-  // Why: completion and heartbeat payloads attribute activity to a specific
-  // dispatch context (not just a task). A retried task has multiple
-  // dispatch_contexts rows; keying worker_done/heartbeat on dispatchId
-  // prevents stale messages from a previously-failed dispatch from completing
-  // or refreshing the retry.
+  // Dispatch ids fence heartbeat/completion authority across retries of one Task.
   dispatchId: string
   taskSpec: string
   /** A terminal handle, or a session's `orca_session_id:<id>`; each is labelled by its kind. */
   coordinatorHandle: string
   workerHandle: string
   devMode?: boolean
-  // Why: packaged WSL panes install the scoped launcher as `orca-ide`;
-  // other execution hosts keep their existing bare `orca` bridge.
+  // Packaged WSL uses orca-ide; other hosts retain their existing launcher.
   cliCommand?: OrchestrationCliCommand
-  // Why: populated by the coordinator's dispatch pre-flight (§3.1) only
-  // when the target worktree is behind its tracking remote. When absent
-  // or when `behind === 0`, the preamble emits no drift section. Callers
-  // must NOT pre-populate this with empty data; the drift section is a
-  // loud-but-rare signal tied to the `allow-stale-base: true` override
-  // path, and polluting it for fresh worktrees would train workers to
-  // ignore it.
+  // Supply actual preflight drift only; spurious warnings train workers to ignore stale-base evidence.
   baseDrift?: {
     base: string
     behind: number
     recentSubjects: string[]
   }
-  // Why: prompt-returning agents should idle after worker_done, while bare
-  // shells have no agent prompt for Orca to reuse.
+  // Prompt-returning agents should idle after completion; bare shells have no reusable agent prompt.
   workerKind?: 'prompt-returning-agent' | 'bare-shell'
-  // Why gated: advertising a verb the depth cap will reject just burns a turn.
+  // Do not advertise delegation when depth enforcement will reject it.
   canDispatchSubWorkers?: boolean
-  // Why: a remote worker has no Dispatch row on its own host to start helpers under.
+  // Federated workers have no local Dispatch row to parent helpers.
   subWorkersInOwnRun?: boolean
+  // Null when the user turned heartbeats off: the worker is never told to send them.
+  heartbeatIntervalMinutes: number | null
 }
-
-// Why: 5 minutes is frequent enough that the coordinator's stale-heartbeat
-// check (threshold 10 min) catches a hung worker within one tick, and
-// infrequent enough to avoid inbox spam on long tasks. One constant so
-// cadence tuning is a single-line change (Q1 in DESIGN_DOC_PREAMBLE_FIX.md).
-const HEARTBEAT_INTERVAL_MIN = 5
 
 /** A session address names a chat worker; any other handle is a terminal. */
 function isSessionHandle(handle: string): boolean {
@@ -64,15 +48,9 @@ function dispatchIdentityLines(params: PreambleParams): string {
   ].join('\n')
 }
 
-// Why: the dispatch preamble teaches agents about Orca's CLI commands for
-// structured communication. Behavioral rules (body summary, heartbeat cadence,
-// no-AskUserQuestion) live as inline comments above the relevant CLI example,
-// not as a separate prose block — LLM readers anchor on examples and skim
-// trailing prose, so rules must land at the point of use.
+// Place behavior rules beside CLI examples, where agent readers use them.
 export function buildDispatchPreamble(params: PreambleParams): string {
-  // Why: in dev mode, agents must use orca-dev to connect to the dev runtime's
-  // socket. Without this, agents inside the dev Electron app would call the
-  // production CLI and talk to the wrong Orca instance (Section 6.4).
+  // Dev agents must reach the dev socket through orca-dev.
   const cli = params.devMode ? 'orca-dev' : (params.cliCommand ?? 'orca')
   const chat = isSessionHandle(params.workerHandle)
   const surface = chat ? 'chat' : 'terminal'
@@ -82,10 +60,25 @@ export function buildDispatchPreamble(params: PreambleParams): string {
     chat
   })
 
-  // Why: one-line recipes paste unchanged in POSIX shells, PowerShell, and cmd.exe.
-  // Why fenced: keeps the shell comments executable without rendering them as Chat UI headings.
-  // Why plain-reason wording: Claude Code tells the model pasted text may carry instructions
-  // the user did not write, and shouted rules read as prompt injection (STA-8200).
+  const heartbeat =
+    params.heartbeatIntervalMinutes === null
+      ? ''
+      : `  # Send a heartbeat every ${params.heartbeatIntervalMinutes} minutes
+  # while actively working on the task. The coordinator uses this to
+  # distinguish "still thinking" from "hung / crashed." Skip heartbeats only
+  # while blocked inside \`check --wait\` or \`ask\` — those calls are
+  # themselves liveness signals. If a background loop sends them, restart
+  # it if it expires mid-task, and stop it before you send worker_done.
+  #
+  # Include BOTH taskId and dispatchId in the payload: the coordinator
+  # attributes the heartbeat to the specific dispatch context, not just
+  # the task, so a straggler heartbeat from a previously-failed dispatch
+  # cannot mask a hung retry.
+  ${cli} orchestration send --from ${params.workerHandle} --type heartbeat --subject "alive" --task-id ${params.taskId} --dispatch-id ${params.dispatchId} --phase "<short: investigating|implementing|reviewing|waiting>"
+
+`
+
+  // Use one-line recipes across POSIX/PowerShell/cmd; fence comments and use plain reasons to avoid misleading Chat rendering (STA-8200).
   const header = `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
 ${dispatchIdentityLines(params)}
 
@@ -112,19 +105,7 @@ Don't post to Slack, GitHub, or other channels during the run; report through th
   # from a failed retry cannot complete the current dispatch.
   ${cli} orchestration send --from ${params.workerHandle} --type worker_done --subject "<short status>" --body "<3-sentence summary: what you did, what you found, what's left>" --task-id ${params.taskId} --dispatch-id ${params.dispatchId} --outcome succeeded
 
-  # Send a heartbeat every ${HEARTBEAT_INTERVAL_MIN} minutes
-  # while actively working on the task. The coordinator uses this to
-  # distinguish "still thinking" from "hung / crashed." Skip heartbeats only
-  # while blocked inside \`check --wait\` or \`ask\` — those calls are
-  # themselves liveness signals.
-  #
-  # Include BOTH taskId and dispatchId in the payload: the coordinator
-  # attributes the heartbeat to the specific dispatch context, not just
-  # the task, so a straggler heartbeat from a previously-failed dispatch
-  # cannot mask a hung retry.
-  ${cli} orchestration send --from ${params.workerHandle} --type heartbeat --subject "alive" --task-id ${params.taskId} --dispatch-id ${params.dispatchId} --phase "<short: investigating|implementing|reviewing|waiting>"
-
-  # Ask the coordinator a question and block until it answers.
+${heartbeat}  # Ask the coordinator a question and block until it answers.
   #
   # Use this instead of AskUserQuestion: that opens a local prompt the
   # coordinator cannot see or answer, so the task would stall until someone
@@ -145,15 +126,16 @@ Don't post to Slack, GitHub, or other channels during the run; report through th
   # start a new file and after a test run — and once more immediately before
   # you send worker_done, so a redirect lands before the task settles.
   ${cli} orchestration check --terminal ${params.workerHandle} --json
+
+  # After processing every message, ack the returned deliveryId; this also reads
+  # the next batch. Repeat until count is 0, then resume. Unacked batches replay
+  # and hide newer mail.
+  ${cli} orchestration check --terminal ${params.workerHandle} --ack <delivery_id> --json
 \`\`\`
 
 ${postDoneInstructions}`
 
-  // Why: the drift section fires only when the coordinator allowed dispatch
-  // against a stale worktree (via `allow-stale-base: true` in the task spec,
-  // see §3.4) OR when behind>0 but under the refusal threshold. Either way
-  // it is defense-in-depth: the worker sees the drift from line 1 instead
-  // of discovering it via stale line numbers in artifacts later.
+  // Show real drift even below refusal threshold so workers notice stale artifacts early.
   const drift =
     params.baseDrift && params.baseDrift.behind > 0 ? buildDriftSection(params.baseDrift) : ''
 
@@ -177,7 +159,7 @@ export type DispatchPreambleSendOptions = Pick<
 export function dispatchPreambleSendOptions(requestId: string): DispatchPreambleSendOptions {
   // Why: a delayed provider hook must not revoke an accepted Dispatch.
   return {
-    inputKind: 'driving',
+    inputKind: 'orchestration',
     leadLine: ORCA_DISPATCH_PROMPT_LEAD_LINE,
     acceptQueued: true,
     observationTimeoutMs: 0,
@@ -203,9 +185,7 @@ function buildPostWorkerDoneInstructions({
   workerKind: NonNullable<PreambleParams['workerKind']>
   chat: boolean
 }): string {
-  // Why: re-dispatch reaches idle agents as new input; inbox polling
-  // after completion cannot receive that new TASK block and looks hung.
-  // Why chat first: a chat has no shell to exit, whatever workerKind says.
+  // Redispatch arrives as new input; post-completion inbox polling looks hung. Chats have no shell to exit.
   if (workerKind === 'bare-shell' && !chat) {
     return `=== AFTER YOU SEND worker_done ===
 
@@ -236,11 +216,7 @@ Dispatch IDs. Never refuse a direct user request because you were a worker.
 ${chat ? CHAT_REDISPATCH_PARAGRAPH : TERMINAL_REDISPATCH_PARAGRAPH}`
 }
 
-// Why the whole section is omitted rather than softened when nesting is off: a
-// worker told it "usually cannot" delegate still tries, then reports the refusal
-// as a blocker.
-// Why fenced + blank line before the closing `---`: unfenced `<placeholders>` are stripped as raw
-// HTML by the Chat UI, and a rule directly under a paragraph is a setext H2 (giant last sentence).
+// Omit disabled delegation entirely; fence placeholders and separate closing rules so Chat rendering preserves the instructions.
 function buildSubDispatchSection(cli: string, workerHandle: string): string {
   return `
 

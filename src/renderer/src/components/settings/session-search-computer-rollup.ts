@@ -1,9 +1,4 @@
-/**
- * What one computer in the pane is doing, as far as this client can tell.
- *
- * `checking` is not `offline`: a probe still in flight is no evidence the host
- * is unreachable, so it is neither counted as offline nor skipped as one.
- */
+/** Checking probes are not evidence of offline hosts; neither count nor skip them as offline. */
 export type SessionSearchComputerState = 'on' | 'off' | 'checking' | 'needs-update' | 'offline'
 
 export type SessionSearchComputerEntry = {
@@ -25,7 +20,6 @@ const STATE_RANK: Record<SessionSearchComputerState, number> = {
   offline: 3
 }
 
-/** Stable order for the server list: by state group, then by name within a group. */
 export function orderSessionSearchServers<T extends SessionSearchComputerEntry>(
   entries: readonly T[]
 ): T[] {

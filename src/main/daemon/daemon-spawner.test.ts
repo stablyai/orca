@@ -32,7 +32,9 @@ function createMockSubprocess(): SubprocessHandle {
     resize: vi.fn(),
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
     terminateOwnedTree: () => 'unavailable' as const,
-    forceKill: vi.fn(() => setTimeout(() => onExitCb?.(137), 5)),
+    forceKill: vi.fn(() => {
+      setTimeout(() => onExitCb?.(137), 5)
+    }),
     signal: vi.fn(),
     onData(_cb: (data: string) => void) {},
     onExit(cb: (code: number) => void) {
@@ -265,8 +267,7 @@ describe('daemon PID publication', () => {
   })
 
   it('reports failure and preserves the record when the rename claim fails for any reason but absence', () => {
-    // A read-only parent denies the rename with EACCES, standing in for the Windows
-    // AV/indexer lock that fails the claim on a record which is merely open.
+    // POSIX directory permissions model the rename failure caused by Windows file locks.
     if (process.platform === 'win32' || process.getuid?.() === 0) {
       return
     }
@@ -290,11 +291,7 @@ describe('daemon PID publication', () => {
 
 describe('daemon socket publication', () => {
   it('keeps every scratch namespace outside the released sweeper pattern', () => {
-    // Why pinned, and why all three: builds already in the field sweep these names on age alone
-    // with no liveness or ownership check, and deleting our sweeper does not un-ship theirs. A
-    // bind name is a live listener's only pathname; a claim briefly holds the only copy of a
-    // live daemon's token or PID record. Renaming any of them back into the released pattern
-    // must fail here rather than in the field.
+    // Released age-only sweepers can delete live bind names and the sole copy of claimed ownership records.
     const RELEASED_SWEEPER_PATTERN =
       /(?:\.(?:cleanup|replace)-\d+-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|^\.b[0-9a-f]{10})$/
 

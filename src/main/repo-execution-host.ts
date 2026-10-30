@@ -17,11 +17,7 @@ export function getStoredRepoExecutionHostId(
   return getSshTargetIdForExecutionHost(hostId) ? hostId : LOCAL_EXECUTION_HOST_ID
 }
 
-/**
- * The gate for Git this process runs on a row from its own Store. `ssh:` rows throw, as does any row
- * still carrying a `connectionId` (a nested SSH target, or a stale one beside `local`). A `runtime:`
- * stamp alone addresses files registered here (`getStoredRepoExecutionHostId`), so it runs.
- */
+/** Store rows may carry runtime stamps for local files; connectionIds still require SSH. */
 export function requireRepoLocalGitRoute(
   repo: Pick<Repo, 'connectionId' | 'executionHostId'>
 ): ReturnType<typeof requireReachableGitRoute> {

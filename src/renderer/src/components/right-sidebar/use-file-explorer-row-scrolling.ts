@@ -22,6 +22,7 @@ type UseFileExplorerRowScrollingParams = {
   loadingDirPaths: ReadonlySet<string>
   rootCache: DirCache | undefined
   loadDir: (dirPath: string, depth: number, options?: { force?: boolean }) => Promise<boolean>
+  loadMoreDir?: (dirPath: string) => Promise<void>
   setSelectedPath: (path: string | null) => void
   activeFileId: string | null
   openFiles: OpenFile[]
@@ -36,7 +37,6 @@ type UseFileExplorerRowScrollingResult = {
   setExplorerShellRef: (node: HTMLDivElement | null) => void
 }
 
-/** Decides which explorer row is measured and scrolled into view. */
 export function useFileExplorerRowScrolling({
   onRevealOutsideRoot,
   visibleRowCount,
@@ -51,6 +51,7 @@ export function useFileExplorerRowScrolling({
   loadingDirPaths,
   rootCache,
   loadDir,
+  loadMoreDir,
   setSelectedPath,
   activeFileId,
   openFiles
@@ -58,7 +59,7 @@ export function useFileExplorerRowScrolling({
   const pendingExplorerReveal = useAppStore((s) => s.pendingExplorerReveal)
   const clearPendingExplorerReveal = useAppStore((s) => s.clearPendingExplorerReveal)
   const [flashingPath, setFlashingPath] = useState<string | null>(null)
-  /** Includes Radix scroll viewport + scrollbar (scrollbar is not a child of the viewport). */
+  /** Include the scrollbar, which is outside Radix’s viewport. */
   const explorerShellRef = useRef<HTMLDivElement | null>(null)
   const flashTimeoutRef = useRef<number | null>(null)
 
@@ -94,6 +95,7 @@ export function useFileExplorerRowScrolling({
     rootCache: displayRootPath ? dirCache[displayRootPath] : rootCache,
     rowProjection,
     loadDir,
+    loadMoreDir,
     setSelectedPath,
     setFlashingPath,
     flashTimeoutRef,
@@ -105,8 +107,7 @@ export function useFileExplorerRowScrolling({
       if (node !== null) {
         return
       }
-      // Why: reveal flash/scroll timers target the explorer shell; clear them
-      // when that owner detaches instead of keeping a passive unmount Effect.
+      // Cancel shell-owned reveal timers on detach rather than passive unmount cleanup.
       cancelRevealTimers()
     },
     [cancelRevealTimers]

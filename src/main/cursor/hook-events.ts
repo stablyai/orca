@@ -1,5 +1,4 @@
-// Subscribe only to Cursor hooks needed for spinner and turn detection.
-// Exclude process-boundary session hooks, which can reset the submitted-turn prompt cache.
+// Process-boundary session hooks reset the submitted-turn cache; subscribe only to turn events.
 export const CURSOR_EVENTS = [
   'beforeSubmitPrompt',
   'stop',

@@ -4,10 +4,8 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 import { createStoreSessionMockApi } from './store-session-test-harness'
 
-// Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
-// Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return {
@@ -707,7 +705,6 @@ describe('hydrateEditorSession', () => {
           }
         ]
       },
-      // Points to a file that no longer exists in the restored set
       activeFileIdByWorktree: { [wt]: '/path/wt1/gone.ts' },
       activeTabTypeByWorktree: { [wt]: 'editor' }
     })
@@ -767,10 +764,8 @@ describe('hydrateEditorSession', () => {
     })
 
     const s = store.getState()
-    // Only files from the valid worktree should be restored
     expect(s.openFiles).toHaveLength(1)
     expect(s.openFiles[0].worktreeId).toBe(validWt)
-    // Deleted worktree should not appear in per-worktree maps
     expect(s.activeFileIdByWorktree[deletedWt]).toBeUndefined()
     expect(s.activeTabTypeByWorktree[deletedWt]).toBeUndefined()
   })

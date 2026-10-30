@@ -14,23 +14,18 @@ import type { CodexEventLabel, CodexTrustEntry } from './config-toml-trust'
 
 type HooksByEvent = Record<string, HookDefinition[]>
 
-/**
- * Orca's entry in ~/.codex lives alone, in a group with no matcher, once per
- * event: Codex hashes the group's matcher, so a copy inside a user's group
- * would wait for review forever.
- */
+// Codex hashes group matchers, so Orca needs a dedicated matcher-free group to match its approval.
 export type RealHomeCodexHookEntryPlan =
-  /** Drop every Orca copy but the one kept first: user hooks may shift, so their approvals move. */
+  /** Pruning can shift user hooks and their positional approval keys. */
   | { kind: 'prune'; hooks: HooksByEvent }
   | {
       kind: 'settle'
-      /** Orca's entry rewritten in place or appended last; no user hook moves. */
+      /** Preserve user hook positions. */
       hooks: HooksByEvent
-      /** Events whose hooks this plan changed; an approval read before the write may no longer fit them. */
+      /** Existing approvals may be stale for these events. */
       changedLabels: ReadonlySet<CodexEventLabel>
-      /** Orca's entry in each planned event, keyed by `sourcePath`. */
       managedEntries: CodexTrustEntry[]
-      /** Events left as they are: a newer build's entry, or an older one not up for conversion. */
+      /** Preserve newer entries and older forms not being converted. */
       untouchedLabels: ReadonlySet<CodexEventLabel>
     }
 
@@ -56,7 +51,6 @@ function findOrcaHandlers(
   )
 }
 
-/** A group that holds only Orca's handlers, with no matcher and nothing else of the user's. */
 function isOrcaOnlyGroup(
   definition: HookDefinition,
   isOrcaCommand: (command: string | undefined) => boolean
@@ -68,8 +62,7 @@ function isOrcaOnlyGroup(
   )
 }
 
-// Why every field: Codex hashes command, type, timeout, async and statusMessage, so an
-// edited copy kept in place would sit beside an approval for what Orca wrote.
+// Match every field Codex hashes so modified hooks cannot reuse Orca's approval.
 function isSameHook(left: HookCommandConfig, right: HookCommandConfig): boolean {
   const keys = new Set([...Object.keys(left), ...Object.keys(right)])
   return [...keys].every((key) => JSON.stringify(left[key]) === JSON.stringify(right[key]))
@@ -86,13 +79,12 @@ export function planRealHomeCodexHookEntries(args: {
   sourcePath: string
   material: Pick<CodexManagedHookInstallMaterial, 'events' | 'command'>
   isOrcaCommand: (command: string | undefined) => boolean
-  /** App start and the setting turning on; a launch never fights a running older build. */
+  /** Convert older forms at startup/opt-in, never on launch. */
   convertOlderForms: boolean
 }): RealHomeCodexHookEntryPlan {
   const { material, isOrcaCommand, sourcePath } = args
   const command = material.command
-  // Why: events this build does not plan keep their Orca entries; a newer build
-  // may subscribe to them, and Codex lists no hash for them here.
+  // Preserve unplanned events, which may belong to a newer build.
   const pruned: HooksByEvent = { ...args.hooks }
   const hooks: HooksByEvent = { ...args.hooks }
   const changedLabels = new Set<CodexEventLabel>()
@@ -112,7 +104,6 @@ export function planRealHomeCodexHookEntries(args: {
       handlers.some((handler) => handler.form > CODEX_HOOK_COMMAND_FORM) ||
       (holdsOlderForm && !args.convertOlderForms)
     ) {
-      // Why: a newer build owns this event's entry, and an older build's may still be running.
       untouchedLabels.add(label)
       continue
     }
@@ -120,7 +111,7 @@ export function planRealHomeCodexHookEntries(args: {
       isOrcaOnlyGroup(current[handler.groupIndex]!, isOrcaCommand)
     )
     const rest = removeManagedCommands(current, isOrcaCommand)
-    // Why the kept group where its copies were: the slot keeps its position, so no user approval key moves.
+    // Keep the surviving group in place to preserve user approval keys.
     const slot = keeper
       ? removeManagedCommands(current.slice(0, keeper.groupIndex), isOrcaCommand).length
       : rest.length
@@ -138,7 +129,6 @@ export function planRealHomeCodexHookEntries(args: {
       continue
     }
     const wanted = buildCodexManagedHook(command, eventName)
-    // Why last when new: no user hook's positional approval key moves.
     const definitions =
       keeper && isSameHook(keeper.hook, wanted)
         ? current

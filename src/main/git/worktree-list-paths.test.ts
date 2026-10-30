@@ -129,8 +129,6 @@ describe('git worktree paths', () => {
   )
 
   it('annotates a worktree whose directory was deleted as prunable', async () => {
-    // Why: an un-pruned registration with a deleted directory must not surface
-    // as a live workspace (issue #8389).
     const { repoPath, worktreePath } = await createRepoWithPrunableWorktree()
 
     const worktrees = await listWorktrees(repoPath)

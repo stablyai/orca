@@ -11,8 +11,7 @@ export function isFileNameFilterQueryTooLarge(
   return isClipboardTextByteLengthOverLimit(query, maxBytes)
 }
 
-// Why: accepted pasted file-filter queries are still on a renderer hot path;
-// tokenize whitespace directly instead of allocating a regex split array.
+// Scan whitespace without a split array on the renderer’s pasted-query hot path.
 export function splitFileNameFilterTokens(query: string): string[] {
   const tokens: string[] = []
   let tokenStart = -1
@@ -55,7 +54,7 @@ export function pathMatchesFileNameFilterTokens(
   if (tokens.length === 0) {
     return true
   }
-  // Why: locale-independent so host and renderer agree; callers pass already-normalized paths.
+  // Locale-independent folding keeps host/renderer matching aligned; paths arrive normalized.
   const haystack = relativePath.toLowerCase()
   return tokens.every((token) => haystack.includes(token))
 }

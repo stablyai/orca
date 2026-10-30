@@ -30,7 +30,7 @@ beforeEach(() =>
     describeProtectionGap: () => 'unavailable'
   })
 )
-// Stands in for the born-restricted create: a real staged write, then the injected outcome.
+// Stage real bytes and inject the born-restricted creator's restriction outcome.
 vi.mock('../../shared/secure-path-windows-acl', async () => {
   const { writeFileSync: stage } = await vi.importActual<typeof Fs>('node:fs')
   return {

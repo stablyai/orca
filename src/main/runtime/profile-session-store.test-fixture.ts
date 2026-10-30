@@ -1,6 +1,4 @@
-// A fake runtime store made to answer as a profile Store does for main's layout: sessions
-// partitioned by execution host, the host list, `layout.apply` on the routed partition, and a
-// write notice for every session write.
+// Model profile sessions by host, including routed layout commands and write notifications.
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { LayoutCommand } from '../../shared/workspace-layout/workspace-layout-command-types'
@@ -25,11 +23,7 @@ const installedSessionStores = new WeakSet<SessionStore>()
 const installedLayoutApplies = new WeakSet<SessionStore>()
 const writeListenersByStore = new WeakMap<SessionStore, Set<WriteListener>>()
 
-/**
- * As the profile Store does, every session write asProfileSessionStore installs (direct or by a
- * layout command) tells the store's write listeners, which is what runs main's merge after a
- * commit. Install it before the runtime's first graph: main subscribes then.
- */
+/** Install before first graph subscription; direct and layout-command writes must notify main's post-commit merge. */
 export function announceSessionWrites(store: SessionStore & Pick<RuntimeStore, 'getRepos'>): void {
   if (store.onWorkspaceSessionWritten) {
     return
@@ -42,7 +36,7 @@ export function announceSessionWrites(store: SessionStore & Pick<RuntimeStore, '
       listeners.delete(listener)
     }
   }
-  // Not enumerable: a test's `{ ...store }` copy keeps its own writes and so must not inherit it.
+  // Keep subscription non-enumerable so spread copies do not inherit another store's write listeners.
   Object.defineProperty(store, 'onWorkspaceSessionWritten', {
     value: subscribe,
     configurable: true,
@@ -81,10 +75,7 @@ export function storeOf(runtime: OrcaRuntimeService): SessionStore | null {
   return runtime['store'] ?? null
 }
 
-/**
- * Gives the store what it lacks of a profile's session API, remembering it for
- * forgetInstalledPaneSession, and records `hostId` among its partitions.
- */
+/** Supply missing profile session APIs, track host partitions, and retain state for fixture cleanup. */
 export function asProfileSessionStore(
   store: SessionStore,
   hostId: string
@@ -94,7 +85,6 @@ export function asProfileSessionStore(
 } {
   if (!store.getWorkspaceSession || !store.setWorkspaceSession) {
     installedSessionStores.add(store)
-    // Partitioned by execution host, as the profile Store keeps sessions.
     const sessions = new Map<string, WorkspaceSessionState>()
     store.getWorkspaceSession = (host = 'local') =>
       sessions.get(host) ?? getDefaultWorkspaceSession()

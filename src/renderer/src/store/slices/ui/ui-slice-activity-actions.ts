@@ -88,8 +88,7 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
           ...(nextManual ? { manuallyUnreadTurnsByPaneKey: nextManual } : {})
         }
       })
-      // Why: main retires what it announced for these subjects; the ids rebuilt above from the row
-      // as it stands now are the fallback after a restart emptied that record.
+      // Dismiss main’s announced subjects; rebuilt IDs cover restart-empty notification records.
       if (paneKeys.length > 0 && typeof window !== 'undefined') {
         void window.api?.notifications?.dismiss?.([...notificationIdsToDismiss], paneKeys)
       }

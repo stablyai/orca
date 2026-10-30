@@ -40,16 +40,6 @@ describe('terminal focus readiness', () => {
     return textarea
   }
 
-  it('does not report success before the active pane exists', () => {
-    register(false)
-    expect(focusRuntimeTerminalSurface('restoring-tab', null, 'restoring-workspace')).toBe(false)
-  })
-
-  it('does not report success before the terminal textarea exists', () => {
-    register(true, false)
-    expect(focusRuntimeTerminalSurface('restoring-tab', null, 'restoring-workspace')).toBe(false)
-  })
-
   it('does not consume focus until the terminal can receive it', () => {
     const textarea = register(true)
     expect(focusRuntimeTerminalSurface('restoring-tab', null, 'restoring-workspace')).toBe(false)

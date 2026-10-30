@@ -1,10 +1,6 @@
 import { useEffect, type RefObject } from 'react'
 
-// Why: plain click inside a contenteditable places the caret, so markdown links
-// only open on Cmd/Ctrl-click. Toggling this class while the platform modifier
-// is held lets CSS surface a pointer cursor only at that moment — matching
-// VS Code's link affordance without misleading the user into expecting a plain
-// click to open.
+// Show link pointer cursors only while the platform modifier is held; plain clicks inside contenteditable place the caret.
 export function useModifierHeldClass(
   targetRef: RefObject<HTMLElement | null>,
   isMac: boolean,

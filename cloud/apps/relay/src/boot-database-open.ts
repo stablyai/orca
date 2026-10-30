@@ -6,20 +6,13 @@ import {
 } from './postgres-pool-pressure.js'
 import { postgresErrorCodeCategory } from './postgres-query-failure.js'
 
-// Only a failure to reach Postgres at all. A retry here re-runs the schema
-// apply, and applyPostgresSchema refuses to repeat a DDL lock timeout on
-// purpose: relation locks are granted in queue order, so a repeat parks every
-// writer behind the same statement again. 55P03, 57014 and 53300 therefore stay
-// terminal at boot even though the request path calls them transient.
+// Retry only unreachable PostgreSQL. Reapplying DDL after lock/statement/capacity errors (55P03/57014/53300) requeues ahead of writers, so these remain terminal at boot.
 function isBootDatabaseUnreachable(error: unknown): boolean {
   const code = postgresErrorCodeCategory(error)
   return isPostgresPoolConnectFailure(error) || code === '08001' || code === '08006'
 }
 
-// A cell boots beside a cloud-sql-proxy that is itself still dialling, so the
-// first pool acquire can outrun the 2s connect timeout that protects the
-// request path. The window is longer than a proxy cold start and shorter than
-// the restart loop it replaces.
+// Proxy cold starts can exceed the request pool’s 2s connect timeout; retry longer than cold start but shorter than the restart loop.
 const BOOT_OPEN_RETRY = {
   attempts: 20,
   windowMs: 45_000,

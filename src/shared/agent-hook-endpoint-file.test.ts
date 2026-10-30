@@ -1,13 +1,25 @@
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { isAgentHookEndpointFileName, parseAgentHookEndpointFile } from './agent-hook-endpoint-file'
+import { parseAgentHookEndpointFile } from './agent-hook-endpoint-file'
+import { getEndpointFileName, writeEndpointFile } from './agent-hook-listener/endpoint-publication'
+
+const ENDPOINT_LINES = [
+  'ORCA_AGENT_HOOK_PORT=12345',
+  'ORCA_AGENT_HOOK_TOKEN=token-123',
+  'ORCA_AGENT_HOOK_ENV=production',
+  'ORCA_AGENT_HOOK_VERSION=1'
+]
+const REQUIRED_FIELDS = [
+  'ORCA_AGENT_HOOK_PORT',
+  'ORCA_AGENT_HOOK_TOKEN',
+  'ORCA_AGENT_HOOK_ENV',
+  'ORCA_AGENT_HOOK_VERSION'
+]
+const ENDPOINT = { port: '12345', token: 'token-123', env: 'production', version: '1' }
 
 describe('agent hook endpoint files', () => {
-  it('recognizes POSIX and Windows endpoint file names', () => {
-    expect(isAgentHookEndpointFileName('endpoint.env')).toBe(true)
-    expect(isAgentHookEndpointFileName('endpoint.cmd')).toBe(true)
-    expect(isAgentHookEndpointFileName('endpoint.ps1')).toBe(false)
-  })
-
   it('parses POSIX endpoint.env contents', () => {
     expect(
       parseAgentHookEndpointFile(
@@ -44,22 +56,39 @@ describe('agent hook endpoint files', () => {
     })
   })
 
-  it('preserves equals signs in endpoint values', () => {
-    expect(
-      parseAgentHookEndpointFile(
-        [
-          'ORCA_AGENT_HOOK_PORT=12345',
-          'ORCA_AGENT_HOOK_TOKEN=token=with=equals',
-          'ORCA_AGENT_HOOK_ENV=production',
-          'ORCA_AGENT_HOOK_VERSION=1'
-        ].join('\n')
-      ).token
-    ).toBe('token=with=equals')
-  })
-
-  it('throws when required endpoint fields are missing', () => {
-    expect(() => parseAgentHookEndpointFile('ORCA_AGENT_HOOK_PORT=12345')).toThrow(
+  it.each(REQUIRED_FIELDS)('rejects an independently missing %s', (field) => {
+    expect(parseAgentHookEndpointFile(ENDPOINT_LINES.join('\n'))).toEqual(ENDPOINT)
+    const missing = ENDPOINT_LINES.filter((line) => !line.startsWith(`${field}=`)).join('\n')
+    expect(() => parseAgentHookEndpointFile(missing)).toThrow(
       'Agent hook endpoint file is missing required fields'
     )
+  })
+
+  it.each(REQUIRED_FIELDS)('rejects an independently empty %s', (field) => {
+    expect(parseAgentHookEndpointFile(ENDPOINT_LINES.join('\n'))).toEqual(ENDPOINT)
+    const empty = ENDPOINT_LINES.map((line) =>
+      line.startsWith(`${field}=`) ? `${field}=` : line
+    ).join('\n')
+    expect(() => parseAgentHookEndpointFile(empty)).toThrow(
+      'Agent hook endpoint file is missing required fields'
+    )
+  })
+
+  it('parses the endpoint bytes published by the platform writer', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'orca-hook-endpoint-parser-'))
+    try {
+      const path = join(directory, getEndpointFileName())
+      expect(
+        writeEndpointFile(directory, path, {
+          port: 12345,
+          token: 'token-123',
+          env: 'production',
+          version: '1'
+        })
+      ).toBe(true)
+      expect(parseAgentHookEndpointFile(readFileSync(path, 'utf8'))).toEqual(ENDPOINT)
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
   })
 })

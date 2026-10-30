@@ -51,8 +51,7 @@ beforeEach(() => {
 })
 
 describe('addSparseWorktree', () => {
-  // Why: argv now depends on the host OS, so pin a non-Windows default or the exact-argv
-  // assertions below would fail for a maintainer running vitest on Windows.
+  // Pin the OS so exact-argv assertions are portable.
   let platformSpy: MockInstance<() => NodeJS.Platform>
 
   beforeEach(() => {
@@ -71,8 +70,6 @@ describe('addSparseWorktree', () => {
   })
 
   it('enables long paths on the Windows commands that actually write the deep checkout', async () => {
-    // Why: `worktree add --no-checkout` writes nothing, so the long-path flag on it alone
-    // left sparse creation failing with "Filename too long" (issue #15785).
     platformSpy.mockReturnValue('win32')
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
 
@@ -115,11 +112,7 @@ describe('addSparseWorktree', () => {
 
   it('removes the worktree and deletes the created branch when sparse setup fails', async () => {
     mockGitCommands({
-      // Why: addWorktree probes push.autoSetupRemote after `worktree add` to
-      // decide whether to set it locally. Without an explicit mock the helper
-      // returns empty stdout and the production code skips the `--local` write,
-      // exercising the wrong branch. Throw with code 1 to mirror git's "key
-      // unset" exit, which is what worktree.ts treats as "needs to be set".
+      // Exit 1 means the config key is unset and exercises the local-write path.
       'git config --get push.autoSetupRemote': {
         error: Object.assign(new Error('key unset'), { code: 1 })
       },

@@ -1,10 +1,5 @@
-// What a bounded-frame subscriber is sent: every frame fits a phone's bridge frame.
-//
-// A history frame carries rows its reader already sized in bounded form, and metadata held to
-// `FRAME_METADATA_CEILING_BYTES`. The lists that ride beside history on other subscribers' frames
-// (the draft queue and the background-task roster) each ride an empty batch of their own, fitted to
-// the same content budget; the slash-command list is not sent, since a phone reads it from
-// `agentSession.options`.
+// Fit phone bridge limits by splitting queue/roster lists into side batches.
+// Omit slash commands because phones read them through agentSession.options.
 
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type {
@@ -27,14 +22,11 @@ const BOUNDED_FRAME_READER: HistoryReader = {
   budgetBytes: BOUNDED_FRAME_CONTENT_BUDGET_BYTES
 }
 
-/** How a subscriber's rows are read, and so how its pages are sized. */
 export function subscriberHistoryReader(subscriber: { boundedFrames: boolean }): HistoryReader {
   return subscriber.boundedFrames ? BOUNDED_FRAME_READER : CLIENT_HISTORY_READER
 }
 
-/** The latest turn and the activity line are each a few hundred bytes, their ids and text bounded
- *  where they are made. Only a provider id far past any real one could pass these; the frame then
- *  leaves the field out, which a reader takes as a host that did not say. */
+/** Omit oversized metadata rather than exceeding the envelope; readers treat absence as unspecified. */
 const BOUNDED_FRAME_LATEST_TURN_BYTES = 8 * 1024
 const BOUNDED_FRAME_ACTIVITY_BYTES = 2 * 1024
 
@@ -49,15 +41,14 @@ function within(value: unknown, maxBytes: number): boolean {
   return value === null || jsonBytes(value) <= maxBytes
 }
 
-/** The cursor a reader holds once it has applied `event`, which a side frame must name. */
+/** Side frames must name the cursor after history is applied. */
 function cursorAfter(event: HistoryFrame): AgentJournalCursor {
   return event.type === 'batch'
     ? event.batch.cursor
     : (event.page.liveCursor ?? event.page.window.nextCursor)
 }
 
-/** `event` without the roster, which rides its own frame, and with metadata past its bound left
- *  out. The other side lists are attached only after this, so an event never carries them. */
+/** Remove side lists and oversized metadata before attaching separately budgeted fields. */
 function boundedHistoryFrame(event: HistoryFrame): HistoryFrame {
   const { backgroundTasks: _backgroundTasks, activity, ...rest } = event
   const frame = {
@@ -99,8 +90,7 @@ function isEmptyBatch(frame: HistoryFrame): frame is BatchFrame {
   )
 }
 
-/** The newer half of each list in turn until the roster fits, least telling first; `incomplete`
- *  tells a reader that what is listed is not everything. */
+/** Discard older rows from the least informative lists first; incomplete signals omissions. */
 function withoutOlderRows(state: AgentSessionBackgroundTaskState): AgentSessionBackgroundTaskState {
   let fitted = state
   for (const list of ['settledTasks', 'children', 'tasks'] as const) {
@@ -115,7 +105,6 @@ function withoutOlderRows(state: AgentSessionBackgroundTaskState): AgentSessionB
   return fitted
 }
 
-/** The roster fitted to a frame: its text shortened, then older rows left out. */
 function boundedBackgroundTasks(
   state: AgentSessionBackgroundTaskState | null
 ): AgentSessionBackgroundTaskState | null {
@@ -136,8 +125,7 @@ type BoundedSideLists = {
   backgroundTasks: AgentSessionBackgroundTaskState | null | undefined
 }
 
-/** One event as a bounded-frame subscriber receives it: the history frame, then an empty batch per
- *  side list it would have carried. An empty history batch is one already, so the first rides it. */
+/** Send history first, then side lists; reuse empty history batches for the first list. */
 export function boundedFrames(
   event: AgentSessionSubscribeEvent,
   side: BoundedSideLists

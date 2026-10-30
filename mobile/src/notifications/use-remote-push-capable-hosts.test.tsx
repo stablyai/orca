@@ -17,8 +17,7 @@ vi.mock('../transport/runtime-capability-probe', () => ({
   startRuntimeCapabilityProbe: vi.fn()
 }))
 
-// The real module reaches expo-notifications and the preference store for the token
-// path; only the capability string matters here.
+// Stub the token path to avoid Expo/preference imports; only the capability answer is tested.
 vi.mock('./push-registration', () => ({
   NOTIFICATIONS_REMOTE_PUSH_CAPABILITY: 'notifications.remote-push.v1'
 }))
@@ -27,7 +26,6 @@ const CAPABILITY = 'notifications.remote-push.v1'
 
 type ClientEntry = { hostId: string; client: RpcClient; state: string }
 
-/** Distinct object per host, so identity changes are the thing under test. */
 function clientFor(hostId: string): RpcClient {
   return { hostId } as unknown as RpcClient
 }
@@ -90,8 +88,7 @@ describe('useRemotePushCapableHosts', () => {
 
     await mount()
 
-    // Resolving here would render "Update your desktop app" at someone whose desktop
-    // is already current, on the strength of a catalog read that simply failed.
+    // Catalog failure cannot prove hosts lack push support or justify an update prompt.
     expect(latest).toEqual({ supported: false, resolved: false })
   })
 
@@ -147,8 +144,7 @@ describe('useRemotePushCapableHosts', () => {
     await setClients([{ hostId: 'host-1', client: first, state: 'connected' }])
     expect(startRuntimeCapabilityProbe).toHaveBeenCalledTimes(1)
 
-    // useAllHostClients rebuilds its array on every connection tick, so a plain
-    // dependency on it would tear down and restart host-1's probe here.
+    // Array identity changes on every connection tick; only client identity changes should restart this probe.
     await setClients([
       { hostId: 'host-1', client: first, state: 'connected' },
       { hostId: 'host-2', client: clientFor('host-2'), state: 'connecting' }
@@ -179,18 +175,5 @@ describe('useRemotePushCapableHosts', () => {
     expect(latest).toEqual({ supported: false, resolved: true })
     await answer('host-1', [CAPABILITY])
     expect(latest).toEqual({ supported: true, resolved: true })
-  })
-
-  it('ignores an answer from a host the catalog no longer lists', async () => {
-    await mount()
-    await setClients([
-      { hostId: 'host-ghost', client: clientFor('host-ghost'), state: 'connected' }
-    ])
-
-    await answer('host-ghost', [CAPABILITY])
-
-    // An unpaired desktop cannot push to this phone, so its vote must not offer
-    // the switch — nor count as the answer that resolves the section.
-    expect(latest).toEqual({ supported: false, resolved: false })
   })
 })

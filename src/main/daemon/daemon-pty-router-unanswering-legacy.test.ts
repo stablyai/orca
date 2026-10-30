@@ -17,10 +17,8 @@ afterEach(async () => {
   }
 })
 
-/** An older daemon endpoint that accepts connections and never answers, like a wedged daemon. */
 async function startUnansweringDaemon(): Promise<{ socketPath: string; tokenPath: string }> {
   const dir = mkdtempSync(join(tmpdir(), 'unanswering-daemon-'))
-  // Why: Windows needs a named pipe, which the spawner's path helper builds per platform.
   const socketPath = getDaemonSocketPath(dir, 47)
   const tokenPath = join(dir, 'daemon.token')
   writeFileSync(tokenPath, 'token')
@@ -40,7 +38,6 @@ async function startUnansweringDaemon(): Promise<{ socketPath: string; tokenPath
   return { socketPath, tokenPath }
 }
 
-// #30486: after an update, one older daemon that could not answer stranded every restored pane.
 describe('DaemonPtyRouter reattach beside an unanswering older daemon', () => {
   it('reattaches the exact restored session the current daemon still runs', async () => {
     const current = await startDaemonAdapterHarness(() => createMockSubprocess())
@@ -55,7 +52,6 @@ describe('DaemonPtyRouter reattach beside an unanswering older daemon', () => {
       isNewSession: true
     })
     expect(spawned.incarnationId).toEqual(expect.any(String))
-    // App restart: the old app's connection goes away; the daemon keeps the session.
     await current.adapter.disconnectOnly()
 
     const unanswering = await startUnansweringDaemon()
@@ -83,7 +79,7 @@ describe('DaemonPtyRouter reattach beside an unanswering older daemon', () => {
         isReattach: true
       })
     }
-    // Without generation evidence the older daemon could still own the id, so that stays refused.
+    // Without incarnation evidence, the unanswered legacy daemon remains a possible owner.
     await expect(
       router.spawn({ cols: 80, rows: 24, sessionId: 'wt@@unproven', attachOnly: true })
     ).rejects.toBeInstanceOf(TerminalSessionOwnerUnverifiedError)

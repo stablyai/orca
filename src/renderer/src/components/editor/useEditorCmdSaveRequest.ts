@@ -38,8 +38,7 @@ export function useEditorCmdSaveRequest({
       if (!saveTargetFile) {
         return
       }
-      // Why: a markdown preview tab is read-only but fronts the same document,
-      // so Cmd/Ctrl+S should save the source editor's current draft.
+      // Read-only Markdown previews still save their source record’s current draft.
       const state = useAppStore.getState()
       const draft = state.editorDrafts[saveTargetFile.id]
       if (!draft && !saveTargetFile.isUntitled && !saveTargetFile.isDirty) {

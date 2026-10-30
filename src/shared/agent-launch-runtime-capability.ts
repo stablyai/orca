@@ -1,28 +1,13 @@
-// Split out of protocol-version.ts, which spreads the list below into RUNTIME_CAPABILITIES in this
-// order. Import these names from here: the mobile recording loader cannot follow `export *`.
+// Preserve spread order in protocol-version.ts; mobile recordings require direct imports rather than export *.
 
-/**
- * `agent.launch` exists: one host-side method that decides structured-vs-terminal and creates the
- * surface, instead of each client routing for itself.
- *
- * Negotiated rather than assumed because a client that cannot see it must keep using
- * `worktree.create` + `startupAgent`, which stays supported verbatim. The reverse skew is the
- * dangerous one: `worktree.create` returns `agentTerminalHandle` only when a startup agent was
- * requested, so a host that quietly routed that call to a structured session would hand an old
- * client a response with no handle and no error.
- *
- * Advertising it is a statement that the client understands EITHER outcome, since the host is what
- * picks: a structured session it can open, or a terminal agent. A client that renders only one of
- * the two keeps using the surface-specific methods.
- */
+/** Negotiate host routing only with clients supporting both chat and terminal outcomes. Older clients retain worktree.create+startupAgent and require its terminal handle; silently routing those calls to chat breaks them. */
 // v2 makes prompt delivery an outcome union and top-level warnings the only supported shape.
 export const AGENT_LAUNCH_RUNTIME_CAPABILITY = 'agent.launch.v2' as const
 
 // Optional identity support on agent.launch; mobile replay across replacement hosts requires the new method.
 export const AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY = 'agent.launch.replay.v1' as const
 
-// A host that sends a launch prompt its typed startup line cannot carry to a paste after
-// readiness; an older host folds any prompt into that line, so clients gate prompted launches on it.
+// Gate prompted launches: this host carries prompts outside typed startup lines to paste after readiness; older hosts inline them.
 export const AGENT_LAUNCH_PROMPT_CARRY_RUNTIME_CAPABILITY = 'agent.launch.prompt-carry.v1' as const
 
 // agent.launchReplay requires the ledger; older replacement hosts must reject the method.
@@ -42,24 +27,20 @@ export const AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY = 'agent.launch.placement
 export const AGENT_LAUNCH_LOCAL_PRESENTATION_RUNTIME_CAPABILITY =
   'agent.launch.local-presentation.v1' as const
 
-// Host-advertised: accepts `target.kind: 'create-folder-workspace'`. An older host refuses the
-// unknown target kind, so a client offers the new-folder-workspace launch only on this. It is not
-// enough on its own: the target also needs `folderWorkspace.create` authorization, which a
-// mobile-scope device lacks, so a phone folder launch needs its own gate.
+// Gate folder launch on this host capability plus folderWorkspace.create authorization; mobile scope lacks that permission.
 export const AGENT_LAUNCH_CREATE_FOLDER_WORKSPACE_RUNTIME_CAPABILITY =
   'agent.launch.create-folder-workspace.v1' as const
 
-// Client-advertised only: the client reads a listed launch tab with no terminal yet as "not
-// started", never as proof its agent runs. The host publishes a paired caller's tab before the
-// spawn only for a client that says so.
+// Client-advertised: unstarted tabs do not prove agent liveness; only these clients may see publication before spawn.
 export const AGENT_LAUNCH_UNSTARTED_TAB_CLIENT_CAPABILITY = 'agent.launch.unstarted-tab.v1' as const
 
-// Client-advertised only: the client reads `agent_launch_tab_closed` (the user closed the launch's
-// tab while it started, so it was stopped) as a definite answer. Others get
-// `agent_session_operation_unknown` for it, as before the host knew.
+// Client-advertised: tab closure during startup is definite; older clients retain agent_session_operation_unknown.
 export const AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY = 'agent.launch.tab-closed.v1' as const
 
 export const AGENT_LAUNCH_SETTINGS_CAPABILITY = 'settings.agent-launch.v1' as const
+
+// Host applies `chatOptions` to whichever surface it opens: seeded on a chat, flags on a terminal.
+export const AGENT_LAUNCH_CHAT_OPTIONS_RUNTIME_CAPABILITY = 'agent.launch.chat-options.v1' as const
 
 // Host accepts scoped terminal permission mutations, including Auto.
 export const AGENT_LAUNCH_AUTO_PERMISSIONS_CAPABILITY =
@@ -69,14 +50,20 @@ export const AGENT_LAUNCH_AUTO_PERMISSIONS_CAPABILITY =
 export const AGENT_LAUNCH_NATIVE_CHAT_PERMISSIONS_CAPABILITY =
   'settings.agent-launch.native-chat-permissions.v1' as const
 
+// Host stores each agent's permission apart from its Arguments: accepts `permission` and
+// `user-arguments` and publishes `agentPermission`. Older hosts keep the permission in the text.
+export const AGENT_LAUNCH_PERMISSION_CHOICE_CAPABILITY = 'settings.agent-permission.v1' as const
+
 // Host-advertised: reads `surface`, the user's chat or terminal pick for one launch, and refuses an
 // explicit chat it cannot open before creating anything. Older hosts strip the field.
 export const AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY = 'agent.launch.surface.v1' as const
 
 export const AGENT_LAUNCH_RUNTIME_CAPABILITIES = [
+  AGENT_LAUNCH_CHAT_OPTIONS_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_SETTINGS_CAPABILITY,
   AGENT_LAUNCH_AUTO_PERMISSIONS_CAPABILITY,
   AGENT_LAUNCH_NATIVE_CHAT_PERMISSIONS_CAPABILITY,
+  AGENT_LAUNCH_PERMISSION_CHOICE_CAPABILITY,
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,

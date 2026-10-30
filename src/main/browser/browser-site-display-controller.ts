@@ -21,23 +21,18 @@ type TrackedGuest = {
   colorScheme: {
     lease: ElectronDebuggerLease
     stopWatchingDetach: () => void
-    /** Orca's scheme is in force on the page, so leaving the site must clear it. */
+    /** An active site override must be cleared when leaving the site. */
     standing: boolean
   } | null
 }
 
 const ZOOM_EPSILON = 1e-6
 
-/**
- * Shows each page the way its browser profile remembers the site: its own zoom (or Default Zoom)
- * and its own color scheme (or Orca's theme). Only webview guests take part; streamed pages have
- * no menu to change either.
- */
 export class BrowserSiteDisplayController {
   private readonly guests = new Map<number, TrackedGuest>()
   private defaultZoomLevel = DEFAULT_BROWSER_PAGE_ZOOM_LEVEL
 
-  /** Electron pushes Orca's UI zoom onto every webview, so a UI zoom change moves pages too. */
+  /** Restore page zoom when Electron propagates an Orca UI zoom change to webviews. */
   followZoomSettings(ui: {
     getUI: () => PersistedUIState
     onUIChanged: (listener: (ui: PersistedUIState) => void) => () => void
@@ -60,8 +55,7 @@ export class BrowserSiteDisplayController {
   onGuestRegistered(guest: Electron.WebContents, profileId: string | null): void {
     const previous = this.guests.get(guest.id)
     previous?.stopWatchingDomReady()
-    // Why dom-ready: once Orca's UI zoom has changed, Electron copies it onto the guest at some
-    // point after each commit; dom-ready always comes after that copy.
+    // dom-ready follows Electron's post-commit copy of the embedder zoom.
     const onDomReady = (): void => this.applyZoom(guest.id)
     guest.on('dom-ready', onDomReady)
     this.guests.set(guest.id, {
@@ -83,10 +77,7 @@ export class BrowserSiteDisplayController {
     this.guests.delete(guestId)
   }
 
-  /**
-   * Why at commit: the new document's scripts read prefers-color-scheme only after this, while the
-   * page being left keeps its own scheme until it is replaced. Zoom is keyed by the committed host.
-   */
+  // Apply the committed site's scheme before document scripts read prefers-color-scheme.
   onMainFrameNavigationCommitted(guestId: number): void {
     this.applyColorScheme(guestId)
     this.applyZoom(guestId)
@@ -119,8 +110,7 @@ export class BrowserSiteDisplayController {
     if (!display?.site || !profileId) {
       return display
     }
-    // Why from the saved level: Electron pushes Orca's UI zoom onto every webview, so the live
-    // level can be stale and stepping from it would save the wrong zoom.
+    // Step from saved zoom; Electron may have overwritten the live level with Orca UI zoom.
     const next = nextBrowserPageZoomLevel(display.zoomLevel, direction, this.defaultZoomLevel)
     const zoomLevel = next === this.defaultZoomLevel ? undefined : next
     if (zoomLevel !== (display.siteHasZoom ? display.zoomLevel : undefined)) {
@@ -167,8 +157,7 @@ export class BrowserSiteDisplayController {
       return
     }
     const level = this.getPageDisplay(guestId)?.zoomLevel ?? this.defaultZoomLevel
-    // Why compare first: Chromium keeps zoom per host, so a no-op write would still reset a
-    // same-host tab that a different profile or the UI zoom push moved.
+    // Chromium shares zoom per host; avoid no-op writes that can reset another profile's tab.
     if (Math.abs(tracked.guest.getZoomLevel() - level) > ZOOM_EPSILON) {
       tracked.guest.setZoomLevel(level)
     }
@@ -188,8 +177,7 @@ export class BrowserSiteDisplayController {
       return
     }
     state.standing = colorScheme !== undefined
-    // Why resend on every navigation: setEmulatedMedia replaces every emulated feature, so an
-    // agent's `set media` call silently drops the scheme and only a fresh write restores it.
+    // Reapply on navigation because an agent's setEmulatedMedia replaces all emulated features.
     tracked.guest.debugger
       .sendCommand('Emulation.setEmulatedMedia', {
         features: [{ name: 'prefers-color-scheme', value: colorScheme ?? '' }]
@@ -202,23 +190,21 @@ export class BrowserSiteDisplayController {
       })
   }
 
-  // Why a lease held for the guest's life: an agent's lease that attached first would otherwise
-  // detach on release and take the scheme with it.
+  // Keep a lifetime lease so an agent releasing its earlier lease cannot clear the scheme.
   private acquireColorScheme(tracked: TrackedGuest): TrackedGuest['colorScheme'] {
     const { guest } = tracked
     let lease: ElectronDebuggerLease
     try {
       lease = acquireElectronDebugger(guest)
     } catch (error) {
-      // Why: attach fails while DevTools holds the page; the next navigation tries again.
+      // DevTools can prevent attachment; retry on the next navigation.
       console.warn('[browser-site-display] could not attach to set the page color scheme', {
         guestWebContentsId: guest.id,
         error: errorMessage(error)
       })
       return null
     }
-    // Why: opening DevTools detaches us and clears the scheme; drop the lease so the next
-    // navigation attaches again.
+    // DevTools detachment clears emulation; reacquire the lease on the next navigation.
     const onDetach = (): void => this.releaseColorScheme(guest.id)
     guest.debugger.on('detach', onDetach)
     tracked.colorScheme = {
@@ -240,7 +226,7 @@ export class BrowserSiteDisplayController {
       state.stopWatchingDetach()
       state.lease.release()
     } catch {
-      // Why: best-effort — the guest may already be destroyed.
+      // The guest may already be destroyed.
     }
   }
 }

@@ -11,8 +11,7 @@ import type { AutomationHostFilterResolution } from './automation-host-filter-re
 import * as searchRows from './automation-list-search-rows'
 import { useAutomationListSearch } from './use-automation-list-search'
 
-// Why: the 50 ms budget is a claim about how often indexing runs, so the test
-// counts index builds instead of timing them (a wall clock would flake in CI).
+// Count index builds instead of timing the 50ms claim to avoid CI timing flakes.
 vi.mock('./automation-list-search-rows', async (importOriginal) => {
   const actual = await importOriginal<typeof searchRows>()
   return {
@@ -82,7 +81,7 @@ afterEach(() => {
 })
 
 describe('useAutomationListSearch index shape', () => {
-  it('indexes the row set once and never again per keystroke', () => {
+  it('reuses search indexes across query changes and equivalent row arrays', () => {
     render('', makeRows(20))
     const buildsAfterMount = buildRowsSpy.mock.calls.length
 
@@ -139,9 +138,7 @@ describe('useAutomationListSearch index shape', () => {
 
 describe('useAutomationListSearch cross-host identity', () => {
   it('keeps both hosts’ copies of one automation ID through a matching query', () => {
-    // Same ID under two authorities is legal (doc:38). Reconstructing the
-    // filtered list from a bare-ID map silently returns one host's copy twice
-    // and drops the other host's row from its group.
+    // Bare-ID reconstruction would duplicate one authority’s row and drop its colliding counterpart.
     const collided = [
       makeAutomationListRow({
         automation: makeAutomation({ id: 'a-1', name: 'Nightly desktop' })

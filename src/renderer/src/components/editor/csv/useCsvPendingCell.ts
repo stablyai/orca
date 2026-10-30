@@ -80,7 +80,7 @@ export function useCsvPendingCell({
   )
 }
 
-/** Writes the cell being edited into the draft, past the preview limits commit enforces. */
+/** Preserve active cell text as a draft even when normal commit refuses preview limits. */
 function preservePendingCell(
   editingRef: RefObject<CsvCellEditSession | null>,
   snapshot: { document: CsvTextDocument | null; onContentChange?: (content: string) => void }

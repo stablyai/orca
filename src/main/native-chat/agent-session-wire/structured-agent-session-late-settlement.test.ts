@@ -34,6 +34,12 @@ import { codexProviderHandle } from '../../../shared/agent-session-provider-hand
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
 
+import {
+  closeStructuredAgentSessionHandovers,
+  finalizingStructuredAgentSessionInput,
+  structuredAgentSessionHandingOver
+} from './structured-agent-session-handing-over'
+
 const CALLER = { callerKey: 'client-1' }
 
 let root: string
@@ -80,7 +86,6 @@ function journal(): AgentSessionJournal {
   ).sessions.get(SESSION)!.journal
 }
 
-/** A send is accepted first; this waits for the delivery loop to hand it to the provider. */
 async function handedOver(clientMessageId: string): Promise<void> {
   await vi.waitFor(async () => {
     expect(
@@ -190,7 +195,7 @@ describe('settling a send the provider proves it received after the ack window',
       unsubscribe()
     }
     await expect(pending).resolves.toMatchObject({ ok: true })
-    // The late `unknown` from the handover does not reopen the proven acceptance.
+    // Late uncertainty must not undo proven acceptance.
     await vi.waitFor(async () =>
       expect(await submissions()).toMatchObject([
         { clientMessageId: params.envelope.clientOperationId, dispatchState: 'accepted' }
@@ -202,6 +207,84 @@ describe('settling a send the provider proves it received after the ack window',
     })
     expect(dispatch).toHaveBeenCalledTimes(1)
   })
+
+  it.each(['N-first', 'O-first'] as const)(
+    'retains the original result owner with %s',
+    async (order) => {
+      const original = Promise.withResolvers<AgentSessionDispatchOutcome>()
+      const nested = Promise.withResolvers<void>()
+      const entered = Promise.withResolvers<void>()
+      dispatch.mockImplementationOnce(() => original.promise)
+      const held = journal()
+      const acceptLate = held.acceptLate.bind(held)
+      const acceptance = vi.spyOn(held, 'acceptLate').mockImplementation(async (input) => {
+        entered.resolve()
+        await nested.promise
+        return acceptLate(input)
+      })
+      const params = sendParams('overlapping result and receipt')
+      const id = params.envelope.clientOperationId
+      const sending = host.send(CALLER, params)
+      let settlement: Promise<void> | undefined
+      let observed: Promise<void> | undefined
+      let completed = 0
+      try {
+        await handedOver(id)
+        settlement = host.settleLateDispatch({
+          sessionId: SESSION,
+          clientMessageId: id,
+          providerIdentity: { provider: 'claude', sessionId: THREAD, uuid: 'overlap-echo' }
+        })
+        void settlement.catch(() => undefined)
+        await entered.promise
+        const completion = closeStructuredAgentSessionHandovers(held)
+        expect(completion).toBeDefined()
+        observed = completion?.then(() => {
+          completed += 1
+        })
+        expect(finalizingStructuredAgentSessionInput(held, id)).toBe(true)
+        expect(structuredAgentSessionHandingOver(held).has(id)).toBe(true)
+
+        if (order === 'N-first') {
+          nested.resolve()
+          await settlement
+          expect(finalizingStructuredAgentSessionInput(held, id)).toBe(true)
+          expect(structuredAgentSessionHandingOver(held).has(id)).toBe(true)
+          await new Promise<void>((resolve) => setImmediate(resolve))
+          expect(completed).toBe(0)
+          original.resolve({ state: 'unknown', reason: 'ack timeout' })
+          await observed
+        } else {
+          original.resolve({ state: 'admitted' })
+          await observed
+          expect(finalizingStructuredAgentSessionInput(held, id)).toBe(false)
+          expect(completed).toBe(1)
+          expect(structuredAgentSessionHandingOver(held).has(id)).toBe(true)
+          expect(closeStructuredAgentSessionHandovers(held)).toBeUndefined()
+          nested.resolve()
+          await settlement
+        }
+
+        await expect(sending).resolves.toMatchObject({ ok: true })
+        await observed
+        expect(completed).toBe(1)
+        expect(finalizingStructuredAgentSessionInput(held, id)).toBe(false)
+        expect(structuredAgentSessionHandingOver(held).has(id)).toBe(false)
+        expect(held.submission(id)).toMatchObject({
+          clientMessageId: id,
+          dispatchState: 'accepted',
+          providerItemId: `claude:${THREAD}:overlap-echo`
+        })
+        expect(dispatch).toHaveBeenCalledTimes(1)
+        expect(acceptance).toHaveBeenCalledTimes(1)
+      } finally {
+        original.resolve({ state: 'unknown', reason: 'cleanup' })
+        nested.resolve()
+        await Promise.allSettled([sending, settlement, observed])
+        acceptance.mockRestore()
+      }
+    }
+  )
 
   it('persists an echo received while the provider is closing', async () => {
     dispatch.mockResolvedValueOnce({ state: 'unknown', reason: 'ack timeout' })
@@ -247,8 +330,7 @@ describe('settling a send the provider proves it received after the ack window',
     expect(await submissions()).toMatchObject([
       { clientMessageId: params.envelope.clientOperationId, dispatchState: 'accepted' }
     ])
-    // The point of the fix: the client stops rendering Retry, and Retry is what
-    // was delivering the message to the agent a second time.
+    // Retry previously redelivered; the settled send must remain single-dispatch.
     expect(dispatch).toHaveBeenCalledTimes(1)
   })
 
@@ -264,7 +346,6 @@ describe('settling a send the provider proves it received after the ack window',
       state: 'rejected',
       ...agentSessionFailureWords(agentSessionFailureFact('cancelled'), { surface: 'rejection' })
     })
-    // A receipt after the withdrawal cannot turn it into sent.
     await host.settleLateDispatch({
       sessionId: SESSION,
       clientMessageId: params.envelope.clientOperationId,

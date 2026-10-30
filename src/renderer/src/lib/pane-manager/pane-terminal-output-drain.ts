@@ -62,7 +62,7 @@ function takeNextDrainableEntry(): QueueEntry | null {
   return null
 }
 
-// Why: re-arm a zero-delay drain once xterm confirms the previous high-priority batch parsed; the fixed 4/16ms cadence otherwise drips far below xterm's ~100 MB/s parse. Only visible panes are pacer-clocked; background keeps the fixed cadence to protect the focused terminal.
+// Parse-clock visible drains at zero delay to approach xterm throughput; fixed 4/16ms cadence limits it. Keep background cadence bounded to protect focus.
 
 function getDrainNow(): number {
   if (typeof performance !== 'undefined') {
@@ -101,7 +101,7 @@ export function drainQueuedOutputImpl(): void {
       entry.highPriority = false
       clearForegroundRelease(entry)
     }
-    // Why: xterm parsing and DOM work share the renderer thread with input; keep draining cooperative so WSL/agent output can't pin the UI.
+    // Yield cooperatively: xterm parsing and input share the renderer thread, so output floods must not pin it.
     if (writes > 0 && getDrainNow() - startedAt >= DRAIN_TIME_BUDGET_MS) {
       break
     }
@@ -113,7 +113,7 @@ export function drainQueuedOutputImpl(): void {
   }
   recordQueueDebugPressure()
   if (queuedByTerminal.size > 0 && hasDrainableBacklog()) {
-    // Why 0 on the channel path: a posted message already yields (input/paint serviced between macrotasks), so the 4ms interval only deepened the queue; timer path keeps it for fake-timer tests.
+    // Posted messages already yield to input/paint; add no 4ms delay. Keep timer cadence for fake-timer tests.
     scheduleDrain(
       hasHighPriorityBacklog()
         ? isMessageChannelDrainEnabled()
@@ -124,5 +124,5 @@ export function drainQueuedOutputImpl(): void {
   }
 }
 
-// Why at module scope: the registry's scheduleDrain must never fire before a runner exists, so registration happens as this module is evaluated rather than on first use.
+// Register at module evaluation so scheduleDrain cannot run before its downstream runner exists.
 setTerminalOutputDrainRunner(drainQueuedOutputImpl)

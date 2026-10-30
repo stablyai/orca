@@ -129,17 +129,42 @@ describe('getEditorPanelRenderModel HTML preview affordance', () => {
   })
 })
 
+describe('getEditorPanelRenderModel shebang language fallback', () => {
+  it('uses the shebang when an extensionless file has no name-based language', () => {
+    const scriptFile: OpenFile = {
+      id: '/repo/bin/deploy',
+      filePath: '/repo/bin/deploy',
+      relativePath: 'bin/deploy',
+      worktreeId: 'wt-1',
+      language: 'plaintext',
+      mode: 'edit',
+      isDirty: false
+    }
+    const model = renderModel({
+      activeFile: scriptFile,
+      fileContents: {
+        [scriptFile.id]: textContent({ content: '#!/usr/bin/env python3\nprint(1)' })
+      }
+    })
+
+    expect(model.resolvedLanguage).toBe('python')
+    const diffModel = renderModel({
+      activeFile: { ...scriptFile, mode: 'diff', diffSource: 'unstaged' },
+      editorDrafts: { [scriptFile.id]: '#!/usr/bin/env python3\nprint(2)' }
+    })
+    expect(diffModel.resolvedLanguage).toBe('plaintext')
+  })
+})
+
 describe('getEditorPanelRenderModel read-only raw rendering (AI Vault View Log)', () => {
   it('renders a read-only markdown log as raw source with no markdown viewer or chrome', () => {
     const model = renderModel({ activeFile: markdownFile({ readOnly: true }) })
 
-    // Raw text renderer, not the rich/preview markdown surface.
     expect(model.isMarkdown).toBe(false)
     expect(model.hasViewModeToggle).toBe(false)
     expect(model.canShowMarkdownPreview).toBe(false)
     expect(model.canExportMarkdownToPdf).toBe(false)
     expect(model.canShowMarkdownTableOfContents).toBe(false)
-    // Real language is preserved so Monaco still tokenizes the read-only source.
     expect(model.resolvedLanguage).toBe('markdown')
   })
 
@@ -165,7 +190,8 @@ describe('getEditorPanelRenderModel markdown export affordance', () => {
       editorDrafts: { '/repo/README.md': '[example]: https://example.com' }
     })
 
-    expect(model.canExportMarkdownToPdf).toBe(false)
+    expect(model.inlineMarkdownRenderState?.renderMode).toBe('preview')
+    expect(model.canExportMarkdownToPdf).toBe(true)
   })
 
   it('disables rich export when a multibyte character crosses the byte limit', () => {

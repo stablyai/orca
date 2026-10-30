@@ -13,9 +13,7 @@ async function createCloneFixture(): Promise<{
   sourcePath: string
   destinationParent: string
 }> {
-  // Why: realpathSync so the path the test asserts on matches the store's
-  // repo.path on macOS, where os.tmpdir() (/var/...) symlinks to /private/var/...
-  // and the app canonicalizes repo.path via `git rev-parse --show-toplevel`.
+  // Canonicalize macOS /var → /private/var like git does when registering repo.path.
   const rootPath = realpathSync(
     await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-add-project-clone-'))
   )
@@ -44,9 +42,7 @@ async function createLinkedWorktreeFixture(): Promise<{
   mainPath: string
   siblingPath: string
 }> {
-  // Why: realpathSync so mainPath matches the store's repo.path on macOS, where
-  // os.tmpdir() (/var/...) symlinks to /private/var/... and the app canonicalizes
-  // repo.path via `git rev-parse --show-toplevel` on add.
+  // Canonicalize the main checkout path like git does on macOS /var symlinks.
   const rootPath = realpathSync(
     await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-add-project-linked-'))
   )

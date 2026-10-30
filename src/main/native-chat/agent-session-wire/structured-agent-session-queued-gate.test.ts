@@ -1,7 +1,3 @@
-// The one queue gate: admission, the drain step and Send-now consume a single
-// typed hold decision, so the lists cannot drift — pinned here with Send-now's
-// override set and the replay-preference rule for a refused draft.
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { structuredQueueHold } from './structured-agent-session-queued-messages'
@@ -65,7 +61,6 @@ describe('the one queue gate', () => {
       ok: false,
       refusal: { message: expect.stringContaining('pending request') }
     })
-    // Read in place: the gate runs on every admission and drain step.
     const snapshot = vi.spyOn(journal, 'snapshot')
     expect(
       structuredQueueHold({
@@ -91,7 +86,6 @@ describe('the one queue gate', () => {
       },
       { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
-    // The turn still runs (`working`), which Send-now alone may override.
     expect(await submission(working)).toMatchObject({ dispatchState: 'pending' })
     expect(await sendNow(draftId)).toMatchObject({
       ok: true,
@@ -124,8 +118,7 @@ describe('replay preference', () => {
     await eventually(async () =>
       expect(await drafts()).toMatchObject([{ messageId: clientOperationId, state: 'returned' }])
     )
-    // The original reply was lost; the retry must agree with the card, or the
-    // same text renders twice — once on a Retry row, once on the card.
+    // Lost-reply replay must match the card or clients render duplicate text.
     const replay = await host.send(CALLER, params)
     expect(replay).toMatchObject({
       ok: true,
@@ -163,7 +156,7 @@ describe('replay of a deleted card', () => {
       ok: true,
       value: { deleted: true }
     })
-    // Retention later drops the tombstone; the rejected hand-off still names the draft.
+    // A retained rejection still identifies its card after tombstone pruning.
     const journal = host.collaboratorsForTests().sessions.get(SESSION)?.journal
     if (!journal) {
       throw new Error('expected the conversation open')
@@ -206,11 +199,9 @@ describe('the hand-off link on answers', () => {
       replayed: true,
       value: { submission: { queuedMessageId: clientOperationId } }
     })
-    // Handed off under a fresh id, never the draft's (the send operation's) own.
     expect(
       replayed.ok && 'submission' in replayed.value && replayed.value.submission.clientMessageId
     ).not.toBe(clientOperationId)
-    // The first send, direct, names no draft.
     expect(await submission(working)).not.toHaveProperty('queuedMessageId')
   })
 
@@ -231,7 +222,7 @@ describe('the hand-off link on answers', () => {
     await settleAccepted(working, 'a')
     await eventually(async () => expect(await rig.handoff(clientOperationId)).toBeDefined())
     const handedOffAs = await rig.handoffId(clientOperationId)
-    // As an older build accepted it, with no receipt: the send runs again rather than replaying.
+    // Model legacy acceptance without a receipt, requiring effect reconstruction.
     openTestJournalHostDatabase(rig.root)
       .db.prepare('DELETE FROM agent_session_command_receipts WHERE operation_id = ?')
       .run(clientOperationId)
@@ -265,7 +256,7 @@ describe('Send-now rerun', () => {
     await eventually(async () =>
       expect(await drafts()).toMatchObject([{ messageId: draftId, state: 'returned' }])
     )
-    // The host died before the Send's answer settled: its ledger row is still pending, so it reruns.
+    // Model a crash before answer settlement, leaving a pending ledger row.
     const operations = store['transactions'].state.operations
     for (const [key, row] of operations) {
       if (row.operationId === operationId) {

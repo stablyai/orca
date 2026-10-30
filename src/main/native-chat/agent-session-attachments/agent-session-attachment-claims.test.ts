@@ -51,7 +51,6 @@ describe('agentSessionAttachmentReferences', () => {
       `@/home/other/agent-session-attachments/${UPLOAD_A}/a.txt`,
       `~/Library/Application Support/Orca/agent-session-attachments/${UPLOAD_A}/x.png`,
       `see agent-session-attachments/${UPLOAD_A}`,
-      // This host's root as the tail of a longer path is still another path.
       `/mnt${root}/${UPLOAD_A}/a.txt`
     ]
     for (const text of mentions) {

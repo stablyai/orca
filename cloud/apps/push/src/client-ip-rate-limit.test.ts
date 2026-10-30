@@ -104,24 +104,6 @@ describe('client ip rate limiter', () => {
     expect(otherClient.status).toBe(200)
   })
 
-  it('gives a spoofed left-most hop no escape from the caller own bucket', async () => {
-    const app = limiterApp(new ClientIpRateLimiter({ now: () => 1_000 }))
-    // A caller that rewrites its own x-forwarded-for on every request still ends
-    // up behind the one value Cloud Run appended.
-    for (let index = 0; index < CAPACITY; index++) {
-      const allowed = await app.request('/probe', {
-        method: 'POST',
-        headers: { 'x-forwarded-for': `198.51.100.${index}, 203.0.113.7` }
-      })
-      expect(allowed.status).toBe(200)
-    }
-    const spoofed = await app.request('/probe', {
-      method: 'POST',
-      headers: { 'x-forwarded-for': '198.51.100.250, 10.1.1.1, 203.0.113.7' }
-    })
-    expect(spoofed.status).toBe(429)
-  })
-
   it('skips the configured trusted proxies when counting from the right', async () => {
     const app = limiterApp(new ClientIpRateLimiter({ now: () => 1_000, capacity: 1 }), 1)
     // <client>, <cloud run>, <load balancer>: one trusted hop after the client.

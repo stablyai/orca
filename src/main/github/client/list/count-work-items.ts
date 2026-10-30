@@ -22,9 +22,39 @@ import {
   spendsSharedGitHubComQuota
 } from '../../rate-limit'
 import { sameOwnerRepo } from './../github-exec-scope'
-import { resolvePrWorkItemSource } from './work-item-list-request'
+import { buildWorkItemListRequest, resolvePrWorkItemSource } from './work-item-list-request'
 import { buildSearchQueryString, defaultOpenWorkItemQuery } from './work-item-search-query'
 import { searchWorkItemCount, usesGraphqlWorkItemSearch } from './work-item-search-page'
+
+function canGroupSearchText(text: string): boolean {
+  let depth = 0
+  let quoted = false
+  let escaped = false
+  for (const char of text) {
+    if (quoted) {
+      if (escaped) {
+        escaped = false
+      } else if (char === '\\') {
+        escaped = true
+      } else if (char === '"') {
+        quoted = false
+      }
+    } else if (char === '"') {
+      quoted = true
+    } else if (char === '\\') {
+      return false
+    } else if (char === '(') {
+      depth += 1
+    } else if (char === ')') {
+      depth -= 1
+      if (depth < 0) {
+        return false
+      }
+    }
+  }
+  return depth === 0 && !quoted
+}
+
 export async function countWorkItemsForQuery(
   repoPath: string,
   ownerRepo: OwnerRepo,
@@ -40,6 +70,16 @@ export async function countWorkItemsForQuery(
   if (usesGraphqlWorkItemSearch(ownerRepo, ghOptions)) {
     ghOptions.env = { ...process.env }
     try {
+      if (query.scope === 'pr' && canGroupSearchText(query.freeText)) {
+        const request = buildWorkItemListRequest({
+          kind: 'pr',
+          ownerRepo,
+          query,
+          limit: 1,
+          page: 1
+        })
+        return await searchWorkItemCount(request.search, ghOptions, 'ISSUE_ADVANCED')
+      }
       return await searchWorkItemCount(searchQ, ghOptions)
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
@@ -61,12 +101,12 @@ export async function countWorkItemsForQuery(
     ],
     ghOptions
   )
-  // Why: over-counting cache hits is the safe direction — the next probe corrects the estimate.
+  // Overcount cached hits conservatively until the next budget probe.
   noteRepositoryRateLimitSpend(ownerRepo, 'search', 1, ghOptions)
   return Number.parseInt(stdout.trim(), 10) || 0
 }
 
-// Why: cached 120s to avoid burning the 30/min search rate limit that backs the pagination total.
+// Cache decorative totals to conserve the 30/minute search budget.
 export async function countWorkItems(
   repoPath: string,
   query?: string,
@@ -96,7 +136,7 @@ export async function countWorkItems(
     ...githubHostExecOptions(ownerRepo)
   }
 
-  // Why: counts are decorative, so stop when the 30/min search budget is gone rather than spawn into 403s (getRateLimit is 30s-cached).
+  // Decorative counts must stop at the search budget floor.
   if (spendsSharedGitHubComQuota(ownerRepo, ghOptions)) {
     await getRateLimit()
   }
@@ -120,7 +160,7 @@ export async function countWorkItems(
     }
 
     const counts: Promise<number>[] = []
-    // Why: draft/reviewRequested/reviewedBy are PR-only, so the issue half would always return 0 — skip it to save a search call.
+    // PR-only filters cannot match issues; avoid spending a search call on that half.
     const hasPrOnlyFilter =
       effectiveQuery.draft ||
       effectiveQuery.reviewRequested !== null ||
@@ -152,7 +192,7 @@ export async function countWorkItems(
         )
       )
     }
-    // Why: allSettled so one failing search side doesn't zero the total; sum only fulfilled halves.
+    // Preserve counts from successful sources when another search fails.
     const results = await Promise.allSettled(counts)
     let total = 0
     for (const r of results) {

@@ -185,8 +185,7 @@ describe('browser viewport operation ownership', () => {
     expect(registeredGuests.get('late-delete')).toBe(105)
   })
 
-  // The request is still "no preset"; what survives the failure is the record that the mobile
-  // override stands, which is what lets the next navigation clear it.
+  // Requested and applied metrics may clear while the separate UA override remains tracked.
   it('same-owner clear failure keeps the standing mobile override tracked', async () => {
     const handle = register('same-owner', 106)
     await browserManager.setViewportOverride('same-owner', mobile)
@@ -281,8 +280,7 @@ describe('browser viewport operation ownership', () => {
     const third = browserManager.setViewportOverride('serialized', null)
     gate.resolve()
     expect(await Promise.all([first, second, third])).toEqual([true, true, true])
-    // Identity follows each viewport as it is applied, so the mobile UA stands only while the mobile
-    // metrics do and is cleared once the desktop metrics land.
+    // Clear mobile identity when desktop metrics replace the mobile viewport.
     expect(handle.debuggerSendCommand.mock.calls.map(([method]) => method)).toEqual([
       'Emulation.setDeviceMetricsOverride',
       'Emulation.setTouchEmulationEnabled',

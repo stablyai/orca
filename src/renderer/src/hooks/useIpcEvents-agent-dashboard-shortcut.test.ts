@@ -64,8 +64,7 @@ describe('toggleAgentDashboardFromShortcut', () => {
   })
 
   it('leaves the sidebar alone when closing the in-window drawer', () => {
-    // Why: forcing the sidebar open on close would re-reveal a panel the user
-    // just dismissed, and the drawer's own collapse effect would fight it.
+    // Closing must not force sidebar open and re-reveal the drawer against its collapse effect.
     const state = makeState({ drawerOpen: true })
 
     toggleAgentDashboardFromShortcut(state as never, vi.fn())

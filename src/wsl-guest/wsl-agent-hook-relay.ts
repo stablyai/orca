@@ -1,16 +1,8 @@
 #!/usr/bin/env node
-// Guest-resident WSL agent-hook relay (STA-1515). Runs inside a WSL distro,
-// binds a loopback hook receiver on the very port the Windows host issued
-// (free under NAT — that port only exists Windows-side), and forwards every
-// parsed hook envelope to Orca over this process's own stdin/stdout using the
-// framed JSON-RPC protocol the SSH relay already speaks. Also hosts the
-// home-scoped fs bridge the host uses to install hook configs into the guest.
-//
-// Lifecycle: dies when stdin closes. A lingering guest listener would let
-// WSL's Windows→WSL forwarder grab the freed Windows-side port and blackhole
-// stale Windows-side hook posts — so unlike the SSH relay there is no grace
-// period and no daemon socket.
+// Forward guest loopback hooks over framed stdio and expose home-scoped installer operations (STA-1515).
+// Exit with stdin: a lingering listener can let WSL forwarding capture the freed Windows port and blackhole hooks.
 import { AGENT_HOOK_INFER_INTERRUPT_METHOD } from '../shared/agent-hook-interrupt-reconciliation'
+import { CLAUDE_AGENT_VIEW_RELAY_METHOD } from '../shared/claude-agent-view'
 import { homedir } from 'node:os'
 
 import { RELAY_SENTINEL } from './protocol'
@@ -61,14 +53,15 @@ async function main(): Promise<void> {
     }
   )
 
-  // Why: restart-stable instance key keeps the endpoint file at one path
-  // across app restarts so surviving agents re-coordinate off its rewrite.
+  // Keep endpoint-file identity across restarts so surviving agents can re-coordinate from its rewrite.
   const instanceKey =
     sanitizeWslHookInstanceKey(process.env[WSL_HOOK_RELAY_INSTANCE_ENV]) ?? `port${windowsPort}`
   const hookServer = new RelayAgentHookServer({
     endpointDir: wslHookRelayEndpointDir(homedir(), instanceKey),
     token,
     preferredPort: windowsPort,
+    forwardClaudeAgentView: (body) =>
+      dispatcher.requestPrimary(CLAUDE_AGENT_VIEW_RELAY_METHOD, { body }, { timeoutMs: 1000 }),
     forward: (envelope) => publishAgentHookEnvelope(dispatcher, envelope)
   })
   dispatcher.onRequest(AGENT_HOOK_INFER_INTERRUPT_METHOD, async (params) => ({
@@ -80,11 +73,7 @@ async function main(): Promise<void> {
     replayed: hookServer.replayCachedPayloadsForPanes()
   }))
 
-  // Why: OpenCode reports status via a plugin (not a hooks.json script), so the
-  // host ships its source over the wire and the guest materializes a config
-  // overlay here — the same PluginOverlayManager path the SSH relay uses. One
-  // handler for the relay's life: it remembers the materialized overlay so
-  // repeat installs don't rebuild it under running agents.
+  // Cache host-shipped plugin sources for the relay lifetime so repeat installs cannot rebuild beneath running agents.
   const installPlugins = createInstallPluginsHandler(new PluginOverlayManager(), process.env)
   dispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async (params) => installPlugins(params))
 
@@ -102,8 +91,7 @@ async function main(): Promise<void> {
     process.exit(1)
   }
   if (hookServer.usedPortFallback) {
-    // Why: diagnosable breadcrumb — hook clients are fail-open silent, the
-    // relay must not be. Fallback is expected under mirrored networking.
+    // Hook clients fail open silently; report the fallback expected under mirrored networking.
     process.stderr.write(
       `[wsl-hook-relay] port ${windowsPort} occupied; bound ${hookServer.getCoordinates().port} (endpoint-file re-coordination)\n`
     )
@@ -122,10 +110,7 @@ async function main(): Promise<void> {
   process.stdout.on('error', shutdown)
   process.on('SIGTERM', shutdown)
   process.on('SIGINT', shutdown)
-  // Why: same posture as the SSH relay — an uncaught exception may leave
-  // broken invariants, so exit and let the host manager respawn a clean
-  // relay; a stray rejection is logged and survived (hook delivery must not
-  // die for a non-fatal async error).
+  // Exit on broken synchronous invariants so the host respawns; log and survive nonfatal async rejections.
   process.on('uncaughtException', (err) => {
     process.stderr.write(`[wsl-hook-relay] uncaught exception: ${err.message}\n`)
     process.exit(1)
@@ -134,8 +119,7 @@ async function main(): Promise<void> {
     process.stderr.write(`[wsl-hook-relay] unhandled rejection: ${String(reason)}\n`)
   })
 
-  // Signal readiness — the host watches for this exact string before
-  // sending framed data (same contract as the SSH relay).
+  // The host waits for this exact sentinel before sending framed data.
   dispatcher.writePrimaryBytes(Buffer.from(RELAY_SENTINEL))
 }
 

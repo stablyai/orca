@@ -10,7 +10,6 @@ export type AiVaultAppliedScan = {
   scopeKey: string
 }
 
-/** The scan the panel is showing, together with the History depth it ran at. */
 export function useAppliedAiVaultScan(): {
   scan: AiVaultAppliedScan | null
   applyScan: (
@@ -22,7 +21,7 @@ export function useAppliedAiVaultScan(): {
 } {
   const [scan, setScan] = useState<AiVaultAppliedScan | null>(null)
   const acceptedScanRef = useRef<AiVaultAppliedScan | null>(null)
-  // Identity-preserving like the plain setter was, so an unchanged republish still bails out.
+  // Preserve identity on unchanged republication so React still bails out.
   const applyScan = useCallback(
     (
       published: AiVaultListResult,

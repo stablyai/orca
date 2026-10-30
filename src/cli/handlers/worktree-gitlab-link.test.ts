@@ -44,8 +44,6 @@ describe('getOptionalGitLabLinkFlag', () => {
     ).toBe(77)
   })
 
-  // Issues and merge requests are separate namespaces on GitLab, so a reference
-  // to one must never be taken as the other's number.
   it('refuses a merge request reference in the issue flag', () => {
     expect(() => getOptionalGitLabLinkFlag(flags({ 'gitlab-issue': '!42' }), 'issue')).toThrow(
       /GitLab issue number/
@@ -92,8 +90,7 @@ describe('getOptionalGitLabLinkFlag', () => {
     }
   )
 
-  // A URL without GitLab's `/-/` separator is not a GitLab link, and a project
-  // path needs a group segment — neither may fall through to a number.
+  // GitLab URLs need /-/ and a grouped project path; malformed URLs must not fall back to numbers.
   it.each(['https://gitlab.com/group/project/issues/42', 'https://gitlab.com/project/-/issues/42'])(
     'refuses the non-GitLab URL shape %s',
     (input) => {
@@ -101,8 +98,7 @@ describe('getOptionalGitLabLinkFlag', () => {
     }
   )
 
-  // `/^\d+$/` accepts 400 digits, which parseInt turns into Infinity — persisting
-  // that writes `null` over the link it meant to set.
+  // parseInt turns huge digit strings into Infinity, which JSON would persist as null.
   it('refuses a number too large to be an integer', () => {
     expect(() =>
       getOptionalGitLabLinkFlag(flags({ 'gitlab-issue': '9'.repeat(400) }), 'issue')

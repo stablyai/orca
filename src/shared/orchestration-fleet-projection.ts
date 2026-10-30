@@ -126,8 +126,7 @@ export type OrchestrationFleetPage = {
   }
 }
 
-/** Re-runs the one attention projection against a newer host verdict. Re-deriving categories
- *  from liveness alone dropped the `unverifiable` an unproven outcome contributed. */
+/** Recompute attention with newer host verdicts; liveness-only derivation lost unverifiable outcomes. */
 export function refreshOrchestrationFleetLivenessAttention(worker: OrchestrationFleetWorker): void {
   const had = (category: OrchestrationFleetAttentionCategory): boolean =>
     worker.attention.categories.includes(category)
