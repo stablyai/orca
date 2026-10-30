@@ -188,6 +188,10 @@
     {
       "file": "src/app-update/use-wall-app-update.web.ts",
       "reason": "The update checker runs in the app, not the page. The native file hands the compatibility wall the release that check found; this one offers none, so the wall inside the page keeps its store or releases link and the page bundle never carries the checker."
+    },
+    {
+      "file": "src/platform/reply-speech.web.ts",
+      "reason": "Android's WebView has no speechSynthesis, so the page cannot speak a reply itself. This one asks the shell through native.speech.control, which reads it with the phone's text-to-speech, and reports canSpeak false on shells that do not grant the verb so no Read button is drawn."
     }
   ]
 }

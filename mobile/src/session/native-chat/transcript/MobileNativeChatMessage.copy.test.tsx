@@ -4,9 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
 import { colors } from '../../../theme/mobile-theme'
 
-const { writeText, alert } = vi.hoisted(() => ({
+const { writeText, alert, speak } = vi.hoisted(() => ({
   writeText: vi.fn<(text: string) => Promise<void>>(),
-  alert: vi.fn()
+  alert: vi.fn(),
+  speak: vi.fn<(id: string, markdown: string) => void>()
 }))
 vi.mock('react-native', () => ({
   Alert: { alert },
@@ -17,9 +18,12 @@ vi.mock('react-native', () => ({
   View: 'View',
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 }
 }))
-vi.mock('lucide-react-native', () => ({ Copy: 'Copy', Check: 'Check' }))
+vi.mock('lucide-react-native', () => ({ Copy: 'Copy', Check: 'Check', Volume2: 'Volume2' }))
 vi.mock('../../../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 vi.mock('../../../platform/clipboard', () => ({ useClipboardWriter: () => ({ writeText }) }))
+vi.mock('../../../platform/reply-speech', () => ({
+  useReplySpeech: () => ({ canSpeak: true, speak })
+}))
 vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
   MobileNativeChatMessageActionsSheet: 'MessageActionsSheet'
 }))
@@ -135,6 +139,25 @@ describe('iOS whole-message copy', () => {
       expect(copyButton()).toBeDefined()
     }
   )
+
+  it('keeps the Read button in the row while a reply streams, usable once it ends', async () => {
+    const row = (streaming: boolean) =>
+      createElement(MobileNativeChatMessage, {
+        message,
+        mayStillGrow: streaming,
+        activeTurnIsWorking: true
+      })
+    const readButton = () =>
+      nodes('Pressable').find((button) => button.props.accessibilityLabel === 'Read reply aloud')
+    act(() => {
+      renderer = create(row(true))
+    })
+    expect(readButton()?.props.disabled).toBe(true)
+    act(() => renderer!.update(row(false)))
+    expect(readButton()?.props.disabled).toBe(false)
+    await act(async () => readButton()?.props.onPress())
+    expect(speak).toHaveBeenCalledWith('reply', 'Started')
+  })
 
   it.each([
     'Please repair this chart:\n::orca-visual{file="usage.html"}\nKeep this text.',

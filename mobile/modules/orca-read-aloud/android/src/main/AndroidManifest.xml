@@ -1,0 +1,12 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Keeps reading agent replies aloud with the screen off. -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
+  <application>
+    <service
+      android:name="expo.modules.orcareadaloud.ReadAloudService"
+      android:exported="false"
+      android:foregroundServiceType="mediaPlayback" />
+  </application>
+</manifest>

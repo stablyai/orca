@@ -75,8 +75,10 @@ describe('the page routes the manifest declares', () => {
     expect(withOptional(['native.externalNavigation'])).toBe(false)
     const names = (count, prefix) =>
       Array.from({ length: count }, (_value, index) => `${prefix}${String(index)}`)
-    expect(withOptional(names(8, 'opt'), names(8, 'req'))).toBe(true)
-    expect(withOptional(names(9, 'opt'), names(8, 'req'))).toBe(false)
+    const required = Math.floor(MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS / 2)
+    const optional = MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS - required
+    expect(withOptional(names(optional, 'opt'), names(required, 'req'))).toBe(true)
+    expect(withOptional(names(optional + 1, 'opt'), names(required, 'req'))).toBe(false)
   })
 
   it('fails the build on a declaration the bundle cannot render', () => {

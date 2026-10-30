@@ -12,6 +12,9 @@ export default defineConfig({
     alias: {
       'expo-crypto': fileURLToPath(
         new URL('./src/test-support/expo-crypto-node.ts', import.meta.url)
+      ),
+      'expo-speech': fileURLToPath(
+        new URL('./src/test-support/expo-speech-node.ts', import.meta.url)
       )
     }
   },

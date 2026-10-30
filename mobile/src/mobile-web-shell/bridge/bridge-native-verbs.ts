@@ -19,6 +19,7 @@ import {
 } from './bridge-media-verbs'
 import { PAGE_STORAGE_MAX_KEY_CHARS } from '../page-storage-keys'
 import { mobileFileMediaMime, PDF_MIME_TYPE } from '../../files/mobile-file-media'
+import { speechControlParamsSchema, speechControlResultSchema } from './bridge-speech-verbs'
 
 // Fence native-prefixed requests on-device; desktop allowlist refusal alone would hide leaked forwarding and depend on desktop version.
 // Native replies use existing frames/in-flight caps without runtime _meta; adding a verb needs a table row and handler, never a new frame kind.
@@ -35,7 +36,8 @@ export const BRIDGE_NATIVE_VERB_NAMES = [
   'native.audio.read',
   'native.audio.stop',
   'native.storage.read',
-  'native.pdf.view'
+  'native.pdf.view',
+  'native.speech.control'
 ] as const
 
 export type BridgeNativeVerb = (typeof BRIDGE_NATIVE_VERB_NAMES)[number]
@@ -129,6 +131,10 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
   'native.pdf.view': {
     params: pdfViewParamsSchema,
     result: pdfViewResultSchema
+  },
+  'native.speech.control': {
+    params: speechControlParamsSchema,
+    result: speechControlResultSchema
   }
 }
 

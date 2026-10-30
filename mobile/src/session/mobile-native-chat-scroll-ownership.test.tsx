@@ -79,7 +79,7 @@ vi.mock('react-native', async () => {
 })
 vi.mock('lucide-react-native', () =>
   Object.fromEntries(
-    'ArrowUp Bot Brain Check ChevronDown ChevronRight Copy Eye FileMinus2 FilePen FilePlus2 Folder Globe ListChecks MessageSquareMore Pencil Plug Search SquareChevronRight SquareTerminal Wrench Circle CircleCheck CircleDot'
+    'ArrowUp Bot Brain Check ChevronDown ChevronRight Copy Eye FileMinus2 FilePen FilePlus2 Folder Globe ListChecks MessageSquareMore Pencil Plug Search SquareChevronRight SquareTerminal Volume2 Wrench Circle CircleCheck CircleDot'
       .split(' ')
       .map((key) => [key, () => null])
   )

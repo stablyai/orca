@@ -15,7 +15,8 @@ export const MOBILE_WEB_BUNDLE_MAX_ASSETS = 256
 export const MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES = 32 * 1024 * 1024
 export const MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES = 10 * 1024 * 1024
 export const MOBILE_WEB_BUNDLE_MAX_ROUTES = 64
-export const MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS = 16
+// Shells shipped with 16 cap each list separately, so a 17th optional grant still parses there.
+export const MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS = 17
 
 export const SHA256_PATTERN = /^[a-f0-9]{64}$/
 const ASSET_PATH_PATTERN = /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/

@@ -6,6 +6,7 @@ import {
   Mic,
   SunMoon,
   Terminal,
+  Volume2,
   Wrench
 } from 'lucide-react-native'
 import type { MobileSettingsMenuItem } from './mobile-settings-menu'
@@ -42,6 +43,12 @@ export function mobileSettingsMenuItems(push: (route: string) => void): MobileSe
       label: translate('settings.menuItems.voice', 'Voice'),
       icon: Mic,
       onPress: () => push('/voice-settings')
+    },
+    {
+      id: 'readAloud',
+      label: translate('settings.menuItems.readAloud', 'Read aloud'),
+      icon: Volume2,
+      onPress: () => push('/read-aloud-settings')
     },
     {
       id: 'notifications',

@@ -19,6 +19,7 @@ import type {
   NativeChatToolCallBlock
 } from '../../../../../src/shared/native-chat-types'
 import { MobileSourceCopyButton } from '../../../components/MobileSourceCopyButton'
+import { MobileReplyReadButton } from '../../../components/MobileReplyReadButton'
 import { nativeChatMessageCopyText } from '../../../../../src/shared/native-chat-message-copy-text'
 import { deriveNativeChatRowContent } from '../../../../../src/shared/native-chat-row-content'
 import {
@@ -341,6 +342,14 @@ function MobileNativeChatMessageImpl({
                 key={message.id}
                 text={copyText}
                 accessibilityLabel={t('chat.message.copyMessage', 'Copy message')}
+              />
+            ) : null}
+            {/* Disabled, not absent, while streaming, so the time stays put when it ends. */}
+            {message.role === 'assistant' && copyText.length > 0 ? (
+              <MobileReplyReadButton
+                id={message.id}
+                text={copyText}
+                disabled={growingBlock !== undefined}
               />
             ) : null}
             <MobileNativeChatMessageTime timestamp={message.timestamp} fontScale={fontScale} />
