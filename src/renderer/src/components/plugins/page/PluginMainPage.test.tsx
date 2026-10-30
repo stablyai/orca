@@ -5,9 +5,10 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 
-const mocks = vi.hoisted(() => ({
-  panels: [] as { tabKey: string; title: string; pluginName: string }[]
-}))
+const mocks = vi.hoisted(() => {
+  const panels: { tabKey: string; title: string; pluginName: string }[] = []
+  return { panels }
+})
 
 vi.mock('@/store/plugin-panels', () => ({
   useLeftNavigationPluginPanels: () => mocks.panels

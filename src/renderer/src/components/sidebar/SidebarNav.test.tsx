@@ -11,26 +11,29 @@ import type { Repo } from '../../../../shared/repo-types'
 import { i18n } from '../../i18n/i18n'
 import { PSEUDO_LOCALIZATION_LOCALE } from '../../i18n/pseudo-localization'
 
-const mocks = vi.hoisted(() => ({
-  state: {} as Record<string, unknown>,
-  openTaskPage: vi.fn(),
-  openAutomationsPage: vi.fn(),
-  openActivityPage: vi.fn(),
-  openMobilePage: vi.fn(),
-  openArtifactsPage: vi.fn(),
-  openModal: vi.fn(),
-  setActiveView: vi.fn(),
-  recordViewVisit: vi.fn(),
-  pluginPanels: [] as { tabKey: `plugin:${string}`; title: string; icon?: string }[],
-  updateSettings: vi.fn(),
-  refreshPreflightStatus: vi.fn(),
-  checkLinearConnection: vi.fn(),
-  hasPairedMobileDevice: false,
-  agentBucketCounts: { attention: 0, working: 0, done: 0, idle: 0 },
-  getAgentBucketCounts: vi.fn(),
-  dismissMobileOnboardingBadge: vi.fn(),
-  setSetupGuideSidebarDismissed: vi.fn()
-}))
+const mocks = vi.hoisted(() => {
+  const pluginPanels: { tabKey: `plugin:${string}`; title: string; icon?: string }[] = []
+  return {
+    state: {} as Record<string, unknown>,
+    openTaskPage: vi.fn(),
+    openAutomationsPage: vi.fn(),
+    openActivityPage: vi.fn(),
+    openMobilePage: vi.fn(),
+    openArtifactsPage: vi.fn(),
+    openModal: vi.fn(),
+    setActiveView: vi.fn(),
+    recordViewVisit: vi.fn(),
+    pluginPanels,
+    updateSettings: vi.fn(),
+    refreshPreflightStatus: vi.fn(),
+    checkLinearConnection: vi.fn(),
+    hasPairedMobileDevice: false,
+    agentBucketCounts: { attention: 0, working: 0, done: 0, idle: 0 },
+    getAgentBucketCounts: vi.fn(),
+    dismissMobileOnboardingBadge: vi.fn(),
+    setSetupGuideSidebarDismissed: vi.fn()
+  }
+})
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) => selector(mocks.state)
