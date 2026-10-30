@@ -108,6 +108,7 @@ export function leafTuiIdleEvidence(
   return {
     record: leaf,
     readTailBlockedReason: () => detectTerminalWaitBlockedReason(waitText()),
+    readBackgroundWorkText: waitText,
     rendererTitle: leaf.paneTitle ?? source.getTabTitle(leaf.tabId),
     readPositiveBodyEvidence: () =>
       isKnownReadyPromptBody(waitText(), agent, readScreen, leaf.lastOutputAt !== null),
@@ -133,6 +134,7 @@ export function ptyTuiIdleEvidence(
   return {
     record: pty,
     readTailBlockedReason: () => detectTerminalWaitBlockedReason(waitText()),
+    readBackgroundWorkText: waitText,
     readPositiveBodyEvidence: () =>
       (agent !== 'qoder' &&
         agent !== 'qoder-cn' &&

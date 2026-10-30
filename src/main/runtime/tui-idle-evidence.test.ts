@@ -368,3 +368,37 @@ describe('evaluateTuiIdle with OSC 7501 program status', () => {
     ).not.toEqual({ kind: 'ready-strong' })
   })
 })
+
+describe('evaluateTuiIdle grok background tasks', () => {
+  const liveHud =
+    'tasks 1\ntask background sleep 60 for orca repro  33s\nwatching · 1 command\n> '
+  const clearedHud = 'tasks 0\nno background tasks\n> '
+  const idleGrok = input({
+    agent: 'grok',
+    record: record({ lastOscTitle: 'Grok', lastAgentStatus: 'idle' }),
+    readPositiveBodyEvidence: () => true,
+    readQuietReadyBodyEvidence: () => false
+  })
+
+  it('refuses an idle title and a ready composer while the Tasks HUD is live', () => {
+    expect(
+      evaluateTuiIdle({ ...idleGrok, readBackgroundWorkText: () => liveHud })
+    ).toEqual({ kind: 'working' })
+  })
+
+  it('still reports a blocked prompt that shares the screen with the HUD', () => {
+    expect(
+      evaluateTuiIdle({
+        ...idleGrok,
+        readBackgroundWorkText: () => liveHud,
+        readTailBlockedReason: () => 'agent-trust-workspace'
+      })
+    ).toEqual({ kind: 'blocked', reason: 'agent-trust-workspace' })
+  })
+
+  it('settles once the Tasks HUD clears', () => {
+    expect(
+      evaluateTuiIdle({ ...idleGrok, readBackgroundWorkText: () => clearedHud })
+    ).toEqual({ kind: 'ready-strong' })
+  })
+})
