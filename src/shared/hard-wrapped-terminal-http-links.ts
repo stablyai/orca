@@ -9,6 +9,7 @@ const HTTP_SCHEME_PATTERN = /https?:\/\//i
 const HTTP_SCHEME_START_PATTERN = /^https?:\/\//i
 const HTTP_FRAGMENT_PATTERN = /^[^\s"'!*(){}|\\^<>`│┃║╎╏┆┇┊┋]*/
 const VERTICAL_LAYOUT_FRAME_PATTERN = /[│┃║╎╏┆┇┊┋|]/
+const CLOSING_LAYOUT_FRAME_PATTERN = /[│┃║╎╏┆┇┊┋|]\s*$/
 const NON_LAYOUT_SUFFIX_PATTERN = /[^\s│┃║╎╏┆┇┊┋|]/
 const HARD_WRAP_CONTINUATION_SUFFIX_PATTERN = /[/?&=#%+:-]$/
 const LAYOUT_SUFFIX_CHAR_PATTERN = /[\s│┃║╎╏┆┇┊┋|]/
@@ -185,7 +186,7 @@ function buildCandidateFromStart(
       // Only framed cells count; screen text around an overlay is not a table row.
       isWrappedTableCell =
         (isTableRow && NON_LAYOUT_SUFFIX_PATTERN.test(leftCells)) ||
-        (VERTICAL_LAYOUT_FRAME_PATTERN.test(rightCells) &&
+        (CLOSING_LAYOUT_FRAME_PATTERN.test(rightCells) &&
           NON_LAYOUT_SUFFIX_PATTERN.test(rightCells))
     } else {
       continuationLeftCells = leftCells

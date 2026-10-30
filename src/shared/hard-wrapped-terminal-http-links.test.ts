@@ -205,6 +205,10 @@ describe('hard-wrapped terminal HTTP candidate bounds', () => {
     [
       'an overlay over screen text',
       ['todo  |http://example.com/aaaa|', '      |README.md              |']
+    ],
+    [
+      'a box beside an open split pane',
+      ['│ https://example.com/aaaaaaaaaa │ │ $ ls', '│ README.md                      │ │']
     ]
   ])('does not join a URL that fills its cell onto the next rows in %s', (_, rowTexts) => {
     const rows = rowTexts.map(bufferLineWithCellColumns)
