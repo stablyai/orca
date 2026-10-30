@@ -21,7 +21,7 @@ import { attachRuntimeWorktreeAgentRowWaits } from '../runtime-worktree-agent-ro
 import { compareWorktreePs } from '../runtime-worktree-status-projection'
 import type { Repo } from '../../../shared/repo-types'
 import { enrichMissingRepoGitRemoteIdentities } from '../../repo-git-remote-identity-enrichment'
-import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from '../structured-agent-session-runtime'
+import * as structuredSessions from '../structured-agent-session-runtime'
 import {
   createStructuredAttentionMobileDelivery,
   readStructuredAttentionWorkspaceLabels
@@ -233,7 +233,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
         logger
       )
     )
-    await installStructuredAgentSessionHost({
+    await structuredSessions.ensureStructuredAgentSessionHost({
       stateDirectory: getProfileUserDataPath(),
       legacySessionTabIds: this.legacyStructuredSessionTabIds,
       hostId: LOCAL_EXECUTION_HOST_ID,
@@ -253,6 +253,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
       nativeChatVisuals: {
         isEnabled: () => this.requireStore().getSettings().nativeChatInlineVisuals !== false
       },
+      transientRecovery: structuredSessions.transientRecoveryPolicy(() => this.requireStore()),
       resolveShellEnvironmentPolicy: () =>
         nativeChatShellEnvironmentPolicy(this.requireStore().getSettings()),
       resolveClaudeAuthPolicy: () =>

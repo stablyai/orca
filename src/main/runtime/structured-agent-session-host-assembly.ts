@@ -59,6 +59,7 @@ export async function installOnJournal(
   })
   host = new StructuredAgentSessionHost({
     store,
+    transientRecovery: deps.transientRecovery,
     adapter,
     agents,
     recoveryCapsule: new AgentSessionRecoveryCapsule(deps.stateDirectory),

@@ -19,11 +19,24 @@ import {
   type StructuredAgentSessionLogger
 } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { migrateLegacyNativeChatVisualsFolders } from '../native-chat/native-chat-scratch-folder-migration'
+import type { RuntimeStore } from './runtime-store-contract'
 
 export { hasPersistedStructuredAgentSessionStore } from './agent-session-record-store-slot'
 
 export type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime-contract'
 import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime-contract'
+
+export function transientRecoveryPolicy(readStore: () => RuntimeStore) {
+  return {
+    enabled: () => readStore().getSettings().nativeChatAutoContinueOnTransientError === true,
+    onDisabled: (listener: () => void) =>
+      readStore().onSettingsChanged?.((updates) => {
+        if (updates.nativeChatAutoContinueOnTransientError === false) {
+          listener()
+        }
+      }) ?? (() => {})
+  }
+}
 
 let installing: Promise<InstalledRuntime> | null = null
 

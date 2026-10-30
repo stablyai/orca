@@ -1,7 +1,5 @@
 import { continuationContextReader as contextReader } from './structured-agent-session-continuation-context'
-import type { AgentSessionRewindParams } from '../../../shared/agent-session-rewind'
-import { rewindStructuredAgentSession } from './structured-agent-session-rewind'
-import { StructuredConversationCommandController } from './structured-conversation-command-controller'
+import { StructuredConversationCommandController as CommandController } from './structured-conversation-command-controller'
 // Serialize durable mutations per conversation; open at rest and start a child only when work needs it.
 
 import type { AgentSessionSubscribeInput } from './structured-agent-session-subscribers'
@@ -19,7 +17,6 @@ import { createStructuredAgentSessionHostMutationContext } from './structured-ag
 import * as lifetime from './structured-agent-session-conversation-lifetime'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import { createStructuredAgentSessionTabSurface as createTabs } from './structured-agent-session-host-tabs'
-import { structuredAgentSessionMutationDelegates } from './structured-agent-session-host-mutations'
 import { flushStructuredAgentSessionHost } from './structured-agent-session-host-teardown'
 import type * as HostTypes from './structured-agent-session-host-types'
 import { StructuredAgentSessionEventRecovery } from './structured-agent-session-event-recovery'
@@ -33,12 +30,10 @@ import { wireStructuredAgentSessionQueuedMessages as wireQueuedMessages } from '
 import * as sessionLogger from './structured-agent-session-logger'
 import { sleepStructuredAgentSessionWorkspace } from './structured-agent-session-workspace-sleep'
 export type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
+import * as transientRecovery from './structured-agent-session-transient-recovery-wiring'
 
 export class StructuredAgentSessionHost {
-  private readonly conversationCommands = new StructuredConversationCommandController(
-    () => this.mutationContext(),
-    this
-  )
+  private readonly conversationCommands = new CommandController(() => this.mutationContext(), this)
   private readonly sessions = new StructuredAgentSessionConversations({
     observe: (id, journal, rows) => this.clientDelivery.requestFailures.observe(id, journal, rows),
     forget: (id) => this.clientDelivery.requestFailures.forget(id),
@@ -74,6 +69,7 @@ export class StructuredAgentSessionHost {
   private readonly eventRecovery: StructuredAgentSessionEventRecovery
   private readonly backgroundTasks: BackgroundTasks
   readonly restartResume: resume.StructuredAgentSessionRestartResume
+  private readonly transientRecovery
 
   constructor(readonly deps: HostTypes.StructuredAgentSessionHostDeps) {
     // Collaborators share a logger wrapper that cannot fail the operation it reports.
@@ -151,6 +147,7 @@ export class StructuredAgentSessionHost {
     this.continuationContext = contextReader(deps, this.lifetime.conversation)
     this.runtimeState.startLeaseRenewal()
     this.lifetime.idleSweep.start()
+    this.transientRecovery = transientRecovery.wireTransientRecovery(this, this.sessions)
   }
 
   private now = (): number => this.deps.now?.() ?? Date.now()
@@ -178,20 +175,18 @@ export class StructuredAgentSessionHost {
     } satisfies StructuredAgentSessionLifetimeContext
   }
 
-  private attachContext(): StructuredAgentSessionAttachContext {
-    return {
-      ...this.lifetimeContext(),
-      subscribers: this.subscribers,
-      tasks: this.tasks,
-      reconcileLeases: (sessionId) => this.reconcileLeases(sessionId),
-      serialize: (sessionId, task) => this.serialize(sessionId, task),
-      openProviderChild: this.eventRecovery.openProviderChild,
-      openConversation: this.conversationDelivery.open
-    }
-  }
+  private attachContext = (): StructuredAgentSessionAttachContext => ({
+    ...this.lifetimeContext(),
+    subscribers: this.subscribers,
+    tasks: this.tasks,
+    reconcileLeases: (sessionId) => this.reconcileLeases(sessionId),
+    serialize: (sessionId, task) => this.serialize(sessionId, task),
+    openProviderChild: this.eventRecovery.openProviderChild,
+    openConversation: this.conversationDelivery.open
+  })
   /** Release resources; user-close cancels cut turns, while eviction leaves their failure reportable. */
   close: lifetime.StructuredAgentSessionConversationLifetime['close'] = (sessionId, cause) =>
-    this.lifetime.close(sessionId, cause)
+    this.transientRecovery.beforeUserAction(sessionId, () => this.lifetime.close(sessionId, cause))
 
   /** Stop hidden children too, using one bounded host snapshot. */
   sleepWorkspace = (workspaceId: string, markAsleep?: boolean) =>
@@ -252,8 +247,11 @@ export class StructuredAgentSessionHost {
   /** Test-only barrier for streamed event writes. */
   flushStreamedEvents = (id: string): Promise<void> => this.runtimeState.flushEventSink(id)
 
-  /** Quit stops delivery and queued-card handover. */
-  stopDelivery = () => [this.conversationDelivery, this.queued.drain].forEach((d) => d.dispose())
+  /** Quit stops delivery, queued-card handover, and automatic continuation. */
+  stopDelivery = () =>
+    [this.conversationDelivery, this.queued.drain, this.transientRecovery].forEach((d) =>
+      d.dispose()
+    )
 
   async flushAllStreamedEvents(options?: { trigger?: 'quit' | 'update' }): Promise<void> {
     this.stopDelivery()
@@ -269,21 +267,24 @@ export class StructuredAgentSessionHost {
 
   private mutationContext = () =>
     createStructuredAgentSessionHostMutationContext({
-      deps: this.deps,
+      ...this.attachContext(),
       sessions: this.sessions,
       subscribers: this.subscribers,
       lifetime: this.lifetime,
       clientDelivery: this.clientDelivery,
       conversationDelivery: this.conversationDelivery,
       queued: this.queued,
-      runtimeState: this.runtimeState,
       attachContext: () => this.attachContext(),
-      trackProviderOperation: (operation) => this.tasks.trackAttach(operation),
-      serialize: (sessionId, task) => this.serialize(sessionId, task),
-      now: () => this.now()
+      trackProviderOperation: (operation) => this.tasks.trackAttach(operation)
     })
 
-  send = this.conversationCommands.send
+  private mutations = transientRecovery.createTransientRecoveryMutationDelegates(
+    () => this.transientRecovery,
+    this.mutationContext,
+    this.attachContext,
+    this.conversationCommands
+  )
+  send = this.mutations.send
 
   queuedMessageSend = this.queued.queuedMessageSend
   queuedMessageDelete = this.queued.queuedMessageDelete
@@ -294,17 +295,14 @@ export class StructuredAgentSessionHost {
 
   waitForSendSettlement = this.clientDelivery.waitForSendSettlement
 
-  private mutations = structuredAgentSessionMutationDelegates(() => this.mutationContext())
   cancel = this.mutations.cancel
   respondToPrompt = this.mutations.respondToPrompt
   setOption = this.mutations.setOption
   changeThreadGoal = this.mutations.changeThreadGoal
   readOptions = this.mutations.readOptions
 
-  rewind = (caller: HostTypes.StructuredAgentSessionCaller, params: AgentSessionRewindParams) =>
-    rewindStructuredAgentSession(this.mutationContext(), this.attachContext(), caller, params)
-
-  conversationCommand = this.conversationCommands.run
+  rewind = this.mutations.rewind
+  conversationCommand = this.mutations.conversationCommand
   /** Undefined means unavailable; an empty array is an authoritative catalog. */
   readCommands = (sessionId: string, commandsOnRequest = false) =>
     this.clientDelivery.readCommandsSettled(sessionId, commandsOnRequest)

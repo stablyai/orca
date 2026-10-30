@@ -47,6 +47,7 @@ import type { StructuredAgentSessionLogger } from './structured-agent-session-lo
 import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
 import type { StructuredAgentSessionStartupLimits } from './structured-agent-session-startup-attempt-contract'
+import type { TransientRecoveryPolicy } from './structured-agent-session-transient-recovery'
 import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
 import type { AgentSessionSwitchResult } from '../../../shared/agent-session-switch-execution'
 
@@ -173,6 +174,8 @@ export type StructuredAgentSessionHostDeps = {
   ) => boolean
   /** Explicit switch admission also includes direct chat assignments, even at rest. */
   hasOwedSwitchWork?: (record: AgentSessionRecord) => boolean
+  /** Host-local opt-in; absent never sends an automatic continuation. */
+  transientRecovery?: TransientRecoveryPolicy
   /** Advisory tab-hidden notice; failures are logged. */
   onSessionTabHidden?: (sessionId: string) => void
   /** Throws while a terminal may still write the record's head conversation; run before a spawn. */
