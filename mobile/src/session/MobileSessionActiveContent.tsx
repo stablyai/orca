@@ -20,6 +20,7 @@ import { useHostDisplay } from '../transport/use-host-display'
 import { FileReader } from './MobileSessionFileReader'
 import { MarkdownReader } from './MobileSessionMarkdownReader'
 
+/** The active tab's content on the session screen. */
 export function MobileSessionActiveContent({
   controller
 }: {
@@ -95,6 +96,7 @@ export function MobileSessionActiveContent({
     handleHaptic,
     nativeChatImages,
     nativeChatStructuredComposer,
+    attachTerminalChatFiles,
     activeMarkdownTab,
     activeFileTab,
     activeBrowserTab,
@@ -313,6 +315,11 @@ export function MobileSessionActiveContent({
             onOpenFile={handleNativeChatFileTap}
             images={nativeChatImages}
             structuredComposer={nativeChatStructuredComposer}
+            onAttachFiles={
+              nativeChatStructuredComposer || connState !== 'connected'
+                ? undefined
+                : () => void attachTerminalChatFiles()
+            }
             onMicPress={dictationEnabled ? handleDictationToggle : undefined}
             micActive={dictation.isStarting || dictation.isRecording}
             micStarting={dictation.isStarting}

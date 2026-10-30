@@ -387,6 +387,26 @@ describe('MobileNativeChatComposer on a structured chat', () => {
     expect(onAttachImage).toHaveBeenCalledTimes(1)
   })
 
+  it('offers only photos and files on a terminal-backed chat that takes files', async () => {
+    const onAttachImage = vi.fn()
+    const onAttachFiles = vi.fn()
+    await act(async () => {
+      renderer = create(draw({ onAttachImage, onAttachFiles, structured: null }))
+    })
+    await act(async () => labelled('Add to message')[0]!.props.onPress())
+    expect(onAttachImage).not.toHaveBeenCalled()
+
+    const sheet = renderer!.root.find(
+      (node) => node.props.actions !== undefined && node.props.visible === true
+    )
+    const [photos, files, ...others] = sheet.props.actions
+    expect([photos.id, files.id, others]).toEqual(['photos', 'files', []])
+    files.onPress()
+    expect(onAttachFiles).toHaveBeenCalledTimes(1)
+    photos.onPress()
+    expect(onAttachImage).toHaveBeenCalledTimes(1)
+  })
+
   it('holds Send while a file is still uploading, and sends a stored file alone', async () => {
     const onSend = vi.fn().mockResolvedValue(true)
     const file = { id: 'f1', name: 'spec.pdf', mime: 'application/pdf', byteLength: 10 }

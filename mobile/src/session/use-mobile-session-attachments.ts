@@ -14,6 +14,7 @@ import { useMobileAttachmentInputLeaseGate } from './use-mobile-attachment-input
 import { useMobileTerminalPaste } from './use-mobile-terminal-paste'
 import type { MobileSessionAccessorySelectionModel } from './use-mobile-session-accessory-selection'
 
+/** Paste and attachment actions for the session screen. */
 export function useMobileSessionAttachments(scope: MobileSessionAccessorySelectionModel) {
   const {
     worktreeId,
@@ -86,7 +87,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
   const structuredNativeChat = activeSessionTab?.type === 'agent-session'
   const nativeChatSessionId = resolveMobileNativeChatSessionId(activeSessionTab)
   // Terminal attachments paste immediately; native chat defers composer chips until submit.
-  const { attachImage, isAttaching, nativeChatImages, nativeChatFiles } =
+  const { attachImage, isAttaching, nativeChatImages, nativeChatFiles, attachTerminalChatFiles } =
     useMobileSessionImageAttachments({
       client,
       agent,
@@ -157,7 +158,8 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     attachImage,
     isAttaching,
     nativeChatImages,
-    nativeChatStructuredComposer
+    nativeChatStructuredComposer,
+    attachTerminalChatFiles
   }
 }
 

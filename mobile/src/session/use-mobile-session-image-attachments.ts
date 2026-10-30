@@ -12,6 +12,7 @@ import {
   useMobileNativeChatFileAttachments,
   type MobileNativeChatFileAttachments
 } from './native-chat/composer/use-mobile-native-chat-file-attachments'
+import { useMobileNativeChatTerminalFileAttachments } from './native-chat/composer/use-mobile-native-chat-terminal-file-attachments'
 
 type CurrentRef<T> = { readonly current: T }
 
@@ -47,7 +48,7 @@ type Args = {
   readonly onError: () => void
 }
 
-// Share upload wiring across immediate terminal paste, deferred chat chips and host-owned structured files.
+/** Share upload wiring across immediate terminal paste, deferred chat chips and host-owned structured files. */
 export function useMobileSessionImageAttachments({
   client,
   agent,
@@ -74,6 +75,7 @@ export function useMobileSessionImageAttachments({
   isAttaching: boolean
   nativeChatImages: MobileNativeChatImageAttachments
   nativeChatFiles: MobileNativeChatFileAttachments
+  attachTerminalChatFiles: () => Promise<void>
 } {
   const { attachImage, isAttaching } = useMobileImageAttachment({
     client,
@@ -93,6 +95,13 @@ export function useMobileSessionImageAttachments({
     sessionId: structuredNativeChat ? nativeChatSessionId : null,
     scopeKey: nativeChatScopeKey,
     enabled: structuredNativeChat && connState === 'connected',
+    showToast
+  })
+  const attachTerminalChatFiles = useMobileNativeChatTerminalFileAttachments({
+    client,
+    scopeKey: nativeChatScopeKey,
+    enabled: !structuredNativeChat && connState === 'connected',
+    getConnectionId: getActiveWorktreeConnectionId,
     showToast
   })
   const nativeChatImages = useMobileNativeChatImageAttachments({
@@ -116,5 +125,5 @@ export function useMobileSessionImageAttachments({
     onAttachSuccess: onSuccess,
     onError
   })
-  return { attachImage, isAttaching, nativeChatImages, nativeChatFiles }
+  return { attachImage, isAttaching, nativeChatImages, nativeChatFiles, attachTerminalChatFiles }
 }

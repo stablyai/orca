@@ -28,6 +28,7 @@ type Props = {
   onOpenFile: (pathText: string) => void
   images: MobileNativeChatImageAttachments
   structuredComposer?: MobileNativeChatStructuredComposer | null
+  onAttachFiles?: () => void
   onMicPress: (() => void) | undefined
   micActive: boolean
   micStarting: boolean
@@ -47,7 +48,7 @@ type Props = {
   hostName: string | null
 }
 
-// Keep the terminal subscription and streaming gate above view toggles; the chat list unmounts below this boundary.
+/** Keep the terminal subscription and streaming gate above view toggles; the chat list unmounts below this boundary. */
 export function MobileNativeChatOverlay({
   controller,
   imageSource,
@@ -55,6 +56,7 @@ export function MobileNativeChatOverlay({
   onOpenFile,
   images,
   structuredComposer = null,
+  onAttachFiles,
   onMicPress,
   micActive,
   micStarting,
@@ -242,6 +244,7 @@ export function MobileNativeChatOverlay({
                         ? () => void images.attachImage('library')
                         : undefined
                     }
+                    onAttachFiles={onAttachFiles}
                     attachments={images.attachments}
                     onRemoveAttachment={images.removeAttachment}
                     isAttaching={images.isAttaching}
