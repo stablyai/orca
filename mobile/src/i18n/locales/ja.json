@@ -1390,19 +1390,11 @@
     "hostPendingCreationRow": {
       "creatingWorkspace": "ワークスペースを作成中…"
     },
-    "hostRailActions": {
-      "accounts": "アカウント",
-      "closeSearch": "検索を閉じる",
-      "floatingWorkspace": "フローティングワークスペース",
-      "newWorkspace": "新規ワークスペース",
-      "searchWorkspaces": "ワークスペースの検索",
-      "tasks": "タスク",
-      "automations": "自動化"
-    },
     "hostScreenHeader": {
       "accounts": "アカウント",
       "activeFilters_one": "ワークスペースのオプション ({{count}} 件のフィルターが有効)",
       "activeFilters_other": "ワークスペースのオプション ({{count}} 件のフィルターが有効)",
+      "automations": "自動化",
       "backToHosts": "ホスト一覧に戻る",
       "closeSearch": "検索を閉じる",
       "floatingWorkspace": "フローティングワークスペース",
@@ -2332,9 +2324,6 @@
       "terminalName": "ターミナル名",
       "unsavedMarkdown": "Markdown の未保存の変更",
       "urlPrompt": "URL を入力してください。空欄のままにすると新規タブが開きます。"
-    },
-    "sideRail": {
-      "backToWorktrees": "ワークツリーに戻る"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "このワークスペースホストでは有効な AI Agent が検出されませんでした。",

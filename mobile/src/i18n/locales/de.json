@@ -1394,19 +1394,11 @@
     "hostPendingCreationRow": {
       "creatingWorkspace": "Arbeitsbereich wird erstellt…"
     },
-    "hostRailActions": {
-      "accounts": "Konten",
-      "closeSearch": "Suche schließen",
-      "floatingWorkspace": "Schwebender Arbeitsbereich",
-      "newWorkspace": "Neuer Arbeitsbereich",
-      "searchWorkspaces": "Arbeitsbereiche durchsuchen",
-      "tasks": "Aufgaben",
-      "automations": "Automatisierungen"
-    },
     "hostScreenHeader": {
       "accounts": "Konten",
       "activeFilters_one": "Arbeitsbereichsoptionen ({{count}} Filter aktiv)",
       "activeFilters_other": "Arbeitsbereichsoptionen ({{count}} Filter aktiv)",
+      "automations": "Automatisierungen",
       "backToHosts": "Zurück zu den Hosts",
       "closeSearch": "Suche schließen",
       "floatingWorkspace": "Schwebender Arbeitsbereich",
@@ -2336,9 +2328,6 @@
       "terminalName": "Terminal-Name",
       "unsavedMarkdown": "Ungespeicherte Markdown-Änderungen",
       "urlPrompt": "URL eingeben oder für einen neuen Tab leer lassen."
-    },
-    "sideRail": {
-      "backToWorktrees": "Zurück zu den Worktrees"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "Auf dem Host dieses Arbeitsbereichs wurde kein aktivierter KI-Agent erkannt.",

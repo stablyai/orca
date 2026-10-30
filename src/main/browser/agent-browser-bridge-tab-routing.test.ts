@@ -100,7 +100,12 @@ describe('AgentBrowserBridge', () => {
     const snapshotArgs = spawns.find(({ command }) => command[0] === 'snapshot')?.args
     expect(snapshotArgs).toContain('--session')
     expect(snapshotArgs![snapshotArgs!.indexOf('--session') + 1]).toBe('orca-tab-tab-b')
-    expect(result).toEqual({ browserPageId: 'tab-b', snapshot: 'tree output' })
+    expect(result).toEqual({
+      browserPageId: 'tab-b',
+      snapshot: 'tree output',
+      url: 'https://b.com',
+      title: 'B'
+    })
     expect(b.getActiveWebContentsId()).toBe(1)
   })
 
@@ -233,6 +238,86 @@ describe('AgentBrowserBridge', () => {
     expect(b.tabList('wt-1').tabs).toMatchObject([{ browserPageId: 'tab-b', active: true }])
   })
 
+  it('lets an agent drive a popup by page id and returns it to the opener when the popup closes', async () => {
+    const tabs = new Map([
+      ['tab-a', 1],
+      ['tab-b', 2]
+    ])
+    const worktrees = new Map([
+      ['tab-a', 'wt-1'],
+      ['tab-b', 'wt-1']
+    ])
+    let popupPages = [{ browserPageId: 'popup-7', webContentsId: 7, openerBrowserPageId: 'tab-b' }]
+    const agentPages = new Set<string>()
+    let closePopup = (): void => {}
+    const popup = {
+      ...mockWebContents(7, 'https://auth.example.com/', 'Sign in'),
+      once: (event: string, listener: () => void) => {
+        if (event === 'destroyed') {
+          closePopup = listener
+        }
+      }
+    }
+    const pages = new Map<number, unknown>([
+      [1, mockWebContents(1, 'https://a.com', 'A')],
+      [2, mockWebContents(2, 'https://b.com', 'B')],
+      [7, popup]
+    ])
+    webContentsFromIdMock.mockImplementation((id: number) => pages.get(id) ?? null)
+    const b = new AgentBrowserBridge(
+      mockBrowserManager(tabs, worktrees, {
+        getPopupPages: () => popupPages,
+        getGuestWebContentsId: (tabId: string) => tabs.get(tabId) ?? null,
+        isAgentUsingPage: (pageId: string) => agentPages.has(pageId),
+        handOverAgentActivity: (from: string, to: string) => {
+          if (agentPages.has(from)) {
+            agentPages.add(to)
+          }
+        }
+      })
+    )
+    b.setActiveTab(1, 'wt-1')
+
+    expect(b.tabList('wt-1').tabs).toMatchObject([
+      { browserPageId: 'tab-a', active: true },
+      { browserPageId: 'tab-b', active: false },
+      { browserPageId: 'popup-7', title: 'Sign in', openerBrowserPageId: 'tab-b', active: false }
+    ])
+    const spawns: string[][] = []
+    answerAgentBrowserCommands(execFileMock, stdinWrites, (command, cb, args, child) => {
+      spawns.push(args)
+      if (command[0] === 'click') {
+        // Approving a sign-in closes the popup before the click reports back.
+        pages.delete(7)
+        popupPages = []
+        closePopup()
+      }
+      cb(null, JSON.stringify({ success: true, data: { snapshot: 'popup tree' } }), '')
+      child.emit('close')
+    })
+    await expect(b.snapshot(undefined, 'popup-7')).resolves.toEqual({
+      browserPageId: 'popup-7',
+      snapshot: 'popup tree',
+      url: 'https://auth.example.com/',
+      title: 'Sign in'
+    })
+    expect(b.getActivePageId('wt-1')).toBe('tab-a')
+
+    await b.tabSwitch(undefined, 'wt-1', 'popup-7')
+    expect(b.getActivePageId('wt-1')).toBe('popup-7')
+    agentPages.add('popup-7')
+    // The person's pick waits while the agent signs in, and keeps waiting once it is back on the opener.
+    b.onTabChanged(1, 'wt-1')
+    await expect(b.click('@e2', 'wt-1')).resolves.toBeDefined()
+
+    expect(b.getActivePageId('wt-1')).toBe('tab-b')
+    await vi.waitFor(() =>
+      expect(spawns.some((args) => args.join(' ') === '--session orca-tab-popup-7 close')).toBe(
+        true
+      )
+    )
+  })
+
   it('repairs per-worktree active routing when an active tab swaps processes', async () => {
     const tabs = new Map([['tab-a', 200]])
     const worktrees = new Map([['tab-a', 'wt-1']])
@@ -270,7 +355,7 @@ describe('AgentBrowserBridge', () => {
           isAgentUsingPage: (id: string) => agentPages.has(id),
           beginAgentCommand: (id: string) => {
             agentPages.add(id)
-            return { run: (execute) => execute(), end: () => {} }
+            return { agent: false, run: (execute) => execute(), end: () => {} }
           }
         })
       )
@@ -381,6 +466,43 @@ describe('AgentBrowserBridge', () => {
     expect(clickSessions).toEqual(['orca-tab-tab-a', 'orca-tab-tab-b'])
   })
 
+  it('binds unpinned refs to the page an exec batch snapshotted', async () => {
+    const tabs = new Map([
+      ['tab-a', 1],
+      ['tab-b', 2]
+    ])
+    const worktrees = new Map([
+      ['tab-a', 'wt-1'],
+      ['tab-b', 'wt-1']
+    ])
+    webContentsFromIdMock.mockImplementation((id: number) => mockWebContents(id))
+    const b = new AgentBrowserBridge(mockBrowserManager(tabs, worktrees))
+    b.setActiveTab(1, 'wt-1')
+    const clickSessions: string[] = []
+    answerAgentBrowserCommands(execFileMock, stdinWrites, (command, cb, args) => {
+      if (command[0] === 'click') {
+        clickSessions.push(args[args.indexOf('--session') + 1])
+      }
+      if (command[0] === 'batch') {
+        const steps = [
+          { command: ['snapshot', '-i'], success: true, result: { snapshot: '' } },
+          { command: ['get', 'title'], success: true, result: { title: 'B' } }
+        ]
+        cb(null, JSON.stringify(steps), '')
+        return
+      }
+      const data = command[0] === 'snapshot' ? { snapshot: '' } : {}
+      cb(null, JSON.stringify({ success: true, data }), '')
+    })
+
+    await b.snapshot('wt-1')
+    await b.tabSwitch(undefined, 'wt-1', 'tab-b')
+    await b.exec('batch "snapshot -i" "get title"', 'wt-1')
+    await b.click('@e2', 'wt-1')
+
+    expect(clickSessions).toEqual(['orca-tab-tab-b'])
+  })
+
   it('queues tabSwitch behind in-flight commands on the current session', async () => {
     const tabs = new Map([
       ['tab-a', 1],
@@ -423,7 +545,12 @@ describe('AgentBrowserBridge', () => {
     expect(releaseSnapshot).not.toBeNull()
 
     releaseSnapshot!()
-    await expect(snapshot).resolves.toEqual({ browserPageId: 'tab-a', snapshot: 'tree' })
+    await expect(snapshot).resolves.toEqual({
+      browserPageId: 'tab-a',
+      snapshot: 'tree',
+      url: 'https://example.com',
+      title: 'Example'
+    })
     await expect(switched).resolves.toEqual({ switched: 1, browserPageId: 'tab-b' })
     expect(b.getActiveWebContentsId()).toBe(2)
   })

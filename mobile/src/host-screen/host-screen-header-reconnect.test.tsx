@@ -26,7 +26,6 @@ vi.mock('lucide-react-native', () => ({
 
 import { resolveHostDisplay } from '../../../src/shared/host-display-resolution'
 import { HostScreenHeader } from './host-screen-header'
-import { SideRailProvider } from '../layout/side-rail'
 
 // Use the unreachable verdict that offers native Reconnect to prove the page still withholds it.
 function controllerWith(forceReconnectHost: ForceReconnect) {
@@ -97,41 +96,40 @@ describe('host Automations entry', () => {
     tree = null
   })
 
-  it.each([
-    { embedded: false, edge: null, actionsInRail: false },
-    { embedded: true, edge: null, actionsInRail: false },
-    { embedded: false, edge: 'right', actionsInRail: false },
-    { embedded: true, edge: 'right', actionsInRail: true },
-    { embedded: true, edge: 'right', actionsInRail: false }
-  ] as const)('keeps one connected-host entry at %j and disables it offline', (layout) => {
-    const navigate = vi.fn()
-    const controller = {
-      ...controllerWith(null),
-      embedded: layout.embedded,
-      actionsInRail: layout.actionsInRail,
-      activeFilterCount: 0,
-      hostId: 'host/with space',
-      actions: { ...controllerWith(null).actions, navigateFromHostList: navigate }
-    }
-    const screen = (connState: 'connected' | 'reconnecting') => (
-      <SideRailProvider edge={layout.edge} width={84} bottom={34}>
+  it.each([false, true])(
+    'keeps one header entry with embedded=%s and disables it offline',
+    (embedded) => {
+      const navigate = vi.fn()
+      const controller = {
+        ...controllerWith(null),
+        embedded,
+        activeFilterCount: 0,
+        hostId: 'host/with space',
+        actions: { ...controllerWith(null).actions, navigateFromHostList: navigate }
+      }
+      const screen = (connState: 'connected' | 'reconnecting') => (
         <HostScreenHeader controller={{ ...controller, connState }} />
-      </SideRailProvider>
-    )
-    act(() => {
-      tree = create(screen('connected'))
-    })
-    const entries = (): ReactTestInstance[] =>
-      tree?.root.findAll(
-        (node) =>
-          String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Automations'
-      ) ?? []
-    expect(entries()).toHaveLength(1)
-    expect(entries()[0]?.props.disabled).toBe(false)
-    act(() => entries()[0]?.props.onPress())
-    expect(navigate).toHaveBeenCalledExactlyOnceWith('/h/host%2Fwith%20space/automations')
-    act(() => tree?.update(screen('reconnecting')))
-    expect(entries()).toHaveLength(1)
-    expect(entries()[0]?.props.disabled).toBe(true)
-  })
+      )
+      act(() => {
+        tree = create(screen('connected'))
+      })
+      const entries = (): ReactTestInstance[] =>
+        tree?.root.findAll(
+          (node) =>
+            String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Automations'
+        ) ?? []
+      expect(entries()).toHaveLength(1)
+      const entry = entries()[0]
+      const toolbarButtons =
+        entry?.parent?.findAll((node) => String(node.type) === 'Pressable') ?? []
+      const entryIndex = entry ? toolbarButtons.indexOf(entry) : -1
+      expect(toolbarButtons?.[entryIndex - 1]?.props.accessibilityLabel).toBe('Tasks')
+      expect(entries()[0]?.props.disabled).toBe(false)
+      act(() => entries()[0]?.props.onPress())
+      expect(navigate).toHaveBeenCalledExactlyOnceWith('/h/host%2Fwith%20space/automations')
+      act(() => tree?.update(screen('reconnecting')))
+      expect(entries()).toHaveLength(1)
+      expect(entries()[0]?.props.disabled).toBe(true)
+    }
+  )
 })

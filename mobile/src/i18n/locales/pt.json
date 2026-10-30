@@ -1437,20 +1437,12 @@
     "hostPendingCreationRow": {
       "creatingWorkspace": "Criando espaço de trabalho…"
     },
-    "hostRailActions": {
-      "accounts": "Contas",
-      "closeSearch": "Fechar busca",
-      "floatingWorkspace": "Espaço de Trabalho Flutuante",
-      "newWorkspace": "Novo espaço de trabalho",
-      "searchWorkspaces": "Buscar espaços de trabalho",
-      "tasks": "Tarefas",
-      "automations": "Automações"
-    },
     "hostScreenHeader": {
       "accounts": "Contas",
       "activeFilters_many": "Opções do espaço de trabalho ({{count}} filtros ativos)",
       "activeFilters_one": "Opções do espaço de trabalho ({{count}} filtro ativo)",
       "activeFilters_other": "Opções do espaço de trabalho ({{count}} filtros ativos)",
+      "automations": "Automações",
       "backToHosts": "Voltar aos hosts",
       "closeSearch": "Fechar busca",
       "floatingWorkspace": "Espaço de Trabalho Flutuante",
@@ -2411,9 +2403,6 @@
       "terminalName": "Nome do terminal",
       "unsavedMarkdown": "Alterações em Markdown não salvas",
       "urlPrompt": "Digite uma URL ou deixe em branco para abrir uma nova aba."
-    },
-    "sideRail": {
-      "backToWorktrees": "Voltar para as worktrees"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "Nenhum agente de IA ativado foi detectado neste host do espaço de trabalho.",

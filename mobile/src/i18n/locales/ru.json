@@ -1480,21 +1480,13 @@
     "hostPendingCreationRow": {
       "creatingWorkspace": "Создание рабочего пространства…"
     },
-    "hostRailActions": {
-      "accounts": "Учётные записи",
-      "closeSearch": "Закрыть поиск",
-      "floatingWorkspace": "Плавающее рабочее пространство",
-      "newWorkspace": "Новое рабочее пространство",
-      "searchWorkspaces": "Поиск рабочих пространств",
-      "tasks": "Задачи",
-      "automations": "Автоматизации"
-    },
     "hostScreenHeader": {
       "accounts": "Учётные записи",
       "activeFilters_few": "Параметры рабочих пространств (активны {{count}} фильтра)",
       "activeFilters_many": "Параметры рабочих пространств (активно {{count}} фильтров)",
       "activeFilters_one": "Параметры рабочих пространств (активен {{count}} фильтр)",
       "activeFilters_other": "Параметры рабочих пространств (активно {{count}} фильтра)",
+      "automations": "Автоматизации",
       "backToHosts": "Назад к серверам",
       "closeSearch": "Закрыть поиск",
       "floatingWorkspace": "Плавающее рабочее пространство",
@@ -2486,9 +2478,6 @@
       "terminalName": "Название терминала",
       "unsavedMarkdown": "Несохранённые изменения в Markdown",
       "urlPrompt": "Введите URL или оставьте поле пустым, чтобы открыть новую вкладку."
-    },
-    "sideRail": {
-      "backToWorktrees": "Вернуться к рабочим деревьям"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "На сервере этого рабочего пространства не найдено включённых ИИ-агентов.",

@@ -552,15 +552,6 @@
     "hostPendingCreationRow": {
       "creatingWorkspace": "Creating workspace…"
     },
-    "hostRailActions": {
-      "accounts": "Accounts",
-      "tasks": "Tasks",
-      "floatingWorkspace": "Floating Workspace",
-      "newWorkspace": "New workspace",
-      "closeSearch": "Close search",
-      "searchWorkspaces": "Search workspaces",
-      "automations": "Automations"
-    },
     "hostScreenHeader": {
       "workspaceOptions": "Workspace options",
       "activeFilters_one": "Workspace options ({{count}} filter active)",
@@ -572,7 +563,9 @@
       "accounts": "Accounts",
       "tasks": "Tasks",
       "closeSearch": "Close search",
-      "searchWorkspaces": "Search workspaces"
+      "searchWorkspaces": "Search workspaces",
+      "newWorkspace": "New workspace",
+      "automations": "Automations"
     },
     "hostScreenOverlays": {
       "deleteWorktree": "Delete Worktree",
@@ -1213,7 +1206,11 @@
       "addShortcut": "Add Custom Shortcut…",
       "addDescription": "Create key combo or text macro",
       "moreKeys": "MORE KEYS",
-      "moreKeysDescription": "These keys sit under ⋯ on the terminal key row. Toggle keys to show or hide them, and hold the grip to drag a key into the order you want. A key already on the row, like Esc or the arrows, is left out of ⋯."
+      "moreKeysDescription": "These keys sit under ⋯ on the terminal key row. Toggle keys to show or hide them, and hold the grip to drag a key into the order you want. A key already on the row, like Esc or the arrows, is left out of ⋯.",
+      "directionPad": "DIRECTION PAD",
+      "showDirectionPad": "Show D-pad",
+      "showDirectionPadDescription": "Pin the arrow pad in the side rail. Without it, the rail lists the arrow keys.",
+      "showShortcut": "Show {{label}} shortcut"
     },
     "voiceModelList": {
       "modelSize": "{{size}} MB",
@@ -1820,7 +1817,12 @@
       "reconnectToDesktop": "Reconnect to desktop",
       "openFileExplorer": "Open file explorer",
       "openSourceControl": "Open source control",
-      "moreActions": "More session actions"
+      "moreActions": "More session actions",
+      "terminalLayout": "Terminal layout",
+      "newTab": "New tab",
+      "quickCommands": "Quick commands",
+      "fileExplorer": "File explorer",
+      "sourceControl": "Source control"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Agent History",
@@ -1865,7 +1867,8 @@
       "tabStatus": "{{title}}, {{status}}",
       "newTab": "New tab",
       "quickCommandsUpdateRequired": "Desktop update required for quick commands",
-      "checkingCapabilities": "Checking desktop capabilities — try again in a moment"
+      "checkingCapabilities": "Checking desktop capabilities — try again in a moment",
+      "terminalLayout": "Terminal layout"
     },
     "terminalInputActions": {
       "sendingImage": "Sending image",
@@ -2157,9 +2160,6 @@
       "emptyPrompt": "This action's saved prompt is empty. Update Source Control AI settings on your computer.",
       "agentStartedIn": "Agent started in {{label}}",
       "agentStarted": "Agent started"
-    },
-    "sideRail": {
-      "backToWorktrees": "Back to worktrees"
     },
     "useAttachmentInputLeaseGate": {
       "reconnecting": "Attach failed (reconnecting)"
@@ -2507,6 +2507,28 @@
       "deleteKeyHint": "Long press to delete this key",
       "addCustomKey": "Add custom key",
       "addKey": "Add key"
+    },
+    "terminalLayoutSheet": {
+      "title": "Terminal layout",
+      "oneTerminal": "One terminal",
+      "selected": "Selected",
+      "auto": "Auto",
+      "autoHint": "Split to fit the available space",
+      "sideBySide": "Side by side",
+      "sideBySideHint": "Two columns, even with the sidebar open",
+      "stacked": "Stacked",
+      "stackedHint": "Two rows in any orientation",
+      "selectedHint": "Selected · {{hint}}"
+    },
+    "terminalPaneView": {
+      "focusedPane": "{{title}}, focused",
+      "terminal": "Terminal",
+      "tapToFocusPane": "{{title}}, tap to focus",
+      "inputPane": "{{title}} · Input"
+    },
+    "terminalSplitLayout": {
+      "saveFailedTitle": "Layout could not be saved",
+      "saveFailedMessage": "This layout applies for now. Choose it again to retry saving."
     }
   },
   "chat": {
@@ -3978,6 +4000,18 @@
     },
     "webviewReadyWatchdog": {
       "initializeFailed": "Terminal did not initialize - no ready signal from the terminal view"
+    }
+  },
+  "mobileWebShell": {
+    "terminalDirectionPad": {
+      "up": "D-pad up",
+      "left": "D-pad left",
+      "right": "D-pad right",
+      "down": "D-pad down",
+      "hint": "Sends an arrow key. Hold to repeat."
+    },
+    "terminalKeyRail": {
+      "ctrlC": "Ctrl+C"
     }
   },
   "automations": {

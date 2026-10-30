@@ -4,6 +4,7 @@ import {
   retireRuntimeBrowserClientPage
 } from './browser-client-page-close'
 import { BrowserError } from '../../browser/browser-error'
+import { browserManager } from '../../browser/browser-manager'
 import { closeBrowserTabInRenderer } from './browser-tab-renderer-close'
 import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from './browser-command-targets'
@@ -84,6 +85,16 @@ export class RuntimeBrowserTabClose {
       if (activeEntry) {
         tabId = activeEntry[0]
       }
+    }
+
+    // Popups are windows, not renderer tabs; close them as the page's own window.close() would.
+    const popupPageId = tabId ?? bridge.getActivePageId(worktreeId)
+    if (
+      popupPageId &&
+      bridge.getRegisteredTabs(worktreeId).has(popupPageId) &&
+      (await browserManager.closePopupPage(popupPageId))
+    ) {
+      return { closed: true }
     }
 
     const authoritativeWindow = this.host.getAvailableAuthoritativeWindow()

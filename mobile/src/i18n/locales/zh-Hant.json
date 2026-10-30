@@ -1390,19 +1390,11 @@
     "hostPendingCreationRow": {
       "creatingWorkspace": "正在建立工作區…"
     },
-    "hostRailActions": {
-      "accounts": "帳戶",
-      "closeSearch": "關閉搜尋",
-      "floatingWorkspace": "浮動工作區",
-      "newWorkspace": "新工作區",
-      "searchWorkspaces": "搜尋工作區",
-      "tasks": "任務",
-      "automations": "自動化"
-    },
     "hostScreenHeader": {
       "accounts": "帳戶",
       "activeFilters_one": "工作區選項（已啟用 {{count}} 個篩選條件）",
       "activeFilters_other": "工作區選項（已啟用 {{count}} 個篩選條件）",
+      "automations": "自動化",
       "backToHosts": "返回主機清單",
       "closeSearch": "關閉搜尋",
       "floatingWorkspace": "浮動工作區",
@@ -2332,9 +2324,6 @@
       "terminalName": "終端機名稱",
       "unsavedMarkdown": "尚未儲存的 Markdown 變更",
       "urlPrompt": "請輸入網址，或留空以開啟新分頁。"
-    },
-    "sideRail": {
-      "backToWorktrees": "返回工作樹"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "此工作區主機上未偵測到已啟用的 AI 代理程式。",

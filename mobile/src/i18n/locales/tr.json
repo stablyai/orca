@@ -1394,19 +1394,11 @@
     "hostPendingCreationRow": {
       "creatingWorkspace": "Çalışma alanı oluşturuluyor…"
     },
-    "hostRailActions": {
-      "accounts": "Hesaplar",
-      "closeSearch": "Aramayı kapat",
-      "floatingWorkspace": "Yüzen Çalışma Alanı",
-      "newWorkspace": "Yeni çalışma alanı",
-      "searchWorkspaces": "Çalışma alanlarını ara",
-      "tasks": "Görevler",
-      "automations": "Otomasyonlar"
-    },
     "hostScreenHeader": {
       "accounts": "Hesaplar",
       "activeFilters_one": "Çalışma alanı seçenekleri ({{count}} filtre etkin)",
       "activeFilters_other": "Çalışma alanı seçenekleri ({{count}} filtre etkin)",
+      "automations": "Otomasyonlar",
       "backToHosts": "Sunuculara dön",
       "closeSearch": "Aramayı kapat",
       "floatingWorkspace": "Yüzen Çalışma Alanı",
@@ -2336,9 +2328,6 @@
       "terminalName": "Terminal adı",
       "unsavedMarkdown": "Kaydedilmemiş Markdown değişiklikleri",
       "urlPrompt": "Bir URL girin veya yeni sekme için boş bırakın."
-    },
-    "sideRail": {
-      "backToWorktrees": "Worktree'lere dön"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "Bu çalışma alanı sunucusunda etkin bir AI ajanı algılanmadı.",

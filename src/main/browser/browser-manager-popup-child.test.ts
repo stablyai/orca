@@ -253,4 +253,50 @@ describe('browserManager popup child policies', () => {
     expect(childOffMock).toHaveBeenCalledWith('will-navigate', expect.any(Function))
     expect(childOffMock).toHaveBeenCalledWith('will-redirect', expect.any(Function))
   })
+
+  it('exposes a live popup child as a page owned by its opener tab', async () => {
+    let didCreateWindow: (window: { webContents: unknown }) => void = () => {}
+    const fakeGuest = (id: number) => ({
+      id,
+      isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setWindowOpenHandler: vi.fn(),
+      on: vi.fn((event: string, listener: (window: { webContents: unknown }) => void) => {
+        if (event === 'did-create-window') {
+          didCreateWindow = listener
+        }
+      }),
+      off: vi.fn(),
+      once: vi.fn((_event: string, listener: () => void) => listener()),
+      close: vi.fn()
+    })
+    const opener = fakeGuest(404)
+    const popup = fakeGuest(4040)
+    webContentsFromIdMock.mockImplementation((id: number) =>
+      id === opener.id ? opener : id === popup.id ? popup : null
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the policy reads only the fake's listed members.
+    browserManager.attachGuestPolicies(opener as unknown as Electron.WebContents)
+    browserManager.registerGuest({
+      browserPageId: 'browser-1',
+      worktreeId: 'wt-1',
+      sessionProfileId: 'work',
+      webContentsId: opener.id,
+      rendererWebContentsId
+    })
+    didCreateWindow({ webContents: popup })
+
+    expect(browserManager.getPopupPages()).toEqual([
+      { browserPageId: 'popup-4040', webContentsId: 4040, openerBrowserPageId: 'browser-1' }
+    ])
+    expect(browserManager.getWorktreeIdForTab('popup-4040')).toBe('wt-1')
+    expect(browserManager.getSessionProfileIdForTab('popup-4040')).toBe('work')
+    await expect(browserManager.closePopupPage('browser-1')).resolves.toBe(false)
+    await expect(browserManager.closePopupPage('popup-4040')).resolves.toBe(true)
+    expect(popup.close).toHaveBeenCalledTimes(1)
+
+    browserManager.unregisterGuest('browser-1')
+    expect(browserManager.getPopupPages()).toEqual([])
+  })
 })

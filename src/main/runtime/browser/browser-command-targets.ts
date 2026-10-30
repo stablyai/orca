@@ -1,5 +1,7 @@
+import type { BrowserSnapshotOptions } from '../../../shared/rpc-contract/browser-observation-params'
 import type { AgentBrowserBridge } from '../../browser/agent-browser-bridge'
 import { BrowserError } from '../../browser/browser-error'
+import { browserPopupPageWebContentsId } from '../../browser/browser-popup-page-id'
 import { webContents } from 'electron'
 import {
   waitForTabRegistration,
@@ -110,7 +112,12 @@ export class RuntimeBrowserCommandTargets {
       ? (await this.host.resolveWorkspaceSelector(params.worktree)).id
       : undefined
     const bridge = this.host.getAgentBrowserBridge()
-    if (bridge && !this.hasLiveRegisteredBrowserPage(bridge, worktreeId, browserPageId)) {
+    // The renderer never registers popups, so waking it for a closed one only stalls.
+    if (
+      bridge &&
+      browserPopupPageWebContentsId(browserPageId) === null &&
+      !this.hasLiveRegisteredBrowserPage(bridge, worktreeId, browserPageId)
+    ) {
       try {
         await this.ensureBrowserPageActive(worktreeId, browserPageId)
       } catch {}
@@ -203,8 +210,14 @@ export class RuntimeBrowserCommandTargets {
     } catch {}
   }
 
-  async browserSnapshot(params: BrowserCommandTargetParams): Promise<BrowserSnapshotResult> {
+  async browserSnapshot(
+    params: BrowserSnapshotOptions & BrowserCommandTargetParams
+  ): Promise<BrowserSnapshotResult> {
     const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().snapshot(target.worktreeId, target.browserPageId)
+    return this.requireAgentBrowserBridge().snapshot(
+      target.worktreeId,
+      target.browserPageId,
+      params
+    )
   }
 }

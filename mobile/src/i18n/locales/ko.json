@@ -1390,19 +1390,11 @@
     "hostPendingCreationRow": {
       "creatingWorkspace": "워크스페이스 만드는 중…"
     },
-    "hostRailActions": {
-      "accounts": "계정",
-      "closeSearch": "검색 닫기",
-      "floatingWorkspace": "플로팅 워크스페이스",
-      "newWorkspace": "새로운 워크스페이스",
-      "searchWorkspaces": "워크스페이스 검색",
-      "tasks": "작업",
-      "automations": "자동화"
-    },
     "hostScreenHeader": {
       "accounts": "계정",
       "activeFilters_one": "워크스페이스 옵션 (필터 {{count}}개 활성화됨)",
       "activeFilters_other": "워크스페이스 옵션 (필터 {{count}}개 활성화됨)",
+      "automations": "자동화",
       "backToHosts": "호스트 목록으로 돌아가기",
       "closeSearch": "검색 닫기",
       "floatingWorkspace": "플로팅 워크스페이스",
@@ -2332,9 +2324,6 @@
       "terminalName": "터미널 이름",
       "unsavedMarkdown": "저장되지 않은 Markdown 변경 사항",
       "urlPrompt": "URL을 입력하세요. 비워 두면 새 탭이 열립니다."
-    },
-    "sideRail": {
-      "backToWorktrees": "워크트리로 돌아가기"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "이 워크스페이스 호스트에서는 활성화된 AI 에이전트가 감지되지 않았습니다.",
