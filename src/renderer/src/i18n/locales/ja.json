@@ -3422,8 +3422,7 @@
           "zcode": {
             "missing": {
               "tui": {
-                "title": "この ZCode ビルドにはターミナル UI がありません",
-                "description": "Orca のフックは正しくインストールされていますが、PATH 上の zcode はセッションを開けません。ZCode デスクトップアプリには、ターミナル UI のない Agent ランタイムが同梱されています。TUI を含む zcode をインストールし、Orca の外部で zcode を実行して確認してください。"
+                "title": "この ZCode ビルドにはターミナル UI がありません"
               }
             }
           },

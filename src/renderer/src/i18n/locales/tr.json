@@ -3936,8 +3936,7 @@
           "zcode": {
             "missing": {
               "tui": {
-                "title": "Bu ZCode derlemesinde terminal arayüzü yok",
-                "description": "Orca'nın kancaları doğru yüklendi — PATH üzerindeki zcode bir oturum açamıyor. ZCode masaüstü uygulaması ajan çalışma zamanını terminal arayüzü olmadan içeriyor. TUI içeren bir zcode yükleyin, ardından doğrulamak için zcode'u Orca dışında çalıştırın."
+                "title": "Bu ZCode derlemesinde terminal arayüzü yok"
               }
             }
           },

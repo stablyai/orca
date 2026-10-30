@@ -3961,8 +3961,7 @@
           "zcode": {
             "missing": {
               "tui": {
-                "title": "Diese ZCode-Version hat keine Terminal-Oberfläche",
-                "description": "Die Orca-Hooks wurden korrekt installiert — zcode im PATH kann jedoch keine Sitzung öffnen. Die ZCode-Desktop-App enthält die Agenten-Laufzeitumgebung ohne Terminal-Oberfläche. Eine zcode-Version mit TUI installieren und zcode anschließend außerhalb von Orca ausführen, um dies zu prüfen."
+                "title": "Diese ZCode-Version hat keine Terminal-Oberfläche"
               }
             }
           },

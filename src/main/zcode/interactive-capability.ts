@@ -1,58 +1,63 @@
 import { runProcess } from '@orca/process-host'
 import {
+  isZCodeInteractiveTuiOutput,
   isZCodeMissingTuiOutput,
   type ZCodeInteractiveCapability
 } from '../../shared/zcode-missing-tui'
+import type { ZcodeCliInvocation } from './zcode-cli-invocation'
 
-/** Probe before opening a pane to avoid racing fast startup failure. version/doctor never load TUI; no-TTY launch distinguishes missing @zcode/tui from loaded UI rejecting a terminal. npm resolves the package, SEA embeds assets, bundled desktop lacks both. */
 export type { ZCodeInteractiveCapability }
 
-// Measured answers arrive under a second; timeouts mean unknown, never proven missing TUI.
 const PROBE_TIMEOUT_MS = 6_000
 
-let cached: ZCodeInteractiveCapability | undefined
-let inFlight: Promise<ZCodeInteractiveCapability> | undefined
+const cached = new Map<string, ZCodeInteractiveCapability>()
+const inFlight = new Map<string, Promise<ZCodeInteractiveCapability>>()
 
 export function _resetZCodeInteractiveCapabilityForTests(): void {
-  cached = undefined
-  inFlight = undefined
+  cached.clear()
+  inFlight.clear()
 }
 
-async function probe(command: string): Promise<ZCodeInteractiveCapability> {
+async function probe(invocation: ZcodeCliInvocation): Promise<ZCodeInteractiveCapability> {
   try {
     const result = await runProcess({
-      program: command,
-      args: [],
-      // Pipe explicit EOF so capable builds reject missing TTY instead of taking the probe interactive.
+      program: invocation.command,
+      args: [...invocation.prefixArgs, 'tui'],
+      env: { ...process.env, ...invocation.envOverlay },
       input: '',
       timeoutMs: PROBE_TIMEOUT_MS
     })
-    if (result.timedOut) {
-      return 'unknown'
+    const output = `${result.stderr}\n${result.stdout}`
+    if (isZCodeMissingTuiOutput(output)) {
+      return 'missing-tui'
     }
-    return isZCodeMissingTuiOutput(`${result.stderr}\n${result.stdout}`)
-      ? 'missing-tui'
-      : 'interactive'
+    return result.timedOut || result.code === 0 || isZCodeInteractiveTuiOutput(output)
+      ? 'interactive'
+      : 'unknown'
   } catch {
-    // Spawn failure proves no capability; preserve unknown rather than accuse a healthy CLI.
     return 'unknown'
   }
 }
 
-/** Cache definitive capability for this process; transient unknown verdicts may retry. */
+/** Cache definitive capability per resolved installation; transient unknown verdicts may retry. */
 export function readZCodeInteractiveCapability(
-  command = 'zcode'
+  invocation: ZcodeCliInvocation
 ): Promise<ZCodeInteractiveCapability> {
-  if (cached !== undefined) {
-    return Promise.resolve(cached)
+  const remembered = cached.get(invocation.identity)
+  if (remembered !== undefined) {
+    return Promise.resolve(remembered)
   }
-  inFlight ??= probe(command).then((verdict) => {
-    // Retry transient unknowns so temporary load cannot suppress the missing-TUI notice for the whole session.
+  const pending = inFlight.get(invocation.identity)
+  if (pending) {
+    return pending
+  }
+  const next = probe(invocation).then((verdict) => {
     if (verdict !== 'unknown') {
-      cached = verdict
+      cached.set(invocation.identity, verdict)
     }
-    inFlight = undefined
+    inFlight.delete(invocation.identity)
     return verdict
   })
-  return inFlight
+  inFlight.set(invocation.identity, next)
+  return next
 }

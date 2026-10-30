@@ -35,8 +35,15 @@ export const preflightApi = {
     ipcRenderer.on('preflight:wslDistroRunning', listener)
     return () => ipcRenderer.removeListener('preflight:wslDistroRunning', listener)
   },
-  zcodeInteractiveCapability: (): Promise<ZCodeInteractiveCapability> =>
-    ipcRenderer.invoke('preflight:zcodeInteractiveCapability'),
+  zcodeInteractiveCapability: (args?: {
+    commandOverride?: string
+  }): Promise<ZCodeInteractiveCapability> =>
+    ipcRenderer.invoke('preflight:zcodeInteractiveCapability', args),
+  zcodeSetupInvocation: (args: {
+    commandOverride?: string
+    cliArgs: string[]
+  }): Promise<{ command: string; args: string[]; env: Record<string, string> }> =>
+    ipcRenderer.invoke('preflight:zcodeSetupInvocation', args),
   refreshAgents: (
     args?: PreflightRuntimeContext & { enabledOnly?: boolean; wakeWslDistro?: boolean }
   ): Promise<RefreshAgentsResult> => ipcRenderer.invoke('preflight:refreshAgents', args),

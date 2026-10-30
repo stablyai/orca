@@ -3885,8 +3885,7 @@
           "zcode": {
             "missing": {
               "tui": {
-                "title": "此 ZCode 版本沒有終端機 UI",
-                "description": "Orca 的掛鉤已正確安裝 — 但 PATH 中的 zcode 無法開啟工作階段。ZCode 桌面應用程式內含代理程式執行環境，卻未附帶其終端機 UI。請安裝附帶 TUI 的 zcode，然後在 Orca 之外執行 zcode 加以確認。"
+                "title": "此 ZCode 版本沒有終端機 UI"
               }
             }
           },

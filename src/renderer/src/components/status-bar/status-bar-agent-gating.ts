@@ -1,15 +1,14 @@
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { StatusBarItem } from '../../../../shared/ui-chrome-types'
 
-// Hide missing CLI items and toggles after detection; unknown detection preserves them to avoid cold-start flicker.
+// Hide missing CLI items after detection; ZCode usage can use Desktop credentials without its TUI.
 const CLI_GATED_ITEMS: ReadonlySet<StatusBarItem> = new Set([
   'claude',
   'codex',
   'gemini',
   'kimi',
   'antigravity',
-  'grok',
-  'zcode'
+  'grok'
 ])
 
 export function isStatusBarItemAvailable(

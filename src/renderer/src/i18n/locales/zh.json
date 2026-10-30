@@ -3422,8 +3422,7 @@
           "zcode": {
             "missing": {
               "tui": {
-                "title": "此 ZCode 版本没有终端 UI",
-                "description": "Orca 的钩子已正确安装——但 PATH 中的 zcode 就是无法打开会话。ZCode 桌面应用打包了智能体运行时，却没有附带其终端 UI。请安装一个自带 TUI 的 zcode，然后在 Orca 之外运行 zcode 加以确认。"
+                "title": "此 ZCode 版本没有终端 UI"
               }
             }
           },

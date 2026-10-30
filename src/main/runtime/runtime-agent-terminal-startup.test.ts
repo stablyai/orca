@@ -1,10 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const zcodeAdmissionMock = vi.hoisted(() => vi.fn())
+
 import { detectAgentCommandsOnHost } from '../preflight/agent-detection'
 import { resolveAgentTerminalCreateOptions } from './runtime-agent-terminal-startup'
 import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl'
 
 vi.mock('../preflight/agent-detection', () => ({
   detectAgentCommandsOnHost: vi.fn(async () => new Set(['qoder']))
+}))
+
+vi.mock('../zcode/terminal-launch-admission', () => ({
+  assertZcodeTerminalLaunchAvailable: zcodeAdmissionMock
 }))
 
 const workspace = { id: 'w', path: '/repo', connectionId: null, repo: null, folderWorkspace: null }
@@ -17,7 +24,10 @@ const host = {
 const original = process.platform
 const setPlatform = (value: string) =>
   Object.defineProperty(process, 'platform', { configurable: true, value })
-beforeEach(() => setPlatform('win32'))
+beforeEach(() => {
+  setPlatform('win32')
+  zcodeAdmissionMock.mockReset().mockResolvedValue(undefined)
+})
 afterEach(() => {
   setPlatform(original)
   _resetWslCachesForTests()
@@ -56,6 +66,38 @@ describe('host agent planner', () => {
     const planHost = { ...host, store: store as never }
     const plan = resolveAgentTerminalCreateOptions(scope, { startupAgent: 'claude' }, planHost)
     await expect(plan).rejects.toThrow('Agent claude is disabled')
+  })
+
+  it('refuses a local ZCode terminal before building its startup command', async () => {
+    setPlatform('linux')
+    zcodeAdmissionMock.mockRejectedValue(
+      new Error('ZCode Desktop does not include the terminal TUI.')
+    )
+
+    await expect(
+      resolveAgentTerminalCreateOptions(workspace, { startupAgent: 'zcode' }, host)
+    ).rejects.toThrow('ZCode Desktop does not include the terminal TUI')
+    expect(zcodeAdmissionMock).toHaveBeenCalledWith({
+      commandSettings: { terminalWindowsShell: 'cmd.exe' },
+      pathEnv: process.env.PATH ?? process.env.Path
+    })
+  })
+
+  it('leaves remote ZCode admission to the remote execution host', async () => {
+    const launch = await resolveAgentTerminalCreateOptions(
+      { ...workspace, connectionId: 'remote' },
+      {
+        startupAgent: 'zcode',
+        launchRuntime: {
+          platform: 'linux',
+          pty: { shellOverride: undefined, terminalWindowsWslDistro: null }
+        }
+      },
+      host
+    )
+
+    expect(launch.command).toBe("zcode '--mode' 'yolo'")
+    expect(zcodeAdmissionMock).not.toHaveBeenCalled()
   })
 
   it("rewrites Qoder once, probing where the fact's PTY runs (C2 skips the window copy)", async () => {

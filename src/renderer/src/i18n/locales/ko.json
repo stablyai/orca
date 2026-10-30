@@ -3422,8 +3422,7 @@
           "zcode": {
             "missing": {
               "tui": {
-                "title": "이 ZCode 빌드에는 터미널 UI가 없습니다",
-                "description": "Orca 후크는 올바르게 설치되었습니다 — PATH에 있는 zcode는 세션을 열 수 없을 뿐입니다. ZCode 데스크톱 앱은 터미널 UI 없이 에이전트 런타임을 번들로 제공합니다. TUI가 포함된 zcode를 설치한 다음 Orca 외부에서 zcode를 실행하여 확인하세요."
+                "title": "이 ZCode 빌드에는 터미널 UI가 없습니다"
               }
             }
           },

@@ -1,8 +1,12 @@
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useCallback, useState } from 'react'
+import { toast } from 'sonner'
+import type { ZcodeSetupInvocation } from '../../../../preload/api/preflight-api'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { Button } from '../ui/button'
 import { SearchableSetting } from './SearchableSetting'
+import { getHostShellForProjectRuntime } from '../../../../shared/local-windows-terminal-runtime'
+import { buildZcodeSetupTerminalCommand } from './zcode-setup-terminal-command'
 
 const OnboardingInlineCommandTerminal = lazy(() =>
   import('../onboarding/OnboardingInlineCommandTerminal').then((module) => ({
@@ -12,11 +16,64 @@ const OnboardingInlineCommandTerminal = lazy(() =>
 
 type SetupChoice = 'zai' | 'bigmodel' | 'api-key'
 
+type SetupTerminal = {
+  choice: SetupChoice
+  invocation: ZcodeSetupInvocation
+}
+
 export function ZcodeCliSetupSection(): React.JSX.Element {
-  const commandOverride = useAppStore((s) => s.settings?.agentCmdOverrides?.zcode)
-  const [choice, setChoice] = useState<SetupChoice | null>(null)
-  const executable = commandOverride?.trim() || 'zcode'
-  const command = choice === 'api-key' ? executable : `${executable} login ${choice} --no-browser`
+  const commandOverride = useAppStore((s) => s.settings?.agentCmdOverrides?.zcode)?.trim()
+  const windowsShell = useAppStore((s) => s.settings?.terminalWindowsShell)
+  const setupShell = navigator.userAgent.includes('Windows')
+    ? getHostShellForProjectRuntime(undefined, windowsShell)
+    : undefined
+  const [loadingChoice, setLoadingChoice] = useState<SetupChoice | null>(null)
+  const [terminal, setTerminal] = useState<SetupTerminal | null>(null)
+  const openSetup = useCallback(
+    async (choice: SetupChoice): Promise<void> => {
+      setLoadingChoice(choice)
+      try {
+        if (choice === 'api-key') {
+          const capability = await window.api.preflight.zcodeInteractiveCapability(
+            commandOverride ? { commandOverride } : undefined
+          )
+          if (capability === 'missing-tui') {
+            toast.error(
+              translate(
+                'auto.components.terminal.pane.zcode.missing.tui.title',
+                'This ZCode build has no terminal UI'
+              ),
+              {
+                description: translate(
+                  'auto.components.settings.ZcodeCliSetupSection.apiKeyTuiRequired',
+                  'The ZCode desktop bundle can run browser sign-in, but API-key setup requires a standalone ZCode CLI that ships the terminal UI.'
+                )
+              }
+            )
+            return
+          }
+        }
+        const cliArgs = choice === 'api-key' ? ['tui'] : ['login', choice, '--no-browser']
+        const invocation = await window.api.preflight.zcodeSetupInvocation({
+          ...(commandOverride ? { commandOverride } : {}),
+          cliArgs
+        })
+        setTerminal({ choice, invocation })
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.components.settings.ZcodeCliSetupSection.resolveFailed',
+                'Could not resolve the installed ZCode CLI.'
+              )
+        )
+      } finally {
+        setLoadingChoice(null)
+      }
+    },
+    [commandOverride]
+  )
 
   const title = translate(
     'auto.components.settings.ZcodeCliSetupSection.title',
@@ -26,6 +83,7 @@ export function ZcodeCliSetupSection(): React.JSX.Element {
     'auto.components.settings.ZcodeCliSetupSection.description',
     'Sign in to use GLM as a coding agent. The quota API key above only monitors usage; ZCode owns its own sign-in and model selection.'
   )
+  const busy = loadingChoice !== null || terminal !== null
 
   return (
     <SearchableSetting
@@ -43,19 +101,14 @@ export function ZcodeCliSetupSection(): React.JSX.Element {
         )}
       </p>
       <div className="flex flex-wrap gap-2">
-        <Button
-          variant="outline"
-          size="xs"
-          disabled={choice !== null}
-          onClick={() => setChoice('zai')}
-        >
+        <Button variant="outline" size="xs" disabled={busy} onClick={() => void openSetup('zai')}>
           {translate('auto.components.settings.ZcodeCliSetupSection.zai', 'Z.AI browser sign-in')}
         </Button>
         <Button
           variant="outline"
           size="xs"
-          disabled={choice !== null}
-          onClick={() => setChoice('bigmodel')}
+          disabled={busy}
+          onClick={() => void openSetup('bigmodel')}
         >
           {translate(
             'auto.components.settings.ZcodeCliSetupSection.bigmodel',
@@ -65,13 +118,13 @@ export function ZcodeCliSetupSection(): React.JSX.Element {
         <Button
           variant="outline"
           size="xs"
-          disabled={choice !== null}
-          onClick={() => setChoice('api-key')}
+          disabled={busy}
+          onClick={() => void openSetup('api-key')}
         >
           {translate('auto.components.settings.ZcodeCliSetupSection.apiKey', 'ZCode API-key setup')}
         </Button>
-        {choice ? (
-          <Button variant="ghost" size="xs" onClick={() => setChoice(null)}>
+        {terminal ? (
+          <Button variant="ghost" size="xs" onClick={() => setTerminal(null)}>
             {translate(
               'auto.components.settings.ZcodeCliSetupSection.close',
               'Close setup terminal'
@@ -79,7 +132,15 @@ export function ZcodeCliSetupSection(): React.JSX.Element {
           </Button>
         ) : null}
       </div>
-      {choice ? (
+      {loadingChoice ? (
+        <p className="text-xs text-muted-foreground">
+          {translate(
+            'auto.components.settings.ZcodeCliSetupSection.loading',
+            'Loading sign-in terminal…'
+          )}
+        </p>
+      ) : null}
+      {terminal ? (
         <Suspense
           fallback={
             <p className="text-xs text-muted-foreground">
@@ -91,7 +152,10 @@ export function ZcodeCliSetupSection(): React.JSX.Element {
           }
         >
           <OnboardingInlineCommandTerminal
-            command={command}
+            command="zcode"
+            prepareCommandForShell={(_command, shell) =>
+              buildZcodeSetupTerminalCommand(terminal.invocation, shell)
+            }
             title={translate(
               'auto.components.settings.ZcodeCliSetupSection.terminalTitle',
               'ZCode sign-in'
@@ -101,7 +165,7 @@ export function ZcodeCliSetupSection(): React.JSX.Element {
               'ZCode sign-in terminal'
             )}
             description={
-              choice === 'api-key'
+              terminal.choice === 'api-key'
                 ? translate(
                     'auto.components.settings.ZcodeCliSetupSection.apiKeyInstructions',
                     'Press Enter to start ZCode, then enter /login and choose the API-key option for your plan site. Enter the key in ZCode’s masked prompt.'
@@ -114,6 +178,8 @@ export function ZcodeCliSetupSection(): React.JSX.Element {
             autoScrollIntoView={false}
             terminalTopMarginPx={8}
             worktreeId="zcode-sign-in-terminal"
+            shellOverride={setupShell}
+            forceHostRuntime
           />
         </Suspense>
       ) : null}

@@ -3723,8 +3723,7 @@
           "zcode": {
             "missing": {
               "tui": {
-                "title": "Ce build ZCode n'a pas d'interface de terminal",
-                "description": "Les hooks d'Orca se sont installés correctement — le zcode présent dans votre PATH ne peut tout simplement pas ouvrir de session. L'application de bureau ZCode intègre le runtime de l'agent sans son interface de terminal. Installez un zcode qui inclut la TUI, puis exécutez zcode en dehors d'Orca pour confirmer."
+                "title": "Ce build ZCode n'a pas d'interface de terminal"
               }
             }
           },

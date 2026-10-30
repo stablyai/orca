@@ -10,6 +10,7 @@ import {
   getPreflightWslTarget,
   type PreflightRuntimeContext
 } from '../ipc/preflight-runtime-target'
+import { readZcodeTerminalLaunchAdmission } from '../zcode/terminal-launch-admission'
 import { detectAgentCommandsOnHost } from './agent-command-detection'
 import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -34,14 +35,22 @@ export async function detectInstalledAgents(
   context?: PreflightRuntimeContext,
   options?: InstalledAgentDetectionOptions
 ): Promise<string[]> {
-  const runtime = getPreflightWslTarget(context) ? 'wsl' : process.platform
+  const wslTarget = getPreflightWslTarget(context)
+  const runtime = wslTarget ? 'wsl' : process.platform
   const commands = activeDetectionCommands(options)
   const probeCommands = getTuiAgentDetectionProbeCommands(commands, runtime)
-  return resolveDetectedTuiAgentIds(
+  const detected = resolveDetectedTuiAgentIds(
     commands,
     await detectAgentCommandsOnHost(probeCommands, { context }),
     runtime
   )
+  if (wslTarget || !detected.includes('zcode')) {
+    return detected
+  }
+  const admission = await readZcodeTerminalLaunchAdmission({
+    pathEnv: process.env.PATH ?? process.env.Path
+  })
+  return admission.status === 'available' ? detected : detected.filter((agent) => agent !== 'zcode')
 }
 
 export async function detectInstalledAgentsWithShellPathHydration(

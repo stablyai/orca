@@ -17,6 +17,7 @@ import type {
 } from '../preflight/agent-detection'
 
 import { readZCodeInteractiveCapability } from '../zcode/interactive-capability'
+import { resolveZcodeCliInvocation } from '../zcode/zcode-cli-invocation'
 import { getPreflightWslTarget } from './preflight-runtime-target'
 import { runAsWslExecUserAct } from '../wsl/wsl-background-exec-gate'
 import { deferRefusedPreflight } from './preflight-wsl-refusal-retry'
@@ -66,8 +67,34 @@ export function registerPreflightHandlers(store?: Pick<Store, 'getSettings'>): v
       })
   )
 
-  ipcMain.handle('preflight:zcodeInteractiveCapability', async () =>
-    readZCodeInteractiveCapability()
+  ipcMain.handle(
+    'preflight:zcodeInteractiveCapability',
+    async (_event, args?: { commandOverride?: string }) =>
+      readZCodeInteractiveCapability(
+        resolveZcodeCliInvocation({
+          pathEnv: process.env.PATH ?? process.env.Path,
+          ...(args?.commandOverride
+            ? { commandSettings: { agentCmdOverrides: { zcode: args.commandOverride } } }
+            : {})
+        })
+      )
+  )
+
+  ipcMain.handle(
+    'preflight:zcodeSetupInvocation',
+    async (_event, args: { commandOverride?: string; cliArgs: string[] }) => {
+      const invocation = resolveZcodeCliInvocation({
+        pathEnv: process.env.PATH ?? process.env.Path,
+        ...(args.commandOverride
+          ? { commandSettings: { agentCmdOverrides: { zcode: args.commandOverride } } }
+          : {})
+      })
+      return {
+        command: invocation.command,
+        args: [...invocation.prefixArgs, ...args.cliArgs],
+        env: invocation.envOverlay
+      }
+    }
   )
 
   ipcMain.handle(
