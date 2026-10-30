@@ -77,7 +77,7 @@ export function MobileNativeChatPromptCard({
         prompt={ask}
         onAnswer={async (selections) => {
           const accepted = (await onAnswerAsk?.(ask, selections)) ?? false
-          if (accepted) {
+          if (accepted && !ask.replyAsMessage) {
             onDismissAsk?.()
           }
           return accepted

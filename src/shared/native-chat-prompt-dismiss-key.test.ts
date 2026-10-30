@@ -31,7 +31,7 @@ describe('nativeChatCardDismissKey', () => {
     const key = (questions: AskQuestion[]) =>
       nativeChatCardDismissKey({
         kind: 'question',
-        prompt: { questions, replyAsMessage: true, occurrenceKey: JSON.stringify(['row']) }
+        prompt: { questions, replyAsMessage: true, occurrenceIds: ['addressed-call'] }
       })
     const original = key([first, second])
     for (const changed of [

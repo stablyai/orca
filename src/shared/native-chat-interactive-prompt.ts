@@ -3,7 +3,11 @@ import type {
   AgentJournalApprovalItem,
   AgentJournalApprovalSubject
 } from './agent-session-journal-types'
-import { parseAskFromStatus, resolveNativeChatAsk } from './native-chat/input/native-chat-ask'
+import {
+  parseAskFromStatus,
+  resolveNativeChatAsk,
+  scanPendingAsks
+} from './native-chat/input/native-chat-ask'
 import type { AskPrompt } from './native-chat/input/native-chat-ask-types'
 import type { NativeChatMessage } from './native-chat-types'
 import { parseOmpPlanReviewPrompt } from './omp-plan-review-prompt'
@@ -109,6 +113,7 @@ export function resolveNativeChatInteractivePromptCard(args: {
   /** Pass the command-boundary-trimmed messages so an ask abandoned via `/clear` stays gone. */
   messages: readonly NativeChatMessage[]
   transcriptSettled: boolean
+  transcriptAsk?: AskPrompt | null
   say?: NativeChatApprovalSay
 }): InteractivePromptCard {
   const statusCard = parseInteractivePrompt(
@@ -121,10 +126,13 @@ export function resolveNativeChatInteractivePromptCard(args: {
     return statusCard
   }
   const prompt = resolveNativeChatAsk({
-    asyncQuestion: args.asyncQuestion,
     liveAsk: statusCard?.prompt ?? null,
     messages: args.messages,
-    transcriptSettled: args.transcriptSettled
+    transcriptSettled: args.transcriptSettled,
+    transcriptAsk:
+      args.asyncQuestion === undefined
+        ? args.transcriptAsk
+        : (scanPendingAsks(args.messages).blocking ?? args.asyncQuestion)
   })
   return prompt ? { kind: 'question', prompt } : null
 }

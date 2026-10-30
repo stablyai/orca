@@ -9,7 +9,6 @@ import {
   forgetNativeChatPromptDismissalsForTab
 } from './native-chat-prompt-dismissals'
 import type { InteractivePromptCard } from '../../../../shared/native-chat-interactive-prompt'
-import { extractPendingMessageReplyAsk } from '../../../../shared/native-chat/input/native-chat-ask'
 
 const PANE = 'tab-1:leaf-1'
 const question: InteractivePromptCard = {
@@ -86,37 +85,5 @@ describe('dismissed prompt occurrences outlive the view but not the prompt', () 
     forgetNativeChatPromptDismissalsForTab('tab-1')
 
     expect(renderPresentation().result.current.card).toBe(question)
-  })
-
-  it('keeps async and blocking dismissals distinct when both use the same pane record', () => {
-    const asyncCard: InteractivePromptCard = {
-      kind: 'question',
-      prompt: extractPendingMessageReplyAsk([
-        {
-          id: 'async-row',
-          role: 'assistant',
-          source: 'transcript',
-          timestamp: null,
-          blocks: [
-            {
-              type: 'tool-call',
-              name: 'request_user_input_async',
-              callId: 'call',
-              input: { questions: [{ title: 'Which folder?', options: ['build'] }] }
-            }
-          ]
-        }
-      ])!
-    }
-    const view = renderPresentation(asyncCard)
-    act(() => view.result.current.dismiss())
-    expect(view.result.current.card).toBeNull()
-    view.rerender({ card: question })
-    expect(view.result.current.card).toBe(question)
-
-    waitFromStatus(10)
-    act(() => view.result.current.dismiss())
-    view.rerender({ card: asyncCard })
-    expect(view.result.current.card).toBe(asyncCard)
   })
 })

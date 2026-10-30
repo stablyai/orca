@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { extractPendingAsk } from '../../shared/native-chat/input/native-chat-ask'
-import { nativeChatAskDismissKey } from '../../shared/native-chat-ask-dismiss-key'
+import {
+  extractPendingAsk,
+  scanPendingAsks,
+  asyncQuestionOccurrenceId
+} from '../../shared/native-chat/input/native-chat-ask'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 import {
@@ -31,7 +34,6 @@ describe('Codex async question items', () => {
       ])
     ).toEqual({
       replyAsMessage: true,
-      occurrenceKey: JSON.stringify(['m']),
       questions: [
         {
           question: 'Which color?',
@@ -69,7 +71,11 @@ describe('Codex async question items', () => {
     const liveOrdinals = new CodexTurnOrdinals()
     const live = project('live-call-async', liveOrdinals)
     const resumed = project('item-0', new CodexTurnOrdinals())
-    const key = (row: NativeChatMessage) => nativeChatAskDismissKey(extractPendingAsk([row]))
+    const key = (row: NativeChatMessage) =>
+      asyncQuestionOccurrenceId(
+        'journal/host/thread/epoch',
+        scanPendingAsks([row]).contributors[0]!
+      )
     expect(live.id).toBe(resumed.id)
     expect(key(live)).not.toBeNull()
     expect(key(resumed)).toBe(key(live))

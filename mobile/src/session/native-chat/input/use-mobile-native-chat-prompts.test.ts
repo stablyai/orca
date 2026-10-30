@@ -1,11 +1,12 @@
+import { asyncQuestionSourceScope } from '../../../../../src/shared/native-chat/input/native-chat-ask'
 import { createElement } from 'react'
 import TestRenderer, { type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../src/shared/agent-status-types'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
-import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
-import { useMobileNativeChatAskDismiss } from './use-mobile-native-chat-ask-dismiss'
+import { useMobileAsyncQuestionHides } from './use-mobile-native-chat-prompt-dismiss'
 import { mobileNativeChatPromptDismissals } from './mobile-native-chat-prompt-dismissals'
+import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
 
 const renderers: ReactTestRenderer[] = []
 afterEach(() => {
@@ -33,6 +34,8 @@ function promptsFor(
   let captured: ReturnType<typeof useMobileNativeChatPrompts> | undefined
   function Probe(): null {
     captured = useMobileNativeChatPrompts({
+      asyncSourceScope: 'host/session/epoch',
+      hiddenAsyncIds: new Set(),
       enabled: true,
       status: status as AgentStatusEntry | null,
       messages,
@@ -150,6 +153,8 @@ describe('useMobileNativeChatPrompts in a structured chat', () => {
       let captured: ReturnType<typeof useMobileNativeChatPrompts> | undefined
       function Probe(): null {
         captured = useMobileNativeChatPrompts({
+          asyncSourceScope: 'host/session/epoch',
+          hiddenAsyncIds: new Set(),
           enabled: true,
           structured: { permission: null, question: null, sendWithOutcome },
           status: null,
@@ -172,98 +177,81 @@ describe('useMobileNativeChatPrompts in a structured chat', () => {
   )
 })
 
-describe('structured async question occurrences', () => {
-  it.each([undefined, 'reused-call'])(
-    'shows an identical question after a delivered answer without an empty read (call ID: %s)',
-    async (callId) => {
+describe('addressed phone hide subscriptions', () => {
+  it('keeps unrelated scopes still and reuses scanner output at N/10N', () => {
+    for (const count of [8, 80]) {
       mobileNativeChatPromptDismissals.clearForTests()
-      const sendWithOutcome = vi.fn(async () => 'accepted' as const)
-      const structured = { permission: null, question: null, sendWithOutcome }
-      const first: NativeChatMessage = {
-        id: 'ask',
-        role: 'assistant',
-        timestamp: null,
-        source: 'transcript',
-        blocks: [
-          {
-            type: 'tool-call',
-            name: 'request_user_input_async',
-            callId,
-            input: { questions: [{ title: 'Which color?', options: ['Red', 'Blue'] }] }
+      let scans = 0
+      const messages: NativeChatMessage[] = [
+        {
+          ...askMessages[0]!,
+          get blocks(): NativeChatMessage['blocks'] {
+            scans += 1
+            return [
+              {
+                type: 'tool-call',
+                name: 'request_user_input_async',
+                input: { questions: [{ title: 'Q1?' }] }
+              }
+            ]
           }
-        ]
-      }
-      let prompts: ReturnType<typeof useMobileNativeChatPrompts>
-      let dismissal: ReturnType<typeof useMobileNativeChatAskDismiss>
-      function Probe({ messages }: { messages: NativeChatMessage[] }): null {
-        prompts = useMobileNativeChatPrompts({
+        }
+      ]
+      const renders = Array<number>(count).fill(0)
+      const actions: (() => void)[] = []
+      function Probe({ index }: { index: number }): null {
+        renders[index] = (renders[index] ?? 0) + 1
+        const sourceKey = asyncQuestionSourceScope({
+          kind: 'journal',
+          agent: 'codex',
+          sessionId: `session-${Math.floor(index / 2)}`,
+          epoch: 'epoch'
+        })
+        const hides = useMobileAsyncQuestionHides(
+          `host-${index % 2}/pane-${Math.floor(index / 2)}`,
+          sourceKey,
+          'view'
+        )
+        const prompts = useMobileNativeChatPrompts({
           enabled: true,
-          structured,
           status: null,
           messages,
-          transcriptLoading: false
+          transcriptLoading: false,
+          asyncSourceScope: sourceKey,
+          hiddenAsyncIds: hides.hidden
         })
-        dismissal = useMobileNativeChatAskDismiss({
-          ask: prompts.ask,
-          startedAt: prompts.waitStartedAt,
-          scopeKey: 'async-tab',
-          sessionKey: 'session',
-          observing: true
-        })
+        actions[index] = hides.capture(prompts.ask?.occurrenceIds ?? [])
         return null
       }
       let renderer: ReactTestRenderer
       TestRenderer.act(() => {
-        renderer = TestRenderer.create(createElement(Probe, { messages: [first] }))
+        renderer = TestRenderer.create(
+          createElement(
+            'Probes',
+            null,
+            Array.from({ length: count }, (_, index) => createElement(Probe, { key: index, index }))
+          )
+        )
         renderers.push(renderer)
       })
-      const update = (messages: NativeChatMessage[]) =>
-        TestRenderer.act(() => renderer.update(createElement(Probe, { messages })))
-      TestRenderer.act(() => dismissal.dismissAsk())
-      expect(dismissal!.showAsk).toBe(false)
-      expect(sendWithOutcome).not.toHaveBeenCalled()
-      for (const readbackId of ['resumed-call', undefined]) {
-        update([
-          {
-            ...first,
-            blocks: [
-              { type: 'text', text: 'More context' },
-              ...first.blocks.map((block) =>
-                block.type === 'tool-call' ? { ...block, callId: readbackId } : block
-              )
-            ]
-          }
-        ])
-        expect(dismissal!.showAsk).toBe(false)
-      }
-
-      const answer: NativeChatMessage = {
-        id: 'answer',
-        role: 'user',
-        timestamp: null,
-        source: 'transcript',
-        blocks: [{ type: 'text', text: 'Blue' }]
-      }
-      const second = { ...first, id: 'ask-again' }
-      update([first, answer, second])
-      expect(dismissal!.showAsk).toBe(true)
-      await TestRenderer.act(async () => {
-        if (await prompts.structuredAnswer?.(prompts.ask!, [{ indices: [1] }])) {
-          dismissal.dismissAsk()
-        }
-      })
-      expect(sendWithOutcome).toHaveBeenCalledWith('> Which color?\n\nBlue')
-      expect(dismissal!.showAsk).toBe(false)
-      update([
-        first,
-        answer,
-        second,
-        { ...answer, id: 'second-answer' },
-        { ...first, id: 'third-ask' }
-      ])
-      expect(dismissal!.showAsk).toBe(true)
+      const initialScans = scans
+      expect(initialScans).toBeGreaterThanOrEqual(count)
+      expect(initialScans).toBeLessThanOrEqual(2 * count)
+      renders.fill(0)
+      TestRenderer.act(() => actions[0]!())
+      expect(renders).toEqual([1, ...Array<number>(count - 1).fill(0)])
+      expect(scans).toBe(initialScans)
+      renders.fill(0)
+      TestRenderer.act(() => actions[1]!())
+      expect(renders).toEqual([0, 1, ...Array<number>(count - 2).fill(0)])
+      expect(scans).toBe(initialScans)
+      renders.fill(0)
+      TestRenderer.act(() => actions[0]!())
+      expect(renders.every((value) => value === 0)).toBe(true)
+      TestRenderer.act(() => renderer.unmount())
+      renderers.pop()
     }
-  )
+  })
 })
 
 it('uses host async controls with no loaded row on both phone input paths', async () => {
