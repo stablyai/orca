@@ -28,7 +28,7 @@ jobs:
   parity:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     name: Windows compiler diagnostics and file selection
-    runs-on: windows-2022
+    runs-on: windows-2025
     timeout-minutes: 40
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
@@ -43,6 +43,7 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
+          no-cache: true
       - name: Compare compiler diagnostics and project file lists
         run: node config/scripts/benchmark-preflight-compilers.mjs --parity-only
       - uses: actions/upload-artifact@v7

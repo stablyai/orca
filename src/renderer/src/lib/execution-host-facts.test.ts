@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
-import { resolveRepoWorktreeLaunchPlatform } from './execution-host-facts'
+import {
+  resolveExecutionHostAgentStartupShell,
+  resolveRepoExecutionHostPlatform,
+  resolveRepoWorktreeLaunchPlatform
+} from './execution-host-facts'
+import { getDefaultSettings } from '../../../shared/constants'
 
 vi.mock('./new-workspace', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -39,8 +44,7 @@ function state(): State {
     projects: [],
     activeRepoId: null,
     activeWorktreeId: null,
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads no other setting.
-    settings: {} as State['settings'],
+    settings: getDefaultSettings('/tmp'),
     sshConnectionStates: new Map(),
     sshStateByEnvironment: new Map(),
     runtimeStatusByEnvironmentId: linuxServer()
@@ -108,5 +112,50 @@ describe('resolveRepoWorktreeLaunchPlatform from a Windows client', () => {
     expect(
       resolveRepoWorktreeLaunchPlatform(withheld, serverRepo, { id: 'wt', path: '/srv/wt' })
     ).toBeUndefined()
+  })
+})
+
+// Why: a desktop-built command runs in the server's own Windows shell, as resume quoting assumes.
+describe('resolveExecutionHostAgentStartupShell for a paired Windows server', () => {
+  it.each([
+    ['cmd.exe', 'cmd'],
+    ['git-bash', 'posix'],
+    [undefined, undefined]
+  ] as const)('quotes for a server whose shell is %s as %s', (serverShell, expected) => {
+    const fact = {
+      kind: 'known' as const,
+      platform: 'win32' as const,
+      hostKind: 'runtime' as const,
+      ...(serverShell ? { terminalWindowsShell: serverShell } : {})
+    }
+    expect(resolveExecutionHostAgentStartupShell(fact, 'powershell.exe')).toBe(expected)
+  })
+
+  it('reads the shell the server reported into its host fact', () => {
+    const windowsServer = new Map(
+      [...linuxServer()].map(([id, entry]) => [
+        id,
+        {
+          ...entry,
+          status: entry.status && {
+            ...entry.status,
+            hostPlatform: 'win32' as const,
+            terminalWindowsShell: 'cmd.exe'
+          }
+        }
+      ])
+    )
+    expect(
+      resolveRepoExecutionHostPlatform(
+        { ...state(), runtimeStatusByEnvironmentId: windowsServer },
+        serverRepo,
+        () => undefined
+      )
+    ).toEqual({
+      kind: 'known',
+      platform: 'win32',
+      hostKind: 'runtime',
+      terminalWindowsShell: 'cmd.exe'
+    })
   })
 })

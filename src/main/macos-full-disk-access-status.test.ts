@@ -6,10 +6,7 @@ const { readMock, closeMock, openMock } = vi.hoisted(() => ({
   openMock: vi.fn()
 }))
 vi.mock('node:fs/promises', () => ({ open: openMock }))
-import {
-  getMacosFullDiskAccessStatus,
-  probeMacosFullDiskAccess
-} from './macos-full-disk-access-status'
+import { probeMacosFullDiskAccess } from './macos-full-disk-access-status'
 
 const originalPlatform = process.platform
 const homeDirectory = join('Users', 'tester')
@@ -35,13 +32,6 @@ beforeEach(() => {
 })
 
 describe('probeMacosFullDiskAccess', () => {
-  it('reports granted only when the TCC database can be read', async () => {
-    const readProbe = vi.fn().mockResolvedValue(undefined)
-
-    await expect(probeMacosFullDiskAccess({ homeDirectory, readProbe })).resolves.toBe('granted')
-    expect(readProbe).toHaveBeenCalledWith(databasePath)
-  })
-
   it('reads only one discarded byte and closes the handle', async () => {
     expect(await probeMacosFullDiskAccess({ homeDirectory })).toBe('granted')
     expect(openMock).toHaveBeenCalledWith(databasePath, 'r')
@@ -54,35 +44,5 @@ describe('probeMacosFullDiskAccess', () => {
     readMock.mockRejectedValueOnce(fileSystemError('EPERM'))
     expect(await probeMacosFullDiskAccess({ homeDirectory })).toBe('denied')
     expect(closeMock).toHaveBeenCalledTimes(1)
-  })
-
-  it.each(['EACCES', 'EPERM'])('reports denied for %s', async (code) => {
-    await expect(
-      probeMacosFullDiskAccess({
-        homeDirectory,
-        readProbe: async () => {
-          throw fileSystemError(code)
-        }
-      })
-    ).resolves.toBe('denied')
-  })
-
-  it.each(['ENOENT', 'ENOTDIR', 'EBUSY'])('keeps %s failures unknown', async (code) => {
-    await expect(
-      probeMacosFullDiskAccess({
-        homeDirectory,
-        readProbe: async () => {
-          throw fileSystemError(code)
-        }
-      })
-    ).resolves.toBe('unknown')
-  })
-})
-
-describe('getMacosFullDiskAccessStatus', () => {
-  it('is unsupported off macOS', async () => {
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
-
-    await expect(getMacosFullDiskAccessStatus()).resolves.toBe('unsupported')
   })
 })

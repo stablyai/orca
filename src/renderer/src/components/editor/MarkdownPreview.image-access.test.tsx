@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 //
-// Renders the real MarkdownPreview and pins the file access its images are read with: a resource of the
-// document showing them, so main limits them to that document's roots or folder.
+// Render real image access to verify it stays scoped to the document’s roots or folder.
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'

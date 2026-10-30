@@ -2,6 +2,62 @@ import XCTest
 @testable import OrcaComputerUseMacOSCore
 
 final class SyntheticMouseClickDeliveryTests: XCTestCase {
+    func testScrollAndDragFenceTheOriginBeforeMoveAndBeforeMutation() {
+        let target = SyntheticMouseClickDelivery.Recipient(ownerPID: 41, windowID: 101)
+        let sibling = SyntheticMouseClickDelivery.Recipient(ownerPID: 41, windowID: 202)
+        for drag in [false, true] {
+            for loss in [SyntheticMouseClickDelivery.RecipientObservation.focused(sibling), .unavailable, .dismissed] {
+                for afterMove in [false, true] {
+                    var observations: [SyntheticMouseClickDelivery.RecipientObservation] = afterMove ? [.focused(target), loss] : [loss]
+                    var posted: [String] = []
+                    let observe = { observations.isEmpty ? .unavailable : observations.removeFirst() }
+                    XCTAssertThrowsError(try {
+                        if drag {
+                            try SyntheticMouseClickDelivery.deliverDrag(
+                                move: "move", down: "down", dragged: ["drag"], up: "up",
+                                target: target, currentObservation: observe,
+                                post: { posted.append($0) }, pause: { _ in }
+                            )
+                        } else {
+                            try SyntheticMouseClickDelivery.deliverScroll(
+                                move: "move", wheel: "wheel",
+                                target: target, currentObservation: observe,
+                                post: { posted.append($0) }, pause: { _ in }
+                            )
+                        }
+                    }())
+                    XCTAssertEqual(posted, afterMove ? ["move"] : [])
+                }
+            }
+        }
+    }
+
+    func testScrollWaitsBeforeRecheckAndDragDoesNotRecheckAfterDown() throws {
+        let target = SyntheticMouseClickDelivery.Recipient(ownerPID: 41, windowID: 101)
+        for drag in [false, true] {
+            var trace: [String] = []
+            let observe = {
+                trace.append("recipient")
+                return SyntheticMouseClickDelivery.RecipientObservation.focused(target)
+            }
+            let post = { (event: String) in trace.append(event) }
+            let pause = { (_: UInt32) in trace.append("pause") }
+            if drag {
+                try SyntheticMouseClickDelivery.deliverDrag(
+                    move: "move", down: "down", dragged: ["drag"], up: "up",
+                    target: target, currentObservation: observe, post: post, pause: pause
+                )
+                XCTAssertEqual(trace, ["recipient", "move", "recipient", "down", "pause", "drag", "pause", "up"])
+            } else {
+                try SyntheticMouseClickDelivery.deliverScroll(
+                    move: "move", wheel: "wheel", target: target,
+                    currentObservation: observe, post: post, pause: pause
+                )
+                XCTAssertEqual(trace, ["recipient", "move", "pause", "recipient", "wheel"])
+            }
+        }
+    }
+
     func testSingleClickPlanPairsDownAndUpAfterMove() {
         XCTAssertEqual(
             SyntheticMouseClickDelivery.steps(clickCount: 1),
@@ -45,12 +101,6 @@ final class SyntheticMouseClickDeliveryTests: XCTestCase {
         XCTAssertEqual(SyntheticMouseClickDelivery.clickState(for: .move), 0)
         XCTAssertEqual(SyntheticMouseClickDelivery.clickState(for: .buttonDown(pressIndex: 1)), 1)
         XCTAssertEqual(SyntheticMouseClickDelivery.clickState(for: .buttonUp(pressIndex: 2)), 2)
-    }
-
-    func testInterEventPauseIsNonZero() {
-        // Unpaced posts race the window server and the mouseUp is dropped,
-        // turning the click into a hover-only no-op (STA-3433).
-        XCTAssertGreaterThan(SyntheticMouseClickDelivery.interEventPauseMicroseconds, 0)
     }
 
     func testAmbiguousWindowFrameFallbackDoesNotSelectRecipient() {
@@ -184,11 +234,15 @@ final class SyntheticMouseClickDeliveryTests: XCTestCase {
                     trace.append("up")
                 }
             },
-            pause: { _ in }
+            pause: { interval in
+                XCTAssertGreaterThan(interval, 0)
+                trace.append("pause")
+            }
         )
 
         XCTAssertEqual(trace, [
-            "move", "recipient", "down", "up", "recipient", "recipient", "down", "up", "recipient"
+            "move", "pause", "recipient", "down", "pause", "up", "recipient",
+            "pause", "recipient", "down", "pause", "up", "recipient", "pause"
         ])
     }
 
@@ -279,27 +333,6 @@ final class SyntheticMouseClickDeliveryTests: XCTestCase {
             .buttonDown(pressIndex: 1),
             .buttonUp(pressIndex: 1),
         ])
-    }
-
-    func testMultiClickRevalidatesBeforeEveryPressAndBetweenReleases() throws {
-        let target = SyntheticMouseClickDelivery.Recipient(ownerPID: 41, windowID: 101)
-        var validationCount = 0
-        var posted: [SyntheticMouseClickDelivery.Step] = []
-
-        try SyntheticMouseClickDelivery.deliver(
-            clickCount: 2,
-            target: target,
-            currentObservation: {
-                validationCount += 1
-                return .focused(target)
-            },
-            makeEvent: { $0 },
-            post: { posted.append($0) },
-            pause: { _ in }
-        )
-
-        XCTAssertEqual(validationCount, 4)
-        XCTAssertEqual(posted, SyntheticMouseClickDelivery.steps(clickCount: 2))
     }
 
     func testButtonPairIsPreparedBeforeMouseDownPosts() {

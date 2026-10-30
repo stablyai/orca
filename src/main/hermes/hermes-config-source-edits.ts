@@ -4,6 +4,11 @@ import type { Node, YAMLMap, YAMLSeq } from 'yaml'
 
 type SourceEdit = { start: number; end: number; text: string }
 
+export const HERMES_EDITED_LISTS = [
+  ['plugins', ['enabled', 'disabled']],
+  ['terminal', ['client_env_passthrough']]
+] as const
+
 function columnAt(source: string, offset: number): number {
   return offset - source.lastIndexOf('\n', offset - 1) - 1
 }
@@ -79,40 +84,60 @@ function insertPair(
 
 export function applyHermesPluginSourceEdits(source: string, document: Document): string {
   const printed = document.toString({ lineWidth: 0 })
-  const original = parseDocument(source, { keepSourceTokens: true })
   const updated = parseDocument(printed)
-  if (!isMap(original.contents)) {
+  if (!isMap(parseDocument(source).contents)) {
     return source.includes('\r\n') ? printed.replaceAll('\n', '\r\n') : printed
   }
   if (!isMap(updated.contents)) {
     throw new Error('Missing updated Hermes mapping')
   }
-  const plugins = original.get('plugins', true)
-  const updatedPlugins = updated.get('plugins', true)
-  if (!isMap(updatedPlugins)) {
-    throw new Error('Missing updated Hermes plugins')
+  // Why: a replaced list's range can run past the root mapping, where another section inserts.
+  let result = source
+  for (const [sectionKey, keys] of HERMES_EDITED_LISTS) {
+    result = applySectionEdits(result, printed, document, updated.contents, sectionKey, keys)
+  }
+  return result
+}
+
+function applySectionEdits(
+  source: string,
+  printed: string,
+  document: Document,
+  updatedRoot: YAMLMap,
+  sectionKey: string,
+  keys: readonly string[]
+): string {
+  const original = parseDocument(source, { keepSourceTokens: true })
+  if (!isMap(original.contents)) {
+    throw new Error('Unexpected Hermes root mapping')
+  }
+  const section = original.get(sectionKey, true)
+  const updatedSection = updatedRoot.get(sectionKey, true)
+  // Edited sections are always mappings; anything else was left untouched.
+  if (!isMap(updatedSection)) {
+    return source
   }
   const edits: SourceEdit[] = []
-  if (plugins === undefined) {
-    edits.push(insertPair(source, printed, original.contents, updated.contents, 'plugins'))
+  if (section === undefined) {
+    edits.push(insertPair(source, printed, original.contents, updatedRoot, sectionKey))
   } else {
-    if (!isMap(plugins)) {
-      throw new Error('Unexpected Hermes plugins mapping')
+    if (!isMap(section)) {
+      throw new Error(`Unexpected Hermes ${sectionKey} mapping`)
     }
-    for (const key of ['enabled', 'disabled']) {
-      const previous = plugins.get(key, true)
-      const next = updatedPlugins.get(key, true)
+    for (const key of keys) {
+      const previous = section.get(key, true)
+      const next = updatedSection.get(key, true)
       if (!isNode(next)) {
         continue
       }
       if (previous === undefined) {
-        edits.push(insertPair(source, printed, plugins, updatedPlugins, key, original.contents))
+        edits.push(insertPair(source, printed, section, updatedSection, key, original.contents))
       } else if (isNode(previous) && !isDeepStrictEqual(previous.toJSON(), next.toJSON())) {
-        const edited = document.createNode(document.getIn(['plugins', key], true))
+        const edited = document.createNode(document.getIn([sectionKey, key], true))
         if (!isSeq(edited)) {
-          throw new Error('Missing edited Hermes plugin list')
+          throw new Error(`Missing edited Hermes ${sectionKey} list`)
         }
-        edits.push(replaceNode(source, plugins, previous, edited))
+        edits.push(replaceNode(source, section, previous, edited))
       }
     }
   }

@@ -33,13 +33,13 @@ export function writeTomlConfigAtomically(configPath: string, contents: string):
       try {
         unlinkSync(temporaryPath)
       } catch {
-        // Why: cleanup failure must not mask the write failure.
+        // Cleanup failure must not mask the write failure.
       }
     }
   }
 }
 
-/** Codex config.toml can carry `mcp_servers` env tokens: keep an existing file's mode, else owner-only. */
+/** Preserve existing permissions; new configs are owner-only because MCP entries may hold tokens. */
 export function resolveCodexConfigTomlFileMode(configPath: string): number {
   try {
     return statSync(configPath).mode & 0o777
@@ -57,6 +57,6 @@ function resolveTomlWritePath(configPath: string): string {
       throw error
     }
   }
-  // Why: replacing the lexical path would destroy a dotfiles symlink; dangling links fail closed.
+  // Preserve dotfile symlinks; refuse writes through unresolved dangling links.
   return isSymlink ? realpathSync.native(configPath) : configPath
 }

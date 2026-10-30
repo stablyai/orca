@@ -23,7 +23,7 @@ vi.mock('../managed-server/install/remote-versioned-install', async (importOrigi
 }))
 vi.mock('../managed-server/install/orcad-remote-install', () => ({ installOrcadBundle: vi.fn() }))
 vi.mock('../managed-server/install/orcad-remote-preflight', () => ({
-  preflightInstalledOrcad: vi.fn()
+  preflightInstalledOrcad: vi.fn(async () => ({}))
 }))
 vi.mock('./orcad-local-build-hash', () => ({
   computeLocalOrcadBuildHash: () => 'abc123def4567890'
@@ -49,7 +49,6 @@ import {
 
 let host = FakeOrcadHost.deployedOld()
 
-/** The host's answer to the room check: KB the state needs, KB a prune frees, and `df`'s line. */
 function answerRoom(neededKb: number, reclaimKb: number, availableKb: number): void {
   vi.mocked(execCommand).mockImplementation(async (_conn, command) =>
     command.includes('SNAPSHOT_SPACE')

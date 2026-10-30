@@ -204,7 +204,7 @@ describe('RemoteBrowserStreamRestartScheduler', () => {
     await vi.advanceTimersByTimeAsync(1_500)
     expect(scheduler.attemptCount).toBe(2)
 
-    // A confirmed-live stream ("ready") resets the counter.
+    // The lifecycle explicitly refills the budget after a sustained healthy stream.
     scheduler.reset()
     expect(scheduler.attemptCount).toBe(0)
 

@@ -1,7 +1,4 @@
-/**
- * A write knows the host it addressed; these pin that it never widens that into
- * another host's rows, and never narrows an unknown host into a guessed one.
- */
+/** Invalidate exactly the written host, or its authority when unknown; never widen across authorities or guess a selector. */
 
 import { describe, expect, it } from 'vitest'
 import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'

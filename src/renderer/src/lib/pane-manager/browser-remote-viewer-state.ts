@@ -1,8 +1,6 @@
 import { useSyncExternalStore } from 'react'
 
-// Why: which host-owned pages a paired client is streaming. Separate from the driver store because
-// watching and driving are independent: a desktop/web/CLI viewer takes no presence lock, but its
-// page must still paint or Chromium stops producing the frames it subscribed to.
+// Track streaming separately from driving: passive viewers hold no presence lock but still need painting to keep Chromium producing frames.
 
 const remotelyViewedPageIds = new Set<string>()
 
@@ -92,8 +90,7 @@ export function useBrowserRemotelyViewedPageIds(
 }
 
 export function hydrateBrowserRemoteViewerPages(browserPageIds: readonly string[]): void {
-  // Why: mirrors hydrateBrowserDrivers — panes can mount before hydration returns after a reload,
-  // so every page that gained or lost the signal has to be notified, not just the new ones.
+  // Notify pages gaining OR losing viewer state after late hydration, including panes already mounted.
   const affectedPageIds = new Set(remotelyViewedPageIds)
   remotelyViewedPageIds.clear()
   for (const browserPageId of browserPageIds) {

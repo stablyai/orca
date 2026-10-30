@@ -42,8 +42,7 @@ describe('where the seam predicate says a module reaches Linking', () => {
   })
 
   it('inspects every alias, not just the first namespace import', () => {
-    // Two namespace imports of react-native, the first unused. Reading only the first alias makes
-    // a module that calls `Linking.openURL` on the second report no site at all.
+    // Exercise second namespace alias with first unused; first-alias-only scans miss call.
     expect(
       reactNativeLinkingSites(
         "import * as Unused from 'react-native'\nimport * as RN from 'react-native'\nRN.Linking.openURL(u)\n"
@@ -60,9 +59,7 @@ describe('where the seam predicate says a module reaches Linking', () => {
   })
 
   it('names an import that renames Linking, which reading the binding alone missed', () => {
-    // `import { Linking as NativeLinking }` is the same import spelled differently; the imported
-    // name lives in `propertyName` when a specifier renames it, and only in `name` when it does
-    // not. Reading `name` alone let `NativeLinking.openURL` through the census entirely.
+    // Renamed import keeps native Linking in propertyName; reading local name misses alias.
     expect(
       reactNativeLinkingSites(
         "import { Linking as NativeLinking } from 'react-native'\nNativeLinking.openURL(u)\n"
@@ -71,32 +68,28 @@ describe('where the seam predicate says a module reaches Linking', () => {
   })
 
   it('leaves alone a local binding that is only spelled Linking', () => {
-    // The other half of reading `propertyName`: this module imports `View`, so naming it would be
-    // a red line with nothing to fix at the end of it.
+    // Local binding named Linking imports View; imported name must decide offence.
     expect(
       reactNativeLinkingSites("import { View as Linking } from 'react-native'\nLinking.foo()\n")
     ).toEqual([])
   })
 
   it('reads a default import as the namespace it is, which the interop here allows', () => {
-    // `import RN from 'react-native'` typechecks here, so it is a binding the whole namespace
-    // hangs off and a call through it is as invisible to a named-import rule as an alias was.
+    // Default RN import typechecks under project interop and exposes same namespace as import *.
     expect(
       reactNativeLinkingSites("import RN from 'react-native'\nRN.Linking.openURL(u)\n")
     ).toEqual([2])
   })
 
   it('leaves alone an alias that is imported and never reaches Linking', () => {
-    // An import of react-native is not the offence; reaching `Linking` through it is.
+    // Whole RN namespace import is allowed; only Linking access is forbidden.
     expect(reactNativeLinkingSites("import * as RN from 'react-native'\nRN.Platform.OS\n")).toEqual(
       []
     )
   })
 
   it('parses a .ts module as TypeScript, where a generic arrow is not an unclosed tag', () => {
-    // `const id = <T>(value: T) => value` is a generic arrow in a `.ts` file and an unclosed JSX
-    // element in a `.tsx` one. Parsed as TSX, everything after it falls into the error node, so
-    // the call below was never walked and the module reported nothing at all.
+    // TS generic arrow parses as unclosed JSX in TSX mode, swallowing later call into error node; infer kind from filename.
     expect(
       reactNativeLinkingSites(
         "import * as RN from 'react-native'\nconst id = <T>(value: T) => value\nRN.Linking.openURL(u)\n",
@@ -111,9 +104,7 @@ describe('where the seam predicate says a module reaches Linking', () => {
     ["export * from 'react-native'\n", 'a wildcard re-export, which carries it with the rest'],
     ["export * as RN from 'react-native'\n", 'a namespace re-export']
   ])('names %# : %s', (source) => {
-    // A re-export puts `Linking` back in reach of whatever imports this module, so the route's
-    // closure reaches it through a file that never imported it. The export statement is the line
-    // to delete, exactly as an import is.
+    // Reexport exposes native Linking without importing it locally; report export statement.
     expect(reactNativeLinkingSites(source, 'module.ts')).toEqual([1])
   })
 
@@ -128,8 +119,7 @@ describe('where the seam predicate says a module reaches Linking', () => {
   })
 
   it('ignores the name inside a comment, which text matching cannot', () => {
-    // A module that talks about the rule is not breaking it, and a census that names a comment is
-    // one whose red list the next reader learns to skip.
+    // Ignore comments/strings mentioning rule; diagnostics must name actionable source.
     expect(
       reactNativeLinkingSites(
         "import * as RN from 'react-native'\n// never call RN.Linking.openURL here\n/* nor RN.Linking */\n"
@@ -157,8 +147,7 @@ describe('where the seam predicate says a module reaches Linking', () => {
 })
 
 describe('the offenders in a closure', () => {
-  // The seam itself imports `Linking` and is the one module allowed to, so a walk that did not
-  // exempt it would report every closure as an offender and never be able to go green.
+  // Seam itself is sole permitted native Linking importer; otherwise no closure can pass.
   const closure = { local: ['src/platform/external-link.web.ts', 'src/platform/external-link.ts'] }
 
   it('exempts the seam and names the module that went around it', () => {
@@ -171,9 +160,7 @@ describe('the offenders in a closure', () => {
 })
 
 describe('the order a red list is read in', () => {
-  // Against a written fixture rather than the tree: the ordering this pins needs one module with
-  // sites on lines 2 and 10, the pair that sorts one way as numbers and the other as text, and no
-  // module in the closure has to keep having one.
+  // Synthetic sites at lines 2/10 distinguish numeric from lexical ordering without constraining real source layout.
   const root = mkdtempSync(join(tmpdir(), 'orca-seam-census-'))
   const lines = ["import * as RN from 'react-native'", 'RN.Linking.openURL(a)']
   while (lines.length < 9) {
@@ -184,7 +171,6 @@ describe('the order a red list is read in', () => {
   writeFileSync(join(root, 'above.ts'), "import { Linking } from 'react-native'\n")
 
   it('puts line 2 before line 10, which sorting the rendered strings does not', () => {
-    // `:10` sorts before `:2` as text. The namespace import on line 1 is not itself an offence.
     expect(externalLinkOffenders(root, { local: ['wide.ts'] })).toEqual(['wide.ts:2', 'wide.ts:10'])
   })
 

@@ -1,7 +1,3 @@
-// Resumes start agents a few at a time host-wide. A continuation is a send, so a chat counts as started
-// once its agent took the message or its start failed — not when the message was accepted, which
-// is instant and would let every agent start at once.
-
 import { expect, it, vi } from 'vitest'
 import {
   startStructuredAgentSessionContinuation,
@@ -104,12 +100,12 @@ it('holds each slot from accept until handover or rejection, and frees it when t
   }
 
   await vi.waitFor(() => expect(waiting).toBe(LIMIT))
-  // Accepted but not yet handed over: a slow start keeps its slot.
+  // Acceptance alone must retain the startup slot until handover.
   await new Promise((resolve) => setTimeout(resolve, 20))
   expect(handovers.size).toBe(LIMIT)
   await settle('session-0', { dispatchState: 'pending' })
   await settle('session-1', { dispatchState: 'rejected', reason: 'Codex could not start.' })
-  // The session closed, or too many waited: the wait proves nothing, and the slot is freed.
+  // An ended wait frees its slot without claiming delivery.
   await settle('session-2', undefined)
   for (const sessionId of sessions.slice(3)) {
     await settle(sessionId, { dispatchState: 'pending' })

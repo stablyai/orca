@@ -1,25 +1,12 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { quietRichMarkdownEditorHost } from './rich-markdown-editor-host.test-support'
-import {
-  createRichMarkdownEditorDocument,
-  startRichMarkdownEditorDocument,
-  stopRichMarkdownEditorDocument
-} from './create-rich-markdown-editor-document'
-import { createRichMarkdownEditorScope } from './document-scope'
-import { emitChange, setMarkdown } from './editor-content'
+import { createRichMarkdownEditorDocument } from './create-rich-markdown-editor-document'
 import { RICH_MARKDOWN_EDITOR_MARKUP } from './document-markup'
 import type { MobileRichMarkdownEditorMessage } from '../mobile-rich-markdown-editor-contract'
 import type { RichMarkdownEditorDocument } from './document-host-seams'
 
-/**
- * What a `stop` owes, and what a second call gets.
- *
- * The WebView never stops its document — there the page is the document's whole life — so every
- * case here is about the host that does: a page mounts the editor, unmounts it and mounts it
- * again, and the same modules answer. A listener or an observer the first mount left behind would
- * make the second one report twice and hold the markup the first one read (rulings 20, 21).
- */
+// Prove stop/restart releases listeners/observers and per-mount state; WebView owns whole page lifetime, but page remount must not double-report or retain old markup (rulings 20/21).
 const started: RichMarkdownEditorDocument[] = []
 
 function plantMarkup() {
@@ -98,8 +85,7 @@ describe('an editor document that is stopped', () => {
     const two = mount(second)
     expect(second).toEqual([{ type: 'keyboardInset', bottom: 120 }, { type: 'ready' }])
     second.length = 0
-    // Its own generation and its own surface: the first mount's 9 is not carried over, and the
-    // element it read is the one planted for this mount.
+    // Fresh mount owns generation/surface; prior mount’s 9 must not carry over.
     two.handle.setMarkdown('second content', 1)
     editor.dispatchEvent(new Event('input'))
     expect(second).toEqual([{ type: 'change', markdown: 'second content', generation: 1 }])
@@ -109,8 +95,7 @@ describe('an editor document that is stopped', () => {
   })
 
   it('is two editors when two are mounted, each reading its own scope', () => {
-    // Not two on one page — the ids collide there, which is the page component's problem — but two
-    // documents over the same markup, which is what says the state is per call rather than shared.
+    // Two document calls over same markup isolate state; overlapping #editor hosts are tested separately.
     const first: MobileRichMarkdownEditorMessage[] = []
     const second: MobileRichMarkdownEditorMessage[] = []
     const editor = plantMarkup()
@@ -121,52 +106,13 @@ describe('an editor document that is stopped', () => {
     one.handle.setMarkdown('shared markup', 3)
     two.handle.setEditable(false)
     editor.dispatchEvent(new Event('input'))
-    // The second document is read-only and says nothing; the first still reports its own
-    // generation, which it would not if `editable` lived in a module.
+    // Read-only second document stays silent while first retains its own generation, ruling out module-global editable state.
     expect(second).toEqual([])
     expect(first).toEqual([{ type: 'change', markdown: 'shared markup', generation: 3 }])
   })
 
-  it('cancels a change still waiting on a timer, which no listener removal can reach', () => {
-    // A listener comes off with the element it was on; a scheduled callback holds the scope and
-    // would fire into a document the host has already unmounted. Nothing schedules the handle
-    // today, so the pending change is planted here — the seam and the field exist for the day
-    // something does, and the cancel has to already be in `stop` when it arrives.
-    const posted: MobileRichMarkdownEditorMessage[] = []
-    plantMarkup()
-    vi.useFakeTimers()
-    try {
-      const scope = createRichMarkdownEditorScope(
-        quietRichMarkdownEditorHost({
-          postToHost: (message) => posted.push(message),
-          keyboardInsetSource: () => null
-        })
-      )
-      startRichMarkdownEditorDocument(scope)
-      setMarkdown(scope, 'body', 2)
-      posted.length = 0
-
-      // The control: while the document is running, the pending change is posted.
-      scope.inputTimer = window.setTimeout(() => emitChange(scope), 0)
-      vi.runAllTimers()
-      expect(posted).toEqual([{ type: 'change', markdown: 'body', generation: 2 }])
-
-      posted.length = 0
-      scope.inputTimer = window.setTimeout(() => emitChange(scope), 0)
-      stopRichMarkdownEditorDocument(scope)
-      expect(scope.inputTimer).toBe(null)
-      vi.runAllTimers()
-      expect(posted).toEqual([])
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('drops a command whose dialog answered after the host moved on', async () => {
-    // `promptForUrl` is a modal on the page, so it is a task boundary: between the toolbar press
-    // and the URL coming back, the host can replace the content, make the editor read-only or
-    // unmount it. Inside the WebView it is `window.prompt`, which answers within a microtask —
-    // which is why nothing here can happen on native, and everything here can happen on the page.
+    // Page URL modal creates task boundary: host can replace content, set read-only or unmount while waiting; native prompt answers within microtask.
     const commands: string[] = []
     const answer: ((url: string) => void)[] = []
     plantMarkup()

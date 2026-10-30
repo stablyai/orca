@@ -143,6 +143,8 @@ describe('TerminalPaneOverlayLayer fallback measure<->fit loop (React #185)', ()
       act(() => {
         capturedResizeCallback?.()
       })
+      expect(overlay?.style.top).toBe('32.1px')
+      expect(overlay?.style.width).toBe('799.1px')
       bodyRect = createRect({ top: 32.1, left: 0.1, width: 799.1, height: 567.1 })
       act(() => {
         capturedResizeCallback?.()

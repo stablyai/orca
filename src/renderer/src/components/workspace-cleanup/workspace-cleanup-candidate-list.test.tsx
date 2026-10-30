@@ -55,14 +55,12 @@ describe('WorkspaceCleanupCandidateList', () => {
 
     expect(rendered).toHaveLength(rows.length)
     expect(container?.querySelectorAll('[data-testid="row"]')).toHaveLength(rows.length)
-    // Plain path keeps natural flow: no absolute-positioned windowing wrappers.
     expect(container?.querySelector('[data-index]')).toBeNull()
   })
 
   it('windows rows into an absolutely positioned container at the threshold', () => {
     const rows = makeRows(WORKSPACE_CLEANUP_VIRTUALIZE_MIN_ROWS)
-    // A real element enables the virtualizer; happy-dom reports zero-size layout,
-    // so this asserts the windowed structure rather than a specific mounted count.
+    // happy-dom has no layout, so assert windowed structure rather than exact mounted count.
     const scrollElement = document.createElement('div')
 
     act(() => {
@@ -78,15 +76,12 @@ describe('WorkspaceCleanupCandidateList', () => {
 
     const windowed = container?.querySelector('.absolute') != null
     const mounted = container?.querySelectorAll('[data-testid="row"]').length ?? 0
-    // Windowed mode never mounts more than the full set, and switches away from
-    // the plain flow used below the threshold.
     expect(mounted).toBeLessThanOrEqual(rows.length)
     expect(windowed || mounted === 0).toBe(true)
   })
 
   it('keys windowed rows through getRowKey, so same-id hosts stay distinct', () => {
-    // Two hosts publish the same worktreeId; only the caller knows the host, so
-    // the list must ask for the key instead of reaching for the colliding id.
+    // Same-ID host rows require caller-supplied identity keys, not list-derived bare IDs.
     const rows = [
       ...makeRows(WORKSPACE_CLEANUP_VIRTUALIZE_MIN_ROWS - 2),
       makeCandidate({ worktreeId: 'shared', executionHostId: 'local' }),

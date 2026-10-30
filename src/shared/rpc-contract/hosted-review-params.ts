@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { requiredString } from './rpc-param-primitives'
+import { OptionalBoolean, requiredString } from './rpc-param-primitives'
 import { OptionalGitAdmissionTier } from './git-admission-tier-params'
 
 export const HostedReviewForBranch = z.object({
@@ -32,16 +32,15 @@ export const HostedReviewCreationEligibility = z.object({
   linkedGitLabMR: z.number().int().positive().nullable().optional(),
   linkedBitbucketPR: z.number().int().positive().nullable().optional(),
   linkedAzureDevOpsPR: z.number().int().positive().nullable().optional(),
-  linkedGiteaPR: z.number().int().positive().nullable().optional()
+  linkedGiteaPR: z.number().int().positive().nullable().optional(),
+  /** The user's Create PR; older hosts drop it. */
+  wakeWslDistro: OptionalBoolean
 })
 
 export const HostedReviewCreate = z.object({
   repo: requiredString('Missing repo selector'),
   worktree: z.string().min(1, 'Missing worktree selector').optional(),
-  // Open on purpose: the provider token is the host's own, and a client repeats back what a
-  // newer host named in its eligibility reply. A closed enum rejects that create outright, so the
-  // client would have to narrow to 'unsupported' before sending and make the host refuse its own
-  // provider. The handler answers `unsupported_provider` for a token this build cannot create with.
+  // Keep provider open: clients echo a newer host’s eligibility token; the handler refuses unsupported providers.
   provider: z.string(),
   base: requiredString('Missing base branch'),
   head: z.string().optional(),

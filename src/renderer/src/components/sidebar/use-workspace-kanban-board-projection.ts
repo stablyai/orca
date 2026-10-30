@@ -10,7 +10,7 @@ import {
   composeWorktreeHostIdentity,
   getWorktreeHostIdentity
 } from '../../../../shared/worktree/host-qualified-identity'
-import type { Worktree } from '../../../../shared/worktree/types'
+import type { WorkspaceStatusDefinition, Worktree } from '../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorktreeDragGroup } from './worktree-manual-order'
 import type { useRepoMap } from '@/store/selectors'
@@ -22,7 +22,7 @@ export function useWorkspaceKanbanBoardProjection(args: {
   open: boolean
   repoMap: ReturnType<typeof useRepoMap>
   sortBy: ReturnType<typeof useAppStore.getState>['sortBy']
-  workspaceStatuses: ReturnType<typeof useAppStore.getState>['workspaceStatuses']
+  workspaceStatuses: readonly WorkspaceStatusDefinition[]
 }) {
   const visibleWorktreeIds = useVisibleWorkspaceKanbanWorktreeIds({
     allWorktrees: args.allWorktrees,

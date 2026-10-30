@@ -1,4 +1,3 @@
-/** The live collaborators a host conversion needs: the census, the direct session and the server. */
 import { encodePairingOffer } from '../../../shared/pairing'
 import {
   getPreferredPairingOffer,
@@ -15,7 +14,12 @@ import {
   stageRemoteOrcadMigrationSnapshotChunk
 } from '../../ssh/orcad-migration-catalog-client'
 import { abortRemoteOrcadMigrationCatalogByReference } from '../../ssh/orcad-migration-catalog-reference-client'
+import {
+  enableRemoteOrcadAutomation,
+  type EnableServerAutomation
+} from '../../ssh/orcad-migration-moved-automations'
 import { censusHostRelayTerminalsFor } from '../../ssh/legacy-relay/ssh-host-relay-census-for-target'
+import { isBridgeableLease } from '../../ssh/legacy-relay/legacy-relay-bridge-leases'
 import type { OrcadManagedConversionArgs } from './orcad-runtime-conversion'
 import type { OrcadServerRepository } from '../../ssh/orcad-migration-repository-link'
 import {
@@ -23,7 +27,6 @@ import {
   type OrcadServerFolderCatalog
 } from '../../ssh/orcad-server-folder-workspaces'
 
-/** The T6-9 client against this server, pinned to the runtime it paired with. */
 export function orcadMigrationDestinationFor(
   environment: KnownRuntimeEnvironment
 ): OrcadMigrationDestinationCatalog {
@@ -40,7 +43,6 @@ export function orcadMigrationDestinationFor(
   }
 }
 
-/** The projects this server already holds, read through the same pinned pairing. */
 export function orcadServerRepositoriesFor(
   environment: KnownRuntimeEnvironment
 ): Promise<OrcadServerRepository[]> {
@@ -51,7 +53,6 @@ export function orcadServerRepositoriesFor(
   )
 }
 
-/** The folder workspaces this server already holds, read through the same pinned pairing. */
 export function orcadServerFolderCatalogFor(
   environment: KnownRuntimeEnvironment
 ): Promise<OrcadServerFolderCatalog> {
@@ -62,19 +63,31 @@ export function orcadServerFolderCatalogFor(
   )
 }
 
+export function orcadServerAutomationEnablerFor(
+  environment: KnownRuntimeEnvironment
+): EnableServerAutomation {
+  const pairingCode = encodePairingOffer(getPreferredPairingOffer(environment))
+  const options = environment.runtimeId ? { expectedRuntimeId: environment.runtimeId } : {}
+  return (automation) => enableRemoteOrcadAutomation(pairingCode, automation, options)
+}
+
 export function conversionCollaborators(): Pick<
   OrcadManagedConversionArgs,
   | 'destinationFor'
   | 'serverRepositoriesFor'
   | 'serverFolderCatalogFor'
+  | 'serverAutomationEnablerFor'
   | 'censusHost'
+  | 'isBridgedPaneLease'
   | 'releaseDirectSession'
 > {
   return {
     destinationFor: orcadMigrationDestinationFor,
     serverRepositoriesFor: orcadServerRepositoriesFor,
     serverFolderCatalogFor: orcadServerFolderCatalogFor,
+    serverAutomationEnablerFor: orcadServerAutomationEnablerFor,
     censusHost: (target) => censusHostRelayTerminalsFor(target)(),
+    isBridgedPaneLease: isBridgeableLease,
     releaseDirectSession: disconnectRegisteredSshTarget
   }
 }

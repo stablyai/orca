@@ -1,14 +1,3 @@
-/**
- * Closing run terminals on a headless host. The desktop closes a run's terminal when the run
- * completes; on orcad nobody does, so schedules leave a shell and a PTY per run until the host
- * runs out. A run terminal stays open for a grace period and the newest few per automation stay
- * viewable; older ones are closed. A completed run in a workspace made for it sleeps instead, as
- * on the desktop, so its tab resumes the agent, or stays while it cannot; any other completed
- * run's terminal is closed. A failed or never-finishing run's is closed only once the shell is
- * proven alone at its prompt, since a timed out agent may still be alive. A terminal a client
- * typed into or is viewing, or one whose use this host cannot tell, is never closed: as on the
- * desktop, that terminal is the user's.
- */
 import {
   isFinalAutomationRunStatus,
   type AutomationRun,
@@ -22,46 +11,35 @@ const SWEEP_INTERVAL_MS = 60_000
 
 export type HeadlessRunTerminalRetentionDeps = {
   listRuns: () => readonly AutomationRun[]
-  /**
-   * Whether any client drove or is viewing the run's terminal. Like the desktop's take-over rule,
-   * a used terminal is the user's now; `unknown` keeps it too.
-   */
+  /** Used, viewed, or unknown-use terminals belong to the user and must stay open. */
   terminalClientUse: (run: AutomationRun) => 'used' | 'unused' | 'unknown'
-  /** Whether the run's pane still holds the run's own PTY; a dead or replaced one is forgotten. */
+  /** True only while the pane holds this run's PTY. */
   runTerminalAlive: (run: AutomationRun) => boolean
-  /** Fresh proof that only the shell runs in the run's PTY, at its prompt; false when unproven. */
+  /** Require fresh proof that only an idle shell remains in the PTY. */
   shellAloneAtPrompt: (run: AutomationRun) => Promise<boolean>
-  /**
-   * Closes the run's own pane, leaving any pane a user split into that tab. False, closing
-   * nothing, when the pane is gone or now holds another PTY (a restart put a new one there).
-   */
+  /** Close only this run's pane and PTY; preserve user-created splits. */
   closeRunTerminal: (run: AutomationRun) => Promise<boolean>
-  /** Whether the run's workspace was made for that run, not shared with others. */
   runOwnsWorkspace: (run: AutomationRun) => boolean
-  /**
-   * Sleeps the run's own workspace, keeping its tab to resume the agent, and drops only the run's
-   * PTY id. False, sleeping nothing, when another terminal there is live or the sleep failed.
-   */
+  /** Preserve the resumable tab; return false if another terminal is live or sleep fails. */
   sleepRunWorkspace: (run: AutomationRun) => Promise<boolean>
-  /** Drops the closed terminal from the run, keeping its status, error and output. */
+  /** Clear terminal references while preserving status, error and output. */
   forgetRunTerminal: (run: AutomationRun) => Promise<void>
-  /** The automation's dispatch lane; a sweep reads and closes its runs' terminals inside it. */
+  /** Serialize retention with dispatch to protect reused panes. */
   inAutomationLane: <T>(automationId: string, operation: () => Promise<T>) => Promise<T>
   now?: () => number
 }
 
-/** Still starting: its agent is being launched, so its terminal is never a candidate. */
 const STARTING: ReadonlySet<AutomationRunStatus> = new Set(['pending', 'dispatching'])
 
 export function createHeadlessRunTerminalRetention(deps: HeadlessRunTerminalRetentionDeps): {
   sweep: () => Promise<void>
-  /** Before an update restarts the server: no grace, no newest-N, every other rule still holds. */
+  /** Release terminals before an update, bypassing grace and newest-run retention. */
   drain: () => Promise<number>
   start: () => void
   stop: () => void
 } {
   const now = deps.now ?? Date.now
-  // When each run terminal was first seen as a candidate; the grace runs from there.
+  // Grace starts when the terminal first becomes a candidate.
   const firstSeenAt = new Map<string, number>()
   let timer: ReturnType<typeof setInterval> | null = null
   let sweeping: Promise<void> | null = null
@@ -81,7 +59,6 @@ export function createHeadlessRunTerminalRetention(deps: HeadlessRunTerminalRete
     return run.status === 'completed' || (await deps.shellAloneAtPrompt(run))
   }
 
-  // Runs inside the automation's lane, so no run of it takes a pane while this reads and closes.
   const sweepAutomation = async (
     automationId: string,
     policy: { keep: number; graceMs: number }
@@ -95,7 +72,7 @@ export function createHeadlessRunTerminalRetention(deps: HeadlessRunTerminalRete
         (run): run is PanedRun =>
           run.automationId === automationId &&
           Boolean(run.terminalPaneKey) &&
-          // Why: no PTY left to release; a slept run's pane must keep resuming it.
+          // Slept panes must remain resumable after their PTY is released.
           Boolean(run.terminalPtyId) &&
           !STARTING.has(run.status)
       )
@@ -105,14 +82,13 @@ export function createHeadlessRunTerminalRetention(deps: HeadlessRunTerminalRete
         firstSeenAt.set(run.id, now())
       }
       try {
-        // A terminal already gone holds no keep slot; only live ones stay viewable.
         if (!deps.runTerminalAlive(run)) {
           if (isFinalAutomationRunStatus(run.status)) {
             await forget(run)
           }
           continue
         }
-        // A reused pane's fate is its newest run's; older runs on it keep their link until it goes.
+        // The newest run controls a reused pane; older runs retain their links until it closes.
         if (ownedPaneKeys.has(run.terminalPaneKey)) {
           continue
         }
@@ -124,7 +100,7 @@ export function createHeadlessRunTerminalRetention(deps: HeadlessRunTerminalRete
         if (!(await mayClose(run, policy.graceMs))) {
           continue
         }
-        // Why: as on the desktop, a run's own workspace sleeps or stays; closing it loses the session.
+        // Closing a completed run's own workspace would lose its resumable session.
         if (run.status === 'completed' && deps.runOwnsWorkspace(run)) {
           if (await deps.sleepRunWorkspace(run)) {
             firstSeenAt.delete(run.id)
@@ -166,7 +142,7 @@ export function createHeadlessRunTerminalRetention(deps: HeadlessRunTerminalRete
   }
 
   const drain = async (): Promise<number> => {
-    // Waits out a periodic sweep so the two never close the same terminal twice.
+    // Avoid closing a terminal twice during an active sweep.
     await sweeping?.catch(() => {})
     return sweepOnce({ keep: 0, graceMs: 0 })
   }

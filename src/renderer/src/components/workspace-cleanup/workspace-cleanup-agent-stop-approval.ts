@@ -3,11 +3,7 @@ import {
   type WorkspaceCleanupCandidate
 } from '../../../../shared/workspace-cleanup'
 
-/**
- * Records on the approved candidate whether the user confirmed stopping an agent there; the
- * final dispatch check refuses a row whose agent was not approved. Scan snapshots can carry
- * `live-agent` without the user ever seeing the stop step, so the blocker is rewritten, not kept.
- */
+/** Stamp explicit agent-stop consent; scan live-agent labels alone are not approval and must be rewritten before final dispatch. */
 export function withWorkspaceCleanupAgentStopApproval(
   candidate: WorkspaceCleanupCandidate,
   approved: boolean

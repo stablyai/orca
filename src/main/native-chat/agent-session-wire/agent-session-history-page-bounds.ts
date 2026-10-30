@@ -6,10 +6,13 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
-import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime-memory-limits'
+import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../shared/mobile-bridge-frame-bytes'
 import { agentSessionHostStatusBody } from '../../../shared/agent-session-host-status-rows'
-import { subagentFoldKey, subagentItemBlock } from '../../../shared/native-chat-subagent-items'
+import {
+  subagentFoldKey,
+  subagentItemBlock
+} from '../../../shared/native-chat/transcript/native-chat-subagent-items'
 
 export const AGENT_SESSION_HISTORY_MAX_PAGE_BYTES = REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES / 2
 
@@ -18,11 +21,9 @@ const HISTORY_PAGE_ENVELOPE_RESERVE_BYTES = 64 * 1024
 export const HISTORY_PAGE_CONTENT_BUDGET_BYTES =
   AGENT_SESSION_HISTORY_MAX_PAGE_BYTES - HISTORY_PAGE_ENVELOPE_RESERVE_BYTES
 
-/** Everything a bounded frame carries beside its rows: the bridge envelope, ids and cursors, the
- *  subagent roster, the latest turn and the activity line, each held to its own bound. */
+/** Reserve bridge/envelope metadata separately from row content. */
 const FRAME_METADATA_CEILING_BYTES = 64 * 1024
 
-/** The rows' share of a phone's bridge frame, which its app ends a stream over. */
 export const BOUNDED_FRAME_CONTENT_BUDGET_BYTES =
   MOBILE_BRIDGE_MAX_FRAME_BYTES - FRAME_METADATA_CEILING_BYTES
 
@@ -33,8 +34,7 @@ export function historyEntryBytes(
   return Buffer.byteLength(JSON.stringify(item), 'utf8') + (submissionBytes.get(item.itemId) ?? 0)
 }
 
-// Keyed on the snapshot's own submissions array, which the reducer rebuilds on
-// every change, so a paged read over one snapshot serializes submissions once.
+// Snapshot arrays change with submissions, so cache serialization once per paged snapshot.
 const bytesBySubmissions = new WeakMap<
   readonly AgentJournalSubmission[],
   ReadonlyMap<string, number>
@@ -74,14 +74,12 @@ export function measureHistoryItem(item: AgentJournalRenderItem): HistoryItemFor
   return { item, bytes: Buffer.byteLength(JSON.stringify(item), 'utf8') }
 }
 
-/** How a reader receives each item, and the bytes its page may hold of them. A page is measured
- *  in that form, so it carries what it will actually send. */
+/** Measure pages in the exact form sent to each reader. */
 export type HistoryReader = {
   form: (item: AgentJournalRenderItem) => HistoryItemForm
   budgetBytes: number
 }
 
-/** Rows are put in `form` only as the page takes them. */
 export function boundHistoryItemsByBytes(
   items: AgentJournalRenderItem[],
   keep: 'newest' | 'oldest',
@@ -115,9 +113,7 @@ export function boundHistoryItemsByBytes(
   }
 }
 
-/** Adjacent same-sequence runs, walked from the end (`newest`) or the start (`oldest`)
- *  so a caller that stops at its window never groups the history it will not return.
- *  Groups and their items keep the order the eager forward grouping produced. */
+/** Group only visited adjacent sequence runs, preserving item order in either traversal direction. */
 function* groupItemsBySequence(
   items: readonly AgentJournalRenderItem[],
   keep: 'newest' | 'oldest'
@@ -160,9 +156,7 @@ export function newestWholeSequenceGroups(
   return selected.toReversed().flat()
 }
 
-/** `start` moved back to the first sibling of every subagent group the window holds part of, but
- *  never past `floor`: a group spread over a long turn, or helpers outside any turn, may still
- *  split rather than grow the page without bound. */
+/** Include whole sibling groups where possible; floor prevents long groups from growing pages unbounded. */
 export function wholeSubagentGroupsStart(
   items: readonly AgentJournalRenderItem[],
   start: number,

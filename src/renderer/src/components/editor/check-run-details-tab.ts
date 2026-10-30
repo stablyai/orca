@@ -36,8 +36,7 @@ export function getCheckRunTabIdentity(check: PRCheckDetail): string {
   if (check.workflowRunId) {
     return `workflow-run:${check.workflowRunId}`
   }
-  // Why: GitLab jobs reuse `stage: name` across pipeline runs and can lack a web_url,
-  // so the numeric job id is the only stable per-job tab identity.
+  // GitLab names repeat across runs and URLs may be absent; job IDs preserve per-job tab identity.
   if (check.gitlabJobId) {
     return `gitlab-job:${check.gitlabJobId}`
   }
@@ -48,8 +47,7 @@ export function getCheckRunTabIdentity(check: PRCheckDetail): string {
 }
 
 export function buildCheckRunDetailsTabId(worktreeId: string, check: PRCheckDetail): string {
-  // Why: one tab per hosted check identity keeps the center pane stable across
-  // PR head refreshes; contextKey lives on the tab state instead of the tab id.
+  // Keep tab identity stable across PR head refreshes; contextKey belongs to tab state.
   return `${worktreeId}::check-details::${getCheckRunTabIdentity(check)}`
 }
 

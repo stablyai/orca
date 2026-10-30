@@ -49,11 +49,11 @@ describe('rowConversationName', () => {
   it('publishes a provider title only for the split-pane session that owns it', () => {
     const paneTitles = { 1: '\u2733 Linear work log', 2: '\u2733 Redis cache strategy' }
 
-    expect(rowConversationName(row(LEAF_A, 'session-a'), false, LAYOUT, paneTitles)).toBe(
-      'Provider title'
-    )
-    expect(rowConversationName(row(LEAF_B, 'session-b'), false, LAYOUT, paneTitles)).toBe(
-      'Redis cache strategy'
-    )
+    expect(
+      rowConversationName(row(LEAF_A, 'session-a'), false, LAYOUT, paneTitles, new Map(), undefined)
+    ).toBe('Provider title')
+    expect(
+      rowConversationName(row(LEAF_B, 'session-b'), false, LAYOUT, paneTitles, new Map(), undefined)
+    ).toBe('Redis cache strategy')
   })
 })

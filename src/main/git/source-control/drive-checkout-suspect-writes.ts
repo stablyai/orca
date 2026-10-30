@@ -37,13 +37,7 @@ async function listMergedTrackedPaths(
   return [...tracked]
 }
 
-/**
- * Redoes a path write with default checkStat for the drive-checkout suspects inside `pathspecs`.
- *
- * Why: under minimal stat, `add` and `restore` treat a same-size rewrite that kept its mtime as
- * unchanged, while status rechecks suspects with default stat and shows it modified; the write
- * would silently do nothing. Only suspects pay the drvfs rehash, so the main write stays minimal.
- */
+/** Redo suspect writes with default stat: minimal-stat add/restore can silently miss paths status already reports dirty. */
 export async function redoWriteForDriveCheckoutSuspects(
   worktreePath: string,
   pathspecs: readonly string[],

@@ -1,7 +1,5 @@
 // @vitest-environment happy-dom
-// Opening a chat an older build left stuck: the host recorded its first message in doubt and later
-// recovered it, while the older build's saved copy still held that message plus two queued behind
-// it. Real chat hook, sends, legacy recovery and draft store; only the history read and RPC are faked.
+// Recover an older client’s in-doubt first send and two queued followers using real hooks/stores; fake only history and RPC.
 
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -18,6 +16,7 @@ let items: AgentJournalRenderItem[] = []
 let submissions: AgentJournalSubmission[] = []
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
   callStructuredAgentSession: mocks.call,
   readStructuredAgentSessionConversationOutline: mocks.outline,
   supportsStructuredAgentSessionQuietRepeatedStop: vi.fn(async () => false),
@@ -151,7 +150,6 @@ describe('opening a chat an older build left stuck behind a message in doubt', (
     await waitFor(() => expect(localStorage.getItem(KEY)).toBeNull())
     expect(draft()).toBe('second\n\nthird')
     expect(result.current.error).toBe('Your message was not sent. Send it again.')
-    // The first is the host's own row, drawn plain.
     const row = result.current.messages.find(
       (message) => message.id === agentJournalSubmissionKey(IN_DOUBT)
     )
@@ -207,7 +205,6 @@ describe('opening a chat an older build left stuck behind a message in doubt', (
     expect(sent).toBe(true)
     await waitFor(() => expect(sendCalls()).toHaveLength(1))
     expect(sendCalls()[0]?.[2].envelope.expectedRuntimeFence).toBe(10)
-    // The read's fence is used, with no history read for it.
     expect(mocks.call.mock.calls.some(([, method]) => method === 'agentSession.history')).toBe(
       false
     )

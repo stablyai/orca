@@ -22,7 +22,7 @@ describe('ACP agents in the runtime registrations', () => {
         compact: true,
         threadGoal: false,
         contextUsage: true,
-        imagePrompts: false,
+        imagePrompts: true,
         steering: 'queue',
         approvalEnforcement: 'orca'
       }
@@ -53,7 +53,7 @@ describe('ACP agents in the runtime registrations', () => {
       agent: 'omp',
       handleTransport: 'acp',
       accountHomeVariable: 'PI_CODING_AGENT_DIR',
-      capabilities: { imagePrompts: false, steering: 'queue', approvalEnforcement: 'orca' }
+      capabilities: { imagePrompts: true, steering: 'queue', approvalEnforcement: 'orca' }
     })
     expect(registration?.launchCheck).toBeDefined()
   })

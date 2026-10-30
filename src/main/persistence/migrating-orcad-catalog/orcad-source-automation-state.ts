@@ -12,7 +12,8 @@ import type {
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 import {
-  createOrcadMigrationSourceScope,
+  createOrcadMigrationExportScope,
+  orcadMigrationScopeOwnsWholeHost,
   orcadMigrationOwnerMatchesScope,
   orcadMigrationOwnsRepoId,
   type OrcadMigrationSourceScope,
@@ -25,6 +26,10 @@ export type OrcadMigrationSourceAutomationInspection = {
   automationRuns: AutomationRun[]
   blockedAutomationCount: number
   blockedRunCount: number
+  /** Moved disabled, as the wire requires; the move re-enables these on the host after commit. */
+  enabledAtSourceIds: string[]
+  /** Automations held back only by a run still in flight; they move once it finishes. */
+  runningAutomationNames: string[]
 }
 
 export function collectOrcadMigrationSourceAutomationState(
@@ -32,7 +37,7 @@ export function collectOrcadMigrationSourceAutomationState(
   source: OrcadMigrationManifestSource,
   catalog: OrcadMigrationCatalogPayload
 ): OrcadMigrationSourceAutomationInspection {
-  const scope = createOrcadMigrationSourceScope({ source, catalog, repos: state.repos })
+  const scope = createOrcadMigrationExportScope({ source, catalog, repos: state.repos })
   const touchedAutomations = state.automations.filter((entry) =>
     automationTouchesScope(entry, scope)
   )
@@ -46,19 +51,29 @@ export function collectOrcadMigrationSourceAutomationState(
   const automationRuns: AutomationRun[] = []
   let blockedAutomationCount = 0
   let blockedRunCount = 0
+  const enabledAtSourceIds: string[] = []
+  const runningAutomationNames: string[] = []
 
   for (const [automationId, matching] of automationsById) {
     const runs = runsByAutomationId.get(automationId) ?? []
-    const eligible =
+    const transferable =
       matching.length === 1 &&
       automationCanTransfer(matching[0], scope) &&
-      runs.every((run) => runCanTransfer(run, scope))
-    if (!eligible) {
+      runs.every((run) => runContextCanTransfer(run, scope))
+    if (!transferable || !runs.every((run) => isFinalAutomationRunStatus(run.status))) {
+      if (transferable) {
+        runningAutomationNames.push(matching[0].name)
+      }
       blockedAutomationCount += matching.length
       blockedRunCount += runs.length
       continue
     }
-    automations.push(projectAutomationToDestination(matching[0]))
+    const projected = projectAutomationToDestination(matching[0])
+    // The projection always sends it disabled; a WSL move re-enables what ran here.
+    if (scope.kind === 'local-wsl' && matching[0].enabled) {
+      enabledAtSourceIds.push(projected.id)
+    }
+    automations.push(projected)
     automationRuns.push(...runs.map(projectAutomationRunToDestination))
   }
 
@@ -69,7 +84,15 @@ export function collectOrcadMigrationSourceAutomationState(
   }
   automations.sort((left, right) => compareKeys(left.id, right.id))
   automationRuns.sort((left, right) => compareKeys(left.id, right.id))
-  return { automations, automationRuns, blockedAutomationCount, blockedRunCount }
+  enabledAtSourceIds.sort(compareKeys)
+  return {
+    automations,
+    automationRuns,
+    blockedAutomationCount,
+    blockedRunCount,
+    enabledAtSourceIds,
+    runningAutomationNames: runningAutomationNames.sort(compareKeys)
+  }
 }
 
 export function automationTouchesScope(
@@ -78,7 +101,7 @@ export function automationTouchesScope(
 ): boolean {
   return (
     (automation.executionTargetType === 'ssh' && automation.executionTargetId === scope.targetId) ||
-    // Why the target too: a generation is per target, so another host's can share the number.
+    // Generations are target-local; another host can share the same number.
     (scope.targetGeneration !== null &&
       automation.executionTargetId === scope.targetId &&
       automation.executionTargetGeneration === scope.targetGeneration) ||
@@ -98,8 +121,18 @@ function runTouchesScope(run: AutomationRun, scope: OrcadMigrationSourceScope): 
 }
 
 function automationCanTransfer(automation: Automation, scope: OrcadMigrationSourceScope): boolean {
+  if (scope.kind === 'local-wsl') {
+    // This desktop schedules it today; the host's scheduler takes over, re-enabled after commit.
+    return (
+      automation.executionTargetType === 'local' &&
+      automation.schedulerOwner === 'local_host_service' &&
+      scope.repoIds.has(getAutomationRunRepoId(automation)) &&
+      ownerCanTransfer(automation.workspaceId, scope) &&
+      contextCanTransfer(automation.runContext, scope) &&
+      contextCanTransfer(automation.sourceContext, scope)
+    )
+  }
   return (
-    automation.enabled === false &&
     automation.executionTargetType === 'ssh' &&
     automation.executionTargetId === scope.targetId &&
     automation.schedulerOwner === 'ssh_bridge' &&
@@ -112,9 +145,8 @@ function automationCanTransfer(automation: Automation, scope: OrcadMigrationSour
   )
 }
 
-function runCanTransfer(run: AutomationRun, scope: OrcadMigrationSourceScope): boolean {
+function runContextCanTransfer(run: AutomationRun, scope: OrcadMigrationSourceScope): boolean {
   return (
-    isFinalAutomationRunStatus(run.status) &&
     ownerCanTransfer(run.workspaceId, scope) &&
     contextCanTransfer(run.runContext, scope) &&
     contextCanTransfer(run.sourceContext, scope)
@@ -129,6 +161,12 @@ function contextTouchesScope(
   context: WorkspaceRunContext | TaskSourceContext | null | undefined,
   scope: OrcadMigrationSourceScope
 ): boolean {
+  if (!orcadMigrationScopeOwnsWholeHost(scope)) {
+    return (
+      (!context?.hostId || context.hostId === scope.hostId) &&
+      orcadMigrationOwnsRepoId(scope, context?.repoId)
+    )
+  }
   return (
     context?.hostId === scope.hostId ||
     (!context?.hostId && orcadMigrationOwnsRepoId(scope, context?.repoId))
@@ -158,6 +196,8 @@ function projectAutomationToDestination(source: Automation): Automation {
     executionTargetType: 'local',
     executionTargetId: 'local',
     schedulerOwner: 'remote_host_service',
+    // Servers accept only dormant rows; the desktop re-enables moved ones after commit.
+    enabled: false,
     workspaceId: projectOwnerToDestination(source.workspaceId)
   }
   delete destination.executionTargetGeneration

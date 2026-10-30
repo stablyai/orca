@@ -6,6 +6,7 @@ type RuntimeGitCommandName =
   | 'checkRuntimeGitIgnoredPaths'
   | 'getRuntimeGitHistory'
   | 'getRuntimeGitConflictOperation'
+  | 'getRuntimeGitMutationInFlight'
   | 'abortRuntimeGitMerge'
   | 'abortRuntimeGitRebase'
   | 'checkoutRuntimeGitBranch'
@@ -23,6 +24,7 @@ type RuntimeGitCommandName =
   | 'getRuntimeGitBranchDiff'
   | 'getRuntimeGitCommitDiff'
   | 'commitRuntimeGit'
+  | 'completeRuntimeGitMerge'
   | 'generateRuntimeCommitMessage'
   | 'discoverRuntimeCommitMessageModels'
   | 'cancelRuntimeGenerateCommitMessage'
@@ -49,6 +51,7 @@ export function installRuntimeGitCommandSurface(
     checkRuntimeGitIgnoredPaths: commands.checkRuntimeGitIgnoredPaths.bind(commands),
     getRuntimeGitHistory: commands.getRuntimeGitHistory.bind(commands),
     getRuntimeGitConflictOperation: commands.getRuntimeGitConflictOperation.bind(commands),
+    getRuntimeGitMutationInFlight: commands.getRuntimeGitMutationInFlight.bind(commands),
     abortRuntimeGitMerge: commands.abortRuntimeGitMerge.bind(commands),
     abortRuntimeGitRebase: commands.abortRuntimeGitRebase.bind(commands),
     checkoutRuntimeGitBranch: commands.checkoutRuntimeGitBranch.bind(commands),
@@ -66,6 +69,7 @@ export function installRuntimeGitCommandSurface(
     getRuntimeGitBranchDiff: commands.getRuntimeGitBranchDiff.bind(commands),
     getRuntimeGitCommitDiff: commands.getRuntimeGitCommitDiff.bind(commands),
     commitRuntimeGit: commands.commitRuntimeGit.bind(commands),
+    completeRuntimeGitMerge: commands.completeRuntimeGitMerge.bind(commands),
     generateRuntimeCommitMessage: commands.generateRuntimeCommitMessage.bind(commands),
     discoverRuntimeCommitMessageModels: commands.discoverRuntimeCommitMessageModels.bind(commands),
     cancelRuntimeGenerateCommitMessage: commands.cancelRuntimeGenerateCommitMessage.bind(commands),

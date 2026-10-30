@@ -11,8 +11,13 @@ export type AgentSubjectRead = { subjectKey: string; structured?: StructuredSubj
 /** `explicit`: the user marked the row read without viewing it (Activity, dashboard, a jump). */
 export type AgentSubjectReadIntent = 'view' | 'explicit'
 
+type AgentSubjectReadListener = (
+  reads: readonly AgentSubjectRead[],
+  readsBySubjectKey: ReadonlyMap<string, AgentSubjectRead>
+) => void
+
 const captures = new Map<string, (intent: AgentSubjectReadIntent) => StructuredSubjectRead | null>()
-const listeners = new Set<(reads: readonly AgentSubjectRead[]) => void>()
+const listeners = new Set<AgentSubjectReadListener>()
 const viewListeners = new Set<(read: StructuredSubjectRead) => void>()
 
 export function registerAgentSubjectReadCapture(
@@ -51,18 +56,26 @@ export function emitAgentSubjectReads(
     captured === undefined
       ? captureAgentSubjectReads(subjectKeys, intent)
       : captured.filter((read) => subjectKeys.includes(read.subjectKey))
+  if (listeners.size === 0) {
+    return
+  }
+  const readsBySubjectKey = new Map<string, AgentSubjectRead>()
+  for (const read of reads) {
+    const subjectKey = read.subjectKey
+    if (!readsBySubjectKey.has(subjectKey)) {
+      readsBySubjectKey.set(subjectKey, read)
+    }
+  }
   for (const listener of listeners) {
     try {
-      listener(reads)
+      listener(reads, readsBySubjectKey)
     } catch (error) {
       console.warn('[agent-subject-read] retirement failed', error)
     }
   }
 }
 
-export function subscribeAgentSubjectReads(
-  listener: (reads: readonly AgentSubjectRead[]) => void
-): () => void {
+export function subscribeAgentSubjectReads(listener: AgentSubjectReadListener): () => void {
   listeners.add(listener)
   return () => {
     listeners.delete(listener)

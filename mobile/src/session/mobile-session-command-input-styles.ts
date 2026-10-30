@@ -1,9 +1,11 @@
 import { StyleSheet } from 'react-native'
 
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
+import { themedStyleSheet } from '../theme/themed-styles'
 
 /** Command dock styles. The field grows with the draft and stops at 120px. */
-export const mobileSessionCommandInputStyles = StyleSheet.create({
+export const mobileSessionCommandInputStyles = themedStyleSheet(() => ({
   createWarningBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -169,7 +171,37 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
     paddingHorizontal: spacing.xs + 2,
     paddingVertical: 0,
     borderRadius: radii.button,
-    minWidth: 36
+    minWidth: 36,
+    height: 26
+  },
+  // The Duo side rail column: full-width keys with room for a thumb.
+  accessoryRail: {
+    flex: 1,
+    minHeight: 0
+  },
+  accessoryScrollVertical: {
+    flex: 1
+  },
+  // Keys span the 84pt rail less 4pt each side, so the widest label (Shift+Tab) fits.
+  accessoryContentVertical: {
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.xs,
+    gap: spacing.sm
+  },
+  accessoryKeyVertical: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 2,
+    borderRadius: radii.composerItem
+  },
+  keyboardDismissKeyVertical: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: spacing.xs,
+    marginBottom: spacing.sm,
+    minHeight: 44,
+    backgroundColor: colors.bgRaised,
+    borderRadius: radii.composerItem
   },
   keyboardDismissGlyph: {
     alignItems: 'center',
@@ -204,7 +236,7 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
     paddingRight: 6,
     paddingTop: spacing.xs + 1,
     paddingBottom: spacing.xs + 1,
-    fontSize: 14,
+    fontSize: TEXT_INPUT_FONT_SIZE,
     fontFamily: typography.monoFamily,
     lineHeight: 20,
     includeFontPadding: false
@@ -212,7 +244,6 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
   liveInputBar: {
     gap: 2
   },
-
   liveInputFocusTarget: {
     flex: 1,
     minHeight: 34,
@@ -225,15 +256,31 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
     borderRadius: radii.input,
     paddingHorizontal: spacing.sm + 2
   },
-
   liveInputFocusTargetPressed: {
     backgroundColor: colors.borderSubtle
   },
-
   liveInputFocusTargetDisabled: {
     opacity: 0.45
   },
-
+  commandField: {
+    flex: 1,
+    flexDirection: 'row',
+    marginRight: spacing.sm
+  },
+  commandFieldInput: {
+    marginRight: 0
+  },
+  // Dictation's preview draws the draft instead while it is hidden.
+  commandFieldInputHidden: {
+    color: 'transparent'
+  },
+  liveInputField: {
+    flex: 1,
+    marginRight: spacing.sm
+  },
+  liveInputCaptureDisabled: {
+    opacity: 0.45
+  },
   liveInputCapture: {
     position: 'absolute',
     opacity: 0,
@@ -266,4 +313,4 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
   sendButtonDisabled: {
     opacity: 0.35
   }
-})
+}))

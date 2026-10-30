@@ -1,15 +1,22 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { agentSessionLeaseFixture } from '../../shared/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../shared/agent-session-record.test-fixture'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   assertLegacyAiVaultResumeAllowed,
   assertLegacyAiVaultResumeCommandAllowed,
+  findResumeOwnership,
   OPENS_EVERY_STRUCTURED_CHAT,
   projectStructuredAiVaultSearchResponse,
   projectStructuredAiVaultSessions
 } from './structured-session-ownership'
 import type { AiVaultSearchHit, AiVaultSearchResponse } from '../../shared/ai-vault-search-types'
 import {
+  codexChatHolding,
+  installChats,
   installOwnership,
   listResult,
   PROVIDER_SESSION
@@ -44,7 +51,6 @@ describe('structured AI Vault ownership', () => {
     expect(projected.sessions[1]).toBe(unowned)
   })
 
-  // An owned hit opens its chat, so it carries no terminal resume command for any agent.
   it('names and owns an indexed search hit as its list row is, leaving other hits alone', () => {
     installOwnership({ conversationName: 'auth/login' })
     const { resumeCommand: _resumeCommand, ...plain } = searchHit()
@@ -108,6 +114,39 @@ describe('structured AI Vault ownership', () => {
     }
   )
 
+  it('names the chat continuing a conversation first, while every link still refuses a terminal', async () => {
+    const movedOn = codexChatHolding('session-moved', [PROVIDER_SESSION, OTHER_SESSION])
+    const owned = (records: ReturnType<typeof codexChatHolding>[]) => {
+      installChats(records)
+      return projectStructuredAiVaultSessions(listResult(), OPENS_EVERY_STRUCTURED_CHAT).sessions[0]
+        ?.structuredSession?.sessionId
+    }
+    expect(owned([movedOn, codexChatHolding('session-now', [PROVIDER_SESSION])])).toBe(
+      'session-now'
+    )
+    expect(owned([movedOn])).toBe('session-moved')
+    expect(
+      findResumeOwnership({ agent: 'codex', sessionId: PROVIDER_SESSION, filePath: '' })
+    ).toMatchObject({
+      sessionId: 'session-moved',
+      role: 'earlier'
+    })
+    expect(() =>
+      assertLegacyAiVaultResumeAllowed({
+        agent: 'codex',
+        filePath: `/sessions/rollout-${PROVIDER_SESSION}.jsonl`,
+        codexHome: null,
+        executionHostId: 'local'
+      })
+    ).toThrow('agent_session_conflict')
+    await expect(
+      assertLegacyAiVaultResumeCommandAllowed(
+        `codex resume ${PROVIDER_SESSION}`,
+        async () => undefined
+      )
+    ).rejects.toThrow('agent_session_conflict')
+  })
+
   it('derives typed refusals from the single writer predicate for live and proving leases', async () => {
     installOwnership()
     expect(() =>
@@ -120,11 +159,15 @@ describe('structured AI Vault ownership', () => {
     ).toThrow('agent_session_conflict')
 
     installOwnership({
-      lease: agentSessionLeaseFixture({
-        handoffStage: 'new-owner-proving',
-        claimStatus: 'reserved',
-        ownerProcess: null
-      })
+      ownerObservation: agentSessionConversationView(
+        agentSessionRecordFixture(
+          agentSessionLeaseFixture({
+            handoffStage: 'new-owner-proving',
+            claimStatus: 'reserved',
+            ownerProcess: null
+          })
+        )
+      ).ownerObservation
     })
     await expect(
       assertLegacyAiVaultResumeCommandAllowed(
@@ -140,8 +183,7 @@ describe('structured AI Vault ownership', () => {
     `claude -r`,
     `claude --continue`,
     `claude -c`,
-    // `--continue` takes no session id, so the trailing token is a prompt —
-    // reading it as a target would admit a writer onto the owned session.
+    // --continue takes no id; trailing prompt text must not be mistaken for a different target.
     `claude --continue "keep going"`,
     `claude -c 019fd532-7c11-7a90-b6de-4e1a2c3d5f61`
   ])('refuses resume commands without a provably different target: %s', async (command) => {
@@ -163,7 +205,6 @@ describe('structured AI Vault ownership', () => {
     ).resolves.toBeUndefined()
   })
 
-  // A fork writes a new conversation, so "Resume in New CLI" on a chat-owned row must pass.
   it.each([
     {
       provider: 'claude' as const,
@@ -234,8 +275,6 @@ describe('Session History ownership read from the agent registration', () => {
     ).resolves.toBeUndefined()
   })
 
-  // Each agent reads its own binary's tokens: a folder or argument named after another agent no
-  // longer hides a Claude or Codex resume (on main the first claude/codex token decided).
   it.each([
     {
       provider: 'claude' as const,
@@ -264,7 +303,6 @@ describe('Session History ownership read from the agent registration', () => {
     }
   )
 
-  // A later `claude` path inside the command is an argument, so `--session-id` still cancels the fork.
   it.each([
     `claude --session-id ${PROVIDER_SESSION} --add-dir ~/src/claude --fork-session --resume ${PROVIDER_SESSION}`,
     `claude --fork-session --resume=${PROVIDER_SESSION} --add-dir ~/x/claude --session-id ${PROVIDER_SESSION}`,

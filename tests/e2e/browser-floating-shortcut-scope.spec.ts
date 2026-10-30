@@ -38,7 +38,11 @@ async function openFloatingBrowser(
       if (!store) {
         throw new Error('Store unavailable')
       }
-      store.setState({ settings: { ...store.getState().settings, floatingTerminalEnabled: true } })
+      const settings = store.getState().settings
+      if (!settings) {
+        throw new Error('Settings are not loaded')
+      }
+      store.setState({ settings: { ...settings, floatingTerminalEnabled: true } })
       const state = store.getState()
       const tab = state.createBrowserTab(worktreeId, initialUrl, {
         activate: true,

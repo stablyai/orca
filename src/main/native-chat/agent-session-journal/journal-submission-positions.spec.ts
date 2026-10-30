@@ -1,7 +1,4 @@
-// Each submission carries where the journal wrote its row. A rejected send's own row moves to its
-// rejection, so this is the only journal-order record of where it was sent. Derived on every fold: a
-// replay of the same rows gives the same value, and a history page carries it. A rejection a turn's
-// end made also names that turn.
+// Rejections move rendered rows; submission positions must preserve original send order across replay.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -47,7 +44,6 @@ export function registerJournalSubmissionPositionsTests(): void {
     }
   })
 
-  /** A send accepted for later handover, handed over, then taken back. */
   async function sendHandedOverThenWithdrawn() {
     root = await mkdtemp(join(tmpdir(), 'orca-submission-positions-'))
     const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
@@ -82,7 +78,6 @@ export function registerJournalSubmissionPositionsTests(): void {
     recordId: 'turn-lifecycle:turn-1'
   } as const
 
-  /** A send its turn ended without taking: the rejection names that turn. */
   async function sendWithdrawnByItsTurnEnd() {
     root = await mkdtemp(join(tmpdir(), 'orca-submission-positions-'))
     const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
@@ -145,7 +140,7 @@ export function registerJournalSubmissionPositionsTests(): void {
         dispatchState: 'rejected',
         submittedSequence: submitted.sequence
       })
-      // Anti-vacuous: the send's own row moved to its rejection, so only this field says where it was sent.
+      // The rendered row moved; only the submission position retains send order.
       expect(
         journal.snapshot().items.find((item) => item.itemId === agentJournalSubmissionKey('send-1'))
           ?.sequence

@@ -1,17 +1,6 @@
-// Count- and byte-bounded insertion-ordered LRU map: one tested implementation of the
-// "Map + entry counter + retained-byte ledger + evict-oldest" pattern.
-//
-// Contract:
-// - get() marks a key most-recently-used. Reads therefore MUTATE order, so keys()/values()/entries()
-//   return snapshots — iterating while touching keys is safe and terminates.
-// - set() admits or rejects; it never reports success for an entry it did not retain. An entry over
-//   maxEntryBytes is rejected and any previously stored value for that key is left untouched.
-// - Weights must be non-negative safe integers (bytes). An unmeasurable weight fails CLOSED (entry
-//   rejected, ledger untouched) rather than poisoning the ledger and silently disabling the ceiling.
-// - A value's measured weight is sampled once at set(); callers holding MUTABLE values must re-set
-//   after mutation, or the ledger will under-count what is actually retained.
-// - onEvict fires only for involuntary capacity eviction — never for delete(), clear(), or the value
-//   an overwrite replaces — and only after both bounds have been restored.
+// Insertion-ordered LRU with count/byte limits. get changes order, so iteration snapshots tolerate reads.
+// set true means retained; reject oversized/unmeasurable values without displacing prior entries. Sample safe-integer weights at set; reset mutated values to update accounting.
+// onEvict handles capacity eviction only, never delete/clear/overwrite; restore both bounds before callbacks.
 
 export type BoundedMapOptions<K, V> = {
   maxEntries: number
@@ -25,8 +14,7 @@ export type BoundedMapOptions<K, V> = {
   onEvict?: (value: V, key: K) => void
 }
 
-// Why safe integers: bytes are whole units, and float ledgers accumulate residue that can drift
-// negative or saturate to Infinity, permanently corrupting later admission decisions.
+// Safe integer byte weights avoid float residue/Infinity corrupting admission.
 function assertCeiling(name: string, value: number | undefined): void {
   if (value === undefined) {
     return
@@ -36,8 +24,7 @@ function assertCeiling(name: string, value: number | undefined): void {
   }
 }
 
-// Why SameValueZero: Map key equality treats NaN as equal to NaN, but === does not; a === guard
-// would fail to protect a just-admitted NaN key and evict it after reporting success.
+// Match Map's SameValueZero: === would fail to protect an admitted NaN key from eviction.
 function isSameKey<K>(a: K, b: K): boolean {
   return a === b || (Number.isNaN(a as unknown as number) && Number.isNaN(b as unknown as number))
 }
@@ -56,8 +43,7 @@ export class BoundedMap<K, V> {
     if (!Number.isSafeInteger(options.maxEntries) || options.maxEntries < 1) {
       throw new RangeError('BoundedMap maxEntries must be a positive safe integer')
     }
-    // Why validate ceilings first: an invalid ceiling is a RangeError regardless of whether the
-    // caller also forgot sizeOf, so the more specific error should not mask it.
+    // Validate ceilings before sizeOf so invalid bounds consistently raise RangeError.
     assertCeiling('maxBytes', options.maxBytes)
     assertCeiling('maxEntryBytes', options.maxEntryBytes)
     if (
@@ -68,8 +54,7 @@ export class BoundedMap<K, V> {
     }
     this.maxEntries = options.maxEntries
     this.maxBytes = options.maxBytes ?? Number.POSITIVE_INFINITY
-    // Why: a per-entry ceiling above the aggregate would admit an entry that eviction must then
-    // immediately discard, making set() return true for a key the map no longer holds.
+    // Clamp per-entry to total or admission would immediately evict the key while reporting success.
     this.maxEntryBytes = Math.min(options.maxEntryBytes ?? this.maxBytes, this.maxBytes)
     this.sizeOf = options.sizeOf ?? (() => 0)
     this.onEvict = options.onEvict
@@ -105,9 +90,7 @@ export class BoundedMap<K, V> {
 
   // Returns false when the entry is rejected; a rejected entry never displaces an existing value.
   set(key: K, value: V): boolean {
-    // Why: an unmeasurable weight must not enter the ledger — a NaN would make every later
-    // comparison false and silently retire the ceiling, so measurement failure rejects the entry
-    // rather than throwing into a caller that may be a relay on someone else's machine.
+    // Reject measurement failure without touching the ledger: NaN would disable future ceilings, and throws may escape into remote relay callers.
     let measured: number
     try {
       measured = this.sizeOf(value, key)
@@ -117,9 +100,7 @@ export class BoundedMap<K, V> {
     if (!Number.isSafeInteger(measured) || measured < 0 || measured > this.maxEntryBytes) {
       return false
     }
-    // Why compute headroom before mutating: the ledger must stay exact, but a rejection here must
-    // not have already dropped the value it is replacing, so the displaced weight is credited
-    // arithmetically rather than by deleting first.
+    // Credit displaced weight arithmetically before mutation so rejection preserves the prior entry and exact ledger.
     const replacing = this.map.has(key) ? (this.bytesByKey.get(key) ?? 0) : 0
     if (measured > Number.MAX_SAFE_INTEGER - (this.retained - replacing)) {
       return false
@@ -132,8 +113,7 @@ export class BoundedMap<K, V> {
     this.bytesByKey.set(key, measured)
     this.retained += measured
     this.evictToFit(key)
-    // Why report presence rather than true: a reentrant onEvict can evict this key from a nested
-    // set(), and the contract is that a true return means the entry is retained.
+    // Reentrant onEvict may remove the new key; report presence so true always means retained.
     return this.map.has(key)
   }
 
@@ -173,8 +153,7 @@ export class BoundedMap<K, V> {
         break
       }
       const [key, value] = oldest.value
-      // Why: clamping maxEntryBytes keeps the just-admitted entry within the aggregate, so reaching
-      // it here would mean evicting the key set() just reported as retained.
+      // Clamping per-entry bytes prevents evicting the key this set just admitted.
       if (isSameKey(key, protectedKey)) {
         break
       }
@@ -186,8 +165,7 @@ export class BoundedMap<K, V> {
     if (!this.onEvict) {
       return
     }
-    // Why: bounds are restored before any disposal runs, so a hook that throws or reenters cannot
-    // strand the map over capacity; each disposal is isolated so one failure still frees the rest.
+    // Restore bounds before callbacks and isolate disposal failures so throws/reentry cannot strand capacity or skip remaining cleanup.
     let firstFailure: unknown
     let failed = false
     for (const [key, value] of disposed) {

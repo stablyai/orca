@@ -9,7 +9,7 @@ export function ConflictSummaryCard({
   conflictOperation,
   unresolvedCount,
   sourceControlAiActionsVisible,
-  isResolvingWithAI,
+  isRecoveryBusy = false,
   isAbortingOperation = false,
   onAbortOperation,
   onResolveWithAI,
@@ -18,7 +18,7 @@ export function ConflictSummaryCard({
   conflictOperation: GitConflictOperation
   unresolvedCount: number
   sourceControlAiActionsVisible: boolean
-  isResolvingWithAI: boolean
+  isRecoveryBusy?: boolean
   isAbortingOperation?: boolean
   onAbortOperation?: (operation: GitConflictOperation) => void
   onResolveWithAI: () => void
@@ -72,14 +72,10 @@ export function ConflictSummaryCard({
             variant="default"
             size="sm"
             className="h-7 w-full text-xs"
-            disabled={isResolvingWithAI}
+            disabled={isAbortingOperation || isRecoveryBusy}
             onClick={onResolveWithAI}
           >
-            {isResolvingWithAI ? (
-              <RefreshCw className="size-3.5 animate-spin" />
-            ) : (
-              <Sparkles className="size-3.5" />
-            )}
+            <Sparkles className="size-3.5" />
             {translate('auto.components.right.sidebar.SourceControl.f6cb48b6fe', 'Resolve with AI')}
           </Button>
         ) : null}
@@ -96,11 +92,10 @@ export function ConflictSummaryCard({
         {(conflictOperation === 'merge' || conflictOperation === 'rebase') && onAbortOperation ? (
           <Button
             type="button"
-            // Why: abort is the escape hatch, so use the quiet outline action instead of reading as destructive.
             variant="outline"
             size="sm"
             className="mt-1.5 h-7 w-full text-xs"
-            disabled={isResolvingWithAI || isAbortingOperation}
+            disabled={isAbortingOperation}
             onClick={() => onAbortOperation(conflictOperation)}
           >
             {isAbortingOperation ? <RefreshCw className="size-3.5 animate-spin" /> : null}
@@ -114,15 +109,25 @@ export function ConflictSummaryCard({
   )
 }
 
-// Why: separate from ConflictSummaryCard because a rebase/merge/cherry-pick can be in progress with no conflicts (between steps, or resolved but pre-continue).
+// Paused rebase/merge/cherry-pick operations may need recovery even with no conflicted files.
 export function OperationBanner({
   conflictOperation,
+  isRecoveryBusy = false,
   isAbortingOperation = false,
-  onAbortOperation
+  onAbortOperation,
+  isCompletingMerge = false,
+  onCompleteMerge,
+  sourceControlAiActionsVisible = false,
+  onResolveWithAI
 }: {
   conflictOperation: GitConflictOperation
+  isRecoveryBusy?: boolean
   isAbortingOperation?: boolean
   onAbortOperation?: (operation: GitConflictOperation) => void
+  isCompletingMerge?: boolean
+  onCompleteMerge?: () => void
+  sourceControlAiActionsVisible?: boolean
+  onResolveWithAI?: () => void
 }): React.JSX.Element {
   const label =
     conflictOperation === 'merge'
@@ -146,6 +151,7 @@ export function OperationBanner({
             )
 
   const Icon = conflictOperation === 'rebase' ? GitPullRequestArrow : GitMerge
+  const canCompleteMerge = conflictOperation === 'merge' && !!onCompleteMerge
 
   return (
     <div className="rounded-md border border-amber-500/25 bg-amber-500/5 px-3 py-2">
@@ -153,22 +159,56 @@ export function OperationBanner({
         <Icon className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
         <span className="text-xs font-medium text-foreground">{label}</span>
       </div>
-      {(conflictOperation === 'merge' || conflictOperation === 'rebase') && onAbortOperation ? (
-        <Button
-          type="button"
-          // Why: abort is the escape hatch, so use the quiet outline action instead of reading as destructive.
-          variant="outline"
-          size="sm"
-          className="mt-2 h-7 w-full text-xs"
-          disabled={isAbortingOperation}
-          onClick={() => onAbortOperation(conflictOperation)}
-        >
-          {isAbortingOperation ? <RefreshCw className="size-3.5 animate-spin" /> : null}
-          {conflictOperation === 'rebase'
-            ? translate('auto.components.right.sidebar.SourceControl.425f138269', 'Abort rebase')
-            : translate('auto.components.right.sidebar.SourceControl.540ca8f78c', 'Abort merge')}
-        </Button>
-      ) : null}
+      <div className="mt-2 space-y-1.5">
+        {canCompleteMerge ? (
+          <Button
+            type="button"
+            variant="default"
+            size="sm"
+            className="h-7 w-full text-xs"
+            disabled={isCompletingMerge || isAbortingOperation || isRecoveryBusy}
+            onClick={onCompleteMerge}
+          >
+            {isCompletingMerge ? (
+              <RefreshCw className="size-3.5 animate-spin" />
+            ) : (
+              <GitMerge className="size-3.5" />
+            )}
+            {translate(
+              'auto.components.right.sidebar.source.control.conflict.status.cards.completeMerge',
+              'Complete merge'
+            )}
+          </Button>
+        ) : null}
+        {sourceControlAiActionsVisible && onResolveWithAI ? (
+          <Button
+            type="button"
+            variant={canCompleteMerge ? 'outline' : 'default'}
+            size="sm"
+            className="h-7 w-full text-xs"
+            disabled={isAbortingOperation || isRecoveryBusy || isCompletingMerge}
+            onClick={onResolveWithAI}
+          >
+            <Sparkles className="size-3.5" />
+            {translate('auto.components.right.sidebar.SourceControl.f6cb48b6fe', 'Resolve with AI')}
+          </Button>
+        ) : null}
+        {(conflictOperation === 'merge' || conflictOperation === 'rebase') && onAbortOperation ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 w-full text-xs"
+            disabled={isAbortingOperation || isCompletingMerge}
+            onClick={() => onAbortOperation(conflictOperation)}
+          >
+            {isAbortingOperation ? <RefreshCw className="size-3.5 animate-spin" /> : null}
+            {conflictOperation === 'rebase'
+              ? translate('auto.components.right.sidebar.SourceControl.425f138269', 'Abort rebase')
+              : translate('auto.components.right.sidebar.SourceControl.540ca8f78c', 'Abort merge')}
+          </Button>
+        ) : null}
+      </div>
     </div>
   )
 }

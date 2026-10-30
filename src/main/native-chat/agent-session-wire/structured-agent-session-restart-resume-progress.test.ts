@@ -47,6 +47,7 @@ it.each(['queued', 'starting', 'continued', 'refused', 'unconfirmed'] as const)(
 it('publishes a real continuation through an overlapping audience exclusion', async () => {
   const { host, dispatch } = await interruptedRestart()
   await host.restartResume.list()
+  await host.revealSession(SESSION)
   const phases: (string | undefined)[] = []
   const release = host.subscribeStatus({
     id: 'overlap',
@@ -113,6 +114,7 @@ it('publishes a real continuation through an overlapping audience exclusion', as
 it('publishes skipped when an offer disappears during reservation without starting its agent', async () => {
   const { host, acquire, dispatch } = await interruptedRestart()
   expect(await host.restartResume.list()).toHaveLength(1)
+  await host.revealSession(SESSION)
   vi.spyOn(AgentSessionRecoveryCapsule.prototype, 'beginResume').mockResolvedValueOnce([])
   const phases: (string | undefined)[] = []
   const release = host.subscribeStatus({
@@ -198,7 +200,7 @@ it.each(['continued', 'refused', 'unconfirmed'] as const)(
       expect(finished).toBe(false)
       expect(summaries.map((summary) => summary.restartResume?.phase)).toContain('queued')
       expect(summaries.map((summary) => summary.restartResume?.phase)).toContain('starting')
-      // Reopening takes a snapshot of the same live action, without needing its earlier frames.
+      // Reopened subscribers need a current action snapshot without prior frames.
       const snapshots: AgentSessionStatusSummary[] = []
       const closeSnapshot = host.subscribeStatus({
         id: 'reopen',

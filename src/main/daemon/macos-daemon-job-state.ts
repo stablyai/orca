@@ -28,7 +28,7 @@ export async function readMacDaemonJobState(service: string): Promise<MacDaemonJ
     if (result.code !== 0) {
       return 'unverifiable'
     }
-    // Only the job's top-level state; nested resource-pressure states say nothing about its process.
+    // Nested resource-pressure states do not describe the job’s process.
     const state = /^\tstate = (.+)$/m.exec(result.stdout)?.[1]
     return state === 'running' ? 'running' : state === 'not running' ? 'stopped' : 'unverifiable'
   } catch {
@@ -43,8 +43,7 @@ export async function stopMacDaemonJob(service: string): Promise<void> {
     timeoutMs: 10_000,
     maxOutputBytes: 8192
   })
-  // bootout can return while launchd still holds a job that was running, and a bootstrap
-  // under the same label in that window is refused.
+  // bootout can return before launchd releases the label for bootstrap.
   const goneByMs = Date.now() + JOB_REMOVAL_TIMEOUT_MS
   while ((await readMacDaemonJobState(service)) !== 'missing') {
     if (Date.now() >= goneByMs) {
@@ -54,7 +53,7 @@ export async function stopMacDaemonJob(service: string): Promise<void> {
   }
 }
 
-/** True once no process can start under `service`: missing, or stopped and booted out. */
+/** Release only missing or confirmed-stopped jobs so no process can still start under this label. */
 export async function releaseMacDaemonJob(
   service: string,
   waitUntilMs = Date.now()

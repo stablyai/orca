@@ -30,8 +30,7 @@ export function useTerminalLiveInputModePreference({
   const pendingLiveInputDefaultHandlesRef = useRef<Set<string>>(new Set())
 
   const defaultTerminalHandlesToLiveInput = useCallback((handles: readonly string[]) => {
-    // Why: terminal discovery (tab snapshots, list poll, create) can arrive
-    // before the async persisted-disabled load on worktree re-entry.
+    // Terminal discovery can precede persisted opt-out hydration on worktree re-entry.
     if (!disabledLiveInputHydratedRef.current) {
       for (const handle of handles) {
         pendingLiveInputDefaultHandlesRef.current.add(handle)
@@ -126,13 +125,11 @@ export function useTerminalLiveInputModePreference({
       } else {
         disabledLiveInputTerminalHandlesRef.current.add(handle)
       }
-      // Why: pre-hydration edits must patch the loaded set per handle; replacing
-      // the loaded set would erase other persisted opt-outs for this worktree.
+      // Patch loaded preferences per handle so pre-hydration edits preserve other opt-outs.
       if (!disabledLiveInputHydratedRef.current) {
         pendingDisabledLiveInputHydrationEditsRef.current.set(handle, !nextEnabled)
       }
-      // Why: only persist after hydration; an earlier write would use the
-      // reset-empty ref and overwrite other handles' opt-outs for the worktree.
+      // Persist only after hydration; the reset-empty ref would overwrite other opt-outs.
       if (disabledLiveInputHydratedRef.current) {
         persistDisabledLiveInputHandles()
       }
@@ -161,8 +158,7 @@ export function useTerminalLiveInputModePreference({
     setLiveInputTerminalHandles(new Set())
 
     let disposed = false
-    // Why: load the persisted opt-outs first so defaulting logic (which can
-    // fire immediately from subscriptions) respects prior user choices.
+    // Hydrate before subscriptions can default live-input mode over persisted choices.
     void readDisabledTerminalLiveInputHandlesPreference(hostId, worktreeId).then((preference) => {
       if (disposed) {
         return

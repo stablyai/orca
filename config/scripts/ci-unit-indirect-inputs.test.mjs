@@ -23,7 +23,8 @@ it.each([
   'export interface Config { spawnToken: string; Worker: string }',
   'export type Config = { readFile: string; global: boolean }',
   "export const url = new URL('https://example.test/data')",
-  'export const spawnToken = "opaque-token"'
+  'export const spawnToken = "opaque-token"',
+  "const ast = ts.createSourceFile('source.ts', source, target)"
 ])('does not retain unrelated tests for syntax that loads no repository inputs: %s', (source) => {
   expect(selected(source)).toEqual(['src/changed.test.ts'])
 })
@@ -42,6 +43,21 @@ it.each([
   "const read = fs['readFileSync']; read(path)",
   'const execute = runProcess; execute(command)',
   'const load = process.getBuiltinModule; load(moduleName)',
+  'const program = ts.createProgram(options)',
+  'const program = ts.createIncrementalProgram(options)',
+  'const program = ts.createWatchProgram(options)',
+  'const config = ts.getParsedCommandLineOfConfigFile(path, {}, ts.sys)',
+  'const config = ts.parseJsonConfigFileContent(config, ts.sys, root)',
+  'const config = ts.parseJsonSourceFileConfigFileContent(config, ts.sys, root)',
+  'const config = ts.readConfigFile(path, ts.sys.readFile)',
+  'const program = ts.createEmitAndSemanticDiagnosticsBuilderProgram(options)',
+  'const program = ts.createSemanticDiagnosticsBuilderProgram(options)',
+  'const builder = ts.createSolutionBuilder(host, roots, options)',
+  'const builder = ts.createSolutionBuilderWithWatch(host, roots, options)',
+  'const service = ts.createLanguageService(host)',
+  'const resolved = ts.resolveModuleName(name, file, options, host)',
+  'const resolved = ts.resolveTypeReferenceDirective(name, file, options, host)',
+  'const files = ts.sys.readDirectory(directory)',
   'eval(source)',
   'const execute = new Function(source); execute()',
   'spawn( @@@'

@@ -35,10 +35,10 @@ export type RemoteAgentStatusEnvelope = {
   isReplay?: boolean
   turnEndedAt?: unknown
   turnEndDisposition?: unknown
-  /** Payload fields the relay dropped to fit an oversized frame; validated below. */
+  /** Fields shed to fit the relay frame; validate before restoration. */
   shedFields?: unknown
   claudeRunningNonAgentTask?: unknown
-  /** The producing peer's advertised run-capability set — a property of the peer/connection that built this envelope, not an orthogonal call parameter. Absent (older relay/HTTP paths) defaults to the unadvertised-legacy-peer set. */
+  /** Producing peer capabilities; absent on older peers, which use legacy defaults. */
   advertisedAgentStatusCapabilities?: readonly string[]
   statusUnavailable?: unknown
   evidenceAgeMs?: unknown
@@ -110,7 +110,7 @@ export function normalizeRemoteEnvelopeFields(envelope: {
       typeof envelope.toolUseId === 'string' && envelope.toolUseId.trim().length > 0
         ? envelope.toolUseId.trim()
         : undefined,
-    // Why replay only: a live hook carries its own settlement, so the list matters only after a gap.
+    // Live hooks settle their own requests; retained settlements only repair replay gaps.
     claudeSettledRequests:
       source === 'claude' && envelope.isReplay === true
         ? readClaudeSettledRequests(envelope.claudeSettledRequests)

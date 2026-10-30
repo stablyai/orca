@@ -15,6 +15,7 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 it('reveals before launch Retry, but waits for a successful queue Resume', async () => {
   const order: string[] = []
   const controller = {
+    capturePresentation: () => () => true,
     respond: vi.fn(async () => null),
     queuedMessages: {
       queueCapable: true,
@@ -68,7 +69,11 @@ it('sends no queued card and retries no start on a host held for its permission 
     editor: undefined,
     steerNewest: vi.fn(() => true)
   }
-  const controller = { respond: vi.fn(async () => null), queuedMessages }
+  const controller = {
+    capturePresentation: () => () => true,
+    respond: vi.fn(async () => null),
+    queuedMessages
+  }
   const retryLaunch = vi.fn()
   useAppStore.setState({
     settings: { ...useAppStore.getState().settings!, nativeChatPermissionMode: 'ask' }

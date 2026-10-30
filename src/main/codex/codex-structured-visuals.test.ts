@@ -3,7 +3,7 @@ import {
   NATIVE_CHAT_SCRATCH_DIR_ENV,
   type NativeChatVisualsLaunch
 } from '../native-chat/native-chat-visuals-delivery'
-import { CodexAppServerRequestError } from './codex-app-server-request-error'
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import { CodexAppServerTimeoutError } from './codex-app-server-session'
 import {
   adapterFor,
@@ -19,7 +19,7 @@ import {
   CODEX_VISUALS_SETUP_BUDGET_MS,
   prepareCodexThreadForVisuals
 } from './codex-structured-visuals'
-import { codexStructuredPermissionPolicy } from './codex-structured-permission-policy'
+import { codexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'
 
 const VISUALS: NativeChatVisualsLaunch = {
   folder: '/state/chat-scratch/abc',
@@ -161,7 +161,6 @@ describe('setting up a Codex app-server for a chat with visuals', () => {
   })
 })
 
-/** A chat acquired through the launch its registration composes, over a shell env of `env`. */
 async function acquired(
   codex: ReturnType<typeof fakeCodex>,
   launch: {
@@ -191,7 +190,7 @@ async function acquired(
       store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
       resolveWorkspacePath: async () => '/work/repo',
       resolveEnvironment: async () => launch.env ?? {},
-      resolveCommand: () => 'codex',
+      resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
       resolveLaunchArgs: () => [],
       prepareVisuals: async () => launch.visuals ?? null
     })
@@ -230,10 +229,8 @@ describe('a Codex chat acquisition with visuals', () => {
     await acquired(codex, { env: { [NATIVE_CHAT_SCRATCH_DIR_ENV]: '/other' } })
     const connection = codex.connections[0]!
     const methods = connection.calls.map((call) => call.method)
-    // The adapter sends `initialize` itself now; nothing comes between it and the thread.
     expect(methods.slice(0, 2)).toEqual(['initialize', 'thread/start'])
     expect(methods).not.toContain('skills/extraRoots/set')
-    // Only the chat's identity overrides: no visuals root, and no inherited folder handed on.
     const config = connection.calls[1]?.params?.config
     const scratchDirOverride = `shell_environment_policy.set.${NATIVE_CHAT_SCRATCH_DIR_ENV}`
     expect(config).not.toHaveProperty(['sandbox_workspace_write.writable_roots'])

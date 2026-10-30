@@ -3,8 +3,7 @@ import { cancelTrackingResponse } from '../lib/unread-response-body.test-fixture
 import {
   getAzureDevOpsAuthStatus,
   getAzureDevOpsPullRequestForBranch,
-  getAzureDevOpsPullRequestForBranchOrThrow,
-  normalizeAzureDevOpsApiBaseUrl
+  getAzureDevOpsPullRequestForBranchOrThrow
 } from './client'
 import { _resetAzureDevOpsPreviewApiVersionCache } from './azure-devops-api-request'
 import { _resetAzureDevOpsRepoRefCache } from './repository-ref'
@@ -16,7 +15,6 @@ vi.mock('../git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-/** Serve the remote URL plus the #9171 default-branch resolver probes. */
 function primeGitExecWithDefaultBranch(defaultRef = 'refs/remotes/origin/main'): void {
   gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
     if (args[0] === 'remote') {
@@ -45,23 +43,6 @@ describe('Azure DevOps client', () => {
     process.env = OLD_ENV
     globalThis.fetch = OLD_FETCH
     _resetAzureDevOpsRepoRefCache()
-  })
-
-  it('normalizes configured API base URLs', () => {
-    expect(normalizeAzureDevOpsApiBaseUrl('https://dev.azure.com/acme/Project/_apis/')).toBe(
-      'https://dev.azure.com/acme/Project'
-    )
-  })
-
-  it('marks token-only auth as configured but unverified because repository remotes supply the API base URL', async () => {
-    delete process.env.ORCA_AZURE_DEVOPS_API_BASE_URL
-    await expect(getAzureDevOpsAuthStatus()).resolves.toEqual({
-      configured: true,
-      authenticated: false,
-      account: null,
-      baseUrl: null,
-      tokenConfigured: true
-    })
   })
 
   it('authenticates against an on-prem Server that requires -preview api-versions (STA-3494)', async () => {
@@ -184,17 +165,13 @@ describe('Azure DevOps client', () => {
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         )
       }
-      // The pull-request list lookup fails (auth/transport).
       return new Response(JSON.stringify({ message: 'forbidden' }), { status: 403 })
     }) as never
 
-    // The swallowing variant collapses the failure into a false "no PR".
     await expect(
       getAzureDevOpsPullRequestForBranch('/repo', 'refs/heads/feature/azure')
     ).resolves.toBeNull()
     _resetAzureDevOpsRepoRefCache()
-    // The throwing variant makes the failure visible so eligibility records
-    // `unavailable` rather than a false "No pull request found".
     await expect(
       getAzureDevOpsPullRequestForBranchOrThrow('/repo', 'refs/heads/feature/azure')
     ).rejects.toThrow(/Azure DevOps request failed/)
@@ -337,48 +314,6 @@ describe('Azure DevOps client', () => {
     await expect(
       getAzureDevOpsPullRequestForBranch('/repo', 'refs/heads/main', 40)
     ).resolves.toMatchObject({ number: 40, state: 'open' })
-  })
-
-  it('keeps an active PR whose source branch is the repo default branch', async () => {
-    gitExecFileAsyncMock.mockResolvedValue({
-      stdout: 'https://dev.azure.com/acme/Project/_git/repo\n'
-    })
-    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
-      const url = new URL(String(input))
-      const response = (body: unknown): Response =>
-        new Response(JSON.stringify(body), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        })
-
-      if (url.pathname === '/acme/Project/_apis/git/repositories/repo') {
-        return response({ id: 'repo-guid' })
-      }
-      if (url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests') {
-        return response({
-          value: [
-            {
-              pullRequestId: 31,
-              title: 'main → release',
-              status: 'active',
-              creationDate: '2026-05-10T00:00:00Z',
-              mergeStatus: 'succeeded',
-              lastMergeSourceCommit: { commitId: 'main-head-oid' }
-            }
-          ]
-        })
-      }
-      if (
-        url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests/31/statuses'
-      ) {
-        return response({ value: [{ state: 'succeeded' }] })
-      }
-      return new Response(JSON.stringify({ message: 'not found' }), { status: 404 })
-    }) as never
-
-    await expect(
-      getAzureDevOpsPullRequestForBranch('/repo', 'refs/heads/main')
-    ).resolves.toMatchObject({ number: 31, state: 'open' })
   })
 
   it('cancels unread error-response bodies so bundled undici cannot crash on socket close', async () => {

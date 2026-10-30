@@ -119,7 +119,7 @@ export function CommitNotices({
               : 'text-muted-foreground'
           )}
         >
-          {/* Why: Create Review blockers carry recovery steps; truncating hides the action the user needs in a narrow sidebar. */}
+          {/* Wrap recovery guidance because truncation can hide the required action in narrow sidebars. */}
           <span className="min-w-0 self-stretch break-words leading-4 [overflow-wrap:anywhere]">
             {createPrIntentNotice.message}
           </span>

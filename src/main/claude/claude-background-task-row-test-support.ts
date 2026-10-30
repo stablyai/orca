@@ -1,9 +1,4 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
-// Shared fixtures and the sink harness the background-task row suites drive.
-//
-// Moved out of claude-background-task-rows.test.ts verbatim when that suite
-// reached its line budget, so the terminal-frame suite reads the same captured
-// payloads and the same forwarded-tool admission set rather than a second copy.
 
 import { vi } from 'vitest'
 import type {
@@ -14,7 +9,7 @@ import type { NativeChatBackgroundTaskBlock } from '../../shared/native-chat-typ
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { ClaudeBackgroundTaskRows } from './claude-background-task-rows'
 
-/** The exact payloads the user's journal carried for the reported failure. */
+/** Lifecycle frames captured from the reported failure. */
 export const FAILED_UPDATE = {
   type: 'system',
   subtype: 'task_updated',
@@ -31,9 +26,7 @@ export const FAILED_NOTIFICATION = {
   summary: 'Background command "Wait for the verification verdict" failed with exit code 1'
 }
 
-/** A terminal frame captured from a user session whose task was never admitted.
- *  Nothing rendered for it: the typed path declined the row and told the generic
- *  fallback the frame was covered. */
+/** Captured terminal frame for a task whose announcement never reached the transcript. */
 export const ORPHAN_FAILED_NOTIFICATION = {
   type: 'system',
   subtype: 'task_notification',
@@ -66,8 +59,7 @@ export function twinOf(body: AgentJournalItemBody | undefined): string | null {
   return block?.type === 'text' ? block.text : null
 }
 
-/** The spawn call the harness treats as forwarded to the top-level transcript.
- *  Admission consults this, so a test that wants a row must name it. */
+/** Parent invocation admitted by the top-level transcript harness. */
 export const FORWARDED_TOOL = 'toolu_01CqPd7y'
 
 export function harness(

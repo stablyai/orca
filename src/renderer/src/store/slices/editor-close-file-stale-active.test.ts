@@ -10,7 +10,6 @@ import {
 import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -76,8 +75,7 @@ function expectValidActiveFile(store: ReturnType<typeof createTestStore>): void 
   }
 }
 
-// A same-file duplicate tab in one group is window-only state: main's frames show each file once
-// per group, so a switch-on seed keeps the duplicate in the open-file list alone.
+// Main frames dedupe same-file tabs per group; keep the duplicate only in openFiles for switch-on seeds.
 const duplicateTab: [string, string][] = ORCA_LAYOUT_OWNER_IS_MAIN ? [] : [['t-a2', '/a']]
 
 describe('closeFile when activeFileId is not an open file', () => {

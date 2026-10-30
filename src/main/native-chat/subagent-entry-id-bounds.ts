@@ -1,22 +1,13 @@
-// Bounding a subagent entry's id — a KEY, not display text.
-//
-// `NativeChatSubagentEntry.id` keys the roster, so clipping it to a fixed prefix
-// merges two distinct children whose ids agree that far and associates one's
-// state with the other. An id long enough to need bounding only reaches us from
-// an imported legacy transcript, but a bound is still required, so keep a head
-// for readability plus a digest of the WHOLE id to keep distinct ids distinct.
+// IDs are roster keys: hash the whole value when bounding so shared prefixes cannot merge children.
 
 import { createHash } from 'node:crypto'
 
-/** Shared by every site that puts a roster entry on a wire, so a journal-bound
- *  id survives the RPC and transcript bounds untouched instead of being clipped
- *  a second time into a different string. */
+/** Use the same cap at journal/RPC/transcript boundaries to avoid rebounding into a different key. */
 export const MAX_SUBAGENT_ENTRY_ID_CHARS = 512
 
 const DIGEST_CHARS = 16
 
-/** Returns `id` unchanged when it fits, else a head plus a digest suffix whose
- *  total length is exactly the cap — so bounding a bounded id is a no-op. */
+/** Keep bounded IDs unchanged; oversized IDs retain a readable head and whole-ID digest. */
 export function boundSubagentEntryId(id: string): string {
   if (id.length <= MAX_SUBAGENT_ENTRY_ID_CHARS) {
     return id

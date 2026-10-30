@@ -15,6 +15,7 @@ describe('sanitizeAgentSessionAttachmentName', () => {
   it('caps a long name in UTF-8 bytes on whole characters, keeping its extension', () => {
     const name = sanitizeAgentSessionAttachmentName(`${'图'.repeat(120)}.pdf`)
     expect(bytes(name)).toBeLessThanOrEqual(AGENT_SESSION_ATTACHMENT_NAME_MAX_BYTES)
+    expect(name).toBe(`${'图'.repeat(65)}.pdf`)
     expect(name.endsWith('.pdf')).toBe(true)
     expect(name).not.toContain('\uFFFD')
   })

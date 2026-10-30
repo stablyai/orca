@@ -61,8 +61,7 @@ export function useIpynbCellExecution({
   const uncommittedRunKeys = useUncommittedRunKeys(filePath)
   const [pendingRun, setPendingRun] = useState<QueuedCell[] | null>(null)
 
-  // Why: runs can finish while this notebook is not the visible tab, so outputs wait in the kernel
-  // session until the open document takes them in.
+  // Keep completed outputs in the kernel session until the notebook document mounts to consume them.
   useEffect(() => {
     if (uncommittedRunKeys.length === 0) {
       return

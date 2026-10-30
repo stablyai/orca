@@ -1,3 +1,5 @@
+import { installSavedResumeStartupCancellation } from './saved-resume-startup-cancellation'
+import { launchConfigsEqual } from '../../../../../shared/agent-resume-record-equivalence'
 import { useAppStore } from '@/store'
 import type { PtyConnectResult } from '../pty-transport-types'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -50,12 +52,14 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
           consumed.record.providerSession
         )
       ) {
-        // Why: legacy pane aliases can leave multiple sleeping rows for one
-        // provider session; once this pane resumes it, every alias is stale.
+        // Consume every alias of the resumed provider session so legacy rows cannot resume it twice.
         state.clearSleepingAgentSession(paneKey)
       }
     }
   }
+  session.savedStartupAutomaticClaim = session.paneStartup?.resumeSource
+    ? useAppStore.getState().automaticAgentResumeClaimsByTabId[session.deps.tabId]
+    : undefined
   session.launchToken = session.paneStartup?.launchConfig
     ? (session.paneStartup.launchToken ?? createBrowserUuid())
     : undefined
@@ -81,9 +85,7 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
     if (session.startupDraftDeliveryClaimed) {
       return true
     }
-    // Why: launch-bound draft paste needs a launch token; all current
-    // draftPrompt startup callers pair it with launchConfig so this can safely
-    // fence off delayed sidecar delivery before Codex's first composer frame.
+    // Draft callers pair launchConfig with prompt paste; reserve its token before delayed sidecar delivery can race Codex composer startup.
     session.startupDraftDeliveryClaimed = beginAgentStartupDeliveryAttempt({
       worktreeId: session.deps.worktreeId,
       tabId: session.deps.tabId,
@@ -117,6 +119,12 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
         tabId: session.deps.tabId,
         leafId: session.pane.leafId
       })
+    if (session.paneStartup.resumeSource) {
+      session.savedStartupLaunchRegistration = {
+        source: session.paneStartup.resumeSource,
+        entry: useAppStore.getState().agentLaunchConfigByPaneKey[session.cacheKey]
+      }
+    }
   } else if (session.paneStartup) {
     useAppStore.getState().clearAgentLaunchConfig(session.cacheKey)
   }
@@ -126,8 +134,7 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
   ): void => {
     if (!effectiveLaunchConfig) {
       if (metadata?.launchAgent) {
-        // Why: daemon launch identity can outlive the process while Orca is
-        // closed. Use it to request confirmation, never as current byte authority.
+        // Daemon launch metadata can outlive its process; it requests confirmation without authorizing bytes.
         const state = useAppStore.getState()
         const current = state.paneForegroundAgentByPaneKey[session.cacheKey]
         // Why: re-mounting a parked pane must not demote this session's own read of the same agent.
@@ -141,8 +148,7 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
       }
       return
     }
-    // Why: daemon reattach preserves the pane's exact launch command but not
-    // renderer metadata; recover only allowlisted command identity from it.
+    // Recover only allowlisted command identity because daemon reattach keeps argv but loses renderer metadata.
     const persistedLaunchAgent = recognizeAgentProcessFromCommandLine(
       effectiveLaunchConfig.agentCommand
     )?.agent
@@ -159,9 +165,24 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
       leafId: session.pane.leafId
     })
   }
-  session.clearRegisteredStartupLaunchConfig = (): void => {
-    useAppStore.getState().clearAgentLaunchConfig(session.cacheKey)
+  session.clearRegisteredStartupLaunchConfig = (expected = session.paneStartup): void => {
+    const state = useAppStore.getState()
+    const installed = state.agentLaunchConfigByPaneKey[session.cacheKey]
+    const captured = session.savedStartupLaunchRegistration
+    const ownsRegistration = expected?.resumeSource
+      ? captured?.source === expected.resumeSource && captured.entry === installed
+      : true
+    if (
+      ownsRegistration &&
+      installed &&
+      expected?.launchConfig &&
+      installed.identity.launchToken === (expected.launchToken ?? session.launchToken) &&
+      launchConfigsEqual(installed.launchConfig, expected.launchConfig)
+    ) {
+      state.clearAgentLaunchConfig(session.cacheKey)
+    }
   }
+  installSavedResumeStartupCancellation(session)
   session.neutralTerminalTitle = (): string => {
     const state = useAppStore.getState()
     const tab = (state.tabsByWorktree[session.deps.worktreeId] ?? []).find(

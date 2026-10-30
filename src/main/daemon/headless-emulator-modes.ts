@@ -3,7 +3,7 @@ import { readTerminalMouseEncoding } from '../../shared/terminal-mouse-encoding'
 import type { TerminalModes } from './types'
 
 type TerminalWithKittyKeyboard = Terminal & {
-  // Why: kitty keyboard flags aren't on the public IModes; read the core service the CSI u handlers mutate.
+  // Kitty flags are absent from public IModes; read the service updated by CSI u.
   _core?: { coreService?: { kittyKeyboard?: { flags?: number } } }
 }
 
@@ -12,17 +12,13 @@ export function readKittyKeyboardFlags(terminal: Terminal): number {
   return typeof flags === 'number' ? flags : 0
 }
 
-// Why a side table: xterm.js has no XTMODKEYS, so without it a snapshot drops pi's fallback
-// request and a reattached pane goes back to the ambiguous `ESC CR` Shift+Enter (STA-7701).
-// `armed` once ever nonzero: from then on the snapshot states the level, 0 included, so a client
-// that missed the disarm is corrected while panes that never used it keep identical snapshots.
+// xterm lacks XTMODKEYS state; retain explicit zero after disarm to correct clients that missed it.
 const modifyOtherKeysByTerminal = new WeakMap<Terminal, { level: number; armed: boolean }>()
 
-/** Tracks the xterm modifyOtherKeys level (`CSI > 4 ; n m`) for readTerminalModes. */
 export function trackModifyOtherKeys(terminal: Terminal): void {
   const state = { level: 0, armed: false }
   modifyOtherKeysByTerminal.set(terminal, state)
-  // Return false so xterm's own handlers (none for XTMODKEYS; RIS for ESC c) still run.
+  // Return false to preserve xterm handlers, including RIS.
   terminal.parser.registerCsiHandler({ prefix: '>', final: 'm' }, (params) => {
     if (params[0] === 4) {
       const value = params[1]
@@ -37,7 +33,6 @@ export function trackModifyOtherKeys(terminal: Terminal): void {
   })
 }
 
-/** Mode state a snapshot must carry so a restored pane behaves like the live one. */
 export function readTerminalModes(terminal: Terminal): TerminalModes {
   const buffer = terminal.buffer.active
   const mouseTrackingMode = terminal.modes.mouseTrackingMode

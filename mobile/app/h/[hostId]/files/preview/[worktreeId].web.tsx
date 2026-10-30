@@ -3,10 +3,7 @@ import { useLocalSearchParams } from 'expo-router'
 import { MobileFilePreviewScreen } from '../../../../../src/files/MobileFilePreviewScreen'
 import { normalizeMobileFilePreviewRouteParams } from '../../../../../src/files/mobile-file-preview-route'
 
-/**
- * The page's route for the file preview: the screen itself. The native route file mounts the shell, whose
- * native view module throws at import in a browser, and the manifest imports every route.
- */
+// Render screen directly: native sibling imports a shell module that throws in browsers, and manifest imports every route.
 export default withWorkspaceRoute(function MobileFilePreviewRoute() {
   const params = useLocalSearchParams<{
     hostId?: string | string[]

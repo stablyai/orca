@@ -151,8 +151,7 @@ export function getNewestWorkspaceCleanupDiffCommentAt(
   if (!diffComments || diffComments.length === 0) {
     return null
   }
-  // Why: persisted diff notes can grow large enough for spread-based Math.max
-  // to exceed the JavaScript argument limit during cleanup scans.
+  // Large persisted note arrays can exceed JavaScript's spread argument limit.
   let newest = diffComments[0]?.createdAt ?? null
   for (let index = 1; index < diffComments.length; index += 1) {
     const createdAt = diffComments[index]?.createdAt
@@ -192,12 +191,7 @@ function shouldReadWorkspaceCleanupGitEvidence(args: {
   if ((skipGit && !forceGitCheck) || repoIsFolder || worktree.isMainWorktree) {
     return false
   }
-  // Why pinned sits with the cost skips and not the refusals: a pinned workspace is
-  // still queueable (`pinned` is not a queue blocker), so it can reach removal -- and
-  // removal forces whenever git is unknown. Skipping its git read on a broad scan is a
-  // fair saving; skipping it on the confirm-time forced read meant deleting with no
-  // evidence ever obtained. main-worktree and folder-repo stay unconditional: those are
-  // refused before removal, so reading git for them is pure cost.
+  // Pinned rows remain removable: defer broad-scan Git work, but require forced confirmation-time evidence.
   if (blockers.includes('pinned') && !forceGitCheck) {
     return false
   }
@@ -205,8 +199,7 @@ function shouldReadWorkspaceCleanupGitEvidence(args: {
     return false
   }
 
-  // Why: inactivity is the only recommendation signal now. Git is read only
-  // to keep the destructive path from deleting dirty or local-only branch work.
+  // Inactivity drives recommendations; Git evidence guards dirty and local-only work during removal.
   return true
 }
 

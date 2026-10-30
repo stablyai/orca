@@ -19,14 +19,7 @@ export type InflightRecord = {
 }
 
 const inflight = new Map<string, InflightRecord>()
-/**
- * Owners an invalidation took off their key. They keep running — nothing here
- * can cancel a lookup — but no new reader may join them, which is what stops a
- * post-invalidation read from waiting out a stale request's deadline.
- *
- * Admission bounds these to two per key across at most 1,000 unsettled keys, so
- * this map cannot outgrow the lookups already counted as in progress.
- */
+/** Invalidation retires joinable ownership without cancelling work. Admission bounds outstanding tokens, including callers still awaiting retired requests. */
 const retired = new Map<InflightToken, InflightRecord>()
 
 export function getInflightLookup(key: string): InflightRecord | undefined {
@@ -43,7 +36,7 @@ export function releaseInflight(key: string, token: InflightToken): boolean {
   return true
 }
 
-/** Takes every owner under `prefix` off its key, without failing it. */
+/** Retire matching owners without failing their callers. */
 export function retireInflightWithPrefix(prefix: string): void {
   for (const [key, record] of inflight) {
     if (key.startsWith(prefix)) {
@@ -53,16 +46,7 @@ export function retireInflightWithPrefix(prefix: string): void {
   }
 }
 
-/**
- * Expires records that outlived the deadline without their timer firing. Main's
- * timers are suspended across a system sleep, so wall-clock age — not
- * `setTimeout` alone — is what actually bounds how long a branch stays pinned.
- * Retired owners are swept too: their readers are gone, but their own callers
- * still need releasing.
- *
- * The guarantee covers tracked records only: one the size cap evicted is in
- * neither map and falls back to its own suspended timer.
- */
+/** Sweep tracked current/retired owners by wall-clock age because sleep suspends timers. Size-evicted records lose this sweep and rely on their own timer. */
 export function expireOverdueInflight(now: number): void {
   let overdue: InflightRecord[] | undefined
   for (const records of [inflight, retired]) {
@@ -85,11 +69,7 @@ export function trackInflight(key: string, record: InflightRecord): void {
     if (oldest === undefined) {
       break
     }
-    // Why: drop the record without expiring it — its own deadline still releases
-    // its callers, and evicting is about memory, not about failing. It does
-    // forfeit the sweep above, so the cap must stay far above realistic
-    // concurrency: below it, sleep-suspended timers are all an evicted record's
-    // callers have left.
+    // Eviction bounds memory without expiring callers, but loses wall-clock sweeping; keep the cap above realistic concurrency.
     inflight.delete(oldest)
   }
 }

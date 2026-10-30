@@ -1,19 +1,5 @@
-// A structured agent beyond Claude and Codex, paired across two builds: current code against the
-// newest published release.
-//
-// A host now accepts any agent it registered, publishes those agents, and stores their records.
-// Clients and hosts update independently, so each skew must hold before such an agent ships:
-//
-//  - an old client paired with a new host never meets that agent's tab, and the Claude and Codex
-//    tabs it does meet are what its own build would have published;
-//  - an old build reading what a new one stored (a tab, a record) keeps every other tab and never
-//    mistakes the new agent's record for another provider;
-//  - a new client against an old host does not offer the agent, because the capability is absent.
-//
-// The old side's lists are read from its checkout and the capability removed from them, so this
-// stays exercised after a release ships the capability (docs/reference/remote-wire-compatibility.md).
-// What the old side stores is its own code, so those expectations follow what the baseline host
-// advertises, never its version.
+// Pair new registered agents across real builds: old clients must not render unknown chats or lose known tabs/records.
+// Derive old capability lists from their checkout and remove the tested capability so rolling releases cannot erase the skew.
 
 import { beforeAll, describe, expect, it } from 'vitest'
 import { z } from 'zod'
@@ -38,7 +24,8 @@ import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
   resolveBaselineReleaseRef,
-  type ReleaseCheckout
+  type ReleaseCheckout,
+  releaseModuleExport
 } from './release-checkout'
 import {
   loadAgentSessionWireBuild,
@@ -46,7 +33,6 @@ import {
   type AgentSessionWireBuild
 } from './versioned-agent-session-wire'
 
-// Why: a cold CI run extracts the baseline checkout before the first pairing.
 const SUITE_TIMEOUT_MS = 180_000
 
 const NEW_AGENT = 'grok'
@@ -72,15 +58,6 @@ type Baseline = {
 
 let baseline: Baseline
 let current: AgentSessionWireBuild
-
-function member<T>(module: Record<string, unknown>, name: string): T {
-  const value = module[name]
-  if (value === undefined) {
-    throw new Error(`the baseline release exports no ${name}`)
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a release module is typed unknown; the name is the same export this build calls, and a missing one throws above.
-  return value as T
-}
 
 // v1.4.228 moved `isStructuredTab` to shared code; keeping both locations lets the rolling baseline
 // cross that move and an older pinned ref still load.
@@ -121,11 +98,14 @@ beforeAll(async () => {
   baseline = {
     ref,
     wire,
-    desktopClientCapabilities: member(capabilities, 'DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES'),
-    projectSessionTabAgentStatus: member(projection, 'projectSessionTabAgentStatus'),
-    parseWorkspaceSession: member(schema, 'parseWorkspaceSession'),
-    isStructuredTab: member(tabs, 'isStructuredTab'),
-    isPersistedAgentSessionRecord: member(record, 'isPersistedAgentSessionRecord')
+    desktopClientCapabilities: releaseModuleExport(
+      capabilities,
+      'DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES'
+    ),
+    projectSessionTabAgentStatus: releaseModuleExport(projection, 'projectSessionTabAgentStatus'),
+    parseWorkspaceSession: releaseModuleExport(schema, 'parseWorkspaceSession'),
+    isStructuredTab: releaseModuleExport(tabs, 'isStructuredTab'),
+    isPersistedAgentSessionRecord: releaseModuleExport(record, 'isPersistedAgentSessionRecord')
   }
 }, SUITE_TIMEOUT_MS)
 
@@ -143,8 +123,7 @@ function baselineReadsRecord(record: AgentSessionRecord): boolean {
   )
 }
 
-/** What a desktop too old to render the host's agents advertises: its own list without the
- *  capability, so the day a release ships it this still describes a client that predates it. */
+// Remove the new capability from the checkout’s real list so the client remains effectively old after release.
 function oldDesktopClientCapabilities(): string[] {
   return baseline.desktopClientCapabilities.filter(
     (capability) => capability !== STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
@@ -252,8 +231,7 @@ describe('a structured agent beyond Claude and Codex, across versions', () => {
     'pairs current code with a real published release',
     () => {
       expect(baseline.ref).toMatch(/^v?\d/)
-      // Anti-vacuous: the old desktop still says it reads structured chats, so a withheld tab
-      // below is this capability's gate answering, not the whole surface being refused.
+      // Require old-client structured support so a withheld tab proves the agent capability gate, not refusal of all chats.
       expect(oldDesktopClientCapabilities()).toContain(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
     },
     SUITE_TIMEOUT_MS

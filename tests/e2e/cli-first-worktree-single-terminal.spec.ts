@@ -1,8 +1,4 @@
-/**
- * A terminal the CLI starts in a worktree the window never opened shows as that one tab on the
- * first visit, and again after a relaunch: no empty workspace, no second "Terminal 1" beside it
- * (layout-owner build only; main holds the tab before the window ever draws the workspace).
- */
+// A CLI-created terminal in an unopened workspace must remain one tab on first visit and after relaunch (main-owned layout).
 
 import { existsSync } from 'node:fs'
 import path from 'node:path'
@@ -102,7 +98,6 @@ test('a CLI-started terminal in a never-opened worktree shows as its one tab, be
     const worktreeId = await createWorktree(first.page, `cli-first-${Date.now()}`)
     const cliTabId = await createCliTerminal(first.page, worktreeId)
     const one: Tabs = { window: [cliTabId], storedRows: [cliTabId], storedTabBar: [cliTabId] }
-    // Main holds it before the window has ever drawn the workspace.
     await expect
       .poll(async () => (await readTabs(first.page, worktreeId)).storedRows, { timeout: 15_000 })
       .toEqual([cliTabId])

@@ -9,8 +9,7 @@ export function normalizeDeprecatedCodexHookFeatureFlag(config: string): string 
 
   for (let index = 0; index <= lines.length; index += 1) {
     const line = lines[index]
-    // Why: CRLF configs keep a trailing \r after the split, so header anchors
-    // must tolerate it or Windows-shaped configs skip normalization entirely.
+    // CRLF lines retain a trailing \r after splitting.
     const isHeader = line === undefined || /^[ \t]*\[[^\]]+\][ \t]*(?:#.*)?\r?$/.test(line)
     if (!isHeader) {
       continue
@@ -50,8 +49,7 @@ function normalizeFeatureSectionLines(lines: string[], start: number, end: numbe
   if (!hasHooksKey) {
     const firstDeprecatedIndex = deprecatedIndexes.shift()
     if (firstDeprecatedIndex !== undefined) {
-      // Why: Codex 0.133 warns on the old key. Mirror into Orca's runtime
-      // config using the new key without rewriting the user's real config.
+      // Codex 0.133 deprecated codex_hooks; normalize only the runtime mirror.
       lines[firstDeprecatedIndex] = lines[firstDeprecatedIndex]!.replace(
         /^([ \t]*)codex_hooks([ \t]*=)/,
         '$1hooks$2'

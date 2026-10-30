@@ -4,18 +4,7 @@ vi.mock('@/components/confirmation-dialog-context', () => ({
   useConfirmationDialog: () => vi.fn().mockResolvedValue(false)
 }))
 
-// Regression test for the child-worktrees <-> agent-list expansion coupling:
-// in a worktree card that shows BOTH inline agent rows (with orchestration
-// lineage) AND a "N children" child-worktrees chip, toggling the child-worktrees
-// chip used to reset the agent list's expansion state (it remounts the card).
-// It renders the REAL WorktreeCardAgents (not a mock) inside the REAL
-// WorktreeList so the remount and the durable-expansion fix are exercised
-// end-to-end. The two toggles must stay independent in both directions.
-//
-// NOTE: unlike the sibling lineage test, this file's useVirtualizer mock HONORS
-// the real `getItemKey` (which returns getRenderRowKey(row)). Without that, the
-// parent card's virtual-row key would be a static `row-<index>` and the
-// item<->lineage-group remount would NOT reproduce (false negative).
+// Render real list/agents so changing lineage row keys remounts cards and exercises disclosure persistence independently of child-worktree expansion.
 
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -57,10 +46,7 @@ vi.mock('@/store', () => ({
   )
 }))
 
-// Why: honor the real getItemKey so each virtual row's React key equals
-// getRenderRowKey(row). This is what makes the parent card remount when it
-// moves between a standalone 'item' row (key wt:...) and a 'lineage-group' row
-// (key lineage-group:...) as the child-worktrees group collapses/expands.
+// Honor getItemKey so toggling standalone/lineage-group rows changes React keys and reproduces the card remount.
 vi.mock('@tanstack/react-virtual', () => ({
   defaultRangeExtractor: ({ startIndex, endIndex }: { startIndex: number; endIndex: number }) =>
     Array.from({ length: endIndex - startIndex + 1 }, (_, index) => startIndex + index),
@@ -140,8 +126,6 @@ vi.mock('./CacheTimer', () => ({
   usePromptCacheCountdownStartedAt: () => null,
   usePromptCacheCountdownForPane: () => null
 }))
-
-// NOTE: intentionally NOT mocking ./WorktreeCardAgents — we render the real one.
 
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -270,14 +254,9 @@ function setAgentLineageState(options: {
   }
 
   mockStore.state = {
-    // Reactive-ish toggle: the chip's onClick eventually calls
-    // toggleCollapsedGroup; mutate the live Set so the next manual re-render
-    // (store isn't reactive in this harness) reflects the user's toggle.
     collapsedGroups: options.collapsedGroups ?? new Set<string>(),
     toggleCollapsedGroup: vi.fn((key: string) => {
-      // Why: mirror the real store's IMMUTABLE update — a fresh Set reference is
-      // what makes WorktreeList's `rows` useMemo (keyed on the Set identity)
-      // recompute buildRenderableRows and flip the parent's render-row.
+      // Replace the Set immutably so the list’s identity-keyed memo rebuilds render rows.
       const set = new Set(mockStore.state.collapsedGroups as Set<string>)
       if (set.has(key)) {
         set.delete(key)
@@ -287,7 +266,6 @@ function setAgentLineageState(options: {
       mockStore.state.collapsedGroups = set
     }),
 
-    // ── worktree list plumbing ──
     activeModal: '',
     activeView: 'terminal',
     activeWorktreeId: null,
@@ -363,7 +341,6 @@ function setAgentLineageState(options: {
     worktreeLineageById: { [child.id]: makeLineage(child, parent) },
     worktreesByRepo: { [repo.id]: [parent, child] },
 
-    // ── agent-list specific state (real WorktreeCardAgents deps) ──
     agentActivityDisplayMode: options.agentActivityDisplayMode,
     agentSendPopoverTargetMode: null,
     acknowledgedAgentsByPaneKey: {},
@@ -371,6 +348,8 @@ function setAgentLineageState(options: {
     dismissRetainedAgent: vi.fn(),
     sendPromptToSidebarAgentTarget: vi.fn(),
     tabsByWorktree: { parent: [makeParentTab()] },
+    unifiedTabsByWorktree: {},
+    structuredChatSleptAtByPaneKey: {},
     agentStatusByPaneKey
   }
 }
@@ -390,9 +369,7 @@ async function renderWorktreeList(): Promise<{ container: HTMLDivElement; root: 
   return { container, root }
 }
 
-// Why: the mocked store isn't reactive. Re-render with FRESH ref props so
-// React.memo(WorktreeList) doesn't bail out, letting a collapsedGroups mutation
-// flow into buildRenderableRows (and thus flip the parent's virtual-row key).
+// The mock store is not reactive; fresh ref props bypass memo so changed groups rebuild render keys.
 async function rerender(root: Root): Promise<void> {
   await act(async () => {
     root.render(
@@ -450,8 +427,7 @@ describe('WorktreeCard agent-list <-> child-worktrees expansion coupling', () =>
 
   beforeEach(() => {
     vi.clearAllMocks()
-    // Expansion now persists in a module-level cache that survives remounts, so
-    // it must be reset between cases or one test's collapse leaks into the next.
+    // Clear module-scoped expansion between tests because it intentionally survives remounts.
     clearWorktreeAgentExpansionStateForTests()
   })
 
@@ -471,17 +447,13 @@ describe('WorktreeCard agent-list <-> child-worktrees expansion coupling', () =>
     setAgentLineageState({ agentActivityDisplayMode: 'full' })
     const { container } = await renderWorktreeList()
 
-    // Same-tab lineage children must not inherit the parent's conversation name.
     expect(container.textContent).toContain('Parent Terminal')
     expect(container.textContent).not.toContain('PARENT_AGENT_PROMPT')
     expect(container.textContent).toContain('CHILD_AGENT_PROMPT')
 
-    // Both controls exist and are independent DOM elements.
     expect(childWorktreeChip(container)).not.toBeNull()
     expect(agentChildDisclosure(container)).not.toBeNull()
 
-    // Defaults: child worktrees expanded (chip aria-expanded true) AND child
-    // agents expanded (disclosure aria-expanded true).
     expect(childWorktreeChip(container)!.getAttribute('aria-expanded')).toBe('true')
     expect(agentChildDisclosure(container)!.getAttribute('aria-expanded')).toBe('true')
     expect(childWorktreeCardPresent(container)).toBe(true)
@@ -494,16 +466,12 @@ describe('WorktreeCard agent-list <-> child-worktrees expansion coupling', () =>
     expect(agentChildDisclosure(container)!.getAttribute('aria-expanded')).toBe('true')
     expect(childWorktreeCardPresent(container)).toBe(true)
 
-    // Collapse the child AGENTS via the disclosure chevron.
     await click(agentChildDisclosure(container)!)
 
-    // Agent children now collapsed (local state)...
     expect(agentChildDisclosure(container)!.getAttribute('aria-expanded')).toBe('false')
     expect(container.querySelector('.worktree-agent-lineage-children')).toBeNull()
-    // ...but the child WORKTREES are untouched: chip still expanded, child card present.
     expect(childWorktreeChip(container)!.getAttribute('aria-expanded')).toBe('true')
     expect(childWorktreeCardPresent(container)).toBe(true)
-    // And collapsedGroups was never mutated by an agent toggle.
     expect((mockStore.state.collapsedGroups as Set<string>).size).toBe(0)
   })
 
@@ -511,27 +479,19 @@ describe('WorktreeCard agent-list <-> child-worktrees expansion coupling', () =>
     setAgentLineageState({ agentActivityDisplayMode: 'full' })
     const { container, root } = await renderWorktreeList()
 
-    // Parent starts inside a lineage-group render row (children expanded).
     expect(parentVirtualRowKey(container)).toBe('lineage-group:all:lineage:parent')
 
-    // User collapses the child AGENTS.
     await click(agentChildDisclosure(container)!)
     expect(agentChildDisclosure(container)!.getAttribute('aria-expanded')).toBe('false')
 
-    // User now clicks the CHILD-WORKTREES chip to collapse child worktrees.
     await click(childWorktreeChip(container)!)
     expect(mockStore.state.toggleCollapsedGroup).toHaveBeenCalledWith('lineage:parent')
-    // Store isn't reactive; flush the collapsedGroups change into a re-render.
     await rerender(root)
 
-    // The remount still happens: the parent moved to a standalone 'item' render
-    // row with a DIFFERENT React key, and the child card is gone.
+    // Verify the parent actually remounted under a different row key; otherwise persistence would pass without exercising the bug.
     expect(parentVirtualRowKey(container)).toBe('wt:all:|parent')
     expect(childWorktreeCardPresent(container)).toBe(false)
 
-    // FIXED: the card remounted, but the durable expansion cache means the
-    // child AGENTS the user collapsed stay collapsed — the child-worktrees
-    // toggle no longer bleeds into the agent list.
     expect(agentChildDisclosure(container)!.getAttribute('aria-expanded')).toBe('false')
     expect(container.querySelector('.worktree-agent-lineage-children')).toBeNull()
   })
@@ -540,22 +500,17 @@ describe('WorktreeCard agent-list <-> child-worktrees expansion coupling', () =>
     setAgentLineageState({ agentActivityDisplayMode: 'compact', secondRootAgent: true })
     const { container, root } = await renderWorktreeList()
 
-    // Two root agents => compact summary pill is shown, collapsed by default.
     const summary = compactAgentSummary(container)
     expect(summary).not.toBeNull()
     expect(summary!.getAttribute('aria-expanded')).toBe('false')
 
-    // User expands the compact agent summary.
     await click(summary!)
     expect(compactAgentSummary(container)!.getAttribute('aria-expanded')).toBe('true')
 
-    // User toggles child worktrees.
     await click(childWorktreeChip(container)!)
     expect(mockStore.state.toggleCollapsedGroup).toHaveBeenCalledWith('lineage:parent')
     await rerender(root)
 
-    // FIXED: the card remounts (child card gone), but the expanded "N agents"
-    // summary is restored from the durable cache instead of collapsing.
     expect(childWorktreeCardPresent(container)).toBe(false)
     expect(compactAgentSummary(container)!.getAttribute('aria-expanded')).toBe('true')
   })

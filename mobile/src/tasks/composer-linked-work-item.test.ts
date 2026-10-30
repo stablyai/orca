@@ -232,8 +232,8 @@ describe('resolveComposerBranchPick', () => {
       lastAutoName: '',
       worktreeBranches: ['refs/heads/feature']
     })
-    expect(pick.reuseEligibleBranch).toBeNull()
-    expect(pick.reuseSelectedBranch).toBe(false)
+    expect(pick.reuseEligibleBranch).toBe('feature')
+    expect(pick.reuseSelectedBranch).toBe(true)
     expect(pick.base.branchNameOverride).toBeUndefined()
   })
 })

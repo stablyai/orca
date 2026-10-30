@@ -47,7 +47,6 @@ export type OrcaProfileApi = {
   onSignInProgressChanged: (
     callback: (progress: OrcaCloudSignInProgress | null) => void
   ) => () => void
-  /** Stops waiting on the browser; the sign-in resolves as cancelled. */
   cancelSignIn: () => Promise<void>
   refreshAuth: () => Promise<RefreshCurrentOrcaProfileAuthResult>
   signOutCurrent: () => Promise<SignOutCurrentOrcaProfileResult>

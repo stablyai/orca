@@ -25,7 +25,6 @@ function fixture(): string {
 
 const NODE_SHA = 'e4b5a3af0e05c75de2eae013904145f40fe7fc2a6e6f17510128bf45cca4e79b'
 
-/** A slot beside the shared `runtimes/` dir, as installed under `~/.orca-remote`. */
 function nodeSlot(options: { marker?: string; runtime?: boolean } = {}): string {
   const root = fixture()
   const slot = join(root, 'orcad-0.1.0-abcdef')
@@ -39,7 +38,7 @@ function nodeSlot(options: { marker?: string; runtime?: boolean } = {}): string 
   return slot
 }
 
-/** Frozen copy of the Bun-era selector that shipped clients still run (design D7.1 R5). */
+/** Frozen Bun-era selector still used by shipped clients. */
 function bunEraSelectorCommand(directory: string, legacyNodePath: string): string {
   const runtime = quotePosixShell(join(directory, 'bun-runtime'))
   const target = quotePosixShell(join(directory, '.build-target'))
@@ -151,7 +150,7 @@ describe.skipIf(process.platform === 'win32')('POSIX slot runtime selection', ()
       program: '/bin/sh',
       args: ['-c', stopOrcadCommand(host, slot, { waitSeconds: 1, nodePath: '/missing-host-node' })]
     })
-    // No readiness file: the pinned runtime ran and reported no PID, so the verdict is unverifiable.
+    // Successful execution without a corroborating readiness PID remains unverifiable.
     expect(result).toMatchObject({ code: 0, stdout: 'UNKNOWN\n' })
   })
 })

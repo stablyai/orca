@@ -1,13 +1,11 @@
 import { readFile } from 'node:fs/promises'
 import { runProcess } from '@orca/process-host'
+import { runPsInProcess } from '../../shared/libproc-process-table'
 import { parseProcessTable, type ProcessTableRow } from '../pty-process-table-parser'
 
 const PROCESS_ROW_TIMEOUT_MS = 2_000
 
-/**
- * One process's parent, group and start marker. `clock-tick` starts come from Linux /proc, where a
- * pid reused within one tick would need the whole pid space to cycle; `second` starts are ps lstart.
- */
+/** Linux /proc starts use clock ticks; ps lstart requires second-boundary PID-reuse checks. */
 export type ProviderProcessRow = Pick<ProcessTableRow, 'pid' | 'ppid' | 'pgid' | 'startedAt'> & {
   startResolution: 'clock-tick' | 'second'
 }
@@ -46,14 +44,22 @@ async function readLinuxProcStatRow(pid: number): Promise<ProcessRowRead> {
 
 async function readPsProcessRow(pid: number): Promise<ProcessRowRead> {
   try {
-    const result = await runProcess({
-      program: 'ps',
-      args: ['-o', 'pid=,ppid=,pgid=,lstart=', '-p', String(pid)],
-      // The same locale on every read, so two reads of one process compare equal.
-      env: { ...process.env, LANG: 'C', LC_ALL: 'C' },
-      timeoutMs: PROCESS_ROW_TIMEOUT_MS,
-      maxOutputBytes: 4096
-    })
+    const args = ['-o', 'pid=,ppid=,pgid=,lstart=', '-p', String(pid)]
+    // Stable locale makes repeated start markers comparable.
+    const env = { ...process.env, LANG: 'C', LC_ALL: 'C' }
+    const result =
+      (await runPsInProcess(args, {
+        env,
+        timeoutMs: PROCESS_ROW_TIMEOUT_MS,
+        maxOutputBytes: 4096
+      })) ??
+      (await runProcess({
+        program: 'ps',
+        args,
+        env,
+        timeoutMs: PROCESS_ROW_TIMEOUT_MS,
+        maxOutputBytes: 4096
+      }))
     const row = parseProcessTable(result.stdout).find((entry) => entry.pid === pid)
     if (row) {
       return { ...row, startResolution: 'second' }

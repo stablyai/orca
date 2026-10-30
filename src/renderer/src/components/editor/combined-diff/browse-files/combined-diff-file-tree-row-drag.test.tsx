@@ -69,8 +69,7 @@ function dragRow(container: HTMLDivElement): DataTransfer {
 }
 
 describe('combined diff rows stamp their drag source', () => {
-  // The tab's entry list is a snapshot, but the paths it drags belong to the
-  // workspace as it is owned now — the same answer the source-control rows give.
+  // Entry lists are snapshots; drag paths must use the workspace’s live owner, matching source-control rows.
   it('stamps the live owner of the workspace the diff belongs to', () => {
     testState.executionHostId = 'runtime:env-1'
     expect(readWorkspaceFileDragSource(dragRow(renderRow('wt-1')))).toEqual({

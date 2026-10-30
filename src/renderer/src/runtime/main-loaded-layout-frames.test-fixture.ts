@@ -1,5 +1,4 @@
-// Main's loaded layout as the frames its stream sends: what main publishes for a stored partition,
-// so a switch-on test feeds the window the layout main holds instead of the window's own restore.
+// Feed switch-on tests main’s loaded partition frames instead of the window’s own restore.
 
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'

@@ -56,40 +56,7 @@
         "$rpc": "null"
       }
     },
-    "1c6a13b5a4b5": {
-      "actionError": "",
-      "busyAction": {
-        "$rpc": "null"
-      },
-      "screenState": {
-        "branchCompare": {
-          "$rpc": "null"
-        },
-        "comments": [
-          {
-            "body": "needs a test",
-            "createdAt": 0,
-            "filePath": "src/app.ts",
-            "id": "note-1",
-            "lineNumber": 4,
-            "side": "modified",
-            "worktreeId": "workspace-1"
-          }
-        ],
-        "kind": "ready",
-        "reviewState": {
-          "files": {},
-          "version": 1
-        },
-        "status": {
-          "entries": []
-        }
-      },
-      "sendSheet": {
-        "$rpc": "null"
-      }
-    },
-    "22df2e34a46c": {
+    "06005dec67d2": {
       "name": "worktree.set#1",
       "ordinal": 1,
       "args": [
@@ -101,6 +68,17 @@
           "name": "params",
           "value": {
             "diffComments": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "side": "modified",
+                "worktreeId": "workspace-1"
+              }
+            ],
+            "diffCommentsBase": [
               {
                 "body": "needs a test",
                 "createdAt": 0,
@@ -152,17 +130,7 @@
         }
       }
     },
-    "32a7c0ae7918": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "outer refused",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "44fe127e6d75": {
+    "078c232ef420": {
       "name": "worktree.set#1",
       "ordinal": 1,
       "args": [
@@ -174,6 +142,17 @@
           "name": "params",
           "value": {
             "diffComments": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "side": "modified",
+                "worktreeId": "workspace-1"
+              }
+            ],
+            "diffCommentsBase": [
               {
                 "body": "needs a test",
                 "createdAt": 0,
@@ -216,20 +195,17 @@
         }
       ],
       "settlement": {
-        "status": "fulfilled",
+        "status": "rejected",
         "startedAt": 0,
         "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": ""
-          },
-          "id": "frame-1",
-          "ok": false
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
         }
       }
     },
-    "4701e4552237": {
+    "1a94a0989e43": {
       "name": "worktree.set#1",
       "ordinal": 1,
       "args": [
@@ -251,305 +227,7 @@
                 "worktreeId": "workspace-1"
               }
             ],
-            "mobileDiffReview": {
-              "completedAt": 1767225600000,
-              "files": {
-                "unstaged:src/app.ts": {
-                  "filePath": "src/app.ts",
-                  "key": "unstaged:src/app.ts",
-                  "lastOpenedAt": {
-                    "$rpc": "undefined"
-                  },
-                  "lastSeenDiffIdentity": "identity-1",
-                  "oldPath": {
-                    "$rpc": "undefined"
-                  },
-                  "reviewDiffIdentity": "identity-1",
-                  "reviewedAt": 1767225600000,
-                  "scope": "unstaged"
-                }
-              },
-              "updatedAt": 1767225600000,
-              "version": 1
-            },
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "refused"
-          }
-        }
-      }
-    },
-    "63639602640e": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "Failed to save review state",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "73f7bfbf2ed4": {
-      "actionError": "Unknown method",
-      "busyAction": {
-        "$rpc": "null"
-      },
-      "screenState": {
-        "branchCompare": {
-          "$rpc": "null"
-        },
-        "comments": [
-          {
-            "body": "needs a test",
-            "createdAt": 0,
-            "filePath": "src/app.ts",
-            "id": "note-1",
-            "lineNumber": 4,
-            "side": "modified",
-            "worktreeId": "workspace-1"
-          }
-        ],
-        "kind": "ready",
-        "reviewState": {
-          "files": {},
-          "version": 1
-        },
-        "status": {
-          "entries": []
-        }
-      },
-      "sendSheet": {
-        "$rpc": "null"
-      }
-    },
-    "86fb9ca891aa": {
-      "name": "worktree.set#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.set"
-        },
-        {
-          "name": "params",
-          "value": {
-            "diffComments": [
-              {
-                "body": "needs a test",
-                "createdAt": 0,
-                "filePath": "src/app.ts",
-                "id": "note-1",
-                "lineNumber": 4,
-                "side": "modified",
-                "worktreeId": "workspace-1"
-              }
-            ],
-            "mobileDiffReview": {
-              "completedAt": 1767225600000,
-              "files": {
-                "unstaged:src/app.ts": {
-                  "filePath": "src/app.ts",
-                  "key": "unstaged:src/app.ts",
-                  "lastOpenedAt": {
-                    "$rpc": "undefined"
-                  },
-                  "lastSeenDiffIdentity": "identity-1",
-                  "oldPath": {
-                    "$rpc": "undefined"
-                  },
-                  "reviewDiffIdentity": "identity-1",
-                  "reviewedAt": 1767225600000,
-                  "scope": "unstaged"
-                }
-              },
-              "updatedAt": 1767225600000,
-              "version": 1
-            },
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "9e0132f8d584": {
-      "actionError": "outer refused",
-      "busyAction": {
-        "$rpc": "null"
-      },
-      "screenState": {
-        "branchCompare": {
-          "$rpc": "null"
-        },
-        "comments": [
-          {
-            "body": "needs a test",
-            "createdAt": 0,
-            "filePath": "src/app.ts",
-            "id": "note-1",
-            "lineNumber": 4,
-            "side": "modified",
-            "worktreeId": "workspace-1"
-          }
-        ],
-        "kind": "ready",
-        "reviewState": {
-          "files": {},
-          "version": 1
-        },
-        "status": {
-          "entries": []
-        }
-      },
-      "sendSheet": {
-        "$rpc": "null"
-      }
-    },
-    "a947768bc0ed": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "transport failure",
-        "isRpcDeliveryUnknown": true
-      }
-    },
-    "b19741dc6694": {
-      "name": "worktree.set#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.set"
-        },
-        {
-          "name": "params",
-          "value": {
-            "diffComments": [
-              {
-                "body": "needs a test",
-                "createdAt": 0,
-                "filePath": "src/app.ts",
-                "id": "note-1",
-                "lineNumber": 4,
-                "side": "modified",
-                "worktreeId": "workspace-1"
-              }
-            ],
-            "mobileDiffReview": {
-              "completedAt": 1767225600000,
-              "files": {
-                "unstaged:src/app.ts": {
-                  "filePath": "src/app.ts",
-                  "key": "unstaged:src/app.ts",
-                  "lastOpenedAt": {
-                    "$rpc": "undefined"
-                  },
-                  "lastSeenDiffIdentity": "identity-1",
-                  "oldPath": {
-                    "$rpc": "undefined"
-                  },
-                  "reviewDiffIdentity": "identity-1",
-                  "reviewedAt": 1767225600000,
-                  "scope": "unstaged"
-                }
-              },
-              "updatedAt": 1767225600000,
-              "version": 1
-            },
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "updated": true
-          }
-        }
-      }
-    },
-    "b948e8307e81": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "Unknown method",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "bc47263d2197": {
-      "name": "worktree.set#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:workspace-1\",\"diffComments\":[{\"side\":\"modified\",\"id\":\"note-1\",\"worktreeId\":\"workspace-1\",\"filePath\":\"src/app.ts\",\"lineNumber\":4,\"body\":\"needs a test\",\"createdAt\":0}],\"mobileDiffReview\":{\"version\":1,\"files\":{\"unstaged:src/app.ts\":{\"key\":\"unstaged:src/app.ts\",\"filePath\":\"src/app.ts\",\"scope\":\"unstaged\",\"lastSeenDiffIdentity\":\"identity-1\",\"reviewedAt\":1767225600000,\"reviewDiffIdentity\":\"identity-1\"}},\"updatedAt\":1767225600000,\"completedAt\":1767225600000}}}"
-    },
-    "c7584e82c72f": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "",
-        "isRpcDeliveryUnknown": true
-      }
-    },
-    "d7908c1db91a": {
-      "name": "worktree.set#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.set"
-        },
-        {
-          "name": "params",
-          "value": {
-            "diffComments": [
+            "diffCommentsBase": [
               {
                 "body": "needs a test",
                 "createdAt": 0,
@@ -605,8 +283,8 @@
         }
       }
     },
-    "d98361dedc14": {
-      "actionError": "Failed to save review state",
+    "1c6a13b5a4b5": {
+      "actionError": "",
       "busyAction": {
         "$rpc": "null"
       },
@@ -638,7 +316,17 @@
         "$rpc": "null"
       }
     },
-    "e689b4c26c6e": {
+    "32a7c0ae7918": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "outer refused",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "387918d6d66f": {
       "name": "worktree.set#1",
       "ordinal": 1,
       "args": [
@@ -660,127 +348,7 @@
                 "worktreeId": "workspace-1"
               }
             ],
-            "mobileDiffReview": {
-              "completedAt": 1767225600000,
-              "files": {
-                "unstaged:src/app.ts": {
-                  "filePath": "src/app.ts",
-                  "key": "unstaged:src/app.ts",
-                  "lastOpenedAt": {
-                    "$rpc": "undefined"
-                  },
-                  "lastSeenDiffIdentity": "identity-1",
-                  "oldPath": {
-                    "$rpc": "undefined"
-                  },
-                  "reviewDiffIdentity": "identity-1",
-                  "reviewedAt": 1767225600000,
-                  "scope": "unstaged"
-                }
-              },
-              "updatedAt": 1767225600000,
-              "version": 1
-            },
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "e779df686927": {
-      "name": "worktree.set#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.set"
-        },
-        {
-          "name": "params",
-          "value": {
-            "diffComments": [
-              {
-                "body": "needs a test",
-                "createdAt": 0,
-                "filePath": "src/app.ts",
-                "id": "note-1",
-                "lineNumber": 4,
-                "side": "modified",
-                "worktreeId": "workspace-1"
-              }
-            ],
-            "mobileDiffReview": {
-              "completedAt": 1767225600000,
-              "files": {
-                "unstaged:src/app.ts": {
-                  "filePath": "src/app.ts",
-                  "key": "unstaged:src/app.ts",
-                  "lastOpenedAt": {
-                    "$rpc": "undefined"
-                  },
-                  "lastSeenDiffIdentity": "identity-1",
-                  "oldPath": {
-                    "$rpc": "undefined"
-                  },
-                  "reviewDiffIdentity": "identity-1",
-                  "reviewedAt": 1767225600000,
-                  "scope": "unstaged"
-                }
-              },
-              "updatedAt": 1767225600000,
-              "version": 1
-            },
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "e7feb1eb0a9a": {
-      "name": "worktree.set#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.set"
-        },
-        {
-          "name": "params",
-          "value": {
-            "diffComments": [
+            "diffCommentsBase": [
               {
                 "body": "needs a test",
                 "createdAt": 0,
@@ -838,15 +406,7 @@
         }
       }
     },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "f19c54834931": {
+    "45f8c93797f0": {
       "name": "worktree.set#1",
       "ordinal": 1,
       "args": [
@@ -858,6 +418,143 @@
           "name": "params",
           "value": {
             "diffComments": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "side": "modified",
+                "worktreeId": "workspace-1"
+              }
+            ],
+            "diffCommentsBase": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "side": "modified",
+                "worktreeId": "workspace-1"
+              }
+            ],
+            "mobileDiffReview": {
+              "completedAt": 1767225600000,
+              "files": {
+                "unstaged:src/app.ts": {
+                  "filePath": "src/app.ts",
+                  "key": "unstaged:src/app.ts",
+                  "lastOpenedAt": {
+                    "$rpc": "undefined"
+                  },
+                  "lastSeenDiffIdentity": "identity-1",
+                  "oldPath": {
+                    "$rpc": "undefined"
+                  },
+                  "reviewDiffIdentity": "identity-1",
+                  "reviewedAt": 1767225600000,
+                  "scope": "unstaged"
+                }
+              },
+              "updatedAt": 1767225600000,
+              "version": 1
+            },
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "63639602640e": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Failed to save review state",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "73f7bfbf2ed4": {
+      "actionError": "Unknown method",
+      "busyAction": {
+        "$rpc": "null"
+      },
+      "screenState": {
+        "branchCompare": {
+          "$rpc": "null"
+        },
+        "comments": [
+          {
+            "body": "needs a test",
+            "createdAt": 0,
+            "filePath": "src/app.ts",
+            "id": "note-1",
+            "lineNumber": 4,
+            "side": "modified",
+            "worktreeId": "workspace-1"
+          }
+        ],
+        "kind": "ready",
+        "reviewState": {
+          "files": {},
+          "version": 1
+        },
+        "status": {
+          "entries": []
+        }
+      },
+      "sendSheet": {
+        "$rpc": "null"
+      }
+    },
+    "81c9edeaad86": {
+      "name": "worktree.set#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:workspace-1\",\"diffComments\":[{\"side\":\"modified\",\"id\":\"note-1\",\"worktreeId\":\"workspace-1\",\"filePath\":\"src/app.ts\",\"lineNumber\":4,\"body\":\"needs a test\",\"createdAt\":0}],\"diffCommentsBase\":[{\"side\":\"modified\",\"id\":\"note-1\",\"worktreeId\":\"workspace-1\",\"filePath\":\"src/app.ts\",\"lineNumber\":4,\"body\":\"needs a test\",\"createdAt\":0}],\"mobileDiffReview\":{\"version\":1,\"files\":{\"unstaged:src/app.ts\":{\"key\":\"unstaged:src/app.ts\",\"filePath\":\"src/app.ts\",\"scope\":\"unstaged\",\"lastSeenDiffIdentity\":\"identity-1\",\"reviewedAt\":1767225600000,\"reviewDiffIdentity\":\"identity-1\"}},\"updatedAt\":1767225600000,\"completedAt\":1767225600000}}}"
+    },
+    "9763741966f9": {
+      "name": "worktree.set#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "diffComments": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "side": "modified",
+                "worktreeId": "workspace-1"
+              }
+            ],
+            "diffCommentsBase": [
               {
                 "body": "needs a test",
                 "createdAt": 0,
@@ -913,7 +610,50 @@
         }
       }
     },
-    "f2507f6faff8": {
+    "9e0132f8d584": {
+      "actionError": "outer refused",
+      "busyAction": {
+        "$rpc": "null"
+      },
+      "screenState": {
+        "branchCompare": {
+          "$rpc": "null"
+        },
+        "comments": [
+          {
+            "body": "needs a test",
+            "createdAt": 0,
+            "filePath": "src/app.ts",
+            "id": "note-1",
+            "lineNumber": 4,
+            "side": "modified",
+            "worktreeId": "workspace-1"
+          }
+        ],
+        "kind": "ready",
+        "reviewState": {
+          "files": {},
+          "version": 1
+        },
+        "status": {
+          "entries": []
+        }
+      },
+      "sendSheet": {
+        "$rpc": "null"
+      }
+    },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "aa4104b74da8": {
       "name": "worktree.set#1",
       "ordinal": 1,
       "args": [
@@ -925,6 +665,17 @@
           "name": "params",
           "value": {
             "diffComments": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "side": "modified",
+                "worktreeId": "workspace-1"
+              }
+            ],
+            "diffCommentsBase": [
               {
                 "body": "needs a test",
                 "createdAt": 0,
@@ -972,8 +723,378 @@
         "settledAt": 0,
         "error": {
           "category": "Error",
-          "message": "",
+          "message": "transport failure",
           "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "b948e8307e81": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Unknown method",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "c7584e82c72f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "d98361dedc14": {
+      "actionError": "Failed to save review state",
+      "busyAction": {
+        "$rpc": "null"
+      },
+      "screenState": {
+        "branchCompare": {
+          "$rpc": "null"
+        },
+        "comments": [
+          {
+            "body": "needs a test",
+            "createdAt": 0,
+            "filePath": "src/app.ts",
+            "id": "note-1",
+            "lineNumber": 4,
+            "side": "modified",
+            "worktreeId": "workspace-1"
+          }
+        ],
+        "kind": "ready",
+        "reviewState": {
+          "files": {},
+          "version": 1
+        },
+        "status": {
+          "entries": []
+        }
+      },
+      "sendSheet": {
+        "$rpc": "null"
+      }
+    },
+    "df1198f920a7": {
+      "name": "worktree.set#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "diffComments": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "side": "modified",
+                "worktreeId": "workspace-1"
+              }
+            ],
+            "diffCommentsBase": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "side": "modified",
+                "worktreeId": "workspace-1"
+              }
+            ],
+            "mobileDiffReview": {
+              "completedAt": 1767225600000,
+              "files": {
+                "unstaged:src/app.ts": {
+                  "filePath": "src/app.ts",
+                  "key": "unstaged:src/app.ts",
+                  "lastOpenedAt": {
+                    "$rpc": "undefined"
+                  },
+                  "lastSeenDiffIdentity": "identity-1",
+                  "oldPath": {
+                    "$rpc": "undefined"
+                  },
+                  "reviewDiffIdentity": "identity-1",
+                  "reviewedAt": 1767225600000,
+                  "scope": "unstaged"
+                }
+              },
+              "updatedAt": 1767225600000,
+              "version": 1
+            },
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "df876725e770": {
+      "name": "worktree.set#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "diffComments": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "side": "modified",
+                "worktreeId": "workspace-1"
+              }
+            ],
+            "diffCommentsBase": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "side": "modified",
+                "worktreeId": "workspace-1"
+              }
+            ],
+            "mobileDiffReview": {
+              "completedAt": 1767225600000,
+              "files": {
+                "unstaged:src/app.ts": {
+                  "filePath": "src/app.ts",
+                  "key": "unstaged:src/app.ts",
+                  "lastOpenedAt": {
+                    "$rpc": "undefined"
+                  },
+                  "lastSeenDiffIdentity": "identity-1",
+                  "oldPath": {
+                    "$rpc": "undefined"
+                  },
+                  "reviewDiffIdentity": "identity-1",
+                  "reviewedAt": 1767225600000,
+                  "scope": "unstaged"
+                }
+              },
+              "updatedAt": 1767225600000,
+              "version": 1
+            },
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "e0def05e4021": {
+      "name": "worktree.set#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "diffComments": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "side": "modified",
+                "worktreeId": "workspace-1"
+              }
+            ],
+            "diffCommentsBase": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "side": "modified",
+                "worktreeId": "workspace-1"
+              }
+            ],
+            "mobileDiffReview": {
+              "completedAt": 1767225600000,
+              "files": {
+                "unstaged:src/app.ts": {
+                  "filePath": "src/app.ts",
+                  "key": "unstaged:src/app.ts",
+                  "lastOpenedAt": {
+                    "$rpc": "undefined"
+                  },
+                  "lastSeenDiffIdentity": "identity-1",
+                  "oldPath": {
+                    "$rpc": "undefined"
+                  },
+                  "reviewDiffIdentity": "identity-1",
+                  "reviewedAt": 1767225600000,
+                  "scope": "unstaged"
+                }
+              },
+              "updatedAt": 1767225600000,
+              "version": 1
+            },
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ebfe5f82347b": {
+      "name": "worktree.set#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "diffComments": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "side": "modified",
+                "worktreeId": "workspace-1"
+              }
+            ],
+            "diffCommentsBase": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "side": "modified",
+                "worktreeId": "workspace-1"
+              }
+            ],
+            "mobileDiffReview": {
+              "completedAt": 1767225600000,
+              "files": {
+                "unstaged:src/app.ts": {
+                  "filePath": "src/app.ts",
+                  "key": "unstaged:src/app.ts",
+                  "lastOpenedAt": {
+                    "$rpc": "undefined"
+                  },
+                  "lastSeenDiffIdentity": "identity-1",
+                  "oldPath": {
+                    "$rpc": "undefined"
+                  },
+                  "reviewDiffIdentity": "identity-1",
+                  "reviewedAt": 1767225600000,
+                  "scope": "unstaged"
+                }
+              },
+              "updatedAt": 1767225600000,
+              "version": 1
+            },
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "updated": true
+          }
         }
       }
     },
@@ -1017,8 +1138,8 @@
       {
         "id": "review-mark-reviewed-persists.normal:persisted",
         "observation": {
-          "sender": ["b19741dc6694"],
-          "payloads": ["bc47263d2197"],
+          "sender": ["ebfe5f82347b"],
+          "payloads": ["81c9edeaad86"],
           "settlements": {
             "mark-reviewed": "eb79a9b3682a"
           },
@@ -1029,8 +1150,8 @@
       {
         "id": "review-mark-reviewed-persists.result-absent:persisted",
         "observation": {
-          "sender": ["22df2e34a46c"],
-          "payloads": ["bc47263d2197"],
+          "sender": ["06005dec67d2"],
+          "payloads": ["81c9edeaad86"],
           "settlements": {
             "mark-reviewed": "eb79a9b3682a"
           },
@@ -1041,8 +1162,8 @@
       {
         "id": "review-mark-reviewed-persists.result-null:persisted",
         "observation": {
-          "sender": ["86fb9ca891aa"],
-          "payloads": ["bc47263d2197"],
+          "sender": ["e0def05e4021"],
+          "payloads": ["81c9edeaad86"],
           "settlements": {
             "mark-reviewed": "eb79a9b3682a"
           },
@@ -1053,8 +1174,8 @@
       {
         "id": "review-mark-reviewed-persists.inner-ok-missing:persisted",
         "observation": {
-          "sender": ["4701e4552237"],
-          "payloads": ["bc47263d2197"],
+          "sender": ["df1198f920a7"],
+          "payloads": ["81c9edeaad86"],
           "settlements": {
             "mark-reviewed": "eb79a9b3682a"
           },
@@ -1065,8 +1186,8 @@
       {
         "id": "review-mark-reviewed-persists.inner-false-string-error:persisted",
         "observation": {
-          "sender": ["d7908c1db91a"],
-          "payloads": ["bc47263d2197"],
+          "sender": ["1a94a0989e43"],
+          "payloads": ["81c9edeaad86"],
           "settlements": {
             "mark-reviewed": "eb79a9b3682a"
           },
@@ -1077,8 +1198,8 @@
       {
         "id": "review-mark-reviewed-persists.inner-false-object-error:persisted",
         "observation": {
-          "sender": ["e7feb1eb0a9a"],
-          "payloads": ["bc47263d2197"],
+          "sender": ["387918d6d66f"],
+          "payloads": ["81c9edeaad86"],
           "settlements": {
             "mark-reviewed": "eb79a9b3682a"
           },
@@ -1089,8 +1210,8 @@
       {
         "id": "review-mark-reviewed-persists.outer-refused:persisted",
         "observation": {
-          "sender": ["f19c54834931"],
-          "payloads": ["bc47263d2197"],
+          "sender": ["9763741966f9"],
+          "payloads": ["81c9edeaad86"],
           "settlements": {
             "mark-reviewed": "32a7c0ae7918"
           },
@@ -1101,8 +1222,8 @@
       {
         "id": "review-mark-reviewed-persists.outer-refused-no-message:persisted",
         "observation": {
-          "sender": ["44fe127e6d75"],
-          "payloads": ["bc47263d2197"],
+          "sender": ["45f8c93797f0"],
+          "payloads": ["81c9edeaad86"],
           "settlements": {
             "mark-reviewed": "63639602640e"
           },
@@ -1113,8 +1234,8 @@
       {
         "id": "review-mark-reviewed-persists.method-not-found:persisted",
         "observation": {
-          "sender": ["e689b4c26c6e"],
-          "payloads": ["bc47263d2197"],
+          "sender": ["df876725e770"],
+          "payloads": ["81c9edeaad86"],
           "settlements": {
             "mark-reviewed": "b948e8307e81"
           },
@@ -1125,8 +1246,8 @@
       {
         "id": "review-mark-reviewed-persists.transport-rejection:persisted",
         "observation": {
-          "sender": ["e779df686927"],
-          "payloads": ["bc47263d2197"],
+          "sender": ["aa4104b74da8"],
+          "payloads": ["81c9edeaad86"],
           "settlements": {
             "mark-reviewed": "a947768bc0ed"
           },
@@ -1137,8 +1258,8 @@
       {
         "id": "review-mark-reviewed-persists.transport-rejection-no-message:persisted",
         "observation": {
-          "sender": ["f2507f6faff8"],
-          "payloads": ["bc47263d2197"],
+          "sender": ["078c232ef420"],
+          "payloads": ["81c9edeaad86"],
           "settlements": {
             "mark-reviewed": "c7584e82c72f"
           },

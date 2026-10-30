@@ -1,30 +1,21 @@
-/**
- * The Codex hook command every Orca build writes, frozen per form.
- *
- * Why frozen: ~/.codex is shared by every Orca instance and build on this
- * HOME. Bytes that depend on the build make two builds rewrite each other's
- * entry, with a Codex trust session each time. A form changes only with a
- * bump here, and a build never rewrites an entry of a higher form.
- */
+// Shared HOME builds must freeze command bytes per form to avoid rewrite/trust loops.
+// Bump the form to change bytes; preserve entries from higher forms.
 export const CODEX_HOOK_COMMAND_FORM = 1
 
 const FORM_MARKER = /orca-agent-hook-form=(\d+)/
 
-// Why literals, not the shared hook constants: a change there must not move these bytes.
+// Keep literals independent of shared hook constants to freeze these bytes.
 const POSIX_STDIN_DRAIN = '{ command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :'
 
-// Why: a path of only these runs bare under every Windows host Codex uses
-// (PowerShell 7 or 5.1 from the turn's shell, else %COMSPEC% /C); any other
-// character takes the cmd spelling. Neither spelling can carry a marker, so
-// later forms change the script, never these bytes.
+// These paths run bare under PowerShell 7/5.1 and %COMSPEC% /C; other characters need cmd quoting.
+// Neither Windows spelling carries a form marker: later forms must change the script, not these bytes.
 const WINDOWS_BARE_PATH = /^[A-Za-z0-9_.:/~-]+$/
 
 function buildPosixCommand(): string {
   const rootScript = '"${ORCA_AGENT_HOOK_ROOT-}/agent-hooks/codex-hook.sh"'
   const sharedScript = '"${HOME-}/.orca/agent-hooks/codex-hook.sh"'
-  // Why the root branch: dormant until Orca sets ORCA_AGENT_HOOK_ROOT, so the
-  // bytes need not change when it does. The shared branch needs a hook port,
-  // so a pane with hooks off and every shell outside Orca only drain stdin.
+  // The root branch stays dormant until Orca sets its root; shared hooks require a pane and port.
+  // Outside Orca or with hooks off, only drain stdin, preserving the frozen command bytes.
   return [
     `: orca-agent-hook-form=${CODEX_HOOK_COMMAND_FORM};`,
     `if [ -n "\${ORCA_PANE_KEY-}" ] && [ -n "\${ORCA_AGENT_HOOK_ROOT-}" ] && [ -f ${rootScript} ]; then /bin/sh ${rootScript} || :;`,
@@ -33,12 +24,11 @@ function buildPosixCommand(): string {
   ].join(' ')
 }
 
-// Why an absolute, unquoted, backslashed cmd.exe: PowerShell resolves a bare `cmd`
-// through PATH (a cmd.bat earlier on PATH runs instead), reads a quoted first
-// token as an expression, and cmd.exe parses a forward-slash argv0 as switches.
+// Absolute cmd.exe avoids PATH hijacking; PowerShell needs an unquoted command token,
+// and cmd.exe needs backslashes to avoid parsing argv0 as switches.
 const WINDOWS_DIRECTORY = /^[A-Za-z]:(?:\/[A-Za-z0-9_.~-]+)+$/
 const COMSPEC_IN_SYSTEM32 = /^(.+)\/system32\/cmd\.exe$/i
-// Why: still absolute when neither variable names a directory it can spell unquoted.
+// Keep cmd.exe absolute when environment paths cannot be spelled unquoted.
 const DEFAULT_WINDOWS_DIRECTORY = 'C:/Windows'
 
 type WindowsDirectoryEnv = Readonly<Record<string, string | undefined>>
@@ -61,17 +51,14 @@ function buildWindowsCommand(scriptPath: string, env: WindowsDirectoryEnv): stri
   if (WINDOWS_BARE_PATH.test(forwardSlashPath)) {
     return forwardSlashPath
   }
-  // Why: `--%` passes the rest to cmd.exe verbatim under PowerShell, /v:off keeps
-  // a registry-enabled delayed expansion from expanding a `!NAME!` pair in the path,
-  // and the `@` stops cmd.exe stripping the quotes around a path holding & or ^.
+  // PowerShell's --% passes arguments verbatim; /v:off prevents delayed !NAME! expansion.
+  // @ prevents cmd.exe stripping path quotes around & or ^.
   const cmdExe = `${resolveWindowsDirectory(env)}/System32/cmd.exe`.replaceAll('/', '\\')
   return `${cmdExe} --% /d /v:off /c @"${forwardSlashPath}"`
 }
 
 /**
- * `scriptPath` is the shared script at `~/.orca/agent-hooks`; only Windows forms
- * embed it. On Windows the bytes depend only on it and on %SystemRoot% (else
- * %ComSpec%), both fixed per machine.
+ * Only Windows embeds scriptPath (~/.orca/agent-hooks); bytes depend on it and the machine's Windows directory.
  */
 export function buildCodexHookCommand(
   scriptPath: string,
@@ -81,10 +68,7 @@ export function buildCodexHookCommand(
   return platform === 'win32' ? buildWindowsCommand(scriptPath, env) : buildPosixCommand()
 }
 
-/**
- * The form of an Orca-shaped Codex hook command. 0 is any form from before the
- * frozen command, including every retired one.
- */
+/** Unmarked commands from before the frozen form return 0. */
 export function readCodexHookCommandForm(command: string, currentCommand: string): number {
   if (command === currentCommand) {
     return CODEX_HOOK_COMMAND_FORM

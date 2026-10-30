@@ -5,7 +5,10 @@ import type {
   AgentJournalQuestion,
   AgentJournalQuestionItem
 } from '../../shared/agent-session-journal-types'
-import { formatToolInput, truncateToolDetail } from '../../shared/native-chat-tool-summary'
+import {
+  formatToolInput,
+  truncateToolDetail
+} from '../../shared/native-chat/tools/native-chat-tool-summary'
 import { isPlanApprovalSubject } from '../../shared/agent-session-approval-subject'
 import { boundJournalPromptBody } from '../native-chat/agent-session-journal/journal-prompt-body-bounds'
 import { claudeRecord, claudeText } from './claude-structured-item-translation'

@@ -1,16 +1,13 @@
-// The frame shapes the fold-steer captures are rebuilt from, keeping only the
-// fields the dispatch/turn path reads.
+// Rebuild fold-steer captures with only dispatch and turn fields.
 
 export type CapturedFoldFrame = { at: number; frame: Record<string, unknown> }
 
 export type FoldCaptureIds = {
-  /** The provider session every frame names. */
   sessionId: string
-  /** Client uuid of the turn-opening send; the CLI adopts it on the replay. */
+  /** Turn-opening client UUID adopted by the replay. */
   first: string
-  /** Client uuid of the mid-turn send. */
   steer: string
-  /** Client uuid of the second mid-turn send (two-steers only). */
+  /** Present only for two-steer captures. */
   secondSteer?: string
 }
 
@@ -48,7 +45,6 @@ export function assistant(
       parent_tool_use_id: null,
       uuid,
       message: { id: `msg-${uuid}`, role: 'assistant', content },
-      // Only the reply that directly answers a send carries the correlation.
       ...(userMessageUuids && userMessageUuids.length > 0
         ? { user_message_uuid: userMessageUuids[0], user_message_uuids: userMessageUuids }
         : {})
@@ -153,9 +149,7 @@ export function sessionIdle(at: number, sessionId: string): CapturedFoldFrame {
   }
 }
 
-/** Root `system/init`: the CLI starting a request cycle. Emitted at startup and
- *  again for every later cycle — sequential turn, queued turn, background wake,
- *  /compact (p3 captures). */
+/** Root init marks each request cycle, including background wakes and manual compaction (p3 captures). */
 export function initFrame(at: number, sessionId: string): CapturedFoldFrame {
   return {
     at,
@@ -170,7 +164,6 @@ export function initFrame(at: number, sessionId: string): CapturedFoldFrame {
   }
 }
 
-/** A root background-task system frame (`task_started`, `task_updated`, ...). */
 export function taskFrame(
   at: number,
   sessionId: string,

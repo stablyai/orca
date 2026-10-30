@@ -1,11 +1,16 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
+import { translate } from '../i18n/mobile-i18n'
 import type { DiffComment, MobileDiffReviewState } from '../../../src/shared/diff-comment-types'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
 import { sessionWorktreeNotesWrite } from './mobile-session-write-operations'
-import { addMobileDiffComment, removeMobileDiffComments } from './mobile-diff-comments'
+import {
+  addMobileDiffComment,
+  normalizeMobileDiffComments,
+  removeMobileDiffComments
+} from './mobile-diff-comments'
 import { updateMobileDiffComment } from './mobile-diff-comment-edit'
 import {
   clearMobileDiffReviewFileReviewed,
@@ -64,19 +69,32 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
   const { openSheet, openSheetWhenIdle, closeSheet } = sheets
 
   const persistMetadata = useCallback(
-    async (comments: readonly DiffComment[], reviewState: MobileDiffReviewState) => {
+    async (
+      comments: readonly DiffComment[],
+      base: readonly DiffComment[],
+      reviewState: MobileDiffReviewState
+    ) => {
       if (!client || connState !== 'connected') {
-        throw new Error('Waiting for desktop...')
+        throw new Error(
+          translate(
+            'session.useDiffReviewCommentActions.waitingForDesktop',
+            'Waiting for desktop...'
+          )
+        )
       }
       const response = await sessionWorktreeNotesWrite.request(client, {
         worktree: `id:${worktreeId}`,
         diffComments: [...comments],
+        diffCommentsBase: [...base],
         mobileDiffReview: reviewState
       })
-      interpretOrThrowRefusalMessage(
+      return interpretOrThrowRefusalMessage(
         () => sessionWorktreeNotesWrite.interpret(response),
-        'Failed to save review state'
-      )
+        translate(
+          'session.useDiffReviewCommentActions.saveStateFailed',
+          'Failed to save review state'
+        )
+      )?.diffComments
     },
     [client, connState, worktreeId]
   )
@@ -93,18 +111,34 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
       const previous = screenState
       updateReadyState((state) => ({ ...state, comments, reviewState }))
       try {
-        await persistMetadata(comments, reviewState)
+        const saved = await persistMetadata(
+          comments,
+          previous.kind === 'ready' ? previous.comments : comments,
+          reviewState
+        )
+        if (saved !== undefined) {
+          // Why: the host kept notes other devices changed; show its list unless a later save moved on.
+          updateReadyState((state) =>
+            state.comments === comments
+              ? { ...state, comments: normalizeMobileDiffComments(saved, worktreeId) }
+              : state
+          )
+        }
         triggerSuccess()
       } catch (err) {
         if (previous.kind === 'ready') {
           setScreenState(previous)
         }
         triggerError()
-        setActionError(err instanceof Error ? err.message : 'Failed to save review')
+        setActionError(
+          err instanceof Error
+            ? err.message
+            : translate('session.useDiffReviewCommentActions.saveFailed', 'Failed to save review')
+        )
         throw err
       }
     },
-    [persistMetadata, screenState, setActionError, setScreenState, updateReadyState]
+    [persistMetadata, screenState, setActionError, setScreenState, updateReadyState, worktreeId]
   )
 
   const openComposer = useCallback(

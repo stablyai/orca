@@ -16,6 +16,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import {
   MARKUP_COLORS,
   MARKUP_FONT_SIZES,
@@ -100,6 +101,7 @@ export const MarkupToolbar = React.memo(function MarkupToolbar({
   onRedo,
   onClear
 }: MarkupToolbarProps) {
+  useUiLanguageRevision()
   return (
     <TooltipProvider delayDuration={300}>
       <div className="flex flex-wrap items-center justify-center gap-1 rounded-md border border-border bg-card/95 px-1.5 py-1 shadow-md backdrop-blur">

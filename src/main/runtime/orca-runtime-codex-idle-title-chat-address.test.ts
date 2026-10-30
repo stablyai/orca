@@ -1,9 +1,11 @@
-// #31136: on a headless `orca serve` host, Codex's own idle title is its project name (no agent
-// marker), captured from Codex 0.163. Only a shell title may retire the hook's transcript address.
+// #31136: Codex 0.163 idle titles lack agent markers; only shell evidence may retire the hook transcript address.
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { committingSpawn } from './bind-first-pane.test-fixture'
+import type { RuntimeStore } from './runtime-store-contract'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -41,22 +43,54 @@ function codexRow(overrides: Partial<AgentStatusIpcPayload>): AgentStatusIpcPayl
   }
 }
 
-// Codex 0.163 frames: its window title, and the OSC 7501 program state it paints beside it.
+// Captured Codex 0.163 title and OSC 7501 program state.
 const title = (text: string): string => `\x1b]0;${text}\x07`
 const programState = (state: 'working' | 'idle'): string =>
   `\x1b]7501;state=${state}:app=codex\x1b\\`
 
+function layoutStore(): RuntimeStore {
+  return {
+    getRepos: () => [],
+    getRepo: () => undefined,
+    addRepo: vi.fn<RuntimeStore['addRepo']>(),
+    updateRepo: vi.fn<RuntimeStore['updateRepo']>(),
+    getAllWorktreeMeta: () => ({}),
+    getWorktreeMeta: () => undefined,
+    setWorktreeMeta: vi.fn<RuntimeStore['setWorktreeMeta']>(),
+    removeWorktreeMeta: vi.fn<RuntimeStore['removeWorktreeMeta']>(),
+    getGitHubCache: vi.fn<RuntimeStore['getGitHubCache']>(),
+    getSettings: () => ({
+      workspaceDir: '/workspaces',
+      nestWorkspaces: false,
+      refreshLocalBaseRefOnWorktreeCreate: false,
+      branchPrefix: 'none',
+      branchPrefixCustom: ''
+    })
+  }
+}
+
 async function codexPaneAfterOutput(
   rows: AgentStatusIpcPayload[],
-  frames: string[],
-  /** The host's verdict when a title drops the agent marker, as the hook server reports it. */
+  frames: (string | (() => void))[],
   presence: 'live' | 'exited' = 'live'
 ): Promise<unknown> {
-  const runtime = new OrcaRuntimeService(null, undefined, {
-    getAgentStatusSnapshot: () => rows,
-    getAgentProviderSessionRowsForPane: () => rows,
-    checkHookAgentPresence: async () => presence
-  })
+  const checkHookAgentPresence = async () => {
+    if (presence === 'exited') {
+      // As the hook server's ended-process reconcile: only resume identity survives.
+      rows.splice(0, rows.length, ...rows.map((row) => ({ ...row, providerSessionOnly: true })))
+    }
+    return presence
+  }
+  // Main-owned layout binds the pane before registration, requiring a store.
+  const runtime = new OrcaRuntimeService(
+    ORCA_LAYOUT_OWNER_IS_MAIN ? layoutStore() : null,
+    undefined,
+    {
+      getAgentStatusSnapshot: () => rows,
+      getAgentProviderSessionRowsForPane: () => rows,
+      checkHookAgentPresence
+    }
+  )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: OrcaRuntimeService defines this protected method; the spy only stubs workspace resolution.
   const internals = runtime as unknown as {
     resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>
@@ -69,7 +103,7 @@ async function codexPaneAfterOutput(
     folderWorkspace: null
   })
   runtime.setPtyController({
-    spawn: vi.fn().mockResolvedValue({ id: PTY_ID }),
+    spawn: vi.fn(committingSpawn(runtime, async () => ({ id: PTY_ID }))),
     write: () => true,
     kill: () => true,
     getForegroundProcess: async () => null
@@ -81,8 +115,12 @@ async function codexPaneAfterOutput(
     title: 'Terminal'
   })
   for (const frame of frames) {
+    if (typeof frame === 'function') {
+      frame()
+      continue
+    }
     runtime.onPtyData(PTY_ID, frame, Date.now())
-    // The presence recheck a dropped marker starts settles before the next frame.
+    // Let the dropped-marker presence recheck settle before the next frame.
     await new Promise((resolve) => setImmediate(resolve))
   }
   const { tabs } = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
@@ -116,7 +154,6 @@ describe('headless Codex chat address under Codex idle titles (#31136)', () => {
       [title('Reply with hi | repo'), programState('idle')]
     )
 
-    // The newer idle title outranks the older hook state, as under any other title.
     expect(agentStatus).toMatchObject({
       agentType: 'codex',
       state: 'done',
@@ -150,6 +187,31 @@ describe('headless Codex chat address under Codex idle titles (#31136)', () => {
     const agentStatus = await codexPaneAfterOutput(
       [codexRow({ state: 'done' })],
       [title('⠋ repo'), title('Reply with hi | repo'), programState('idle'), title('zsh')],
+      'exited'
+    )
+
+    expect(agentStatus).toBeUndefined()
+  })
+
+  // #32030: with Codex titles off, the pre-launch shell title is the newest title the first hook sees.
+  const firstTurnUnderShellTitle = (rows: AgentStatusIpcPayload[]) => [
+    title('zsh'),
+    programState('idle'),
+    () => rows.push(codexRow({ state: 'working', evidenceObservedAt: Date.now() + 1 }))
+  ]
+
+  it('addresses a first turn reported after the pre-launch shell title', async () => {
+    const rows: AgentStatusIpcPayload[] = []
+    const agentStatus = await codexPaneAfterOutput(rows, firstTurnUnderShellTitle(rows))
+
+    expect(agentStatus).toMatchObject({ agentType: 'codex', providerSession: PROVIDER_SESSION })
+  })
+
+  it('retires that row when the agent exits without a shell title repaint', async () => {
+    const rows: AgentStatusIpcPayload[] = []
+    const agentStatus = await codexPaneAfterOutput(
+      rows,
+      [...firstTurnUnderShellTitle(rows), '\x1b]133;D;0\x07$ '],
       'exited'
     )
 

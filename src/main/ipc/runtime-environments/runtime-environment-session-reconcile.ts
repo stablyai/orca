@@ -1,36 +1,33 @@
-/**
- * Startup reconcile for workspace sessions of servers that no longer exist. Unlinking a server drops
- * its `runtime:<id>` session, but a crash between the two, or a build that unlinked before that
- * drop existed, leaves an orphan that listings keep naming as an unselectable host.
- */
-import { existsSync } from 'node:fs'
+/** Crashes and older unlink flows can leave runtime session partitions that listings advertise as orphaned hosts. */
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
-import { getEnvironmentStorePath } from '../../../shared/runtime-environment-store-file'
+import { readEnvironmentStoreRecords } from '../../../shared/runtime-environment-store-records'
 
 type SessionHostStore = {
   getWorkspaceSessionHostIds: () => ExecutionHostId[]
   removeWorkspaceSessionHost: (hostId: ExecutionHostId) => void
 }
 
-/** Returns the dropped hosts. Local and ssh: sessions are never touched. */
+/** Drop orphaned runtime hosts while preserving local and SSH sessions. */
 export function reconcileOrphanedRuntimeSessions(
   store: SessionHostStore,
   userDataPath: string
 ): ExecutionHostId[] {
-  // Why both guards: a missing file reads as "no servers", and a session must never be deleted
-  // on evidence that only means the environment store could not be read.
-  if (!existsSync(getEnvironmentStorePath(userDataPath))) {
-    return []
-  }
   let known: Set<string>
   try {
-    known = new Set(listEnvironments(userDataPath).map((environment) => environment.id))
-  } catch (error) {
-    console.warn('[runtime-environments] skipped orphaned session reconcile:', error)
+    // Raw records, not the listing: newer-format and overlay-hidden servers are still saved.
+    const records = readEnvironmentStoreRecords(userDataPath, { requireStoreFile: true })
+    if (records.unreadable.some((record) => record.id === undefined)) {
+      return []
+    }
+    known = new Set([
+      ...records.environments.map((environment) => environment.id),
+      ...records.unreadable.map((record) => record.id ?? '')
+    ])
+  } catch {
+    // Missing or unreadable registry data cannot prove a server was removed.
     return []
   }
-  // Safe because a runtime:<id> session is only ever written after that server is registered.
+  // Runtime sessions are written only after their server is registered.
   const dropped = store.getWorkspaceSessionHostIds().filter((hostId) => {
     const parsed = parseExecutionHostId(hostId)
     return parsed?.kind === 'runtime' && !known.has(parsed.environmentId)

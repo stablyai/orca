@@ -8,7 +8,7 @@ const { runProcessMock, runProcessSyncMock } = vi.hoisted(() => ({
   runProcessSyncMock: vi.fn()
 }))
 
-// The repair must never start a child process; any icacls left behind would land here.
+// Fail any process spawn: repair must use the in-process addon rather than icacls.
 vi.mock('@orca/process-host', () => ({
   runProcess: runProcessMock,
   runProcessSync: runProcessSyncMock
@@ -178,7 +178,6 @@ describe('repairWindowsInstallDirPackageAcl', () => {
     expect(data.failedFileCount).toBe(82)
     expect(String(data.reason)).toContain('root: Access is denied.')
     expect(String(data.reason)).toContain('tree: failed-files')
-    // No retry loop: exactly the two passes, then it gives up for this version.
     expect(passes).toHaveLength(2)
   })
 
@@ -209,9 +208,7 @@ describe('repairWindowsInstallDirPackageAcl', () => {
     expect(marker.outcome).toBe('failed')
   })
 
-  // The bricking mechanism: a marker was written on failure and matched regardless of
-  // outcome, so one Defender-locked file or one timeout pinned the machine to
-  // 'marker-hit' — repair permanently skipped — for the life of that version.
+  // One failure must not pin this version permanently: Defender locks/timeouts may clear on later bounded retries.
   it('retries a failed repair on later launches, then stops once the budget is spent', async () => {
     const userDataPath = userDataDir()
     const failing = deniedGrant()
@@ -224,7 +221,6 @@ describe('repairWindowsInstallDirPackageAcl', () => {
     resetWindowsInstallDirAclRepairForTest()
     const spent = fakePackageGrant()
     const { result } = await repair({ userDataPath, grants: spent.grants })
-    // Not alreadyRepaired: the budget ran out, so the tree is still poisoned.
     expect(result).toEqual({ mode: 'marker-hit', alreadyRepaired: false })
     expect(spent.passes).toHaveLength(0)
   })

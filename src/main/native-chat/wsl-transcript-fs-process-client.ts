@@ -6,9 +6,7 @@ import {
   decodeWslTranscriptFsProcessError,
   decodeWslTranscriptFsProcessValue
 } from './wsl-transcript-fs-process-decode'
-// Transport faults (spawn failure, child death) mean nothing was consulted —
-// surfacing them as plain errors would read as "path missing"/"empty tree" to
-// the discovery layers, which only rethrow WslTranscriptFsError.
+// Classify transport faults as unavailable so discovery cannot mistake unconsulted mounts for missing paths.
 import { wslTranscriptFsProcessFailureError } from './wsl-transcript-fs-error'
 import {
   attachSlotChild,
@@ -31,8 +29,7 @@ export type { WslTranscriptFsProcessHandle } from './wsl-transcript-fs-process-s
 export class WslTranscriptFsProcessClient {
   private readonly pool: WslTranscriptFsProcessLanePool
   private readonly handles = new WeakMap<WslTranscriptFsProcessHandle, HandleState>()
-  /** Handles retired by a slot fault/kill, not by a clean close: reads on them
-   *  are a transport condition, never a caller bug. */
+  /** Slot faults make handles unavailable; late reads are transport failures, not caller bugs. */
   private readonly faultedHandles = new WeakSet<WslTranscriptFsProcessHandle>()
   private nextId = 1
 
@@ -105,14 +102,12 @@ export class WslTranscriptFsProcessClient {
     }
     if (!state.closePromise) {
       state.closePromise = this.performClose(handle, state)
-      // The stored promise may reject before any caller chains onto it.
       void state.closePromise.catch(() => {})
     }
     return state.closePromise
   }
 
-  // Why: closes bypass the gate and can arrive during a read. Queue them ahead
-  // of later lane work so teardown cannot fork around the one-process bound.
+  // Close may race a read; queue it before later lane work to preserve the one-process bound.
   private async performClose(
     handle: WslTranscriptFsProcessHandle,
     state: HandleState
@@ -216,8 +211,7 @@ export class WslTranscriptFsProcessClient {
       try {
         call.resolve(decodeWslTranscriptFsProcessValue(call.operation, response.value))
       } catch (error) {
-        // An undecodable ok-response means the protocol is corrupt: fail the
-        // call and retire the slot rather than leave the promise unsettled.
+        // Corrupt responses must reject and retire the slot rather than strand the pending call.
         call.reject(error)
         this.destroySlot(slot)
         return
@@ -280,16 +274,14 @@ export class WslTranscriptFsProcessClient {
     try {
       slot.child.kill('SIGKILL')
     } catch {
-      // Teardown race: kill of an already-terminating child emits 'error' with
-      // no listeners left, which throws synchronously; the child dies anyway.
+      // An already-terminating child can throw through its now-unobserved error event; teardown still completes.
     }
   }
 
   private releaseHandle(slot: ProcessSlot, handle: WslTranscriptFsProcessHandle): void {
     slot.handles.delete(handle)
     this.handles.delete(handle)
-    // The owners entry stays (WeakMap, collected with the handle) so late
-    // cross-module reads still reach this client for a classified rejection.
+    // Retain weak owner identity so late cross-module reads receive classified rejection.
   }
 
   private releaseAllHandles(slot: ProcessSlot): void {

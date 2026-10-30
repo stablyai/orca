@@ -1,5 +1,4 @@
-// Why a proxy over a fixed list: the omnibox reaches sidebar modules through tab
-// activation, so which icons the graph pulls in is not knowable per test file.
+// Use a proxy because tab activation reaches sidebar icons beyond each test’s direct imports.
 
 export function stubEveryIcon(): Record<string, unknown> {
   const Icon = (): null => null

@@ -1,0 +1,53 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`SSH migration manifest through the real collectors > exercises every collector the rich profile feeds 1`] = `
+{
+  "automationRuns": 1,
+  "automations": 1,
+  "savedPortForwards": 1,
+  "sessionTabs": 1,
+  "sparsePresets": 1,
+  "worktreeLineage": 1,
+  "worktreeMeta": 1,
+}
+`;
+
+exports[`SSH migration manifest through the real collectors > keeps the blocked counts of the rich profiles unchanged 1`] = `
+{
+  "blockedCounts": {
+    "automation": 0,
+    "automation-run": 0,
+    "mobile-tab-selection": 0,
+    "retired-worktree-name": 0,
+    "saved-port-forward": 0,
+    "sparse-preset": 0,
+    "ui-routing": 0,
+    "workspace-lineage": 0,
+    "workspace-session": 0,
+    "worktree-lineage": 0,
+    "worktree-metadata": 0,
+  },
+  "blockedSessionItems": [],
+  "leftBehindItems": [],
+}
+`;
+
+exports[`SSH migration manifest through the real collectors > keeps the blocked counts of the rich profiles unchanged 2`] = `
+{
+  "blockedCounts": {
+    "automation": 0,
+    "automation-run": 0,
+    "mobile-tab-selection": 0,
+    "retired-worktree-name": 0,
+    "saved-port-forward": 0,
+    "sparse-preset": 0,
+    "ui-routing": 0,
+    "workspace-lineage": 0,
+    "workspace-session": 0,
+    "worktree-lineage": 0,
+    "worktree-metadata": 0,
+  },
+  "blockedSessionItems": [],
+  "leftBehindItems": [],
+}
+`;

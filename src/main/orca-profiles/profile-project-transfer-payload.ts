@@ -24,8 +24,7 @@ import { rekeyWorktreeId, rekeyWorkspaceKey } from './profile-project-worktree-i
 export type TransferPayload = {
   repo: Repo
   sparsePresets: SparsePreset[]
-  /** Generated names already spent for this repo, compacted. Carried so the destination profile
-   *  does not reissue a name whose old directory still holds agent state. */
+  /** Preserve spent names so the destination cannot reuse directories still holding agent state. */
   retiredNameRegistry: RetiredNameRegistry | undefined
   retiredNameRegistriesByNamespace: Record<string, RetiredNameRegistry>
   worktreeMeta: PersistedState['worktreeMeta']

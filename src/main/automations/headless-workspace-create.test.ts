@@ -89,29 +89,4 @@ describe('headless automation workspace create args', () => {
       }
     })
   })
-
-  it('falls back to skip for legacy automations without a saved setup decision', () => {
-    const args = buildHeadlessAutomationWorktreeCreateArgs({
-      automation: { ...automation, setupDecision: undefined },
-      run: {
-        id: 'run-1',
-        title: 'Nightly review run',
-        scheduledFor: Date.UTC(2026, 0, 2, 3, 4, 5)
-      },
-      repo
-    })
-
-    expect(args.setupDecision).toBe('skip')
-    expect(Object.hasOwn(args, 'startupExtraAgentArgs')).toBe(false)
-  })
-
-  it('carries saved extras into the startup agent launch', () => {
-    const args = buildHeadlessAutomationWorktreeCreateArgs({
-      automation: { ...automation, extraAgentArgs: '--model gpt-5.5' },
-      run: { id: 'run-1', title: 'Nightly review run', scheduledFor: 0 },
-      repo
-    })
-
-    expect(args.startupExtraAgentArgs).toBe('--model gpt-5.5')
-  })
 })

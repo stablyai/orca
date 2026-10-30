@@ -98,7 +98,6 @@ export function zoomViewAt({
   }
 }
 
-/** Top-left of the scaled content inside the viewport. */
 export function getPanZoomViewOffset(
   view: PanZoomView,
   viewport: PanZoomSize,

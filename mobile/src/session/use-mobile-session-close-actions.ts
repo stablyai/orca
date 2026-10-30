@@ -6,9 +6,12 @@ import {
 } from './mobile-session-write-operations'
 import type { MobileSessionTab, Terminal } from './mobile-session-route-types'
 import type { MobileSessionContentCreateActionsModel } from './use-mobile-session-content-create-actions'
+import { mobileNativeChatScopeKey } from './native-chat/mobile-native-chat-scope-key'
+import { closeMobileNativeChatTabDraft } from './native-chat/composer/mobile-native-chat-draft-store'
 
 export function useMobileSessionCloseActions(scope: MobileSessionContentCreateActionsModel) {
   const {
+    hostId,
     worktreeId,
     client,
     setTerminals,
@@ -60,9 +63,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         })
         scheduleDelayedAction(() => void fetchTerminals(), 300)
       }
-    } catch {
-      // Rename failed — refresh will restore the server title.
-    }
+    } catch {}
   }
 
   async function handleCloseTerminal(target: Terminal) {
@@ -97,9 +98,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
           }
         }
       }
-    } catch {
-      // Close failed — keep the local tab list unchanged.
-    }
+    } catch {}
   }
 
   async function handleCloseSessionTab(tab: MobileSessionTab) {
@@ -116,7 +115,11 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
           reason: 'user'
         })
       )
-      if (response.accepted) {
+      if (response.accepted && !response.value.refused) {
+        const chatScope = mobileNativeChatScopeKey(hostId, worktreeId, tab.id)
+        if (chatScope && response.value.retirementConfirmed) {
+          closeMobileNativeChatTabDraft(chatScope)
+        }
         if (tab.type === 'markdown') {
           setMarkdownDocs((prev) => {
             const doc = prev.get(tab.id)
@@ -151,11 +154,9 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         }
         sessionTabsRef.current = remainingTabs
         setSessionTabs(remainingTabs)
-        // Why: tombstone the closed tab and rely on the snapshot, not a blind refetch that often re-added the not-yet-closed tab.
+        // Tombstone closed tabs until snapshots confirm them; immediate refetch can resurrect a pending close.
         closedTabTombstonesRef.current.set(tab.id, Date.now() + 10_000)
-        // Why: bulk close re-activates the anchor before awaiting each close;
-        // the render-synced ref sees that switch while this closure would not,
-        // so comparing against the ref keeps the anchor from being nulled out.
+        // Read active identity live: bulk close can reactivate its anchor while an older close closure still names another tab.
         if (activeSessionTabIdRef.current === tab.id || remainingTabs.length === 0) {
           activeSessionTabTypeRef.current = null
           selectedSessionTabIdRef.current = null
@@ -165,9 +166,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
           setActiveHandle(null)
         }
       }
-    } catch {
-      // Close failed — keep the authoritative session snapshot visible.
-    }
+    } catch {}
   }
   return {
     handleRenameTerminal,

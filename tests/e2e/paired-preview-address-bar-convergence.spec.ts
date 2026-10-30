@@ -35,8 +35,7 @@ async function preparePairedClient(
 ): Promise<PreparedPairedClient> {
   const client = await launchPairedElectronClient(offer, testInfo, 'Address-bar convergence')
   try {
-    // A workstation-sized window: under CI's default size the split preview squeezes the document
-    // chip below its content width (min-w-0 + overflow-hidden), leaving no chip pixels to click.
+    // Use workstation width so split-preview document chips retain clickable pixels under CI.
     await client.page.setViewportSize({ width: 1600, height: 900 })
     await expect
       .poll(
@@ -75,11 +74,7 @@ async function preparePairedClient(
   }
 }
 
-/**
- * The canonical new-tab path the client-hosted specs use. A raw createBrowserTab from a paired
- * client races the client-hosted creation machinery: the host's published snapshot can fail to
- * match the locally minted row and place the same page twice (seen on CI as duplicate tabs).
- */
+// Use the canonical new-tab path: raw paired create can race adoption and duplicate the host page.
 async function openPairedWebTab(page: Page, url: string): Promise<void> {
   await page.evaluate(async (pageUrl) => {
     const state = window.__store?.getState()
@@ -105,13 +100,8 @@ async function openPreviewFromExplorer(page: Page, fixtureName: string): Promise
   await openPreviewToSide.click()
 }
 
-/**
- * The STA-5681 naive journey, driven with real clicks and real typing: the preview's chip becomes
- * an address bar; a committed URL makes the tab an ordinary browser tab in place; Back returns to
- * the document; typing the document's path into the web tab's address bar converts it back to the
- * preview on a fresh grant; and the URL dropdown offers the previewed document by name. The host's
- * session snapshot stays empty throughout: a converted page is client-local like the preview was.
- */
+// STA-5681: drive preview chip → URL conversion → Back/Forward → document conversion and document-name suggestions.
+// Converted tabs retain client-local ownership, so host session snapshots stay empty.
 test('converts a preview to a web tab and back from the address bar', async ({
   orcaPage,
   testRepoPath
@@ -149,18 +139,13 @@ test('converts a preview to a web tab and back from the address bar', async ({
     const preview = requireSingleDocWorkspace(
       await readPairedHtmlPreviewInventory(page, inventoryArgs)
     )
-    // The activation click a reader would make: the preview opened to the side, unfocused.
-    // Browser rows in the strip are keyed by workspace id.
     await page.locator(`[data-tab-id="${preview.workspaceId}"]`).click()
 
     // The mobile-publish baseline: the document tab is held back from the tab snapshot.
     const baseline = await readPairedHtmlPreviewInventory(page, inventoryArgs)
     expect(baseline.hostSessionBrowserTabs).toHaveLength(0)
 
-    // Chip → address bar, prefilled with the file the reader can retype.
-    // Why the left-edge position: under CI's narrow pane the squeezed chip's center hit-tests to
-    // the neighboring toolbar control's tooltip span; the file icon at the chip's left edge is
-    // always the chip's own pixels.
+    // Click the file icon at the chip’s left edge; narrow-pane center hits the neighboring tooltip.
     await page
       .getByRole('button', { name: 'Edit address', exact: true })
       .click({ position: { x: 8, y: 10 } })
@@ -168,11 +153,7 @@ test('converts a preview to a web tab and back from the address bar', async ({
     await expect(addressInput).toBeVisible({ timeout: 10_000 })
     await expect(addressInput).toHaveValue(FIXTURE_NAME)
 
-    // A committed URL converts the tab in place: same workspace row, now an ordinary browser tab.
-    // The converted page stays client-local (it inherits the preview's ownership), so like every
-    // client-local page in a paired worktree it never enters the host's session tab snapshot —
-    // the phone-facing publish flip is a desktop-host observable, pinned at the snapshot-builder
-    // unit level (sync-runtime-graph-conversion-publish.test.ts).
+    // Convert in place with the preview’s client-local ownership; desktop-host publish behavior is pinned in sync-runtime-graph-conversion-publish.test.ts.
     await addressInput.fill(marker.markerUrl)
     await addressInput.press('Enter')
     await expect
@@ -207,7 +188,6 @@ test('converts a preview to a web tab and back from the address bar', async ({
     expect(converted?.url).toBe(marker.markerUrl)
     expect(converted?.docLocation).toBeNull()
     expect(converted?.convertedFrom).toMatchObject({ kind: 'workspace-doc' })
-    // The marker page really rendered in a browsing guest.
     await expect
       .poll(() => page.locator('webview').last().getAttribute('src'), { timeout: 30_000 })
       .toContain(marker.origin)
@@ -226,11 +206,7 @@ test('converts a preview to a web tab and back from the address bar', async ({
       .toContain(FIXTURE_HEADING)
     await expect.poll(() => readDocPreviewGuestUrl(page)).toMatch(/^orca-preview:\/\//)
 
-    // Forward re-crosses what Back consumed: the returned-to preview carries the web page as its
-    // forward target, and Forward rebuilds it — then Back still works, a real two-entry history.
-    // The converted web page is client-local (the doc it replaced held a desktop-minted grant),
-    // which is the scope of the crossing: a runtime-owned client-hosted origin cannot be rebuilt
-    // by a crossing yet, because the conversion closed its remote page (STA-5872).
+    // Forward rebuilds the consumed client-local web target; runtime-owned origins remain unsupported because conversion closed their remote page (STA-5872).
     await page.getByRole('button', { name: 'Forward', exact: true }).click()
     await expect
       .poll(
@@ -254,9 +230,7 @@ test('converts a preview to a web tab and back from the address bar', async ({
       .poll(() => readDocPreviewRenderedText(page, 'h1'), { timeout: 60_000 })
       .toContain(FIXTURE_HEADING)
 
-    // The other side of the two-entry history, on the same client-local tab: Forward to the web
-    // page, type the document's path over it, then Back restores the web page and the WEB
-    // toolbar's Forward (not the preview's) re-crosses to the document.
+    // Reverse from web to document, then require the web toolbar’s Forward to re-cross after Back.
     await page.getByRole('button', { name: 'Forward', exact: true }).click()
     await expect
       .poll(
@@ -265,9 +239,7 @@ test('converts a preview to a web tab and back from the address bar', async ({
         { timeout: 60_000, message: 'the second Forward never re-crossed the conversion' }
       )
       .toBe(0)
-    // The split pane squeezes the address input to zero width (every other toolbar control is
-    // shrink-0); focusing the bar overlays it across the toolbar (#11090). Click the slot — the
-    // bar forwards padding clicks to the input — so it expands before typing.
+    // Click the input slot to expand its zero-width field before typing (#11090).
     const convertedAddressSlot = page.locator('[data-browser-chrome-address-slot]')
     await expect(convertedAddressSlot).toBeVisible({ timeout: 30_000 })
     await convertedAddressSlot.click()
@@ -305,7 +277,6 @@ test('converts a preview to a web tab and back from the address bar', async ({
       .poll(() => readDocPreviewRenderedText(page, 'h1'), { timeout: 60_000 })
       .toContain(FIXTURE_HEADING)
 
-    // Reverse conversion by typing: close the preview, open a web tab, type the document's path.
     const returned = requireSingleDocWorkspace(
       await readPairedHtmlPreviewInventory(page, inventoryArgs)
     )
@@ -328,12 +299,10 @@ test('converts a preview to a web tab and back from the address bar', async ({
       .poll(() => readDocPreviewRenderedText(page, 'h1'), { timeout: 60_000 })
       .toContain(FIXTURE_HEADING)
 
-    // The dropdown offers the previewed document as a file identity; selecting it activates the
-    // tab it is already open in rather than minting a second grant.
+    // Selecting the document identity must activate its existing tab, preserving its grant.
     const docTabsBefore = (await readPairedHtmlPreviewInventory(page, inventoryArgs)).docWorkspaces
     await openPairedWebTab(page, marker.movedUrl)
-    // Why the count settles first: the converted tab's old pane unmounts a beat after the store
-    // flips, and a strict locator that races it resolves to two inputs.
+    // Wait for the old converted pane to unmount or strict input locators see both.
     await expect
       .poll(() => page.locator('[data-browser-chrome-address-slot] input').count(), {
         timeout: 30_000,
@@ -341,8 +310,7 @@ test('converts a preview to a web tab and back from the address bar', async ({
       })
       .toBe(1)
     const secondInput = page.locator('[data-browser-chrome-address-slot] input')
-    // Why click-until-expanded: the freshly loaded guest steals focus once, and the dropdown
-    // dismisses on webview focus — a single click can land just before that steal.
+    // Retry expansion if the freshly loaded guest steals focus and dismisses the dropdown.
     await expect
       .poll(
         async () => {
@@ -353,8 +321,7 @@ test('converts a preview to a web tab and back from the address bar', async ({
       )
       .toBe('true')
     await secondInput.pressSequentially('Convergence', { delay: 40 })
-    // Scoped to the suggestion popover: the doc tab's own strip label carries the same title, and
-    // a strip click would satisfy a bare text locator without the dropdown existing at all.
+    // Scope to the suggestion popover so the existing strip title cannot satisfy the locator.
     const docSuggestion = page
       .locator('[data-slot="popover-content"]')
       .getByText(FIXTURE_TITLE, { exact: false })
@@ -376,7 +343,6 @@ test('converts a preview to a web tab and back from the address bar', async ({
       )
       .toEqual({
         docTabs: docTabsBefore.length,
-        // Dedupe wins: selection activates the tab the document is already open in.
         activeWorkspaceId: docTabsBefore[0]?.workspaceId ?? null
       })
   } finally {

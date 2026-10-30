@@ -11,7 +11,7 @@ export type NativeChatApprovalEnvelope = {
 
 const ESCAPE = String.fromCharCode(27)
 
-/** Parse the approval envelope the host writes to `agentStatus.interactivePrompt` on a PermissionRequest. */
+/** Read the approval envelope published in agentStatus.interactivePrompt on PermissionRequest. */
 export function parseNativeChatApprovalEnvelope(
   interactivePrompt: string | undefined | null,
   agent?: string

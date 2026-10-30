@@ -1,10 +1,6 @@
 import type { WorkspacePortScanResult } from '../../../shared/workspace-ports'
 
-/**
- * Host a per-host scan key points at. `unknown` is kept distinct from `local` so
- * an unrecognised key (a synthetic projection key that leaked into the per-host
- * map, say) is never mislabelled as a local failure.
- */
+/** Distinguish unknown scan keys from local so leaked projection keys cannot become local-host failures. */
 export type WorkspacePortHostRef =
   | { kind: 'local' }
   | { kind: 'environment'; environmentId: string }
@@ -18,10 +14,7 @@ export type UnavailableWorkspacePortHost = {
   reason: string
 }
 
-// Why: mirrors workspacePortScanKeyForTarget (`${targetKey}:all`, where the
-// target key is `local` or `environment:<id>`) without importing the heavier
-// workspace-port-actions module into this pure helper. Splitting on the last
-// `:all` keeps environment ids that themselves contain colons intact.
+// Match targetKey:all without heavy actions imports; split at the final :all because environment IDs can contain colons.
 const ENVIRONMENT_SCAN_KEY_PREFIX = 'environment:'
 const SCAN_KEY_SUFFIX = ':all'
 const LOCAL_SCAN_KEY = `local${SCAN_KEY_SUFFIX}`
@@ -41,12 +34,7 @@ export function workspacePortHostForScanKey(scanKey: string): WorkspacePortHostR
   return environmentId ? { kind: 'environment', environmentId } : { kind: 'unknown' }
 }
 
-/**
- * Every host whose latest scan failed, named by host rather than by scan key.
- * Why: on a remote host "none listening" and "could not look" are different
- * answers, and the merged projection collapses both the partial case (no reason
- * at all) and the total case (reasons joined with raw internal keys).
- */
+/** Name failed hosts explicitly: merged scans obscure partial failures and join total failures with raw keys, while could-not-look differs from no-listeners. */
 export function getUnavailableWorkspacePortHosts(
   scansByKey: Record<string, WorkspacePortScanResult>
 ): UnavailableWorkspacePortHost[] {

@@ -30,7 +30,6 @@ export function getMonacoCodebaseSearchQuery(
     return null
   }
 
-  // Why: until Orca has semantic LSP references, the editor affordance should
-  // still work from a cursor by searching the visible symbol text in files.
+  // Until semantic references exist, search files for the cursor’s visible symbol text.
   return normalizeSelectedTextForFileSearch(model.getWordAtPosition(position)?.word)
 }

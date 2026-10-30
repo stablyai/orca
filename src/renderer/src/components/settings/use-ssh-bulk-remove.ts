@@ -14,7 +14,6 @@ import { summarizeSshBulkRemove } from './ssh-bulk-remove-summary'
 
 type PlainRemoveTarget = { id: string; label: string }
 
-/** Splits a selection into one confirmed removal plus skips, and reports the run in one toast. */
 export function useSshBulkRemove(args: {
   targets: readonly SshTarget[]
   selected: ReadonlySet<string>
@@ -33,7 +32,7 @@ export function useSshBulkRemove(args: {
 } {
   const mountedRef = useMountedRef()
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
-  // Why a ref: skips are decided when Remove is clicked and reported once the confirmed run ends.
+  // Retain click-time skip decisions until the confirmed removal finishes.
   const skippedRef = useRef<SshBulkRemovePlan['skipped']>([])
 
   const finishBulkRemove = async (result: SshBulkRemoveResult): Promise<void> => {
@@ -67,7 +66,7 @@ export function useSshBulkRemove(args: {
     requestPlainRemove: (target: PlainRemoveTarget) => void
   ): void => {
     const chosen = args.targets.filter((target) => args.selected.has(target.id))
-    // Why: a single host keeps its own dialogs (managed server, workspaces) instead of a skip.
+    // Single removals retain their managed-server/workspace dialogs instead of being skipped.
     if (chosen.length === 1) {
       args.requestSingleRemove(chosen[0], requestPlainRemove)
       return
@@ -81,8 +80,7 @@ export function useSshBulkRemove(args: {
       const resolution = resolveSshHostRemoval({
         targetId: target.id,
         repos: state.repos,
-        worktrees,
-        sshConnectionStates: state.sshConnectionStates
+        worktrees
       })
       return resolution.workspaceCount > 0 ? 'workspaces' : null
     })

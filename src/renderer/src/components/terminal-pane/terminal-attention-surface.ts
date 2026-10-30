@@ -1,9 +1,4 @@
-/**
- * Terminal implementation of the provider-neutral attention surface.
- *
- * This module is the only place the PTY/leaf/layout admission predicates are called from;
- * the attention policy in `@/attention` reaches terminal state exclusively through it.
- */
+/** Binds provider-neutral attention policy to terminal state; owns PTY/leaf/layout admission checks. */
 import type { useAppStore } from '@/store'
 import type {
   AgentAttentionSubject,
@@ -33,8 +28,7 @@ function admitTerminalPane(
   if (tabId === null) {
     return { admitted: false, cause: 'unknown-surface' }
   }
-  // Why: delayed completion hooks from a closed split pane can arrive while another pane in
-  // the tab is still live; stale leaf completions must not create unread or OS notifications.
+  // Late completion from a closed split must not notify just because a sibling pane remains live.
   const isCurrentPane = liveness.hasLiveSession
     ? isCurrentLivePaneKey(state, subject.workspaceId, subject.surfaceKey)
     : isCurrentKnownPaneKey(state, subject.workspaceId, subject.surfaceKey)
@@ -54,12 +48,9 @@ function isViewedTerminalPane(state: StoreSnapshot, workspaceId: string, paneKey
   return tabId !== null && isTabOnScreen(state, workspaceId, tabId, 'terminal')
 }
 
-/** Binds the neutral surface contract to one store snapshot. */
 export function createTerminalAttentionSurface(state: StoreSnapshot): AgentAttentionSurface {
   return {
-    // Why: shutdownWorktreeTerminals clears ptyIdsByTabId synchronously before killing PTYs
-    // asynchronously, so a late timer or accumulated-closure callback still dispatches.
-    // Checking liveness here catches every phantom source instead of cancelling each one.
+    // Shutdown clears PTY IDs before async kills; checking liveness here rejects every late timer/closure source.
     hasLiveSession: (subject: AgentAttentionSubject) =>
       hasLivePtyForNotification(state, subject.workspaceId, subject.surfaceKey),
     admitSurface: (subject, liveness) => admitTerminalPane(state, subject, liveness),

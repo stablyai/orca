@@ -14,7 +14,6 @@ import {
   type ProviderProcessLaunch
 } from '../provider-process/provider-process-launch'
 
-/** Codex's `--version`, which names the binary on its own line. */
 export const readCodexCliVersion: AgentCliVersionReader = (input) =>
   readAgentCliVersion(input, parseCodexCliVersion)
 
@@ -32,7 +31,9 @@ export async function requireSupportedCodexCli(
 }
 
 /** Check every acquired child against the same sealed launch the app-server will use. */
-export function withSupportedCodexCli<L extends ProviderProcessLaunch>(
+export function withSupportedCodexCli<
+  L extends ProviderProcessLaunch & { prefixArgs?: readonly string[] }
+>(
   resolveLaunch: StructuredAgentLaunchResolver<L>,
   readVersion: AgentCliVersionReader = readCodexCliVersion
 ): StructuredAgentLaunchResolver<L> {
@@ -41,6 +42,7 @@ export function withSupportedCodexCli<L extends ProviderProcessLaunch>(
     await requireSupportedCodexCli(
       {
         program: launch.command,
+        prefixArgs: launch.prefixArgs,
         cwd: launch.cwd,
         env: resolveProviderChildEnv(launch, process.env)
       },

@@ -1,3 +1,7 @@
+import type { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
+import { partialRuntimeStore } from '../../src/main/runtime/runtime-store-partial-fixture'
+import { agentSessionRecordFixture } from '../../src/main/native-chat/agent-session-record-test-fixture'
+import { agentSessionConversationView } from '../../src/shared/agent-session-conversation-view'
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -15,7 +19,7 @@ import { registerTerminalUiRoutingIpcBridge } from '../../src/renderer/src/hooks
 import type { RuntimeClientTarget } from '../../src/shared/runtime-client-target'
 import { applyWebSessionTabsSnapshot } from '../../src/renderer/src/runtime/web-session-tabs-sync/snapshot-api'
 import {
-  acceptPairedHostStructuredSessions,
+  suppressCancelledStructuredSessionTabs,
   retireStructuredAgentSessionTab
 } from '../../src/renderer/src/runtime/structured-agent-session-tab-retirement'
 import { isLocalSessionTabCloseOwned } from '../../src/renderer/src/runtime/local-session-tab-close-owner'
@@ -42,6 +46,25 @@ type ProcessBoundary = {
   rendererSessionCloses: string[]
   closeHeld: Promise<void> | null
   pairedClose: Promise<void> | null
+}
+
+type RestoreCloseHost = Pick<
+  StructuredAgentSessionHost,
+  | 'reconcileRestartLeases'
+  | 'seedSessionTabs'
+  | 'getPersistedVisibleSessionTabIndex'
+  | 'isSessionTabVisible'
+  | 'close'
+  | 'setSessionTabVisibility'
+  | 'listSessionTabs'
+  | 'getSessionTabId'
+> & {
+  deps: {
+    store: Pick<
+      StructuredAgentSessionHost['deps']['store'],
+      'getConversation' | 'isSessionUnreadable' | 'isSessionTabRetired'
+    >
+  }
 }
 
 const bridge = vi.hoisted((): ProcessBoundary => ({
@@ -121,12 +144,8 @@ vi.mock('../../src/renderer/src/runtime/structured-agent-session-close', () => (
   }
 }))
 
-/**
- * After /clear the current chat keeps the tab id derived from its first session, so reopening that
- * first session from history lands in a suffixed tab. Closing or focusing the reopened tab from
- * main must reach that tab, not the current chat. Runs the real main close/focus path against the
- * real window store, mirror and IPC bridges; only the process boundary is stubbed.
- */
+// After /clear, history reopens the first conversation under a suffixed tab id; real main close/focus must target that tab.
+// Connect real window store/mirror/IPC with only the process boundary stubbed.
 describe('reopened structured session close', () => {
   const WORKTREE = 'repo-1::/tmp/wt-reopen'
   const CURRENT_SESSION = 'clear-x'
@@ -168,7 +187,7 @@ describe('reopened structured session close', () => {
 
     const hostSessionCloses: string[] = []
     const closeResponses: (string | undefined)[] = []
-    const runtime = new OrcaRuntimeService()
+    const runtime = new OrcaRuntimeService(partialRuntimeStore())
     bridge.runtime = runtime
     let nextRequest = 0
     runtime.setNotifier(
@@ -188,7 +207,7 @@ describe('reopened structured session close', () => {
           listeners.focusEditorTab!({ tabId, worktreeId })
       } as never
     )
-    // No durable store, PTYs or workspace session on disk: the host tab list below is the whole state.
+    // The adapter owns checked records and current visibility; PTY/profile restoration is excluded.
     Object.assign(runtime, {
       hasPersistedStructuredAgentSessionStore: () => true,
       getKnownWorkspaceSessionWorktreeIds: () => new Set(),
@@ -196,24 +215,45 @@ describe('reopened structured session close', () => {
       refreshMobileSessionPtyRecords: async () => new Set(),
       ensureStructuredAgentSessionHost: async () => undefined
     })
+    const hostTabs = new Set([CURRENT_SESSION, REOPENED_SESSION])
+    const records = new Map(
+      [...hostTabs].map((sessionId) => [
+        sessionId,
+        agentSessionConversationView(
+          agentSessionRecordFixture({ sessionId, location: { workspaceId: WORKTREE } })
+        )
+      ])
+    )
     setStructuredAgentSessionHost(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: restore and tab close call only these host members.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: adapter supplies current selection/records and the restore/close API used here.
       {
+        deps: {
+          store: {
+            getConversation: (id: string) => records.get(id) ?? null,
+            isSessionUnreadable: () => false,
+            isSessionTabRetired: (id: string) => !hostTabs.has(id)
+          }
+        },
         reconcileRestartLeases: async () => undefined,
-        restoreReadableSessions: async () => undefined,
+        seedSessionTabs: async () => undefined,
+        getPersistedVisibleSessionTabIndex: () => ({ present: true, sessionIds: [...hostTabs] }),
+        isSessionTabVisible: (id: string) => hostTabs.has(id) && records.has(id),
         close: async (sessionId: string) => {
           hostSessionCloses.push(sessionId)
         },
-        setSessionTabVisibility: async () => undefined,
-        // The host's tab index, which main opens chat tabs under: the current chat holds its first
-        // session's tab id, so the reopened one has its own (an id names one chat there).
+        setSessionTabVisibility: async (id: string, visible: boolean) => {
+          if (visible) {
+            hostTabs.add(id)
+          } else {
+            hostTabs.delete(id)
+          }
+        },
+        // Index the reopened chat separately because the current chat retains its first session’s tab id.
         getSessionTabId: (sessionId: string) =>
           sessionId === CURRENT_SESSION ? CURRENT_TAB : REOPENED_TAB,
-        listSessionTabs: () => [
-          { sessionId: CURRENT_SESSION, workspaceId: WORKTREE, agent: 'claude' },
-          { sessionId: REOPENED_SESSION, workspaceId: WORKTREE, agent: 'claude' }
-        ]
-      } as never
+        listSessionTabs: () =>
+          [...hostTabs].map((sessionId) => ({ sessionId, workspaceId: WORKTREE, agent: 'claude' }))
+      } satisfies RestoreCloseHost as never
     )
     // The current chat after /clear: first session's tab id, new session's entity.
     useAppStore.setState({ activeWorktreeId: WORKTREE })
@@ -314,12 +354,8 @@ describe('reopened structured session close', () => {
   })
 })
 
-/**
- * Closing a chat tab removes it from the window at once, while the host is still handling the close.
- * A tab-list frame the host publishes in that gap (a working chat's status update, for one) still
- * lists the chat, and must not put it back at the end of the strip. Runs the real main close path
- * against the real window store and session-tabs mirror; only the process boundary is stubbed.
- */
+// Hold host close after the window removes its chat, then publish a still-listed frame that must not resurrect it.
+// Exercise real main/window/mirror paths with only the process boundary stubbed.
 describe('in-flight structured session close', () => {
   const WORKTREE = 'repo-1::/tmp/wt-stale-frame'
   const SESSIONS = ['chat-a', 'chat-b', 'chat-c'] as const
@@ -330,7 +366,7 @@ describe('in-flight structured session close', () => {
     const pendingResponses = new Map<string, (error?: string) => void>()
     // A failing close answers when the test says, so its frame can be read first.
     const failingCloses: (() => void)[] = []
-    const runtime = new OrcaRuntimeService()
+    const runtime = new OrcaRuntimeService(partialRuntimeStore())
     bridge.runtime = runtime
     vi.stubGlobal('api', {
       ui: {
@@ -364,7 +400,7 @@ describe('in-flight structured session close', () => {
           })
       } as never
     )
-    // No durable store, PTYs or workspace session on disk: the host tab list below is the whole state.
+    // The adapter owns checked records and current visibility; PTY/profile restoration is excluded.
     Object.assign(runtime, {
       hasPersistedStructuredAgentSessionStore: () => true,
       getKnownWorkspaceSessionWorktreeIds: () => new Set(),
@@ -374,22 +410,42 @@ describe('in-flight structured session close', () => {
     })
     const hostSessionCloses: string[] = []
     const hostTabs = new Set<string>(SESSIONS)
+    const records = new Map(
+      [...hostTabs].map((sessionId) => [
+        sessionId,
+        agentSessionConversationView(
+          agentSessionRecordFixture({ sessionId, location: { workspaceId: WORKTREE } })
+        )
+      ])
+    )
     setStructuredAgentSessionHost(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: restore and tab close call only these host members.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: adapter supplies current selection/records and the restore/close API used here.
       {
+        deps: {
+          store: {
+            getConversation: (id: string) => records.get(id) ?? null,
+            isSessionUnreadable: () => false,
+            isSessionTabRetired: (id: string) => !hostTabs.has(id)
+          }
+        },
         reconcileRestartLeases: async () => undefined,
-        restoreReadableSessions: async () => undefined,
+        seedSessionTabs: async () => undefined,
+        getPersistedVisibleSessionTabIndex: () => ({ present: true, sessionIds: [...hostTabs] }),
+        isSessionTabVisible: (id: string) => hostTabs.has(id) && records.has(id),
         close: async (sessionId: string) => {
           hostSessionCloses.push(sessionId)
         },
         setSessionTabVisibility: async (sessionId: string, visible: boolean) => {
-          if (!visible) {
+          if (visible) {
+            hostTabs.add(sessionId)
+          } else {
             hostTabs.delete(sessionId)
           }
         },
+        getSessionTabId: (id: string) => (hostTabs.has(id) ? tabIdOf(id) : null),
         listSessionTabs: () =>
           [...hostTabs].map((sessionId) => ({ sessionId, workspaceId: WORKTREE, agent: 'claude' }))
-      } as never
+      } satisfies RestoreCloseHost as never
     )
     useAppStore.setState({ activeWorktreeId: WORKTREE })
     await mainHoldsWindowLayout(runtime)
@@ -522,7 +578,10 @@ describe('in-flight structured session close', () => {
         useAppStore.setState((state) =>
           applyWebSessionTabsSnapshot(
             state,
-            acceptPairedHostStructuredSessions(snapshot, SERVER),
+            suppressCancelledStructuredSessionTabs(snapshot, {
+              kind: 'environment',
+              environmentId: SERVER
+            }),
             SERVER
           )
         )

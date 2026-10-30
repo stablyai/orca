@@ -69,14 +69,11 @@ export function useRichMarkdownPendingSerialization({
   ])
 
   useEffect(() => {
-    // Why: autosave/restart paths live outside the editor component tree, so a
-    // mounted rich editor must expose a synchronous "flush now" hook to avoid
-    // a dirty-without-draft window during the debounce period.
+    // Expose synchronous flushing to autosave/restart so pending typing cannot leave a dirty-without-draft debounce window.
     return registerPendingEditorFlush(fileId, flushPendingSerialization)
   }, [fileId, flushPendingSerialization])
 
-  // Why: layout-effect cleanup runs before useEditor's passive cleanup destroys
-  // the editor on tab switch or mode change, so the flush can still serialize.
+  // Flush in layout cleanup before Tiptap’s passive cleanup destroys the editor on tab/mode changes.
   useLayoutEffect(() => {
     return () => {
       flushPendingSerialization()

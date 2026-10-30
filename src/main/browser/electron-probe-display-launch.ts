@@ -10,10 +10,7 @@ export type ElectronProbeLaunchInput = {
   display: string | undefined
 }
 
-// Why: these probes each start a full Electron stack, and CI already runs the whole vitest
-// invocation under one `xvfb-run`. Nesting a private `--auto-servernum` server per probe adds an
-// X server per concurrent file and races the sibling probes for a free display number, so reuse
-// the display we were handed and only own one when there is none.
+// Reuse the inherited display to avoid concurrent xvfb-run probes racing for display numbers.
 export function resolveElectronProbeLaunch({
   electronBinary,
   electronArgs,

@@ -120,7 +120,6 @@ describe('lifecycle graph against its callers', () => {
     expect(database.beginWorkerStop(dispatchId, 'runtime_test').disposition).toBe('stopping')
     expect(database.getWorkerDispatch(dispatchId)?.state).toBe('stopping')
 
-    // Real path: failActiveDispatchOnExit -> failDispatch({ workerProcessExited: true }).
     expect(() =>
       database.failDispatch(dispatchId, 'process exited', {
         workerProcessExited: true,

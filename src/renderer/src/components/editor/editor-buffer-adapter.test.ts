@@ -70,7 +70,6 @@ describe('applyEditorBufferText', () => {
   let b: string
   beforeEach(() => {
     ;({ store, a, b } = twoViews())
-    // `a` shows Monaco source; `b` keeps the rich view.
     store.getState().setMarkdownViewMode(a, 'source')
   })
 
@@ -115,7 +114,6 @@ describe('withRecordDiskText (panel content sync)', () => {
     const views = store.getState().editorBufferViews[store.getState().editorBufferIdOf[a]]
     const next = withRecordDiskText(prev, views, a, 'saved')
     expect(next[b]?.content).toBe('saved')
-    // The saver's own entry is written by the saved event itself.
     expect(next[a]?.content).toBe('old')
     expect(next.other?.content).toBe('other')
     expect(withRecordDiskText({ [a]: prev[a] }, views, a, 'saved')).toEqual({

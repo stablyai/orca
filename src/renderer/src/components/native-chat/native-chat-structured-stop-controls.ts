@@ -7,12 +7,7 @@ type StopController = Pick<
   'canStop' | 'stopPressed' | 'stop' | 'queuedMessages' | 'sendsQueue' | 'queueSendsNext'
 >
 
-/**
- * The chat pane's Stop state. It reads "Stopping…" from the host's word, bridged by this client's
- * own press until its Stop event lands. Only that press in flight holds Stop, since a repeat is how
- * a stuck stop escalates. While it reads Stopping nothing steers into the turn: a message sent then
- * runs after it.
- */
+/** Bridge host Stopping with the local request; hold Stop only in flight so repeats can escalate, and queue sends for afterward. */
 export function nativeChatStructuredStopControls(
   controller: StopController,
   hostStopping: boolean

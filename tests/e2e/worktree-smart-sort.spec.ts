@@ -106,10 +106,7 @@ async function seedSmartSortScenario(page: Page): Promise<SmartSortScenario> {
     let blockedLeafId = ''
     let doneLeafId = ''
 
-    // Why: WorktreeList intentionally holds cold-start ordering until a live
-    // PTY exists. E2E hidden windows can create tabs before panes mount, so
-    // seed the live-PTY and stable-layout maps explicitly and let agent-status
-    // writes drive the same sortEpoch path that hook events use in the app.
+    // Cold sort holds until a live PTY exists; seed live/stable-layout maps for hidden windows, then drive production sortEpoch via agent status.
     store.setState((current) => {
       const blockedLayout = current.terminalLayoutsByTabId[blockedTab.id]
       const doneLayout = current.terminalLayoutsByTabId[doneTab.id]

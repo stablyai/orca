@@ -1,7 +1,4 @@
-/**
- * Files, Source Control and review for a server workspace, from a phone paired with the desktop:
- * each call names the server with `executionHost`, and its effect lands on the server, never the Mac.
- */
+// Phone executionHost calls must read/write the server workspace’s files, Git and review through the desktop relay.
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
@@ -99,7 +96,6 @@ test('phone reads, uploads, commits and reviews in a server workspace through th
       .not.toBe('')
     const worktree = `id:${worktreeId}`
 
-    // Open: the server's file, read on the server.
     const opened = z
       .looseObject({ content: z.string() })
       .parse(await result(socket, 'files.read', { worktree, relativePath: 'NOTES.md' }, server))
@@ -126,7 +122,6 @@ test('phone reads, uploads, commits and reviews in a server workspace through th
       .parse(await result(socket, 'clipboard.commitImageUpload', { uploadId }, server))
     expect(existsSync(uploaded)).toBe(true)
 
-    // Commit: lands in the server's repository.
     await result(socket, 'git.stage', { worktree, filePath: 'NOTES.md' }, server)
     expect(
       await result(socket, 'git.commit', { worktree, message: 'from the phone' }, server)
@@ -134,7 +129,6 @@ test('phone reads, uploads, commits and reviews in a server workspace through th
     expect(git('log', '-1', '--format=%s').trim()).toBe('from the phone')
     expect(git('status', '--porcelain').trim()).toBe('')
 
-    // Review: provider calls run on the server's repository, as the desktop runs them.
     const { repos } = ReposSchema.parse(await result(socket, 'repo.list', {}, server))
     const repo = repos.find((row) => row.path === githubRepo)?.id ?? ''
     expect(await result(socket, 'github.repoSlug', { repo }, server)).toMatchObject({

@@ -48,8 +48,7 @@ import { ProviderDetailsMenu } from './ProviderDetailsMenu'
 import { getClaudeAccountSyncKey } from './provider-account-sync-key'
 import { signInToClaudeAccount } from '@/lib/claude-account-sign-in'
 
-// Exported so its account-switch/reset logic is preserved for row drill-in even
-// though the footer now opens the consolidated UsageRosterPanel first.
+// Retain account switch/reset drill-in even though the footer now opens UsageRosterPanel.
 export function ClaudeSwitcherMenu({
   claude,
   compact,
@@ -84,7 +83,6 @@ export function ClaudeSwitcherMenu({
   const claudeTarget = useAppStore((s) => s.rateLimits.claudeTarget)
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  // Why: no host picker; the focused workspace's owner, else the default scope host.
   const { target: runtimeTarget, wslHostDistro } = useActiveAccountOwner(defaultScopeHost(settings))
   const activeRuntimeEnvironmentId = runtimeTargetEnvironmentId(runtimeTarget)
   const hasActiveRuntimeEnvironment = activeRuntimeEnvironmentId !== null

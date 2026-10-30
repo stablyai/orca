@@ -10,6 +10,7 @@ import {
 import { createMobileCreateTestNotifier } from '../../orca-runtime-test-scenario-builders.spec'
 import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-pane-tree'
 import { ProvisioningRuntime } from '../../orca-runtime-layout-owner-start-fixture'
+import { committingSpawn, registerBoundPty } from '../../bind-first-pane.test-fixture'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
@@ -56,16 +57,21 @@ describe('a split of a pane the window draws, in a layout-owner build', () => {
       }))
     })
     const statusesSeen: unknown[] = []
-    const spawn = vi.fn(async (args: { tabId?: string; leafId?: string }) => {
+    const spawn = vi.fn(async (args: { worktreeId?: string; tabId?: string; leafId?: string }) => {
       statusesSeen.push(runtime.startStatusOf(`${args.tabId}:${args.leafId}`))
       return { id: `pty-split-${spawn.mock.calls.length}` }
     })
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null,
       getCwd: async () => '/repo/src'
+    })
+    // The source pane's terminal runs, bound in main's layout as its spawn commit left it.
+    registerBoundPty(runtime, 'pty-0', TEST_WORKTREE_ID, null, {
+      tabId: TAB_ID,
+      leafId: HEADLESS_LEAF_ID
     })
     runtime.syncWindowGraph(1, graph())
     const handle = runtime.getTerminalHandleForPaneKey(makePaneKey(TAB_ID, HEADLESS_LEAF_ID))
@@ -102,7 +108,7 @@ describe('a split of a pane the window draws, in a layout-owner build', () => {
       cols: 120,
       rows: 40
     })
-    // Views see the pane as starting while it starts, so none starts its own; then it clears.
+    // Publish starting status to prevent views spawning duplicates, then clear it after binding.
     expect(statusesSeen).toEqual([{ status: 'starting' }])
     expect(runtime.startStatusOf(makePaneKey(TAB_ID, split.leafId ?? ''))).toBeNull()
     expect(split.tabId).toBe(TAB_ID)
@@ -256,7 +262,6 @@ describe('a split of a pane the window draws, in a layout-owner build', () => {
 
       const root = getSession().terminalLayoutsByTabId[TAB_ID]?.root
       expect(root ? collectLayoutLeafIdsInOrder(root) : []).not.toContain(NEW_LEAF_ID)
-      // Nothing is left showing a start for a pane that is gone.
       expect(runtime.startStatusOf(makePaneKey(TAB_ID, NEW_LEAF_ID))).toBeNull()
     }
   )
@@ -310,7 +315,6 @@ describe('a split of a pane the window draws, in a layout-owner build', () => {
         { direction: 'vertical', newLeafId: HEADLESS_LEAF_ID, keepPaneOnStartFailure: true }
       )
     ).rejects.toThrow('pane_exists')
-    // The live pane is not marked as a failed start.
     expect(runtime.startStatusOf(makePaneKey(TAB_ID, HEADLESS_LEAF_ID))).toBeNull()
   })
 })

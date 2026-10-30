@@ -21,10 +21,7 @@ import {
 import { startFreezableTcpProxy, type FreezableTcpProxy } from './helpers/freezable-tcp-proxy'
 import { decodePairingOffer, encodePairingOffer } from '../../src/shared/pairing'
 
-/**
- * Long enough for the host to void the lease. A reset outage starts the 15s lease grace at once; a
- * silent one first needs the host's heartbeat to reap the socket (three missed 15s probes).
- */
+// Outlast the 15s lease grace; silent outages first need three missed 15s heartbeats to reap the socket.
 const OUTAGE_MS = { reset: 25_000, silent: 100_000 } as const
 
 async function readPageHostGeneration(
@@ -58,11 +55,7 @@ async function remountBrowserTab(
   return page.getByText('Client-hosted browser unavailable').count()
 }
 
-/**
- * Neither Orca process restarts; only the network between them goes away for longer than the lease
- * grace. When it returns, the same desktop must host its page again on its own, instead of leaving
- * the tab on "Client-hosted browser unavailable … attached to a different desktop" for good.
- */
+// Without restarting either app, recover the same desktop’s page after network loss voids its lease.
 for (const mode of ['silent', 'reset'] as const) {
   test(`the same desktop re-hosts its browser tab after a ${mode} network outage longer than the lease grace`, async ({
     testRepoPath
@@ -104,8 +97,7 @@ for (const mode of ['silent', 'reset'] as const) {
       await new Promise((resolve) => setTimeout(resolve, OUTAGE_MS[mode]))
       proxy.restore()
 
-      // Why the generation: only a newly minted placement proves the page was hosted again, rather
-      // than read before the voided lease's guest was torn down.
+      // Require a fresh placement generation so a stale guest read cannot masquerade as re-hosting.
       try {
         await expect
           .poll(() => readPageHostGeneration(client!, opened.localPageId), {

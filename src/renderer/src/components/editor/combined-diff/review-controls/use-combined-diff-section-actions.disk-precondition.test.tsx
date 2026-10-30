@@ -5,6 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
 import type { DiffSection } from '../../diff-section-types'
 import type { OpenFile } from '@/store/slices/editor'
+import type * as EditorFileOperationOwner from '@/lib/editor-file-operation-owner'
 import { useCombinedDiffSectionActions } from './use-combined-diff-section-actions'
 import { getStoredTextDiffResult } from '../../large-diff-section-content'
 
@@ -13,7 +14,8 @@ const mocks = vi.hoisted(() => ({ writeRuntimeFile: vi.fn() }))
 vi.mock('@/runtime/runtime-file-mutation-client', () => ({
   writeRuntimeFile: mocks.writeRuntimeFile
 }))
-vi.mock('@/lib/editor-file-operation-owner', () => ({
+vi.mock('@/lib/editor-file-operation-owner', async (importOriginal) => ({
+  ...(await importOriginal<typeof EditorFileOperationOwner>()),
   getEditorFileOperationContext: () => ({ target: { kind: 'local' } })
 }))
 vi.mock('@/store', () => {

@@ -1,7 +1,8 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const terminalSettingsScreenStyles = StyleSheet.create({
+export const terminalSettingsScreenStyles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase,
@@ -88,4 +89,4 @@ export const terminalSettingsScreenStyles = StyleSheet.create({
     backgroundColor: colors.borderSubtle,
     marginHorizontal: spacing.md
   }
-})
+}))

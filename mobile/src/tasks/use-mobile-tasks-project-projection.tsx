@@ -41,8 +41,7 @@ export function useMobileTasksProjectProjection(model: WorkspaceAndProjectStateM
     taskStateHydrated,
     tasksSupportState
   } = model
-  // Why: project detail text inputs rerender this screen while comments stay
-  // unchanged; keep grouping out of the typing path.
+  // Memoize grouping so detail-text edits do not regroup unchanged comments.
   const projectDetailCommentGroups = useMemo(
     () =>
       groupDetailComments(projectRowDetail?.provider === 'github' ? projectRowDetail.comments : []),
@@ -88,9 +87,7 @@ export function useMobileTasksProjectProjection(model: WorkspaceAndProjectStateM
       ) as RepoSummary | null,
     [activeGitHubProjectHost, githubRepoSlugCache, hostedRepos]
   )
-  // Why: `every` is vacuously true on an empty repo list, so readiness has to ask
-  // the resource whether that list is real yet. Otherwise the board renders
-  // "No project items" for a board whose repos simply have not arrived.
+  // Empty every() is true before repos load; consult resource readiness before claiming No project items.
   const githubProjectRepoSlugReady = useMemo(
     () =>
       hasSettledHostRepoList(repoList.state) &&

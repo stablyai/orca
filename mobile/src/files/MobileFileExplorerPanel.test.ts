@@ -8,6 +8,7 @@ import type { RpcResponse } from '../transport/types'
 type MockClient = {
   sendRequest: ReturnType<typeof vi.fn>
 }
+const mounted: ReactTestRenderer[] = []
 
 const mockTransport = vi.hoisted(
   (): {
@@ -120,6 +121,7 @@ async function renderExplorer(): Promise<ReactTestRenderer> {
   if (!renderer) {
     throw new Error('MobileFileExplorerPanel did not render')
   }
+  mounted.push(renderer)
   return renderer
 }
 
@@ -160,6 +162,9 @@ function renderedText(renderer: ReactTestRenderer): string {
 
 describe('MobileFileExplorerPanel', () => {
   afterEach(() => {
+    for (const renderer of mounted.splice(0)) {
+      act(() => renderer.unmount())
+    }
     vi.restoreAllMocks()
     mockTransport.client = null
     mockTransport.connectionState = 'connected'
@@ -406,8 +411,7 @@ describe('MobileFileExplorerPanel', () => {
 
     await pressByLabel(renderer, 'Open folder src')
     expect(renderedText(renderer)).toContain('app.ts')
-    // Every directory comes from the synthesized cache: one readDir attempt
-    // plus one files.list call total, no per-directory RPCs afterwards.
+    // The synthesized cache needs one readDir attempt and one files.list call, with no per-directory RPCs.
     expect(legacyClient.sendRequest).toHaveBeenCalledTimes(2)
   })
 
@@ -525,8 +529,7 @@ describe('MobileFileExplorerPanel', () => {
     })
 
     it("keeps a folder's Retry on the page, whose read runs when the shell reconnects", async () => {
-      // The one retry that does something without a re-dial: it queues the folder, and the
-      // queue drains on the next `connected` whoever brought it back.
+      // Queue the read even without re-dial; any later connected event drains it.
       mockTransport.forceReconnect = null
       const client = failingClient(new Set(['src']))
       mockTransport.client = client
@@ -545,6 +548,8 @@ describe('MobileFileExplorerPanel', () => {
           relativePath: 'src'
         })
       )
+      expect(renderedText(renderer)).toContain('app.ts')
+      expect(renderedText(renderer)).not.toContain('read failed')
     })
   })
 })

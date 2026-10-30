@@ -56,17 +56,7 @@ function getCardWorktreeId(card: HTMLElement): string | undefined {
   return card.dataset.workspaceBoardWorktreeId ?? card.dataset.workspaceBoardCardId
 }
 
-/**
- * `viewIds` is the lane in the index space `getCardDropTarget` reports, and
- * `fullLaneIds` is the lane's whole membership. Board search hides non-matching
- * cards, so lanes publish their full membership for exactly this reader.
- *
- * Why the virtual layout first: lanes virtualize, so the mounted cards are a
- * window rather than the lane view, and `getCardDropTarget` indexes the same
- * virtual layout. The DOM scan is only the fallback for a lane the virtualizer
- * never claimed — there the unfiltered card list is the full lane, since a card
- * the browser is not laying out is still a member for manual-order purposes.
- */
+/** Prefer the virtualizer’s complete view over mounted cards; fullLaneIds also retains search-hidden members. */
 function toLaneDropIds(lane: HTMLElement): { fullLaneIds: string[]; viewIds: string[] } {
   const publishedFullLaneIds = parseWorkspaceLaneFullIds(lane.dataset.workspaceLaneFullIds)
   const laneScroll = lane.querySelector<HTMLElement>(LANE_SCROLL_SELECTOR)
@@ -154,13 +144,7 @@ export function getWorkspaceKanbanSidebarDropTarget(
   return getCardDropTarget(board, x, y)
 }
 
-/**
- * Translates a tracked drop index — which counts the lane's *view* items,
- * matching the drop indicator — onto the full lane that
- * `getWorkspaceKanbanSidebarDropGroups` reports. Call this once, at the commit
- * boundary: a tracked target can be committed after the pointer has left the
- * lane, so translating earlier would miss that path.
- */
+/** Translate view to full-lane indexes once at commit, including tracked drops committed after leaving the lane. */
 export function resolveWorkspaceKanbanSidebarFullLaneDropIndex(
   status: WorkspaceStatus,
   viewDropIndex: number

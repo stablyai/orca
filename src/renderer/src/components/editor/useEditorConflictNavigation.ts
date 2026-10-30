@@ -15,13 +15,14 @@ export type EditorConflictNavigation = {
 
 export function useEditorConflictNavigation(): (
   file: OpenFile,
-  content: string
+  content: string,
+  viewStateId: string
 ) => EditorConflictNavigation | undefined {
   const setPendingEditorReveal = useAppStore((state) => state.setPendingEditorReveal)
   const [navigationIndexByFile, setNavigationIndexByFile] = useState<Record<string, number>>({})
 
   return useCallback(
-    (file: OpenFile, content: string) => {
+    (file: OpenFile, content: string, viewStateId: string) => {
       const blocks = findGitConflictBlocks(content)
       if (blocks.length === 0) {
         return undefined
@@ -48,6 +49,8 @@ export function useEditorConflictNavigation(): (
           queueMicrotask(() => {
             setPendingEditorReveal({
               filePath: file.filePath,
+              fileId: file.id,
+              viewStateId,
               line,
               column: 1,
               matchLength: markerLineLength

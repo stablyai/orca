@@ -1,5 +1,4 @@
-// A layout-owner build's record of a tab order the window set itself (an anchored create, a
-// paired client's reorder): main moves the same tabs, so the window's save changes no order.
+// Mirror window-set tab order to main so the subsequent save cannot reorder anchored creates or paired-client moves.
 
 import { recordLayoutApply } from '@/runtime/layout-apply-send'
 import { tabOrderAnchor, tabOrderMoves } from '../../../../../shared/workspace-layout/tab-order'

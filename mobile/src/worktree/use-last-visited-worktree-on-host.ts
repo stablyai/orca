@@ -7,12 +7,8 @@ import {
   subscribeLastVisitedWorktree
 } from './last-visited-worktree-by-host'
 
-/**
- * The workspace this phone last opened on `hostId`: stored, then each visit noted in this context
- * (a list tap) or written through this context's store (in the app, a session page's write).
- * A web page's store is its load-time copy, so a visit another page makes reaches it on reload.
- * Null until the stored visit is read, and when this phone has opened nothing there.
- */
+// Track stored and locally noted visits; other pages reach a web page’s load-time copy only on reload.
+// Null until history loads or when this host has no visit.
 export function useLastVisitedWorktreeOnHost(
   hostId: string | undefined
 ): LastVisitedWorktreeOnHost | null {
@@ -58,6 +54,5 @@ export function useLastVisitedWorktreeOnHost(
     }
   }, [hostId])
 
-  // Keyed by host so a switch to another host never shows the last one's visit.
   return visited && visited.hostId === hostId ? visited.value : null
 }

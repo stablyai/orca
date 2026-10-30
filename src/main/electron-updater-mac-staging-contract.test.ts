@@ -2,8 +2,7 @@ import { EventEmitter } from 'node:events'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { MacUpdater } from 'electron-updater/out/MacUpdater'
 
-// Why: supervised serve installs rely on these MacUpdater behaviors, which every updater suite mocks;
-// an electron-updater upgrade that changed them would silently bring back the macOS serve deadlock.
+// Exercise the real updater: mocks cannot catch upstream changes that deadlock supervised serve.
 describe('electron-updater MacUpdater staging contract', () => {
   it('stages Squirrel from quitAndInstall, not from the finished download, when autoInstallOnAppQuit is off', async () => {
     const nativeUpdater = Object.assign(new EventEmitter(), {
@@ -24,7 +23,7 @@ describe('electron-updater MacUpdater staging contract', () => {
       }
     }
 
-    // Why: a regression that stages here never settles the await, so cleanup must not depend on the body finishing.
+    // Register cleanup before awaiting a staging call that could hang on regression.
     onTestFinished(() => updater.closeServerIfExists())
 
     await MacUpdater.prototype['updateDownloaded'].call(

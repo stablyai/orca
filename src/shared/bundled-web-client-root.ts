@@ -4,14 +4,11 @@ import { WEB_CLIENT_FILES_FILENAME } from './bundled-web-client-manifest'
 
 export const WEB_CLIENT_INDEX_FILENAME = 'web-index.html'
 
-/**
- * The browser client a paired server serves, found beside an app root. Shared so Electron
- * `--serve` and the CLI handing orcad its root look in the same places.
- */
+/** Share paired-browser bundle lookup between Electron --serve and the CLI supplying orcad’s root. */
 export function findBundledWebClientRoot(appPath: string): string | undefined {
   const roots = [
     join(appPath, 'out', 'web'),
-    // Why: unpacked electron-vite entrypoints set appPath to out/main, next to the web bundle.
+    // Unpacked electron-vite sets appPath to out/main beside the web bundle.
     join(appPath, '..', 'web')
   ]
   const standalone = roots.find((root) => existsSync(join(root, WEB_CLIENT_INDEX_FILENAME)))

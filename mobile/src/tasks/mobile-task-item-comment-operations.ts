@@ -6,13 +6,7 @@ import {
   taskCommentWrittenSchema
 } from './task-item-comment-reply-schema'
 
-// Writing comments and replies on a task item, over all three providers. Every one of these
-// answers with an accepted `{ ok, error, comment }` envelope the call site reads itself, and every
-// one keeps its own fallback copy for an envelope that carries no error text — so the acceptance
-// policy here only decides whether there is an envelope to read at all.
-//
-// The five that answer with a comment share one reader, because they share one reply convention;
-// each schema lives in task-item-comment-reply-schema.ts with the consumer line behind it.
+// Accepted comment envelopes may fail in-band; callers keep provider-specific fallback copy.
 
 const taskCommentWrittenReader = rpcResultVariant('task-comment-written', taskCommentWrittenSchema)
 
@@ -66,7 +60,6 @@ export const gitlabMergeRequestCommentWrite = bindDeferredRpcOperation(
   })
 )
 
-/** Linear answers with an id rather than a comment, which the sheet turns into a local row. */
 export const linearIssueCommentWrite = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'linear.add-issue-comment',
@@ -77,7 +70,7 @@ export const linearIssueCommentWrite = bindDeferredRpcOperation(
   })
 )
 
-/** Resolving or reopening a review thread. The reply is `true` or the write did not happen. */
+// Thread toggles acknowledge with true; any other reply means the write did not happen.
 export const githubReviewThreadResolve = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'github.resolve-review-thread',

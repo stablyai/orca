@@ -14,6 +14,7 @@ vi.mock('react-native', () => ({
 }))
 
 vi.mock('./pr-sidebar/MermaidDiagram', () => ({ MermaidDiagram: 'MermaidDiagram' }))
+vi.mock('./MobileSourceCopyButton', () => ({ MobileSourceCopyButton: 'MobileSourceCopyButton' }))
 
 type TestNode = {
   type: string
@@ -65,8 +66,7 @@ function selectableFor(tree: TestNode, needle: string): boolean {
 describe('MobileMarkdown selection', () => {
   afterEach(() => vi.clearAllMocks())
 
-  // Paragraphs are the default block for agent prose, and were the one block
-  // type left non-selectable when the others gained it.
+  // Regress paragraphs left non-selectable when other blocks gained iOS selection.
   it.each([
     ['paragraph', 'Paragraph prose here.'],
     ['heading', 'Heading prose'],

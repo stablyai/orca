@@ -1,5 +1,4 @@
-// The identity and wording of one structured attention edge, shared by every surface that
-// announces it: the desktop's banner and unread, and the execution host's own phone push.
+// Share attention identity/wording across desktop banners/unread and execution-host mobile pushes.
 
 import {
   agentSessionScopeKey,
@@ -116,8 +115,7 @@ export function isStructuredAttentionOrigin(value: unknown): value is Structured
   )
 }
 
-/** Every attention key this host can mint for one session starts with this: what acknowledging
- *  the session retires. */
+/** Session acknowledgement retires all host-minted attention keys with this prefix. */
 export function agentSessionAttentionSubjectPrefix(
   scope: AgentSessionExecutionLocation,
   sessionId: string
@@ -126,8 +124,7 @@ export function agentSessionAttentionSubjectPrefix(
   return `${parts.map(encodeURIComponent).join(':')}:`
 }
 
-/** One edge's identity, shared by every surface that announces it: the desktop banner, the host's
- *  mobile push and their retirement all use it, and delivery dedupes on it rather than a time window. */
+/** Desktop/mobile delivery and retirement share one edge key; dedupe by identity rather than time windows. */
 export function agentSessionAttentionKey(edge: AgentSessionAttentionEdge): string {
   if (edge.type === 'prompt') {
     return agentSessionPromptAttentionKey(
@@ -148,8 +145,7 @@ export function agentSessionPromptAttentionKey(
   return `${agentSessionAttentionSubjectPrefix(scope, sessionId)}prompt:${encodeURIComponent(promptId)}`
 }
 
-/** What one edge tells the user, worded once for every surface; null when it tells nothing.
- *  `blocked` is the row's "needs input". */
+/** Share edge wording across surfaces; blocked means needs input, and null carries no news. */
 export function agentSessionAttentionNews(
   edge: AgentSessionAttentionEdge
 ): { agentState: 'blocked' | 'done'; outcome?: AgentJournalTurnOutcome } | null {
