@@ -724,6 +724,12 @@ it.each(['native', 'consent'] as const)(
         const native = await import('./push-native-preparation')
         const consent = await import('./push-consent-preparation')
         const context = `${kind}/${stage}/${action}`
+        const currentToken = stage === 'native' && action === 'token'
+        if (currentToken) {
+          ports.native = { ...T2, token: 'b'.repeat(64) }
+        }
+        const initialToken = ports.native
+        const nativeCalls = ports.nativeCalls
         ports.storage.set('orca:pushServiceNotificationsEnabled', 'true')
         if (kind === 'saved') {
           const { mobilePushRouteKey } = await import('./push-route-declaration')
@@ -754,6 +760,7 @@ it.each(['native', 'consent'] as const)(
           release = registration.attachPushRegistration('actions', connection)
           detach.push(release)
           await drain()
+          const listener = ports.listener
           expect(registration.pushRegistrationSnapshotForTests().preparations, context).toBe(1)
           let rollback: (() => void) | undefined
           if (action === 'disable') {
@@ -795,12 +802,39 @@ it.each(['native', 'consent'] as const)(
             save.mockRestore()
           }
           await drain()
-          expect(
+          const registerCalls = () =>
             connection.sendRequest.mock.calls.filter(
               ([method]) => method === 'notifications.registerPush'
-            ),
-            context
-          ).toHaveLength(0)
+            )
+          if (currentToken) {
+            const expected = {
+              ...T2,
+              filter: { onlyWhenDesktopAway: true, sound: true }
+            }
+            expect(
+              registerCalls().map(([, params]) => params),
+              context
+            ).toEqual([expected])
+            expect(ports.nativeCalls - nativeCalls, context).toBe(1)
+            expect(native.pushNativeSnapshotForTests(), context).toEqual({
+              physical: 1,
+              assignment: 0,
+              entries: 0,
+              timers: 0,
+              callables: 0
+            })
+            ports.nativeHold?.resolve(initialToken.token)
+            await ports.nativeHold?.promise
+            await drain()
+            expect(
+              registerCalls().map(([, params]) => params),
+              `${context}: late T1`
+            ).toEqual([expected])
+            expect(ports.nativeCalls - nativeCalls, context).toBe(1)
+            expect(native.pushNativeSnapshotForTests().physical, context).toBe(0)
+          } else {
+            expect(registerCalls(), context).toHaveLength(0)
+          }
           expect(
             registration.pushRegistrationSnapshotForTests().preparations,
             context
@@ -820,11 +854,14 @@ it.each(['native', 'consent'] as const)(
             hosts: 0,
             callables: 0
           })
+          listener?.(initialToken)
+          await drain()
+          expect(registerCalls(), `${context}: retired listener`).toHaveLength(currentToken ? 1 : 0)
         } finally {
           stop?.()
           release?.()
           ports.consentHold?.gate.resolve()
-          ports.nativeHold?.resolve(ports.native.token)
+          ports.nativeHold?.resolve(initialToken.token)
           keyRead.resolve()
           await keyRead.promise
           await ports.consentHold?.gate.promise

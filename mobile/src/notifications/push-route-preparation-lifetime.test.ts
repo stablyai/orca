@@ -241,10 +241,62 @@ it.each(['saved', 'missing'] as const)(
           kind === 'missing' && !absent ? 1 : 0
         )
         const publisherLive = kind === 'saved' && (action === 'background' || action === 'remove')
-        expect(
-          send,
-          `${context}: independent authenticated publisher; actual operations ${JSON.stringify(receipts)}`
-        ).toHaveBeenCalledTimes(publisherLive || !absent ? 2 : 0)
+        const publicationContext = `${context}: independent authenticated publisher; actual operations ${JSON.stringify(receipts)}`
+        if (kind === 'saved' && action === 'renewal') {
+          expect(
+            operations.map((operation) => operation.action),
+            publicationContext
+          ).toEqual(['read', 'replace', 'read', 'replace'])
+          const [initial, renewal] = operations.filter(
+            (operation) => operation.action === 'replace'
+          )
+          if (!initial || !renewal) {
+            throw new Error(`${publicationContext}: missing initial or owed renewal replace`)
+          }
+          const q = [initial.platform, initial.apnsEnvironment, initial.token, initial.routeKey]
+          expect(
+            operations.map((operation) => [
+              operation.platform,
+              operation.apnsEnvironment,
+              operation.token,
+              operation.routeKey
+            ]),
+            publicationContext
+          ).toEqual([q, q, q, q])
+          expect(initial, publicationContext).toMatchObject(token)
+          expect(initial.expectedVersion, publicationContext).toBeNull()
+          expect(renewal.expectedVersion, publicationContext).toBe(initial.version)
+          expect(renewal.version, publicationContext).toBeGreaterThan(initial.version)
+          expect(renewal.hosts, publicationContext).toEqual(initial.hosts)
+          expect(initial.hosts, publicationContext).toHaveLength(1)
+          expect(receipts, publicationContext).toEqual([
+            { action: 'read', status: 200, version: null },
+            { action: 'replace', status: 200, version: initial.version, expectedVersion: null },
+            { action: 'read', status: 200, version: initial.version },
+            {
+              action: 'replace',
+              status: 200,
+              version: renewal.version,
+              expectedVersion: initial.version
+            }
+          ])
+          expect(current.get(JSON.stringify(q)), publicationContext).toEqual({
+            version: renewal.version,
+            hosts: initial.hosts
+          })
+          expect(state.storage.get('orca:push-route-version'), publicationContext).toBe(
+            String(renewal.version)
+          )
+          expect(send, publicationContext).toHaveBeenCalledTimes(receipts.length)
+          const completedOperations = operations.slice()
+          const completedReceipts = receipts.slice()
+          await settle()
+          expect(operations, `${context}: no new wake`).toEqual(completedOperations)
+          expect(receipts, `${context}: no new wake`).toEqual(completedReceipts)
+          expect(send, `${context}: no new wake`).toHaveBeenCalledTimes(completedReceipts.length)
+        } else {
+          expect(send, publicationContext).toHaveBeenCalledTimes(publisherLive || !absent ? 2 : 0)
+        }
         if (action === 'remove') {
           recover?.()
           await settle()

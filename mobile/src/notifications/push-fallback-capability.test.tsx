@@ -64,6 +64,7 @@ vi.mock('../transport/host-store', () => ({
 }))
 vi.mock('../storage/preferences', () => ({
   loadPushNotificationsEnabled: async () => true,
+  readPushNotificationsPreference: async () => ({ value: true, loaded: true }),
   saveRemotePushHostRegistrations: async () => {},
   loadRemotePushHostRegistrations: async () => ({
     registeredHostIds: [],
