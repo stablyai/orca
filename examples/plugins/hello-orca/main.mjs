@@ -19,4 +19,14 @@ export default function activate(orca) {
   orca.events.on('agent.status.changed', (payload) => {
     orca.log(`agent status: ${payload.state} in ${payload.workspaceId ?? 'unknown workspace'}`)
   })
+
+  // A panel asks for the count; the worker answers through the panel, not a notification.
+  orca.events.on('panel.action', async ({ panelId, action }) => {
+    if (action !== 'count') {
+      return
+    }
+    const stored = await orca.host.call('storage.get', { key: 'pings' })
+    const pings = typeof stored?.value === 'number' ? stored.value : 0
+    await orca.host.call('panel.post', { panelId, payload: { pings } })
+  })
 }
