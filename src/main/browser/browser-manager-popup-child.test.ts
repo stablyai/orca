@@ -299,4 +299,41 @@ describe('browserManager popup child policies', () => {
     browserManager.unregisterGuest('browser-1')
     expect(browserManager.getPopupPages()).toEqual([])
   })
+
+  it("saves a download an agent claimed on a popup page to the agent's path", async () => {
+    let didCreateWindow: (window: { webContents: unknown }) => void = () => {}
+    const opener = {
+      id: 406,
+      isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setWindowOpenHandler: vi.fn(),
+      on: vi.fn((event: string, listener: (window: { webContents: unknown }) => void) => {
+        if (event === 'did-create-window') {
+          didCreateWindow = listener
+        }
+      }),
+      off: vi.fn()
+    }
+    const popup = { ...opener, id: 4060, on: vi.fn() }
+    webContentsFromIdMock.mockImplementation((id: number) =>
+      id === opener.id ? opener : id === popup.id ? popup : null
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the policy reads only the fake's listed members.
+    browserManager.attachGuestPolicies(opener as unknown as Electron.WebContents)
+    browserManager.registerGuest({
+      browserPageId: 'browser-1',
+      webContentsId: opener.id,
+      rendererWebContentsId
+    })
+    didCreateWindow({ webContents: popup })
+
+    const claim = browserManager.claimNextDownload(popup.id, '/work/out/receipt.pdf')
+    const item = createDownloadItem()
+    browserManager.handleGuestWillDownload({ guestWebContentsId: popup.id, item })
+
+    expect(item.setSavePath).toHaveBeenCalledWith('/work/out/receipt.pdf')
+    await expect(claim.started).resolves.toBe(true)
+    claim.release()
+  })
 })

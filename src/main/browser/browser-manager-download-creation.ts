@@ -53,10 +53,14 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
   }
 
   /**
-   * Agent `download`: saves the next download this page (or its popups) starts to `savePath`.
+   * Agent `download`: saves the next download this tab (or its popups) starts to `savePath`.
    * New-tab links opened meanwhile are downloaded in place instead of opening a tab.
    */
   claimNextDownload(guestWebContentsId: number, savePath: string): BrowserDownloadClaim {
+    // Claims live on the tab's root guest, where will-download and the popup policy look them up.
+    const rootGuestWebContentsId =
+      this.resolvePopupOwnerContext(guestWebContentsId)?.rootGuestWebContentsId ??
+      guestWebContentsId
     const started = Promise.withResolvers<boolean>()
     const finished = Promise.withResolvers<BrowserDownloadFinishedEvent>()
     const claim: PendingDownloadClaim = {
@@ -64,13 +68,13 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
       start: started.resolve,
       finish: finished.resolve
     }
-    this.downloadClaimsByGuestId.set(guestWebContentsId, claim)
+    this.downloadClaimsByGuestId.set(rootGuestWebContentsId, claim)
     return {
       started: started.promise,
       finished: finished.promise,
       release: () => {
-        if (this.downloadClaimsByGuestId.get(guestWebContentsId) === claim) {
-          this.downloadClaimsByGuestId.delete(guestWebContentsId)
+        if (this.downloadClaimsByGuestId.get(rootGuestWebContentsId) === claim) {
+          this.downloadClaimsByGuestId.delete(rootGuestWebContentsId)
         }
       }
     }
