@@ -1,17 +1,15 @@
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import type { AgentType } from '../../../../shared/agent-status-types'
-import {
-  getAgentSessionOptionCatalog,
-  type CatalogModel
-} from '../../../../shared/agent-session-option-catalog'
-import { matchNativeChatCatalogModelId } from '../../../../shared/native-chat-session-option-state'
-import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
+import { getAgentSessionOptionCatalog } from '../../../../shared/agent-session-option-catalog'
+import { matchNativeChatCatalogModelId } from '../../../../shared/native-chat/input/native-chat-session-option-state'
+import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { useAppStore } from '../../store'
+import { sayNativeChatSessionOptionTranslated } from './native-chat-session-option-labels-text'
 import {
   createNativeChatPtySessionOptions,
   type NativeChatPtySessionOptionsSurface
-} from './native-chat-pty-session-options'
-import type { NativeChatSessionOptionDispatchCommand } from './native-chat-session-option-command-dispatch'
+} from '../../../../shared/native-chat-pty-session-options'
+import type { NativeChatSessionOptionDispatchCommand } from '../../../../shared/native-chat-session-option-dispatch'
 import {
   ensureNativeChatModelEnrichment,
   readNativeChatEnrichedModels,
@@ -30,25 +28,6 @@ const subscribeEmpty = (): (() => void) => () => {}
 const getEmptySnapshot = (): SessionOptionDescriptor[] => EMPTY_SNAPSHOT
 
 const CLIENT_SETTINGS_TARGET = { kind: 'local' } as const
-
-/** Retire authoritative missing model defaults too: launch sites without a picker still turn persisted IDs into -m arguments. */
-export async function retirePersistedModelMissingFromDiscovery(
-  agent: AgentType,
-  models: readonly CatalogModel[]
-): Promise<void> {
-  if (!getAgentSessionOptionCatalog(agent)?.discoveredModelsAreAuthoritative) {
-    return
-  }
-  // An empty list means the probe failed, not that the account has no models.
-  if (models.length === 0) {
-    return
-  }
-  await enqueueSessionOptionSettingsWrite(CLIENT_SETTINGS_TARGET, {
-    type: 'clear-model-if-missing',
-    agent,
-    availableModelIds: models.map((model) => model.id)
-  })
-}
 
 export function useNativeChatSessionOptions(args: {
   agent: AgentType
@@ -109,6 +88,7 @@ export function useNativeChatSessionOptions(args: {
       // Version-neutral family seeds keep the picker available while host discovery runs or fails.
       ...(discoveryContext ? { initialModels: discoveredModels ?? undefined } : {}),
       mode: targetPtyId ? 'live' : 'draft',
+      modelLabel: sayNativeChatSessionOptionTranslated('model'),
       reportedValues,
       dispatchCommand,
       canSwitchOmpModel,
@@ -224,14 +204,8 @@ export function useNativeChatSessionOptions(args: {
         if (reportedValues) {
           surface.reportSessionOptions(reportedValues)
         }
-        void retirePersistedModelMissingFromDiscovery(agent, models).catch(() => undefined)
       }
     )
-    // Subscriptions do not replay; inspect cached discovery so pre-mount probes can retire stale defaults.
-    const cached = readNativeChatEnrichedModels(agent, discoveryContext.hostKey)
-    if (cached) {
-      void retirePersistedModelMissingFromDiscovery(agent, cached).catch(() => undefined)
-    }
     ensureNativeChatModelEnrichment({
       agent,
       hostKey: discoveryContext.hostKey,

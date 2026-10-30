@@ -1,7 +1,8 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const mobileDiffReviewLayoutStyles = StyleSheet.create({
+export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
   safeArea: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -243,4 +244,4 @@ export const mobileDiffReviewLayoutStyles = StyleSheet.create({
     fontSize: typography.bodySize,
     fontWeight: '700'
   }
-})
+}))

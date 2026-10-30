@@ -203,9 +203,9 @@ describe("a chat assignee's liveness, stop and close", () => {
     const { dispatchId } = await dispatchToChat()
     const cleared = await clearChat(PEER_CHAT)
     expect(cleared).toBe(PEER_CHAT)
-    const getRecord = host.deps.store.getRecord.bind(host.deps.store)
-    vi.spyOn(host.deps.store, 'getRecord').mockImplementation((sessionId) =>
-      sessionId === cleared ? null : getRecord(sessionId)
+    const getConversation = host.deps.store.getConversation.bind(host.deps.store)
+    vi.spyOn(host.deps.store, 'getConversation').mockImplementation((sessionId) =>
+      sessionId === cleared ? null : getConversation(sessionId)
     )
 
     expect(await call('orchestration.workerShow', { dispatch: dispatchId })).toMatchObject({

@@ -11,7 +11,6 @@ import {
   resolveTerminalArtifactPath,
   useTerminalArtifactTempFiles
 } from './orca-runtime-files-terminal-artifact-fixtures'
-import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import { RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES } from './files/file-preview-budget'
 import type { RuntimeFileCommands } from './orca-runtime-files'
 
@@ -141,6 +140,45 @@ describe('RuntimeFileCommands', () => {
         )
       ).rejects.toThrow('terminal_file_grant_stale')
       await expect(readFile(artifactPath, 'utf8')).resolves.toBe('{"ok":"ext"}')
+    })
+
+    it('lets only one of two concurrent writes from different clients land', async () => {
+      const artifactPath = await tempFile('result.json', '{"ok":true}')
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+      // The registry stubs rename; commit for real so the second writer sees the first one's bytes.
+      renameMock.mockImplementation(async (from, to) => writeFile(to, await readFile(from)))
+
+      const first = absoluteFileTarget(await resolveTerminalArtifactPath(commands, artifactPath))
+      const second = absoluteFileTarget(
+        await resolveTerminalArtifactPath(commands, artifactPath, null, 'client-b')
+      )
+
+      const results = await Promise.allSettled([
+        commands.writeTerminalArtifactFile(
+          'id:wt-1',
+          first.grantId,
+          first.absolutePath,
+          '{"from":"a"}',
+          'client-a'
+        ),
+        commands.writeTerminalArtifactFile(
+          'id:wt-1',
+          second.grantId,
+          second.absolutePath,
+          '{"from":"b"}',
+          'client-b'
+        )
+      ])
+
+      const winner = results.findIndex((result) => result.status === 'fulfilled')
+      expect(results[1 - winner]).toMatchObject({
+        status: 'rejected',
+        reason: new Error('terminal_file_grant_stale')
+      })
+      await expect(readFile(artifactPath, 'utf8')).resolves.toBe(
+        winner === 0 ? '{"from":"a"}' : '{"from":"b"}'
+      )
     })
 
     it('keeps the original terminal artifact when atomic commit fails', async () => {
@@ -364,16 +402,13 @@ describe('RuntimeFileCommands', () => {
       await expect(readFile(artifactPath, 'utf8')).resolves.toBe('%PDF text-looking bytes')
     })
 
-    it('refuses a native-chat artifact on an SSH target as not served', async () => {
-      const { commands, store } = createRuntimeFileCommands({
-        path: '/repo',
-        hasRecentNativeChatOutputPath: vi.fn(() => true)
-      })
+    it('never reads this machine for a native-chat path outside an SSH workspace', async () => {
+      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
       store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
 
       await expect(
         resolveRemoteNativeChatArtifact(commands, '/home/me/report.json')
-      ).rejects.toThrow(SshHostNotServedError)
+      ).rejects.toThrow('outside an SSH workspace')
     })
   })
 })

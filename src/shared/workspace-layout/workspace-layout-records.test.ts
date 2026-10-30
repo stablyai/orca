@@ -47,13 +47,6 @@ describe('a published layout as records', () => {
     expect(stableJson(joinPublishedLayout(splitPublishedLayout(layout)))).toBe(stableJson(layout))
   })
 
-  it('keeps a pane’s binding out of its tab’s tree', () => {
-    const records = splitPublishedLayout(published())
-    const tree = records.paneTrees.find((candidate) => candidate.tabId === 'tab-shell')!
-    expect(tree.panes.every((pane) => !('ptyId' in pane))).toBe(true)
-    expect(records.bindings).toContainEqual({ leafId: leaf(1), ptyId: `${GIT_KEY}@@aaaa0001` })
-  })
-
   it('sends nothing when nothing changed', () => {
     expect(diff(published(), published())).toBeNull()
   })

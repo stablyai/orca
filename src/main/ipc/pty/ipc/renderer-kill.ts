@@ -3,7 +3,7 @@ import type {
   PtyFencedTerminationOutcome
 } from '../../../../shared/pty-fenced-termination'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getPtyIpc } from '../pty-host-bindings'
 import type { Store } from '../../../persistence'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'

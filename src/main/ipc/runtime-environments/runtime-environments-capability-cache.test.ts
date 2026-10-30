@@ -48,7 +48,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../../../shared/remote-runtime-client', () => ({
+vi.mock('../../../shared/remote-runtime/remote-runtime-client', () => ({
   sendRemoteRuntimeRequest: sendRemoteRuntimeRequestMock,
   subscribeRemoteRuntimeRequest: subscribeRemoteRuntimeRequestMock
 }))

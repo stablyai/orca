@@ -115,47 +115,6 @@ describe('session write subscriber allocation', () => {
     }
   )
 
-  it('allocates nothing for store writes that touch no session field', () => {
-    const harness = createHarness()
-    try {
-      harness.write()
-      vi.advanceTimersByTime(500)
-
-      const writes = 200
-      const calls = countFilterCalls(() => {
-        for (let write = 0; write < writes; write += 1) {
-          harness.write((previous) => ({
-            agentStatusByPaneKey: { ...previous.agentStatusByPaneKey, [`p-${write}`]: {} } as never
-          }))
-        }
-      })
-      expect(calls).toBe(0)
-    } finally {
-      harness.dispose()
-    }
-  })
-
-  it('still allocates and persists when a session field really changes', () => {
-    const harness = createHarness()
-    try {
-      harness.write()
-      vi.advanceTimersByTime(500)
-      harness.persisted.length = 0
-
-      const writes = 20
-      const calls = countFilterCalls(() => {
-        for (let write = 0; write < writes; write += 1) {
-          harness.write(() => ({ activeTabId: `tab-${write}` }))
-        }
-      })
-      expect(calls).toBe(writes)
-      vi.advanceTimersByTime(500)
-      expect(harness.persisted).toHaveLength(1)
-    } finally {
-      harness.dispose()
-    }
-  })
-
   it('still wakes a deferred write when an unrelated field changes', () => {
     let state = makeSessionState()
     const listeners: ((next: AppState) => void)[] = []

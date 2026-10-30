@@ -5,6 +5,9 @@ import type { PRState } from '../../../../src/shared/github/pull-request-types'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
 import type { GitHubPrRepoSlug } from '../../session/github-pr-rpc'
 import { colors } from '../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import type { Translate } from '../../i18n/mobile-i18n'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { canAddRootComment } from '../../session/pr-comment-actions'
 import { isPrSidebarDetailsPlaceholder } from '../../session/mobile-pr-sidebar-state'
 import type { MobilePrCommentActions } from '../../session/use-mobile-pr-comment-actions'
@@ -17,10 +20,6 @@ import {
   getPRCommentAudienceCounts,
   type PRCommentAudienceFilter
 } from '../../../../src/shared/pr-comment-audience'
-import {
-  PR_COMMENT_AUDIENCE_FILTERS,
-  getPRCommentAudienceEmptyLabel
-} from './pr-comment-audience-labels'
 import {
   getPRCommentGroupCount,
   getPRCommentGroupId,
@@ -48,6 +47,25 @@ type Props = {
 // Page comments in chunks: nested ScrollView cannot virtualize, and eager Markdown parse of whole timeline can ANR JS thread.
 const COMMENT_PAGE = 12
 
+function audienceFilters(t: Translate): { value: PRCommentAudienceFilter; label: string }[] {
+  return [
+    { value: 'all', label: t('pullRequest.commentsSection.all', 'All') },
+    { value: 'human', label: t('pullRequest.commentsSection.humans', 'Humans') },
+    { value: 'bot', label: t('pullRequest.commentsSection.bots', 'Bots') }
+  ]
+}
+
+function audienceEmptyLabel(filter: PRCommentAudienceFilter, t: Translate): string {
+  switch (filter) {
+    case 'bot':
+      return t('pullRequest.commentsSection.noBotComments', 'No bot comments.')
+    case 'human':
+      return t('pullRequest.commentsSection.noHumanComments', 'No human comments.')
+    case 'all':
+      return t('pullRequest.commentsSection.noComments', 'No comments yet.')
+  }
+}
+
 // Match desktop description/timeline with audience filter, threaded review replies, reactions and collapsible resolved threads.
 export function PRCommentsSection({
   details,
@@ -56,6 +74,8 @@ export function PRCommentsSection({
   actions,
   botAuthorOverrides
 }: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   // Null details means phase 2 loading; synthetic placeholder means failure, never empty success.
   const loadingDetails = details === null
   const detailsFailed = details != null && isPrSidebarDetailsPlaceholder(details)
@@ -109,25 +129,31 @@ export function PRCommentsSection({
   }
   const shownGroups = groups.slice(0, limit)
   const remaining = groups.length - shownGroups.length
+  const count = Math.min(remaining, COMMENT_PAGE)
 
   return (
     <>
-      <PRSection title="Description">
+      <PRSection title={t('pullRequest.commentsSection.description', 'Description')}>
         {loadingDetails ? (
           <ActivityIndicator color={colors.textSecondary} />
         ) : detailsFailed ? (
           <Text style={styles.noDescription}>
-            Could not load description. Tap refresh to try again.
+            {t(
+              'pullRequest.commentsSection.descriptionLoadFailed',
+              'Could not load description. Tap refresh to try again.'
+            )}
           </Text>
         ) : body.trim() ? (
           <CommentMarkdown content={body} variant="document" />
         ) : (
-          <Text style={styles.noDescription}>No description provided.</Text>
+          <Text style={styles.noDescription}>
+            {t('pullRequest.commentsSection.noDescription', 'No description provided.')}
+          </Text>
         )}
       </PRSection>
 
       <PRSection
-        title="Comments"
+        title={t('pullRequest.commentsSection.title', 'Comments')}
         trailing={
           comments.length > 0 ? (
             <View style={styles.countChip}>
@@ -139,16 +165,23 @@ export function PRCommentsSection({
         {loadingDetails ? (
           <ActivityIndicator color={colors.textSecondary} />
         ) : detailsFailed ? (
-          <Text style={styles.empty}>Could not load comments. Tap refresh to try again.</Text>
+          <Text style={styles.empty}>
+            {t(
+              'pullRequest.commentsSection.commentsLoadFailed',
+              'Could not load comments. Tap refresh to try again.'
+            )}
+          </Text>
         ) : (
           <View style={styles.list}>
             {comments.length === 0 ? (
-              <Text style={styles.empty}>No comments yet.</Text>
+              <Text style={styles.empty}>
+                {t('pullRequest.commentsSection.noComments', 'No comments yet.')}
+              </Text>
             ) : (
               <>
                 {isPr ? (
                   <View style={styles.audienceTabs}>
-                    {PR_COMMENT_AUDIENCE_FILTERS.map((tab) => {
+                    {audienceFilters(t).map((tab) => {
                       const active = tab.value === filter
                       return (
                         <Pressable
@@ -174,7 +207,7 @@ export function PRCommentsSection({
                   </View>
                 ) : null}
                 {visible.length === 0 ? (
-                  <Text style={styles.empty}>{getPRCommentAudienceEmptyLabel(filter)}</Text>
+                  <Text style={styles.empty}>{audienceEmptyLabel(filter, t)}</Text>
                 ) : (
                   <>
                     {shownGroups.map((group) => (
@@ -192,8 +225,15 @@ export function PRCommentsSection({
                         accessibilityRole="button"
                       >
                         <Text style={styles.showMoreText}>
-                          Show {Math.min(remaining, COMMENT_PAGE)} more
-                          {remaining > COMMENT_PAGE ? ` of ${remaining}` : ''}
+                          {remaining > COMMENT_PAGE
+                            ? t(
+                                'pullRequest.commentsSection.showMoreOf',
+                                'Show {{count}} more of {{remaining}}',
+                                { count, remaining }
+                              )
+                            : t('pullRequest.commentsSection.showMore', 'Show {{count}} more', {
+                                count
+                              })}
                         </Text>
                       </Pressable>
                     ) : null}
@@ -205,8 +245,11 @@ export function PRCommentsSection({
             {canComment && actions ? (
               <View style={styles.rootComposer}>
                 <PRCommentComposer
-                  placeholder="Add a comment…"
-                  submitLabel="Comment"
+                  placeholder={t(
+                    'pullRequest.commentsSection.addCommentPlaceholder',
+                    'Add a comment…'
+                  )}
+                  submitLabel={t('pullRequest.commentsSection.comment', 'Comment')}
                   submitting={actions.isRootBusy}
                   onSubmit={actions.addRootComment}
                 />
@@ -228,6 +271,8 @@ function CommentGroupView({
   actions?: PRCommentCardActions
   now: number
 }) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const [expanded, setExpanded] = useState(false)
   const cards =
     group.kind === 'thread'
@@ -263,8 +308,29 @@ function CommentGroupView({
       >
         <Chevron size={14} color={colors.textSecondary} strokeWidth={2.2} />
         <Text style={styles.resolvedHeaderText} numberOfLines={1}>
-          Resolved {group.kind === 'thread' ? 'thread' : 'comment'} by {root.author}
-          {count > 1 ? ` (${count})` : ''}
+          {group.kind === 'thread'
+            ? count === 1
+              ? t(
+                  'pullRequest.commentsSection.resolvedThreadSingle',
+                  'Resolved thread by {{author}}',
+                  { author: root.author }
+                )
+              : t(
+                  'pullRequest.commentsSection.resolvedThreadCount',
+                  'Resolved thread by {{author}} ({{count}})',
+                  { author: root.author, count }
+                )
+            : count === 1
+              ? t(
+                  'pullRequest.commentsSection.resolvedCommentSingle',
+                  'Resolved comment by {{author}}',
+                  { author: root.author }
+                )
+              : t(
+                  'pullRequest.commentsSection.resolvedCommentCount',
+                  'Resolved comment by {{author}} ({{count}})',
+                  { author: root.author, count }
+                )}
         </Text>
       </Pressable>
       {expanded ? <View style={shared.sectionBody}>{cards}</View> : null}

@@ -8,7 +8,7 @@ import {
 import type { UpdateCheckOptions } from '../../shared/update-status-types'
 import { translateMain } from '../i18n/main-i18n'
 import { createAppMenuSelectionItem, resolveNativeEditTarget } from './app-menu-selection-item'
-import { createAppMenuQuitItem } from './app-menu-quit-item'
+import { createAppMenuQuitItems, type AppMenuQuitHandlers } from './app-menu-quit-item'
 import { createAppMenuReloadAndDevToolsItems } from './app-menu-reload-devtools-items'
 import { createAppWindowMenu } from './app-menu-window'
 
@@ -26,7 +26,7 @@ export function getNextDefaultOnAppearanceSettingValue(current: boolean | undefi
   return !(current !== false)
 }
 
-type RegisterAppMenuOptions = {
+type RegisterAppMenuOptions = AppMenuQuitHandlers & {
   onOpenSettings: () => void
   onOpenSetupGuide: (window?: Electron.BaseWindow | null) => void
   onOpenFeatureTour: (window?: Electron.BaseWindow | null) => void
@@ -44,7 +44,6 @@ type RegisterAppMenuOptions = {
   toggleFocusedPageDevTools?: (focused: Electron.WebContents) => boolean
   // app.name stays stable for Keychain; menus use the per-branch development label.
   appMenuLabel?: string
-  onQuit?: () => void
 }
 
 function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
@@ -140,13 +139,13 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
       { role: 'hideOthers' },
       { role: 'unhide' },
       { type: 'separator' },
-      createAppMenuQuitItem(options.onQuit, options.appMenuLabel ?? app.name)
+      ...createAppMenuQuitItems(options, options.appMenuLabel ?? app.name)
     ]
   }
 
   const fileMenu: Electron.MenuItemConstructorOptions = {
     label: translateMain('menu.file', 'File'),
-    submenu: [settingsItem, { type: 'separator' }, createAppMenuQuitItem(options.onQuit)]
+    submenu: [settingsItem, { type: 'separator' }, ...createAppMenuQuitItems(options)]
   }
 
   // Keep menu hints while non-macOS Ctrl+Z/Ctrl+Y reach focused terminal or DOM controls.

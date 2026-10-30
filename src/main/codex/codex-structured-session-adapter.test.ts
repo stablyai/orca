@@ -45,6 +45,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     expect(codex.connections[0].calls.map((call) => call.method)).toEqual([
       'initialize',
       'thread/start',
+      'config/read',
       'skills/list'
     ])
   })
@@ -148,7 +149,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       resolveLaunch: createCodexStructuredLaunchResolver({
         store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
         resolveWorkspacePath: async () => '/work/repo',
-        resolveCommand: () => 'codex',
+        resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
         resolveLaunchArgs: () => []
       })
     })

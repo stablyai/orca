@@ -10,6 +10,7 @@ type ConptyNative = {
   terminateJob: (id: number, shellPid: number) => boolean
   listJobProcessIds: (id: number, shellPid: number) => number[] | null
   assignCurrentProcessToJob: () => boolean
+  assignCurrentProcessToStrictJob?: () => boolean
   /** Absent on builds that predate the terminal process ceiling. */
   setActiveProcessLimit?: (limit: number) => boolean
 }
@@ -139,6 +140,19 @@ export function assignHostProcessToKillOnCloseJob(): boolean {
   }
   hostJobAssigned = assignHostProcessOnce()
   return hostJobAssigned
+}
+
+/** Native messaging helpers must inherit ownership even when they request breakaway. */
+export function assignHostProcessToStrictKillOnCloseJob(): boolean {
+  const native = nativeLoader()
+  if (typeof native?.assignCurrentProcessToStrictJob !== 'function') {
+    return false
+  }
+  try {
+    return native.assignCurrentProcessToStrictJob()
+  } catch {
+    return false
+  }
 }
 
 function assignHostProcessOnce(): boolean {

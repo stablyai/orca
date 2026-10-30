@@ -1,14 +1,12 @@
 // Per-device revocable tokens isolate compromises; persist with hardened metadata-style permissions.
 import { join } from 'node:path'
-import { writeDurableSecureJsonFile, writeSecureJsonFile } from '../../shared/secure-file'
 import type { DeviceScope } from '../../shared/runtime-types'
 import { removeStaleDurableWriteTempFiles } from '../durable-file-write'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
-import { mintDeviceCredential } from './device-credential'
+import { mintTokenDevice } from './device-credential'
 import { planDeviceKeyFork } from './device-key-fork'
 import { planIdleEphemeralPrune, withoutEphemeralRows } from './ephemeral-device-rows'
-import { quarantineCorruptRegistry } from './device-registry-corruption'
-import { readDeviceRegistryFile } from './device-registry-file-read'
+import { DeviceRegistryWriter } from './device-registry-disk-merge'
 import type { RelayDeviceBinding } from './mobile-cloud-relay/relay-revoke-outbox'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
@@ -49,9 +47,11 @@ export class DeviceRegistry {
   private registryDoubtful = false
   private corruptFilePending = false
   private pendingLastSeenFlush: NodeJS.Timeout | null = null
+  private readonly writer: DeviceRegistryWriter
 
   constructor(userDataPath: string) {
     this.registryPath = join(userDataPath, DEVICE_REGISTRY_FILENAME)
+    this.writer = new DeviceRegistryWriter(this.registryPath)
     // #20497: reap temp files orphaned by a crash before rename.
     void removeStaleDurableWriteTempFiles(this.registryPath, {
       minimumAgeMs: STALE_WRITE_TEMP_AGE_MS
@@ -75,20 +75,10 @@ export class DeviceRegistry {
     pairingReach: RuntimePairingReach,
     grants: readonly RuntimeDeviceGrant[]
   ): TokenDeviceEntry {
-    const validatedGrants = validGrants(grants, scope)
-    const entry: TokenDeviceEntry = {
-      ...mintDeviceCredential(),
-      name,
-      scope,
-      pairedAt: Date.now(),
-      lastSeenAt: 0,
-      pairingReach,
-      ...(validatedGrants ? { grants: validatedGrants } : {})
-    }
+    const entry = mintTokenDevice(name, scope, pairingReach, grants)
     const nextDevices = [...existingDevices, entry]
     // Credentials become valid only after durable persistence.
-    this.save(nextDevices)
-    this.devices = nextDevices
+    this.devices = this.save(nextDevices)
     return entry
   }
 
@@ -99,6 +89,8 @@ export class DeviceRegistry {
     pairingReach: RuntimePairingReach = 'network',
     grants: readonly RuntimeDeviceGrant[] = []
   ): TokenDeviceEntry {
+    // Never show a QR for an offer an admin removed on disk.
+    this.adoptExternalEdits()
     // Reuse only identical grants so re-advertisement cannot expand permissions.
     const existing = this.devices.find(
       (d): d is TokenDeviceEntry =>
@@ -106,9 +98,10 @@ export class DeviceRegistry {
     )
     if (existing) {
       // Widen advertised reach, never narrow it and break an off-host link already handed out.
-      return pairingReach === 'network' && existing.pairingReach === 'this-computer'
-        ? this.setPairingReach(existing, 'network')
-        : existing
+      const widen = pairingReach === 'network' && existing.pairingReach === 'this-computer'
+      // Removed on disk meanwhile: mint a fresh offer rather than hand out a revoked one.
+      const offered = widen ? this.setPairingReach(existing, 'network') : existing
+      return offered ?? this.addDevice(name, scope, pairingReach, grants)
     }
     return this.addDevice(name, scope, pairingReach, grants)
   }
@@ -116,10 +109,9 @@ export class DeviceRegistry {
   private setPairingReach(
     existing: TokenDeviceEntry,
     pairingReach: RuntimePairingReach
-  ): TokenDeviceEntry {
+  ): TokenDeviceEntry | null {
     const updated: TokenDeviceEntry = { ...existing, pairingReach }
-    this.replaceRow(existing.deviceId, () => updated)
-    return updated
+    return this.replaceRow(existing.deviceId, () => updated) ? updated : null
   }
 
   /** Explicit QR regeneration revokes leaked unused offers; ordinary re-advertisement reuses them. */
@@ -145,10 +137,10 @@ export class DeviceRegistry {
   ): DelegatedMobileDeviceEntry[] {
     const { nextDevices, entries } = planDelegatedMobileDevices(this.devices, parent, phones)
     if (nextDevices !== this.devices) {
-      this.save(nextDevices)
-      this.devices = nextDevices
+      this.devices = this.save(nextDevices)
     }
-    return entries
+    // A child the file had already lost is dropped by the save: never hand out its token.
+    return entries.filter((entry) => this.getDevice(entry.deviceId) !== null)
   }
 
   removeDevice(deviceId: string): boolean {
@@ -157,8 +149,7 @@ export class DeviceRegistry {
       return false
     }
     // Persist before swapping memory so failure cannot revoke a device only until restart.
-    this.save(nextDevices)
-    this.devices = nextDevices
+    this.devices = this.save(nextDevices)
     return true
   }
 
@@ -167,6 +158,7 @@ export class DeviceRegistry {
   }
 
   getPendingDevice(scope: DeviceScope = 'mobile'): TokenDeviceEntry | null {
+    this.adoptExternalEdits()
     return (
       this.devices.find(
         (device): device is TokenDeviceEntry => isPendingTokenRow(device) && device.scope === scope
@@ -207,6 +199,7 @@ export class DeviceRegistry {
   }
 
   validateToken(token: string): DeviceEntry | null {
+    this.adoptExternalEdits()
     return (
       (token && this.devices.find((d) => d.credentialKind === undefined && d.token === token)) ||
       null
@@ -215,6 +208,7 @@ export class DeviceRegistry {
 
   // Clients erase keys on unknown; reserve that verdict for readable absence.
   lookupDeviceKey(deviceId: string): DeviceKeyLookup {
+    this.adoptExternalEdits()
     const lookup = lookupDeviceKeyRow(this.getDevice(deviceId))
     return lookup.kind === 'unknown' && (this.registryUnreadable || this.registryDoubtful)
       ? { kind: 'unavailable' }
@@ -236,8 +230,7 @@ export class DeviceRegistry {
       options
     )
     if (fork.created) {
-      this.save(fork.nextDevices, { durable: true })
-      this.devices = fork.nextDevices
+      this.devices = this.save(fork.nextDevices, { durable: true })
     }
     return fork.entry
   }
@@ -246,13 +239,13 @@ export class DeviceRegistry {
   pruneIdleEphemeralDevices(now: number, isLive: (deviceId: string) => boolean): string[] {
     const plan = planIdleEphemeralPrune(this.devices, now, isLive)
     if (plan.removed.length > 0) {
-      this.save(plan.nextDevices, { durable: true })
-      this.devices = plan.nextDevices
+      this.devices = this.save(plan.nextDevices, { durable: true })
     }
     return plan.removed
   }
 
   resolveAuthenticatedPrincipal(principal: AuthenticatedPrincipalBinding): DeviceEntry | null {
+    this.adoptExternalEdits()
     const device = this.getDevice(principal.deviceId)
     return device && isStillAuthenticated(device, principal) ? device : null
   }
@@ -293,9 +286,9 @@ export class DeviceRegistry {
     this.saveOrLog({}, 'persist device lastSeen')
   }
 
-  private saveOrLog(options: { durable?: boolean }, action: string): void {
+  private saveOrLog(options: { durable?: boolean }, action: string, before = this.devices): void {
     try {
-      this.save(this.devices, options)
+      this.devices = this.save(this.devices, options, before)
     } catch (error) {
       console.error(`[runtime] Failed to ${action}:`, error)
     }
@@ -308,15 +301,23 @@ export class DeviceRegistry {
     }
   }
 
+  /** Auth checks see a removal made on disk (an admin revoke) without waiting for orcad's next save. */
+  private adoptExternalEdits(): void {
+    // An unreadable load refuses everything until restart; there is nothing to merge into.
+    if (!this.registryUnreadable) {
+      this.devices = this.writer.adoptExternalEdits(this.devices) ?? this.devices
+    }
+  }
+
   private load(): void {
-    const read = readDeviceRegistryFile(this.registryPath)
+    const read = this.writer.read()
     this.registryUnreadable = read.unreadable
     this.registryDoubtful = read.doubtful
     this.corruptFilePending = read.corruptFilePending
     this.devices = withoutEphemeralRows(read.devices)
     // Session-only browser keys died with the prior host; remove their registry rows.
     if (this.devices.length !== read.devices.length) {
-      this.saveOrLog({ durable: true }, 'drop session-only devices after restart')
+      this.saveOrLog({ durable: true }, 'drop session-only devices after restart', read.devices)
     }
   }
 
@@ -329,9 +330,9 @@ export class DeviceRegistry {
     const nextDevices = this.devices.map((device, candidateIndex) =>
       candidateIndex === index ? update(device) : device
     )
-    this.save(nextDevices)
-    this.devices = nextDevices
-    return true
+    this.devices = this.save(nextDevices)
+    // False when the file had already lost the row: the update did not apply.
+    return this.devices.some((candidate) => candidate.deviceId === deviceId)
   }
 
   private assertReadable(): void {
@@ -341,17 +342,21 @@ export class DeviceRegistry {
       )
     }
     if (this.corruptFilePending) {
-      quarantineCorruptRegistry(this.registryPath)
+      this.writer.quarantineCorrupt()
       this.corruptFilePending = false
     }
   }
 
-  // Security transitions such as key forks require fsync durability.
-  private save(devices: DeviceEntry[], options: { durable?: boolean } = {}): void {
+  /** Writes `devices` merged over the file as it is now; memory takes the result. */
+  private save(
+    devices: readonly DeviceEntry[],
+    options: { durable?: boolean } = {},
+    before: readonly DeviceEntry[] = this.devices
+  ): DeviceEntry[] {
     this.assertReadable()
-    const write = options.durable ? writeDurableSecureJsonFile : writeSecureJsonFile
-    write(this.registryPath, devices)
+    const written = this.writer.write(before, devices, options)
     // Every save includes current timestamps, making a pending refresh redundant.
     this.cancelPendingLastSeenFlush()
+    return written
   }
 }

@@ -13,7 +13,7 @@ import type {
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
 import { DISPATCH_REJECTED_CANCELLED } from '../../../../shared/structured-agent-session-dispatch-rejection'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { nativeChatRowsInDrawOrder } from '../../../../shared/native-chat-turn-grouping'
+import { nativeChatRowsInDrawOrder } from '../../../../shared/native-chat/transcript/native-chat-turn-grouping'
 import { nativeChatTurnMembership } from '../../../../shared/native-chat-turn-membership'
 import {
   buildNativeChatRailItems,
@@ -22,7 +22,7 @@ import {
 import { createNativeChatMessageListProjection } from './native-chat-message-list-projection'
 import type { NativeChatResolvedPrompt } from '../../../../shared/native-chat-resolution-receipt'
 import { nativeChatSubagentSections } from './native-chat-subagent-sections'
-import { projectNativeChatTaskListFrames } from '../../../../shared/native-chat-task-list-frames'
+import { projectNativeChatTaskListFrames } from '../../../../shared/native-chat/input/native-chat-task-list-frames'
 import { omitNativeChatThreadGoalRows } from './native-chat-thread-goal-rows'
 import { buildNativeChatTranscriptSlots } from './native-chat-transcript-slots'
 import type { NativeChatTurnDiff } from './native-chat-turn-diffs'

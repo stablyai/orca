@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
@@ -57,7 +58,13 @@ function clearedChat(): AgentSessionRecordReader {
     ],
     [LIVE, record(LIVE)]
   ])
-  return { getRecord: (id) => records.get(id) ?? null, listRecords: () => [...records.values()] }
+  return {
+    getRecord: (id) => {
+      const record = records.get(id)
+      return record ? agentSessionConversationView(record) : null
+    },
+    listRecords: () => [...records.values()].map(agentSessionConversationView)
+  }
 }
 
 /** This run issued `term_now` for PANE; any other handle is from an earlier run. */

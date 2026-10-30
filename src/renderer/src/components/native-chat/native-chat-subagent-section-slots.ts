@@ -5,7 +5,7 @@ import type {
 import {
   normalizeSubagentState,
   subagentGroupBlocks
-} from '../../../../shared/native-chat-subagent-summary'
+} from '../../../../shared/native-chat/transcript/native-chat-subagent-summary'
 import { nativeChatRowRendersContent } from '../../../../shared/native-chat-row-content'
 import {
   type NativeChatRowTypography,
@@ -24,7 +24,7 @@ import {
 import {
   nativeChatRowRendersProse,
   nativeChatRowSpeaksOrActs
-} from '../../../../shared/native-chat-trailing-run'
+} from '../../../../shared/native-chat/native-chat-trailing-run'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 
 /** The head of a section no loaded roster row holds: it names whose rows follow it. */

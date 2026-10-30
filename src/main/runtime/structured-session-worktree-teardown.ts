@@ -84,9 +84,9 @@ function listFencedStructuredSessions(
   if (!host) {
     return { members: [], live: [] }
   }
-  let records: ReturnType<typeof host.deps.store.listRecords>
+  let records: ReturnType<typeof host.deps.store.listConversations>
   try {
-    records = host.deps.store.listRecords()
+    records = host.deps.store.listConversations()
   } catch {
     return { members: [], live: [] }
   }

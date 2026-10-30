@@ -1,4 +1,5 @@
 import {
+  expectLargeRetainedPrefixRewind,
   expectSupersededRewindReplay,
   expectRetainedPrefixRewindReplay
 } from './structured-agent-session-rewind-replay.test-fixture'
@@ -207,6 +208,27 @@ async function params(itemId: string, epoch?: string) {
 const LATE = { provider: 'codex' as const, threadId: HOST_TEST_THREAD, turnId: 'late', ordinal: 0 }
 
 describe('host rewind', () => {
+  it('answers a saved rewind after floor damage without another provider rewind', async () => {
+    const request = await params(await seed())
+    expect(await host.rewind(caller, request)).toMatchObject({ ok: true })
+    await host.flushAllStreamedEvents()
+    openTestJournalHostDatabase(directory)
+      .db.prepare(
+        "UPDATE agent_session_records SET record_json = json_set(record_json, '$.lease.minimumNextFence', 'bad') WHERE session_id = ?"
+      )
+      .run(HOST_TEST_SESSION)
+    const reopened = await openTestAgentSessionRecordStore(directory)
+    const restored = new StructuredAgentSessionHost({ ...host.deps, store: reopened })
+    const effects = rewind.mock.calls.length
+    expect(await restored.rewind(caller, request)).toMatchObject({
+      ok: true,
+      replayed: true,
+      fence: reopened.getConversation(HOST_TEST_SESSION)?.currentFence
+    })
+    expect(rewind).toHaveBeenCalledTimes(effects)
+    await restored.flushAllStreamedEvents()
+  })
+
   it('replays the original ordinary rewind after another rewind replaces its record', () =>
     expectSupersededRewindReplay({ host, store, rewind, recoverRewind, seed, params }))
 
@@ -331,36 +353,8 @@ describe('host rewind', () => {
     expect(await second).toMatchObject({ ok: false, refusal: { rewindReason: 'stale-epoch' } })
     expect(rewind).toHaveBeenCalledTimes(1)
   })
-  it('rewinds a chat whose kept part is far past the old 2 MB limit', async () => {
-    expect(await host.attach(caller, hostTestAttachParams(null))).toMatchObject({ ok: true })
-    const message = (turnId: string) => ({
-      provider: 'codex' as const,
-      threadId: HOST_TEST_THREAD,
-      turnId,
-      ordinal: 0
-    })
-    for (let turn = 0; turn < 300; turn++) {
-      sink.appendItem(message(`kept-${turn}`), hostTestMessage('x'.repeat(12_000)), {
-        turnScope: AGENT_JOURNAL_THREAD_SCOPE
-      })
-    }
-    for (const turnId of ['drop', 'tip']) {
-      sink.appendItem(message(turnId), hostTestMessage(turnId), {
-        turnScope: AGENT_JOURNAL_THREAD_SCOPE
-      })
-    }
-    await host.flushStreamedEvents(HOST_TEST_SESSION)
-
-    expect(
-      await host.rewind(caller, await params(agentJournalItemKey(message('drop'))))
-    ).toMatchObject({ ok: true })
-    expect(rewind).toHaveBeenCalledWith(expect.objectContaining({ beforeTurnId: 'drop' }))
-    const { items } = await host.journalSnapshot(HOST_TEST_SESSION)
-    expect(items.map(({ itemId }) => itemId)).toEqual(
-      Array.from({ length: 300 }, (_, turn) => agentJournalItemKey(message(`kept-${turn}`)))
-    )
-    expect(store.getRecord(HOST_TEST_SESSION)?.rewind).toMatchObject({ phase: 'completed' })
-  })
+  it('rewinds a chat whose kept part is far past the old 2 MB limit', () =>
+    expectLargeRetainedPrefixRewind({ host, store, rewind, sink: () => sink, params }))
   it('replaces the epoch with the retained prefix and replays without another provider call', () =>
     expectRetainedPrefixRewindReplay({ host, rewind, seed, params }))
   it('keeps when each kept message was first seen, not when the rewind re-read it', async () => {

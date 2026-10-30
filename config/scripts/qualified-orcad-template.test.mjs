@@ -110,9 +110,7 @@ it('keeps SignPath on GitHub runners and isolates Blacksmith qualification cache
     "${{ inputs.fast_runners && 'fast' || 'github-hosted' }}"
   )
   for (const name of ['cache', 'save']) {
-    expect(workflow.jobs[name]['runs-on']).toBe(
-      "${{ inputs.fast_runners && 'blacksmith-2vcpu-ubuntu-2404' || 'ubuntu-latest' }}"
-    )
+    expect(workflow.jobs[name]['runs-on']).toBe('ubuntu-latest')
   }
 })
 

@@ -1,5 +1,7 @@
+import { isWindowsAbsolutePathLike } from './cross-platform-path'
 import { IMAGE_FILE_EXTENSIONS } from './image-file-extensions'
 import { shellEscapePath } from './shell-path-quoting'
+import { isWslUncPath } from './wsl-paths'
 
 type TerminalTargetShell = 'posix' | 'windows'
 
@@ -20,6 +22,13 @@ export function isImageDropPath(path: string): boolean {
     return false
   }
   return IMAGE_DROP_EXTENSIONS.has(path.slice(lastDot).toLowerCase())
+}
+
+export function isTerminalDropWindowsPathLike(path: string): boolean {
+  if (isWslUncPath(path)) {
+    return false
+  }
+  return isWindowsAbsolutePathLike(path) || path.includes('\\')
 }
 
 export function canPasteImageDropPathRaw(path: string, targetShell: TerminalTargetShell): boolean {

@@ -1,7 +1,11 @@
+import { createHmac } from 'node:crypto'
 import { ConnectorPollResponseSchema } from '@orca-cloud/connector-contract'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanupConnectorHarnesses } from './connector-server-harness.test-fixture.js'
+import { SlackApps } from './slack-apps.js'
+import { SlackInstalls } from './slack-installs.js'
 import {
+  APP,
   BOT,
   CHANNEL,
   createSlackHarness,
@@ -50,7 +54,7 @@ describe('Slack event ingress', () => {
 
     const stale = await harness.signedPost('{}', Math.floor(harness.now() / 1000) - 301)
     expect(stale.status).toBe(401)
-    const forged = await harness.request('/slack/events', {
+    const forged = await harness.request(`/slack/apps/${APP}/events`, {
       method: 'POST',
       headers: {
         'x-slack-request-timestamp': String(Math.floor(harness.now() / 1000)),
@@ -62,6 +66,94 @@ describe('Slack event ingress', () => {
     expect(SIGNING_SECRET).toBeTruthy()
   })
 
+  it('verifies each app with its own secret, and acts only where that app is installed', async () => {
+    const harness = await linkedOwner()
+    const now = harness.now()
+    await new SlackApps(harness.tokenKey).register(
+      harness.database,
+      { appId: 'A2', clientId: '3.4', clientSecret: 'cs-2', signingSecret: 'secret-2' },
+      now
+    )
+    const installs = new SlackInstalls(harness.tokenKey)
+    const install = { appId: 'A2', botUserId: 'UBOT2', botToken: 'xoxb-2' }
+    // One Orca app per workspace: app 2 can't take over app 1's workspace.
+    expect(await installs.save(harness.database, { ...install, teamId: TEAM }, now)).toBe(false)
+    expect(await installs.save(harness.database, { ...install, teamId: 'T2' }, now)).toBe(true)
+    const signedBy = (secret: string, path: string, body: string) => {
+      const timestamp = String(Math.floor(now / 1000))
+      return harness.request(path, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-slack-request-timestamp': timestamp,
+          'x-slack-signature': `v0=${createHmac('sha256', secret).update(`v0:${timestamp}:${body}`).digest('hex')}`
+        },
+        body
+      })
+    }
+    const event = (appId: string, teamId: string) =>
+      JSON.stringify({
+        type: 'event_callback',
+        api_app_id: appId,
+        team_id: teamId,
+        event: { type: 'message', user: OWNER, channel: CHANNEL, channel_type: 'channel', ...mention() }
+      })
+
+    // The path only picks the key: app 2's secret doesn't open app 1's URL, nor does an unknown app.
+    expect((await signedBy('secret-2', `/slack/apps/${APP}/events`, event(APP, TEAM))).status).toBe(401)
+    expect((await signedBy('secret-2', '/slack/apps/A9/events', event('A9', TEAM))).status).toBe(401)
+    // Signed by app 2 but naming app 1, or app 2 speaking for app 1's workspace: acknowledged, ignored.
+    expect((await signedBy('secret-2', '/slack/apps/A2/events', event(APP, TEAM))).status).toBe(200)
+    expect((await signedBy('secret-2', '/slack/apps/A2/events', event('A2', TEAM))).status).toBe(200)
+    expect(await harness.poll()).toEqual([])
+    expect(await harness.posts()).toEqual([])
+
+    // A row that won't open is an operator fault, not a bad request: Slack retries a 500.
+    await harness.database.query(
+      "UPDATE connector_slack_apps SET signing_secret = 'v1.AAAA.AAAA.AAAA' WHERE app_id = 'A2'"
+    )
+    expect((await signedBy('secret-2', '/slack/apps/A2/events', event('A2', 'T2'))).status).toBe(500)
+
+    // App 1's own signed event in its own workspace starts the conversation.
+    expect((await harness.message(mention())).status).toBe(200)
+    expect(await harness.poll()).toEqual([expect.objectContaining({ kind: 'start' })])
+  })
+
+  it('keeps the legacy env-secret route for allowlisted workspaces until the app’s URL takes over', async () => {
+    const harness = await linkedOwner({
+      legacy: { signingSecret: 'legacy-secret', teamIds: new Set([TEAM]) }
+    })
+    // As before apps were rows: the install has no app yet.
+    await harness.database.query('UPDATE connector_slack_installs SET app_id = NULL')
+    const timestamp = String(Math.floor(harness.now() / 1000))
+    const legacyPost = (body: string, secret = 'legacy-secret') =>
+      harness.request('/slack/events', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-slack-request-timestamp': timestamp,
+          'x-slack-signature': `v0=${createHmac('sha256', secret).update(`v0:${timestamp}:${body}`).digest('hex')}`
+        },
+        body
+      })
+    const event = (teamId: string) =>
+      JSON.stringify({
+        type: 'event_callback',
+        api_app_id: APP,
+        team_id: teamId,
+        event: { type: 'message', user: OWNER, channel: CHANNEL, channel_type: 'channel', ...mention() }
+      })
+    // The app's own URL can't reach an install that isn't bound to it.
+    expect((await harness.message(mention())).status).toBe(200)
+    expect(await harness.poll()).toEqual([])
+    // The legacy route still needs its own secret and its allowlist.
+    expect((await legacyPost(event(TEAM), SIGNING_SECRET)).status).toBe(401)
+    expect((await legacyPost(event('T9'))).status).toBe(200)
+    expect(await harness.poll()).toEqual([])
+    expect((await legacyPost(event(TEAM))).status).toBe(200)
+    expect(await harness.poll()).toEqual([expect.objectContaining({ kind: 'start' })])
+  })
+
   it('starts the owner’s conversation once for the message and app_mention twins', async () => {
     const harness = await linkedOwner()
     expect((await harness.message(mention())).status).toBe(200)
@@ -71,7 +163,7 @@ describe('Slack event ingress', () => {
     expect(deliveries).toEqual([
       expect.objectContaining({
         kind: 'start',
-        deliveryId: `${TEAM}:${CHANNEL}:${THREAD}`,
+        deliveryId: `slack:${TEAM}:${CHANNEL}:${THREAD}`,
         conversation: { source: 'slack', externalId: EXTERNAL_ID },
         agent: 'claude',
         placeId: 'pl_orca',
@@ -155,7 +247,7 @@ describe('Slack event ingress', () => {
         messages: [{ ts: THREAD, user: OWNER, text: `<@${BOT}> fix the flaky test` }]
       })
     )
-    await harness.edge.starts.buildDue()
+    await harness.core.buildHeldStarts()
     const [start] = ConnectorPollResponseSchema.parse((await theirs.poll()).body).deliveries
     expect(start).toMatchObject({
       kind: 'start',
@@ -198,7 +290,7 @@ describe('Slack event ingress', () => {
       'users.info',
       Response.json({ ok: true, user: { team_id: TEAM, is_restricted: true } })
     )
-    await harness.edge.starts.buildDue()
+    await harness.core.buildHeldStarts()
     expect(harness.fake.take('conversations.replies')[0]?.args).toMatchObject({
       ts: THREAD,
       latest: MENTION,
@@ -232,7 +324,7 @@ describe('Slack event ingress', () => {
       'conversations.replies',
       Response.json({ ok: false, error: 'internal_error' })
     )
-    await harness.edge.starts.buildDue()
+    await harness.core.buildHeldStarts()
     const [start] = await harness.poll()
     expect(start).toMatchObject({
       kind: 'start',
@@ -306,7 +398,7 @@ describe('Slack event ingress', () => {
     const harness = await linkedOwner()
     await harness.message(mention())
     harness.advance(5 * 60_000 + 1)
-    await harness.runtime.inbox.expireDue(harness.edge.onExpired)
+    await harness.runtime.inbox.expireDue(harness.core.onExpired)
     // Said in the public status message, with no separate reply.
     expect(
       (await harness.posts()).map((post) => [post.post_id, JSON.parse(String(post.body)).text])
@@ -320,7 +412,7 @@ describe('Slack event ingress', () => {
 
     await harness.message({ text: 'try again', ts: '1800000000.000500', thread_ts: THREAD })
     harness.fake.respond('conversations.replies', Response.json({ ok: true, messages: [] }))
-    await harness.edge.starts.buildDue()
+    await harness.core.buildHeldStarts()
     const [retry] = await harness.poll()
     expect(retry).toMatchObject({ kind: 'start', placeId: 'pl_orca', prompt: 'try again' })
   })
@@ -380,7 +472,7 @@ describe('Slack event ingress', () => {
       thread_ts: THREAD
     })
     const context = await harness.database.query(
-      'SELECT external_id, text FROM connector_thread_context ORDER BY ts'
+      'SELECT external_id, text FROM connector_thread_context ORDER BY message_id'
     )
     expect(context).toEqual([
       { external_id: EXTERNAL_ID, text: 'orca: what about docs' },
@@ -416,7 +508,7 @@ describe('Slack event ingress', () => {
     harness.advance(-1)
     await harness.message({ text: 'go', ts: '1800000000.000600', thread_ts: THREAD })
     harness.fake.respond('conversations.replies', Response.json({ ok: true, messages: [] }))
-    await harness.edge.starts.buildDue()
+    await harness.core.buildHeldStarts()
     const [start] = await harness.poll()
     expect(start).toMatchObject({ kind: 'start', prompt: 'fix this' })
     await harness.machine.ack([{ deliveryId: start?.deliveryId, step: 'received' }])
@@ -433,7 +525,7 @@ describe('Slack event ingress', () => {
     })
     await harness.message({ text: 'go', ts: '1800000000.000500', thread_ts: THREAD })
     harness.advance(5 * 60_000 + 1)
-    await harness.runtime.inbox.expireDue(harness.edge.onExpired)
+    await harness.runtime.inbox.expireDue(harness.core.onExpired)
     expect(await harness.poll()).toEqual([])
     expect(
       await harness.database.query('SELECT kind, state FROM connector_inbox ORDER BY seq')
@@ -463,7 +555,7 @@ describe('Slack event ingress', () => {
         ...(cursor ? { response_metadata: { next_cursor: cursor } } : {})
       })
     harness.fake.respond('conversations.replies', page(100, 200, 'p2'), page(300, 30))
-    await harness.edge.starts.buildDue()
+    await harness.core.buildHeldStarts()
     const [start] = await harness.poll()
     const lines = (start?.kind === 'start' ? start.prompt : '').split('\n')
     expect(lines.slice(1, 3)).toEqual(['[Bob] m100', '[Bob] m311'])
@@ -481,7 +573,7 @@ describe('Slack event ingress', () => {
     const more = () =>
       Response.json({ ok: true, messages: [], response_metadata: { next_cursor: 'more' } })
     harness.fake.respond('conversations.replies', more(), more(), more(), more(), more())
-    await harness.edge.starts.buildDue()
+    await harness.core.buildHeldStarts()
     const [start] = await harness.poll()
     expect(start?.kind === 'start' ? start.prompt : '').toContain('couldn’t be read')
   })
@@ -491,9 +583,9 @@ describe('Slack event ingress', () => {
     await harness.message(mention())
     harness.advance(5 * 60_000 + 1)
     await harness.message({ text: 'try again', ts: '1800000000.000500', thread_ts: THREAD })
-    await harness.runtime.inbox.expireDue(harness.edge.onExpired)
+    await harness.runtime.inbox.expireDue(harness.core.onExpired)
     harness.fake.respond('conversations.replies', Response.json({ ok: true, messages: [] }))
-    await harness.edge.starts.buildDue()
+    await harness.core.buildHeldStarts()
     const [retry] = await harness.poll()
     expect(retry).toMatchObject({ kind: 'start', prompt: 'try again' })
   })
@@ -502,7 +594,7 @@ describe('Slack event ingress', () => {
     const harness = await linkedOwner()
     await harness.message(mention())
     harness.advance(5 * 60_000 + 1)
-    await harness.runtime.inbox.expireDue(harness.edge.onExpired)
+    await harness.runtime.inbox.expireDue(harness.core.onExpired)
     await harness.message({
       user: TEAMMATE,
       text: 'see the logs',
@@ -515,7 +607,7 @@ describe('Slack event ingress', () => {
       'conversations.replies',
       Response.json({ ok: false, error: 'ratelimited' })
     )
-    await harness.edge.starts.buildDue()
+    await harness.core.buildHeldStarts()
     const [retry] = await harness.poll()
     const prompt = retry?.kind === 'start' ? retry.prompt : ''
     expect(prompt).toContain('couldn’t be read')
@@ -527,7 +619,7 @@ describe('Slack event ingress', () => {
     const harness = await linkedOwner()
     await harness.message(mention())
     harness.advance(5 * 60_000 + 1)
-    await harness.runtime.inbox.expireDue(harness.edge.onExpired)
+    await harness.runtime.inbox.expireDue(harness.core.onExpired)
     await harness.database.query(
       `UPDATE connector_hosts SET hello = REPLACE(hello, '"claude","codex"', '"gemini"')`
     )
@@ -561,7 +653,7 @@ describe('Slack event ingress', () => {
         messages: [{ ts: THREAD, user: TEAMMATE, subtype: 'thread_broadcast', text: 'root' }]
       })
     )
-    await harness.edge.starts.buildDue()
+    await harness.core.buildHeldStarts()
     const [start] = await harness.poll()
     expect(start?.kind === 'start' ? start.prompt : '').toContain('[Bob] root')
 
@@ -578,7 +670,7 @@ describe('Slack event ingress', () => {
         messages: [{ ts: '1800000001.000000', user: TEAMMATE, text: 'old' }]
       })
     )
-    await harness.edge.starts.buildDue()
+    await harness.core.buildHeldStarts()
     await harness.machine.ack([{ deliveryId: start?.deliveryId, step: 'received' }])
     const second = (await harness.poll()).find((delivery) => delivery.kind === 'start')
     expect(second?.kind === 'start' ? second.prompt : '').toContain('couldn’t be read')
@@ -594,16 +686,16 @@ describe('Slack event ingress', () => {
     harness.advance(5 * 60_000 + 1)
     await harness.message({ text: 'retry now', ts: '1800000300.000100', thread_ts: THREAD })
     harness.fake.respond('conversations.replies', Response.json({ ok: true, messages: [] }))
-    await harness.edge.starts.buildDue()
+    await harness.core.buildHeldStarts()
     expect(harness.fake.take('conversations.replies')[0]?.args).toMatchObject({
       latest: '1800000300.000100'
     })
-    await harness.runtime.inbox.expireDue(harness.edge.onExpired)
+    await harness.runtime.inbox.expireDue(harness.core.onExpired)
     const deliveries = await harness.poll()
     expect(deliveries).toEqual([
       expect.objectContaining({
         kind: 'start',
-        deliveryId: `${TEAM}:${CHANNEL}:1800000300.000100`,
+        deliveryId: `slack:${TEAM}:${CHANNEL}:1800000300.000100`,
         placeId: 'pl_orca',
         prompt: 'retry now'
       })
@@ -611,8 +703,8 @@ describe('Slack event ingress', () => {
     expect(
       await harness.database.query('SELECT delivery_id, state FROM connector_inbox ORDER BY seq')
     ).toEqual([
-      { delivery_id: `${TEAM}:${CHANNEL}:1800000000.000400`, state: 'expired' },
-      { delivery_id: `${TEAM}:${CHANNEL}:1800000300.000100`, state: 'leased' }
+      { delivery_id: `slack:${TEAM}:${CHANNEL}:1800000000.000400`, state: 'expired' },
+      { delivery_id: `slack:${TEAM}:${CHANNEL}:1800000300.000100`, state: 'leased' }
     ])
   })
 })

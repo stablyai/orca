@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -67,8 +68,11 @@ function installStore(record: AgentSessionRecord | null, visible = true): Store 
   hostRef.current = {
     deps: {
       store: {
-        getRecord: (sessionId: string) => store.records.get(sessionId) ?? null,
-        listRecords: () => [...store.records.values()],
+        getConversation: (sessionId: string) => {
+          const record = store.records.get(sessionId)
+          return record ? agentSessionConversationView(record) : null
+        },
+        listConversations: () => [...store.records.values()].map(agentSessionConversationView),
         getVisibleSessionTabIndex: () => store.visible
       }
     }

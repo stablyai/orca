@@ -12,6 +12,7 @@ export type AgentLaunchFingerprintInput = {
     | { kind: 'create-folder-workspace'; create: Readonly<Record<string, unknown>> }
   prompt?: { text: string; delivery: string }
   sessionOptions?: Readonly<Record<string, string>>
+  chatOptions?: Readonly<Record<string, string>>
   reuseTerminal?: { handle: string }
   /** Arguments change operation identity; null explicitly clears defaults and differs from absence. */
   agentArgs?: string | null
@@ -34,6 +35,7 @@ export function computeAgentLaunchFingerprint(input: AgentLaunchFingerprintInput
     target: input.target,
     prompt: input.prompt,
     sessionOptions: input.sessionOptions,
+    chatOptions: input.chatOptions,
     reuseTerminal: input.reuseTerminal,
     agentArgs: input.agentArgs,
     cwd: input.cwd,

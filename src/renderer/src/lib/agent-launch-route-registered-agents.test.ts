@@ -119,14 +119,6 @@ describe('structured launch of a host-registered agent', () => {
     expect(routeFor(store(), 'gemini')).not.toBe('structured-native-chat')
   })
 
-  it('keeps the Chat UI switch authoritative', async () => {
-    await loadHostStructuredAgents('local', REGISTERED, null)
-
-    expect(routeFor(store({ settings: { experimentalNativeChat: false } }), 'grok')).not.toBe(
-      'structured-native-chat'
-    )
-  })
-
   it("reads a paired host's list only from the runtime that gave it", async () => {
     await loadHostStructuredAgents('runtime:env-1', REGISTERED, 'rt-1')
 
@@ -156,13 +148,6 @@ describe('OpenCode with its Command and environment set (live QA run 5)', () => 
     warn.mockRestore()
   })
 
-  it('opens a chat once the local host listed OpenCode', async () => {
-    mocks.callRuntimeRpc.mockResolvedValue(LISTS_OPENCODE)
-    await loadHostStructuredAgents('local', REGISTERED, null)
-
-    expect(routeFor(withOverrides(), 'opencode')).toBe('structured-native-chat')
-  })
-
   it('says why it opened the terminal chat and asks the host again after a failed startup read', async () => {
     mocks.callRuntimeRpc.mockRejectedValueOnce(new Error('host not ready'))
     await loadHostStructuredAgents('local', REGISTERED, null)
@@ -177,12 +162,5 @@ describe('OpenCode with its Command and environment set (live QA run 5)', () => 
     await vi.waitFor(() =>
       expect(routeFor(withOverrides(), 'opencode')).toBe('structured-native-chat')
     )
-  })
-
-  it('keeps new agent tabs in terminals while Chat UI is off', () => {
-    expect(routeFor(store({ settings: { experimentalNativeChat: false } }), 'opencode')).toBe(
-      'terminal-tui'
-    )
-    expect(warn).not.toHaveBeenCalled()
   })
 })

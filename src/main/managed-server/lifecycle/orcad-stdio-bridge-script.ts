@@ -90,7 +90,8 @@ export function orcadBashStdioBridgeCommand(port: number): string {
     'cat <&3 & r=$!;',
     'cat <&4 >&3 & w=$!;',
     'exec 4<&-;',
-    'wait -n; kill $r $w 2>/dev/null; exit 0; fi;',
+    // Reap the cat just killed: WSL's session init never does, and its zombie keeps the distro up.
+    'wait -n; kill $r $w 2>/dev/null; wait; exit 0; fi;',
     'eval "$1"'
   ].join(' ')
   // Carry the Node bridge once, as data both shells can run.

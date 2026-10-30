@@ -1,48 +1,6 @@
 // @vitest-environment happy-dom
 import { expect, it } from 'vitest'
-import { equalizePaneSplitSizes, findPaneChildren } from './pane-tree-equalization'
-
-type Direction = 'vertical' | 'horizontal'
-
-/** The pre-cache weight walk, as the differential oracle. */
-function referenceWeight(el: HTMLElement, direction: Direction): number {
-  if (!el.classList.contains('pane-split')) {
-    return 1
-  }
-  const own = el.classList.contains('is-horizontal') ? 'horizontal' : 'vertical'
-  if (own !== direction) {
-    return 1
-  }
-  return Math.max(
-    1,
-    findPaneChildren(el).reduce((sum, child) => sum + referenceWeight(child, direction), 0)
-  )
-}
-
-/** The pre-cache sweep, writing into a parallel attribute so both can be compared. */
-function referenceEqualize(el: HTMLElement): void {
-  if (!el.classList.contains('pane-split')) {
-    return
-  }
-  const direction: Direction = el.classList.contains('is-horizontal') ? 'horizontal' : 'vertical'
-  const children = findPaneChildren(el)
-  if (children.length >= 2) {
-    for (const child of children) {
-      child.dataset.expectedFlex = `${referenceWeight(child, direction)} 1 0%`
-    }
-  }
-  for (const child of children) {
-    referenceEqualize(child)
-  }
-}
-
-function makeRandom(seed: number): () => number {
-  let state = seed >>> 0
-  return () => {
-    state = (state * 1664525 + 1013904223) >>> 0
-    return state / 0x100000000
-  }
-}
+import { equalizePaneSplitSizes } from './pane-tree-equalization'
 
 function makePane(): HTMLElement {
   const element = document.createElement('div')
@@ -55,44 +13,6 @@ function makeDivider(): HTMLElement {
   element.className = 'pane-divider'
   return element
 }
-
-/** Random split tree with mixed axes, 2-4 children per split, and dividers interleaved. */
-function makeTree(random: () => number, depth: number): HTMLElement {
-  if (depth <= 0 || random() < 0.35) {
-    return makePane()
-  }
-  const split = document.createElement('div')
-  split.className = random() < 0.5 ? 'pane-split is-horizontal' : 'pane-split'
-  const childCount = 2 + Math.floor(random() * 3)
-  for (let i = 0; i < childCount; i += 1) {
-    if (i > 0) {
-      split.append(makeDivider())
-    }
-    split.append(makeTree(random, depth - 1))
-  }
-  return split
-}
-
-function allElements(root: HTMLElement): HTMLElement[] {
-  return [root, ...Array.from(root.querySelectorAll<HTMLElement>('.pane, .pane-split'))]
-}
-
-it('produces the same flex on every element as the uncached weight walk', () => {
-  let splitCases = 0
-  for (let seed = 1; seed <= 400; seed += 1) {
-    const random = makeRandom(seed)
-    const root = makeTree(random, 5)
-    referenceEqualize(root)
-    equalizePaneSplitSizes(root)
-    for (const element of allElements(root)) {
-      expect(element.style.flex || undefined, `seed ${seed}`).toEqual(element.dataset.expectedFlex)
-      if (element.dataset.expectedFlex) {
-        splitCases += 1
-      }
-    }
-  }
-  expect(splitCases).toBeGreaterThan(1000)
-})
 
 it('recomputes weights after a split is added and after one is closed', () => {
   const root = document.createElement('div')

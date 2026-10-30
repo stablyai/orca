@@ -22,6 +22,7 @@
   ],
   "rules": {
     "app-store-performance/require-selector": "warn",
+    "app-store-performance/no-whole-hot-map-selector": "warn",
     "app-store-performance/no-identity-selector": "warn",
     "app-store-performance/no-fresh-selector-result": "warn",
     "app-store-performance/no-nested-fresh-under-shallow": "warn",

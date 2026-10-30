@@ -2,15 +2,13 @@ import { describe, expect, it, vi, type Mock } from 'vitest'
 import type { Cookie } from 'electron'
 import {
   identitiesFromClearCookies,
-  removeTransplantableCookies,
-  type CookieClearIdentity
+  removeTransplantableCookies
 } from './browser-cookie-import-clear'
 import {
   importedDomainScope,
   isGoogleSourceBoundCookie,
   isNonTransplantableCookieDomain,
-  normalizeCookieDomain,
-  replaceCookiesForImportedDomains
+  normalizeCookieDomain
 } from './browser-cookie-import-policy'
 
 function cookie(domain: string, name: string, path = '/', secure = true): Cookie {
@@ -46,161 +44,6 @@ describe('isGoogleSourceBoundCookie', () => {
     expect(normalizeCookieDomain('example.com:443')).toBeNull()
     expect(normalizeCookieDomain('%65xample.com')).toBeNull()
     expect(isGoogleSourceBoundCookie('SIDCC', 'user@google.com')).toBe(false)
-  })
-})
-
-// Match the CDP-backed store so rollback cannot reconstruct cookies without partition keys.
-function replaceStore(
-  existing: Cookie[],
-  overrides: {
-    remove?: Mock
-    snapshot?: Mock
-    restore?: Mock
-  } = {}
-) {
-  const get = vi.fn().mockResolvedValue(existing)
-  const remove = overrides.remove ?? vi.fn().mockResolvedValue(undefined)
-  const snapshotClearIdentities =
-    overrides.snapshot ??
-    vi
-      .fn()
-      .mockImplementation(async (cookies: readonly { cookie: Cookie; url: string }[]) =>
-        identitiesFromClearCookies(cookies)
-      )
-  const restoreClearIdentities = overrides.restore ?? vi.fn().mockResolvedValue(undefined)
-  return { get, remove, snapshotClearIdentities, restoreClearIdentities }
-}
-
-describe('replaceCookiesForImportedDomains', () => {
-  it('removes parent, exact, and child-domain cookies while preserving unrelated sites', async () => {
-    const existing = [
-      cookie('.google.com', 'parent'),
-      { ...cookie('google.com', 'host-only-parent'), hostOnly: true },
-      cookie('.accounts.google.com', 'exact', '/signin'),
-      cookie('.child.accounts.google.com', 'child', '/nested', false),
-      cookie('.google.com.evil.example', 'suffix-confusion'),
-      cookie('.example.com', 'unrelated')
-    ]
-    const store = replaceStore(existing)
-
-    const { removed } = await replaceCookiesForImportedDomains(store, ['accounts.google.com'])
-
-    expect(removed).toHaveLength(3)
-    expect(store.get).toHaveBeenCalledWith({})
-    expect(store.remove.mock.calls).toEqual([
-      ['https://google.com/', 'parent'],
-      ['https://accounts.google.com/signin', 'exact'],
-      ['http://child.accounts.google.com/nested', 'child']
-    ])
-    expect(store.snapshotClearIdentities).toHaveBeenCalledOnce()
-    expect(
-      store.snapshotClearIdentities.mock.calls[0]?.[0].map(
-        ({ cookie: entry }: { cookie: Cookie }) => entry.name
-      )
-    ).toEqual(['parent', 'exact', 'child'])
-    expect(store.restoreClearIdentities).not.toHaveBeenCalled()
-  })
-
-  it('does not replace a private-suffix host cookie for a tenant import', async () => {
-    const store = replaceStore([
-      { ...cookie('github.io', 'host-only-suffix'), hostOnly: true },
-      cookie('.user.github.io', 'tenant')
-    ])
-
-    const { removed } = await replaceCookiesForImportedDomains(store, ['user.github.io'])
-
-    expect(removed.map(({ name }) => name)).toEqual(['tenant'])
-    expect(store.remove).toHaveBeenCalledWith('https://user.github.io/', 'tenant')
-  })
-
-  it('does not read or mutate the store when no valid domain scope exists', async () => {
-    const store = replaceStore([])
-
-    await expect(
-      replaceCookiesForImportedDomains(store, ['', '...', 'com', 'co.uk', 'github.io'])
-    ).resolves.toEqual({ removed: [], identities: [] })
-    expect(store.get).not.toHaveBeenCalled()
-    expect(store.remove).not.toHaveBeenCalled()
-    expect(store.snapshotClearIdentities).not.toHaveBeenCalled()
-    expect(store.restoreClearIdentities).not.toHaveBeenCalled()
-  })
-
-  it('keeps single-label intranet scopes from selecting descendant hosts', async () => {
-    const store = replaceStore([cookie('local', 'exact'), cookie('.service.local', 'descendant')])
-
-    const { removed } = await replaceCookiesForImportedDomains(store, ['local'])
-
-    expect(removed.map(({ name }) => name)).toEqual(['exact'])
-    expect(store.remove).toHaveBeenCalledOnce()
-    expect(store.remove).toHaveBeenCalledWith('https://local/', 'exact')
-  })
-
-  // Electron cookies.get/set lose partition keys; rollback must use captured CDP identities.
-  it('restores removed cookies through CDP identities, keeping partition identity', async () => {
-    const existing = [
-      cookie('.example.com', 'first', '/one'),
-      cookie('.example.com', 'second', '/two')
-    ]
-    const partitionKey = { topLevelSite: 'https://top.example', hasCrossSiteAncestor: true }
-    const snapshot = vi
-      .fn()
-      .mockImplementation(async (cookies: readonly { cookie: Cookie; url: string }[]) =>
-        identitiesFromClearCookies(cookies).map((identity) =>
-          identity.name === 'first' ? { ...identity, partitionKey } : identity
-        )
-      )
-    const remove = vi
-      .fn()
-      .mockResolvedValueOnce(undefined)
-      .mockRejectedValueOnce(new Error('cookie store unavailable'))
-    const store = replaceStore(existing, { remove, snapshot })
-
-    await expect(replaceCookiesForImportedDomains(store, ['example.com'])).rejects.toThrow(
-      'cookie store unavailable'
-    )
-
-    expect(store.restoreClearIdentities).toHaveBeenCalledOnce()
-    const restored = store.restoreClearIdentities.mock.calls[0]?.[0] as CookieClearIdentity[]
-    // A rejected removal may already have changed the cookie.
-    expect(restored.map(({ name }) => name)).toEqual(['second', 'first'])
-    expect(restored.find(({ name }) => name === 'first')?.partitionKey).toEqual(partitionKey)
-    expect(restored.find(({ name }) => name === 'first')?.url).toBe('https://example.com/one')
-  })
-
-  it('aborts without removing anything when the snapshot cannot cover the removal plan', async () => {
-    const existing = [
-      cookie('.example.com', 'first', '/one'),
-      cookie('.example.com', 'second', '/two')
-    ]
-    const snapshot = vi
-      .fn()
-      .mockImplementation(async (cookies: readonly { cookie: Cookie; url: string }[]) =>
-        identitiesFromClearCookies(cookies).filter((identity) => identity.name !== 'second')
-      )
-    const store = replaceStore(existing, { snapshot })
-
-    await expect(replaceCookiesForImportedDomains(store, ['example.com'])).rejects.toThrow(
-      'the session was left unchanged'
-    )
-    expect(store.remove).not.toHaveBeenCalled()
-    expect(store.restoreClearIdentities).not.toHaveBeenCalled()
-  })
-
-  it('reports both failures when the CDP rollback itself fails', async () => {
-    const remove = vi
-      .fn()
-      .mockResolvedValueOnce(undefined)
-      .mockRejectedValueOnce(new Error('cookie store unavailable'))
-    const restore = vi.fn().mockRejectedValue(new Error('debugger detached'))
-    const store = replaceStore(
-      [cookie('.example.com', 'first', '/one'), cookie('.example.com', 'second', '/two')],
-      { remove, restore }
-    )
-
-    await expect(replaceCookiesForImportedDomains(store, ['example.com'])).rejects.toThrow(
-      'Cookie replacement and rollback failed'
-    )
-    expect(restore).toHaveBeenCalledOnce()
   })
 })
 

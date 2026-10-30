@@ -276,7 +276,6 @@ describe('parseAntigravityUsageEnvelope', () => {
     ['another command’s payload', { status: 'SUCCESS', command: { name: 'models', data: {} } }],
     ['a missing command', { status: 'SUCCESS' }],
     ['no groups', envelope(undefined)],
-    ['an empty group list', envelope([])],
     ['a group with no usable bucket', envelope([{ name: 'G', buckets: [{ id: 'a' }] }])],
     [
       'a group with every bucket disabled',

@@ -14,7 +14,7 @@ export type SubprocessHandle = {
   /** cachedOnly must neither query the process nor schedule inspection. */
   getForegroundProcess(options?: { rawFallback?: boolean; cachedOnly?: boolean }): string | null
   /** Await process-table evidence captured after this confirmation request. */
-  confirmForegroundProcess?(): Promise<string | null>
+  confirmForegroundProcess?(context?: { decision?: boolean }): Promise<string | null>
   /** Proves a fresh post-boundary PTY process tree contains only the shell. */
   confirmShellForeground?(): Promise<boolean>
   /** Skip stdin command delivery when shell arguments already delivered it. */
@@ -37,7 +37,8 @@ export type SubprocessHandle = {
   /** Resync ConPTY after frontend clears to prevent stale-row prompt repaint. */
   clear?(): void
   kill(): void
-  forceKill(): void
+  /** Settles once signals are sent; a rejection means the kernel refused them. */
+  forceKill(): void | Promise<void>
   /** Cover detached descendants via the PTY job; unavailable requires fallback and never proves death. */
   terminateOwnedTree(): JobTerminationOutcome
   signal(sig: string): void

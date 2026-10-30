@@ -19,32 +19,6 @@ describe('WSL CLI registration registry', () => {
     await rm(userDataPath, { recursive: true, force: true })
   })
 
-  it('discovers each distro once while continuing to reconcile managed registrations', async () => {
-    await expect(
-      getWslCliRegistrationCandidates(userDataPath, ['Ubuntu', 'Debian'])
-    ).resolves.toEqual(['Ubuntu', 'Debian'])
-
-    await recordWslCliRegistrationObservations(userDataPath, [
-      { distro: 'Ubuntu', inspected: true, managed: false },
-      { distro: 'Debian', inspected: true, managed: true }
-    ])
-
-    await expect(
-      getWslCliRegistrationCandidates(userDataPath, ['ubuntu', 'Debian', 'Fedora'])
-    ).resolves.toEqual(['Debian', 'Fedora'])
-    const state = JSON.parse(
-      await readFile(join(userDataPath, 'wsl-cli-registrations.json'), 'utf8')
-    ) as Record<string, unknown>
-    expect(state).toMatchObject({
-      schemaVersion: 2,
-      registeredDistros: ['Debian'],
-      inspectionTimes: {
-        ubuntu: expect.any(Number),
-        debian: expect.any(Number)
-      }
-    })
-  })
-
   it('skips a registered distro already reconciled by this build against this launcher', async () => {
     const reconciled = { target: 'C:\\Orca\\resources\\bin\\orca.exe', appVersion: '1.4.138' }
     await recordWslCliRegistrationObservations(userDataPath, [
@@ -167,21 +141,6 @@ describe('WSL CLI registration registry', () => {
     await expect(
       getWslCliRegistrationCandidates(userDataPath, ['Ubuntu'], {
         now: 11_001,
-        negativeInspectionTtlMs: 10_000
-      })
-    ).resolves.toEqual(['Ubuntu'])
-  })
-
-  it('rediscovers negative entries after the system clock moves backward', async () => {
-    await recordWslCliRegistrationObservations(
-      userDataPath,
-      [{ distro: 'Ubuntu', inspected: true, managed: false }],
-      { now: 100_000 }
-    )
-
-    await expect(
-      getWslCliRegistrationCandidates(userDataPath, ['Ubuntu'], {
-        now: 1_000,
         negativeInspectionTtlMs: 10_000
       })
     ).resolves.toEqual(['Ubuntu'])

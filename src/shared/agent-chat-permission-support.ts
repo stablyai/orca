@@ -2,13 +2,10 @@ import type { AgentChatPermissionMode } from './agent-chat-permission-mode'
 /** The modes one agent's chats offer. */
 export type AgentChatPermissionModeSupport = {
   modes: readonly AgentChatPermissionMode[]
-  /** `auto` runs only on a model the agent's listing says supports it. */
-  autoNeedsModelSupport?: true
 }
 
 const CLAUDE_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
-  modes: ['ask', 'accept-edits', 'auto', 'full-access'],
-  autoNeedsModelSupport: true
+  modes: ['ask', 'accept-edits', 'auto', 'full-access']
 }
 
 const CODEX_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {

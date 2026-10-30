@@ -1,14 +1,18 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import {
   createBulkCloseSheetActions,
   createCloseWithBulkActions
 } from './mobile-bulk-close-sheet-actions'
 import type { RpcSuccess } from '../transport/types'
+import { mobileBulkTabCloseCopy } from './mobile-bulk-tab-close-copy'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { activateMobileSessionTab } from './mobile-session-tab-activation'
 import type { MobileSessionTab, SessionTabsResult } from './mobile-session-route-types'
 import type { MobileSessionCloseActionsModel } from './use-mobile-session-close-actions'
 
 export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel) {
+  const t = useMobileTranslation()
+  const copy = mobileBulkTabCloseCopy(t)
   const {
     worktreeId,
     client,
@@ -28,12 +32,29 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
     parkedPendingTerminalContext,
     retryPendingTerminalRecovery
   } = scope
+  const [answerBulkClose, setAnswerBulkClose] = useState<((confirmed: boolean) => void) | null>(
+    null
+  )
+  const resolveBulkCloseConfirm = (confirmed: boolean) => {
+    answerBulkClose?.(confirmed)
+    setAnswerBulkClose(null)
+  }
+  const bulkCloseConfirm = {
+    visible: answerBulkClose !== null,
+    title: copy.title.others,
+    message: copy.description,
+    confirmLabel: copy.confirm,
+    destructive: true,
+    onConfirm: () => resolveBulkCloseConfirm(true),
+    onCancel: () => resolveBulkCloseConfirm(false)
+  }
   const bulkCloseActions = createBulkCloseSheetActions({
     sessionTabsRef,
     markdownDocs,
     activeSessionTabIdRef,
     switchSessionTab,
-    closeSessionTab: handleCloseSessionTab
+    closeSessionTab: handleCloseSessionTab,
+    confirmBulkClose: () => new Promise<boolean>((resolve) => setAnswerBulkClose(() => resolve))
   })
   const closeWithBulkActions = createCloseWithBulkActions(handleCloseSessionTab, bulkCloseActions)
 
@@ -97,6 +118,7 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
   ])
   return {
     bulkCloseActions,
+    bulkCloseConfirm,
     closeWithBulkActions,
     visibleTabs,
     activeMarkdownTab,

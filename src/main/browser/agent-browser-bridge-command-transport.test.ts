@@ -54,7 +54,7 @@ vi.mock('./cdp-bridge', () => ({
 
 import { AgentBrowserBridge } from './agent-browser-bridge'
 import {
-  createFakeAgentBrowserChild,
+  answerAgentBrowserCommands,
   createSucceedWith,
   mockBrowserManager,
   mockWebContents,
@@ -103,19 +103,15 @@ describe('AgentBrowserBridge', () => {
 
   it('maps in-flight CDP discovery failures to tab not found after the session disappears', async () => {
     let releaseSnapshot: (() => void) | null = null
-    const activeChild = createFakeAgentBrowserChild({ kill: vi.fn() })
-    execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
-        if (args.includes('snapshot')) {
-          releaseSnapshot = () => {
-            cb(null, JSON.stringify({ success: false, error: CDP_DISCOVERY_FAILURE }), '')
-          }
-          return activeChild
+    answerAgentBrowserCommands(execFileMock, stdinWrites, (command, cb) => {
+      if (command[0] === 'snapshot') {
+        releaseSnapshot = () => {
+          cb(null, JSON.stringify({ success: false, error: CDP_DISCOVERY_FAILURE }), '')
         }
-        cb(null, JSON.stringify({ success: true, data: null }), '')
-        return createFakeAgentBrowserChild({ kill: vi.fn() })
+        return
       }
-    )
+      cb(null, JSON.stringify({ success: true, data: null }), '')
+    })
 
     const snapshotPromise = bridge.snapshot()
 
@@ -161,15 +157,13 @@ describe('AgentBrowserBridge', () => {
 
   it('returns browser_timeout for timed conditional waits without recycling the session', async () => {
     const killedError = Object.assign(new Error('timeout'), { killed: true })
-    execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
-        if (args.includes('wait')) {
-          cb(killedError, '', '')
-          return
-        }
-        cb(null, JSON.stringify({ success: true, data: { snapshot: 'fresh' } }), '')
+    answerAgentBrowserCommands(execFileMock, stdinWrites, (command, cb) => {
+      if (command[0] === 'wait') {
+        cb(killedError, '', '')
+        return
       }
-    )
+      cb(null, JSON.stringify({ success: true, data: { snapshot: 'fresh' } }), '')
+    })
 
     for (let i = 0; i < 3; i++) {
       await expect(bridge.wait({ selector: '.missing', timeout: 1200 })).rejects.toThrow(
@@ -206,6 +200,22 @@ describe('AgentBrowserBridge', () => {
       }
     )
     await expect(bridge.snapshot()).rejects.toThrow('Command failed')
+  })
+
+  it('drops the daemon lifecycle agent-browser adds to every result', async () => {
+    // Real agent-browser 0.39.4 batch reply.
+    const reply =
+      '[{"command":["click","@e2"],"error":null,"result":{"clicked":"@e2","lifecycle":{"effectiveLaunch":{"browserLaunched":true,"engine":"chrome","launchHash":520248349195465926},"launched":false,"relaunchedBrowser":false,"restartedBackground":false,"restoreStatus":"not_configured","reused":true,"saveStatus":"not_attempted"}},"success":true}]'
+    answerAgentBrowserCommands(execFileMock, stdinWrites, (_command, cb) => cb(null, reply, ''))
+    await expect(bridge.click('@e2')).resolves.toEqual({ clicked: '@e2' })
+  })
+
+  it('reports a ref whose element is gone as stale', async () => {
+    // agent-browser 0.39.2+ wording when it cannot re-resolve a ref by role and name.
+    failWith(
+      'Stale ref for role=button name=Approve cannot be recovered: several elements now match. Run snapshot again and use a fresh ref.'
+    )
+    await expect(bridge.click('@e2')).rejects.toMatchObject({ code: 'browser_stale_ref' })
   })
 
   it('returns browser_error with truncated output for malformed JSON', async () => {

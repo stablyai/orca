@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import {
   restorePtyDataHandlersAfterFailedShutdown,
@@ -7,7 +7,7 @@ import {
 import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
-import '../slices/agent-status'
+import '../slices/agent-status/agent-status'
 import {
   collectHibernatedCompletionEvidenceForWorktree,
   collectSleepingAgentSessionRecordsForWorktree

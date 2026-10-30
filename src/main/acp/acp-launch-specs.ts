@@ -125,7 +125,7 @@ export type AcpLaunchSpec = {
   /** Enables /compact as a prompt command. */
   compaction?: true
   /** Rejects copy arguments that route the CLI away from the copy's store. */
-  assertCopyLaunchArgs?: (args: readonly string[]) => void
+  assertCopyLaunchArgs?: (args: readonly string[], prefixArgs?: readonly string[]) => void
   /** How the agent names each turn its reopen replays, when a reopened chat catches up on the
    *  turns made outside it; absent, the replay is only dropped. */
   historyCatchUp?: AcpHistoryTurnIdentity

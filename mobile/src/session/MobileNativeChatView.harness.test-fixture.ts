@@ -1,15 +1,25 @@
-import { resolveMobileNativeChatRowProps } from './use-mobile-native-chat-row-props'
+import { resolveMobileNativeChatRowProps } from './native-chat/transcript/use-mobile-native-chat-row-props'
 import { createElement, type ReactElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, expect, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatView } from './MobileNativeChatView'
+import { setMobileNativeChatDraftText } from './native-chat/composer/mobile-native-chat-draft-store'
 import {
   scrollToEnd,
   scrollToOffset,
-  platform,
   pageScroller
 } from './MobileNativeChatView.render-stubs.test-fixture'
+
+vi.mock('../components/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))
+vi.mock('react-native-reanimated', async () => {
+  const { useRef } = await import('react')
+  return {
+    default: { ScrollView: 'ScrollView' },
+    useAnimatedRef: () => useRef(null),
+    useSharedValue: (value: unknown) => useRef({ value }).current
+  }
+})
 
 export type Overrides = {
   messages?: Parameters<typeof MobileNativeChatView>[0]['messages']
@@ -26,6 +36,11 @@ export type Overrides = {
   agentWorking?: boolean
   canStop?: boolean
   ask?: Parameters<typeof MobileNativeChatView>[0]['ask']
+  askRequiresTerminal?: boolean
+  collapsedPrompt?: Parameters<typeof MobileNativeChatView>[0]['collapsedPrompt']
+  micActive?: boolean
+  micProcessing?: boolean
+  composerTray?: Parameters<typeof MobileNativeChatView>[0]['composerTray']
   question?: Parameters<typeof MobileNativeChatView>[0]['question']
   permission?: Parameters<typeof MobileNativeChatView>[0]['permission']
   sendSurfaceId?: string
@@ -43,7 +58,13 @@ export function assistantTurn(id: string, text: string): NativeChatMessage {
   return { id, role: 'assistant', blocks: [{ type: 'text', text }], timestamp: 0, source: 'hook' }
 }
 
-function chatViewElement(overrides: Overrides): ReturnType<typeof createElement> {
+const DRAFT_KEY = 'draft-a'
+
+function chatViewElement({
+  composerText = '',
+  ...overrides
+}: Overrides): ReturnType<typeof createElement> {
+  setMobileNativeChatDraftText(DRAFT_KEY, composerText)
   return createElement(MobileNativeChatView, {
     messages: [],
     folded: [],
@@ -54,7 +75,7 @@ function chatViewElement(overrides: Overrides): ReturnType<typeof createElement>
     getSendCompletionGeneration: () => 0,
     getComposerEditGeneration: () => 0,
     pending: [],
-    composerText: '',
+    draftKey: DRAFT_KEY,
     onComposerTextChange: vi.fn(),
     ...overrides
   })
@@ -167,4 +188,9 @@ export async function scrollAwayFromTail(): Promise<void> {
   })
 }
 
-export { scrollToEnd, scrollToOffset, platform, pageScroller }
+export {
+  scrollToEnd,
+  scrollToOffset,
+  platform,
+  pageScroller
+} from './MobileNativeChatView.render-stubs.test-fixture'

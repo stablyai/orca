@@ -23,7 +23,7 @@ import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-ow
 import { retireProvider } from '@/lib/retire-unowned-background-terminal'
 import { createRuntimeAgentBackgroundTerminal } from '@/lib/runtime-agent-background-create'
 import { subscribeToRuntimeTerminalData } from '@/runtime/runtime-terminal-stream'
-import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { isMainTerminalSideEffectAuthorityForPty } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
 import { hasExtraAgentArgs } from '../../../shared/automation-extra-agent-args'
 import { runBestEffortAgentBackgroundCleanups } from '@/lib/agent-background-session-cleanup'
@@ -74,7 +74,8 @@ export async function launchAgentBackgroundSession(
     isRemote,
     // The window quotes by its Settings shell, which its pane's spawn also reads.
     shell: undefined,
-    extraAgentArgs: args.extraAgentArgs
+    extraAgentArgs: args.extraAgentArgs,
+    suppressStartupUpdatePrompt: true
   })
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0

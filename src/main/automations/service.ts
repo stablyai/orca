@@ -31,12 +31,11 @@ import {
 import { createAutomationRunWriter, type AutomationRunWriter } from './automation-run-writer'
 import { reportAutomationScheduleDrift } from './schedule-drift-report'
 import {
-  describeScheduledRefusal,
+  describeScheduledTickRefusal,
   missedBeyondGrace,
   recordMissedRun,
   recordRefusedAutomationRun,
-  recordUnevaluableAutomation,
-  WSL_MOVE_OWNED_BY_HOST
+  recordUnevaluableAutomation
 } from './dispatch-refusal'
 import type {
   AutomationsChangedPayload,
@@ -265,13 +264,13 @@ export class AutomationService {
     // Fold recurring refusals before creating rows so they do not evict real run history.
     const target = this.resolveTarget(automation)
     const canDispatch = this.canDispatchToRenderer() || Boolean(this.headlessDispatcher)
-    const refusal = describeScheduledRefusal({ target, canDispatch })
+    const refusal = await describeScheduledTickRefusal(this.store, { target, canDispatch })
     // Once WSL owns the schedule, avoid churning skips on the retained local copy.
-    if (refusal === WSL_MOVE_OWNED_BY_HOST) {
+    if (refusal?.errorCode === 'wslMoveOwnedByHost') {
       await this.runs.advanceNextRun(automation.id, now)
       return
     }
-    if (refusal && (await this.runs.repeatSkip(automation.id, refusal, scheduledFor))) {
+    if (refusal && (await this.runs.repeatSkip(automation.id, refusal.error, scheduledFor))) {
       await this.runs.advanceNextRun(automation.id, now)
       return
     }

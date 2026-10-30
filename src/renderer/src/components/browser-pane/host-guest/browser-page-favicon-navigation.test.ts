@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createBrowserPageWebviewNavigationHandlers } from './browser-page-webview-navigation-handlers'
-import { createBrowserPageWebviewLoadingHandlers } from './browser-page-webview-loading-handlers'
 import type { BrowserTabPageState } from '../describe-page/browser-page-types'
 
 const TAB_ID = 'tab-1'
@@ -41,27 +40,7 @@ function createHarness(startUrl: string) {
     annotationViewportBridgeTokenRef: ref('token'),
     setBrowserOverlayViewport: vi.fn()
   })
-  const loading = createBrowserPageWebviewLoadingHandlers({
-    webview,
-    browserTabId: TAB_ID,
-    faviconUrlRef,
-    browserTabUrlRef: ref(startUrl),
-    addressBarValueRef: ref(startUrl),
-    addressBarInputRef: ref(null),
-    activeLoadFailureRef: ref(null),
-    lastKnownWebviewUrlRef: ref<string | null>(startUrl),
-    keepAddressBarFocusRef: ref(false),
-    recoveryNavigationValidationRef: ref(null),
-    invalidateBrowserAnnotationDocumentRef: ref(vi.fn()),
-    onUpdatePageStateRef,
-    onSetUrlRef: ref(vi.fn()),
-    setBrowserOverlayViewport: vi.fn(),
-    setAddressBarValue: vi.fn(),
-    focusAddressBarNow: () => false
-  })
-
   const navigateTo = (url: string): void => {
-    loading.handleDidStartLoading()
     navigation.handleDidStartNavigation({
       isMainFrame: true,
       isInPlace: false,
@@ -70,7 +49,7 @@ function createHarness(startUrl: string) {
     committedUrl.current = url
   }
 
-  return { faviconUrlRef, updates, navigation, loading, navigateTo, committedUrl }
+  return { faviconUrlRef, updates, navigation, navigateTo, committedUrl }
 }
 
 describe('favicon retention across navigations', () => {
@@ -145,7 +124,6 @@ describe('favicon retention across navigations', () => {
         frameProcessId: 1,
         frameRoutingId: 1
       })
-    harness.loading.handleDidStartLoading()
     harness.navigation.handleDidStartNavigation(
       startNavigation('https://ads.example.com/frame', false, false)
     )

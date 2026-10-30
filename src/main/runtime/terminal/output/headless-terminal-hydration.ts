@@ -13,7 +13,6 @@ import {
 import { TrustDialogStatusObserver } from '../../trust-dialog-status-observer'
 import type { LaunchedAgentForeground } from '../../launched-agent-foreground'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../shared/terminal-scrollback-policy'
 import {
   detectAgentStatusFromTitle,
   normalizeTerminalTitle
@@ -92,9 +91,9 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
       }
       try {
         // Retain normal-buffer scrollback while a TUI is in alt-screen so pre-TUI history remains restorable (#6106).
-        // Desktop depth (this emulator's retention): a hidden-output reveal repaints the pane from this model.
+        // This emulator's retention: a hidden-output reveal repaints the pane from this model.
         const rendered = await controller.serializeBuffer!(ptyId, {
-          scrollbackRows: DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT
+          scrollbackRows: this.headlessTerminalScrollbackRows
         })
         if (
           this.headlessTerminals.get(ptyId) !== state ||
@@ -104,7 +103,7 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
           return
         }
         this.recordOsc7MetadataForPty(ptyId, rendered.data)
-        this.recordRecentPtyOutputForPathProvenance(ptyId, rendered.data)
+        this.recordRecentPtyOutput(ptyId, rendered.data)
         // Resize to renderer's dims so the seed reflows correctly into the
         // emulator's grid, then resize back to PTY dims (if known) so live
         // writes use the correct cell layout.

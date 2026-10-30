@@ -8,7 +8,9 @@ import {
   normalizeImageTranscriptMessages,
   normalizeNativeChatUserText,
   normalizedNativeChatUserMessageText
-} from '../../../../../src/shared/native-chat-image-transcript-markers'
+} from '../../../../../src/shared/native-chat/transcript/native-chat-image-transcript-markers'
+import { nativeChatPendingOccurrence } from '../../../../../src/shared/native-chat-pending-occurrence'
+import type { NativeChatPendingSend } from '../../../../../src/shared/native-chat-pending-sends'
 
 export type UnconfirmedSend = {
   draftKey: string
@@ -23,42 +25,10 @@ export function normalizedUserText(message: NativeChatMessage): string | null {
   return normalizedNativeChatUserMessageText(message)
 }
 
-export function countUserTextOccurrences(
-  messages: readonly NativeChatMessage[],
-  text: string
-): number {
-  let count = 0
-  for (const message of messages) {
-    if (normalizedUserText(message) === text) {
-      count++
-    }
-  }
-  return count
-}
-
-// Match image-only sends by image-echo ordinal; unrelated text echoes must not clear them even after the captured tail paginates out.
-export function countImageSourceTurnsAfter(
-  messages: readonly NativeChatMessage[],
-  tailId: string | null
-): number {
-  const tailIndex = tailId ? messages.findIndex((message) => message.id === tailId) : -1
-  let count = 0
-  for (let i = tailIndex + 1; i < messages.length; i++) {
-    const message = messages[i]
-    if (message && isImageSourceUserTurn(message)) {
-      count++
-    }
-  }
-  return count
-}
-
-export type PendingImagePreviewEcho = {
-  id: string
-  text: string
-  images?: string[]
-  expectedOccurrence: number
-  baselineTailMessageId: string | null
-}
+export type PendingImagePreviewEcho = Pick<
+  NativeChatPendingSend,
+  'id' | 'text' | 'sentAt' | 'afterMessageId' | 'matchingOccurrence'
+> & { images?: string[] }
 
 export type SentImagePreview = {
   messageId: string
@@ -141,6 +111,24 @@ export function migrateImagePreviewMessageIds(
   return nextSession ? { ...previous, [sessionKey]: nextSession } : previous
 }
 
+// A boundary on an image-source row lives on in the prompt row it folded into.
+function foldedBoundaryIndex(
+  messages: readonly NativeChatMessage[],
+  normalizedIndexById: ReadonlyMap<string, number>,
+  boundaryId: string | null | undefined
+): number | undefined {
+  if (!boundaryId) {
+    return -1
+  }
+  const direct = normalizedIndexById.get(boundaryId)
+  if (direct !== undefined) {
+    return direct
+  }
+  const rawIndex = messages.findIndex((message) => message.id === boundaryId)
+  const promptId = rawIndex === -1 ? null : imagePreviewReplacementMessageId(messages, rawIndex)
+  return promptId ? normalizedIndexById.get(promptId) : undefined
+}
+
 // Carry phone-local preview URIs onto authoritative rows because host paths/marker-only turns cannot display those photos.
 export function findLandedImagePreviewEchoes(
   messages: readonly NativeChatMessage[],
@@ -185,21 +173,12 @@ export function findLandedImagePreviewEchoes(
       const imageCount = message.blocks.filter(isImageRefBlock).length
       return message.blocks.length === 0 || imageCount >= entry.images!.length
     })
-    const tailIndex = entry.baselineTailMessageId
-      ? messageIndexById.get(entry.baselineTailMessageId)
-      : -1
-    const occurrenceIndex = Math.max(0, entry.expectedOccurrence - 1)
-    const candidate = targetText
-      ? candidates[occurrenceIndex]
-      : candidates.filter(
-          (message) =>
-            tailIndex === undefined || (messageIndexById.get(message.id) ?? -1) > tailIndex
-        )[occurrenceIndex]
-    if (
-      !candidate ||
-      claimedMessageIds.has(candidate.id) ||
-      (tailIndex !== undefined && (messageIndexById.get(candidate.id) ?? -1) <= tailIndex)
-    ) {
+    const tailIndex = foldedBoundaryIndex(messages, messageIndexById, entry.afterMessageId)
+    // Same boundary-relative occurrence as the shared pending rule, so older identical rows cannot bind.
+    const candidate = candidates.filter(
+      (message) => tailIndex === undefined || (messageIndexById.get(message.id) ?? -1) > tailIndex
+    )[nativeChatPendingOccurrence(entry, 0) - 1]
+    if (!candidate || claimedMessageIds.has(candidate.id)) {
       continue
     }
     claimedMessageIds.add(candidate.id)

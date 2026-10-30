@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -39,7 +40,8 @@ async function namedFeed() {
   const sessions = new Map([['session', indexedStatusFeedSession({ journal })]])
   const feed = new StructuredAgentSessionStatusFeed({
     sessions,
-    getRecord: (id) => (id === record.sessionId ? record : null),
+    getConversation: (id) =>
+      id === record.sessionId ? agentSessionConversationView(record) : null,
     namingFailure: () => failure,
     now: () => 100,
     logger: createStructuredAgentSessionLogger()
@@ -112,8 +114,8 @@ it('publishes cold names from durable records across a host restart without a st
   const open = () =>
     new StructuredAgentSessionStatusFeed({
       sessions: new Map(),
-      getRecord: () => record,
-      listRecords: () => [record],
+      getConversation: () => agentSessionConversationView(record),
+      listConversations: () => [agentSessionConversationView(record)],
       now: () => 100,
       logger: createStructuredAgentSessionLogger()
     })

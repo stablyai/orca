@@ -32,9 +32,13 @@ export function SessionUnsavedConversationNotice({
       <div className="rounded-md border border-dashed border-border/70 bg-foreground/[0.04] px-2.5 py-2 text-[11px] leading-4 text-muted-foreground">
         {recoverable
           ? translate(
-              'auto.components.right.sidebar.AiVaultSessionDetails.recoverableEmptyDetail',
-              'This session has no saved conversation, but {{value0}} recoverable item(s) survive.',
-              { value0: aiVaultSessionRecoverableSignalCount(session) }
+              'auto.components.right.sidebar.AiVaultSessionDetails.recoverableEmptyDetailCount',
+              'This session has no saved conversation, but {{count}} recoverable items survive.',
+              {
+                count: aiVaultSessionRecoverableSignalCount(session),
+                defaultValue_one:
+                  'This session has no saved conversation, but {{count}} recoverable item survives.'
+              }
             )
           : translate(
               'auto.components.right.sidebar.AiVaultSessionDetails.emptyConversationDetail',
@@ -69,18 +73,18 @@ function SessionRecoverableSignalLines({
       {queuedMessageCount > 0 ? (
         <li>
           {translate(
-            'auto.components.right.sidebar.AiVaultSessionDetails.queuedMessages',
-            '{{value0}} queued message(s)',
-            { value0: queuedMessageCount }
+            'auto.components.right.sidebar.AiVaultSessionDetails.queuedMessageCount',
+            '{{count}} queued messages',
+            { count: queuedMessageCount, defaultValue_one: '{{count}} queued message' }
           )}
         </li>
       ) : null}
       {subagentTranscriptCount > 0 ? (
         <li>
           {translate(
-            'auto.components.right.sidebar.AiVaultSessionDetails.subagentTranscripts',
-            '{{value0}} subagent transcript(s)',
-            { value0: subagentTranscriptCount }
+            'auto.components.right.sidebar.AiVaultSessionDetails.subagentTranscriptCount',
+            '{{count}} subagent transcripts',
+            { count: subagentTranscriptCount, defaultValue_one: '{{count}} subagent transcript' }
           )}
         </li>
       ) : null}

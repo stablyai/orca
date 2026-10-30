@@ -4,9 +4,9 @@ import {
   type AgentProviderSessionMetadata,
   type ResumableTuiAgent
 } from './agent-session-resume'
-import type { SessionOptionValue } from './native-chat-session-options'
+import type { SessionOptionValue } from './native-chat/input/native-chat-session-options'
 import { buildSleepingAgentLaunchConfig } from './sleeping-agent-launch-config'
-import { resolveAgentLaunchCommand } from './tui-agent-launch-command'
+import { resolveAgentLaunchCommand, withAgentTerminalInputArgs } from './tui-agent-launch-command'
 import type { AgentStartupPlan } from './tui-agent-startup'
 import { resolveStartupShell, type AgentStartupShell } from './tui-agent-startup-shell'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
@@ -36,6 +36,8 @@ export function buildAgentResumeStartupPlan(args: {
   launchCwd?: string | null
   /** Open a copy of the conversation instead of re-entering it; null for agents that cannot. */
   fork?: boolean
+  /** OS that runs the agent when `platform` only picks quoting; null when unreported. */
+  agentHostPlatform?: NodeJS.Platform | null
 }): AgentStartupPlan | null {
   const resumeArgv = args.fork
     ? getAgentForkArgv(args.agent, args.providerSession)
@@ -59,8 +61,13 @@ export function buildAgentResumeStartupPlan(args: {
   const baseCommand = resolvedAgentCommand
     ? ({
         ok: true,
-        command: resolvedAgentCommand,
-        commandWithoutSessionOptions: resolvedAgentCommand,
+        command: withAgentTerminalInputArgs(
+          resolvedAgentCommand,
+          args.agent,
+          args.agentHostPlatform === undefined ? args.platform : args.agentHostPlatform,
+          shell
+        ),
+        resumeLaunch: { agentCommand: resolvedAgentCommand },
         appliedSessionOptions: {}
       } as const)
     : resolveAgentLaunchCommand({
@@ -71,7 +78,8 @@ export function buildAgentResumeStartupPlan(args: {
         agentArgs: recorded.agentArgs,
         sessionOptions: args.sessionOptions,
         sessionOptionsOverrideAgentArgs: args.sessionOptionsOverrideAgentArgs,
-        isRemote: args.isRemote
+        isRemote: args.isRemote,
+        agentHostPlatform: args.agentHostPlatform
       })
   if (!baseCommand.ok) {
     return null
@@ -79,7 +87,7 @@ export function buildAgentResumeStartupPlan(args: {
   const launchConfig = buildSleepingAgentLaunchConfig({
     ...args,
     agentArgs: recorded.agentArgs,
-    agentCommand: baseCommand.commandWithoutSessionOptions
+    ...baseCommand.resumeLaunch
   })
   const resumeCommand = buildAgentResumeLaunchCommand(args.agent, baseCommand.command, argv, shell)
   const agentCwd = args.providerSession.cwd

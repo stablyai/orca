@@ -1,9 +1,18 @@
+import {
+  closeStructuredAgentSessionChild,
+  type StructuredAgentSessionCloseOptions
+} from '../../agent-session/structured-agent-session-close'
 /** Create structured workers directly; attach is not readiness, so hold the preamble until the agent takes it.
  * Open dispatches retain agents through the idle sweep; settled workers rest and restart on mail. The preamble is a turn, never keystrokes. */
 
 import { randomUUID } from 'node:crypto'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../../shared/agent-session-definitive-refusal'
 import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
+import {
+  agentSessionFailureDetailText,
+  readAgentSessionFailureFact
+} from '../../../../shared/agent-session-failure'
+import { quotedProviderDetail } from '../../../../shared/agent-session-failure-quoted-detail'
 import type {
   AgentJournalMessageItem,
   AgentJournalSubmission
@@ -116,7 +125,7 @@ export async function createStructuredWorkerSession(args: {
       )
     }
     const host = requireInstalledHost()
-    const record = host.deps.store.getRecord(sessionId)
+    const record = host.deps.store.requireWritableRecord(sessionId)
     if (!record || !structuredWorkerHostScope(record.location)) {
       throw new OrchestrationError(
         'agent_unconfigured',
@@ -151,20 +160,18 @@ function structuredCreateMayHaveCommitted(
  * Keep the tab reachable if close throws. Later authority/preamble failures also use this cleanup. */
 export async function discardStructuredWorkerSession(
   sessionId: string,
-  runtime: Pick<OrcaRuntimeService, 'retireStructuredAgentSessionTabFromSnapshot'>
+  runtime: NonNullable<StructuredAgentSessionCloseOptions['runtime']>
 ): Promise<void> {
   const host = getStructuredAgentSessionHost()
   if (!host) {
     return
   }
-  try {
-    await host.setSessionTabVisibility?.(sessionId, false)
-    await host.close(sessionId, 'evict')
-  } catch (error) {
+  const outcome = await closeStructuredAgentSessionChild(sessionId, { runtime })
+  if (!outcome.stopped) {
     console.warn(
       '[orchestration] failed to discard a half-started structured worker',
       sessionId,
-      error
+      outcome.reason
     )
     return
   }
@@ -178,7 +185,12 @@ function reasonClause(reason: string | null | undefined): string {
 
 /** What a preamble send reads of the host. */
 type StructuredWorkerPreambleHost = StructuredAgentTurnHost & {
-  deps: { store: { getRecord: (sessionId: string) => { lease: { runtimeFence: number } } | null } }
+  deps: {
+    store: Pick<
+      StructuredAgentSessionHost['deps']['store'],
+      'selectWritableRecord' | 'requireWritableRecord'
+    >
+  }
 }
 
 /** Delivers the dispatch preamble as the worker's first turn. `pending`: the worker's agent had
@@ -199,10 +211,10 @@ export async function sendStructuredWorkerPreamble(args: {
     blocks: [{ type: 'text', text: args.preamble }],
     from: args.from
   }
-  const fence = args.host.deps.store.getRecord(args.sessionId)?.lease.runtimeFence
-  if (fence === undefined) {
+  if (args.host.deps.store.selectWritableRecord(args.sessionId).kind === 'missing') {
     throw new Error('The structured worker session has no durable record to dispatch into.')
   }
+  const fence = args.host.deps.store.requireWritableRecord(args.sessionId).lease.runtimeFence
   const outcome = await sendAgentTurn({
     kind: 'structured-session',
     host: args.host,
@@ -235,12 +247,17 @@ export function preambleDispatchState(
     return submission.dispatchState
   }
   if (submission?.dispatchState === 'rejected') {
+    // Name the failure detail unless the reason already quotes it.
+    const detail = agentSessionFailureDetailText(readAgentSessionFailureFact(submission.rejection))
+    const quoted = detail ? quotedProviderDetail(detail) : ''
+    const detailClause =
+      quoted && !submission.reason?.includes(quoted) ? ` Details: ${quoted}.` : ''
     // Definitive rejection gets a typed non-delivery code so the coordinator can retry without a duplicate turn.
     throw new OrchestrationError(
       'dispatch_preamble_undelivered',
       `The dispatch preamble was not delivered${
         submission.rejection ? ` (${submission.rejection.kind})` : ''
-      }: ${reasonClause(submission.reason)}.`
+      }: ${reasonClause(submission.reason)}.${detailClause}`
     )
   }
   // Only accepted proves delivery; adapter/transport unknown requires an outcome_unknown receipt that tells the coordinator to inspect.
@@ -279,14 +296,8 @@ async function subscribeForRedrive(
     maxWaitMs: REDRIVE_MAX_WAIT_MS
   })
   try {
-    const unsubscribe = await host.subscribe({
-      id: `orchestration:redrive:${sessionId}`,
-      sessionId,
-      emit: (event) => {
-        if (event.type === 'batch' || event.type === 'reset') {
-          coalescer.schedule(sessionId)
-        }
-      }
+    const unsubscribe = host.observeJournalPublications(sessionId, () => {
+      coalescer.schedule(sessionId)
     })
     // Discard pending redrive on settlement so it cannot nudge a session no dispatch owns.
     return () => {

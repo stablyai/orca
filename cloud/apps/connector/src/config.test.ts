@@ -11,6 +11,7 @@ describe('connector config', () => {
   it('fills defaults around the required settings', () => {
     expect(loadConnectorConfig(ENV)).toEqual({
       mode: 'active',
+      role: 'api',
       port: 8080,
       publicUrl: 'https://connector.onorca.dev',
       dataDir: './data/connector',
@@ -31,7 +32,8 @@ describe('connector config', () => {
     ['a path on the public URL', { ORCA_CONNECTOR_PUBLIC_URL: 'https://connector.onorca.dev/x' }],
     ['plain HTTP off loopback', { ORCA_CONNECTOR_AUTH_ISSUER: 'http://login.onorca.dev' }],
     ['a missing key set URL', { ORCA_CONNECTOR_JWKS_URL: undefined }],
-    ['a plain HTTP key set URL', { ORCA_CONNECTOR_JWKS_URL: 'http://login.onorca.dev/jwks' }]
+    ['a plain HTTP key set URL', { ORCA_CONNECTOR_JWKS_URL: 'http://login.onorca.dev/jwks' }],
+    ['the gateway role without Discord', { ORCA_CONNECTOR_ROLE: 'discord-gateway' }]
   ])('rejects %s', (_name, override) => {
     expect(() => loadConnectorConfig({ ...ENV, ...override })).toThrow()
   })

@@ -1,11 +1,6 @@
 // fish toggles 2031 around each prompt, often in one chunk. Acting on any subscribe instead of final state sends replies into the shell/child (#9993).
 import { describe, expect, it } from 'vitest'
-import {
-  INITIAL_MODE_2031_REPLY_SCAN_STATE,
-  scanMode2031ReplyDecision,
-  scanMode2031Sequences,
-  type Mode2031ReplyDecision
-} from './terminal-color-scheme-protocol'
+
 import {
   createTerminalTitleTracker,
   type TerminalTitleTrackerCallbacks
@@ -13,9 +8,6 @@ import {
 
 const ESC = '\x1b'
 const BEL = '\x07'
-
-// A fish prompt cycle: subscribe, paint the prompt, hand the tty to the child.
-const FISH_PROMPT_HANDOFF = `${ESC}[?2031h${ESC}[0m~/orca ${ESC}[32m❯${ESC}[0m ${ESC}[?2031l`
 
 function trackerRecording(overrides: TerminalTitleTrackerCallbacks = {}): {
   subscribes: number
@@ -37,52 +29,6 @@ function trackerRecording(overrides: TerminalTitleTrackerCallbacks = {}): {
 }
 
 describe('DECSET 2031 replies follow the chunk-final state (#9993)', () => {
-  it('reports a subscribe-then-unsubscribe chunk as unsubscribed', () => {
-    const scan = scanMode2031Sequences('', FISH_PROMPT_HANDOFF)
-
-    // Both toggles occurred, but only finalState says whether the shell is still listening.
-    expect(scan.subscribe).toBe(true)
-    expect(scan.unsubscribe).toBe(true)
-    expect(scan.finalState).toBe('unsubscribed')
-  })
-
-  it('does not emit a 2031-subscribe fact when the shell unsubscribed in the same chunk', () => {
-    const recorded = trackerRecording()
-
-    recorded.tracker.handleChunk(FISH_PROMPT_HANDOFF)
-
-    expect(recorded.subscribes).toBe(0)
-  })
-
-  it('still emits a fact when the chunk ends subscribed', () => {
-    const recorded = trackerRecording()
-
-    recorded.tracker.handleChunk(`${ESC}[?2031l${ESC}[?2031h`)
-
-    expect(recorded.subscribes).toBe(1)
-  })
-
-  it('emits once per chunk that ends subscribed, across a fish prompt loop', () => {
-    const recorded = trackerRecording()
-
-    // Three prompt cycles, then a TUI that subscribes and keeps listening.
-    recorded.tracker.handleChunk(FISH_PROMPT_HANDOFF)
-    recorded.tracker.handleChunk(FISH_PROMPT_HANDOFF)
-    recorded.tracker.handleChunk(FISH_PROMPT_HANDOFF)
-    recorded.tracker.handleChunk(`${ESC}[?2031h`)
-
-    expect(recorded.subscribes).toBe(1)
-  })
-
-  it('keeps answering a subscribe split across chunk boundaries', () => {
-    const recorded = trackerRecording()
-
-    recorded.tracker.handleChunk(`${ESC}[?20`)
-    recorded.tracker.handleChunk('31h')
-
-    expect(recorded.subscribes).toBe(1)
-  })
-
   it('does not answer a subscribe whose withdrawal straddles the chunk boundary', () => {
     const recorded = trackerRecording()
 
@@ -162,19 +108,6 @@ function trackerRecordingBothFacts(): {
 }
 
 describe('a fish prompt-accept burst is tracked, never answered (#9993)', () => {
-  it('yields registry transitions only — subscribe then unsubscribe, two chunks apart', () => {
-    let state = INITIAL_MODE_2031_REPLY_SCAN_STATE
-    const decisions: Mode2031ReplyDecision[] = FISH_PROMPT_ACCEPT_CHUNKS.map((chunk) => {
-      const result = scanMode2031ReplyDecision(state, chunk)
-      state = result.state
-      return result.decision
-    })
-
-    expect(decisions).toEqual(['subscribed', null, null, 'unsubscribed', null])
-    // The shell withdraws before exec; a reply queued at subscribe can reach only its child.
-    expect(decisions.indexOf('unsubscribed')).toBeLessThan(FISH_PROMPT_ACCEPT_CHUNKS.length - 1)
-  })
-
   it('still emits both side-effect facts so the subscription registry stays truthful', () => {
     const recorded = trackerRecordingBothFacts()
 
@@ -184,14 +117,5 @@ describe('a fish prompt-accept burst is tracked, never answered (#9993)', () => 
 
     // Facts survive the fix: maybePushMode2031Flip needs them to know who is listening.
     expect(recorded.facts).toEqual(['2031-subscribe', '2031-unsubscribe'])
-  })
-
-  it('contains no color-scheme query, so silence is the whole correct answer', () => {
-    const burst = FISH_PROMPT_ACCEPT_CHUNKS.join('')
-
-    // A captured full fish session subscribes but never queries CSI ?996n, so ?997;Nn would be unsolicited.
-    expect(burst).toContain(`${ESC}[?2031h`)
-    expect(burst).not.toContain('996')
-    expect(burst).not.toContain('997')
   })
 })

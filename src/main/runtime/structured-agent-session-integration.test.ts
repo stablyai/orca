@@ -31,7 +31,7 @@ import type { OrcaRuntimeService } from './orca-runtime'
 import { readPersistedTestAgentSessionStoreText } from './agent-session-record-store-test-harness'
 import type { RpcRequest, RpcResponse } from './rpc/core'
 import { RpcDispatcher } from './rpc/dispatcher'
-import type { NativeChatShellEnvironmentPolicy } from '../../shared/native-chat-shell-environment'
+import type { NativeChatShellEnvironmentPolicy } from '../../shared/native-chat/native-chat-shell-environment'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './rpc/methods/structured-agent-session'
 import {
   ensureStructuredAgentSessionHost,
@@ -298,10 +298,13 @@ async function readKnownOptions(): Promise<RpcResponse> {
     expect(result).toMatchObject({
       ok: true,
       result: {
-        models: [{ id: 'gpt-live', defaultEffort: 'medium' }],
+        models: [{ id: 'gpt-live' }],
         current: { model: 'gpt-live' }
       }
     })
+    if (result.ok) {
+      expect(result.result).not.toHaveProperty('models.0.defaultEffort')
+    }
     return result
   })
 }
@@ -336,7 +339,7 @@ beforeEach(async () => {
         hostId: 'local',
         claimKeyId: 'key-1',
         resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
-        resolveCodexCommand: () => '/usr/local/bin/codex',
+        resolveCodexCommand: () => ({ command: '/usr/local/bin/codex', prefixArgs: [] }),
         runCodexCatalogSession: scriptedCodexCatalogSession,
         resolveAgentAccountHome: async () => ({ variable: 'CODEX_HOME', path: '/home/dev/.codex' }),
         resolveLaunchArgs: () => [],

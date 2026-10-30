@@ -1,3 +1,8 @@
+import {
+  selectVisibleAgentOrchestration,
+  representedOrchestrationWorktrees,
+  type VisibleOrchestrationState
+} from '@/runtime/visible-agent-orchestration'
 import type { AppState } from '@/store/types'
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
@@ -8,7 +13,8 @@ type OrchestrationIndexState = Pick<
   | 'retainedAgentsByPaneKey'
   | 'runtimeAgentOrchestrationByPaneKey'
   | 'tabsByWorktree'
->
+> &
+  VisibleOrchestrationState
 
 type RuntimeOrchestrationRecord = Record<string, AgentStatusOrchestrationContext>
 
@@ -26,6 +32,7 @@ type PaneWorktreeProjectionCache = {
   runtimeSource: OrchestrationIndexState['runtimeAgentOrchestrationByPaneKey']
   liveSource: OrchestrationIndexState['agentStatusByPaneKey']
   retainedSource: OrchestrationIndexState['retainedAgentsByPaneKey']
+  representedSource: OrchestrationIndexState['unifiedTabsByWorktree']
   paneWorktreeIds: readonly (string | undefined)[]
 }
 
@@ -76,27 +83,37 @@ function projectPaneWorktreeIds(
   runtimeSource: OrchestrationIndexState['runtimeAgentOrchestrationByPaneKey'],
   runtimeEntries: readonly [string, AgentStatusOrchestrationContext][],
   agentStatusByPaneKey: OrchestrationIndexState['agentStatusByPaneKey'],
-  retainedAgentsByPaneKey: OrchestrationIndexState['retainedAgentsByPaneKey']
+  retainedAgentsByPaneKey: OrchestrationIndexState['retainedAgentsByPaneKey'],
+  state: OrchestrationIndexState
 ): readonly (string | undefined)[] {
   // Cache by map identity so all cards share one attribution scan per publication.
   if (
     paneWorktreeProjectionCache?.runtimeSource === runtimeSource &&
     paneWorktreeProjectionCache.liveSource === agentStatusByPaneKey &&
-    paneWorktreeProjectionCache.retainedSource === retainedAgentsByPaneKey
+    paneWorktreeProjectionCache.retainedSource === retainedAgentsByPaneKey &&
+    paneWorktreeProjectionCache.representedSource === state.unifiedTabsByWorktree
   ) {
     return paneWorktreeProjectionCache.paneWorktreeIds
   }
   const paneWorktreeIds: (string | undefined)[] = []
-  for (const [paneKey] of runtimeEntries) {
+  const represented = state.unifiedTabsByWorktree
+    ? representedOrchestrationWorktrees(state)
+    : new Map<string, string>()
+  for (const [paneKey, context] of runtimeEntries) {
     paneWorktreeIds.push(
       agentStatusByPaneKey[paneKey]?.worktreeId,
-      retainedAgentsByPaneKey[paneKey]?.worktreeId
+      retainedAgentsByPaneKey[paneKey]?.worktreeId,
+      represented.get(paneKey),
+      represented.size > 0 && context.parentPaneKey
+        ? represented.get(context.parentPaneKey)
+        : undefined
     )
   }
   paneWorktreeProjectionCache = {
     runtimeSource,
     liveSource: agentStatusByPaneKey,
     retainedSource: retainedAgentsByPaneKey,
+    representedSource: state.unifiedTabsByWorktree,
     paneWorktreeIds
   }
   return paneWorktreeIds
@@ -195,7 +212,15 @@ function buildIndex(
     }
     const liveWorktreeId = paneWorktreeIds[projectionCursor]
     const retainedWorktreeId = paneWorktreeIds[projectionCursor + 1]
-    projectionCursor += 2
+    const representedWorktreeId = paneWorktreeIds[projectionCursor + 2]
+    const parentWorktreeId = paneWorktreeIds[projectionCursor + 3]
+    if (representedWorktreeId) {
+      targets.add(representedWorktreeId)
+    }
+    if (parentWorktreeId) {
+      targets.add(parentWorktreeId)
+    }
+    projectionCursor += 4
     if (typeof liveWorktreeId === 'string') {
       targets.add(liveWorktreeId)
     }
@@ -227,8 +252,7 @@ function buildIndex(
 export function selectWorktreeAgentOrchestrationIndex(
   state: OrchestrationIndexState
 ): ReadonlyMap<string, RuntimeOrchestrationRecord> {
-  const runtimeAgentOrchestrationByPaneKey =
-    state.runtimeAgentOrchestrationByPaneKey ?? EMPTY_SOURCE
+  const runtimeAgentOrchestrationByPaneKey = selectVisibleAgentOrchestration(state)
   // Cache context entries separately so unrelated live/retained churn cannot force enumeration.
   if (runtimeEntriesCache?.source !== runtimeAgentOrchestrationByPaneKey) {
     runtimeEntriesCache = {
@@ -251,7 +275,8 @@ export function selectWorktreeAgentOrchestrationIndex(
     runtimeAgentOrchestrationByPaneKey,
     runtimeEntries,
     state.agentStatusByPaneKey ?? EMPTY_SOURCE,
-    state.retainedAgentsByPaneKey ?? EMPTY_SOURCE
+    state.retainedAgentsByPaneKey ?? EMPTY_SOURCE,
+    state
   )
   if (
     orchestrationIndexCache?.runtimeSource === runtimeAgentOrchestrationByPaneKey &&

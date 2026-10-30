@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -79,7 +80,7 @@ function publishedSummary(journal: AgentSessionJournal): AgentSessionStatusSumma
   const feed = new StructuredAgentSessionStatusFeed({
     logger: createStructuredAgentSessionLogger(),
     sessions: new Map([[SESSION, session]]),
-    getRecord: () => agentSessionRecordFixture(),
+    getConversation: () => agentSessionConversationView(agentSessionRecordFixture()),
     now: () => 1_000
   })
   const events: AgentSessionStatusEvent[] = []
@@ -111,7 +112,7 @@ function ingest(summary: AgentSessionStatusSummary, children: AgentChildWorkEvid
   const summaries = new Map([[WORKSPACE_ID, row]])
   attachRuntimeWorktreeAgentRows({
     summaries,
-    workingTerminalEvidenceByWorktreeId: new Map(),
+    terminalTitleEvidenceByWorktreeId: new Map(),
     rowSources: collectRuntimeWorktreeAgentSources({
       mirroredWorktreeIdByTabId: new Map(),
       connectedPtyEvidence: {

@@ -21,7 +21,9 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('sonner', () => ({ toast: { info: mocks.toastInfo, error: mocks.toastError } }))
-vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: mocks.launchAgentInNewTab }))
+vi.mock('@/lib/launch-agent-in-new-tab', () => ({
+  launchAgentInNewTabWithOutcome: mocks.launchAgentInNewTab
+}))
 vi.mock('@/lib/ai-vault-session-resume-preparation', () => ({
   prepareAiVaultSessionForResume: async () => ({ sessionId: 'provider-1' })
 }))
@@ -214,7 +216,10 @@ describe('a structured chat launch on a paired server', () => {
     })
     await useAppStore.getState().ensureNativeDetectedAgents()
     mocks.createSupport.mockResolvedValue({ supported: false })
-    const openTerminal = vi.fn(() => ({ surface: { kind: 'host-published' as const } }))
+    const openTerminal = vi.fn(() => ({
+      surface: { kind: 'host-published' as const },
+      pasteDraftAfterLaunch: false
+    }))
     const declined = () =>
       launchStructuredAgentFromNewTab({ plan: plan(), worktreeId, openTerminal })
     await expect(declined()?.structuredSettlement).resolves.toMatchObject({ kind: 'failed' })

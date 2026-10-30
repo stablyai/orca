@@ -197,9 +197,11 @@ export function installShellCommandInference(session: ConnectPanePtySession): vo
   session.reattachReplayPayloadSignalGeneration = 0
   session.rememberReattachPayloadAgentSignal = (
     data: string,
-    opts: { fullScreenReplay: boolean }
+    opts: { fullScreenReplay: boolean; imageTitle?: string }
   ): void => {
     session.reattachReplayPayloadSignalGeneration += 1
+    // Post-parse checks for this replay must judge the same title its reset did.
+    session.reattachReplayImageTitle = opts.imageTitle
     // Agent names in history are not liveness; require restored Cursor screen shape.
     const signal = hasCursorAgentReattachPayloadScreenSignal(data)
     // Incremental frames may add evidence; only authoritative full-screen repaint may clear it.
@@ -210,27 +212,31 @@ export function installShellCommandInference(session: ConnectPanePtySession): vo
   session.isCursorAgentNativeTitle = (title: string): boolean => {
     return title.trim().toLowerCase() === CURSOR_AGENT_REATTACH_HEADER.toLowerCase()
   }
-  session.hasLiveAgentReattachStatusOrTitleSignal = (): boolean => {
+  session.hasLiveAgentReattachStatusOrTitleSignal = (imageTitle?: string): boolean => {
     // Permanent tab launch metadata cannot prove liveness; require current status/title or restored screen shape.
     if (useAppStore.getState().agentStatusByPaneKey[session.cacheKey]) {
       return true
     }
-    const title = session.getCurrentTerminalTitle() ?? ''
+    // A replayed image's own title outranks the store's, which arrives on a separate channel.
+    const title = imageTitle ?? session.getCurrentTerminalTitle() ?? ''
     // Loose label matching can classify ssh user names; mode preservation and input injection need exact/status titles.
     return detectAgentStatusFromTitle(title) !== null || session.isCursorAgentNativeTitle(title)
   }
-  session.hasLiveAgentReattachSignal = (): boolean => {
+  session.hasLiveAgentReattachSignal = (imageTitle?: string): boolean => {
     return (
-      session.hasLiveAgentReattachStatusOrTitleSignal() ||
+      session.hasLiveAgentReattachStatusOrTitleSignal(imageTitle) ||
       session.reattachReplayPayloadHasCursorAgentSignal
     )
   }
-  session.shouldPreserveAgentReattachModes = (): boolean => {
+  session.shouldPreserveAgentReattachModes = (imageTitle?: string): boolean => {
     // Why: ordinary shells can inherit stale ?25l/?1004h from replay bytes.
     // Preserve those modes only when reattach still looks agent-owned.
-    return session.hasLiveAgentReattachSignal()
+    return session.hasLiveAgentReattachSignal(imageTitle)
   }
-  session.shouldSendFocusedAgentReattachFocusIn = (): boolean => {
-    return terminalOwnsDomFocus(session.pane.terminal) && session.shouldPreserveAgentReattachModes()
+  session.shouldSendFocusedAgentReattachFocusIn = (imageTitle?: string): boolean => {
+    return (
+      terminalOwnsDomFocus(session.pane.terminal) &&
+      session.shouldPreserveAgentReattachModes(imageTitle)
+    )
   }
 }

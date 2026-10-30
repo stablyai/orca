@@ -1,5 +1,8 @@
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
+// Why: 'unknown' (no valid fit proposal) must not count as a match that settles the drift probe.
+export type TerminalGridFitDrift = 'drifted' | 'matched' | 'unknown'
+
 export function readPaneSize(
   session: ConnectPanePtySession
 ): { width: number; height: number } | null {
@@ -26,11 +29,14 @@ export function initializePaneGeometry(session: ConnectPanePtySession): void {
       return null
     }
   }
-  session.terminalGridDriftedFromFit = (): boolean => {
+  session.measureTerminalGridFitDrift = (): TerminalGridFitDrift => {
     const proposed = session.readProposedTerminalGrid()
-    return Boolean(
-      proposed &&
-      (session.pane.terminal.cols !== proposed.cols || session.pane.terminal.rows !== proposed.rows)
-    )
+    if (!proposed) {
+      return 'unknown'
+    }
+    return session.pane.terminal.cols !== proposed.cols ||
+      session.pane.terminal.rows !== proposed.rows
+      ? 'drifted'
+      : 'matched'
   }
 }

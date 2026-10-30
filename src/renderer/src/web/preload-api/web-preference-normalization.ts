@@ -1,5 +1,5 @@
 import { isAgentChatPermissionMode } from '../../../../shared/agent-chat-permission-mode'
-import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat-appearance-settings'
+import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat/native-chat-appearance-settings'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../../shared/auto-rename-branch-from-work-settings'
 import {
   getDefaultSettings,

@@ -12,6 +12,7 @@ import { prepareLegacyTranscriptImport } from './agent-session-journal/journal-l
 import { prepareCodexAdoption } from './codex-adoption-preparation'
 import { codexAiVaultSessionResumePreparation } from '../codex/codex-ai-vault-session-resume'
 import * as codexHomes from '../codex/codex-home-paths'
+import { adoptedDirectoryProbes } from './agent-session-journal/adopted-directory-probe'
 
 let root: string
 beforeEach(async () => {
@@ -54,6 +55,58 @@ function params(agent: StructuredAgentId, transcriptPath: string): AgentSessionA
     }
   }
 }
+
+it('preserves exact/Codex and the complete Pi two-link and fallback acceptance without the optional probe', async () => {
+  const probe = vi
+    .spyOn(adoptedDirectoryProbes, 'matches')
+    .mockRejectedValue(new Error('probe unavailable'))
+  const transcriptPath = join(root, `${id}.jsonl`)
+  const save = (agent: 'claude' | 'pi', cwd: string, sessionId = id) =>
+    file(
+      transcriptPath,
+      agent === 'pi'
+        ? [
+            { type: 'session', id: sessionId, cwd },
+            { type: 'message', id: 'turn', message: { role: 'user', content: 'hello' } }
+          ]
+        : [
+            {
+              type: 'user',
+              sessionId,
+              cwd,
+              uuid: 'turn',
+              message: { role: 'user', content: 'hello' }
+            }
+          ]
+    )
+  await save('claude', root)
+  expect(await prepareAdoptedTranscript(params('claude', transcriptPath))).toMatchObject({
+    ok: true
+  })
+  const left = join(root, 'left')
+  const right = join(root, 'right')
+  for (const link of [left, right]) {
+    await symlink(root, link, process.platform === 'win32' ? 'junction' : 'dir')
+  }
+  const pi = params('pi', transcriptPath)
+  pi.adopt!.source!.workspaceCwd = left
+  await save('pi', right)
+  expect(await prepareAdoptedTranscript(pi)).toMatchObject({ ok: true })
+  // Both unavailable paths retain samePiDirectory's established normalize fallback.
+  pi.adopt!.source!.workspaceCwd = join(root, 'missing', 'pkg')
+  await save('pi', `${join(root, 'missing')}/./pkg`)
+  expect(await prepareAdoptedTranscript(pi)).toMatchObject({ ok: true })
+  await save('pi', right, 'wrong-header')
+  expect(await prepareAdoptedTranscript(pi)).toMatchObject({ ok: false })
+  await file(transcriptPath, [
+    { type: 'session_meta', payload: { id } },
+    { type: 'response_item', payload: { type: 'message', role: 'user', content: 'hello' } }
+  ])
+  expect(await prepareAdoptedTranscript(params('codex', transcriptPath))).toMatchObject({
+    ok: true
+  })
+  expect(probe).not.toHaveBeenCalled()
+})
 
 it('creates from the host hook path when Claude filename differs, then checks actual recorded cwd', async () => {
   const transcriptPath = await file(join(root, 'projects', 'folder', 'different-uuid.jsonl'), [

@@ -50,7 +50,6 @@ export const advertisedUrlWatcher = importedValues.exportedAdvertisedUrlWatcher
 export const afterEach = importedValues.exportedAfterEach
 export const appendBrowserTabOrder = importedValues.exportedAppendBrowserTabOrder
 export const appendNormalizedToTailBuffer = importedValues.exportedAppendNormalizedToTailBuffer
-export const appendRecentPtyPathCandidates = importedValues.exportedAppendRecentPtyPathCandidates
 export const assertWorktreeCleanForRemoval = importedValues.exportedAssertWorktreeCleanForRemoval
 export const basename = importedValues.exportedBasename
 export const beforeEach = importedValues.exportedBeforeEach
@@ -109,10 +108,6 @@ export const performance = importedValues.exportedPerformance
 export const projectHostSetupProjectionFromRepos =
   importedValues.exportedProjectHostSetupProjectionFromRepos
 export const randomUUID = importedValues.exportedRandomUUID
-export const recentTerminalOutputIncludesPath =
-  importedValues.exportedRecentTerminalOutputIncludesPath
-export const recentTerminalPathCandidatesIncludePath =
-  importedValues.exportedRecentTerminalPathCandidatesIncludePath
 export const registerLocalPtyMemoryRow = importedValues.exportedRegisterLocalPtyMemoryRow
 export const removeWorktree = importedValues.exportedRemoveWorktree
 export const resolveSetupRunnerShell = importedValues.exportedResolveSetupRunnerShell

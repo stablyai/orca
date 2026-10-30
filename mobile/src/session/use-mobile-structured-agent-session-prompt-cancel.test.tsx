@@ -8,7 +8,6 @@ import type { RpcClient } from '../transport/rpc-client'
 const mocks = vi.hoisted(() => ({
   sendRequest: vi.fn(),
   promptResponses: vi.fn(() => ({
-    groupedDraft: null,
     respondPermission: vi.fn(),
     respondQuestion: vi.fn()
   }))

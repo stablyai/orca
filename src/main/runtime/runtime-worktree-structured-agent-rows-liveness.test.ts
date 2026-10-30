@@ -102,7 +102,7 @@ async function awaitingApproval() {
   const feed = new StructuredAgentSessionStatusFeed({
     logger: createStructuredAgentSessionLogger(),
     sessions,
-    getRecord: () => null,
+    getConversation: () => null,
     now: () => Date.now(),
     statusSink: () => ({
       publish: (summary, subject) => {
@@ -125,7 +125,7 @@ function worktreeFor(store: AgentHookServer): RuntimeWorktreePsSummary {
   const summaries = new Map([[WORKTREE_ID, row]])
   attachRuntimeWorktreeAgentRows({
     summaries,
-    workingTerminalEvidenceByWorktreeId: new Map(),
+    terminalTitleEvidenceByWorktreeId: new Map(),
     rowSources: collectRuntimeWorktreeAgentSources({
       mirroredWorktreeIdByTabId: new Map(),
       connectedPtyEvidence: {

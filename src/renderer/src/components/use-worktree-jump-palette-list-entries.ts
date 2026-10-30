@@ -4,6 +4,7 @@ import {
   CREATE_WORKTREE_ITEM_ID
 } from '@/lib/worktree-palette-create-action'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import {
   appendPaletteListEntries,
   CONTINUED_SECTION_HEADER_ID_SUFFIX,
@@ -35,6 +36,7 @@ export function useWorktreeJumpPaletteListEntries({
   middleLeadsSections,
   taskItems
 }: WorktreeJumpPaletteListEntriesInput) {
+  const languageRevision = useUiLanguageRevision()
   const listEntries = useMemo<PaletteListEntry[]>(() => {
     const entries: PaletteListEntry[] = []
     const {
@@ -258,6 +260,7 @@ export function useWorktreeJumpPaletteListEntries({
       entries.push({ id: CREATE_WORKTREE_ITEM_ID, type: 'create-worktree' })
     }
     return entries
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
   }, [
     handleExpandSection,
     hasQuery,
@@ -266,7 +269,8 @@ export function useWorktreeJumpPaletteListEntries({
     paletteSections,
     showCreateAction,
     taskSourceUrl,
-    taskItems
+    taskItems,
+    languageRevision
   ])
   const selectableItems = useMemo<PaletteItem[]>(
     () =>

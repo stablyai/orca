@@ -123,7 +123,8 @@ describe('humanizeTerminalError', () => {
           if (kind === 'startup') {
             expect(tokenChecks).toBe(2 * rowCount)
           }
-          expect(startupTranslations).toBe(2 * matchingRows)
+          // Upper bound only: option-free translations are cached after their first lookup.
+          expect(startupTranslations).toBeLessThanOrEqual(2 * matchingRows)
           expect(
             view.container.textContent?.match(/Codex exited while starting\./g) ?? []
           ).toHaveLength(matchingRows)
@@ -207,6 +208,26 @@ describe('humanizeTerminalError', () => {
 
   it('leaves other errors untouched', () => {
     expect(humanizeTerminalError('Paste failed.')).toBe('Paste failed.')
+  })
+
+  it("drops Electron's IPC wrapper from a refusal main threw, keeping other lines as they are", () => {
+    const wrapped =
+      "Error invoking remote method 'runtimeEnvironments:call': Error: Ubuntu was stopped. Start it again."
+    expect(humanizeTerminalError(wrapped)).toBe('Ubuntu was stopped. Start it again.')
+    expect(humanizeTerminalError(`Paste failed.\n${wrapped}\n  indented detail`)).toBe(
+      'Paste failed.\nUbuntu was stopped. Start it again.\n  indented detail'
+    )
+  })
+
+  // SSH pin: only the wrapper goes; the SSH host's own words, and other channels' wrappers, stay.
+  it("leaves an SSH host's refusal words and other IPC channels' wrappers as they were", () => {
+    expect(
+      humanizeTerminalError(
+        "Error invoking remote method 'runtimeEnvironments:call': Error: Remote Orca runtime is not connected: ssh desk"
+      )
+    ).toBe('Remote Orca runtime is not connected: ssh desk')
+    const otherChannel = "Error invoking remote method 'ssh:connect': Error: Permission denied"
+    expect(humanizeTerminalError(otherChannel)).toBe(otherChannel)
   })
 
   it('replaces the terminal-host-gone code with copy that explains the loss', () => {

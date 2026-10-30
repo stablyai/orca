@@ -12,6 +12,8 @@ vi.mock('react-native', () => reactNative)
 vi.mock('./mobile-tasks-dependencies', async () => ({
   ...reactNative,
   ...(await import('../theme/mobile-theme')),
+  ...(await import('../theme/themed-styles')),
+  ...(await import('../theme/use-mobile-color-scheme')),
   ChevronLeft: 'Icon',
   Plus: 'Icon',
   RefreshCw: 'Icon',

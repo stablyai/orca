@@ -1,10 +1,10 @@
 import { useCallback, useMemo } from 'react'
+import { extractPendingMessageReplyAsk } from '../../../src/shared/native-chat/input/native-chat-ask'
 import {
-  extractPendingMessageReplyAsk,
   formatAskAnswer,
-  type AskAnswerSelection,
-  type AskPrompt
-} from '../../../src/shared/native-chat-ask'
+  type AskAnswerSelection
+} from '../../../src/shared/native-chat-ask-answer'
+import type { AskPrompt } from '../../../src/shared/native-chat/input/native-chat-ask-types'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 

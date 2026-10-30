@@ -6,6 +6,8 @@ import type {
 } from '../../shared/native-file-drop-preparation'
 import type { SshMutationExpectation } from '../../shared/ssh-types'
 import type { LocalFileAccess } from '../../shared/local-file-access'
+import type { RemoteFilePreviewAddress } from '../../shared/remote-file-preview-address'
+import type { FileBytesWritePrecondition } from '../../shared/file-bytes-write'
 import type {
   FileWriteDiskPrecondition,
   FileWriteResult
@@ -40,11 +42,14 @@ export const fsApi = {
     access?: LocalFileAccess
     offset: number
     length: number
+    wakeWslDistro?: boolean
   }) => ipcRenderer.invoke('fs:readFileChunk', args),
   readDir: (args: {
     dirPath: string
     connectionId?: string
     followSymlinks?: boolean
+    wakeWslDistro?: boolean
+    access?: LocalFileAccess
   }): Promise<{ name: string; isDirectory: boolean; isSymlink: boolean }[]> =>
     ipcRenderer.invoke('fs:readDir', args),
   readFile: (args: {
@@ -52,13 +57,29 @@ export const fsApi = {
     connectionId?: string
     includeLocalLogMetadata?: boolean
     access?: LocalFileAccess
+    wakeWslDistro?: boolean
+    rangePreview?: boolean
   }): Promise<{
     content: string
     isBinary: boolean
     isImage?: boolean
+    mediaUrl?: string
+    size?: number
     mimeType?: string
     fileIdentity?: string
   }> => ipcRenderer.invoke('fs:readFile', args),
+  readPreviewRange: (args: { url: string; offset: number; length: number }): Promise<Uint8Array> =>
+    ipcRenderer.invoke('fs:readPreviewRange', args),
+  grantRuntimeFilePreview: (
+    args: RemoteFilePreviewAddress
+  ): Promise<{
+    content: string
+    isBinary: true
+    mimeType: string
+    mediaUrl: string
+    isImage?: true
+    size?: number
+  } | null> => ipcRenderer.invoke('fs:grantRuntimeFilePreview', args),
   readLocalLogTail: (args: LocalLogTailReadArgs): Promise<LocalLogTailReadResult> =>
     ipcRenderer.invoke('fs:readLocalLogTail', args),
   startLocalLogTail: (args: LocalLogTailWatchArgs): Promise<void> =>
@@ -120,6 +141,15 @@ export const fsApi = {
       diskPrecondition?: FileWriteDiskPrecondition
     } & SshMutationExpectation
   ): Promise<FileWriteResult> => ipcRenderer.invoke('fs:writeFile', args),
+  writeFileBytes: (
+    args: {
+      filePath: string
+      bytes: Uint8Array
+      connectionId?: string
+      access?: LocalFileAccess
+      diskPrecondition: FileBytesWritePrecondition
+    } & SshMutationExpectation
+  ): Promise<FileWriteResult> => ipcRenderer.invoke('fs:writeFileBytes', args),
   createFile: (
     args: { filePath: string; connectionId?: string } & SshMutationExpectation
   ): Promise<void> => ipcRenderer.invoke('fs:createFile', args),
@@ -150,12 +180,14 @@ export const fsApi = {
       targetPath: string
       connectionId?: string
       recursive?: boolean
+      permanent?: boolean
     } & SshMutationExpectation
   ): Promise<void> => ipcRenderer.invoke('fs:deletePath', args),
   stat: (args: {
     filePath: string
     connectionId?: string
     access?: LocalFileAccess
+    wakeWslDistro?: boolean
   }): Promise<{ size: number; isDirectory: boolean; mtime: number }> =>
     ipcRenderer.invoke('fs:stat', args),
   pathsExist: (args: {

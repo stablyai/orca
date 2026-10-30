@@ -14,13 +14,18 @@ import {
   type AgentSessionReserveRequest,
   type AgentSessionReserveResult
 } from './agent-session/ownership/agent-session-reservation-admission'
-import type { AgentSessionStoreState } from './agent-session-store-state'
+import {
+  selectWritableAgentSessionRecord,
+  requireWritableAgentSessionRecord,
+  type AgentSessionStoreState
+} from './agent-session-store-state'
 import { setAgentSessionTabVisibility } from './agent-session/agent-session-tab-table'
 
 /** Use create admission without requiring owner acquisition. */
 export function commitAgentSessionFounding(
   state: AgentSessionStoreState,
-  request: AgentSessionReserveRequest
+  request: AgentSessionReserveRequest,
+  legacyIds: readonly string[] = []
 ): AgentSessionReserveResult {
   const decision = evaluateAgentSessionReserveOperation(state, request)
   if (decision.decision === 'refused') {
@@ -39,10 +44,11 @@ export function commitAgentSessionFounding(
       reason: 'requestMalformed'
     })
   }
-  if (state.unreadableRecords.has(request.sessionId)) {
-    throw agentSessionRefusalError('execution_owner_reconciling', { reason: 'recordUnreadable' })
+  const selected = selectWritableAgentSessionRecord(state, request.sessionId)
+  if (selected.kind === 'unreadable') {
+    requireWritableAgentSessionRecord(state, request.sessionId)
   }
-  if (state.records.has(request.sessionId)) {
+  if (selected.kind === 'writable') {
     throw agentSessionRefusalError('agent_session_conflict', { reason: 'sessionExists' })
   }
   try {
@@ -56,7 +62,7 @@ export function commitAgentSessionFounding(
     }
     throw error
   }
-  assertReservedTabUnheld(state, request)
+  assertReservedTabUnheld(state, request, legacyIds)
   const founded = foundAgentSessionRecord(request, request)
   const record = request.adoptedHandleLink
     ? { ...founded, providerHandleChain: [request.adoptedHandleLink] }
@@ -70,6 +76,6 @@ export function commitAgentSessionFounding(
     agentSessionOperationKey(operationRow.callerKey, operationRow.operationId),
     operationRow
   )
-  setAgentSessionTabVisibility(state, request.sessionId, true, request.surfaceTabId)
+  setAgentSessionTabVisibility(state, request.sessionId, true, request.surfaceTabId, legacyIds)
   return { record, disposition: 'created', operationRow }
 }

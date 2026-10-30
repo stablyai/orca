@@ -124,7 +124,7 @@ describe('OrcaRuntimeService', () => {
 
     const spawnCall = spawn.mock.calls[0]?.[0] as { command?: string } | undefined
     expect(spawnCall?.command).toBe(
-      "codex --profile work '--dangerously-bypass-approvals-and-sandbox'"
+      "codex --profile work '-c' 'disable_paste_burst=true' '--dangerously-bypass-approvals-and-sandbox'"
     )
   })
 
@@ -417,7 +417,9 @@ describe('OrcaRuntimeService', () => {
     expect(compoundClaude.env?.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS).toBeUndefined()
     expect(compoundClaude.env?.TMUX).toBeUndefined()
 
-    expect(normalAgent.command).toBe("codex '--dangerously-bypass-approvals-and-sandbox'")
+    expect(normalAgent.command).toBe(
+      "codex '-c' 'disable_paste_burst=true' '--dangerously-bypass-approvals-and-sandbox'"
+    )
     expect(normalAgent.env?.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS).toBeUndefined()
     expect(normalAgent.env?.TMUX).toBeUndefined()
   })

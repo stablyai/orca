@@ -2,7 +2,7 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal
 import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
 import { isStructuredAgentSessionCommandEntry } from '../../../shared/structured-agent-session-command-entry'
 
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { projectStructuredAgentSessionStatusState } from '../../../shared/structured-agent-session-projection'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
@@ -49,7 +49,7 @@ export class StructuredAgentSessionJournalProjections {
 
   read(
     journal: AgentSessionJournal,
-    record: AgentSessionRecord | null,
+    record: AgentSessionConversationView | null,
     seen?: {
       lastEndedChild?: StructuredAgentSessionWorkEvidence['ended']
       operationalRevision?: number
@@ -58,7 +58,7 @@ export class StructuredAgentSessionJournalProjections {
   ): StructuredAgentSessionJournalProjection {
     const cursor = journal.cursor()
     const contextId = record?.providerContextBoundary?.operationId ?? null
-    const fence = record?.lease.runtimeFence
+    const fence = record?.currentFence
     const ended = seen?.lastEndedChild
     const work = structuredAgentSessionCurrentWork(journal, {
       record,

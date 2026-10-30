@@ -97,7 +97,6 @@ export async function typeMobileNativeChatCommandWithOutcome(args: {
   resolvedLaunchDraft?: { text: string; createdAt: number }
   mobileClient?: MobileTerminalClient
   deadline?: number
-  requireWriteSettlement?: true
 }): Promise<MobileNativeChatWriteOutcome> {
   let writeIndex = 0
   return typeAgentTuiCommand({
@@ -110,7 +109,6 @@ export async function typeMobileNativeChatCommandWithOutcome(args: {
         terminal: args.terminal,
         text: key,
         enter: false,
-        ...(args.requireWriteSettlement ? { requireWriteSettlement: true as const } : {}),
         ...(isSubmit && args.resolvedLaunchDraft
           ? { resolvedLaunchDraft: args.resolvedLaunchDraft }
           : {}),

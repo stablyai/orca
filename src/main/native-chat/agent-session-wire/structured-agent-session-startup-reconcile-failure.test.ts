@@ -149,14 +149,14 @@ it('adjudicates records a newer Orca wrote in memory only, and writes nothing', 
   expect(await readdir(stateDirectory)).toEqual(files)
 })
 
-it('restores a chat for reading while the reconcile keeps failing, and reports it once', async () => {
+it('lists a chat without opening it while the reconcile keeps failing, and reports it once', async () => {
   const { host, store, leaseReconcileLogged } = await relaunch()
   writes.failing = true
   await host.reconcileRestartLeases()
 
-  await expect(host.restoreReadableSessions([SESSION])).resolves.toBeUndefined()
+  await expect(host.seedSessionTabs([SESSION])).resolves.toBeUndefined()
 
-  expect(host.hasSession(SESSION)).toBe(true)
+  expect(host.hasSession(SESSION)).toBe(false)
   expect(store.getRecord(SESSION)?.lease.unreconciled).toBe(true)
   expect(leaseReconcileLogged).toHaveBeenCalledOnce()
   expect(leaseReconcileLogged).toHaveBeenCalledWith(IO_ERROR)
@@ -184,14 +184,14 @@ it('opens no chat from records a newer Orca wrote, and writes nothing trying', a
   const path = journalDatabasePath(stateDirectory)
   const bytes = await readFile(path)
 
-  await expect(host.restoreReadableSessions([SESSION])).resolves.toBeUndefined()
+  await expect(host.seedSessionTabs([SESSION])).resolves.toBeUndefined()
 
   expect(host.hasSession(SESSION)).toBe(false)
   expect(leaseReconcileLogged).not.toHaveBeenCalled()
   expect(await readFile(path)).toEqual(bytes)
 })
 
-it('restores a chat for reading when resolving its recovery cannot write the store', async () => {
+it('keeps a chat readable when recovery cannot write the store', async () => {
   const { host, store, leaseReconcileLogged } = await relaunch(false, async () => ({
     outcome: 'indeterminate',
     reason: 'probe'
@@ -200,17 +200,16 @@ it('restores a chat for reading when resolving its recovery cannot write the sto
   expect(store.getRecord(SESSION)?.lease.handoffStage).toBe('recovering')
   writes.failing = true
 
-  await expect(host.restoreReadableSessions([SESSION])).resolves.toBeUndefined()
+  await expect(host.seedSessionTabs([SESSION])).resolves.toBeUndefined()
 
-  expect(host.hasSession(SESSION)).toBe(true)
+  expect(host.hasSession(SESSION)).toBe(false)
   expect(store.getRecord(SESSION)?.lease.handoffStage).toBe('recovering')
-  expect(leaseReconcileLogged).toHaveBeenCalledOnce()
-  expect(leaseReconcileLogged).toHaveBeenCalledWith(IO_ERROR)
+  expect(leaseReconcileLogged).toHaveBeenCalledExactlyOnceWith(IO_ERROR)
+  expect(await host.revealSession(SESSION)).toMatchObject({ readable: true })
 })
 
 it.each([
-  ['startup reconcile', (host: StructuredAgentSessionHost) => host.reconcileRestartLeases()],
-  ['read restore', (host: StructuredAgentSessionHost) => host.restoreReadableSessions([SESSION])]
+  ['startup reconcile', (host: StructuredAgentSessionHost) => host.reconcileRestartLeases()]
 ])('keeps the %s resolving when the logger throws', async (_step, read) => {
   const { host, leaseReconcileLogged } = await relaunch()
   const sinkError = new Error('error sink failed')

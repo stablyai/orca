@@ -7,6 +7,7 @@ import {
   parseOrcadMigrationManifest
 } from './orcad-migration-manifest-validation'
 import type { OrcadMigrationManifest } from './orcad-migration-manifest'
+import { MAX_ORCAD_MIGRATION_DORMANT_ROWS } from './orcad-migration-dormant-value-validation'
 import { isOrcadMigrationLocalWslSource } from './orcad-migration-source-kind'
 
 export const ORCAD_MIGRATION_SOURCE_CUTOVER_VERSION = 1
@@ -43,6 +44,11 @@ const CutoverRecordSchema = z.object({
   bridgedPtyIds: z.array(z.string().min(1).max(256)).max(10_000).optional(),
   // Committed, with the source rows kept so a downgraded build still sees the host's projects.
   sourceRetainedAt: z.string().datetime().optional(),
+  // Moved automations enabled on this desktop, still to be re-enabled on the server.
+  automationsToEnableOnServer: z
+    .array(z.string().min(1).max(1_024))
+    .max(MAX_ORCAD_MIGRATION_DORMANT_ROWS)
+    .optional(),
   // A delta move after an older build changed the source: the migration it extends, never merges.
   supersedesMigrationId: z.string().min(1).max(128).optional(),
   // What the retained source must still look like; absent means this manifest's own catalog.

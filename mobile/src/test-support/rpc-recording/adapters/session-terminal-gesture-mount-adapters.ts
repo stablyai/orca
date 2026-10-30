@@ -17,7 +17,10 @@ const PTY_MODES: TerminalModes = {
   altScreen: false,
   mouseTrackingMode: 'any',
   sgrMouseMode: true,
-  sgrMousePixelsMode: false
+  sgrMousePixelsMode: false,
+  applicationCursorKeysMode: false,
+  kittyKeyboardFlags: 0,
+  modifyOtherKeys: 0
 }
 
 // Record send/clear outcomes and queue accounting without a WebView; local clear rendering is outside this oracle.
@@ -56,11 +59,17 @@ export function sessionTerminalGestureMountAdapters(
             terminalGestureInputInFlightRef: inFlight,
             liveInputRef: { current: null },
             liveInputFocusTimerRef: { current: null },
-            terminalUnsubsRef: { current: new Map() },
+            terminalUnsubsRef: { current: new Map([[HANDLE, () => {}]]) },
             hostQueryReplyInputSupportedRef: { current: false },
+            hostProgramStatusSupportedRef: { current: false },
             clearPendingLiveInputCommit: () => {},
             toggleTerminalLiveInput: () => false,
             getTerminalRef: () => undefined,
+            unsubscribeTerminal: (handle) => effect('terminal-unsubscribe', { handle }),
+            subscribeToTerminal: (handle) => {
+              effect('terminal-subscribe', { handle })
+              return true
+            },
             showToast: (message: string, durationMs?: number) =>
               effect('toast', { message, durationMs: durationMs ?? null })
           })

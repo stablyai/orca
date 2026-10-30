@@ -27,3 +27,8 @@ export function agentSessionExecutionOptionsRecord(
     Object.entries(options).filter((entry): entry is [string, string] => entry[1] !== undefined)
   )
 }
+
+/** Exact picker domain; personality remains host-captured. */
+export const AgentSessionSelectionSchema = AgentSessionExecutionOptionsSchema.omit({
+  personality: true
+}).strict()

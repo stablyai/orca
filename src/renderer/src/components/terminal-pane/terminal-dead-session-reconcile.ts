@@ -1,6 +1,6 @@
 // On visibility resume, route daemon sessions reaped while hidden through normal exit teardown (design-docs/terminal-dead-pane-on-bg-exit.md).
 
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 /** Structural binding keeps lifecycle fan-out independent of the full PanePtyBinding import. */
 export type ReconcilableBinding = {

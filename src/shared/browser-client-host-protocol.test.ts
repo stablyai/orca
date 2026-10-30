@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { REMOTE_RUNTIME_MAX_SUBSCRIPTION_PARAM_BYTES } from './remote-runtime-memory-limits'
+import { REMOTE_RUNTIME_MAX_SUBSCRIPTION_PARAM_BYTES } from './remote-runtime/remote-runtime-memory-limits'
 import {
   BROWSER_CLIENT_HOST_PAGE_INVENTORY_MAX_BYTES,
   BROWSER_CLIENT_HOST_PAGE_INVENTORY_IDENTITY_MAX_JSON_BYTES,

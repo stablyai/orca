@@ -18,6 +18,7 @@ import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-cl
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { emptyTabLayoutState } from '../../store/slices/editor-slice-test-harness'
 import { withLoadedBaselines } from './editor-autosave-controller-test-fixture'
+import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
 
 const mocks = vi.hoisted(() => ({
   getConnectionIdForFile: vi.fn()
@@ -219,16 +220,32 @@ describe('attachEditorAutosaveController', () => {
     const store = createEditorStore()
     const workspaceKey = folderWorkspaceKey('folder-workspace-1')
     store.setState({
-      worktreesByRepo: {
-        'folder-workspace-1': [
-          {
-            id: workspaceKey,
-            repoId: 'folder-workspace-1',
-            path: '/home/neil/platform',
-            hostId: 'ssh:ssh-1'
-          }
-        ] as never
-      },
+      worktreesByRepo: {},
+      folderWorkspaces: [
+        makeFolderWorkspace({
+          id: 'folder-workspace-1',
+          projectGroupId: 'group-1',
+          folderPath: '/home/neil/platform',
+          executionHostId: 'ssh:ssh-1',
+          connectionId: 'ssh-1'
+        })
+      ],
+      projectGroups: [
+        {
+          id: 'group-1',
+          name: 'Platform',
+          parentPath: '/home/neil/platform',
+          connectionId: 'ssh-1',
+          executionHostId: 'ssh:ssh-1',
+          parentGroupId: null,
+          createdFrom: 'manual',
+          tabOrder: 0,
+          isCollapsed: false,
+          color: null,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ],
       sshConnectionStates: new Map([
         [
           'ssh-1',

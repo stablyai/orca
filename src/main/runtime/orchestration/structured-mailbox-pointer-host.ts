@@ -45,7 +45,7 @@ async function readPointerSessionFacts(
     return null
   }
   const host = getStructuredAgentSessionHost()
-  const boundary = host?.deps.store.getRecord(sessionId)?.providerContextBoundary
+  const boundary = host?.deps.store.getConversation(sessionId)?.providerContextBoundary
   return {
     submissions: boundary
       ? snapshot.submissions.filter((submission) => submission.fence > boundary.afterFence)
@@ -86,12 +86,12 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
 
     currentFence(sessionId) {
       return (
-        getStructuredAgentSessionHost()?.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? null
+        getStructuredAgentSessionHost()?.deps.store.getConversation(sessionId)?.currentFence ?? null
       )
     },
 
     currentContextClearOperationId(sessionId) {
-      return getStructuredAgentSessionHost()?.deps.store.getRecord(sessionId)
+      return getStructuredAgentSessionHost()?.deps.store.getConversation(sessionId)
         ?.providerContextBoundary?.operationId
     },
 

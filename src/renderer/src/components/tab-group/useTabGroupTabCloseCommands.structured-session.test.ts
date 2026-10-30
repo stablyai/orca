@@ -29,6 +29,12 @@ const store = vi.hoisted(() => ({
   unifiedTabsByWorktree: {} as Record<string, unknown[]>
 }))
 
+vi.mock('@/lib/agent-session/structured-agent-session-busy', async () => ({
+  admitStructuredAgentSession: (
+    await import('@/store/slices/store-session-test-harness')
+  ).admissionFromBusy(() => false)
+}))
+
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof ReactModule>('react')
   return {

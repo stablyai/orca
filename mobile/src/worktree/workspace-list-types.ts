@@ -37,6 +37,8 @@ export type Worktree = {
   createdAt?: number
   // Use filesystem basenames to dedupe fallback workspace names.
   path: string
+  /** Older paths of a renamed or moved workspace; older hosts omit it. */
+  priorWorktreeIds?: string[]
   isArchived?: boolean
   isMainWorktree?: boolean
   hasHostSidebarActivity?: boolean
@@ -78,6 +80,8 @@ export type Worktree = {
   linkedItems?: RuntimeWorktreePsSummary['linkedItems']
   comment?: string
   status?: 'working' | 'active' | 'permission' | 'done' | 'inactive'
+  /** Unchecked wire data: a newer host may send a state this build does not know. */
+  sidebarStatus?: string
   workingMode?: AgentWorkingMode
   agents?: RuntimeWorktreeAgentRow[]
 }
@@ -98,7 +102,10 @@ export type SectionRepo = ProjectSectionRepo & {
 export type SectionPendingCreation = { key: string; repoName: string | null }
 
 export type Section = {
+  /** The list identity; unique even when one header repeats in several host sections. */
   key: string
+  /** The view's collapse key when it differs from `key`; a header's copies share it. */
+  collapseKey?: string
   title: string
   icon?: 'pin'
   repo?: SectionRepo

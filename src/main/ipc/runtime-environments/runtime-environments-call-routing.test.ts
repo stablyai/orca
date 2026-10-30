@@ -8,7 +8,7 @@ import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/ele
 import * as environmentStore from '../../../shared/runtime-environment-store'
 import { AtomicSnapshotWriter } from '../../persistence/atomic-snapshot-writer'
 import { desktopChatCreationHistory } from '../../runtime/desktop-chat-creation-history'
-import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import { RuntimeRpcCallQueueOverloadError } from '../../../shared/runtime-rpc-call-queue'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 
@@ -55,7 +55,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../../../shared/remote-runtime-client', () => ({
+vi.mock('../../../shared/remote-runtime/remote-runtime-client', () => ({
   sendRemoteRuntimeRequest: sendRemoteRuntimeRequestMock,
   subscribeRemoteRuntimeRequest: subscribeRemoteRuntimeRequestMock
 }))
@@ -120,6 +120,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     resetRuntimeEnvironmentStatusOwners()
+    vi.unstubAllGlobals()
     rmSync(userDataPath, { recursive: true, force: true })
   })
 

@@ -1,8 +1,9 @@
 import { StyleSheet } from 'react-native'
-import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import { colors, getMobileColorScheme, spacing, radii, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
-export const customKeyModalStyles = StyleSheet.create({
+export const customKeyModalStyles = themedStyleSheet(() => ({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -166,7 +167,7 @@ export const customKeyModalStyles = StyleSheet.create({
     fontFamily: typography.monoFamily
   },
   chipGlyphSelected: {
-    color: 'rgba(10,10,10,0.5)'
+    color: getMobileColorScheme() === 'dark' ? 'rgba(10,10,10,0.5)' : 'rgba(255,255,255,0.5)'
   },
   moreLink: {
     paddingVertical: spacing.sm,
@@ -275,4 +276,4 @@ export const customKeyModalStyles = StyleSheet.create({
   saveButtonTextDisabled: {
     color: colors.textMuted
   }
-})
+}))

@@ -17,7 +17,7 @@ import {
   readNativeChatAttachmentCache,
   useNativeChatComposerAttachments
 } from './use-native-chat-composer-attachments'
-import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 const electron = vi.hoisted(() => ({
   on: vi.fn(),
@@ -56,7 +56,7 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, unknown>) =>
     fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(values?.[name]))
 }))
-vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+vi.mock('../../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({
   ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
   isRemoteRuntimePtyId: () => false
 }))

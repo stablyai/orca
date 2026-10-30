@@ -51,6 +51,8 @@ import type { AgentJournalEpochReason, JournalRow } from './journal-row-schema'
 import { assertJournalFence } from './journal-write-guards'
 import type { JournalOperationReceipt } from './journal-row-writer'
 
+import type { JournalAttachmentClaim } from './journal-submission-hook'
+
 export type JournalReplacementItem = AgentJournalProducerLinkage & {
   echoOf?: JournalItemEcho['echoOf']
   identity: AgentJournalItemIdentity
@@ -70,6 +72,8 @@ export function replaceJournalEpoch(input: {
   fence: number
   items: readonly JournalReplacementItem[]
   receipt?: (cursor: AgentJournalCursor) => JournalOperationReceipt
+  isLiveGoal?: (id: string) => boolean
+  claimAttachments?: JournalAttachmentClaim
   previous?: JournalReducerState
   /** Preserve Stop/Resume state so rewinds cannot release held cards or resurrect lifted pauses. */
   queuePause: JournalQueuePauseRestatement
@@ -187,6 +191,7 @@ export function replaceJournalEpoch(input: {
 
   const { sessionId } = input.identity
   const receipt = input.receipt?.({ epoch, sequence: state.lastSequence })
+  const claimsCommitted: (() => void)[] = []
   input.database.transaction((db) => {
     const retired = readJournalSessionEpoch(db, sessionId)
     if (retired !== null) {
@@ -194,11 +199,23 @@ export function replaceJournalEpoch(input: {
     }
     for (const row of rows) {
       insertJournalRow(db, sessionId, row)
+      const body = row.kind === 'item' || row.kind === 'submission' ? row.body : null
+      if (
+        body?.kind === 'message' &&
+        body.role === 'user' &&
+        !(row.kind === 'item' && input.isLiveGoal?.(row.itemId))
+      ) {
+        const commit = input.claimAttachments?.(db, body, false)
+        if (commit) {
+          claimsCommitted.push(commit)
+        }
+      }
     }
     input.queue.receipt.write(db)
     publishJournalSessionEpoch(db, input.identity, epoch)
     receipt?.write(db)
   })
+  claimsCommitted.forEach((commit) => commit())
   input.queue.receipt.committed()
 
   // Adopt the committed epoch immediately; later failures must not leave writers targeting deleted rows.

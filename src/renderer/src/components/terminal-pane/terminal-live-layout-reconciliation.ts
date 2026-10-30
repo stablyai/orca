@@ -2,7 +2,7 @@ import type {
   TerminalPaneLayoutNode,
   TerminalPaneSplitDirection
 } from '../../../../shared/terminal-tab-types'
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { collectLeafIds } from '../../../../shared/terminal-pane-layout-tree'
 
 /** Materialize host-published layouts for web/mobile and desktop remote-runtime tabs; local desktop splits create panes directly. */

@@ -1,7 +1,7 @@
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../shared/execution-host'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
-import { areWorktreePathsEqual } from './git/worktree-path-comparison'
-import { isUnregisteredRemovalLeftover } from './worktree-removal-leftover'
+import { areWorktreePathsEqual, canonicalWorktreePath } from './git/worktree-path-comparison'
+import { isRecordedCheckout, isUnregisteredRemovalLeftover } from './worktree-removal-leftover'
 import type { WorktreeRemovalRecord } from './worktree-removal-records'
 import {
   failedWorktreeRemovals,
@@ -21,16 +21,30 @@ export async function withUnregisteredRemovalCheckouts(
   repoId: string,
   gitWorktrees: GitWorktreeInfo[]
 ): Promise<GitWorktreeInfo[]> {
+  let droppedFailure = false
+  const failures = new Map(
+    [...failedWorktreeRemovals.values()]
+      .filter((record) => record.repoId === repoId)
+      .map((record) => [canonicalWorktreePath(record.worktreePath), record] as const)
+  )
+  gitWorktrees = gitWorktrees.map((row) => {
+    const record = failures.get(canonicalWorktreePath(row.path))
+    if (!record) {
+      return row
+    }
+    if (isRecordedCheckout(row, record)) {
+      return { ...row, removalError: record.failure?.message }
+    }
+    failedWorktreeRemovals.delete(record.worktreeId)
+    droppedFailure = true
+    return row
+  })
   const unlisted = [...pendingWorktreeRemovals.values(), ...failedWorktreeRemovals.values()].filter(
     (record) =>
       record.repoId === repoId &&
       !gitWorktrees.some((worktree) => areWorktreePathsEqual(worktree.path, record.worktreePath))
   )
-  if (unlisted.length === 0) {
-    return gitWorktrees
-  }
   const leftovers: GitWorktreeInfo[] = []
-  let droppedFailure = false
   for (const record of unlisted) {
     const failed = failedWorktreeRemovals.get(record.worktreeId) === record
     if (

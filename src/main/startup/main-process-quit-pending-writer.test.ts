@@ -19,6 +19,7 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../ipc/pty/kill-all': { killAllPty },
   '../daemon/daemon-provider-state': { disconnectDaemon: settled(), shutdownDaemon: settled() },
   '../ipc/ssh/ssh-shutdown-drain': { beginSshShutdown },
+  './main-process-connector-startup': { desktopConnectorCloud: () => null },
   '../agent-hooks/server': { agentHookServer: { stop: stopAgentHookServer } },
   '../agent-hooks/wsl-hook-relay-manager': { wslHookRelayManager: { disposeAll: idle() } },
   '../agent-hooks/managed-agent-hook-controls': {

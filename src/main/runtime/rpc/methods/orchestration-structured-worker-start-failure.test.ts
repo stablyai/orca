@@ -1,3 +1,9 @@
+import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+import { hostTestState } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../../shared/agent-session-record.test-fixture'
 /** Post-create authority/preamble failure must retire both live and durable chat tabs; dropping only the dispatch hold restores an unowned dead tab after restart. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -42,40 +48,42 @@ const WORKTREE = 'wt_1'
 function installHost() {
   const closed: string[] = []
   const visibility: [string, boolean][] = []
-  setStructuredAgentSessionHost({
-    setSessionTabVisibility: async (sessionId: string, visible: boolean) => {
-      visibility.push([sessionId, visible])
-    },
-    close: async (sessionId: string) => {
-      closed.push(sessionId)
-    },
-    hasSession: () => true,
-    hold: async () => {},
-    release: () => {},
-    subscribe: () => () => {},
-    deps: {
-      store: {
-        getRecord: () => ({
-          location: { executionHostId: 'local', wslDistro: null },
-          lease: {
-            runtimeKind: 'native',
-            claimStatus: 'live',
-            deathEvidence: null,
-            runtimeFence: 1
-          }
+  const { host, store } = hostTestState()
+  vi.spyOn(host, 'setSessionTabVisibility').mockImplementation(async (sessionId, visible) => {
+    visibility.push([sessionId, visible])
+  })
+  vi.spyOn(host, 'close').mockImplementation(async (sessionId) => {
+    closed.push(sessionId)
+  })
+  vi.spyOn(host, 'hasSession').mockImplementation((id) => !closed.includes(id))
+  vi.spyOn(store, 'getConversation').mockImplementation((id) =>
+    agentSessionConversationView(
+      agentSessionRecordFixture(
+        agentSessionLeaseFixture({
+          sessionId: id,
+          claimStatus: closed.includes(id) ? 'released' : 'live',
+          ownerProcess: null,
+          reservedSpawnToken: null
         })
-      }
-    }
-  } as never)
+      )
+    )
+  )
+  vi.spyOn(host, 'subscribe').mockResolvedValue(() => {})
+  vi.spyOn(store, 'requireWritableRecord').mockImplementation((sessionId) =>
+    agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId, runtimeFence: 1 }))
+  )
+  setStructuredAgentSessionHost(host)
   return { closed, visibility }
 }
 
 function fakes() {
   const retireStructuredAgentSessionTabFromSnapshot = vi.fn(() => true)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this partial runtime fixture implements the methods called by the failing start path.
   const runtime = {
     showTerminal: async () => ({ worktreeId: WORKTREE }),
     showManagedTerminalWorkspace: async () => ({ id: WORKTREE }),
     getNestedWorkerMaxDepth: () => 3,
+    getOrchestrationHeartbeatMinutes: () => 5,
     getRuntimeId: () => 'epoch-1',
     ensureStructuredAgentSessionHost: async () => {},
     getTerminalOrchestrationCliCommand: () => 'orca',

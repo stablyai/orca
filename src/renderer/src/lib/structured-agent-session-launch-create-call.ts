@@ -1,3 +1,4 @@
+import { AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY } from '../../../shared/agent-session-create-capabilities'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
@@ -11,6 +12,8 @@ import { readAgentSessionRefusalReference } from '../../../shared/agent-session-
 import { readAgentSessionErrorRefusal } from '../../../shared/agent-session-write-failure'
 import {
   callStructuredAgentSession,
+  supportsStructuredAgentSessionCreateOptionsMode,
+  structuredAgentSessionHostSupports,
   supportsStructuredAgentSessionCreateMessage
 } from '@/runtime/structured-agent-session-client'
 import type { StructuredAgentSessionCreateParams } from '../../../shared/structured-agent-session-create'
@@ -117,14 +120,23 @@ export async function launchStructuredAgentSession(
   await requireHostPermission(intent)
   if (!intent.createPrepared) {
     let supported = false
+    let takesExplicitOptions = false
     try {
       supported = await supportsStructuredAgentSessionCreateMessage(intent.target)
+      takesExplicitOptions =
+        supported &&
+        intent.explicitLaunchOptions !== undefined &&
+        (await supportsStructuredAgentSessionCreateOptionsMode(intent.target))
+      intent.sendSelectionSupport = await structuredAgentSessionHostSupports(
+        intent.target,
+        AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY
+      )
     } catch {
       // Unknown capability stays on the compatible create path.
     }
     if (!intent.createPrepared) {
       intent.createMessageSupport = supported
-      intent.prepareCreate?.()
+      intent.prepareCreate?.(takesExplicitOptions)
       intent.createPrepared = true
     }
   }

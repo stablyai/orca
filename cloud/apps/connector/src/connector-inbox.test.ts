@@ -44,10 +44,8 @@ async function setup(
   const enqueue = (externalId: string, deliveryId: string, body: DeliveryBody, held = false) =>
     harness.runtime.queueDelivery({
       thread: {
-        externalId,
-        teamId: 'T1',
-        channelId: 'C1',
-        threadTs: externalId,
+        conversation: { source: 'slack', externalId },
+        place: { workspaceId: 'T1', containerId: 'C1', threadId: externalId },
         ownerUserId: 'U1',
         hostId: machine.hostId,
         placeId: 'pl_1'
@@ -205,7 +203,7 @@ describe('connector inbox', () => {
     let fault!: ReturnType<typeof failOnce>
     const { machine, enqueue, poll } = await setup({
       wrapDatabase: (database) => {
-        fault = failOnce(database, 'SELECT delivery_id, external_id, seq')
+        fault = failOnce(database, 'SELECT delivery_id, source, external_id, seq')
         return fault.database
       }
     })
@@ -351,10 +349,8 @@ describe('connector inbox', () => {
     await expect(
       harness.runtime.queueDelivery({
         thread: {
-          externalId: 'a',
-          teamId: 'T1',
-          channelId: 'C1',
-          threadTs: 'a',
+          conversation: { source: 'slack', externalId: 'a' },
+          place: { workspaceId: 'T1', containerId: 'C1', threadId: 'a' },
           ownerUserId: 'U1',
           hostId: silent.hostId,
           placeId: 'pl_1'
@@ -373,12 +369,12 @@ describe('connector inbox', () => {
     await enqueue('b', 'b1', START)
     harness.advance(CONNECTOR_LIMITS.deliveryTtlMs)
     expect(await harness.runtime.inbox.expireDue()).toEqual([
-      { hostId: expect.any(String), externalId: 'b' }
+      { hostId: expect.any(String), conversation: { source: 'slack', externalId: 'b' } }
     ])
     expect(await ids()).toEqual([])
     harness.advance(CONNECTOR_LIMITS.leasedExpiryGraceMs)
     expect(await harness.runtime.inbox.expireDue()).toEqual([
-      { hostId: expect.any(String), externalId: 'a' }
+      { hostId: expect.any(String), conversation: { source: 'slack', externalId: 'a' } }
     ])
   })
 
@@ -401,7 +397,7 @@ describe('connector inbox', () => {
     harness.advance(CONNECTOR_LIMITS.deliveryTtlMs)
     await expect(attach('a1', 'late')).resolves.toBe(false)
     expect(await harness.runtime.inbox.expireDue()).toEqual([
-      { hostId: expect.any(String), externalId: 'a' }
+      { hostId: expect.any(String), conversation: { source: 'slack', externalId: 'a' } }
     ])
     await expect(attach('a1', 'late')).resolves.toBe(false)
     expect(await states()).toEqual({ a1: 'expired' })
@@ -472,7 +468,7 @@ describe('connector inbox', () => {
     const { harness, machine, enqueue } = await setup(
       {
         wrapDatabase: (database) => {
-          gate = pauseBefore(database, 'SELECT delivery_id, external_id, seq')
+          gate = pauseBefore(database, 'SELECT delivery_id, source, external_id, seq')
           return gate.database
         }
       },

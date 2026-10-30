@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 // Name senders from production-owned Dispatch tasks, mirrored workspace chat/terminal tabs and PTY records.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -149,7 +150,13 @@ beforeEach(() => {
   records = new Map([[CHAT, { ...base, location: { ...base.location, workspaceId: WORKTREE } }]])
   hostRef.current = {
     deps: {
-      store: { getRecord: (id: string) => records.get(id) ?? null, listRecords: () => [] }
+      store: {
+        getConversation: (id: string) => {
+          const record = records.get(id)
+          return record ? agentSessionConversationView(record) : null
+        },
+        listConversations: () => []
+      }
     }
   }
 })

@@ -103,6 +103,7 @@ export async function attemptStructuredAgentSessionSend(args: {
   target: RuntimeClientTarget
   beforeIssue: () => void
   abandoned: () => boolean
+  reconcile: (uncertain: boolean) => void
 }): Promise<StructuredAgentSessionSendAttempt | null> {
   const { entry, target } = args
   // Measured as the host measures it, so a message it would refuse comes back saying why.
@@ -132,6 +133,7 @@ export async function attemptStructuredAgentSessionSend(args: {
     body: entry.body,
     ...(entry.delivery ? { delivery: entry.delivery } : {}),
     ...(entry.options ? { options: entry.options } : {}),
+    ...(entry.selection !== undefined ? { selection: entry.selection } : {}),
     ...(entry.usageLimitContinuationOfTurnItemId
       ? { usageLimitContinuationOfTurnItemId: entry.usageLimitContinuationOfTurnItemId }
       : {})
@@ -149,6 +151,7 @@ export async function attemptStructuredAgentSessionSend(args: {
   } catch (error) {
     // Re-pairing errors are raised before forwarding, proving the request never went out.
     if (error instanceof RuntimeRpcCallError && error.code === RUNTIME_ENVIRONMENT_CHANGED) {
+      args.reconcile(false)
       return args.abandoned() ? null : { kind: 'not-sent', parts: notSentParts(error) }
     }
     answer = {
@@ -157,6 +160,7 @@ export async function attemptStructuredAgentSessionSend(args: {
       rpcCode: error instanceof RuntimeRpcCallError ? error.code : undefined
     }
   }
+  args.reconcile(structuredAgentSessionSendEvidence(answer).kind === 'uncertain')
   if (args.abandoned()) {
     return null
   }

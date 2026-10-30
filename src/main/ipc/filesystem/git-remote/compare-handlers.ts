@@ -11,6 +11,7 @@ import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 import type { GitAdmissionTier } from '../../../git/command-runner/git-exec-options'
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
+import { assertWslUncPathRunning } from '../../../wsl/wsl-unc-access-gate'
 
 export function registerGitRemoteCompareHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
@@ -27,12 +28,15 @@ export function registerGitRemoteCompareHandlers(context: FilesystemHandlerConte
       }
     ): Promise<GitBranchCompareResult> => {
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+      // A 30 s poll while Source Control shows the branch: its Git would boot a stopped WSL distro (E9).
+      await assertWslUncPathRunning(args.worktreePath)
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
         worktreePath
       )
+      await assertWslUncPathRunning(worktreePath, gitOptions.wslDistro)
       return getBranchCompare(worktreePath, args.baseRef, {
         ...gitOptions,
         ...(args.admissionTier ? { admissionTier: args.admissionTier } : {})

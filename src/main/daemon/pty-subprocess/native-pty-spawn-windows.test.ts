@@ -43,6 +43,7 @@ function fakePane(pid: number, chunks: string[], exitCode?: number) {
   const pane = {
     pid,
     kill: vi.fn(),
+    write: vi.fn(),
     onData: (listener: (data: string) => void) => {
       dataListeners.add(listener)
       return { dispose: () => dataListeners.delete(listener) }
@@ -86,6 +87,41 @@ describe('Windows shell fallback over node-pty ConPTY', () => {
     vi.restoreAllMocks()
   })
 
+  it('keeps a WSL pane out of a distro the internal allowlist excludes, falling back past it', async () => {
+    vi.stubEnv('ORCA_INTERNAL_WSL_DISTRO_ALLOWLIST', 'orca-test-a')
+    try {
+      const wslAttempts = ['Ubuntu', 'orca-test-a'].map((distro) => ({
+        ...attempts[0]!,
+        shellPath: 'C:\\Windows\\System32\\wsl.exe',
+        shellArgs: ['-d', distro, '--cd', '~']
+      }))
+      nodePty.spawn.mockReturnValue(healthyPane(4242))
+      const result = await spawnNativeDaemonPty({
+        ...args,
+        shellPath: wslAttempts[0]!.shellPath,
+        shellArgs: wslAttempts[0]!.shellArgs,
+        windowsFallbackAttempts: wslAttempts
+      })
+      expect(nodePty.spawn.mock.calls.map(([, argv]) => argv)).toEqual([
+        ['-d', 'orca-test-a', '--cd', '~']
+      ])
+      expect(result.shellPath).toBe(wslAttempts[1]!.shellPath)
+
+      nodePty.spawn.mockClear()
+      await expect(
+        spawnNativeDaemonPty({
+          ...args,
+          shellPath: wslAttempts[0]!.shellPath,
+          shellArgs: wslAttempts[0]!.shellArgs,
+          windowsFallbackAttempts: [wslAttempts[0]!]
+        })
+      ).rejects.toMatchObject({ code: 'ORCA_WSL_DISTRO_NOT_ALLOWLISTED' })
+      expect(nodePty.spawn).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   it('walks both fallback shells when ConPTY rejects the primary ones', async () => {
     const proc = fakePane(9876, [CONPTY_PRELUDE])
     nodePty.spawn.mockImplementation((file: string) => {
@@ -117,9 +153,11 @@ describe('Windows shell fallback over node-pty ConPTY', () => {
     expect(nodePty.spawn.mock.calls.map(([file]) => file)).toEqual(['pwsh.exe', 'pwsh.exe'])
     expect(ptyJob.terminatePtyJob).toHaveBeenCalledWith(broken)
     expect(broken.kill).toHaveBeenCalledOnce()
+    expect(broken.write).not.toHaveBeenCalled()
     expect(result.process).toBe(healthy)
     expect(result.shellPath).toBe('pwsh.exe')
-    expect(result.claimStartupEvents?.().data).toEqual(['\x1b[1t', '\x1b[c\x1b[?1004h'])
+    expect(healthy.write).toHaveBeenCalledExactlyOnceWith('\x1b[?61;4c')
+    expect(result.claimStartupEvents?.().data).toEqual(['\x1b[1t\x1b[?1004h'])
   })
 
   it('respawns only once, then says so in the pane', async () => {

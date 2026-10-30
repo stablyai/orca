@@ -1,12 +1,11 @@
-// What a hello's snapshot tells the cloud: recently active Slack conversations, within the contract's caps.
+// What a hello's snapshot tells the cloud: recently active cloud conversations, within the contract's caps.
 import type { PendingPrompt } from '../../shared/agent-pending-prompt'
 import {
+  cloudConversation,
   CONNECTOR_CLIENT_LIMITS,
-  type ConnectorConversation,
   type ConnectorEvent
 } from '../../shared/connector-cloud-contract'
 import type { ConversationSnapshot } from '../external-conversations/external-conversation-events'
-import type { ConversationKey } from '../external-conversations/external-conversation-types'
 
 type Snapshot = Extract<ConnectorEvent, { kind: 'snapshot' }>
 
@@ -17,10 +16,6 @@ export const unsupported = (prompt: PendingPrompt): PendingPrompt => ({
   kind: 'unsupported',
   promptId: prompt.promptId
 })
-
-export function slackConversation(key: ConversationKey): ConnectorConversation | null {
-  return key.source === 'slack' ? { source: 'slack', externalId: key.externalId } : null
-}
 
 /**
  * Linked conversations active within the window, newest first, at most maxSnapshotConversations. Working
@@ -34,7 +29,7 @@ export function connectorSnapshot(
   const since = now - CONNECTOR_CLIENT_LIMITS.snapshotActiveWindowMs
   const recent = event.conversations
     .flatMap((entry) => {
-      const conversation = slackConversation(entry.conversation)
+      const conversation = cloudConversation(entry.conversation)
       const activeAt = entry.working || entry.prompt ? now : entry.activeAt
       return conversation && activeAt >= since ? [{ ...entry, conversation, activeAt }] : []
     })

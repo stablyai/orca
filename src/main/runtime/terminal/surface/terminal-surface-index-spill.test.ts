@@ -6,7 +6,7 @@ import { loadWorkspaceLayout } from '../../../../shared/workspace-layout/workspa
 import { nameBasedLoadContext } from '../../../../shared/workspace-layout/workspace-layout-minted-ids'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { composeMainTerminalSurfaces, TerminalSurfaceIndex } from './terminal-surface-index'
-import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 

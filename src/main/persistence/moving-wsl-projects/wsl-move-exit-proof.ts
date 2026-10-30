@@ -1,6 +1,6 @@
 // Require a complete daemon census under the move fence; unavailable evidence cannot prove exit.
 import { parsePtySessionId, WORKTREE_ID_SEPARATOR } from '../../../shared/pty-session-id-format'
-import { foldWslUncPathCaseInsensitiveParts, toWindowsWslUncPath } from '../../../shared/wsl-paths'
+import { comparableWslPath, isAtOrUnder, isLinuxSpelled } from './wsl-move-comparable-path'
 import type { SessionInfo } from '../../daemon/types'
 
 export type WslMoveExitProof =
@@ -119,16 +119,14 @@ function attributeByCwd(
   const inDistro = typeof wslDistro === 'string' && sameDistro(wslDistro, distro)
   const path = comparableWslPath(cwd, distro)
   const underRoot = path !== null && roots.some((root) => isAtOrUnder(path, root))
-  // POSIX cwd alone cannot distinguish native Git Bash from wsl.exe sessions.
+  // A POSIX folder is a Linux path only inside WSL. A Git Bash `/c/...` is not, but a native-tagged
+  // or untagged `wsl.exe` shell's may be, so only one in a moved folder stays unknown.
   if (isLinuxSpelled(cwd) && !inDistro) {
-    return wslDistro === undefined || (wslDistro === null && underRoot) ? 'unknown' : 'elsewhere'
+    return typeof wslDistro !== 'string' && underRoot ? 'unknown' : 'elsewhere'
   }
-  if (underRoot) {
-    return 'in-scope'
-  }
-  const distroRoot = comparableWslPath('/', distro)
-  const pathInDistro = path !== null && distroRoot !== null && isAtOrUnder(path, distroRoot)
-  return inDistro || pathInDistro ? 'unknown' : 'elsewhere'
+  // A known folder outside the move is outside it, even in the moving distro: other projects there
+  // keep their terminals open through a move.
+  return underRoot ? 'in-scope' : 'elsewhere'
 }
 
 function keyPath(key: string): string | null {
@@ -144,19 +142,6 @@ function comparableKey(key: string, distro: string): string {
     return key
   }
   return `${key.slice(0, key.indexOf(WORKTREE_ID_SEPARATOR))}${WORKTREE_ID_SEPARATOR}${comparable}`
-}
-
-function comparableWslPath(path: string, distro: string): string | null {
-  const unc = isLinuxSpelled(path) ? toWindowsWslUncPath(path, distro) : path
-  return foldWslUncPathCaseInsensitiveParts(unc)?.replace(/\/+$/, '') ?? null
-}
-
-function isLinuxSpelled(path: string): boolean {
-  return /^\/(?!\/)/.test(path)
-}
-
-function isAtOrUnder(path: string, root: string): boolean {
-  return path === root || path.startsWith(`${root}/`)
 }
 
 function sameDistro(left: string, right: string): boolean {

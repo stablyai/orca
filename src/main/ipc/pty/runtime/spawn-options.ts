@@ -124,6 +124,13 @@ export async function buildRuntimePtySpawnOptions(
   if (args.signal) {
     ctx.spawnOptions.signal = args.signal
   }
+  // Default-deny (E9): a main-side start is background work unless its caller names the user's act.
+  if (!ctx.preAdoptedStablePane && args.wslUserAct !== true) {
+    ctx.spawnOptions.wslBackgroundStart = true
+  }
+  if (ctx.wslHoldReadAnchor !== undefined) {
+    ctx.spawnOptions.wslHoldReadAnchor = ctx.wslHoldReadAnchor
+  }
   if (
     args.onPtySpawnCommitted &&
     (ctx.provider instanceof LocalPtyProvider || routesFreshSpawnsToLocalProvider(ctx.provider))

@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   getCombinedDiffFileTreeEntriesMatchingStaticFilters,
-  getEntryExtension
+  getEntryExtension,
+  NO_EXTENSION_KEY
 } from './combined-diff-file-tree-filter'
 import type {
   CombinedDiffFileTreeEntry,
@@ -279,7 +280,14 @@ export function CombinedDiffFileTree({
                       <Check
                         className={cn('size-3.5 shrink-0', checked ? 'opacity-100' : 'opacity-0')}
                       />
-                      <span className="min-w-0 flex-1 truncate">{extension}</span>
+                      <span className="min-w-0 flex-1 truncate">
+                        {extension === NO_EXTENSION_KEY
+                          ? translate(
+                              'auto.components.editor.CombinedDiffViewer.noExtension',
+                              '(no extension)'
+                            )
+                          : extension}
+                      </span>
                     </button>
                   )
                 })}

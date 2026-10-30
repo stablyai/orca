@@ -5,7 +5,7 @@ import process from 'node:process'
 import { repairTranslatedValue } from './locale-translation-policy.mjs'
 
 const LOCALES_DIR = path.join('src', 'renderer', 'src', 'i18n', 'locales')
-const SUPPORTED_LOCALES = new Set(['es', 'fr', 'ja', 'ko', 'zh'])
+const SUPPORTED_LOCALES = new Set(['de', 'es', 'fr', 'ja', 'ko', 'pt', 'ru', 'tr', 'zh', 'zh-Hant'])
 const PLACEHOLDER_RE = /\{\{[^}]+\}\}/g
 
 function placeholders(value) {
@@ -28,8 +28,14 @@ function setEntry(catalog, key, value) {
   cursor[parts.at(-1)] = value
 }
 
-function getEn(catalog, key) {
-  const value = getEntry(catalog, key)
+function getEn(catalog, key, locale) {
+  // Why: locales with more CLDR plural categories than English (ru few/many) translate from `_other`.
+  const plural = /^(.*)_(zero|one|two|few|many|other)$/.exec(key)
+  const value =
+    getEntry(catalog, key) ??
+    (plural && new Intl.PluralRules(locale).resolvedOptions().pluralCategories.includes(plural[2])
+      ? getEntry(catalog, `${plural[1]}_other`)
+      : undefined)
   if (typeof value !== 'string') {
     throw new Error(`en.json has no string entry for ${key}`)
   }
@@ -57,7 +63,7 @@ async function main() {
         skipped += 1
         continue
       }
-      const enValue = getEn(enCatalog, key)
+      const enValue = getEn(enCatalog, key, locale)
       if (placeholders(enValue) !== placeholders(rawValue)) {
         throw new Error(
           `[${locale}] placeholder mismatch for ${key}: en=${placeholders(enValue)} vs locale=${placeholders(rawValue)}`

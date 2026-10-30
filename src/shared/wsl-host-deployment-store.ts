@@ -18,6 +18,18 @@ const WSL_HOST_DEPLOYMENTS_FILE = 'orca-wsl-host-deployments.json'
 const MAX_WSL_HOST_DEPLOYMENTS_FILE_BYTES = 256 * 1024
 
 /** A managed orcad in a WSL distro. The environment's name is its label; runtime state lives elsewhere. */
+/** A Remove that could not prove the host's server stopped (E11); the host stays until one does. */
+export const WslHostPendingStopSchema = z.object({
+  since: z.number().finite(),
+  reason: z.string().max(4_096),
+  /** `reason`'s WSL_HOST_STATUS_DETAIL_COPY code; older builds drop it and show `reason`. */
+  reasonCode: z.string().max(128).optional(),
+  reasonParams: z.record(z.string(), z.union([z.string().max(4_096), z.number()])).optional(),
+  verdict: z.enum(['live', 'unverifiable'])
+})
+
+export type WslHostPendingStop = z.infer<typeof WslHostPendingStopSchema>
+
 export const WslHostDeploymentRecordSchema = OrcadWslDeploymentLinkSchema.extend({
   environmentId: z.string().min(1),
   createdAt: z.number().finite(),
@@ -27,7 +39,8 @@ export const WslHostDeploymentRecordSchema = OrcadWslDeploymentLinkSchema.extend
    */
   pairingPublicKeyB64: z.string().min(1).optional(),
   /** The key a refresh replaced, accepted until the pairing write that follows it lands. */
-  previousPairingPublicKeyB64: z.string().min(1).optional()
+  previousPairingPublicKeyB64: z.string().min(1).optional(),
+  pendingStop: WslHostPendingStopSchema.optional()
 })
 
 export type WslHostDeploymentRecord = z.infer<typeof WslHostDeploymentRecordSchema>
@@ -156,7 +169,7 @@ export function writeWslHostDeployment(
   )
 }
 
-function hasNonWslOwner(environment: KnownRuntimeEnvironment): boolean {
+export function hasNonWslOwner(environment: KnownRuntimeEnvironment): boolean {
   return Boolean(
     environment.orcadDeployment ||
     environment.sshAccess ||
@@ -194,6 +207,7 @@ export function overlayWslHostDeployments(
       const {
         environmentId: _environmentId,
         createdAt: _createdAt,
+        pendingStop: _pendingStop,
         pairingPublicKeyB64,
         previousPairingPublicKeyB64,
         ...link

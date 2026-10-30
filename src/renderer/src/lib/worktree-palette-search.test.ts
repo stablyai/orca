@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getWorktreePaletteSearchScope, searchWorktrees } from './worktree-palette-search'
-import { isWorktreePaletteQueryTooLarge } from './worktree-palette-query-bounds'
+import { isWorktreePaletteQueryTooLarge } from '../../../shared/palette-match/worktree-palette-query-bounds'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { HostedReviewInfo } from '../../../shared/hosted-review'

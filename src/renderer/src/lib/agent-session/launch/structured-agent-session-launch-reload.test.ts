@@ -76,8 +76,12 @@ vi.mock('@/lib/agent-catalog', () => ({
 }))
 
 import { retryStructuredAgentSessionLaunch } from '../../structured-agent-session-launch'
+import { structuredLaunchOptionOverlay } from '../../structured-agent-session-launch-options'
 import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
-import { resetStructuredAgentLaunchRegistryForTests } from './structured-agent-session-launch-registry'
+import {
+  resetStructuredAgentLaunchRegistryForTests,
+  getStructuredLaunchStateBySessionId
+} from './structured-agent-session-launch-registry'
 
 function launchIntent(worktreeId: string, sessionId: string): StructuredAgentSessionLaunchIntent {
   return {
@@ -141,12 +145,18 @@ describe('structured agent launch reload recovery', () => {
         clientOperationId: string
         payloadFingerprint: string
         expectedRuntimeFence: number | null
+        explicitLaunchOptions?: Readonly<Record<string, string>>
+        optionsMode?: 'replace-model-selection'
+        options?: Readonly<Record<string, string>>
       }) => ({
         ...launchIntent(args.worktreeId, args.sessionId),
         agent: args.agent,
+        explicitLaunchOptions: args.explicitLaunchOptions,
         params: {
           ...launchIntent(args.worktreeId, args.sessionId).params,
           agent: args.agent,
+          optionsMode: args.optionsMode,
+          options: args.options,
           envelope: {
             sessionId: args.sessionId,
             clientOperationId: args.clientOperationId,
@@ -168,6 +178,9 @@ describe('structured agent launch reload recovery', () => {
           sessionId,
           agent: 'codex',
           lifecycle: 'pending',
+          explicitLaunchOptions: { model: 'action-model', fastMode: 'false' },
+          optionsMode: 'replace-model-selection',
+          options: { model: 'frozen-model', effort: 'high' },
           clientOperationId: 'operation-reloaded',
           payloadFingerprint: 'fingerprint-reloaded',
           expectedRuntimeFence: null
@@ -180,13 +193,21 @@ describe('structured agent launch reload recovery', () => {
       .mockResolvedValueOnce([publishedSnapshot(worktreeId, sessionId)])
 
     expect(retryStructuredAgentSessionLaunch(worktreeId, sessionId)).toBe(true)
+    const restored = getStructuredLaunchStateBySessionId(sessionId)!
+    expect(restored.selection).toMatchObject({
+      explicit: { model: 'action-model', fastMode: 'false' }
+    })
+    expect(structuredLaunchOptionOverlay(restored)).toEqual({})
     await flushLaunchSettlement()
 
     expect(mocks.launch).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId,
         worktreeId,
+        explicitLaunchOptions: { model: 'action-model', fastMode: 'false' },
         params: expect.objectContaining({
+          optionsMode: 'replace-model-selection',
+          options: { model: 'frozen-model', effort: 'high' },
           envelope: expect.objectContaining({
             clientOperationId: 'operation-reloaded',
             payloadFingerprint: 'fingerprint-reloaded'

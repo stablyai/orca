@@ -106,6 +106,12 @@ export function sessionScreenReadMountAdapters(
               effect('default-live-input', [...handles]),
             clearTerminalLiveInputDefault: (handle) => effect('clear-live-input', { handle }),
             setTerminalKeyboardMetrics: () => {},
+            setTerminalModes: () => {},
+            ptyModesRef: { current: new Map() },
+            terminalCwdRef: { current: new Map() },
+            subscribeSeqRef: { current: new Map() },
+            initialModesSeenRef: { current: new Set() },
+            webReadyHandlesRef: { current: new Set() },
             terminalRefs: { current: new Map() },
             terminalUnsubsRef: { current: unsubs },
             initializedHandlesRef: { current: new Set([HANDLE]) },
@@ -171,6 +177,8 @@ export function sessionScreenReadMountAdapters(
             enabled,
             handleRef: { current: HANDLE },
             deviceTokenRef: { current: DEVICE_TOKEN },
+            // OpenCode is the agent whose Stop sends the paced second Escape these recordings pin.
+            agentRef: { current: 'opencode' },
             streamIdentity: 'stream-1',
             cancelPending: () => effect('cancel-pending', {}),
             onSendError: (message: string) => errors.push(message)

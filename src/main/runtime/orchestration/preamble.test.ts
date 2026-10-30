@@ -11,6 +11,7 @@ function baseParams(overrides: Partial<Parameters<typeof buildDispatchPreamble>[
     taskSpec: 'Implement the login form',
     coordinatorHandle: 'term_coord',
     workerHandle: 'term_worker',
+    heartbeatIntervalMinutes: 5,
     ...overrides
   }
 }
@@ -152,6 +153,17 @@ describe('buildDispatchPreamble', () => {
     expect(result).not.toMatch(/(^|\s)orca orchestration/m)
   })
 
+  it('tells the worker the heartbeat interval the user chose', () => {
+    const result = buildDispatchPreamble(baseParams({ heartbeatIntervalMinutes: 15 }))
+    expect(result).toContain('# Send a heartbeat every 15 minutes')
+  })
+
+  it('never mentions heartbeats when the user turned them off', () => {
+    const result = buildDispatchPreamble(baseParams({ heartbeatIntervalMinutes: null }))
+    expect(result).not.toMatch(/heartbeat/i)
+    expect(cliFence(result)).toContain('orchestration ask')
+  })
+
   it('appends a BASE DRIFT section when baseDrift.behind > 0', () => {
     const result = buildDispatchPreamble({
       taskId: 'task_x',
@@ -159,6 +171,7 @@ describe('buildDispatchPreamble', () => {
       taskSpec: 'do stuff',
       coordinatorHandle: 'term_c',
       workerHandle: 'term_w',
+      heartbeatIntervalMinutes: 5,
       baseDrift: {
         base: 'origin/main',
         behind: 7,
@@ -181,6 +194,7 @@ describe('buildDispatchPreamble', () => {
       taskSpec: 'do stuff',
       coordinatorHandle: 'term_c',
       workerHandle: 'term_w',
+      heartbeatIntervalMinutes: 5,
       baseDrift: {
         base: 'origin/main',
         behind: 0,
@@ -199,6 +213,7 @@ describe('buildDispatchPreamble', () => {
       taskSpec: 'do stuff',
       coordinatorHandle: 'term_c',
       workerHandle: 'term_w',
+      heartbeatIntervalMinutes: 5,
       baseDrift: {
         base: 'origin/main',
         behind: 3,
@@ -220,7 +235,8 @@ describe('buildDispatchPreamble', () => {
       dispatchId: 'ctx_SNAP',
       taskSpec: 'TASK_BODY',
       coordinatorHandle: 'term_COORD',
-      workerHandle: 'term_WORKER'
+      workerHandle: 'term_WORKER',
+      heartbeatIntervalMinutes: 5
     })
     expect(result).toMatchSnapshot()
   })
@@ -231,7 +247,8 @@ describe('buildDispatchPreamble', () => {
       dispatchId: 'ctx_SNAP',
       taskSpec: 'TASK_BODY',
       coordinatorHandle: 'orca_session_id:COORD',
-      workerHandle: 'orca_session_id:WORKER'
+      workerHandle: 'orca_session_id:WORKER',
+      heartbeatIntervalMinutes: 5
     })
     expect(result).toMatchSnapshot()
   })
@@ -243,7 +260,8 @@ describe('sub-dispatch section', () => {
     dispatchId: 'ctx_1',
     taskSpec: 'do the thing',
     coordinatorHandle: 'term_coord',
-    workerHandle: 'term_worker'
+    workerHandle: 'term_worker',
+    heartbeatIntervalMinutes: 5
   }
 
   it('is omitted explicitly when nesting is disallowed', () => {

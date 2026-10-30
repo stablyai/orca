@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatSkillDiscovery } from './use-native-chat-skills'
 import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { isSkillPickerTriggered } from './native-chat-composer-state'
+import { isSkillPickerTriggered } from '../../../../shared/native-chat-composer-autocomplete'
 
 const mocks = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn(),
@@ -117,6 +117,24 @@ describe('useNativeChatSkills', () => {
       { cwd: '/repo/worktree', worktreeId: 'worktree-1' },
       { timeoutMs: 10_000 }
     )
+  })
+
+  it('reads no tab maps while the picker is closed', () => {
+    let tabMapReads = 0
+    const base = stateForHost('local')
+    mocks.state = Object.defineProperties(
+      { ...base },
+      {
+        tabsByWorktree: { get: () => (tabMapReads++, base.tabsByWorktree) },
+        unifiedTabsByWorktree: { get: () => (tabMapReads++, base.unifiedTabsByWorktree) }
+      }
+    )
+    const view = render(<Probe enabled={false} />)
+    view.rerender(<Probe enabled={false} />)
+
+    // Every mounted chat holds this hook; tab changes must not reach closed pickers.
+    expect(tabMapReads).toBe(0)
+    expect(mocks.snapshots.at(-1)?.status).toBe('idle')
   })
 
   it('resolves the catalog for a structured session tab', async () => {

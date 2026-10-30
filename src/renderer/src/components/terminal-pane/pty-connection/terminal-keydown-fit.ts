@@ -1,8 +1,9 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { makePaneKey } from '../../../../../shared/stable-pane-id'
 import { useAppStore } from '@/store'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { bindPanePtyId, getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
+import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import {
   confirmRuntimeTerminalForegroundProcess,
   inspectRuntimeTerminalProcess
@@ -90,8 +91,14 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
     }
     // Why: override hydration can arrive before this pane knows its PTY. Once
     // data-pty-id is bound, safeFit can park xterm at the authoritative grid.
-    if (getFitOverrideForPty(ptyId)) {
+    const hasFitOverride = getFitOverrideForPty(ptyId) !== null
+    if (hasFitOverride) {
       safeFit(session.pane)
+    }
+    // Why: the overlay tick skipped that early event (no pane owned this PTY yet),
+    // so the parked grid would otherwise show no "sized for your phone" banner.
+    if (hasFitOverride || isPtyLocked(ptyId)) {
+      session.deps.refreshMobileOverlays?.()
     }
     session.claimPendingVisibleRemoteViewport()
   }

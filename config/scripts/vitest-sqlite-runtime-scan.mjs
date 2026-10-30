@@ -20,7 +20,9 @@ const SQLITE_HARNESSES = new Set([
   'structured-agent-session-rest-test-rig',
   'journal-host-database-test-support',
   'terminal-topology-profile-fixture',
-  'acknowledged-terminal-tab-retirement-fixture'
+  'acknowledged-terminal-tab-retirement-fixture',
+  // Opens the index read-only after the indexer closes; Bun's macOS SQLite refuses a WAL file then.
+  'session-search-indexer-test-fixture'
 ])
 export const SQLITE_MODULES = [
   'src/main/sqlite/sync-database',

@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
 import { CLAUDE_CLI_CONVERSATIONS } from '../../../claude/claude-cli-conversations'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { localProvider } from '../provider/registry'
@@ -67,7 +68,7 @@ const chat = agentSessionRecordFixture(
 )
 
 const store = {
-  listRecords: () => [chat],
+  listConversations: () => [agentSessionConversationView(chat)],
   getVisibleSessionTabIndex: () => ({ present: true, sessionIds: [chat.sessionId] })
 }
 
@@ -174,7 +175,9 @@ describe('actual runtime saved-resume outcomes', () => {
           handle: { ...link.handle, nativeId: `unrelated-${index}` }
         }))
       }))
-      const list = vi.spyOn(store, 'listRecords').mockImplementation(() => records)
+      const list = vi
+        .spyOn(store, 'listConversations')
+        .mockImplementation(() => records.map(agentSessionConversationView))
       const visible = vi.spyOn(store, 'getVisibleSessionTabIndex').mockReturnValue({
         present: true,
         sessionIds: records.map((record) => record.sessionId)
@@ -408,16 +411,17 @@ it('preserves case-distinct conversation heads and saved homes across the shared
     }))
   }
   const opencodeStore: AgentSessionRecordStore = Object.create(AgentSessionRecordStore.prototype)
-  opencodeStore.listRecords = () => [record]
+  opencodeStore.listConversations = () => [agentSessionConversationView(record)]
   opencodeStore.getVisibleSessionTabIndex = () => ({
     present: true,
     sessionIds: [record.sessionId]
   })
   const runtime = { openAgentSessionRecordStore: async () => opencodeStore }
-  expect(listStructuredProviderSessionOwnership([record]).map((holding) => holding.role)).toEqual([
-    'earlier',
-    'head'
-  ])
+  expect(
+    listStructuredProviderSessionOwnership([agentSessionConversationView(record)]).map(
+      (holding) => holding.role
+    )
+  ).toEqual(['earlier', 'head'])
   for (const [index, id] of ids.entries()) {
     await expect(
       admitResumeSpawn(

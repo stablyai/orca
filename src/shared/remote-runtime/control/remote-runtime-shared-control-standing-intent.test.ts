@@ -1,6 +1,6 @@
 import { pairedRuntimeConnectionFromOffer } from '../../paired-runtime-connection'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RemoteRuntimeClientError } from '../../remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { RemoteRuntimeSharedControlConnection } from './remote-runtime-shared-control-connection'
 import { SharedControlReconnectScheduler } from './remote-runtime-shared-control-reconnect'
 import type { SharedControlLogicalSubscription } from './remote-runtime-shared-control-types'

@@ -12,7 +12,7 @@ import {
 import {
   paletteResultQualityClassRank,
   type PaletteResultQualityClass
-} from '@/lib/palette-match/match-quality'
+} from '../../../../shared/palette-match/match-quality'
 
 export type CmdJSettingsResult = {
   id: string

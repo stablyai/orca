@@ -7,6 +7,7 @@ export type BrowserChromeFoldStage =
   | 'external'
   | 'devtools'
   | 'share'
+  | 'extensions'
   | 'import'
   | 'draw'
   | 'grab'
@@ -17,6 +18,7 @@ export const BROWSER_CHROME_FOLD_ORDER: readonly BrowserChromeFoldStage[] = [
   'external',
   'devtools',
   'share',
+  'extensions',
   'import',
   'draw',
   'grab',

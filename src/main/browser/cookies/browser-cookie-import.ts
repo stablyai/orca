@@ -13,11 +13,6 @@ import {
 import { importChromiumCookies } from './chromium/import-cookies'
 import { importCookiesFromFirefox } from './sources/browser-cookie-firefox-import'
 import { importCookiesFromSafari } from './sources/browser-cookie-safari-import'
-import {
-  buildChromiumCookieInsertParams as buildInsertParams,
-  type ChromiumCookieColumnInfo
-} from './sources/browser-cookie-sqlite'
-
 export function detectInstalledBrowsers(): DetectedBrowser[] {
   return detectBrowsers()
 }
@@ -38,14 +33,6 @@ export async function importCookiesFromFile(
   targetPartition: string
 ): Promise<BrowserCookieImportResult> {
   return importFile(filePath, targetPartition)
-}
-
-export function buildChromiumCookieInsertParams(
-  targetColumns: ChromiumCookieColumnInfo[],
-  sourceRow: Record<string, unknown>,
-  decryptedValue: Buffer
-): (string | number | bigint | Buffer | null)[] {
-  return buildInsertParams(targetColumns, sourceRow, decryptedValue)
 }
 
 export async function importCookiesFromBrowser(

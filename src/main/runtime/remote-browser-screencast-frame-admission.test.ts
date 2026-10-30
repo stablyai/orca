@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 
 import { deriveSharedKey, encrypt, generateKeyPair } from '../../shared/e2ee-crypto'
-import { REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES } from '../../shared/remote-runtime-memory-limits'
+import { REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES } from '../../shared/remote-runtime/remote-runtime-memory-limits'
 import { startBrowserScreencast } from '../browser/browser-screencast-stream'
 import { E2EEChannel } from './rpc/e2ee-channel'
 import { sendRemoteBrowserScreencastFrame } from './remote-browser-screencast-frame-admission'

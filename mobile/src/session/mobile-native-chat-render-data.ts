@@ -1,8 +1,5 @@
 import { formatAgentTypeLabel } from '../../../src/shared/agent-type-label'
-import {
-  formatNativeChatEmptyStateCopy,
-  type NativeChatEmptyStateCopy
-} from '../../../src/shared/native-chat-empty-state'
+import type { NativeChatEmptyStateCopy } from '../../../src/shared/native-chat/native-chat-empty-state'
 import { isRootAgentJournalItem } from '../../../src/shared/agent-session-journal-producer'
 import { stripNoiseMessages } from '../../../src/shared/native-chat-noise'
 import { nativeChatStreamingMessage } from '../../../src/shared/native-chat/native-chat-streaming'
@@ -11,32 +8,76 @@ import {
   foldToolMessages,
   isUndrawnProviderFrameMessage
 } from '../../../src/shared/native-chat/tools/native-chat-tool-fold'
-import { projectNativeChatTaskListFrames } from '../../../src/shared/native-chat-task-list-frames'
-import { foldSubagentItems } from '../../../src/shared/native-chat-subagent-items'
-import { prepareNativeChatMessages } from '../../../src/shared/native-chat-message-preparation'
+import { projectNativeChatTaskListFrames } from '../../../src/shared/native-chat/input/native-chat-task-list-frames'
+import { foldSubagentItems } from '../../../src/shared/native-chat/transcript/native-chat-subagent-items'
+import { prepareNativeChatMessages } from '../../../src/shared/native-chat/transcript/native-chat-message-preparation'
 import {
   isImageRefBlock,
   type AgentType,
   type NativeChatMessage
 } from '../../../src/shared/native-chat-types'
-import { isImageSourceUserTurn } from '../../../src/shared/native-chat-image-transcript-markers'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
+import { translate } from '../i18n/mobile-i18n'
+
+function mobileNativeChatEmptyStateCopy(
+  kind: 'notFound' | 'empty' | 'error',
+  agentLabel: string
+): NativeChatEmptyStateCopy {
+  switch (kind) {
+    case 'notFound':
+      return {
+        title: translate(
+          'session.nativeChatRenderData.notFoundTitle',
+          "Can't find this conversation yet"
+        ),
+        subtitle: translate(
+          'session.nativeChatRenderData.notFoundSubtitle',
+          'Send a message to start one, or open the terminal view to see what {{agent}} is doing.',
+          { agent: agentLabel }
+        )
+      }
+    case 'empty':
+      return {
+        title: translate('session.nativeChatRenderData.emptyTitle', 'Start a chat with {{agent}}', {
+          agent: agentLabel
+        }),
+        subtitle: translate(
+          'session.nativeChatRenderData.emptySubtitle',
+          'Ask {{agent}} to inspect code, explain output, or make a change.',
+          { agent: agentLabel }
+        )
+      }
+    case 'error':
+      return {
+        title: translate('session.nativeChatRenderData.errorTitle', 'Could not load conversation'),
+        subtitle: translate(
+          'session.nativeChatRenderData.errorSubtitle',
+          'The transcript could not be read. Toggle back to the terminal to keep working.'
+        )
+      }
+  }
+}
 
 export function mobileNativeChatEmptyState(
   status: MobileNativeChatStatus,
   agent: string | null,
-  error?: string
+  error?: string,
+  sessionLive = false
 ): NativeChatEmptyStateCopy | null {
-  const agentLabel = agent ? formatAgentTypeLabel(agent) : 'the agent'
+  const agentLabel = agent
+    ? formatAgentTypeLabel(agent)
+    : translate('session.nativeChatRenderData.defaultAgentLabel', 'the agent')
   switch (status) {
     // Missing history may mean new or unreadable; promise neither in the waiting copy.
     case 'waiting-session':
+      return mobileNativeChatEmptyStateCopy('notFound', agentLabel)
+    // A session the running agent just reported has no file until its first prompt.
     case 'awaiting-transcript':
-      return formatNativeChatEmptyStateCopy('notFound', agentLabel)
+      return mobileNativeChatEmptyStateCopy(sessionLive ? 'empty' : 'notFound', agentLabel)
     case 'ready':
-      return formatNativeChatEmptyStateCopy('empty', agentLabel)
+      return mobileNativeChatEmptyStateCopy('empty', agentLabel)
     case 'error': {
-      const copy = formatNativeChatEmptyStateCopy('error', agentLabel)
+      const copy = mobileNativeChatEmptyStateCopy('error', agentLabel)
       return error ? { ...copy, subtitle: error } : copy
     }
     default:
@@ -48,8 +89,6 @@ export type MobileNativeChatPendingItem = {
   id: string
   text: string
   images?: string[]
-  // Anchor unmatched echoes after their captured tail so later turns cannot reorder them.
-  baselineTailMessageId?: string | null
   sentAt?: number
 }
 
@@ -76,14 +115,11 @@ export function foldMobileNativeChatMessages(
 }
 
 export function buildMobileNativeChatTransientData({
-  messages,
   folded,
   streaming,
   pending,
   imagePreviewsByMessageId
 }: {
-  /** Raw transcript rows, used to project folded-away send boundaries. */
-  messages: NativeChatMessage[]
   folded: NativeChatMessage[]
   streaming: string | null
   pending: MobileNativeChatPendingItem[]
@@ -109,45 +145,13 @@ export function buildMobileNativeChatTransientData({
     }
     return { ...message, blocks }
   })
-  // Keep echoes at their send boundary: some TUIs never record a matching user row, so appending would move them below every later turn.
-  const anchoredPending = new Map<string, NativeChatMessage[]>()
-  const leadingPending: NativeChatMessage[] = []
-  const trailingPending: NativeChatMessage[] = []
-  const foldedIds = new Set(renderedFolded.map((message) => message.id))
-  const missingBaselineIds = new Set<string>()
-  for (const item of pending) {
-    const baselineId = item.baselineTailMessageId
-    if (baselineId && !foldedIds.has(baselineId)) {
-      missingBaselineIds.add(baselineId)
-    }
-  }
-  const foldedAnchorByRawId = new Map<string, string>()
-  const leadingBaselineIds = new Set<string>()
-  if (missingBaselineIds.size > 0) {
-    let lastVisibleId: string | null = null
-    const forwardImageBaselineIds: string[] = []
-    for (const message of messages) {
-      if (foldedIds.has(message.id)) {
-        for (const baselineId of forwardImageBaselineIds) {
-          foldedAnchorByRawId.set(baselineId, message.id)
-        }
-        forwardImageBaselineIds.length = 0
-        lastVisibleId = message.id
-      }
-      if (!missingBaselineIds.has(message.id)) {
-        continue
-      }
-      if (isImageSourceUserTurn(message)) {
-        forwardImageBaselineIds.push(message.id)
-      } else if (lastVisibleId) {
-        foldedAnchorByRawId.set(message.id, lastVisibleId)
-      } else {
-        leadingBaselineIds.add(message.id)
-      }
-    }
+  // Desktop order: transcript rows, then the streaming preview, then unmatched echoes in send order.
+  const data: NativeChatMessage[] = [...renderedFolded]
+  if (streaming) {
+    data.push(nativeChatStreamingMessage(streaming))
   }
   for (const item of pending) {
-    const bubble: NativeChatMessage = {
+    data.push({
       id: item.id,
       role: 'user',
       blocks: [
@@ -156,41 +160,7 @@ export function buildMobileNativeChatTransientData({
       ],
       timestamp: item.sentAt ?? null,
       source: 'transcript'
-    }
-    // Tool/noise rows fold backward; image-source rows fold into their following prompt.
-    const baselineId = item.baselineTailMessageId
-    if (baselineId && leadingBaselineIds.has(baselineId)) {
-      leadingPending.push(bubble)
-      continue
-    }
-    const anchor = baselineId
-      ? foldedIds.has(baselineId)
-        ? baselineId
-        : foldedAnchorByRawId.get(baselineId)
-      : undefined
-    if (!anchor || !foldedIds.has(anchor)) {
-      trailingPending.push(bubble)
-      continue
-    }
-    const siblings = anchoredPending.get(anchor)
-    if (siblings) {
-      siblings.push(bubble)
-    } else {
-      anchoredPending.set(anchor, [bubble])
-    }
+    })
   }
-
-  const data: NativeChatMessage[] = [...leadingPending]
-  for (const message of renderedFolded) {
-    data.push(message)
-    const attached = anchoredPending.get(message.id)
-    if (attached) {
-      data.push(...attached)
-    }
-  }
-  if (streaming) {
-    data.push(nativeChatStreamingMessage(streaming))
-  }
-  data.push(...trailingPending)
   return { folded: renderedFolded, streaming, data }
 }

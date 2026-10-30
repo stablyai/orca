@@ -20,6 +20,7 @@ import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { AUTO_UPDATE_CHECK_INTERVAL_MS } from './updater-state'
 import { UpdaterDownloadInstall } from './updater-download-install'
 import { configureMacShipItScheduling } from './macos-shipit-scheduling'
+import { handleElectronUpdaterProxyLogin } from './electron-updater-proxy-session'
 import type { PreQuitCleanupFailureMode, UpdateInstallMode } from './updater-state'
 
 export type UpdaterSetupOptions = {
@@ -165,6 +166,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
       return
     }
     this.autoUpdaterInitialized = true
+    autoUpdater.on('login', handleElectronUpdaterProxyLogin)
 
     registerAutoUpdaterHandlers({
       autoUpdater,

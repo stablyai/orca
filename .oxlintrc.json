@@ -42,6 +42,7 @@
     "react/jsx-no-useless-fragment": ["error", { "allowExpressions": true }],
     "react/jsx-pascal-case": "error",
     "react/no-object-type-as-default-prop": "error",
+    "react/no-unstable-nested-components": ["warn", { "allowAsProps": true }],
     "react/self-closing-comp": "error",
     "react-hooks/rules-of-hooks": "error",
     "react-hooks/exhaustive-deps": "warn",
@@ -128,6 +129,11 @@
                 "name": "@linear/sdk",
                 "allowTypeImports": true,
                 "message": "Value-importing @linear/sdk hoists its ~2.6MB CJS bundle into the eager top-level require block and defeats the lazy loader. Use `import type` plus loadLinearSdk() from src/main/linear/linear-sdk.ts."
+              },
+              {
+                "name": "ssh2",
+                "allowTypeImports": true,
+                "message": "Value-importing ssh2 hoists it into the eager main-process require block and blocks startup (#35731). Use `import type` plus loadSsh2() from src/main/ssh/ssh2-module-load.ts."
               }
             ],
             "patterns": [
@@ -211,6 +217,7 @@
   "ignorePatterns": [
     "src/main/acp/generated/acp-protocol.generated.ts",
     "src/shared/rpc-contract/rpc-params-catalog.generated.ts",
+    "src/cli/bundled-skill-guides.ts",
     "**/node_modules",
     "**/dist",
     "**/out",

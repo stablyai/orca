@@ -1,6 +1,6 @@
 import { watchBatchFlushDelayMs } from '../../../../shared/filesystem-watch-batch-window'
 import type { FsChangeEvent } from '../../../../shared/filesystem-entry-types'
-import { MAX_BATCHED_WATCHER_EVENTS } from '../../../ipc/filesystem/watchers/filesystem-watcher-event-batch'
+import { FileWatchEventBuffer } from '../../../../shared/filesystem-watch-event-buffer'
 import type { FileWatchBatchCadence } from '../../../../shared/rpc-contract/files-target-params'
 
 // Older clients discard superseded reads; 100ms batches starve slow links, so preserve their trailing window unless opted in.
@@ -16,8 +16,7 @@ export function createFileWatchEventBatcher(
   flush: () => void
   dispose: () => void
 } {
-  let events: FsChangeEvent[] = []
-  let overflowed = false
+  const events = new FileWatchEventBuffer()
   let timer: ReturnType<typeof setTimeout> | null = null
   let lastFlushAt = 0
   let firstEventAt = 0
@@ -32,8 +31,7 @@ export function createFileWatchEventBatcher(
 
   const flush = (): void => {
     clearTimer()
-    const nextEvents = events.splice(0)
-    overflowed = false
+    const nextEvents = events.take()
     firstEventAt = 0
     if (nextEvents.length === 0) {
       return
@@ -47,26 +45,7 @@ export function createFileWatchEventBatcher(
       if (nextEvents.length === 0) {
         return
       }
-      if (!overflowed) {
-        const incomingOverflow = nextEvents.find((event) => event.kind === 'overflow')
-        if (incomingOverflow) {
-          events = [incomingOverflow]
-          overflowed = true
-        } else if (events.length + nextEvents.length > MAX_BATCHED_WATCHER_EVENTS) {
-          // When precise events exceed budget, one overflow requests refresh without a huge payload.
-          events = [
-            {
-              kind: 'overflow',
-              absolutePath: nextEvents[0]?.absolutePath ?? events[0]?.absolutePath ?? ''
-            }
-          ]
-          overflowed = true
-        } else {
-          for (const event of nextEvents) {
-            events.push(event)
-          }
-        }
-      }
+      events.push(nextEvents)
       if (cadence !== 'interval') {
         const now = Date.now()
         firstEventAt ||= now
@@ -89,8 +68,7 @@ export function createFileWatchEventBatcher(
     flush,
     dispose(): void {
       clearTimer()
-      events = []
-      overflowed = false
+      events.clear()
       firstEventAt = 0
     }
   }

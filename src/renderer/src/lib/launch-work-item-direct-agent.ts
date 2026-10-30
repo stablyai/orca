@@ -1,3 +1,4 @@
+import { readLaunchPermissionChoice } from '../../../shared/tui-agent-permission-choice'
 import { toast } from 'sonner'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import {
@@ -12,15 +13,19 @@ import type { StartupCommandDelivery } from '../../../shared/codex-startup-deliv
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
 import {
+  agentLaunchPermissionSettings,
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv,
   type AgentLaunchProfileSettings
 } from '../../../shared/tui-agent-launch-defaults'
+import { terminalSessionOptionInputs } from '../../../shared/tui-agent-launch-command'
 import { translate } from '@/i18n/i18n'
 
 export function buildDirectWorkItemAgentStartupPlan(args: {
   agent: TuiAgent | null
   agentArgs?: string | null
+  sessionOptions?: Readonly<Record<string, string>>
+  sessionOptionsYieldToAgentArgs?: true
   draftContent: string
   promptDelivery: 'draft' | 'submit-after-ready'
   settings:
@@ -42,11 +47,31 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
     return { startupPlan: null, draftLaunchedNatively: false, startupPlanFailed: false }
   }
 
+  const permissionSettings = agentLaunchPermissionSettings(
+    args.agent,
+    args.settings ?? {},
+    args.sessionOptions
+  )
   const effectiveAgentArgs =
     args.agentArgs === undefined
-      ? resolveTuiAgentLaunchArgs(args.agent, args.settings)
+      ? resolveTuiAgentLaunchArgs(
+          args.agent,
+          permissionSettings,
+          readLaunchPermissionChoice(args.sessionOptions) ? 'own' : undefined
+        )
       : args.agentArgs
-  const effectiveAgentEnv = resolveTuiAgentLaunchEnv(args.agent, args.settings, args.launchPlatform)
+  const effectiveAgentEnv = resolveTuiAgentLaunchEnv(
+    args.agent,
+    permissionSettings,
+    args.launchPlatform
+  )
+  const sessionOptionInputs = terminalSessionOptionInputs({
+    agent: args.agent,
+    sessionOptions: args.sessionOptions,
+    yieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
+    agentArgs: effectiveAgentArgs,
+    shell: args.shell ?? (args.launchPlatform === 'win32' ? 'powershell' : 'posix')
+  })
   const draftLaunchPlan =
     args.promptDelivery === 'submit-after-ready'
       ? null
@@ -58,7 +83,8 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
           ...(args.shell ? { shell: args.shell } : {}),
           isRemote: args.isRemote,
           agentArgs: effectiveAgentArgs,
-          agentEnv: effectiveAgentEnv
+          agentEnv: effectiveAgentEnv,
+          ...sessionOptionInputs
         })
 
   if (draftLaunchPlan) {
@@ -88,6 +114,7 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
     isRemote: args.isRemote,
     agentArgs: effectiveAgentArgs,
     agentEnv: effectiveAgentEnv,
+    ...sessionOptionInputs,
     allowEmptyPromptLaunch: true,
     ...(args.promptDelivery === 'submit-after-ready' ? { suppressStartupUpdatePrompt: true } : {})
   })

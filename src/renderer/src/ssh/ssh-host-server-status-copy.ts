@@ -9,6 +9,7 @@ import { useAppStore } from '@/store'
 import { compactIpcErrorMessage, extractIpcErrorMessage } from '@/lib/ipc-error'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { launchSessionEndedLine } from './ssh-host-launch-session-copy'
+import { automationsLeftDisabledLine } from './ssh-host-moved-automations-copy'
 import { bridgedTerminalsLine } from './ssh-host-bridged-terminals-copy'
 import { managedUpdateLine, withDetail } from './ssh-host-server-update-copy'
 import { blockedNodeDownload, nodeDownloadBlockedText } from './ssh-host-node-download-copy'
@@ -52,6 +53,9 @@ export function sshHostServerStatusLine(
   }
   if (status?.kind === 'managed' && status.linked?.length) {
     return linkedProjectsLine(status.linked)
+  }
+  if (status?.kind === 'managed' && status.automationsLeftDisabled) {
+    return automationsLeftDisabledLine(status.automationsLeftDisabled)
   }
   // A healthy managed server is the default; the card stays quiet unless something needs attention.
   if (status?.kind === 'managed' || (!status && target.orcadFence)) {
@@ -235,7 +239,12 @@ function linkedProjectsLine(
         ? translate(
             'auto.components.settings.sshHostServer.linkedProjects',
             'This host’s Orca server already had {{paths}}, so this desktop now uses the server’s copy. This desktop’s tabs and {{count}} automations there were not moved, and worktrees it created there show as external worktrees.',
-            { paths, count }
+            {
+              paths,
+              count,
+              defaultValue_one:
+                'This host’s Orca server already had {{paths}}, so this desktop now uses the server’s copy. This desktop’s tabs and {{count}} automation there were not moved, and worktrees it created there show as external worktrees.'
+            }
           )
         : translate(
             'auto.components.settings.sshHostServer.linkedProjectsNoAutomations',
@@ -258,7 +267,11 @@ function unservedLine(
           ? translate(
               'auto.components.settings.sshHostServer.olderTerminals',
               '{{count}} terminals started by an older version of Orca are still running on this host, and they don’t stop on their own. Close them in that version of Orca or end them on the host, then reconnect.',
-              { count: status.terminals }
+              {
+                count: status.terminals,
+                defaultValue_one:
+                  '{{count}} terminal started by an older version of Orca is still running on this host, and it doesn’t stop on its own. Close it in that version of Orca or end it on the host, then reconnect.'
+              }
             )
           : translate(
               'auto.components.settings.sshHostServer.olderTerminalsUncounted',

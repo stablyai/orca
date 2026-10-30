@@ -1,8 +1,13 @@
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../shared/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 /** Project removal must close structured sessions and retire chat tabs itself; PTY sweeps cannot see them. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 import type { RepoHostTarget } from '../../shared/repo-host-identity'
-import { getRepoExecutionHostId } from '../../shared/execution-host'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 
 const hostRef: { current: unknown } = { current: null }
 
@@ -13,23 +18,16 @@ vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', (
 const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
 const { TEST_REPO_ID, TEST_WORKTREE_ID, store } = await import('./orca-runtime-test-fixtures.spec')
 
-type FakeRecord = {
-  sessionId: string
-  provider: 'claude' | 'codex'
-  location: { executionHostId: string; workspaceId: string }
-  lease: { claimStatus: string; deathEvidence: unknown }
+function record(
+  sessionId: string,
+  workspaceId: string,
+  executionHostId: ExecutionHostId = 'local'
+) {
+  const record = agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId }))
+  return { ...record, location: { ...record.location, executionHostId, workspaceId } }
 }
 
-function record(sessionId: string, workspaceId: string, executionHostId = 'local'): FakeRecord {
-  return {
-    sessionId,
-    provider: 'claude',
-    location: { executionHostId, workspaceId },
-    lease: { claimStatus: 'live', deathEvidence: null }
-  }
-}
-
-function installHost(records: FakeRecord[], detached: string[] = []) {
+function installHost(records: ReturnType<typeof record>[], detached: string[] = []) {
   const held = new Set(
     records.map((entry) => entry.sessionId).filter((id) => !detached.includes(id))
   )
@@ -38,8 +36,11 @@ function installHost(records: FakeRecord[], detached: string[] = []) {
   hostRef.current = {
     deps: {
       store: {
-        listRecords: () => records,
-        getRecord: (sessionId: string) => records.find((entry) => entry.sessionId === sessionId),
+        listConversations: () => records.map(agentSessionConversationView),
+        getConversation: (sessionId: string) => {
+          const entry = records.find((entry) => entry.sessionId === sessionId)
+          return entry ? agentSessionConversationView(entry) : null
+        },
         getSessionTabId: (sessionId: string) => (visible.has(sessionId) ? `tab-${sessionId}` : null)
       },
       logger: { warn: () => {} }

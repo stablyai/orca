@@ -2,6 +2,7 @@ import '../runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
 import { getDefaultSettings, getDefaultWorkspaceSession } from '../../shared/constants'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { listResult } from '../ai-vault/structured-session-ownership.test-support'
@@ -44,6 +45,7 @@ it.each(['J', 'R', 'P', 'L', 'T', 'U', 'C'] as const)(
           () => ({ getSettings: () => getDefaultSettings('/isolated') }),
           {
             resolveWorkspace: async () => ({ path: '/fixture', executionHostId: 'local' }),
+            resolveNamingEnvironment: async () => ({}),
             getAgentEnvResolvers: () => undefined,
             workerTaskTitle: () => null,
             retitleOpenTab: runtime.refreshStructuredConversationTabTitle.bind(runtime)
@@ -60,6 +62,7 @@ it.each(['J', 'R', 'P', 'L', 'T', 'U', 'C'] as const)(
       const id = (index: number) =>
         index < 0 ? 'unrelated' : index ? `population-${index}` : HOST_TEST_SESSION
       const get = store.getRecord
+      const getConversation = store.getConversation
       const providerId = (sessionId: string) =>
         sessionId === HOST_TEST_SESSION ? HOST_TEST_THREAD : `renderer-provider-${sessionId}`
       const records = Array.from({ length: sizes.R }, (_, index) => ({
@@ -79,12 +82,22 @@ it.each(['J', 'R', 'P', 'L', 'T', 'U', 'C'] as const)(
         }
       }))
       const byId = new Map(records.map((record) => [record.sessionId, record]))
+      const conversations = records.map((record) => ({
+        ...agentSessionConversationView(record),
+        get providerHandleChain() {
+          return record.providerHandleChain
+        }
+      }))
+      const conversationsById = new Map(conversations.map((view) => [view.sessionId, view]))
       const lookup = vi
         .spyOn(store, 'getRecord')
         .mockImplementation((id) => get(id) ?? byId.get(id) ?? null)
+      const conversationLookup = vi
+        .spyOn(store, 'getConversation')
+        .mockImplementation((id) => getConversation(id) ?? conversationsById.get(id) ?? null)
       const list = vi
-        .spyOn(store, 'listRecords')
-        .mockImplementation(() => [get(HOST_TEST_SESSION)!, ...records.slice(1)])
+        .spyOn(store, 'listConversations')
+        .mockImplementation(() => [getConversation(HOST_TEST_SESSION)!, ...conversations.slice(1)])
       for (let index = 0; index < sizes.J; index++) {
         naming.regenerate(id(index))
       }
@@ -158,6 +171,7 @@ it.each(['J', 'R', 'P', 'L', 'T', 'U', 'C'] as const)(
       )
       try {
         lookup.mockClear()
+        conversationLookup.mockClear()
         list.mockClear()
         recordVisits = linkVisits = rowVisits = labelVisits = 0
         deliveries.length = 0
@@ -165,8 +179,12 @@ it.each(['J', 'R', 'P', 'L', 'T', 'U', 'C'] as const)(
         const snapshots = deliveries.filter((event) => event.includes('namingActiveSessionIds'))
         expect(snapshots).toHaveLength(sizes.C)
         expect(JSON.parse(snapshots[0]!).namingActiveSessionIds).toHaveLength(sizes.J)
-        expect(lookup.mock.calls.length).toBeGreaterThanOrEqual(sizes.J + 1)
-        expect(lookup.mock.calls.length).toBeLessThanOrEqual(sizes.J + 10)
+        expect(
+          lookup.mock.calls.length + conversationLookup.mock.calls.length
+        ).toBeGreaterThanOrEqual(sizes.J + 1)
+        expect(lookup.mock.calls.length + conversationLookup.mock.calls.length).toBeLessThanOrEqual(
+          sizes.J + 10
+        )
         expect(list).not.toHaveBeenCalled()
         for (let index = 0; index < sizes.C; index++) {
           const response = JSON.parse(JSON.stringify(await rpc()))

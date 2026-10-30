@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness } from '../../terminal/lifecycle/floating-session-liveness'
 import { writeOrchestrationPointerWithSettlement } from '../mailbox-pointer-pty-write'
 import type { WriteSettlement } from '../../../../shared/pty-write-settlement'

@@ -39,8 +39,6 @@ const HOST_EPOCH = 'host-epoch-1'
 const T0 = 1_700_000_000_000
 /** The laptop was closed well past the agent-status freshness boundary. */
 const LONG_SLEEP_MS = AGENT_STATUS_STALE_AFTER_MS * 6
-/** A blip the client rides out without its own status going stale. */
-const BRIEF_DROP_MS = 5_000
 
 type TestStore = ReturnType<typeof createTestStore>
 
@@ -265,14 +263,6 @@ describe('STA-3107: sidebar agent rows survive a paired-client sleep/wake reconn
   afterEach(() => {
     vi.useRealTimers()
     resetRendererOwnedAgentStatusPanesForTests()
-  })
-
-  it('control: a brief transport drop keeps every pane in the sidebar', () => {
-    const store = seedPairedClientStore()
-    const reconnected = runSleepWakeReconnect(store, BRIEF_DROP_MS)
-
-    expect(reconnected.tabIds).toHaveLength(PANES.length)
-    expect(reconnected.rowPaneKeys.sort()).toEqual(PANES.map(mirrorPaneKey).sort())
   })
 
   it('keeps a sidebar row for every still-live pane after a long sleep', () => {

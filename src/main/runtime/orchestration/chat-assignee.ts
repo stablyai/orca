@@ -1,4 +1,4 @@
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import {
   ORCA_SESSION_ADDRESS_PREFIX,
   parseOrcaSessionAddress,
@@ -23,7 +23,7 @@ export function chatAssigneeSessionId(
 
 export type ChatAssigneeObservation =
   /** `session` is the conversation's live session: its `/clear` successor, if it has one. */
-  | { status: 'live'; session: AgentSessionRecord }
+  | { status: 'live'; session: AgentSessionConversationView }
   | { status: 'exited'; reason: string }
   | { status: 'unverifiable'; reason: string }
 

@@ -14,11 +14,11 @@ import {
   CommentLocationLabel,
   CommentMoreMenu,
   CopyButton,
-  isMutablePRConversationComment,
   PRCommentActionBadge,
   QueueForAgentButton,
   ResolveButton
 } from './comment-controls'
+import { isMutablePRConversationComment } from '../../../../../shared/github/pr-comment-mutability'
 
 export function CommentRow({
   comment,

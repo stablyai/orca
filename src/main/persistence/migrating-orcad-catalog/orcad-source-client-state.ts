@@ -14,7 +14,8 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session-st
 import { sessionPartitions } from './orcad-source-workspace-session-fragments'
 import { collectCloseIntents } from './orcad-source-client-browser-intents'
 import {
-  createOrcadMigrationSourceScope,
+  createOrcadMigrationExportScope,
+  orcadMigrationScopeOwnsWholeHost,
   orcadMigrationOwnerMatchesScope,
   orcadMigrationOwnsRepoId,
   unqualifyOrcadMigrationOwnerKey
@@ -36,7 +37,7 @@ export function collectOrcadMigrationSourceClientState(
   destinationEnvironmentId: string | undefined,
   eligibleSession: WorkspaceSessionState | undefined
 ): OrcadMigrationSourceClientStateInspection {
-  const scope = createOrcadMigrationSourceScope({ source, catalog, repos: state.repos })
+  const scope = createOrcadMigrationExportScope({ source, catalog, repos: state.repos })
   const blockedCounts = { 'saved-port-forward': 0 }
   let blockedCount = 0
   const mobile = collectMobileSelections(state, scope, eligibleSession)
@@ -80,7 +81,7 @@ export function collectOrcadMigrationSourceClientState(
 
 function collectMobileSelections(
   state: PersistedState,
-  scope: ReturnType<typeof createOrcadMigrationSourceScope>,
+  scope: ReturnType<typeof createOrcadMigrationExportScope>,
   session: WorkspaceSessionState | undefined
 ):
   | NonNullable<OrcadMigrationClientStatePayload['mobileClientTabSelectionsByDeviceId']>
@@ -115,7 +116,7 @@ function collectMobileSelections(
 
 function collectUiRouting(
   state: PersistedState,
-  scope: ReturnType<typeof createOrcadMigrationSourceScope>,
+  scope: ReturnType<typeof createOrcadMigrationExportScope>,
   session: WorkspaceSessionState | undefined
 ): OrcadMigrationUiRoutingState | undefined {
   const ui = state.ui
@@ -165,12 +166,15 @@ function collectUiRouting(
 /** Include source-owned tabs from every partition. */
 function collectSourceOwnedTabIds(
   state: PersistedState,
-  scope: ReturnType<typeof createOrcadMigrationSourceScope>
+  scope: ReturnType<typeof createOrcadMigrationExportScope>
 ): Set<string> {
   const tabIds = new Set<string>()
   for (const [hostId, session] of sessionPartitions(state, 'local')) {
     for (const [ownerKey, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
-      if (hostId === scope.hostId || orcadMigrationOwnerMatchesScope(ownerKey, scope)) {
+      if (
+        (orcadMigrationScopeOwnsWholeHost(scope) && hostId === scope.hostId) ||
+        orcadMigrationOwnerMatchesScope(ownerKey, scope)
+      ) {
         tabs.forEach((tab) => tabIds.add(tab.id))
       }
     }
@@ -182,7 +186,7 @@ type EligibleSessionIdentity = { tabIds: ReadonlySet<string>; groupIds: Readonly
 
 function collectEligibleSessionIdentity(
   session: WorkspaceSessionState,
-  scope: ReturnType<typeof createOrcadMigrationSourceScope>
+  scope: ReturnType<typeof createOrcadMigrationExportScope>
 ): EligibleSessionIdentity {
   const tabIds = new Set<string>()
   const groupIds = new Set<string>()

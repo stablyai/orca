@@ -47,7 +47,7 @@
     },
     {
       "file": "src/platform/text-input-content-height.web.ts",
-      "reason": "react-native-web renders a multiline TextInput as a <textarea> that keeps the browser's default two rows whatever it holds, where a native multiline input grows between its min and max heights by itself. The web file measures the text in a hidden copy of the textarea and returns that height, so the queued-message edit field grows from one line to four; the native file returns nothing to measure. Resizing the live field to measure it was rejected: WebKit clamps the scroll position of the list around it, so the queue jumped while typing."
+      "reason": "react-native-web renders a multiline TextInput as a <textarea> that keeps the browser's default two rows whatever it holds, where a native multiline input grows between its min and max heights by itself. The web file measures the text in a hidden copy of the textarea and returns that height, so the chat composer grows with its draft, placeholder, and dictation preview; the native file returns nothing to measure. Resizing the live field to measure it was rejected: WebKit clamps the scroll position of the list around it, so the queue jumped while typing."
     },
     {
       "file": "src/platform/haptics.web.ts",
@@ -119,7 +119,7 @@
     },
     {
       "file": "src/session/native-chat/composer/MobileNativeChatComposerField.web.tsx",
-      "reason": "A picked skill leads the composer's draft and is drawn highlighted in place. Natively that is a styled span of the TextInput's own text, but react-native-web renders TextInput as a textarea, which cannot style part of its text and ignores Text children. This one draws a copy of the draft behind the field with the skill highlighted, clears the field's own text while keeping its caret, and moves the copy with the field's scroll."
+      "reason": "A picked skill leads the composer's draft and is drawn highlighted in place. Natively that is a styled span of the TextInput's own text, but react-native-web renders TextInput as a textarea, which cannot style part of its text and ignores Text children. This one draws a copy of the draft behind the field with the skill highlighted, clears the field's own text while keeping its caret, and moves the copy with the field's scroll. It also measures the shown text to grow the textarea, whose default two rows do not grow with content, and caps it to the space above the keyboard."
     },
     {
       "file": "src/session/native-chat/composer/mobile-native-chat-input-styles.web.ts",
@@ -140,6 +140,10 @@
     {
       "file": "src/platform/dictation-capture.web.ts",
       "reason": "Dictation's capture seam. The native file holds the microphone through @orca/expo-two-way-audio, which a browser does not have; this one asks the shell for it over native.audio.start|read|stop, draining the shell's ring on a timer and raising each reply as the events the engine emits directly, and taking the utterance's tail off the stop's own reply. The screen an open microphone holds awake is not in this seam at all: the device module that opens the mic takes it and gives it back on both hosts. The flow above the seam is one file on both hosts."
+    },
+    {
+      "file": "src/platform/pdf-opener.web.ts",
+      "reason": "Native file routes never render a preview themselves: they mount this page, which cannot show a PDF because the shell's CSP refuses frames and objects. This one asks the shell through native.pdf.view, which downloads the file and shows it in Quick Look or the Android PDF viewer, cancels that download when the preview is left, and returns null on shells that do not grant the verb so the preview asks for an app update."
     },
     {
       "file": "src/platform/media-picker.web.ts",

@@ -1,4 +1,5 @@
 import { getAppEnvironment } from '../../../shared/app-environment'
+import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
 import { listEnvironments } from '../../../shared/runtime-environment-store'
 import {
   getOrcadSshDeployment,
@@ -12,7 +13,10 @@ import {
   isSshUserDisconnected,
   recordSshUserDisconnected
 } from '../../ssh/ssh-user-disconnect'
-import { connectRegisteredSshTarget } from '../../ssh/targets/ssh-target-registry'
+import {
+  connectRegisteredSshTarget,
+  getSshTargetRegistryStore
+} from '../../ssh/targets/ssh-target-registry'
 import {
   clearRuntimeEnvironmentManualDisconnect,
   isRuntimeEnvironmentManuallyDisconnected,
@@ -125,9 +129,28 @@ export function resetLaunchReconnectOptOutsForTests(): void {
   launchReconnectOptOutsHeld = false
 }
 
+/** Stop and remove persists across reloads and restarts: automatic dials must not deploy a new server. */
+export function isManagedServerRemovalHeld(
+  target: Pick<SshTarget, 'managedServerRemoved' | 'orcadFence'> | undefined
+): boolean {
+  if (!target?.managedServerRemoved) {
+    return false
+  }
+  // An older desktop ignores the hold and may redeploy; its registered server stays reachable.
+  const environmentId = getManagedOrcadFenceEnvironmentId(target)
+  return (
+    !environmentId ||
+    !listEnvironments(appUserDataPath()).some((environment) => environment.id === environmentId)
+  )
+}
+
 /** Explicit host Connect lifts its servers; resume their status checks only after connection settles. */
 export function liftSshHostUserDisconnect(targetId: string): string[] {
   clearSshUserDisconnected(targetId)
+  const registry = getSshTargetRegistryStore()
+  if (registry?.getTarget(targetId)?.managedServerRemoved) {
+    registry.updateTarget(targetId, { managedServerRemoved: undefined })
+  }
   const lifted: string[] = []
   for (const environment of environmentsReachedThrough(appUserDataPath(), targetId)) {
     if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {

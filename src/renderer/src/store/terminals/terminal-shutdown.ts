@@ -2,7 +2,7 @@ import type { SleepingAgentSessionRecord } from '../../../../shared/agent-sessio
 import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
-import '../slices/agent-status'
+import '../slices/agent-status/agent-status'
 import {
   collectHibernatedCompletionEvidenceForWorktree,
   collectSleepingAgentSessionRecordsForWorktree

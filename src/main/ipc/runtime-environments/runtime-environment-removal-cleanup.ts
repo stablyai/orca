@@ -1,4 +1,5 @@
 import { desktopChatCreationHistory } from '../../runtime/desktop-chat-creation-history'
+import { revokeRemoteFilePreviewGrants } from '../../media/media-preview-protocol'
 import { clearBrowserRoutePartitionStorageForEnvironment } from '../../browser/browser-route-partition-storage-runtime'
 import { retireBrowserRoutePartitionStorageForEnvironment } from '../../browser/browser-route-partition-storage-retirement'
 import { clearRuntimeEnvironmentCapabilityEvidence } from './runtime-environment-capability-evidence'
@@ -24,6 +25,7 @@ export function retireRemovedRuntimeEnvironment(
     void desktopChatCreationHistory(userDataPath).removeEnvironment(environmentId)
   }
   clearRuntimeEnvironmentCapabilityEvidence(environmentId)
+  revokeRemoteFilePreviewGrants(environmentId)
   // Retained session partitions make listings advertise the removed server as a known host.
   store.removeWorkspaceSessionHost(toRuntimeExecutionHostId(environmentId))
   forgetRemoteLayoutSnapshot(store, environmentId)

@@ -9,7 +9,15 @@ import type { AiVaultSessionWorktreeInfo } from './ai-vault-session-worktree'
 import { searchHit } from '../../../../shared/ai-vault-search-test-fixture'
 import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
 import type { AiVaultSubagentResumeActions } from './AiVaultSessionSubagents'
+import { findAiVaultSessionLiveState } from './ai-vault-original-pane'
 import { VaultSessionRow } from './AiVaultSessionRow'
+
+import type { AgentDotState } from '@/components/AgentStateDot'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import {
+  buildAiVaultOriginalPaneIndex,
+  findAiVaultSessionLiveStateInIndex
+} from './ai-vault-original-pane-index'
 
 const session = {
   id: 'local:gemini:sess-1:/home/a/.gemini/s.json',
@@ -59,6 +67,7 @@ afterEach(() => {
 
 function renderRow(
   overrides: {
+    liveState?: AgentDotState | null
     searchHit?: AiVaultSearchHit
     session?: AiVaultSession
     subagentResume?: AiVaultSubagentResumeActions
@@ -78,7 +87,7 @@ function renderRow(
         session={overrides.session ?? session}
         searchHit={overrides.searchHit}
         subagentResume={overrides.subagentResume}
-        liveState={null}
+        liveState={overrides.liveState ?? null}
         resumeStartup={{ command: 'gemini --resume sess-1' }}
         realHomeResumeStartup={{ command: 'gemini --resume sess-1' }}
         worktreeInfo={overrides.worktreeInfo ?? null}
@@ -105,6 +114,72 @@ function renderRow(
     </TooltipProvider>
   )
 }
+
+it.each([true, false])(
+  'renders the selected pane status through the %s provider lookup',
+  (direct) => {
+    const selectedSession = { ...session, title: 'Monitor the background job until it finishes' }
+    const selected: AgentStatusEntry = {
+      paneKey: 'tab:leaf',
+      state: 'working',
+      workingMode: 'monitoring',
+      agentType: session.agent,
+      prompt: selectedSession.title,
+      updatedAt: 100,
+      stateStartedAt: 100,
+      stateHistory: [],
+      ...(direct ? { providerSession: { key: 'session_id', id: session.sessionId } } : {})
+    }
+    const lookup = (entries: AgentStatusEntry[]) => {
+      const state = {
+        agentStatusByPaneKey: Object.fromEntries(entries.map((entry, i) => [String(i), entry])),
+        retainedAgentsByPaneKey: {},
+        sleepingAgentSessionsByPaneKey: {},
+        tabsByWorktree: {},
+        terminalLayoutsByTabId: {}
+      }
+      const indexed = findAiVaultSessionLiveStateInIndex(
+        buildAiVaultOriginalPaneIndex(state),
+        selectedSession
+      )
+      expect(findAiVaultSessionLiveState(state, selectedSession)).toBe(indexed)
+      return indexed
+    }
+    renderRow({ liveState: lookup([selected]) })
+    expect(screen.getByLabelText('Monitoring background tasks')).toBeTruthy()
+    cleanup()
+    renderRow({ liveState: lookup([{ ...selected, workingMode: undefined }]) })
+    expect(screen.getByLabelText('Working')).toBeTruthy()
+    cleanup()
+    renderRow({
+      liveState: lookup([{ ...selected, state: 'done', workingMode: undefined, interrupted: true }])
+    })
+    expect(screen.getByLabelText('Interrupted')).toBeTruthy()
+    for (const [outcome, label] of [
+      ['failure', 'Failed'],
+      ['unconfirmed', 'Couldn’t confirm']
+    ] as const) {
+      cleanup()
+      renderRow({
+        liveState: lookup([
+          {
+            ...selected,
+            state: 'done',
+            workingMode: undefined,
+            mainAgent: { state: 'done', outcome, stateStartedAt: 100 }
+          }
+        ])
+      })
+      expect(screen.getByLabelText(label)).toBeTruthy()
+    }
+    cleanup()
+    renderRow({ liveState: lookup([{ ...selected, state: 'done', workingMode: undefined }]) })
+    expect(screen.queryByLabelText('Done')).toBeNull()
+    if (!direct) {
+      expect(lookup([selected, selected])).toBeNull()
+    }
+  }
+)
 
 function expectAgentIdentity(): void {
   const metadata = screen.getByTestId('ai-vault-session-metadata')

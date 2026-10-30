@@ -12,12 +12,15 @@ import {
 } from '../../../shared/agent-session-provider-handle-encoding'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
-import { withNativeChatCutTurnNotices } from '../../../shared/native-chat-cut-turn-notice'
+import { withNativeChatCutTurnNotices } from '../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
 import {
   nativeChatRowTurnKeys,
   nativeChatTurnBarRows
-} from '../../../shared/native-chat-turn-grouping'
-import { nativeChatTurnFold, nativeChatTurnFoldRow } from '../../../shared/native-chat-turn-fold'
+} from '../../../shared/native-chat/transcript/native-chat-turn-grouping'
+import {
+  nativeChatTurnFold,
+  nativeChatTurnFoldRow
+} from '../../../shared/native-chat/transcript/native-chat-turn-fold'
 import { nativeChatTurnMembership } from '../../../shared/native-chat-turn-membership'
 import { projectStructuredItemsToNativeChat } from '../../../shared/structured-agent-session-projection'
 import { GROK_ACP_DIALECT } from '../../acp/acp-dialects/grok-dialect'

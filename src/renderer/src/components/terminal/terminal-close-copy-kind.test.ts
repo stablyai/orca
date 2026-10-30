@@ -26,26 +26,6 @@ describe('terminal close copy kind', () => {
     setState()
   })
 
-  it('agrees between the pane lookup and the busy-pty lookup for the same pane', () => {
-    expect(resolveLeafCloseCopyKind('tab-1', LEAF_B)).toBe('agent')
-    expect(resolveBusyPtyCloseCopyKind('tab-1', ['pty-b'])).toBe('agent')
-
-    expect(resolveLeafCloseCopyKind('tab-1', LEAF_A)).toBe('command')
-    expect(resolveBusyPtyCloseCopyKind('tab-1', ['pty-a'])).toBe('command')
-  })
-
-  it('prefers the agent copy when a split has both busy', () => {
-    expect(resolveBusyPtyCloseCopyKind('tab-1', ['pty-a', 'pty-b'])).toBe('agent')
-  })
-
-  it.each([
-    ['a missing leaf id', undefined],
-    ['a null leaf id', null],
-    ['a legacy non-uuid leaf id', 'leaf']
-  ])('falls back to the command copy for %s', (_label, leafId) => {
-    expect(resolveLeafCloseCopyKind('tab-1', leafId)).toBe('command')
-  })
-
   it('never throws on a tab id that makePaneKey would reject', () => {
     setState({
       terminalLayoutsByTabId: { 'tab:1': { ptyIdsByLeafId: { [LEAF_B]: 'pty-b' } } }

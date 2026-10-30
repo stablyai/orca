@@ -89,6 +89,8 @@ export type SshTarget = {
   managedServerLeaveBehind?: { confirmedAt: string }
   /** Main-owned: updating the managed server to this app version failed; retried once it changes. */
   managedServerUpdateFailure?: { reason: string; appVersion: string }
+  /** Main-owned: the user stopped and removed this host's server; only an explicit Connect deploys again. */
+  managedServerRemoved?: { removedAt: string }
   orcadFence?: {
     environmentId: string
     /** The retained source holds projects no move took: the host is unserved until moved again. */
@@ -107,6 +109,7 @@ export type SshTargetCreateInput = Omit<
   | 'managedServerMoveOffered'
   | 'managedServerLeaveBehind'
   | 'managedServerUpdateFailure'
+  | 'managedServerRemoved'
 >
 export type SshTargetUpdateInput = Partial<SshTargetCreateInput>
 
@@ -306,6 +309,8 @@ export type SshManagedServerStatus =
       serving?: SshManagedServerServingNote
       /** Set on the connect that moved this host's projects, when some were linked instead. */
       linked?: SshManagedServerLinkedProject[]
+      /** Set on the connect that moved this host's automations, when its server kept some off. */
+      automationsLeftDisabled?: number
       /**
        * macOS 15+: the SSH session that started this server proved exited, so its terminals may
        * have lost Local Network access (#25934). Absent when unknown, e.g. an older launch.

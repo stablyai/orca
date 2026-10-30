@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, expectTypeOf, it } from 'vitest'
 import {
   decodePersistedAgentSessionProviderHandleChain,
   encodePersistedAgentSessionProviderHandleChain,
@@ -17,7 +17,12 @@ import {
   decodePersistedAgentSessionProviderHandle,
   encodePersistedAgentSessionProviderHandle
 } from './agent-session-provider-handle-encoding'
-import { isPersistedAgentSessionRecord } from './agent-session-record'
+import {
+  isPersistedAgentSessionRecord,
+  type AgentSessionRecord,
+  type AgentSessionLease
+} from './agent-session-record'
+import { normalizeLegacyHandoffLease } from './agent-session-legacy-handoff-lease'
 import {
   decodePersistedAgentSessionRecord,
   encodeAgentSessionRecord
@@ -98,6 +103,18 @@ const STORED_CODEX_ROW = JSON.stringify({
 })
 
 describe('a record row older builds wrote', () => {
+  it.each([undefined, 0, 6, 7, 9, Number.MAX_SAFE_INTEGER])(
+    'keeps a valid legacy next-fence floor %s readable',
+    (minimumNextFence) => {
+      const record = agentSessionRecordFixture(agentSessionLeaseFixture({ minimumNextFence }))
+      const stored = JSON.parse(JSON.stringify(encodeAgentSessionRecord(record)))
+      expect(isPersistedAgentSessionRecord(stored)).toBe(true)
+      expect(decodePersistedAgentSessionRecord(stored).record.lease.minimumNextFence).toBe(
+        minimumNextFence
+      )
+    }
+  )
+
   it.each([
     ['Claude', STORED_CLAUDE_ROW],
     ['Codex', STORED_CODEX_ROW]
@@ -109,8 +126,21 @@ describe('a record row older builds wrote', () => {
     }
     const { record, normalized } = decodePersistedAgentSessionRecord(stored)
     expect(normalized).toBe(false)
+    expectTypeOf(record).toMatchTypeOf<AgentSessionRecord>()
     expect(JSON.stringify(encodeAgentSessionRecord(record))).toBe(row)
   })
+
+  it.each([undefined, 25, 0, -1, '25', null, Number.NaN, Number.POSITIVE_INFINITY])(
+    'normalizes a saved sleep value %s without hiding the conversation',
+    (sleptAt) => {
+      const stored = { ...encodeAgentSessionRecord(agentSessionRecordFixture()), sleptAt }
+      expect(isPersistedAgentSessionRecord(stored)).toBe(true)
+      const decoded = decodePersistedAgentSessionRecord(stored)
+      expectTypeOf(decoded.record).toMatchTypeOf<AgentSessionRecord>()
+      expect(decoded.record.sleptAt).toBe(sleptAt === 25 ? 25 : undefined)
+      expect(decoded.normalized).toBe(sleptAt !== undefined && sleptAt !== 25)
+    }
+  )
 
   it('hands shared code only the neutral handle', () => {
     const stored: unknown = JSON.parse(STORED_CLAUDE_ROW)
@@ -128,11 +158,33 @@ describe('a record row older builds wrote', () => {
     const record = agentSessionRecordFixture()
     const stored = encodeAgentSessionRecord(record)
     expect(decodePersistedAgentSessionRecord(stored)).toEqual({ record, normalized: false })
-    const legacy = { ...stored, lease: { ...stored.lease, runtimeKind: 'tui' as const } }
-    expect(decodePersistedAgentSessionRecord(legacy)).toEqual({
-      record: { ...record, lease: { ...record.lease, claimStatus: 'conflicted' } },
+    const lease = {
+      ...stored.lease,
+      runtimeKind: 'tui' as const,
+      handoffStage: 'preparing' as const,
+      claimStatus: 'live' as const
+    }
+    const normalized = normalizeLegacyHandoffLease(lease)
+    expectTypeOf(normalized.runtimeKind).toEqualTypeOf<AgentSessionLease['runtimeKind']>()
+    expectTypeOf(normalized.handoffStage).toEqualTypeOf<AgentSessionLease['handoffStage']>()
+    expectTypeOf(normalized.claimStatus).toEqualTypeOf<AgentSessionLease['claimStatus']>()
+    const decoded = decodePersistedAgentSessionRecord({ ...stored, lease })
+    expectTypeOf(decoded.record).toMatchTypeOf<AgentSessionRecord>()
+    expect(decoded).toEqual({
+      record: {
+        ...record,
+        lease: { ...record.lease, claimStatus: 'conflicted', handoffStage: 'recovering' }
+      },
       normalized: true
     })
+    const unknownFloor: unknown = 'bad'
+    const observed = decodePersistedAgentSessionRecord({
+      ...stored,
+      lease: { ...lease, minimumNextFence: unknownFloor }
+    })
+    expectTypeOf(observed.record.lease.minimumNextFence).toEqualTypeOf<unknown>()
+    expectTypeOf(observed.record).not.toMatchTypeOf<AgentSessionRecord>()
+    expect(observed.record.lease.minimumNextFence).toBe('bad')
   })
 })
 
@@ -368,4 +420,73 @@ describe('a chat whose saved conversation could not be restored', () => {
     stored[3].replaces.key = agentSessionProviderHandleKey(acp('s-1'))
     expect(decodePersistedAgentSessionProviderHandleChain(stored)).toBeNull()
   })
+})
+
+it.each([
+  null,
+  'open',
+  {},
+  { state: 'open', at: -1 },
+  { state: 'settled', at: 10, outcome: 'newer' },
+  { state: 'open', at: 10, prompt: 'p'.repeat(281) }
+])('ignores malformed optional last-turn metadata: %j', (lastTurn) => {
+  const stored = { ...encodeAgentSessionRecord(agentSessionRecordFixture()), lastTurn }
+  expect(isPersistedAgentSessionRecord(stored)).toBe(true)
+  expect(decodePersistedAgentSessionRecord(stored).record.lastTurn).toBeUndefined()
+})
+
+it('preserves the saved turn and unknown JSON through a record transition', () => {
+  const stored = {
+    ...encodeAgentSessionRecord(agentSessionRecordFixture()),
+    lastTurn: { state: 'settled', outcome: 'success', at: 10 },
+    laterField: 'keep'
+  }
+  const record = decodePersistedAgentSessionRecord(stored).record
+  expect(encodeAgentSessionRecord({ ...record, updatedAt: 20 })).toMatchObject({
+    lastTurn: stored.lastTurn,
+    laterField: 'keep'
+  })
+})
+
+it('stores a delivered kill in the form older builds read and reads only that exact pair back', () => {
+  const evidence = { detail: 'killed', observedAt: 40, ownerFence: 7 } as const
+  const withEvidence = (deathEvidence: unknown) => ({
+    ...encodeAgentSessionRecord(agentSessionRecordFixture()),
+    lease: { ...agentSessionLeaseFixture({ claimStatus: 'released' }), deathEvidence }
+  })
+  const killed = agentSessionRecordFixture(
+    agentSessionLeaseFixture({
+      claimStatus: 'released',
+      deathEvidence: { kind: 'kill-delivered', ...evidence }
+    })
+  )
+  const stored = encodeAgentSessionRecord(killed)
+  expect(stored.lease.deathEvidence).toEqual({ kind: 'pid-absent', delivery: 'kill', ...evidence })
+  expect(isPersistedAgentSessionRecord(stored)).toBe(true)
+  expect(decodePersistedAgentSessionRecord(stored).record).toEqual(killed)
+  // Rows written before this encoding, a plain absent pid, and stale or foreign markers.
+  for (const [saved, read] of [
+    [
+      { kind: 'kill-delivered', ...evidence },
+      { kind: 'kill-delivered', ...evidence }
+    ],
+    [
+      { kind: 'pid-absent', ...evidence },
+      { kind: 'pid-absent', ...evidence }
+    ],
+    [
+      { kind: 'pid-absent', delivery: 'signal', ...evidence },
+      { kind: 'pid-absent', ...evidence }
+    ],
+    [
+      { kind: 'exit-observed', delivery: 'kill', ...evidence },
+      { kind: 'exit-observed', ...evidence }
+    ]
+  ]) {
+    const row: unknown = withEvidence(saved)
+    if (!isPersistedAgentSessionRecord(row)) {
+      throw new Error('the stored evidence fixture must pass record validation')
+    }
+    expect(decodePersistedAgentSessionRecord(row).record.lease.deathEvidence).toEqual(read)
+  }
 })

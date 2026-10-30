@@ -15,7 +15,7 @@ import { buildSleepingAgentLaunchConfig } from './sleeping-agent-launch-config'
 import { planHermesStartupQuery } from './hermes-startup-query'
 import { inlineAgentDraftFitsPlatform } from './agent-draft-platform-limit'
 import type { TuiAgent } from './tui-agent'
-import type { SessionOptionValue } from './native-chat-session-options'
+import type { SessionOptionValue } from './native-chat/input/native-chat-session-options'
 import { resolveAgentLaunchCommand } from './tui-agent-launch-command'
 import { appliedSessionOptionProps, buildFlagPromptStartupPlan } from './flag-prompt-startup'
 
@@ -85,11 +85,12 @@ export function buildAgentStartupPlan(args: {
     : baseCommand
   const launchConfig = buildSleepingAgentLaunchConfig({
     ...args,
-    // Picker flags apply once; resumed providers restore their own state and keep only explicit user args.
-    agentCommand: recordedCommand.ok
-      ? recordedCommand.commandWithoutSessionOptions
-      : baseCommand.commandWithoutSessionOptions
+    ...(recordedCommand.ok ? recordedCommand.resumeLaunch : baseCommand.resumeLaunch)
   })
+  // Updater overrides belong to this launch, not the saved session's environment.
+  const agentEnv = baseCommand.startupEnv
+    ? { ...args.agentEnv, ...baseCommand.startupEnv }
+    : args.agentEnv
 
   if (!trimmedPrompt) {
     if (!allowEmptyPromptLaunch) {
@@ -102,7 +103,7 @@ export function buildAgentStartupPlan(args: {
       followupPrompt: null,
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+      ...(agentEnv ? { env: { ...agentEnv } } : {})
     }
   }
 
@@ -121,7 +122,7 @@ export function buildAgentStartupPlan(args: {
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       ...(agent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+      ...(agentEnv ? { env: { ...agentEnv } } : {})
     }
   }
 
@@ -134,7 +135,7 @@ export function buildAgentStartupPlan(args: {
       shell,
       launchConfig,
       sessionOptions: baseCommand.appliedSessionOptions,
-      agentEnv: args.agentEnv
+      agentEnv
     })
   }
 
@@ -143,7 +144,7 @@ export function buildAgentStartupPlan(args: {
       baseCommand: baseCommand.command,
       agentArgs: args.agentArgs,
       prompt: trimmedPrompt,
-      agentEnv: args.agentEnv,
+      agentEnv,
       platform,
       shell,
       isRemote: args.isRemote
@@ -171,7 +172,7 @@ export function buildAgentStartupPlan(args: {
       followupPrompt: null,
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+      ...(agentEnv ? { env: { ...agentEnv } } : {})
     }
   }
 
@@ -183,7 +184,7 @@ export function buildAgentStartupPlan(args: {
       followupPrompt: null,
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+      ...(agentEnv ? { env: { ...agentEnv } } : {})
     }
   }
 
@@ -194,7 +195,7 @@ export function buildAgentStartupPlan(args: {
     followupPrompt: trimmedPrompt,
     launchConfig,
     ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
-    ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+    ...(agentEnv ? { env: { ...agentEnv } } : {})
   }
 }
 
@@ -250,8 +251,7 @@ export function buildAgentDraftLaunchPlan(args: {
     agent === 'omp' ? withFreshOmpLaunch(baseCommand.command, shell) : baseCommand.command
   const launchConfig = buildSleepingAgentLaunchConfig({
     ...args,
-    // Resume must not replay one-time picker flags.
-    agentCommand: baseCommand.commandWithoutSessionOptions
+    ...baseCommand.resumeLaunch
   })
   let plan: AgentDraftLaunchPlan | null = null
   if (config.draftPromptFlag && shell === 'cmd' && /[\r\n]/.test(trimmed)) {

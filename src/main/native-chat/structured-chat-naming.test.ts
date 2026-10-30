@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { OrchestrationDb } from '../runtime/orchestration/db'
 import {
   structuredWorkerOpenTaskTitle,
@@ -355,6 +356,19 @@ describe.each(['claude', 'codex'] as const)('structured %s chat naming', (provid
     expect(state.handle.failure(state.summary.sessionId)).toBeUndefined()
   })
 
+  it('codes the Orca-authored failure when the chat-name agent cannot run', async () => {
+    const state = rig(provider)
+    state.deps.generate = vi.fn(async () => {
+      throw new Error('spawn ENOENT')
+    })
+    state.handle(state.summary, { replay: false })
+    await settle()
+    expect(state.handle.failure(state.summary.sessionId)).toMatchObject({
+      message: 'Orca could not run the chat-name agent.',
+      messageCode: 'agentNotRun'
+    })
+  })
+
   it.each(['read', 'save'] as const)(
     'publishes completion after a rejected %s without a summary',
     async (stage) => {
@@ -366,7 +380,10 @@ describe.each(['claude', 'codex'] as const)('structured %s chat naming', (provid
       const failure = state.handle.failure(id)
       const feed = new StructuredAgentSessionStatusFeed({
         sessions: new Map(),
-        getRecord: state.getRecord,
+        getConversation: () => {
+          const record = state.getRecord()
+          return record ? agentSessionConversationView(record) : null
+        },
         now: () => 100,
         logger: state.deps.logger,
         namingActiveSessionIds: state.handle.activeSessionIds

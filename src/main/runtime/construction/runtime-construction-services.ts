@@ -50,6 +50,7 @@ export abstract class RuntimeConstructionServices {
   abstract listRepos(): Repo[]
   abstract invalidateResolvedWorktreeCache(): void
   abstract invalidateWorktreeScanCacheForRepo(repoId: string): void
+  abstract notifyWorktreesChanged(repoId: string, options?: { invalidateGitScans?: boolean }): void
   protected abstract notifyReposChanged(): void
   protected abstract isPtyKnownExited(ptyId: string): boolean
 
@@ -266,7 +267,11 @@ export abstract class RuntimeConstructionServices {
   protected abstract getTrackedDisplayTitleForPty(ptyId: string): string | null
   protected abstract getLeavesForPty(ptyId: string): RuntimeLeafRecord[]
   abstract notifyMessageArrived(handle: string, messageType?: string): void
-  protected abstract resolveWorktreeSelector(selector: string): Promise<ResolvedWorktree>
+  protected abstract resolveGitWorktreeSelector(selector: string): Promise<ResolvedWorktree>
+  protected abstract resolveWorkspaceSelector(
+    selector: string,
+    options?: { requireUsableFolderPath?: boolean }
+  ): Promise<ResolvedWorktree>
   protected abstract refreshPtyWorktreeRecordsWithControllerInventory(
     resolvedWorktrees: ResolvedWorktree[],
     targetWorktreeId?: string | null,

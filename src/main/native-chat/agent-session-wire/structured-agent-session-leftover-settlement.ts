@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import {
   continuingStructuredAgentSessionInput,
   finalizingStructuredAgentSessionInput
@@ -57,7 +58,7 @@ export async function settleStructuredAgentSessionLeftovers(
     const { journal, sessionId } = input
     const replaced = input.store.replacedRuntime?.(sessionId)
     const liveFence = structuredAgentSessionLiveFence({
-      record,
+      record: agentSessionConversationView(record),
       replaced,
       ...(input.ended ? { ended: input.ended } : {})
     })

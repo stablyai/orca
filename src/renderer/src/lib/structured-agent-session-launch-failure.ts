@@ -10,7 +10,9 @@ import {
   readAgentSessionErrorRefusal,
   type AgentSessionWriteRefusal
 } from '../../../shared/agent-session-write-failure'
+import { wslHostsAvailable } from '@/components/sidebar/use-wsl-hosts-enabled'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
 import { StructuredAgentSessionCreateRefusalError } from './structured-agent-session-launch-errors'
 
 export type StructuredLaunchFailure = AgentSessionWriteRefusal & {
@@ -20,13 +22,29 @@ export type StructuredLaunchFailure = AgentSessionWriteRefusal & {
   owner?: AgentSessionConversationOwner
 }
 
+/** A WSL distro added as a host runs chat itself, so point there once this desktop can add one. */
+function wslHostChatAvailable(): boolean {
+  const state = useAppStore.getState()
+  // Serve-only hides Add WSL distro, so the hint would point at a missing button.
+  return (
+    wslHostsAvailable() &&
+    state.settings?.experimentalWslHosts === true &&
+    state.wslHostsAcceptNewWork
+  )
+}
+
 /** Why a host said it can't run a chat in this workspace, and what to do instead. */
 export function structuredChatUnavailableText(reason?: string): string {
   return reason === 'wsl'
-    ? translate(
-        'components.native-chat.explicitChatWsl',
-        'Chat is not available in WSL. Open the agent in a terminal instead.'
-      )
+    ? wslHostChatAvailable()
+      ? translate(
+          'components.native-chat.explicitChatWslAddHost',
+          'Chat is not available in a WSL folder opened from Windows. Add the distro as a WSL host (Add a project → Add remote host → Add WSL distro) to chat there, or open the agent in a terminal.'
+        )
+      : translate(
+          'components.native-chat.explicitChatWsl',
+          'Chat is not available in WSL. Open the agent in a terminal instead.'
+        )
     : reason === 'remote'
       ? translate(
           'components.native-chat.explicitChatSsh',

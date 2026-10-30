@@ -72,12 +72,16 @@ export function hostAgentStatusPiercesClientAuthority(entry: AgentStatusEntry): 
   )
 }
 
-/** Byte-derived ownership requires transport claim plus a write; teardown releases it back to host. */
+/** Only the current byte-derived row can fence host snapshots; adopting a host row yields authority. */
 export function isClientOwnedAgentStatus(
   paneKey: string,
   existing: AgentStatusEntry | undefined
 ): existing is AgentStatusEntry {
-  return existing !== undefined && isClientAuthoritativeAgentStatusPane(paneKey)
+  return (
+    existing !== undefined &&
+    existing.mirroredEvidenceReceivedAt === undefined &&
+    isClientAuthoritativeAgentStatusPane(paneKey)
+  )
 }
 
 /** When host and client compete, stale client status yields to host; ownership alone still protects against host omission. */
@@ -87,6 +91,19 @@ export function isFencedClientAgentStatus(
   now: number
 ): existing is AgentStatusEntry {
   return isClientOwnedAgentStatus(paneKey, existing) && isAgentStatusFresh(existing, now)
+}
+
+/** A fresh client byte writer keeps the pane unless the host carries a host-only state class. */
+export function clientAgentStatusFencesHost(
+  paneKey: string,
+  existing: AgentStatusEntry | undefined,
+  hostEntry: AgentStatusEntry | null | undefined,
+  now: number
+): boolean {
+  return (
+    isFencedClientAgentStatus(paneKey, existing, now) &&
+    !(hostEntry && hostAgentStatusPiercesClientAuthority(hostEntry))
+  )
 }
 
 export function batchAgentPaneKeysForTabs(
@@ -117,6 +134,7 @@ export function updateBatchAgentPaneKey(
   present: boolean,
   batchContext?: WebSessionTabsBatchContext
 ): void {
+  batchContext?.changedAgentPaneKeys?.add(paneKey)
   const tabId = parsePaneKey(paneKey)?.tabId
   const index = batchContext?.agentPaneKeysByTabId
   if (!tabId || !index) {
@@ -192,6 +210,7 @@ export function buildRetractedMirroredTabSweepPatch(
     const paneKeys = scopedPaneKeysByTabId.get(tabId)
     const patch = buildRetiredTerminalTabStateSweepPatch(sweepState, [tabId], undefined, {
       preserveActivityClearedState: true,
+      changedAgentPaneKeys: batchContext?.changedAgentPaneKeys,
       ...(paneKeys ? { paneKeys } : {})
     })
     if (patch) {

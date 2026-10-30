@@ -85,7 +85,7 @@ export function parseFileWriteResult(value: unknown): FileWriteResult {
 }
 
 /** Only a not-found answer proves the file is gone; a lost transport proves nothing. */
-function isConfirmedFileNotFoundError(error: unknown): boolean {
+export function isConfirmedFileNotFoundError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false
   }

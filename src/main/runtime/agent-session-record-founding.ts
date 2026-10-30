@@ -1,3 +1,7 @@
+import {
+  AGENT_SESSION_FOUNDING_FENCE,
+  agentSessionNeverStarted
+} from '../../shared/agent-session-conversation-view'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../shared/agent-chat-permission-mode'
 import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
@@ -38,21 +42,8 @@ export function agentSessionRecordIdentityFields(
   }
 }
 
-export const AGENT_SESSION_FOUNDING_FENCE = 1
-
 /** No reservation, owner or provider handle means no agent ever started. */
-export function structuredSessionNeverStarted(record: AgentSessionRecord): boolean {
-  const { lease } = record
-  return (
-    lease.claimStatus === 'released' &&
-    lease.runtimeFence === AGENT_SESSION_FOUNDING_FENCE &&
-    lease.minimumNextFence === undefined &&
-    lease.ownerProcess === null &&
-    lease.reservedSpawnToken === null &&
-    lease.handoffStage === null &&
-    record.providerHandleChain.length === 0
-  )
-}
+export const structuredSessionNeverStarted = agentSessionNeverStarted
 
 /** An empty handle chain starts a fresh conversation on first send rather than resuming one. */
 export function foundAgentSessionRecord(

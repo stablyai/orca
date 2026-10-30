@@ -1,3 +1,4 @@
+import { migrateActionPermissionArgs } from '../../../shared/source-control-action-permission-lift'
 import { homedir } from 'node:os'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type {
@@ -89,12 +90,29 @@ export function prepareLoadedTerminalSettings(
     markNeedsSave()
   }
   const legacyCommitMessageAi = parsed.settings?.commitMessageAi
-  const migratedSourceControlAi = rawSourceControlAiMissing
+  const sourceBeforeNormalization = rawSourceControlAiMissing
     ? sourceControlAiSettingsFromLegacy(legacyCommitMessageAi ?? defaults.settings.commitMessageAi)
-    : mergeLegacyCommitMessageAiIntoSourceControlAi(
-        parsed.settings?.sourceControlAi,
-        legacyCommitMessageAi
-      )
+    : rawSourceControlAi
+  const sourceActions = {
+    ...sourceBeforeNormalization.launchActionDefaults,
+    ...sourceBeforeNormalization.actions
+  }
+  const actions = migrateActionPermissionArgs(sourceActions)
+  if (actions !== sourceActions) {
+    markNeedsSave()
+  }
+  const sourceWithActions = { ...sourceBeforeNormalization, actions }
+  const migratedSourceControlAi = rawSourceControlAiMissing
+    ? sourceWithActions
+    : mergeLegacyCommitMessageAiIntoSourceControlAi(sourceWithActions, legacyCommitMessageAi)
+  migratedExternalVisibility.repos = migratedExternalVisibility.repos.map((repo) => {
+    const actionOverrides = migrateActionPermissionArgs(repo.sourceControlAi?.actionOverrides)
+    if (actionOverrides === repo.sourceControlAi?.actionOverrides) {
+      return repo
+    }
+    markNeedsSave()
+    return { ...repo, sourceControlAi: { ...repo.sourceControlAi, actionOverrides } }
+  })
   // Legacy Option-as-Alt true broke non-US characters; let the layout probe choose once.
   const rawOptionAsAlt = parsed.settings?.terminalMacOptionAsAlt
   const alreadyMigrated = parsed.settings?.terminalMacOptionAsAltMigrated === true

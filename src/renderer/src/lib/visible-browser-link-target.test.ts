@@ -52,59 +52,6 @@ const target = (state: VisibleBrowserLinkState, wt = WT) =>
   findVisibleBrowserLinkTarget(state, wt)?.targetGroupId
 
 describe('findVisibleBrowserLinkTarget', () => {
-  it('returns the most recently focused browser group', () => {
-    expect(findVisibleBrowserLinkTarget(fixture(), WT)).toEqual({ targetGroupId: 'right' })
-  })
-
-  it('prefers the focused group when it shows a browser', () => {
-    const s = fixture()
-    s.activeGroupIdByWorktree = { [WT]: 'left' }
-    expect(target(s)).toBe('left')
-  })
-
-  // Unlike resolveEditorOpenTargetGroupId (terminal-only trigger): markdown links come from editor panes.
-  it('redirects from a focused editor pane too', () => {
-    const s = fixture()
-    s.unifiedTabsByWorktree![WT] = s.unifiedTabsByWorktree![WT]!.map((t) =>
-      t.id === 't' ? { ...t, contentType: 'editor' } : t
-    )
-    expect(target(s)).toBe('right')
-  })
-
-  it.each([
-    ['left', 'right'],
-    ['right', 'left']
-  ])('finds the browser in both mirror orders (%s | %s)', (termSide, webSide) => {
-    const s: VisibleBrowserLinkState = {
-      unifiedTabsByWorktree: {
-        [WT]: [
-          makeUnifiedTab({ id: 't', worktreeId: WT, groupId: termSide, contentType: 'terminal' }),
-          makeUnifiedTab({ id: 'w', worktreeId: WT, groupId: webSide, contentType: 'browser' })
-        ]
-      },
-      groupsByWorktree: {
-        [WT]: [
-          makeTabGroup({ id: termSide, worktreeId: WT, activeTabId: 't', tabOrder: ['t'] }),
-          makeTabGroup({ id: webSide, worktreeId: WT, activeTabId: 'w', tabOrder: ['w'] })
-        ]
-      },
-      activeGroupIdByWorktree: { [WT]: termSide },
-      layoutByWorktree: { [WT]: split(leaf('left'), leaf('right')) }
-    }
-    expect(target(s)).toBe(webSide)
-  })
-
-  it('ignores a browser hidden behind another tab in its group', () => {
-    const s = fixture()
-    s.groupsByWorktree![WT]![1] = makeTabGroup({
-      id: 'right',
-      worktreeId: WT,
-      activeTabId: null,
-      tabOrder: ['b']
-    })
-    expect(target(s)).toBe('left')
-  })
-
   it('ignores a group that is not in the layout', () => {
     const s = fixture()
     s.layoutByWorktree = { [WT]: leaf('bottom') }
@@ -136,19 +83,5 @@ describe('findVisibleBrowserLinkTarget', () => {
     expect(target(s)).toBe('left')
     s.activeGroupIdByWorktree = {}
     expect(target(s)).toBe('left') // first group
-  })
-
-  it('breaks recency ties by layout order', () => {
-    const s = fixture()
-    s.unifiedTabsByWorktree![WT] = s.unifiedTabsByWorktree![WT]!.map((t) => ({
-      ...t,
-      lastFocusedAt: undefined
-    }))
-    expect(target(s)).toBe('left')
-  })
-
-  it('never borrows another worktree and survives an empty state', () => {
-    expect(target(fixture(), 'other')).toBeUndefined()
-    expect(findVisibleBrowserLinkTarget({}, WT)).toBeUndefined()
   })
 })

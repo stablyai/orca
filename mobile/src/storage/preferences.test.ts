@@ -479,18 +479,18 @@ describe('host sidebar width preference', () => {
     expect(clampHostSidebarWidth(337.6)).toBe(338)
   })
 
-  it('falls back to the default width for missing, invalid, or unreadable storage', async () => {
+  it('has no saved width for missing, invalid, or unreadable storage', async () => {
     vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
 
-    await expect(loadHostSidebarWidth()).resolves.toBe(340)
+    await expect(loadHostSidebarWidth()).resolves.toBeNull()
 
     vi.mocked(AsyncStorage.getItem).mockResolvedValue('not-a-number')
 
-    await expect(loadHostSidebarWidth()).resolves.toBe(340)
+    await expect(loadHostSidebarWidth()).resolves.toBeNull()
 
     vi.mocked(AsyncStorage.getItem).mockRejectedValue(new Error('storage unavailable'))
 
-    await expect(loadHostSidebarWidth()).resolves.toBe(340)
+    await expect(loadHostSidebarWidth()).resolves.toBeNull()
   })
 
   it('loads and persists clamped sidebar widths', async () => {

@@ -54,7 +54,11 @@ export function registerWslHostIpcBridge(unsubs: (() => void)[]): void {
   if (typeof api.getCapability === 'function') {
     void api
       .getCapability()
-      .then(({ serverFiles }) => useAppStore.getState().setWslHostServerFiles(serverFiles))
+      .then(({ serverFiles, acceptsNewWork }) => {
+        const state = useAppStore.getState()
+        state.setWslHostServerFiles(serverFiles)
+        state.setWslHostsAcceptNewWork(acceptsNewWork !== false)
+      })
       .catch((error) => console.error('Failed to read WSL host capability:', error))
   }
   let stopped = false
@@ -102,8 +106,8 @@ export function registerWslHostIpcBridge(unsubs: (() => void)[]): void {
     // Switching to a workspace on a WSL host (or launch restoring one) is the user acting on it.
     if (entry !== focusEntry) {
       focusEntry = entry
-      if (focusedHost && typeof api.focusHost === 'function') {
-        void api.focusHost({ environmentId: focusedHost }).catch((error) => {
+      if (typeof api.focusHost === 'function') {
+        void api.focusHost({ environmentId: focusedHost ?? null }).catch((error) => {
           console.error('Failed to report the focused WSL host:', error)
         })
       }

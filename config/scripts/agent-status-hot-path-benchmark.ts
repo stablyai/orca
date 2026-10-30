@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
 import type { AgentStatusBatchUpdate } from '@/store/slices/agent-status/agent-status-contract'
-import '@/store/slices/agent-status'
+import '@/store/slices/agent-status/agent-status'
 import { MAX_LIVE_AGENT_STATUSES } from '@/store/slices/agent-status/agent-status-capacity-eviction'
 import {
   createTestStore,

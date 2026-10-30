@@ -1,7 +1,7 @@
 import { Copy } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import type { ResourcePtyRow } from './resource-pty-view-model'
 
 export function resourcePtyBindingLabel(binding: ResourcePtyRow['binding']): string {
@@ -49,7 +49,7 @@ export function ResourcePtyDetails({
     [translate('resourceManager.pty.agentOwnership', 'Agent ownership evidence'), ownership],
     [
       translate('resourceManager.pty.observationTime', 'Observation time'),
-      observedAt === null ? unavailable : new Date(observedAt).toLocaleString()
+      observedAt === null ? unavailable : new Date(observedAt).toLocaleString(getIntlLocale())
     ],
     [
       translate('resourceManager.pty.pid', 'PID'),

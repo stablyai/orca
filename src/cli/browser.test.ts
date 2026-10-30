@@ -710,7 +710,7 @@ describe('orca cli browser waits and viewport flags', () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await main(
-      ['wait', '--selector', '#ready', '--timeout', '12000', '--worktree', 'all', '--json'],
+      ['wait', '--selector', '#ready', '--timeout', '45000', '--worktree', 'all', '--json'],
       '/tmp/not-an-orca-worktree'
     )
 
@@ -718,7 +718,7 @@ describe('orca cli browser waits and viewport flags', () => {
       'browser.wait',
       {
         selector: '#ready',
-        timeout: 12000,
+        timeout: 45000,
         text: undefined,
         url: undefined,
         load: undefined,
@@ -726,7 +726,7 @@ describe('orca cli browser waits and viewport flags', () => {
         state: undefined,
         worktree: undefined
       },
-      { timeoutMs: 17000 }
+      { timeoutMs: 75000 }
     )
   })
 

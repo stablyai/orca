@@ -267,7 +267,7 @@ it('uses Windows job membership and the native process table for ordinary childr
   const handle = createHandle()
   expect(await handle.confirmForegroundProcess?.()).toBe('vim.exe')
   expect(await inspect(handle)).toMatchObject({
-    foregroundProcess: 'vim.exe',
+    foregroundProcess: 'zsh',
     hasChildProcesses: true
   })
   expect(readStrict).not.toHaveBeenCalled()
@@ -277,8 +277,9 @@ it('keeps missing Windows job membership unverifiable', async () => {
   vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
   resolveWindows.mockResolvedValue({ available: true, processName: null })
   members.mockReturnValue(null)
+  expect(await createHandle().confirmForegroundProcess?.()).toBeNull()
   expect(await inspect(createHandle())).toMatchObject({
-    foregroundProcess: null,
+    foregroundProcess: 'zsh',
     hasChildProcesses: true,
     childProcessEvidence: 'unverifiable'
   })

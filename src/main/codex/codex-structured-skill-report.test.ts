@@ -117,7 +117,8 @@ describe('a running Codex chat lists and runs the skills Codex loaded', () => {
         }),
         []
       ],
-      [retyped, []]
+      [retyped, []],
+      [edit(body, { text: '/review', skills: [{ name: 'review', path: REPO_REVIEW }] }), []]
     ] as const) {
       expect(edited).toMatchObject(retainedFields)
       const adapter = await acquired(codex)

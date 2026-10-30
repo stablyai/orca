@@ -24,6 +24,7 @@ export const HOST_NODE_DOWNLOAD_NO_TOOL = 'ORCA_NODE_HOST_DOWNLOAD_NO_TOOL'
 // One shared budget permits ~70 KB/s downloads without multiplying timeouts per source.
 const HOST_DOWNLOAD_BUDGET_SECONDS = 840
 const HOST_DOWNLOAD_MIN_ATTEMPT_SECONDS = 30
+const HOST_DOWNLOAD_CONNECT_TIMEOUT_SECONDS = 20
 // ulimit -f counts 512-byte blocks; match the desktop's 200 MiB cap.
 const HOST_DOWNLOAD_MAX_BLOCKS = (200 * 1024 * 1024) / 512
 // Leave exec time for hashing and reporting after the download budget expires.
@@ -40,8 +41,15 @@ export function hostNodeRuntimeUrl(target: NodeRuntimeTarget): string {
 /** Accept only a pinned archive; exit 0 with a status marker even when downloading fails. */
 export function hostDownloadNodeRuntimeCommand(
   host: RemoteHostPlatform,
-  args: { stageDir: string; target: NodeRuntimeTarget; mirror?: string | null }
+  args: {
+    stageDir: string
+    target: NodeRuntimeTarget
+    mirror?: string | null
+    /** Per-source connect budget; a dropped connection costs this once per source. */
+    connectTimeoutSeconds?: number
+  }
 ): string {
+  const connectTimeout = args.connectTimeoutSeconds ?? HOST_DOWNLOAD_CONNECT_TIMEOUT_SECONDS
   const asset = pinnedNodeRuntimeAsset(args.target)
   const file = quotePosixShell(joinRemotePath(host, args.stageDir, asset.archive))
   // Mirrors carry only the official tree; unofficial builds have one fixed source.
@@ -61,12 +69,12 @@ export function hostDownloadNodeRuntimeCommand(
   const sizeCap = `ulimit -f ${HOST_DOWNLOAD_MAX_BLOCKS} 2>/dev/null`
   // wget lacks a total timeout; a silent watchdog avoids host-specific timeout commands and open SSH captures.
   const wget =
-    `wget -q -T 20 -t 1 -O ${file} "$2" & orca_dl_pid=$!; ` +
+    `wget -q -T ${connectTimeout} -t 1 -O ${file} "$2" & orca_dl_pid=$!; ` +
     // Kill the watchdog's sleep too so it cannot linger after wget exits.
     `(trap 'kill "$orca_dl_z" 2>/dev/null; exit 0' TERM; sleep "$orca_dl_t" & orca_dl_z=$!; ` +
     'wait "$orca_dl_z" && kill "$orca_dl_pid") </dev/null >/dev/null 2>&1 & orca_dl_dog=$!; ' +
     'wait "$orca_dl_pid"; orca_dl_s=$?; kill "$orca_dl_dog" 2>/dev/null; exit "$orca_dl_s"'
-  const curl = `curl -fsSLg --connect-timeout 20 --max-time "$orca_dl_t" -o ${file} "$2"`
+  const curl = `curl -fsSLg --connect-timeout ${connectTimeout} --max-time "$orca_dl_t" -o ${file} "$2"`
   return [
     'orca_dl_ok=; orca_dl_out=; orca_dl_tool=',
     'if command -v curl >/dev/null 2>&1; then orca_dl_tool=curl; elif command -v wget >/dev/null 2>&1; then orca_dl_tool=wget; fi',
@@ -152,6 +160,7 @@ async function downloadNodeRuntimeOnHost(args: {
   target: NodeRuntimeTarget
   desktopError: unknown
   offlineArchivePath?: string
+  hostConnectTimeoutSeconds?: number
   timeoutMs: number
   signal?: AbortSignal
 }): Promise<string> {
@@ -160,7 +169,8 @@ async function downloadNodeRuntimeOnHost(args: {
     hostDownloadNodeRuntimeCommand(args.host, {
       stageDir: args.stageDir,
       target: args.target,
-      mirror
+      mirror,
+      connectTimeoutSeconds: args.hostConnectTimeoutSeconds
     }),
     { signal: args.signal, timeoutMs: args.timeoutMs }
   )
@@ -190,6 +200,8 @@ export async function stageNodeRuntimeArchive(args: {
   stageDir: string
   archivePath: () => Promise<string>
   offlineArchivePath?: string
+  /** See hostDownloadNodeRuntimeCommand. */
+  hostConnectTimeoutSeconds?: number
   exec: (command: string, options: { signal?: AbortSignal; timeoutMs?: number }) => Promise<string>
   upload: (localDir: string) => Promise<void>
   /** Expose the local stage immediately for caller cleanup. */

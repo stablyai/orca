@@ -55,7 +55,7 @@ describe('connector places', () => {
     ])
     expect(JSON.stringify(projects)).not.toContain('/src/')
     const [local, remote] = projects
-    expect(placeLaunchTarget(local!.placeId, 'T1:C9:1')).toEqual({
+    expect(placeLaunchTarget(local!.placeId, 'T1:C9:1', 'slack')).toEqual({
       kind: 'create-worktree',
       create: {
         repo: 'id:orca',
@@ -64,7 +64,7 @@ describe('connector places', () => {
         nameWasGenerated: true
       }
     })
-    expect(placeLaunchTarget(remote!.placeId, 'T1:C9:1')).toMatchObject({
+    expect(placeLaunchTarget(remote!.placeId, 'T1:C9:1', 'slack')).toMatchObject({
       create: { repo: 'id:orca', repoHostId: 'ssh:box' }
     })
   })
@@ -80,7 +80,7 @@ describe('connector places', () => {
       )
     )
     expect(folder).toMatchObject({ name: 'Docs', kind: 'folder', where: { kind: 'local' } })
-    expect(placeLaunchTarget(folder!.placeId, 'd1')).toEqual({
+    expect(placeLaunchTarget(folder!.placeId, 'd1', 'slack')).toEqual({
       kind: 'create-folder-workspace',
       create: { projectGroupId: 'g1', name: expect.stringMatching(/^slack-[0-9a-f]{8}$/) }
     })
@@ -88,13 +88,17 @@ describe('connector places', () => {
 
   it('derives the same worktree name for a resent start, and refuses a place it cannot read', () => {
     const [project] = connectorProjects(store([repo({ id: 'orca' })]))
-    expect(placeLaunchTarget(project!.placeId, 'd1')).toEqual(
-      placeLaunchTarget(project!.placeId, 'd1')
+    expect(placeLaunchTarget(project!.placeId, 'd1', 'slack')).toEqual(
+      placeLaunchTarget(project!.placeId, 'd1', 'slack')
     )
-    expect(placeLaunchTarget(project!.placeId, 'd1')).not.toEqual(
-      placeLaunchTarget(project!.placeId, 'd2')
+    expect(placeLaunchTarget(project!.placeId, 'd1', 'slack')).not.toEqual(
+      placeLaunchTarget(project!.placeId, 'd2', 'slack')
     )
-    expect(placeLaunchTarget('not-a-place', 'd1')).toBeNull()
+    expect(placeLaunchTarget('not-a-place', 'd1', 'slack')).toBeNull()
+    // The workspace is named for where the conversation came from.
+    expect(placeLaunchTarget(project!.placeId, 'd1', 'linear')).toMatchObject({
+      create: { name: expect.stringMatching(/^linear-[0-9a-f]{8}$/) }
+    })
   })
 
   it('lists the most recently used projects first, at most maxHelloProjects, with short names', () => {

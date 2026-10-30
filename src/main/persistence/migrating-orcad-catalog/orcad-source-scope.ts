@@ -1,5 +1,12 @@
-import { requireOrcadMigrationSshSource } from '../../../shared/orcad-migration/orcad-migration-source-kind'
-import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../shared/execution-host'
+import {
+  isOrcadMigrationLocalWslSource,
+  requireOrcadMigrationSshSource
+} from '../../../shared/orcad-migration/orcad-migration-source-kind'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  toSshExecutionHostId
+} from '../../../shared/execution-host'
 import type {
   OrcadMigrationCatalogPayload,
   OrcadMigrationManifestSource
@@ -14,10 +21,7 @@ import type { Repo } from '../../../shared/repo-types'
 import { ownerKeyBelongsToRepo } from '../../orca-profiles/profile-project-worktree-identity'
 import { repoBelongsToOrcadSource } from './orcad-source-ownership'
 
-export type OrcadMigrationSourceScope = {
-  targetId: string
-  targetGeneration: number | null
-  hostId: ReturnType<typeof toSshExecutionHostId>
+type OrcadMigrationScopeRows = {
   repoIds: ReadonlySet<string>
   folderWorkspaceKeys: ReadonlySet<string>
   /** Shared bare repo IDs cannot prove host ownership, so never move or subtract them. */
@@ -26,22 +30,57 @@ export type OrcadMigrationSourceScope = {
   partitionHostId?: string
 }
 
-export function orcadMigrationPartitionScope(
-  scope: OrcadMigrationSourceScope,
+/** A relay-era SSH target: its rows name the target, and live on the target's host id. */
+export type OrcadMigrationSshSourceScope = OrcadMigrationScopeRows & {
+  kind: 'ssh-relay'
+  targetId: string
+  targetGeneration: number | null
+  hostId: ReturnType<typeof toSshExecutionHostId>
+}
+
+/** Local projects inside one WSL distro: rows live on host `local`, and no SSH target is involved. */
+export type OrcadMigrationLocalWslSourceScope = OrcadMigrationScopeRows & {
+  kind: 'local-wsl'
+  targetId: null
+  targetGeneration: null
+  hostId: typeof LOCAL_EXECUTION_HOST_ID
+}
+
+export type OrcadMigrationSourceScope =
+  | OrcadMigrationSshSourceScope
+  | OrcadMigrationLocalWslSourceScope
+
+/**
+ * An SSH conversion moves every row its host holds, so an unmatched host row is an error. A WSL move
+ * takes some of host `local`'s projects; the rest are another project's, never this move's.
+ */
+export function orcadMigrationScopeOwnsWholeHost(scope: OrcadMigrationSourceScope): boolean {
+  return scope.kind === 'ssh-relay'
+}
+
+/** The scope as seen from one session partition. */
+export function orcadMigrationPartitionScope<T extends OrcadMigrationSourceScope>(
+  scope: T,
   partitionHostId: string
-): OrcadMigrationSourceScope {
+): T {
   return { ...scope, partitionHostId }
 }
 
-export function createOrcadMigrationSourceScope(args: {
+type OrcadMigrationScopeArgs = {
   source: OrcadMigrationManifestSource
   catalog: OrcadMigrationCatalogPayload
   /** Detect repo IDs shared by other hosts. */
   repos: readonly Repo[]
-}): OrcadMigrationSourceScope {
+}
+
+/** For the SSH conversion's own steps (census, subtraction): a WSL manifest reaching them throws. */
+export function createOrcadMigrationSourceScope(
+  args: OrcadMigrationScopeArgs
+): OrcadMigrationSshSourceScope {
   const repoIds = new Set(args.catalog.repositories.map((repo) => repo.id))
   const source = requireOrcadMigrationSshSource(args.source)
   return {
+    kind: 'ssh-relay',
     targetId: source.sshTargetId,
     targetGeneration: source.sshTargetGeneration,
     hostId: toSshExecutionHostId(source.sshTargetId),
@@ -53,6 +92,34 @@ export function createOrcadMigrationSourceScope(args: {
       args.repos
         .filter(
           (repo) => repoIds.has(repo.id) && !repoBelongsToOrcadSource(repo, source.sshTargetId)
+        )
+        .map((repo) => repo.id)
+    )
+  }
+}
+
+/** The scope the dormant-state export reads, for either source kind. */
+export function createOrcadMigrationExportScope(
+  args: OrcadMigrationScopeArgs
+): OrcadMigrationSourceScope {
+  if (!isOrcadMigrationLocalWslSource(args.source)) {
+    return createOrcadMigrationSourceScope(args)
+  }
+  const repoIds = new Set(args.catalog.repositories.map((repo) => repo.id))
+  return {
+    kind: 'local-wsl',
+    targetId: null,
+    targetGeneration: null,
+    hostId: LOCAL_EXECUTION_HOST_ID,
+    repoIds,
+    folderWorkspaceKeys: new Set(
+      args.catalog.folderWorkspaces.map((workspace) => `folder:${workspace.id}`)
+    ),
+    // Another host registering the same repo id makes its unqualified keys ambiguous.
+    sharedRepoIds: new Set(
+      args.repos
+        .filter(
+          (repo) => repoIds.has(repo.id) && getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID
         )
         .map((repo) => repo.id)
     )
@@ -97,6 +164,22 @@ export function orcadMigrationOwnerMatchesScope(
   const parsed = parseWorkspaceKey(rawValue)
   return (
     parsed?.type === 'folder' && scope.folderWorkspaceKeys.has(`folder:${parsed.folderWorkspaceId}`)
+  )
+}
+
+/**
+ * An unqualified key naming a moved repo that another host also registers: it may be this move's
+ * row or the other host's, so a WSL move can neither carry nor ignore what it owns.
+ */
+export function orcadMigrationOwnerKeyIsAmbiguous(
+  value: string | null | undefined,
+  scope: OrcadMigrationSourceScope
+): boolean {
+  if (!value || isWorktreeHostIdentity(value)) {
+    return false
+  }
+  return [...scope.sharedRepoIds].some(
+    (repoId) => scope.repoIds.has(repoId) && ownerKeyBelongsToRepo(value, repoId)
   )
 }
 

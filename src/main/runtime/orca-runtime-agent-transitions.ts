@@ -1,4 +1,5 @@
 import { AgentTransitionDetector } from '../agent-hooks/agent-transition-detector'
+import type { ConnectorCloud } from '../connector-cloud/connector-cloud'
 import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
 import { installExternalConversations } from '../external-conversations/external-conversations-install'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-session-contracts'
@@ -48,6 +49,17 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithMig
   /** The connector seam while `experimentalConnectors` is on; null refuses every connector call. */
   getExternalConversationSeam(): ExternalConversationSeam | null {
     return this.externalConversations.current()
+  }
+
+  private connectorCloud: ConnectorCloud | null = null
+
+  /** The desktop's link to the Orca Cloud connector; null in `orca serve` and in builds without cloud auth. */
+  getConnectorCloud(): ConnectorCloud | null {
+    return this.connectorCloud
+  }
+
+  setConnectorCloud(cloud: ConnectorCloud | null): void {
+    this.connectorCloud = cloud
   }
 
   constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithMigrationCatalog>) {

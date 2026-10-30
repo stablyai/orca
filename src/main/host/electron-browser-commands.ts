@@ -8,6 +8,7 @@ import { deleteManagedBrowserProfile } from '../browser/browser-managed-session-
 /** Importing this desktop factory loads the Chromium browser cluster. */
 export function installElectronBrowserCommands(): void {
   setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host), {
+    supportsGoogleCookieClear: () => true,
     clientHosting: true
   })
   setBrowserHostClientProfileResolver((browserProfileId) => {

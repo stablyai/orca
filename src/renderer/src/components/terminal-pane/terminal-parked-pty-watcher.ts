@@ -1,6 +1,6 @@
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { isProvenProcessExit } from '../../../../shared/terminal-exit-cause'
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { useAppStore } from '@/store'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { startParkedTerminalByteWatcher } from './parked-terminal-byte-watcher'

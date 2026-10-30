@@ -26,8 +26,11 @@ vi.mock('@/lib/structured-agent-session-launch-options', () => ({
   getStructuredAgentSessionLaunchSelection: () => null
 }))
 
+import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../src/main/ipc/desktop-renderer-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { agentSessionConversationView } from '../../src/shared/agent-session-conversation-view'
 import { agentSessionRecordFixture } from '../../src/main/native-chat/agent-session-record-test-fixture'
-import type { SessionOptionDescriptor } from '../../src/shared/native-chat-session-options'
+import type { SessionOptionDescriptor } from '../../src/shared/native-chat/input/native-chat-session-options'
 import { createClaudeModelCatalogProbe } from '../../src/main/claude/claude-model-catalog-probe'
 import { createAgentModelCatalogFilePersistence } from '../../src/main/native-chat/agent-model-catalog/agent-model-catalog-persistence'
 import { createAgentModelCatalogService } from '../../src/main/native-chat/agent-model-catalog/agent-model-catalog-service'
@@ -91,10 +94,12 @@ let release: () => void
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'orca-host-auto-mode-'))
   mocks.rpc.mockReset()
+  setLocalRuntimeCapabilitiesForTests(DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES)
   resetHostModelCatalogSnapshotsForTests()
 })
 
 afterEach(() => {
+  setLocalRuntimeCapabilitiesForTests(null)
   rmSync(dir, { recursive: true, force: true })
 })
 
@@ -112,6 +117,7 @@ async function hostCatalog(listingLands: Promise<void>) {
   const modelCatalog = createAgentModelCatalogService({
     store,
     getRecord: () => record,
+    getConversation: () => agentSessionConversationView(record),
     drivesRecord: () => true,
     resolveAccountHome: async () => record.accountHome,
     recordWorkspacePath: async () => join(dir, 'project'),
@@ -148,7 +154,10 @@ async function hostCatalog(listingLands: Promise<void>) {
     deps: {
       adapter: {},
       agents: claudeAndCodexDeclared(),
-      store: { getRecord: () => record },
+      store: {
+        getRecord: () => record,
+        getConversation: () => agentSessionConversationView(record)
+      },
       modelCatalog
     },
     serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
@@ -157,17 +166,27 @@ async function hostCatalog(listingLands: Promise<void>) {
   } as unknown as StructuredAgentSessionMutationContext
   // As the host's RPC methods answer them: the catalog for the chat's folder, and its options.
   mocks.rpc.mockImplementation(
-    (_target: unknown, method: string, params: { waitForListing?: boolean }) =>
-      method === 'agentSession.modelCatalog'
-        ? modelCatalog.read({
-            agent: 'claude',
-            sessionId: SESSION,
-            workspacePath: join(dir, 'project'),
-            ...(params.waitForListing ? { waitForListing: true } : {})
-          })
-        : method === 'agentSession.options'
-          ? readStructuredAgentSessionOptions(context, SESSION, IN_PROCESS_OPTIONS_READER)
-          : new Promise(() => {})
+    (
+      _target: unknown,
+      method: string,
+      params: { waitForListing?: boolean; savedOnly?: boolean }
+    ) => {
+      if (method === 'agentSession.modelCatalog') {
+        const request = {
+          agent: 'claude',
+          sessionId: SESSION,
+          workspacePath: join(dir, 'project'),
+          ...params
+        }
+        if (!params.savedOnly) {
+          void modelCatalog.demand(request)
+        }
+        return modelCatalog.read(request)
+      }
+      return method === 'agentSession.options'
+        ? readStructuredAgentSessionOptions(context, SESSION, IN_PROCESS_OPTIONS_READER)
+        : new Promise(() => {})
+    }
   )
   return { persistence }
 }
@@ -199,17 +218,30 @@ const optionReads = () =>
   mocks.rpc.mock.calls.filter(([, method]) => method === 'agentSession.options').length
 
 describe('Approve for me on a new Claude chat', () => {
-  it('is offered once the background listing lands after the chat opened', async () => {
+  it('is offered before and after the background listing lands', async () => {
     const lands = new Promise<void>((resolve) => (release = resolve))
     await hostCatalog(lands)
     const { result, unmount } = openNewChat()
     // The chat opened before its account was ever listed: the first answers come without a list.
     await waitFor(() => expect(optionReads()).toBe(1))
     await waitFor(() => expect(offered(result.current.optionSnapshot)).toContain('ask'))
-    expect(offered(result.current.optionSnapshot)).not.toContain('auto')
+    expect(offered(result.current.optionSnapshot)).toEqual([
+      'ask',
+      'accept-edits',
+      'auto',
+      'full-access'
+    ])
 
     release()
-    await waitFor(() => expect(offered(result.current.optionSnapshot)).toContain('auto'))
+    await mocks.rpc(undefined, 'agentSession.modelCatalog', { waitForListing: true })
+    await waitFor(() =>
+      expect(offered(result.current.optionSnapshot)).toEqual([
+        'ask',
+        'accept-edits',
+        'auto',
+        'full-access'
+      ])
+    )
     unmount()
   })
 

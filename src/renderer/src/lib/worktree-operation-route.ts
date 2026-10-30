@@ -261,7 +261,7 @@ function resolveOwnerRouteResult(
   }
 
   // Every server row is stamped on arrival; focus cannot make an unstamped row remote.
-  const savedRuntimeIds = state.runtimeEnvironments?.map((environment) => environment.id.trim())
+  const savedRuntimes = state.runtimeEnvironments
   // A listed/detected worktree backed by an unstamped repo proves local identity, matching folder routing despite unrelated saved runtimes (#16733). Stamped rows routed above; a repo alone proves no worktree exists (#16841).
   const localOwnerRoute = hasKnownWorktree
     ? resolveUnstampedLocalWorktreeRoute(state, repoId)
@@ -271,9 +271,9 @@ function resolveOwnerRouteResult(
   }
   // Why: no saved runtime can publish a remote ownerless row; otherwise current detected presence affirms identity under the stamped-writer invariant.
   const mayBeLegacyLocal =
-    savedRuntimeIds === undefined ||
+    savedRuntimes === undefined ||
     (state.runtimeEnvironmentCatalogHydrated === true &&
-      (savedRuntimeIds.length === 0 || hasDetectedWorktree))
+      (savedRuntimes.length === 0 || hasDetectedWorktree))
   return mayBeLegacyLocal
     ? {
         kind: 'resolved',

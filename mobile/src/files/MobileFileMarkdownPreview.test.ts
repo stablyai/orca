@@ -41,7 +41,9 @@ vi.mock('../theme/mobile-theme', () => ({
   colors: { textPrimary: '#fff', textSecondary: '#999' },
   spacing: { xs: 4, sm: 8 },
   radii: { button: 6 },
-  typography: { metaSize: 12 }
+  typography: { metaSize: 12 },
+  getMobileColorScheme: () => 'dark',
+  subscribeMobileColorScheme: () => () => {}
 }))
 
 vi.mock('./mobile-file-preview-styles', () => ({

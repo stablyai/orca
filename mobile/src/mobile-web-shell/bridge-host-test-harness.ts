@@ -73,7 +73,7 @@ export function harness(
     client?: FakeRpcClient
     post?: (json: string) => Promise<void>
     route?: BridgeInitRoute
-    onNavigate?: (href: string) => void
+    onNavigate?: (href: string, replace: boolean) => void
     onNavigateBack?: () => BridgeNavigateBackOutcome
     storage?: Readonly<Record<string, string>>
     readStorage?: () => PageStorageForInit
@@ -132,6 +132,7 @@ export function harness(
       pageReadies += 1
     },
     onPageBackClaim: (claimed) => backClaims.push(claimed),
+    onPageLocation: () => {},
     onPagePainted: () => {
       pagePaints += 1
     },

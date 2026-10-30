@@ -1,5 +1,5 @@
 import { structuredAgentSessionRuntimePermission } from './structured-agent-session-ran-options'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 import { normalizeOptionalField } from '../../../shared/agent-status-field-normalization'
 import { AGENT_MODEL_MAX_LENGTH } from '../../../shared/agent-status-types'
@@ -32,12 +32,15 @@ export function structuredAgentSessionStatusSummary({
 }: {
   sessionId: string
   session: {
-    params: { location: AgentSessionRecord['location']; provider: AgentSessionRecord['provider'] }
+    params: {
+      location: AgentSessionConversationView['location']
+      provider: AgentSessionConversationView['provider']
+    }
     child?: StructuredAgentSessionProviderChild | null
     restartResume?: AgentSessionStatusSummary['restartResume']
   }
   journal: AgentSessionJournal
-  record: AgentSessionRecord | null
+  record: AgentSessionConversationView | null
   state: StructuredAgentSessionStatusState
   starting?: boolean
   stopping: boolean
@@ -50,6 +53,10 @@ export function structuredAgentSessionStatusSummary({
   // Acknowledged record options remain authoritative across model switches.
   const model = normalizeOptionalField(record?.options?.model, AGENT_MODEL_MAX_LENGTH)
   const permissionMode = record?.permissionMode
+  // Published so another device's pick moves the client's option stamp.
+  const effort = record?.options?.effort
+  const fastMode = record?.options?.fastMode
+  const serviceTier = record?.options?.serviceTier
   const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
   return {
     sessionId,
@@ -71,6 +78,9 @@ export function structuredAgentSessionStatusSummary({
       : {}),
     ...(model ? { model } : {}),
     ...(isAgentChatPermissionMode(permissionMode) ? { permissionMode } : {}),
+    ...(effort ? { effort } : {}),
+    ...(fastMode ? { fastMode } : {}),
+    ...(serviceTier ? { serviceTier } : {}),
     ...childWork,
     ...(providerSession ? { providerSession } : {}),
     ...(launchDirectory ? { launchDirectory } : {}),
@@ -82,7 +92,7 @@ export function structuredAgentSessionStatusSummary({
 
 /** The record's name, and the failure to replace it only while that is still the name. */
 export function structuredSummaryConversationNaming(
-  record: AgentSessionRecord | null,
+  record: AgentSessionConversationView | null,
   failure: StructuredChatNamingFailure | undefined
 ): Pick<AgentSessionStatusSummary, 'conversationName' | 'namingError'> {
   const name = record?.conversationName
@@ -92,17 +102,21 @@ export function structuredSummaryConversationNaming(
   return failure?.forName === name
     ? {
         conversationName: name,
-        namingError: { message: failure.message, failedAt: failure.failedAt }
+        namingError: {
+          message: failure.message,
+          failedAt: failure.failedAt,
+          ...(failure.messageCode ? { messageCode: failure.messageCode } : {})
+        }
       }
     : { conversationName: name }
 }
 
 export function renamedStructuredStatusSummary(
   previous: AgentSessionStatusSummary,
-  deps: Pick<StructuredAgentSessionStatusFeedDeps, 'getRecord' | 'namingFailure'>,
+  deps: Pick<StructuredAgentSessionStatusFeedDeps, 'getConversation' | 'namingFailure'>,
   sessionId: string
 ): AgentSessionStatusSummary | null {
-  const record = deps.getRecord(sessionId)
+  const record = deps.getConversation(sessionId)
   const { conversationName: _name, namingError: _error, sleptAt: _sleptAt, ...rest } = previous
   const summary = {
     ...rest,
@@ -119,4 +133,17 @@ export function retainedStructuredStatusSummaries(
   return [...publications].map(
     ({ summary }) => renamedStructuredStatusSummary(summary, deps, summary.sessionId) ?? summary
   )
+}
+
+export function releasedStructuredStatusSummary(
+  previous: AgentSessionStatusSummary
+): AgentSessionStatusSummary {
+  const {
+    hostExecutionOwned: _hostExecutionOwned,
+    hostExecutionPhase: _hostExecutionPhase,
+    stopping: _stopping,
+    restartResume: _restartResume,
+    ...retained
+  } = previous
+  return { ...retained, runtimePermission: null }
 }

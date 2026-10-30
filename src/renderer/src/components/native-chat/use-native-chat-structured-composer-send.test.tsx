@@ -1,12 +1,16 @@
 // @vitest-environment happy-dom
+// @vitest-environment happy-dom
 import { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-send-mutation'
 import {
   clearNativeChatComposerDraftsForTests,
   readNativeChatComposerDraft,
+  hydrateNativeChatComposerDrafts,
+  nativeChatComposerDraftWritesSettled,
   updateNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
-import { renderHook } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { act, cleanup, render, renderHook, screen } from '@testing-library/react'
+import { createRef } from 'react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
@@ -31,6 +35,7 @@ function harness(
     dispatchCommand: (text: string) =>
       dispatchStructuredAgentSessionComposerCommand(text, {
         agent,
+        sessionCommands: structuredTransport.sessionCommands,
         snapshot: [],
         invokeAction: async () => true,
         setOption: async () => true,
@@ -69,12 +74,73 @@ function harness(
   return { send: result.current, structuredTransport, setDraft }
 }
 
+it.each([10, 100])(
+  'ordinary Send skips %i reported commands for prose and still routes slash controls',
+  async (count) => {
+    clearNativeChatComposerDraftsForTests()
+    let kinds = 0
+    let names = 0
+    const onSubmitted = vi.fn()
+    const { send, structuredTransport } = harness('codex', undefined, onSubmitted)
+    structuredTransport.sessionCommands = Array.from({ length: count }, (_, index) => ({
+      get kind() {
+        kinds++
+        return 'command' as const
+      },
+      get name() {
+        names++
+        return `provider-${index}`
+      }
+    }))
+    await send('hello', [])
+    expect(structuredTransport.send).toHaveBeenCalledExactlyOnceWith('hello', [])
+    expect({ kinds, names }).toEqual({ kinds: 0, names: 0 })
+    expect(onSubmitted).toHaveBeenCalledOnce()
+    await send('/compact', [])
+    expect(onSubmitted).toHaveBeenCalledTimes(2)
+    expect(structuredTransport.send).toHaveBeenCalledTimes(1)
+    expect(structuredTransport.onError).toHaveBeenCalledTimes(2)
+    expect(structuredTransport.onError).toHaveBeenNthCalledWith(1, null, undefined)
+    expect(structuredTransport.onError).toHaveBeenNthCalledWith(2, null, undefined)
+    expect({ kinds, names }).toEqual({ kinds: 0, names: 0 })
+  }
+)
+
+it.each([
+  undefined,
+  [],
+  [
+    { name: 'fast', kind: 'command' as const },
+    { name: 'permissions', kind: 'command' as const }
+  ]
+])(
+  'sends provider commands with attachments under inventory %j and retains refused drafts',
+  async (inventory) => {
+    for (const text of ['/fast', '/permissions']) {
+      for (const accepted of [true, false]) {
+        clearNativeChatComposerDraftsForTests()
+        const { send, structuredTransport, setDraft } = harness('codex')
+        structuredTransport.sessionCommands = inventory
+        vi.mocked(structuredTransport.send).mockReturnValue(accepted)
+        updateNativeChatComposerDraft('tab-1:pane', { text, images: [ATTACHMENT] }, 'immediate')
+        await send(text)
+        expect(structuredTransport.send).toHaveBeenCalledExactlyOnceWith(text, [ATTACHMENT])
+        if (accepted) {
+          expect(setDraft).toHaveBeenCalledWith('')
+        } else {
+          expect(setDraft).not.toHaveBeenCalled()
+          expect(readNativeChatComposerDraft('tab-1:pane').text).toBe(text)
+        }
+      }
+    }
+  }
+)
+
 // Host-owned commands send no message and would drop images; pass-through commands carry their attachments.
 describe('attachment guard follows what the host claims', () => {
   it.each([
     ['claude', '/clear'],
-    ['claude', '/model'],
-    ['codex', '/permissions']
+    ['claude', '/model']
   ] as const)('refuses attachments on the host-claimed %s command %s', (agent, text) => {
     const { send, structuredTransport } = harness(agent)
     send(text)
@@ -85,6 +151,8 @@ describe('attachment guard follows what the host claims', () => {
   })
 
   it.each([
+    ['codex', '/permissions'],
+    ['claude', '/fast'],
     ['claude', '/init'],
     ['claude', '/review'],
     ['codex', '/goal ship the fix']
@@ -141,17 +209,12 @@ describe('reports the sends that bring the latest into view', () => {
     expect(onSubmitted).toHaveBeenCalledOnce()
   })
 
-  it('reports nothing for a host command chat sessions do not run', async () => {
+  it('reports a provider command sent without an inventory', async () => {
     const onSubmitted = vi.fn()
     const { send, structuredTransport } = harness('codex', undefined, onSubmitted)
-    send('/permissions', [])
-    await vi.waitFor(() =>
-      expect(structuredTransport.onError).toHaveBeenCalledWith(
-        expect.stringContaining('not available in chat sessions'),
-        undefined
-      )
-    )
-    expect(onSubmitted).not.toHaveBeenCalled()
+    await send('/permissions', [])
+    expect(structuredTransport.send).toHaveBeenCalledWith('/permissions', [])
+    expect(onSubmitted).toHaveBeenCalledOnce()
   })
 })
 
@@ -258,3 +321,401 @@ it.each(['claude', 'codex'] as const)(
     clearNativeChatComposerDraftsForTests()
   }
 )
+
+import * as draftStore from './native-chat-composer-draft-store'
+import {
+  createNativeChatQueuedEditDraft,
+  handBackNativeChatQueuedEdit,
+  discardNativeChatQueuedEdit
+} from './native-chat-queued-edit-draft'
+import {
+  createMemoryNativeChatComposerDraftStorage,
+  nativeChatComposerDraftStorage,
+  parseStoredNativeChatComposerDraft,
+  setNativeChatComposerDraftStorageForTests
+} from './native-chat-composer-draft-storage'
+import { useNativeChatDraft } from './use-native-chat-draft'
+import { NativeChatPromptEditor } from './NativeChatPromptEditor'
+import { promptEditor } from './native-chat-prompt-editor.test-support'
+import { promptSkillRefs } from './native-chat-prompt-document'
+
+describe('complete handback acceptance', () => {
+  const scope = 'agent-session:rich-return'
+  const composing = false
+  beforeEach(async () => {
+    localStorage.clear()
+    clearNativeChatComposerDraftsForTests()
+    setNativeChatComposerDraftStorageForTests(createMemoryNativeChatComposerDraftStorage())
+    await hydrateNativeChatComposerDrafts()
+  })
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+    clearNativeChatComposerDraftsForTests()
+  })
+  function returned() {
+    const edit = createNativeChatQueuedEditDraft(
+      {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: '$review' }],
+        skills: [{ name: 'review', path: '/returned/SKILL.md' }]
+      },
+      scope
+    )
+    const value = readNativeChatComposerDraft(edit.scopeKey)
+    updateNativeChatComposerDraft(
+      edit.scopeKey,
+      {
+        text: '$review changed',
+        document: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                ...(value.document?.content?.[0].content ?? []),
+                { type: 'text', text: ' changed' }
+              ]
+            }
+          ]
+        }
+      },
+      'immediate'
+    )
+    return edit
+  }
+
+  function acceptanceFixture() {
+    const goal = Promise.withResolvers<boolean>()
+    let current = true
+    const caret = vi.fn()
+    const clearOrigin = vi.fn()
+    const transport: NativeChatStructuredComposerTransport = {
+      capturePresentation: () => () => current,
+      send: vi.fn(() => true),
+      threadGoal: { setObjective: () => goal.promise },
+      dispatchCommand: (text) =>
+        dispatchStructuredAgentSessionComposerCommand(text, {
+          agent: 'codex',
+          snapshot: [],
+          invokeAction: async () => true,
+          setOption: async () => true,
+          setThreadGoalObjective: () => goal.promise
+        }),
+      optionsSurface: {
+        getSnapshot: () => [],
+        setOption: vi.fn(),
+        invokeAction: vi.fn(),
+        subscribe: () => () => {}
+      },
+      optionSnapshot: [],
+      onError: vi.fn(),
+      runtime: 'local',
+      sessionId: 'rich-return',
+      runtimeEnvironmentId: null
+    }
+    function useSend(key: string) {
+      const draft = useNativeChatDraft(key, () => composing)
+      const send = useNativeChatStructuredComposerSend({
+        agent: 'codex',
+        draftScopeKey: key,
+        imageAttachments: [],
+        structuredTransport: transport,
+        isComposing: () => composing,
+        clearSkillOrigin: clearOrigin,
+        setDraft: draft.setDraft,
+        setCaret: caret
+      })
+      return { ...draft, send }
+    }
+    const mount = () => renderHook(({ key }) => useSend(key), { initialProps: { key: scope } })
+    return {
+      goal,
+      transport,
+      caret,
+      clearOrigin,
+      useSend,
+      mount,
+      depart: () => {
+        current = false
+      },
+      arrive: () => {
+        current = true
+      }
+    }
+  }
+
+  it.each(['current', 'obsolete'] as const)(
+    'retains accepted handback node identity through %s presentation and the next actual Send',
+    async (presentation) => {
+      const fixture = acceptanceFixture()
+      updateNativeChatComposerDraft(scope, { text: '/goal ship it' }, 'immediate')
+      const hook = fixture.mount()
+      let pending: Promise<void> | undefined
+      act(() => {
+        pending = hook.result.current.send('/goal ship it', [])
+      })
+      const edit = returned()
+      act(() => {
+        handBackNativeChatQueuedEdit(edit)
+        discardNativeChatQueuedEdit(edit)
+      })
+      expect(promptSkillRefs(readNativeChatComposerDraft(scope).document)).toEqual([
+        { name: 'review', path: '/returned/SKILL.md' }
+      ])
+      const other = 'agent-session:other-host'
+      if (presentation === 'obsolete') {
+        fixture.depart()
+        updateNativeChatComposerDraft(other, { text: 'other untouched' }, 'immediate')
+        hook.rerender({ key: other })
+        hook.unmount()
+      }
+      await act(async () => {
+        fixture.goal.resolve(true)
+        await pending
+      })
+      const left = readNativeChatComposerDraft(scope)
+      expect(left.text).toBe('\n\n$review changed')
+      expect(promptSkillRefs(left.document)).toEqual([
+        { name: 'review', path: '/returned/SKILL.md' }
+      ])
+      if (presentation === 'obsolete') {
+        expect(readNativeChatComposerDraft(other).text).toBe('other untouched')
+        expect(fixture.caret).not.toHaveBeenCalled()
+        expect(fixture.clearOrigin).not.toHaveBeenCalled()
+        expect(fixture.transport.onError).not.toHaveBeenCalled()
+      }
+      hook.unmount()
+      fixture.arrive()
+      const next = fixture.mount()
+      await act(async () => next.result.current.send(next.result.current.draft, []))
+      expect(fixture.transport.send).toHaveBeenCalledExactlyOnceWith(left.text, [], {
+        skills: [{ name: 'review', path: '/returned/SKILL.md' }]
+      })
+    }
+  )
+
+  it('subtracts only submitted nodes when an ordinary message yields to a handback before admission, and persists the latest remainder', async () => {
+    const fixture = acceptanceFixture()
+    const seed = createNativeChatQueuedEditDraft(
+      {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: '$review sent' }],
+        skills: [{ name: 'review', path: '/sent/SKILL.md' }]
+      },
+      scope
+    )
+    updateNativeChatComposerDraft(scope, readNativeChatComposerDraft(seed.scopeKey), 'immediate')
+    discardNativeChatQueuedEdit(seed)
+    const hook = fixture.mount()
+    let pending: Promise<void> | undefined
+    act(() => {
+      pending = hook.result.current.send('$review sent', [])
+    })
+    const edit = returned()
+    act(() => {
+      handBackNativeChatQueuedEdit(edit)
+      discardNativeChatQueuedEdit(edit)
+    })
+    // Latest actual document wins, not a union with either captured snapshot.
+    const view = render(
+      <NativeChatPromptEditor
+        scopeKey={scope}
+        inputRef={createRef()}
+        initialValue={readNativeChatComposerDraft(scope).text}
+        disabled={false}
+        placeholder="Returned draft"
+        onChange={(input) => hook.result.current.setDraft(input.value)}
+        onSelect={() => {}}
+      />
+    )
+    const editor = promptEditor(screen.getByRole('textbox'))
+    // Edit the surviving selected node through the actual editor transaction.
+    let selected = -1
+    editor.state.doc.descendants((node, pos) => {
+      if (node.type.name === 'nativeChatSkill' && node.attrs.path === '/returned/SKILL.md') {
+        selected = pos
+      }
+    })
+    expect(selected).toBeGreaterThanOrEqual(0)
+    act(() =>
+      editor.view.dispatch(
+        editor.state.tr.setNodeMarkup(selected, undefined, {
+          token: '$review',
+          path: '/latest/SKILL.md'
+        })
+      )
+    )
+    await act(async () => pending)
+    const left = readNativeChatComposerDraft(scope)
+    expect(left.text).toBe('\n\n$review changed')
+    expect(promptSkillRefs(left.document)).toEqual([{ name: 'review', path: '/latest/SKILL.md' }])
+    expect(fixture.transport.send).toHaveBeenNthCalledWith(1, '$review sent', [], {
+      skills: [{ name: 'review', path: '/sent/SKILL.md' }]
+    })
+    await nativeChatComposerDraftWritesSettled()
+    const stored = parseStoredNativeChatComposerDraft(
+      await nativeChatComposerDraftStorage().read(scope)
+    )
+    expect(stored?.text).toBe(left.text)
+    expect(promptSkillRefs(stored?.document)).toEqual([
+      { name: 'review', path: '/latest/SKILL.md' }
+    ])
+    view.unmount()
+    hook.unmount()
+    const next = fixture.mount()
+    await act(async () => next.result.current.send(next.result.current.draft, []))
+    expect(fixture.transport.send).toHaveBeenNthCalledWith(2, left.text, [], {
+      skills: [{ name: 'review', path: '/latest/SKILL.md' }]
+    })
+  })
+
+  it('keeps main obsolete-command cleanup when no complete handback participates', async () => {
+    const fixture = acceptanceFixture()
+    updateNativeChatComposerDraft(scope, { text: '/goal ship it' }, 'immediate')
+    const hook = fixture.mount()
+    let pending: Promise<void> | undefined
+    act(() => {
+      pending = hook.result.current.send('/goal ship it', [])
+    })
+    const ordinary = returned()
+    const value = readNativeChatComposerDraft(ordinary.scopeKey)
+    act(() =>
+      updateNativeChatComposerDraft(
+        scope,
+        {
+          text: `/goal ship it\n\n${value.text}`,
+          document: {
+            type: 'doc',
+            content: [
+              { type: 'paragraph', content: [{ type: 'text', text: '/goal ship it' }] },
+              { type: 'paragraph' },
+              ...(value.document?.content ?? [])
+            ]
+          }
+        },
+        'immediate'
+      )
+    )
+    discardNativeChatQueuedEdit(ordinary)
+    fixture.depart()
+    hook.unmount()
+    await act(async () => {
+      fixture.goal.resolve(true)
+      await pending
+    })
+    expect(readNativeChatComposerDraft(scope).text).toBe('\n\n$review changed')
+    expect(readNativeChatComposerDraft(scope).document).toBeUndefined()
+    expect(fixture.caret).not.toHaveBeenCalled()
+  })
+
+  it.each([10, 100])(
+    'bounds in-flight handback observation beside %i unrelated mounted drafts and disposes on every settlement',
+    async (count) => {
+      const original = draftStore.subscribeToNativeChatComposerDraftAppend
+      const active = new Map<string, number>()
+      const calls = new Map<string, number>()
+      vi.spyOn(draftStore, 'subscribeToNativeChatComposerDraftAppend').mockImplementation(
+        (key, callback) => {
+          active.set(key, (active.get(key) ?? 0) + 1)
+          const release = original(key, (addition, previous) => {
+            calls.set(key, (calls.get(key) ?? 0) + 1)
+            callback(addition, previous)
+          })
+          return () => {
+            active.set(key, active.get(key)! - 1)
+            release()
+          }
+        }
+      )
+      const renders = Array.from({ length: count }, () => 0)
+      const idle = renders.map((_, index) =>
+        renderHook(() => {
+          renders[index]++
+          return useNativeChatDraft(`agent-session:other-host-${index}`, () => false)
+        })
+      )
+      await act(async () => {})
+      renders.fill(0)
+      for (const settlement of ['accepted', 'refused', 'error', 'replacement'] as const) {
+        const fixture = acceptanceFixture()
+        act(() =>
+          updateNativeChatComposerDraft(
+            scope,
+            { text: '/goal ship it', document: undefined, images: [] },
+            'immediate'
+          )
+        )
+        const hook = fixture.mount()
+        expect(active.get(scope)).toBe(1)
+        let pending: Promise<void> | undefined
+        act(() => {
+          pending = hook.result.current.send('/goal ship it', [])
+        })
+        expect(active.get(scope)).toBe(2)
+        calls.clear()
+        const edit = returned()
+        act(() => {
+          handBackNativeChatQueuedEdit(edit)
+          handBackNativeChatQueuedEdit(edit)
+          discardNativeChatQueuedEdit(edit)
+        })
+        expect(calls.get(scope)).toBe(2)
+        expect([...calls.keys()]).toEqual([scope])
+        if (settlement === 'replacement') {
+          act(() =>
+            updateNativeChatComposerDraft(
+              scope,
+              {
+                text: 'replacement',
+                document: {
+                  type: 'doc',
+                  content: [{ type: 'paragraph', content: [{ type: 'text', text: 'replacement' }] }]
+                }
+              },
+              'immediate'
+            )
+          )
+        }
+        const before = readNativeChatComposerDraft(scope)
+        await act(async () => {
+          if (settlement === 'error') {
+            fixture.goal.reject(new Error('host request failed'))
+          } else {
+            fixture.goal.resolve(settlement !== 'refused')
+          }
+          await pending
+        })
+        expect(active.get(scope)).toBe(1)
+        if (settlement !== 'accepted') {
+          expect(readNativeChatComposerDraft(scope)).toEqual(before)
+        }
+        expect(renders).toEqual(Array(count).fill(0))
+        // A later ordinary invocation has no inherited participation, even in the same mounted hook.
+        act(() =>
+          updateNativeChatComposerDraft(
+            scope,
+            { text: 'ordinary later', document: undefined, images: [] },
+            'immediate'
+          )
+        )
+        await act(async () => hook.result.current.send('ordinary later', []))
+        expect(readNativeChatComposerDraft(scope).text).toBe('')
+        expect(active.get(scope)).toBe(1)
+        hook.unmount()
+        expect(active.get(scope)).toBe(0)
+        calls.clear()
+        const later = returned()
+        act(() => {
+          handBackNativeChatQueuedEdit(later)
+          discardNativeChatQueuedEdit(later)
+        })
+        expect(calls.size).toBe(0)
+      }
+      idle.forEach((view) => view.unmount())
+      expect([...active.values()].every((value) => value === 0)).toBe(true)
+    }
+  )
+})

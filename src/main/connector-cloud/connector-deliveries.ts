@@ -5,12 +5,21 @@ import {
   ConnectorDeliveryId,
   type ConnectorDeliveryResult
 } from '../../shared/connector-cloud-contract'
+import {
+  CONNECTOR_SOURCE_NAMES,
+  type ConnectorSource
+} from '../../shared/external-conversation-link'
 import type {
   ExternalConversationHost,
   ExternalConversationSeam
 } from '../external-conversations/external-conversation-seam'
 import type { Delivery } from '../external-conversations/external-conversation-types'
 import { placeLaunchTarget } from './connector-places'
+
+/** One fixed line per source, so a resent start hashes to the same receipt. */
+export function connectorReplyInstructions(source: ConnectorSource): string {
+  return `(Sent from ${CONNECTOR_SOURCE_NAMES[source]}. To answer in the thread, run: orca connector reply --text "<your message>")`
+}
 
 export type DispatchedDelivery = {
   deliveryId: string
@@ -56,11 +65,12 @@ export function dispatchDelivery(
   let done: Promise<ConnectorDeliveryResult>
   switch (delivery.kind) {
     case 'start': {
-      const target = placeLaunchTarget(delivery.placeId, deliveryId)
+      const target = placeLaunchTarget(delivery.placeId, deliveryId, key.source)
       if (!target) {
         return refuse(deliveryId, { outcome: 'unsupported' })
       }
-      const { agent, prompt } = delivery
+      const { agent } = delivery
+      const prompt = `${delivery.prompt}\n\n${connectorReplyInstructions(key.source)}`
       done = settle(
         async () => (await seam.start(host, key, deliveryId, { agent, target, prompt })).initial
       )

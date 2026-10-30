@@ -8,6 +8,7 @@ import {
   ConnectorHelloResponse,
   ConnectorPollControl,
   ConnectorPollResponse,
+  type ConnectorReplyResponse,
   type ConnectorAck,
   type ConnectorConversation,
   type ConnectorDeliveryResult,
@@ -17,10 +18,15 @@ import type {
   ExternalConversationHost,
   ExternalConversationSeam
 } from '../external-conversations/external-conversation-seam'
-import { UNREADABLE_ANSWER, type ConnectorFailure } from './connector-cloud-request'
+import {
+  UNREADABLE_ANSWER,
+  type ConnectorFailure,
+  type ConnectorResult
+} from './connector-cloud-request'
 import { dispatchDelivery } from './connector-deliveries'
 import { connectorHello, type ConnectorHelloSaid } from './connector-hello'
 import type { ConnectorMachine, ConnectorTransport } from './connector-machine'
+import { postConnectorReply, type ConnectorReplyBody } from './connector-replies'
 import { connectorRetryDelayMs, ConnectorOutbox, ConnectorOutboxSender } from './connector-outbox'
 import type { ConnectorTurnEvents } from './connector-turn-events'
 
@@ -107,6 +113,11 @@ export class ConnectorPollClient {
     // Turn ends that finish before the first hello still reach the outbox; only sending waits for it.
     this.watch()
     void this.run()
+  }
+
+  /** Posts an agent's reply to its conversation's thread while this client runs. */
+  reply(body: ConnectorReplyBody): Promise<ConnectorResult<ConnectorReplyResponse>> {
+    return postConnectorReply(this.transport, body, this.stopped.signal, this.random)
   }
 
   stop(): void {

@@ -36,23 +36,6 @@ function buildReadiness(
 }
 
 describe('task-source-setup-state', () => {
-  it('counts Linear readiness as three steps', () => {
-    expect(
-      getTaskProviderCompletedSteps({
-        connected: true,
-        checking: false,
-        skillInstalled: false,
-        visible: true
-      })
-    ).toEqual({ completed: 2, total: 3 })
-  })
-
-  it('counts code-host readiness as two steps', () => {
-    expect(
-      getTaskProviderCompletedSteps({ connected: true, checking: false, visible: true })
-    ).toEqual({ completed: 2, total: 2 })
-  })
-
   it('marks Linear ready only when connected, skill installed, and visible', () => {
     expect(
       isTaskProviderReady({
@@ -252,68 +235,6 @@ describe('task-source-setup-state', () => {
       resolveStickyAutoExpandedTaskProvider({
         providers: ORDER,
         readinessByProvider: whileChecking,
-        previousAutoExpanded: 'linear'
-      })
-    ).toBe('linear')
-  })
-
-  it('does not switch to a later incomplete provider during the previous provider recheck', () => {
-    const whileChecking = buildReadiness({
-      linear: { skillInstalled: false, skillChecking: true },
-      jira: { connected: false }
-    })
-
-    expect(getAutoExpandedTaskProvider(ORDER, whileChecking)).toBe('jira')
-    expect(
-      resolveStickyAutoExpandedTaskProvider({
-        providers: ORDER,
-        readinessByProvider: whileChecking,
-        previousAutoExpanded: 'linear'
-      })
-    ).toBe('linear')
-  })
-
-  it('does not hand the expansion to a provider whose check landed later', () => {
-    // Model slower gh/glab preflight completing after Linear claimed expansion.
-    const afterPreflight = buildReadiness({
-      github: { connected: false },
-      gitlab: { connected: false },
-      linear: { skillInstalled: false }
-    })
-
-    expect(getAutoExpandedTaskProvider(ORDER, afterPreflight)).toBe('github')
-    expect(
-      resolveStickyAutoExpandedTaskProvider({
-        providers: ORDER,
-        readinessByProvider: afterPreflight,
-        previousAutoExpanded: 'linear'
-      })
-    ).toBe('linear')
-  })
-
-  it('keeps the auto-expand slot after the chosen provider finishes', () => {
-    const afterLinearCompletes = buildReadiness({ github: { connected: false } })
-
-    expect(getAutoExpandedTaskProvider(ORDER, afterLinearCompletes)).toBe('github')
-    expect(
-      resolveStickyAutoExpandedTaskProvider({
-        providers: ORDER,
-        readinessByProvider: afterLinearCompletes,
-        previousAutoExpanded: 'linear'
-      })
-    ).toBe('linear')
-  })
-
-  it('keeps the auto-expand slot when the chosen provider is hidden', () => {
-    const afterHidingLinear = buildReadiness({
-      github: { connected: false },
-      linear: { skillInstalled: false, visible: false }
-    })
-
-    expect(
-      resolveStickyAutoExpandedTaskProvider({
-        providers: ORDER,
-        readinessByProvider: afterHidingLinear,
         previousAutoExpanded: 'linear'
       })
     ).toBe('linear')

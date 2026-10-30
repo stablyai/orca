@@ -1,8 +1,8 @@
 import { getAiVaultResumeWorkspaceWslDistro } from '@/lib/ai-vault-resume-shell'
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { toast } from 'sonner'
+import { canResumeAiVaultSessionOnTarget } from '../../../../shared/ai-vault-resume-target'
 import {
-  canResumeAiVaultSessionOnTarget,
   getAiVaultResumeWorkspaceExecutionHostId,
   getAiVaultResumeWorkspaceTargetStatus
 } from '@/lib/ai-vault-resume-target'
@@ -253,8 +253,14 @@ export default function AiVaultSessionDropLayer({
             // Refuse old payloads that cannot repin the startup command; silently using another account’s home is unsafe.
             throw new Error(
               result.substituteCodexHome
-                ? 'This session was dragged from an older Orca window, so Orca cannot retarget it to the selected Codex account. Resume it from the Session History panel instead.'
-                : 'Orca could not prepare this legacy Codex session. Retry resume.'
+                ? translate(
+                    'auto.components.tab.group.AiVaultSessionDropLayer.legacyDragCannotRetarget',
+                    'This session was dragged from an older Orca window, so Orca cannot retarget it to the selected Codex account. Resume it from the Session History panel instead.'
+                  )
+                : translate(
+                    'auto.components.tab.group.AiVaultSessionDropLayer.legacyDragPrepareFailed',
+                    'Orca could not prepare this legacy Codex session. Retry resume.'
+                  )
             )
           }
           const providerSession = getAiVaultAgentProviderSession({

@@ -151,7 +151,7 @@ async function openHost() {
         })
       ]
     ]),
-    getRecord: () => null,
+    getConversation: () => null,
     now: () => 1
   })
   const events: AgentSessionStatusEvent[] = []

@@ -1,3 +1,4 @@
+import { collectDescendantRows } from '../pty-descendant-termination'
 import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import type { PipedChildProcess } from '@orca/process-host/process-spec'
 import { execFileSync } from 'node:child_process'
@@ -731,6 +732,7 @@ describe('claude child tree reaper', () => {
     expect(child.kill).not.toHaveBeenCalled()
     release.resolve(true)
     await expect(reap).resolves.toBe('exited')
+    expect(tree.killDelivered).toBe(true)
     expect(child.kill).toHaveBeenCalledWith('SIGKILL')
     expect(captureDescendants).not.toHaveBeenCalled()
   })
@@ -744,6 +746,7 @@ describe('claude child tree reaper', () => {
 
     await expect(tree.reap()).resolves.toBe('unverifiable')
     expect(tree.treeVerdict).toBe('unverifiable')
+    expect(tree.killDelivered).toBe(false)
     expect(child.kill).toHaveBeenCalledWith('SIGKILL')
   })
 
@@ -757,6 +760,7 @@ describe('claude child tree reaper', () => {
     })
 
     await expect(tree.reap()).resolves.toBe('unverifiable')
+    expect(tree.killDelivered).toBe(false)
     expect(child.kill).toHaveBeenCalledWith('SIGKILL')
   })
 
@@ -783,3 +787,80 @@ describe('claude child tree reaper', () => {
     expect(captureDescendants).not.toHaveBeenCalled()
   })
 })
+
+it.each([true, false])(
+  'retains shared reaper taskkill=%s when root cleanup throws',
+  async (delivered) => {
+    const child = mockChild()
+    child.kill.mockImplementation(() => {
+      throw new Error('held root cleanup failed')
+    })
+    const tree = createClaudeChildTreeReaper(child, {
+      platform: 'win32',
+      terminateWindowsTree: async () => delivered
+    })
+    await expect(tree.reap()).resolves.toBe(delivered ? 'exited' : 'unverifiable')
+    expect(tree.killDelivered).toBe(delivered)
+  }
+)
+
+it.each([10, 100])(
+  'shares one fresh forced snapshot across %s rows and callers',
+  async (population) => {
+    const child = mockChild()
+    const root = { pid: 424242, ppid: 1, pgid: 424242, startedAt: 'Mon Jan 1 00:00:00 2026' }
+    const writer = { ...root, pid: 424243, ppid: root.pid, pgid: 424243 }
+    const rows = [
+      root,
+      writer,
+      ...Array.from({ length: population - 2 }, (_, index) => ({
+        ...root,
+        pid: 424244 + index,
+        ppid: index === 0 ? root.pid : index % 2 ? writer.pid : 1,
+        pgid: writer.pid
+      }))
+    ]
+    const fresh = Promise.withResolvers<void>()
+    const capture = vi.fn(async () =>
+      collectDescendantRows(
+        root.pid,
+        rows.filter((row) => row !== writer),
+        1
+      )
+    )
+    const terminate = vi.fn(async () => 'unverifiable' as const)
+    const signal = vi.spyOn(process, 'kill').mockReturnValue(true)
+    try {
+      const tree = createClaudeChildTreeReaper(child, {
+        platform: 'linux',
+        supervised: true,
+        exited: () => false,
+        captureDescendants: capture,
+        terminateDescendants: terminate
+      })
+      await tree.capture()
+      capture.mockImplementation(async () => {
+        expect(child.kill).toHaveBeenCalledWith('SIGSTOP')
+        await fresh.promise
+        return collectDescendantRows(root.pid, rows, 2)
+      })
+      const first = tree.reap()
+      for (let index = 0; index < population; index++) {
+        expect(tree.reap()).toBe(first)
+      }
+      await vi.waitFor(() => expect(capture).toHaveBeenCalledTimes(2))
+      fresh.resolve()
+      await first
+      expect(capture).toHaveBeenCalledTimes(2)
+      expect(terminate).toHaveBeenCalledOnce()
+      expect(signal.mock.calls.length).toBeGreaterThan(0)
+      expect(signal.mock.calls.length).toBeLessThanOrEqual(2)
+      expect(
+        signal.mock.calls.every(([pid, sig]) => pid === -writer.pid && sig === 'SIGKILL')
+      ).toBe(true)
+      expect(tree.killDelivered).toBe(true)
+    } finally {
+      signal.mockRestore()
+    }
+  }
+)

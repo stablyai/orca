@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { UNRESOLVED_OWNER_HOST_ID } from '../../../../../shared/execution-host'
 import { reportWorkerTerminalUserInput } from '@/lib/worker-terminal-takeover-report'
 import { useAppStore } from '@/store'
@@ -26,7 +26,8 @@ import { isMainTerminalSideEffectAuthorityForPty } from '../terminal-side-effect
 import { isRendererHiddenPtyDeliveryGateEnabled } from '../terminal-hidden-delivery-gate'
 import {
   markRendererOwnedAgentStatusWrite,
-  registerRendererOwnedAgentStatusPane
+  registerRendererOwnedAgentStatusPane,
+  resolveRendererOwnedAgentStatusTiming
 } from '../renderer-owned-agent-status-registry'
 
 import { resolveLatestAgentDoneStartedAt } from './agent-done-started-at'
@@ -138,12 +139,15 @@ export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): 
       : resolvedStatusTitle
     // Only actual byte-derived status proves authority to fence out host mirroring.
     markRendererOwnedAgentStatusWrite(session.cacheKey)
+    const timing = resolveRendererOwnedAgentStatusTiming(
+      currentState.agentStatusByPaneKey[session.cacheKey]
+    )
     if (session.launchToken) {
       currentState.setAgentStatus(
         session.cacheKey,
         observedStatusPayload,
         statusTitle,
-        undefined,
+        timing,
         routing,
         {
           launchToken: session.launchToken
@@ -154,7 +158,7 @@ export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): 
         session.cacheKey,
         observedStatusPayload,
         statusTitle,
-        undefined,
+        timing,
         routing
       )
     }
@@ -227,9 +231,13 @@ export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): 
     // Takeover must never fire from the onData fallback below: it mixes in auto-replies.
     reportWorkerTerminalUserInput(session.cacheKey, session.runtimeEnvironmentId)
   }
-  session.userInputActivityDisposable = subscribeToTerminalUserInput(
-    session.pane.terminal,
-    session.recordRealUserTerminalInput
+  // Why: xterm fires onUserInput before onData, so publishing here made the key wait on every store subscriber before reaching the PTY.
+  session.userInputActivityDisposable = subscribeToTerminalUserInput(session.pane.terminal, () =>
+    queueMicrotask(() => {
+      if (!session.disposed) {
+        session.recordRealUserTerminalInput()
+      }
+    })
   )
   session.recordTerminalInputForHibernationFallback = (): void => {
     if (session.userInputActivityDisposable === null) {

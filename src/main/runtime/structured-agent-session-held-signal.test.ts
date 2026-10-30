@@ -55,6 +55,7 @@ const runtime = {
   openAgentSessionRecordStore: async () =>
     (
       await openAgentSessionRecordStoreOnce({
+        legacySessionTabIds: [],
         stateDirectory,
         hostId: 'local',
         logger: createStructuredAgentSessionLogger()

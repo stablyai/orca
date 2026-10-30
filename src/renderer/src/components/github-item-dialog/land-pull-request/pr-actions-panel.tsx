@@ -29,6 +29,7 @@ import { runPullRequestStateUpdate } from '@/components/github/github-work-item-
 import type { GitHubItemDialogProjectOrigin } from '../load-item-details/github-item-dialog-types'
 import { PRActionsMergeMenu } from './pr-actions-merge-menu'
 import { WorkItemStateBadge } from '../load-item-details/work-item-state-badge'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 export function PRActionsPanel({
   item,
@@ -205,7 +206,7 @@ export function PRActionsPanel({
             })
       if (!result.ok) {
         toast.error(
-          result.error ||
+          codeHostErrorText(result) ||
             translate('auto.components.GitHubItemDialog.aba792c8b3', 'Failed to merge pull request')
         )
         return
@@ -274,7 +275,7 @@ export function PRActionsPanel({
             })
       if (!result.ok) {
         toast.error(
-          result.error ||
+          codeHostErrorText(result) ||
             (enabled
               ? translate(
                   'auto.components.GitHubItemDialog.825a8fb8cd',

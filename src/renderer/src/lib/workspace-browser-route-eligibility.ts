@@ -16,7 +16,8 @@ export function isExpectedRuntimeBrowserRoute(
   availability: ClientCreationActionAvailability,
   route: ReturnType<typeof resolveWorktreeOperationRoute>,
   workspaceId: string,
-  expectedRuntimeEnvironmentId: string
+  expectedRuntimeEnvironmentId: string,
+  allowClientBrowserFallback = false
 ): boolean {
   if (availability.state !== 'enabled' || workspaceId === FLOATING_TERMINAL_WORKTREE_ID || !route) {
     return false
@@ -28,7 +29,8 @@ export function isExpectedRuntimeBrowserRoute(
   if (
     environmentId !== expectedEnvironmentId ||
     (!capabilities?.includes(BROWSER_SCREENCAST_RUNTIME_CAPABILITY) &&
-      !runtimeHostsPagesOnThisDesktop(state, expectedEnvironmentId))
+      !runtimeHostsPagesOnThisDesktop(state, expectedEnvironmentId) &&
+      !(allowClientBrowserFallback && availability.provider === 'local-client'))
   ) {
     return false
   }
@@ -102,7 +104,8 @@ export function isExpectedSshBrowserRoute(
   availability: ClientCreationActionAvailability,
   route: ReturnType<typeof resolveWorktreeOperationRoute>,
   workspaceId: string,
-  expectedSshConnectionId: string
+  expectedSshConnectionId: string,
+  allowClientBrowserFallback = false
 ): boolean {
   if (availability.state !== 'enabled' || workspaceId === FLOATING_TERMINAL_WORKTREE_ID || !route) {
     return false
@@ -116,8 +119,9 @@ export function isExpectedSshBrowserRoute(
   return (
     Boolean(expectedTargetId) &&
     route.runtimeEnvironmentId === null &&
-    eligibility?.eligible === true &&
-    eligibility.targetId === expectedTargetId &&
+    eligibility?.targetId === expectedTargetId &&
+    (eligibility.eligible ||
+      (allowClientBrowserFallback && availability.provider === 'local-client')) &&
     host?.kind === 'ssh' &&
     host.targetId === expectedTargetId
   )

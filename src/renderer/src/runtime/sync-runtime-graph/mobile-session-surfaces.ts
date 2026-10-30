@@ -4,7 +4,7 @@ import { isClaudeManagementTitle } from '../../../../shared/agent-detection'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 import { isWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 import type { Tab } from '../../../../shared/tab-types'
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   isNativeChatTabWideFallbackSafe,
   nativeChatLaunchAgentForLeaf,
@@ -77,9 +77,28 @@ export function isMobileFileDiffSource(
   return diffSource === 'staged' || diffSource === 'unstaged'
 }
 
+export function getMobileMarkdownSourceFile(
+  file: AppState['openFiles'][number],
+  openFilesById: ReadonlyMap<string, AppState['openFiles'][number]> | undefined
+): AppState['openFiles'][number] | null {
+  if (file.mode !== 'edit' && file.mode !== 'markdown-preview') {
+    return null
+  }
+  if (file.language !== 'markdown' && file.mode !== 'markdown-preview') {
+    return null
+  }
+  return file.mode === 'markdown-preview' && file.markdownPreviewSourceFileId
+    ? (openFilesById?.get(file.markdownPreviewSourceFileId) ?? file)
+    : file
+}
+
 export function isMobilePublishableOpenFile(file: AppState['openFiles'][number]): boolean {
   // A tab mirrored from a paired host is that host's; republishing it echoes it back to the host.
   if (file.mirroredFromRuntimeSession === true) {
+    return false
+  }
+  // Virtual review/check views use display labels as paths, not readable files.
+  if (file.mode !== 'edit' && file.mode !== 'diff' && file.mode !== 'markdown-preview') {
     return false
   }
   // Combined diff tabs use display labels as paths and need the desktop renderer.

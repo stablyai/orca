@@ -34,7 +34,7 @@ import { restoreOrStripOverlayEnv } from '../../../../shared/agent-overlay-env'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from './spawn-env-keys'
 import { applyManagedDataAccountEnvironment } from '../../../managed-data-accounts/launch-environment'
 import { applyOpenCodeStatusPluginEnv, captureOpenCodeSourceConfig } from './opencode-config'
-import { applyCodexRemoteViewerClipboardEnv } from './codex-terminal-clipboard'
+import { applyRemoteViewerClipboardEnv } from './remote-viewer-clipboard-env'
 
 /** Mutate host-local PTY environment only for local execution; SSH cannot use these loopback endpoints or filesystem paths. */
 export function buildPtyHostEnv(
@@ -313,7 +313,7 @@ export function buildPtyHostEnv(
     baseEnv.BROWSER = `${cliCommand} open-url --url %s`
   }
   // Browser-relayed and SSH-managed headless hosts both have viewers on another machine.
-  applyCodexRemoteViewerClipboardEnv(baseEnv, {
+  applyRemoteViewerClipboardEnv(baseEnv, {
     launchAgent: opts.launchAgent,
     viewerIsRemote: opts.routeBrowserOpensToClient === true
   })

@@ -3,10 +3,8 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../../shared/skills'
-import {
-  getNativeChatAgentProfile,
-  readsSkillSource
-} from '../../../../shared/native-chat-agent-profiles'
+import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
+import { isNativeChatSkillForAgent } from '../../../../shared/native-chat-skill-visibility'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { emitNativeChatSkillDiscovery } from '@/lib/native-chat-telemetry'
 import {
@@ -58,43 +56,27 @@ const MISSING_CONTEXT_STATE: StoredDiscoveryState = {
   errorKind: 'unknown',
   contextKey: null
 }
+const selectNoSkillStateInputs = (): null => null
 const inFlightDiscovery = new Map<string, Promise<SkillDiscoveryResult>>()
-
-export function isNativeChatSkillForAgent(
-  agent: AgentType,
-  skill: DiscoveredSkill,
-  result?: Pick<SkillDiscoveryResult, 'sources'>
-): boolean {
-  const profile = getNativeChatAgentProfile(agent)
-  if (!profile) {
-    return false
-  }
-  if (!result) {
-    return (
-      agent === 'codex' &&
-      (skill.providers.includes('codex') || skill.providers.includes('agent-skills'))
-    )
-  }
-  // Canonical dedup may hide alternate symlink roots; any shared/agent root grants visibility regardless of scan order.
-  const rootPaths = skill.rootPaths?.length ? skill.rootPaths : [skill.rootPath]
-  return rootPaths.some((rootPath) => {
-    const source = result.sources.find((entry) => entry.path === rootPath)
-    return source !== undefined && readsSkillSource(profile, source)
-  })
-}
 
 export function useNativeChatSkills(
   agent: AgentType,
   terminalTabId: string,
   enabled = false
 ): NativeChatSkillDiscovery {
-  const inputs = useAppStore(useShallow(selectNativeChatSkillStateInputs))
+  // Closed is the common state, so the tab-map subscription only runs while the picker is open.
+  const inputs = useAppStore(
+    useShallow(enabled ? selectNativeChatSkillStateInputs : selectNoSkillStateInputs)
+  )
   const context = useMemo(
-    () => resolveNativeChatSkillDiscoveryContext(inputs, terminalTabId),
+    () => (inputs ? resolveNativeChatSkillDiscoveryContext(inputs, terminalTabId) : null),
     [inputs, terminalTabId]
   )
   const awaitingContext = useMemo(
-    () => !context && isNativeChatSkillDiscoveryAwaitingDirectory(inputs, terminalTabId),
+    () =>
+      inputs !== null &&
+      !context &&
+      isNativeChatSkillDiscoveryAwaitingDirectory(inputs, terminalTabId),
     [context, inputs, terminalTabId]
   )
   const [state, setState] = useState<StoredDiscoveryState>(IDLE_STATE)

@@ -22,6 +22,7 @@ const MOBILE_DYNAMIC_RPC_METHODS = [
   'github.prChecks',
   'github.prCheckDetails',
   'github.listAssignableUsers',
+  'github.markPRReadyForReview',
   'github.mergePR',
   'github.setPRAutoMerge',
   'github.requestPRReviewers',
@@ -203,6 +204,7 @@ describe('mobile RPC allowlist', () => {
       'agentSession.cancel',
       'agentSession.queuedMessageSend',
       'agentSession.queuedMessageDelete',
+      'agentSession.queuedMessageMove',
       'agentSession.queuedMessageUpdate',
       'agentSession.queuedMessageEditHold',
       'agentSession.queuedMessagesResume',
@@ -228,14 +230,15 @@ describe('mobile RPC allowlist', () => {
     expect(mobileRpcAllowlist().has('agentSession.attach')).toBe(false)
   })
 
-  it('lets a phone upload chat attachments but not read the store back', () => {
+  it('lets a phone upload chat attachments and read stored images back', () => {
     expect(
       [...mobileRpcAllowlist()].filter((method) => method.startsWith('agentSessionAttachment.'))
     ).toEqual([
       'agentSessionAttachment.uploadStart',
       'agentSessionAttachment.uploadAppend',
       'agentSessionAttachment.uploadCommit',
-      'agentSessionAttachment.uploadAbort'
+      'agentSessionAttachment.uploadAbort',
+      'agentSessionAttachment.read'
     ])
   })
 })

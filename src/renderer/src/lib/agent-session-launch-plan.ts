@@ -44,6 +44,8 @@ export type AgentSessionLaunchRequest = AgentLaunchRouteArgs & {
   onPromptDelivered?: () => void
   /** The caller keeps the prompt's text if it does not go out (notes), so no composer gets it. */
   promptKeptByCaller?: true
+  /** Options this launch asks for over the saved chat defaults, e.g. an action's model. */
+  launchOptions?: Readonly<Record<string, string>>
 }
 
 /** Carry the decided route and delivery fields in memory so post-create launches and same-session retries reuse them without re-resolving. */
@@ -59,6 +61,7 @@ export type AgentSessionLaunchVerdict = {
   resumeFrom?: StructuredAgentSessionResumeSource
   onPromptDelivered?: () => void
   promptKeptByCaller?: true
+  launchOptions?: Readonly<Record<string, string>>
 }
 
 export type AgentSessionStructuredFeasibilityRequest = AgentLaunchRouteArgs & {
@@ -95,7 +98,8 @@ function structuredLaunchOptions(verdict: AgentSessionLaunchVerdict): Structured
     ...(verdict.resumeFrom ? { resumeFrom: verdict.resumeFrom } : {}),
     ...(verdict.onPromptDelivered ? { onPromptDelivered: verdict.onPromptDelivered } : {}),
     ...(verdict.promptKeptByCaller ? { promptKeptByCaller: true as const } : {}),
-    ...(verdict.executionHostId ? { executionHostId: verdict.executionHostId } : {})
+    ...(verdict.executionHostId ? { executionHostId: verdict.executionHostId } : {}),
+    ...(verdict.launchOptions ? { launchOptions: verdict.launchOptions } : {})
   }
 }
 
@@ -286,6 +290,7 @@ export function planAgentSessionLaunch(
     ...(request.promptDelivery ? { promptDelivery: request.promptDelivery } : {}),
     ...(request.resumeFrom ? { resumeFrom: request.resumeFrom } : {}),
     ...(request.onPromptDelivered ? { onPromptDelivered: request.onPromptDelivered } : {}),
-    ...(request.promptKeptByCaller ? { promptKeptByCaller: true as const } : {})
+    ...(request.promptKeptByCaller ? { promptKeptByCaller: true as const } : {}),
+    ...(request.launchOptions ? { launchOptions: request.launchOptions } : {})
   })
 }

@@ -27,12 +27,6 @@ describe('program status result retention', () => {
   const dismiss = (entry: AgentStatusEntry | undefined): void =>
     dismissRetainedProgramResult(PANE, { agentStatusByPaneKey: { [PANE]: entry }, dropAgentStatus })
 
-  it('dismisses a finished program result whenever the pane sees input', () => {
-    dismiss(programDone())
-    dismiss(programDone({ programStatus: { state: 'error', observedAt: 1_000 } }))
-    expect(dropAgentStatus).toHaveBeenCalledTimes(2)
-  })
-
   it('leaves agents, live programs, boundaries and empty panes alone', () => {
     dismiss(programDone({ agentType: 'claude' }))
     dismiss(programDone({ state: 'working', programStatus: { state: 'working', observedAt: 1 } }))

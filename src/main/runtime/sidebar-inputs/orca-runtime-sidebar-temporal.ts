@@ -1,5 +1,5 @@
 import { getRepoRegistrationHostIds } from '../../../shared/repo-host-identity'
-import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { OrcaRuntimeWithDetectedCheckoutsAndLiveContent } from './orca-runtime-detected-checkouts-live-content'
 import type { OrcaRuntimeWithAgentTransitions } from '../orca-runtime-agent-transitions'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'

@@ -53,4 +53,12 @@ export class PluginContentVerifier {
       throw new Error(`plugin ${plugin.pluginKey} failed integrity verification: ${result.error}`)
     }
   }
+
+  /** Uncached integrity check for code about to run; bytes may have changed since `verify`. */
+  async verifyNow(plugin: HashAddressedPluginContent & { pluginKey: string }): Promise<void> {
+    const result = await verifyHashAddressedPluginContent(plugin)
+    if (!result.ok) {
+      throw new Error(`plugin ${plugin.pluginKey} failed integrity verification: ${result.error}`)
+    }
+  }
 }

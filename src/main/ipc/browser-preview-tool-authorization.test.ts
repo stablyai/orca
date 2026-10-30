@@ -85,6 +85,7 @@ vi.mock('./browser-tab-registration-wait', async (importOriginal) => {
 })
 
 import { registerBrowserHandlers } from './browser'
+import { setTrustedBrowserRendererWebContentsId } from './browser-renderer-trust'
 import { browserManager } from '../browser/browser-manager'
 import {
   getWorkspaceDocPageGuest,
@@ -139,8 +140,11 @@ const BROWSER_PAGE_CHANNELS = [
   'browser:session:deleteProfile',
   'browser:session:ensureManagedProfile',
   'browser:session:importCookies',
+  'browser:session:importCookiesForClientHost',
   'browser:session:resolvePartition',
   'browser:session:clearDefaultCookies',
+  'browser:session:clearGoogleCookies',
+  'browser:session:googleCookieClearTarget',
   'browser:session:importFromBrowserForClientHost',
   'browser:session:clientRouteImportSources',
   'browser:session:detectBrowsers',
@@ -151,7 +155,23 @@ const BROWSER_PAGE_CHANNELS = [
   'browser:identity:set',
   // Remembered site answers for a browser profile, never a viewed guest.
   'browser:sitePermissions:list',
-  'browser:sitePermissions:set'
+  'browser:sitePermissions:set',
+  // Extension management and the toolbar's extension buttons: browser-page tabs only.
+  'browserExtensions:list',
+  'browserExtensions:setEnabled',
+  'browserExtensions:remove',
+  'browserExtensions:loadUnpacked',
+  'browserExtensions:reload',
+  'browserExtensions:openOptions',
+  'browserExtensions:reviewUpdate',
+  'browserExtensions:installFromWebStore',
+  'browserExtensions:respondInstallPrompt',
+  'browserExtensions:contextMenuClick',
+  'browserExtensions:actionContextMenu',
+  'browserExtensions:toolbarState',
+  'browserExtensions:setPinned',
+  'browserExtensions:activateAction',
+  'browserExtensions:pageIcon'
 ]
 
 type Handler = (event: { sender: Electron.WebContents }, args: unknown) => unknown
@@ -276,6 +296,7 @@ const GUEST_RECEIVING_MOCKS = [
 
 beforeEach(() => {
   vi.stubEnv('ELECTRON_RENDERER_URL', '')
+  setTrustedBrowserRendererWebContentsId(HOST_RENDERER_ID)
   // Revoke before clearing mocks so disposal calls belong to the previous test.
   revokeAllDocPreviewGrants()
   vi.clearAllMocks()

@@ -78,8 +78,8 @@ describe('buildWorktreeStartupForAgent host resolution', () => {
     ).toBe('orca')
   })
 
-  it('keeps the rename for a runtime host with no nested SSH target', () => {
-    expect(launchCliNameFor(makeRepo({ executionHostId: 'runtime:vm-1' }))).toBe('orca-ide')
+  it('uses the headless runtime CLI with no nested SSH target (#33920)', () => {
+    expect(launchCliNameFor(makeRepo({ executionHostId: 'runtime:vm-1' }))).toBe('orca')
   })
 
   it('uses per-launch arguments and preserves launch telemetry', () => {
@@ -367,6 +367,9 @@ describe('resolveWorktreeStartupDraftAgent', () => {
       resolve({ defaultTuiAgent: 'claude', disabledTuiAgents: ['codex'] }, 'codex')
     ).resolves.toBe('gemini')
     expect(mocks.detectInstalledAgentsWithShellPathHydration).toHaveBeenCalledTimes(1)
+    expect(mocks.detectInstalledAgentsWithShellPathHydration).toHaveBeenCalledWith(undefined, {
+      disabledTuiAgents: ['codex']
+    })
   })
 
   it('starts no agent when the default is blank', async () => {
@@ -378,6 +381,10 @@ describe('resolveWorktreeStartupDraftAgent', () => {
     mocks.detectInstalledAgentsWithShellPathHydration.mockResolvedValue(['codex', 'claude'])
 
     await expect(resolve({ disabledTuiAgents: ['codex'] })).resolves.toBe('claude')
+    expect(mocks.detectInstalledAgentsWithShellPathHydration).toHaveBeenCalledExactlyOnceWith(
+      undefined,
+      { disabledTuiAgents: ['codex'] }
+    )
   })
 
   // An unserved SSH host cannot be answered by local detection.

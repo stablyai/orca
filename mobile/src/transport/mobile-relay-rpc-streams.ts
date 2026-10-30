@@ -19,7 +19,7 @@ type StreamRecord = {
   method: string
   params: unknown
   envelope?: RpcEnvelopeFields
-  listener: (result: unknown) => void
+  listener?: (result: unknown) => void
   onBinaryFrame?: Parameters<RpcClient['subscribe']>[3] extends
     | { onBinaryFrame?: infer Listener }
     | undefined
@@ -175,7 +175,7 @@ export class MobileRelayRpcStreams {
       if (typeof metadata.subscriptionId === 'string') {
         stream.subscriptionId = metadata.subscriptionId
       }
-      if (typeof metadata.streamId === 'number') {
+      if (typeof metadata.streamId === 'number' && stream.listener) {
         stream.streamIds.add(metadata.streamId)
         this.terminalListeners.set(metadata.streamId, stream.listener)
       }
@@ -188,7 +188,7 @@ export class MobileRelayRpcStreams {
       }
     }
     if (!stream.cancelled) {
-      stream.listener(result)
+      stream.listener?.(result)
     }
     return true
   }
@@ -207,15 +207,12 @@ export class MobileRelayRpcStreams {
   }
 
   clear(): void {
-    for (const stream of this.streams.values()) {
+    for (const [id, stream] of this.streams) {
       stream.cancelled = true
+      this.remove(id)
     }
-    this.streams.clear()
     this.cancelledSubscriptions.clear()
-    this.terminalListeners.clear()
-    this.terminalSnapshots.clear()
     this.unreadableTerminalFrames.clear()
-    this.activeBrowserStream = null
   }
 
   private cancel(id: string): void {
@@ -309,6 +306,8 @@ export class MobileRelayRpcStreams {
       this.activeBrowserStream = null
     }
     this.streams.delete(id)
+    stream.listener = undefined
+    stream.onBinaryFrame = undefined
   }
 
   private fail(id: string, stream: StreamRecord, message: string, error?: unknown): void {
@@ -320,7 +319,8 @@ export class MobileRelayRpcStreams {
 
   /** Removed first, so the listener's dispose cannot name a host-ended stream. */
   private finish(id: string, stream: StreamRecord, result: unknown): void {
+    const listener = stream.listener
     this.remove(id)
-    stream.listener(result)
+    listener?.(result)
   }
 }

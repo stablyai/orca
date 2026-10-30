@@ -1,3 +1,4 @@
+import type { AgentSessionOwnerObservation } from './agent-session-conversation-view'
 /**
  * Single-writer lease adjudication.
  *
@@ -106,7 +107,13 @@ function deathEvidenceFor(
 /** `exited` only for a lease released on death evidence; one recovery released without proof, like
  *  anything held or mid-handoff, may still be running. */
 export function agentSessionLeaseOwnerVerdict(lease: AgentSessionLease): AgentSessionOwnerVerdict {
-  if (agentSessionLeaseAdmitsWriter(lease)) {
+  return agentSessionOwnerObservationVerdict(lease)
+}
+
+export function agentSessionOwnerObservationVerdict(
+  lease: AgentSessionOwnerObservation
+): AgentSessionOwnerVerdict {
+  if (agentSessionOwnerObservationIsLive(lease)) {
     return 'live'
   }
   return lease.claimStatus === 'released' &&
@@ -118,6 +125,32 @@ export function agentSessionLeaseOwnerVerdict(lease: AgentSessionLease): AgentSe
     : 'unverifiable'
 }
 
+/** Founding is not an observed death; every reservation/recovery leaves a different tuple. */
+export function agentSessionLeaseNeverAcquired(lease: AgentSessionLease): boolean {
+  return (
+    lease.runtimeKind === 'native' &&
+    lease.runtimeFence === 1 &&
+    lease.minimumNextFence === undefined &&
+    !lease.unreconciled &&
+    lease.claimStatus === 'released' &&
+    lease.ownerProcess === null &&
+    lease.reservedSpawnToken === null &&
+    lease.handoffStage === null &&
+    lease.handoffOperationId === null &&
+    lease.provenHandleLinkId === null &&
+    lease.deathEvidence === null
+  )
+}
+
+export function agentSessionLeasePossiblyWriting(
+  lease: AgentSessionLease | AgentSessionOwnerObservation
+): boolean {
+  return (
+    !('runtimeKind' in lease && agentSessionLeaseNeverAcquired(lease)) &&
+    agentSessionOwnerObservationVerdict(lease) !== 'exited'
+  )
+}
+
 /** Nothing holds this lease: released, no handoff in flight, and reconciled since the last restart. */
 export function agentSessionLeaseIsReleased(lease: AgentSessionLease): boolean {
   return !lease.unreconciled && lease.claimStatus === 'released' && lease.handoffStage === null
@@ -125,6 +158,10 @@ export function agentSessionLeaseIsReleased(lease: AgentSessionLease): boolean {
 
 /** True when the recorded owner may write right now. Used by every mutating path in later parts. */
 export function agentSessionLeaseAdmitsWriter(lease: AgentSessionLease): boolean {
+  return agentSessionOwnerObservationIsLive(lease)
+}
+
+export function agentSessionOwnerObservationIsLive(lease: AgentSessionOwnerObservation): boolean {
   return (
     !lease.unreconciled &&
     lease.handoffStage === null &&

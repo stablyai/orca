@@ -1,10 +1,12 @@
 // `pnpm lint`: runs the independent lint steps in a bounded pool, printing output only for failures.
-import { spawn } from 'node:child_process'
+import { runProcess } from '@orca/process-host'
 import { readFileSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
+import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
+import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'
 
 // package.json script names, slowest first so short steps fill in around them.
 export const LINT_STEPS = [
@@ -15,8 +17,11 @@ export const LINT_STEPS = [
   'check:test-file-runners',
   'verify:localization-catalogs',
   'verify:localization-coverage',
+  'verify:mobile-localization',
+  'verify:mobile-localization-coverage',
   'lint:ast-grep-gates',
   'check:main-sync-spawn-ratchet',
+  'check:has-restyle-scope',
   'lint:js-plugins',
   'oxlint',
   'check:dead-classes',
@@ -34,6 +39,7 @@ export const LINT_STEPS = [
   'check:ts-nocheck-ratchet',
   'check:workspace-record-read-ratchet',
   'check:unproven-pty-retirement-ratchet',
+  'check:daemon-blocking-call-ratchet',
   'check:node-runtime-pin',
   'check:path-literal-ratchet',
   'check:host-list-render-ratchet',
@@ -46,56 +52,54 @@ export const LINT_STEPS = [
 ]
 
 // Steps with no package script of their own run as the bare command.
-const BARE_COMMANDS = {
-  oxlint: 'oxlint',
-  // process-host and compat-boundary imports from one TypeScript parse, as CI runs them.
-  'check:import-boundaries': 'bun config/scripts/check-import-boundaries.mjs',
-  // lint:ast-grep and the flaky-test ratchet from one scan, as CI runs them.
-  'lint:ast-grep-gates': 'node config/scripts/ast-grep-gates.mjs'
-}
-
-function parseMaxWorkers(argv) {
-  const argument = argv.find((value) => /^--max-?workers=\d+$/i.test(value))
-  const requested = argument ? Number(argument.split('=')[1]) : 0
-  // Most steps are multi-threaded themselves, so a quarter of the cores keeps the host responsive.
-  return requested > 0 ? requested : Math.max(2, Math.floor(availableParallelism() / 4))
-}
-
-export function resolveLintCommands(scripts, steps = LINT_STEPS) {
-  return steps.map((name) => {
-    const command = scripts[name] ?? BARE_COMMANDS[name]
-    if (!command) {
+function resolveLintCommands(scripts, root) {
+  const pnpm = resolvePnpmCliInvocation()
+  return LINT_STEPS.map((name) => {
+    if (name === 'oxlint') {
+      const { command, prefixArgs } = resolveOxlintInvocation(root)
+      return { name, program: command, args: prefixArgs }
+    }
+    if (!scripts[name]) {
       throw new Error(`Lint step ${name} has no package.json script.`)
     }
-    return { name, command }
+    return { name, program: pnpm.command, args: [...pnpm.prefixArgs, 'run', name] }
   })
 }
 
-function runStep({ name, command }, root) {
+async function runStep({ name, program, args }, root) {
   const startedAt = performance.now()
-  return new Promise((resolve) => {
-    let output = ''
-    // Why a shell: package scripts are shell commands (`a && b`), as pnpm would run them.
-    const child = spawn(command, { cwd: root, shell: true, windowsHide: true })
-    child.stdout.on('data', (chunk) => (output += chunk))
-    child.stderr.on('data', (chunk) => (output += chunk))
-    const finish = (ok, extra = '') =>
-      resolve({
-        name,
-        ok,
-        output: output + extra,
-        elapsed: `${((performance.now() - startedAt) / 1000).toFixed(1)}s`
-      })
-    child.on('error', (error) => finish(false, String(error.message ?? error)))
-    child.on('close', (code) => finish(code === 0))
-  })
+  try {
+    const result = await runProcess({ program, args, cwd: root, timeoutMs: null }, 'tail')
+    return {
+      name,
+      ok: result.code === 0 && !result.signal && !result.timedOut,
+      output: result.stdout + result.stderr,
+      elapsed: `${((performance.now() - startedAt) / 1000).toFixed(1)}s`
+    }
+  } catch (error) {
+    return { name, ok: false, output: error.message ?? String(error), elapsed: 'failed to start' }
+  }
 }
 
 async function main(root, argv) {
   const startedAt = performance.now()
   const { scripts } = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'))
-  const steps = resolveLintCommands(scripts)
-  const concurrency = parseMaxWorkers(argv)
+  // Individual linters also use multiple cores.
+  let concurrency = Math.max(2, Math.min(4, Math.floor(availableParallelism() / 4)))
+  let timings = false
+  for (const argument of argv) {
+    if (argument === '--') {
+      continue
+    }
+    if (argument === '--timings') {
+      timings = true
+    } else if (/^--max-?workers=[1-9]\d*$/i.test(argument)) {
+      concurrency = Number(argument.split('=')[1])
+    } else {
+      throw new Error(`Unknown option ${argument}. Use --maxWorkers=<n> or --timings.`)
+    }
+  }
+  const steps = resolveLintCommands(scripts, root)
   const results = []
   let next = 0
   await Promise.all(
@@ -104,6 +108,8 @@ async function main(root, argv) {
         const result = await runStep(steps[next++], root)
         if (!result.ok) {
           console.error(`\n✗ ${result.name} (${result.elapsed})\n${result.output.trimEnd()}`)
+        } else if (timings) {
+          console.log(`✓ ${result.name} (${result.elapsed})`)
         }
         results.push(result)
       }
@@ -122,5 +128,10 @@ async function main(root, argv) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  process.exitCode = await main(path.resolve(import.meta.dirname, '../..'), process.argv.slice(2))
+  try {
+    process.exitCode = await main(path.resolve(import.meta.dirname, '../..'), process.argv.slice(2))
+  } catch (error) {
+    console.error(`lint: ${error.message ?? error}`)
+    process.exitCode = 1
+  }
 }

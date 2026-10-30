@@ -1,10 +1,10 @@
 import type { MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
-import { useMobileNativeChatPermissionSend } from './mobile-native-chat-permission-send'
-import { useMobileNativeChatAnswerSend } from './use-mobile-native-chat-answer-send'
-import { useMobileNativeChatCancelAsk } from './use-mobile-native-chat-cancel-ask'
+import { useMobileNativeChatPermissionSend } from './native-chat/input/mobile-native-chat-permission-send'
+import { useMobileNativeChatAnswerSend } from './native-chat/input/use-mobile-native-chat-answer-send'
+import { useMobileNativeChatCancelAsk } from './native-chat/input/use-mobile-native-chat-cancel-ask'
 import { useMobileNativeChatStop } from './use-mobile-native-chat-stop'
-import type { MobileNativeChatAnswerSend } from './use-mobile-native-chat-answer-send'
+import type { MobileNativeChatAnswerSend } from './native-chat/input/use-mobile-native-chat-answer-send'
 
 // Share the bridge write gate and cancel pending answer groups before interrupting; structured prompts use RPC instead.
 export function useMobileBridgeChatPromptWrites(args: {
@@ -21,7 +21,7 @@ export function useMobileBridgeChatPromptWrites(args: {
   answerAsk: MobileNativeChatAnswerSend['answerAsk']
   cancelAsk: () => Promise<boolean>
   respondPermission: (send: string) => Promise<boolean>
-  stop: () => void
+  stop: () => Promise<boolean>
 } {
   const { client, enabled, handleRef, deviceTokenRef, streamIdentity, onSendError } = args
   const { answerAsk, cancelPending } = useMobileNativeChatAnswerSend({
@@ -55,6 +55,7 @@ export function useMobileBridgeChatPromptWrites(args: {
     enabled,
     handleRef,
     deviceTokenRef,
+    agentRef: args.agentRef,
     streamIdentity,
     cancelPending,
     onSendError
