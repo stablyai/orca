@@ -19,7 +19,14 @@ import { StagedFileSaves } from './staged-file-saves'
 
 // An append can be held open to put other ops beside it.
 const appendGate = vi.hoisted((): { hold: Promise<void> | null } => ({ hold: null }))
-const createGate = vi.hoisted((): { hold: Promise<void> | null; entered: boolean } => ({
+const createGate = vi.hoisted(
+  (): { hold: Promise<void> | null; entered: boolean; failAfterCreate: boolean } => ({
+    hold: null,
+    entered: false,
+    failAfterCreate: false
+  })
+)
+const removeGate = vi.hoisted((): { hold: Promise<void> | null; entered: boolean } => ({
   hold: null,
   entered: false
 }))
@@ -34,7 +41,19 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     writeFile: async (...args: Parameters<typeof actual.writeFile>) => {
       createGate.entered = true
       await createGate.hold
-      return actual.writeFile(...args)
+      await actual.writeFile(...args)
+      if (createGate.failAfterCreate) {
+        throw new Error('staged_save_create_failed')
+      }
+    },
+    rm: async (...args: Parameters<typeof actual.rm>) => {
+      const options = args[1]
+      if (options && typeof options === 'object' && 'recursive' in options && options.recursive) {
+        return actual.rm(...args)
+      }
+      removeGate.entered = true
+      await removeGate.hold
+      return actual.rm(...args)
     }
   }
 })
@@ -49,6 +68,9 @@ beforeEach(() => {
   appendGate.hold = null
   createGate.hold = null
   createGate.entered = false
+  createGate.failAfterCreate = false
+  removeGate.hold = null
+  removeGate.entered = false
 })
 afterEach(() => {
   vi.useRealTimers()
@@ -211,6 +233,30 @@ describe('a staged save', () => {
     await expect(starting).rejects.toThrow('staged_save_unknown')
     await aborting
     expect(temps()).toEqual([])
+    await expect(staged.begin('conn-1', at(join(root, 'b.txt')), 1)).resolves.toEqual(
+      expect.objectContaining({ saveId: expect.any(String) })
+    )
+    await staged.abortConnection('conn-1')
+  })
+
+  it('keeps a failed setup reserved until its temp is removed', async () => {
+    let release = () => {}
+    removeGate.hold = new Promise((resolve) => {
+      release = resolve
+    })
+    createGate.failAfterCreate = true
+    const staged = saves({ maxSavesPerConnection: 1, maxSavesPerHost: 1 })
+    const starting = staged.begin('conn-1', at(join(root, 'a.txt')), 1)
+    await vi.waitFor(() => expect(removeGate.entered).toBe(true))
+
+    await expect(staged.begin('conn-1', at(join(root, 'b.txt')), 1)).rejects.toThrow(
+      'staged_save_limit'
+    )
+
+    release()
+    await expect(starting).rejects.toThrow('staged_save_create_failed')
+    expect(temps()).toEqual([])
+    createGate.failAfterCreate = false
     await expect(staged.begin('conn-1', at(join(root, 'b.txt')), 1)).resolves.toEqual(
       expect.objectContaining({ saveId: expect.any(String) })
     )

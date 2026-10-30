@@ -102,8 +102,8 @@ export class StagedFileSaves {
       }
     } catch (error) {
       if (!save.aborting) {
-        this.release(saveId, save)
         await rm(tempPath, { force: true }).catch(() => {})
+        this.release(saveId, save)
       }
       throw error
     }
