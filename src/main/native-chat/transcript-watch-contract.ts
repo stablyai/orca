@@ -1,4 +1,5 @@
 import type { CurrentRequestsProjection } from './agent-session-wire/agent-session-current-requests'
+import type { MessageQuestionRepository } from './message-question-repository'
 export const DESKTOP_READ_WINDOW = 300
 export const UNFLUSHED_SETTLE_MS = 1_500
 
@@ -29,6 +30,7 @@ export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
     lifecycle?: NativeChatTurnLifecycle
   ) => void
   onCurrentRequests?: (projection: CurrentRequestsProjection) => void
+  prepareCurrentRequests?: () => Promise<MessageQuestionRepository | void>
   initialLimit?: number
   sourceOrder?: boolean
   filePath?: string

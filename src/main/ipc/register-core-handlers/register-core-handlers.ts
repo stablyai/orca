@@ -290,7 +290,7 @@ export function registerCoreHandlers(
   configureRuntimeAiVaultSessionDelete((environmentId, args) =>
     deleteRuntimeAiVaultSession(getRuntimeEnvironmentRegistryRoot(), environmentId, args)
   )
-  registerNativeChatHandlers()
+  registerNativeChatHandlers(() => runtime.ensureStructuredAgentSessionHost())
   registerClipboardHandlers(store, {
     localChatAttachmentStore: async () => {
       await ensureStructuredAgentSessionHostUnlessRefused(() =>

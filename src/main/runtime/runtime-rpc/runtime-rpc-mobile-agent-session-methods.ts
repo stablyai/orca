@@ -23,6 +23,7 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.commands',
   'agentSession.history',
   'agentSession.currentRequests',
+  'agentSession.cancelCurrentQuestions',
   'agentSession.subscribe',
   'agentSession.unsubscribe',
   // Every session's status on one stream: the phone's chat reads the host's "Stopping…" from it.

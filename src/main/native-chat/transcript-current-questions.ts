@@ -1,117 +1,105 @@
-import { createPendingAskScanner } from '../../shared/native-chat/input/native-chat-ask'
-import { AGENT_SESSION_CURRENT_REQUESTS_V2 } from '../../shared/agent-session-current-requests-capability'
-import {
-  currentRequestsProjection,
-  type CurrentRequestsProjection
-} from './agent-session-wire/agent-session-current-requests'
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
+import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
+import { getStructuredAgentSessionHost } from './agent-session-wire/structured-agent-session-registry'
+import { messageQuestionsFor, type MessageQuestionRepository } from './message-question-repository'
+import type { CurrentRequestsProjection } from './agent-session-wire/agent-session-current-requests'
 import type { NativeChatLineDecoder } from './transcript-tail-reader'
-import {
-  createIncrementalTranscriptState,
-  readIncrementalTranscriptMessages,
-  resetIncrementalTranscriptState
-} from './transcript-incremental-reader'
-import {
-  boundaryFingerprint,
-  readTranscriptFileVersion,
-  transcriptFileVersionChanged,
-  type TranscriptFileVersion
-} from './transcript-file-version'
+import { createTranscriptQuestionSource } from './transcript-question-source'
 
-type Source = ReturnType<typeof createSource>
-const sources = new Map<string, Source>()
+type Source = ReturnType<typeof createTranscriptQuestionSource> & {
+  users: number
+  idle?: ReturnType<typeof setTimeout>
+}
+const sources = new WeakMap<MessageQuestionRepository, Map<string, Source>>()
+const SOURCE_IDLE_MS = 30_000
 
-function createSource(filePath: string, sessionId: string, decode: NativeChatLineDecoder) {
-  const state = createIncrementalTranscriptState()
-  const abort = new AbortController()
-  let scan = createPendingAskScanner()
-  let version: TranscriptFileVersion | undefined
-  let projection: CurrentRequestsProjection | undefined
-  let json: string | undefined
-  let serial = Promise.resolve()
-  const listeners = new Set<(projection: CurrentRequestsProjection) => void>()
-  const owner = {}
-  async function refresh(): Promise<void> {
-    abort.signal.throwIfAborted()
-    const next = await readTranscriptFileVersion(filePath, abort.signal)
-    if (version && !transcriptFileVersionChanged(next, version) && next.size === state.offset) {
-      return
-    }
-    const replaced =
-      version &&
-      (next.identity !== version.identity ||
-        next.size <= state.offset ||
-        (await boundaryFingerprint(filePath, state.offset, abort.signal)) !==
-          state.boundary.toString('base64'))
-    if (replaced) {
-      resetIncrementalTranscriptState(state)
-      scan = createPendingAskScanner()
-    }
-    const append = (messages: Parameters<typeof scan.append>[0][]) => messages.forEach(scan.append)
-    append(
-      await readIncrementalTranscriptMessages(
-        filePath,
-        state,
-        decode,
-        append,
-        undefined,
-        undefined,
-        abort.signal,
-        true
-      )
-    )
-    const completed = await readTranscriptFileVersion(filePath, abort.signal)
-    version = next
-    // A racing rewrite is replayed by the existing watcher before it declares completeness.
-    if (transcriptFileVersionChanged(completed, next)) {
-      return
-    }
-    const payload = {
-      blocking: [],
-      asyncQuestions: scan.current().contributors,
-      context: { sessionId, boundary: `${filePath}:${next.identity}` }
-    }
-    const nextJson = JSON.stringify(payload)
-    if (json === nextJson) {
-      return
-    }
-    json = nextJson
-    const nextProjection = currentRequestsProjection(
-      owner,
-      sessionId,
-      { actionablePrompts: () => [], viewKey: () => payload.context.boundary },
-      AGENT_SESSION_CURRENT_REQUESTS_V2,
-      payload,
-      next.identity
-    )
-    projection = nextProjection
-    listeners.forEach((notify) => notify(nextProjection))
+function hostRepository(): MessageQuestionRepository {
+  const database = getStructuredAgentSessionHost()?.deps.journalDatabase
+  if (!database) {
+    throw new Error('Current questions repository unavailable')
   }
+  return messageQuestionsFor(database)
+}
+
+function retainSource(
+  filePath: string,
+  agent: string,
+  sessionId: string,
+  decode: NativeChatLineDecoder,
+  repository: MessageQuestionRepository
+) {
+  agent = resolveNativeChatTranscriptAgent(agent) ?? agent
+  let ownedSources = sources.get(repository)
+  if (!ownedSources) {
+    ownedSources = new Map()
+    sources.set(repository, ownedSources)
+  }
+  const key = JSON.stringify([filePath, agent, sessionId])
+  let source = ownedSources.get(key)
+  if (!source) {
+    source = {
+      ...createTranscriptQuestionSource(filePath, agent, sessionId, decode, repository),
+      users: 0
+    }
+    ownedSources.set(key, source)
+    const created = source
+    const dispose = created.dispose
+    const releaseOwner = repository.ownSource(
+      { kind: 'transcript', filePath, agent, sessionId },
+      () => created.dispose()
+    )
+    created.dispose = () => {
+      if (created.idle) {
+        clearTimeout(created.idle)
+      }
+      dispose()
+      created.listeners.clear()
+      releaseOwner()
+      if (ownedSources.get(key) === created) {
+        ownedSources.delete(key)
+      }
+    }
+  }
+  if (source.idle) {
+    clearTimeout(source.idle)
+  }
+  source.idle = undefined
+  source.users++
+  const retained = source
+  let released = false
   return {
-    listeners,
-    current: () => projection,
-    refresh: () => {
-      const run = serial.then(refresh)
-      serial = run.catch(() => {})
-      return run
-    },
-    dispose: () => abort.abort()
+    source,
+    release: () => {
+      if (released) {
+        return
+      }
+      released = true
+      if (--retained.users > 0 || ownedSources.get(key) !== retained) {
+        return
+      }
+      // A unary query may assemble its next piece after the final stream has ended.
+      retained.idle = setTimeout(() => {
+        retained.dispose()
+        if (ownedSources.get(key) === retained) {
+          ownedSources.delete(key)
+        }
+      }, SOURCE_IDLE_MS)
+      retained.idle.unref?.()
+    }
   }
 }
 
-/** Existing watchers share one streaming source scan; the final subscriber releases its read model. */
+/** Stream interest and unary queries share one canonical read model, never read authority. */
 export function acquireTranscriptCurrentQuestions(
   filePath: string,
   agent: string,
   sessionId: string,
   decode: NativeChatLineDecoder,
-  notify: (projection: CurrentRequestsProjection) => void
+  notify: (projection: CurrentRequestsProjection) => void,
+  repository: MessageQuestionRepository = hostRepository()
 ) {
-  const key = JSON.stringify([filePath, agent, sessionId])
-  let source = sources.get(key)
-  if (!source) {
-    source = createSource(filePath, sessionId, decode)
-    sources.set(key, source)
-  }
+  const retained = retainSource(filePath, agent, sessionId, decode, repository)
+  const { source } = retained
   source.listeners.add(notify)
   const current = source.current()
   if (current) {
@@ -121,10 +109,79 @@ export function acquireTranscriptCurrentQuestions(
     refresh: source.refresh,
     dispose: () => {
       source.listeners.delete(notify)
-      if (source.listeners.size === 0) {
-        source.dispose()
-        sources.delete(key)
-      }
+      retained.release()
     }
   }
+}
+
+async function withTranscriptQuestionSource<T>(
+  filePath: string,
+  agent: string,
+  sessionId: string,
+  decode: NativeChatLineDecoder,
+  run: (source: Source) => T,
+  signal: AbortSignal | undefined,
+  repository: MessageQuestionRepository
+): Promise<T> {
+  signal?.throwIfAborted()
+  const retained = retainSource(filePath, agent, sessionId, decode, repository)
+  const deadline = AbortSignal.timeout(15_000)
+  const querySignal = signal ? AbortSignal.any([signal, deadline]) : deadline
+  try {
+    await waitForPromiseWithSignal(retained.source.refresh(), querySignal)
+    querySignal.throwIfAborted()
+    return run(retained.source)
+  } finally {
+    retained.release()
+  }
+}
+
+/** No subscriber is required; finite query/idle leases preserve publication identity across pieces. */
+export function queryTranscriptCurrentQuestions<T>(
+  filePath: string,
+  agent: string,
+  sessionId: string,
+  decode: NativeChatLineDecoder,
+  read: (projection: CurrentRequestsProjection) => T,
+  signal?: AbortSignal,
+  repository: MessageQuestionRepository = hostRepository()
+): Promise<T> {
+  return withTranscriptQuestionSource(
+    filePath,
+    agent,
+    sessionId,
+    decode,
+    (source) => {
+      const projection = source.current()
+      if (!projection) {
+        throw new Error('Current questions unavailable')
+      }
+      return read(projection)
+    },
+    signal,
+    repository
+  )
+}
+
+/** Source refresh applies canonical answer facts before committing an exact-ID cancellation. */
+export function cancelTranscriptCurrentQuestions(
+  filePath: string,
+  agent: string,
+  sessionId: string,
+  decode: NativeChatLineDecoder,
+  ids: readonly string[],
+  caller: string,
+  now: number,
+  signal?: AbortSignal,
+  repository: MessageQuestionRepository = hostRepository()
+): Promise<void> {
+  return withTranscriptQuestionSource(
+    filePath,
+    agent,
+    sessionId,
+    decode,
+    (source) => source.cancel(ids, caller, now),
+    signal,
+    repository
+  )
 }

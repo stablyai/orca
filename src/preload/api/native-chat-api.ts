@@ -1,6 +1,7 @@
 import type {
   AgentSessionCurrentRequestsMarker,
-  AgentSessionCurrentRequestsRead,
+  NativeChatCurrentRequestsRead,
+  NativeChatCancelCurrentQuestions,
   AgentSessionCurrentRequestsPiece
 } from '../../shared/agent-session-current-requests-wire'
 import type {
@@ -61,8 +62,11 @@ export type NativeChatSubscribeArgs = {
 }
 
 export type NativeChatApi = {
+  cancelCurrentQuestions: (
+    request: NativeChatCancelCurrentQuestions
+  ) => Promise<{ cancelled: true }>
   currentRequests: (
-    request: AgentSessionCurrentRequestsRead & { subscriptionId: string }
+    request: NativeChatCurrentRequestsRead
   ) => Promise<AgentSessionCurrentRequestsPiece>
   /** Reads the latest limit turns; the hook-reported transcriptPath takes precedence over ID globbing. */
   readSession: (

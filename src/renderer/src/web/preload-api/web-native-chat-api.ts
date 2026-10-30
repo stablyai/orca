@@ -7,17 +7,45 @@ import {
   parseRuntimeNativeChatTurnLifecycle
 } from '@/components/native-chat/native-chat-runtime-contract'
 import { translate } from '@/i18n/i18n'
-import { callRuntimeResult } from './web-runtime-calls'
+import { assertEnvironmentPairing, callEnvironmentEnvelope } from './web-runtime-calls'
+import type { StoredWebRuntimeEnvironment } from '../web-runtime-environment'
 import { getClientForEnvironment, requireActiveEnvironmentOrNull } from './web-runtime-session'
 
-export function createWebNativeChatApi(): NativeChatApi {
+export function createWebNativeChatApi(captured?: {
+  environment: StoredWebRuntimeEnvironment | null
+}): NativeChatApi {
+  const capturedRevision = captured?.environment
+    ? (captured.environment.pairingRevision ?? captured.environment.createdAt)
+    : undefined
+  const capturedRuntimeId = captured?.environment?.runtimeId ?? undefined
+  const environmentForCall = () =>
+    captured ? captured.environment : requireActiveEnvironmentOrNull()
+  async function call<TResult>(method: string, params?: unknown): Promise<TResult> {
+    const environment = environmentForCall()
+    if (!environment) {
+      throw new Error('Pair a host to view agent chat history.')
+    }
+    const response = await callEnvironmentEnvelope<TResult>(
+      environment.id,
+      method,
+      params,
+      15_000,
+      capturedRevision ?? environment.pairingRevision ?? environment.createdAt,
+      captured ? capturedRuntimeId : (environment.runtimeId ?? undefined)
+    )
+    if (!response.ok) {
+      throw Object.assign(new Error(response.error.message), { code: response.error.code })
+    }
+    return response.result
+  }
   return {
-    currentRequests: (request) => callRuntimeResult('nativeChat.currentRequests', request),
+    cancelCurrentQuestions: (request) => call('nativeChat.cancelCurrentQuestions', request),
+    currentRequests: (request) => call('nativeChat.currentRequests', request),
     // The full output stays on the host that ran the agent; the web client shows the message.
     getConversationNameFailureOutput: async () => null,
     readSession: async (agent, sessionId, limit, transcriptPath) =>
       parseRuntimeNativeChatReadSessionResult(
-        await callRuntimeResult<unknown>('nativeChat.readSession', {
+        await call<unknown>('nativeChat.readSession', {
           agent,
           sessionId,
           limit,
@@ -27,7 +55,7 @@ export function createWebNativeChatApi(): NativeChatApi {
       ),
     subscribe: (args, onFrame) => {
       // No paired runtime yet: return a no-op teardown so the chat view mounts cleanly; only the not-paired case is swallowed.
-      const environment = requireActiveEnvironmentOrNull()
+      const environment = environmentForCall()
       if (!environment) {
         onFrame({
           type: 'snapshot',
@@ -43,11 +71,16 @@ export function createWebNativeChatApi(): NativeChatApi {
       let handle: { unsubscribe: () => void } | null = null
       let cancelled = false
       let receivedInitial = false
-      void callRuntimeResult<{ capabilities?: string[] }>('status.get')
+      void call<{ capabilities?: string[] }>('status.get')
+        .catch(() => ({ capabilities: [] }))
         .then((status) => {
           if (cancelled) {
             return { unsubscribe: () => {} }
           }
+          assertEnvironmentPairing(
+            environment.id,
+            capturedRevision ?? environment.pairingRevision ?? environment.createdAt
+          )
           const supported =
             status.capabilities?.includes(AGENT_SESSION_CURRENT_REQUESTS_V2) === true
           return getClientForEnvironment(environment).subscribe(
@@ -67,6 +100,16 @@ export function createWebNativeChatApi(): NativeChatApi {
             {
               onResponse: (response) => {
                 if (cancelled) {
+                  return
+                }
+                try {
+                  assertEnvironmentPairing(
+                    environment.id,
+                    capturedRevision ?? environment.pairingRevision ?? environment.createdAt
+                  )
+                } catch {
+                  cancelled = true
+                  handle?.unsubscribe()
                   return
                 }
                 if (!response.ok) {

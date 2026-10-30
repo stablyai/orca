@@ -1,8 +1,8 @@
 import {
   aggregateAsyncQuestions,
-  extractPendingMessageReplyAsk,
-  type AsyncQuestionContributor
+  extractPendingMessageReplyAsk
 } from './native-chat/input/native-chat-ask'
+import type { MessageQuestionOccurrence } from './message-question-occurrence'
 import type { NativeChatMessage } from './native-chat-types'
 import type { SourceContext } from './agent-session-current-requests-wire'
 import { agentSessionCurrentContextRows } from './agent-session-context-clear'
@@ -15,7 +15,7 @@ import {
 } from './agent-session-current-requests-capability'
 
 export type AgentSessionCurrentRequestsState = {
-  asyncQuestions?: AsyncQuestionContributor[]
+  asyncQuestions?: readonly MessageQuestionOccurrence[]
   requestContext?: SourceContext
   currentRequests?: AgentJournalRenderItem[]
   requestMarker?: AgentSessionCurrentRequestsMarker

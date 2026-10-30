@@ -19,7 +19,7 @@ export type CurrentRequestsProjection = {
   identity: string
   marker: AgentSessionCurrentRequestsMarker
   items: AgentJournalRenderItem[] | CurrentRequestsPayload
-  json?: string
+  json: string
 }
 const projections = new WeakMap<object, Map<CurrentRequestsContract, CurrentRequestsProjection>>()
 // Even six escaped bytes per UTF-16 unit leave room for the RPC and phone envelopes.
@@ -53,6 +53,7 @@ export function currentRequestsProjection(
   const projection: CurrentRequestsProjection = {
     identity,
     items,
+    json: JSON.stringify(items),
     marker: {
       contract,
       sessionId,
@@ -75,7 +76,7 @@ export function readCurrentRequestsPiece(
   if (request.version !== projection.marker.version) {
     return { marker: projection.marker, json: '', nextCursor: 0, restart: true }
   }
-  const json = (projection.json ??= JSON.stringify(projection.items))
+  const json = projection.json
   const cursor = request.cursor ?? 0
   if (!Number.isSafeInteger(cursor) || cursor < 0 || cursor >= json.length) {
     throw new Error('Invalid current-request cursor')

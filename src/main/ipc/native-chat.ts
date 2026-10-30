@@ -1,3 +1,4 @@
+import { registerNativeChatCurrentRequestHandlers } from './native-chat-current-requests'
 import type {
   NativeChatReadSessionArgs,
   NativeChatSubscribeArgs,
@@ -8,11 +9,7 @@ export type {
   NativeChatSubscribeArgs,
   NativeChatAppendedPayload
 } from './native-chat-contract'
-import {
-  readCurrentRequestsPiece,
-  type CurrentRequestsProjection
-} from '../native-chat/agent-session-wire/agent-session-current-requests'
-import type { AgentSessionCurrentRequestsRead } from '../../shared/agent-session-current-requests-wire'
+import type { CurrentRequestsProjection } from '../native-chat/agent-session-wire/agent-session-current-requests'
 import { DESKTOP_READ_WINDOW } from '../native-chat/transcript-watch-contract'
 import { ipcMain, type IpcMainEvent, type WebContents } from 'electron'
 import { clearNativeChatTranscriptCache } from '../native-chat/transcript-read-cache'
@@ -49,7 +46,6 @@ async function readSession(args: NativeChatReadSessionArgs): Promise<ReadTranscr
 type LiveSubscription = {
   subscription: NativeChatTranscriptSubscription
   sessionId: string
-  projection: () => CurrentRequestsProjection | undefined
 }
 
 type PendingSubscription = {
@@ -142,7 +138,11 @@ function takePendingSubscription(
   return true
 }
 
-async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArgs): Promise<void> {
+async function handleSubscribe(
+  event: IpcMainEvent,
+  args: NativeChatSubscribeArgs,
+  ensureQuestions: () => Promise<void>
+): Promise<void> {
   const sender = event.sender
   if (sender.isDestroyed()) {
     return
@@ -162,6 +162,7 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
     agent,
     sessionId,
     transcriptPath: opened.transcriptPath,
+    prepareCurrentRequests: ensureQuestions,
     onCurrentRequests: (next) => {
       projection = next
       if (publishedSnapshot && canPublish()) {
@@ -255,7 +256,7 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
   if (existing) {
     existing.subscription.unsubscribe()
   }
-  bySubId.set(subscriptionId, { subscription, sessionId, projection: () => projection })
+  bySubId.set(subscriptionId, { subscription, sessionId })
   liveSubscriptions.set(sender.id, bySubId)
   if (!subscription.watching && canPublish()) {
     const payload: NativeChatAppendedPayload = {
@@ -296,23 +297,15 @@ export function _getNativeChatPendingSubscriptionCountForTest(): number {
   return count
 }
 
-export function registerNativeChatHandlers(): void {
-  ipcMain.handle(
-    'nativeChat:currentRequests',
-    (event, request: AgentSessionCurrentRequestsRead & { subscriptionId: string }) => {
-      const live = liveSubscriptions.get(event.sender.id)?.get(request.subscriptionId)
-      const projection = live?.projection()
-      if (!projection || live?.sessionId !== request.sessionId) {
-        throw new Error('Current questions unavailable')
-      }
-      return readCurrentRequestsPiece(projection, request)
-    }
-  )
+export function registerNativeChatHandlers(
+  ensureQuestions: () => Promise<void> = async () => {}
+): void {
+  registerNativeChatCurrentRequestHandlers(ensureQuestions, registerSenderCleanup)
   ipcMain.handle('nativeChat:readSession', (_event, args: NativeChatReadSessionArgs) =>
     readSession(args)
   )
   ipcMain.on('nativeChat:subscribe', (event, args: NativeChatSubscribeArgs) => {
-    void handleSubscribe(event, args)
+    void handleSubscribe(event, args, ensureQuestions)
   })
   ipcMain.on('nativeChat:unsubscribe', (event, args: { subscriptionId: string }) => {
     teardownSubscription(event.sender.id, args.subscriptionId)

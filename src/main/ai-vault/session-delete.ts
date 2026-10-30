@@ -1,3 +1,4 @@
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { lstat, realpath } from 'node:fs/promises'
 import type {
   AiVaultDeleteSessionResult,
@@ -9,6 +10,7 @@ import {
   type ValidateAiVaultSessionDeleteTargetArgs
 } from './session-delete-target'
 import { tryDeleteWslUncPath, WslDeleteValidationError } from '../wsl-unc-delete'
+import { deleteTranscriptQuestionSource } from '../native-chat/message-question-source-deletion'
 import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
 
 /** Desktop moves to Trash; a plain-Node host has none, so it removes permanently after the user confirmed. */
@@ -17,7 +19,8 @@ export type AiVaultSessionPathRemover = (removal: AiVaultSessionDeleteRemoval) =
 // Remove companions first so partial failure leaves the transcript visible for retry.
 export async function deleteAiVaultSessionFile(
   args: ValidateAiVaultSessionDeleteTargetArgs & { sessionId?: string },
-  removePath: AiVaultSessionPathRemover
+  removePath: AiVaultSessionPathRemover,
+  deletedSource: (agent: string, path: string) => Promise<void> = deleteTranscriptQuestionSource
 ): Promise<AiVaultDeleteSessionResult> {
   const validation = validateAiVaultSessionDeleteTarget(args)
   if (!validation.allowed) {
@@ -32,7 +35,6 @@ export async function deleteAiVaultSessionFile(
         return { outcome: 'rejected', agent, reason: rejection }
       }
     }
-    return { outcome: 'deleted' }
   } catch (error) {
     return {
       outcome: 'failed',
@@ -40,6 +42,15 @@ export async function deleteAiVaultSessionFile(
       error: error instanceof Error ? error.message : String(error)
     }
   }
+  try {
+    await deletedSource(agent, validation.resolvedPath)
+  } catch (error) {
+    createStructuredAgentSessionLogger().warn('Deleted transcript question cleanup failed', {
+      scope: 'message-question-source-deletion',
+      error
+    })
+  }
+  return { outcome: 'deleted' }
 }
 
 // Missing companions or externally removed transcripts are successful, idempotent removals.

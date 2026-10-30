@@ -1,3 +1,5 @@
+import { backgroundTaskFingerprint } from './agent-session-subscriber-frame-fields'
+import { AGENT_SESSION_CURRENT_REQUESTS_V2 } from '../../../shared/agent-session-current-requests-capability'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
@@ -63,5 +65,61 @@ export function refreshPublishedWork(
   emit()
   if (port.isActive(subscriber)) {
     subscriber.workView = view
+  }
+}
+
+export function republishCurrentRequestFrames(
+  emit: SubscriberDeliveryPort['emit'],
+  subscribers: Iterable<Subscriber>,
+  sessionId: string,
+  work: AgentSessionPublishedWork | undefined,
+  hostNow: number
+): void {
+  if (!work) {
+    return
+  }
+  for (const subscriber of subscribers) {
+    if (subscriber.requestContract !== AGENT_SESSION_CURRENT_REQUESTS_V2) {
+      continue
+    }
+    emit(
+      subscriber,
+      {
+        type: 'batch',
+        sessionId,
+        batch: emptyAgentSessionBatch(subscriber.cursor),
+        fence: subscriber.fence,
+        hostNow
+      },
+      { currentWork: work }
+    )
+  }
+}
+
+export function republishBackgroundTaskFrames(
+  port: Pick<SubscriberDeliveryPort, 'emit' | 'hooks'>,
+  subscribers: Iterable<Subscriber>,
+  sessionId: string,
+  fence: number,
+  hostNow: number
+): void {
+  const state = port.hooks.readBackgroundTasks?.(sessionId)
+  if (state === undefined) {
+    return
+  }
+  const fingerprint = backgroundTaskFingerprint(state)
+  for (const subscriber of subscribers) {
+    if (subscriber.backgroundTasks === fingerprint) {
+      continue
+    }
+    port.emit(subscriber, {
+      type: 'batch',
+      sessionId,
+      batch: emptyAgentSessionBatch(subscriber.cursor),
+      fence,
+      backgroundTasks: state,
+      hostNow
+    })
+    subscriber.fence = fence
   }
 }

@@ -1,3 +1,5 @@
+import { cancelStructuredAsyncQuestions } from './structured-agent-session-async-questions'
+import type { CancelCurrentQuestions } from '../../../shared/agent-session-current-requests-wire'
 import type { CurrentRequestsContract } from '../../../shared/agent-session-current-requests-capability'
 import type { AgentSessionCurrentRequestsRead } from '../../../shared/agent-session-current-requests-wire'
 import { readCurrentRequestsPiece } from './agent-session-current-requests'
@@ -91,6 +93,29 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     return readCurrentRequestsPiece(work.requestProjection(request.sessionId, contract), request)
   }
 
+  async cancelCurrentQuestions(request: CancelCurrentQuestions, caller: string): Promise<void> {
+    const { journal } = await this.conversation(request.sessionId)
+    const work = hostStructuredAgentSessionCurrentWork(
+      { store: this.deps.store, sessions: this.sessions },
+      request.sessionId
+    )
+    if (!work) {
+      throw new Error('Current requests unavailable')
+    }
+    if (
+      cancelStructuredAsyncQuestions(
+        journal,
+        request.sessionId,
+        work,
+        request.ids,
+        caller,
+        this.deps.now?.() ?? Date.now()
+      )
+    ) {
+      this.subscribers.republishCurrentRequests(request.sessionId, journal)
+    }
+  }
+
   async subscribe(input: AgentSessionSubscribeInput): Promise<() => void> {
     const session = await this.conversation(input.sessionId)
     return this.subscribers.open({
@@ -129,5 +154,20 @@ export class StructuredAgentSessionBackgroundTaskChannel {
       children: views,
       ...(incomplete ? { incomplete: true } : {})
     }
+  }
+}
+
+export function backgroundTaskChannelDelegates(
+  channel: () => StructuredAgentSessionBackgroundTaskChannel
+) {
+  return {
+    history: (...args: Parameters<StructuredAgentSessionBackgroundTaskChannel['history']>) =>
+      channel().history(...args),
+    currentRequests: (
+      ...args: Parameters<StructuredAgentSessionBackgroundTaskChannel['currentRequests']>
+    ) => channel().currentRequests(...args),
+    cancelCurrentQuestions: (
+      ...args: Parameters<StructuredAgentSessionBackgroundTaskChannel['cancelCurrentQuestions']>
+    ) => channel().cancelCurrentQuestions(...args)
   }
 }

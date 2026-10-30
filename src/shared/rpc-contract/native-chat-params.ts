@@ -43,9 +43,19 @@ export const MOBILE_NATIVE_CHAT_MAX_WINDOW = 2000
 
 export const NativeChatCurrentRequests = z
   .object({
-    subscriptionId: z.string().min(1),
-    sessionId: z.string().min(1),
+    agent: NativeChatSession.shape.agent,
+    sessionId: NativeChatSession.shape.sessionId,
+    transcriptPath: NativeChatSession.shape.transcriptPath,
     version: z.string().uuid(),
     cursor: z.number().int().nonnegative().optional()
+  })
+  .strict()
+
+export const NativeChatCancelCurrentQuestions = z
+  .object({
+    agent: NativeChatSession.shape.agent,
+    sessionId: NativeChatSession.shape.sessionId,
+    transcriptPath: NativeChatSession.shape.transcriptPath,
+    ids: z.array(z.string().min(1)).min(1)
   })
   .strict()

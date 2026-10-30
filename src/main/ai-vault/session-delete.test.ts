@@ -33,7 +33,11 @@ import { deleteAiVaultSessionFile as deleteWithRemover } from './session-delete'
 
 // The desktop's Trash remover; the executor itself is remover-agnostic.
 const deleteAiVaultSessionFile = (args: Parameters<typeof deleteWithRemover>[0]) =>
-  deleteWithRemover(args, (removal) => trashItemMock(removal.path))
+  deleteWithRemover(
+    args,
+    (removal) => trashItemMock(removal.path),
+    async () => {}
+  )
 
 const HOME = join('/tmp', 'orca-ai-vault-delete-exec-fixture-home')
 const GEMINI_ROOT = join(HOME, '.gemini', 'tmp')
@@ -59,6 +63,29 @@ describe('deleteAiVaultSessionFile', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     tryDeleteWslUncPathMock.mockResolvedValue(false)
+  })
+
+  it('keeps successful file deletion when occurrence cleanup fails', async () => {
+    const filePath = join(GEMINI_ROOT, 'project-a', 'session-1.json')
+    lstatMock.mockResolvedValue({ isFile: () => true })
+    realpathMock.mockResolvedValue(filePath)
+    trashItemMock.mockResolvedValue(undefined)
+    const failure = new Error('occurrence database unavailable')
+    const cleanup = vi.fn().mockRejectedValue(failure)
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const result = await deleteWithRemover(
+        baseArgs(filePath),
+        (removal) => trashItemMock(removal.path),
+        cleanup
+      )
+      expect(result).toEqual({ outcome: 'deleted' })
+      expect(trashItemMock).toHaveBeenCalledExactlyOnceWith(filePath)
+      expect(cleanup).toHaveBeenCalledExactlyOnceWith('gemini', resolve(filePath))
+      expect(warning).toHaveBeenCalled()
+    } finally {
+      warning.mockRestore()
+    }
   })
 
   it('trashes a regular file whose realpath matches the resolved path', async () => {

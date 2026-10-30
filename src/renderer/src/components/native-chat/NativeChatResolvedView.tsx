@@ -205,7 +205,7 @@ export function NativeChatResolvedView({
     questionAnswerInputRef,
     isVisible,
     isFocusedGroup,
-    composerReady: shownPromptCard === null && targetPtyId !== null && canSend
+    composerReady: !cardOwnsInput && targetPtyId !== null && canSend
   })
 
   // Match mobile ordering: hook preview before optimistic user echoes.

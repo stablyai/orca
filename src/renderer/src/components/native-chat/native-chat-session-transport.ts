@@ -1,6 +1,11 @@
 import { AGENT_SESSION_CURRENT_REQUESTS_V2 } from '../../../../shared/agent-session-current-requests-capability'
 import type { AgentSessionCurrentRequestsMarker } from '../../../../shared/agent-session-current-requests-wire'
 import type { NativeChatApi, NativeChatAppendedMessages } from '../../../../preload/api-types'
+import { createWebNativeChatApi } from '@/web/preload-api/web-native-chat-api'
+import {
+  requireActiveEnvironmentOrNull,
+  resolveEnvironment
+} from '@/web/preload-api/web-runtime-session'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
@@ -16,7 +21,7 @@ import { translate } from '@/i18n/i18n'
 /** Match local IPC so session consumers can read local or runtime-owned transcripts. */
 export type NativeChatSessionTransport = Pick<
   NativeChatApi,
-  'readSession' | 'subscribe' | 'currentRequests'
+  'readSession' | 'subscribe' | 'currentRequests' | 'cancelCurrentQuestions'
 >
 
 function runtimeTooOldMessage(): string {
@@ -41,6 +46,7 @@ export function toRuntimeNativeChatErrorMessage(err: unknown): string {
 
 /** Web IPC already targets its paired runtime; preserve sync desktop and deferred web teardown forms. */
 const localNativeChatTransport: NativeChatSessionTransport = {
+  cancelCurrentQuestions: (request) => window.api.nativeChat.cancelCurrentQuestions(request),
   currentRequests: (request) => window.api.nativeChat.currentRequests(request),
   readSession: (agent, sessionId, limit, transcriptPath) =>
     window.api.nativeChat.readSession(agent, sessionId, limit, transcriptPath),
@@ -51,6 +57,8 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
   const target: RuntimeClientTarget = { kind: 'environment', environmentId }
 
   return {
+    cancelCurrentQuestions: (request) =>
+      callRuntimeRpc(target, 'nativeChat.cancelCurrentQuestions', request),
     currentRequests: (request) => callRuntimeRpc(target, 'nativeChat.currentRequests', request),
     readSession: async (agent, sessionId, limit, transcriptPath) => {
       try {
@@ -97,6 +105,7 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
       const openStream = (): void => {
         const attempt = ++activeAttempt
         void runtimeEnvironmentSupportsCapability(environmentId, AGENT_SESSION_CURRENT_REQUESTS_V2)
+          .catch(() => false)
           .then((supported) => {
             if (cancelled || attempt !== activeAttempt) {
               return { unsubscribe: () => {} }
@@ -273,7 +282,14 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
 export function getNativeChatSessionTransport(
   runtimeEnvironmentId: string | null
 ): NativeChatSessionTransport {
-  if (runtimeEnvironmentId && !isWebClientLocation()) {
+  if (isWebClientLocation()) {
+    return createWebNativeChatApi({
+      environment: runtimeEnvironmentId
+        ? resolveEnvironment(runtimeEnvironmentId)
+        : requireActiveEnvironmentOrNull()
+    })
+  }
+  if (runtimeEnvironmentId) {
     return createRuntimeNativeChatTransport(runtimeEnvironmentId)
   }
   return localNativeChatTransport

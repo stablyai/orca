@@ -11,6 +11,7 @@ import {
 import { JournalUnreleasedSchemaError } from './journal-open-failure'
 import { ensureQueuedMessagesTable } from './queued-message-schema'
 import { ensureCommandReceiptsTable } from './command-receipt-schema'
+import { ensureMessageQuestionTables } from './message-question-schema'
 import { ensureAgentSessionAttachmentClaimTables } from '../agent-session-attachments/agent-session-attachment-claims'
 
 export const JOURNAL_BUSY_TIMEOUT_MS = 5000
@@ -72,6 +73,7 @@ export function openJournalDatabase(dbPath: string): OpenJournalDatabase {
     // Additive tables must exist on every writable open, even when version migration returns early.
     ensureQueuedMessagesTable(probe)
     ensureCommandReceiptsTable(probe)
+    ensureMessageQuestionTables(probe)
     ensureAgentSessionAttachmentClaimTables(probe)
     hardenSqliteDatabaseFiles(dbPath)
     transferred = true

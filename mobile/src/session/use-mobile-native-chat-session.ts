@@ -160,7 +160,11 @@ export function useMobileNativeChatSession(args: {
     const subscriptionId = buildNativeChatSubscriptionId(agent, sessionId, randomV4Uuid())
     const requestReader = createNativeChatCurrentRequestsBinding({
       read: (request) =>
-        callAgentSession(client, 'nativeChat.currentRequests', { ...request, subscriptionId }),
+        callAgentSession(client, 'nativeChat.currentRequests', {
+          ...request,
+          agent,
+          transcriptPath: transcriptPath ?? undefined
+        }),
       publish: (state) => setRequests({ ...state, identity })
     })
     const unsubscribe = client.subscribe(

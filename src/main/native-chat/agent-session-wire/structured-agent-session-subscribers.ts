@@ -10,7 +10,6 @@ import type {
   AgentSessionTurnActivity
 } from '../../../shared/agent-session-wire'
 import {
-  backgroundTaskFingerprint,
   emitSubscriberFrame,
   subscriberCommandsChanged,
   type SubscriberFieldHooks,
@@ -28,7 +27,11 @@ import { withPublishedWork } from './agent-session-published-work'
 import { subscriberHistoryReader } from './agent-session-bounded-frames'
 import { rememberSessionActivity } from './structured-agent-session-activity-retention'
 import { refreshDerivedStopNotes } from './agent-session-stop-note-refresh'
-import { refreshPublishedWork } from './agent-session-work-refresh'
+import {
+  refreshPublishedWork,
+  republishCurrentRequestFrames,
+  republishBackgroundTaskFrames
+} from './agent-session-work-refresh'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 
 export type AgentSessionSubscriberEmit = (event: AgentSessionSubscribeEvent) => void
@@ -227,27 +230,24 @@ export class AgentSessionSubscribers {
     this.hooks.onJournalPublished?.(sessionId, journal)
   }
 
+  republishCurrentRequests(sessionId: string, journal: AgentSessionJournal): void {
+    republishCurrentRequestFrames(
+      this.deliveryPort().emit,
+      this.subscribers(sessionId),
+      sessionId,
+      this.hooks.readCurrentWork?.(sessionId, journal),
+      this.now()
+    )
+  }
+
   republishBackgroundTasks(sessionId: string, fence: number): void {
-    const state = this.hooks.readBackgroundTasks?.(sessionId)
-    if (state === undefined) {
-      return
-    }
-    const fingerprint = backgroundTaskFingerprint(state)
-    const hostNow = this.now()
-    for (const subscriber of this.subscribers(sessionId)) {
-      if (subscriber.backgroundTasks === fingerprint) {
-        continue
-      }
-      this.emit(subscriber, {
-        type: 'batch',
-        sessionId,
-        batch: emptyAgentSessionBatch(subscriber.cursor),
-        fence,
-        backgroundTasks: state,
-        hostNow
-      })
-      subscriber.fence = fence
-    }
+    republishBackgroundTaskFrames(
+      this.deliveryPort(),
+      this.subscribers(sessionId),
+      sessionId,
+      fence,
+      this.now()
+    )
   }
 
   republishCommands(): void {

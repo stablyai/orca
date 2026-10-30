@@ -163,7 +163,7 @@ export function useNativeChatLiveSession(
 
     const subscriptionId = nextTranscriptId()
     const requestReader = bindCurrentQuestions((request) =>
-      transport.currentRequests({ ...request, subscriptionId })
+      transport.currentRequests({ ...request, agent, transcriptPath: transcriptPath ?? undefined })
     )
     const closeStream = openNativeChatTranscriptStream(
       transport,

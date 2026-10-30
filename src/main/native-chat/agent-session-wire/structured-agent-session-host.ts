@@ -23,7 +23,7 @@ import { structuredAgentSessionMutationDelegates } from './structured-agent-sess
 import { flushStructuredAgentSessionHost } from './structured-agent-session-host-teardown'
 import type * as HostTypes from './structured-agent-session-host-types'
 import { StructuredAgentSessionEventRecovery } from './structured-agent-session-event-recovery'
-import { StructuredAgentSessionBackgroundTaskChannel } from './structured-agent-session-background-task-channel'
+import * as background from './structured-agent-session-background-task-channel'
 import { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
 import { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
 import * as resume from './structured-agent-session-restart-resume-host'
@@ -71,14 +71,14 @@ export class StructuredAgentSessionHost {
   private readonly lifetime: lifetime.StructuredAgentSessionConversationLifetime
   private readonly conversationDelivery: conversation.StructuredAgentSessionConversationDelivery
   private readonly eventRecovery: StructuredAgentSessionEventRecovery
-  private readonly backgroundTasks: StructuredAgentSessionBackgroundTaskChannel
+  private readonly backgroundTasks: background.StructuredAgentSessionBackgroundTaskChannel
   readonly restartResume: resume.StructuredAgentSessionRestartResume
 
   constructor(readonly deps: HostTypes.StructuredAgentSessionHostDeps) {
     // Collaborators share a logger wrapper that cannot fail the operation it reports.
     this.deps = deps = sessionLogger.withNeverThrowingLogger(deps)
     this.clientDelivery.watchAtRestCommands(deps.adapter)
-    this.backgroundTasks = new StructuredAgentSessionBackgroundTaskChannel(
+    this.backgroundTasks = new background.StructuredAgentSessionBackgroundTaskChannel(
       deps,
       this.sessions,
       this.subscribers,
@@ -313,8 +313,8 @@ export class StructuredAgentSessionHost {
   /** Read the store; idle-released chats have no session-map entry. */
   handoffStatus = (sessionId: string) => structuredAgentSessionOwnerStatus(this.deps, sessionId)
 
-  history: StructuredAgentSessionBackgroundTaskChannel['history'] = (...args) =>
-    this.backgroundTasks.history(...args)
+  private readonly channel = background.backgroundTaskChannelDelegates(() => this.backgroundTasks)
+  history = this.channel.history
 
   readonly continuationContext: ReturnType<typeof contextReader>
 
@@ -323,8 +323,9 @@ export class StructuredAgentSessionHost {
     (await this.lifetime.conversation(sessionId)).journal.snapshot()
 
   currentWork = this.clientDelivery.readCurrentWork
-  readCurrentRequests: StructuredAgentSessionBackgroundTaskChannel['currentRequests'] = (...args) =>
-    this.backgroundTasks.currentRequests(...args)
+  readCurrentRequests = this.channel.currentRequests
+
+  cancelCurrentQuestions = this.channel.cancelCurrentQuestions
 
   observeJournalPublications = this.clientDelivery.observeJournalPublications
 

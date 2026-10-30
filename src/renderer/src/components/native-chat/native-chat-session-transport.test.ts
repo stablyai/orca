@@ -18,6 +18,12 @@ const nativeChatSubscribe = vi.fn()
 const runtimeEnvironmentsCall = vi.fn()
 const runtimeEnvironmentsSubscribe = vi.fn()
 
+const web = vi.hoisted(() => ({ create: vi.fn(), read: vi.fn(), resolve: vi.fn() }))
+vi.mock('@/web/preload-api/web-native-chat-api', () => ({ createWebNativeChatApi: web.create }))
+vi.mock('@/web/preload-api/web-runtime-session', () => ({
+  resolveEnvironment: web.resolve,
+  requireActiveEnvironmentOrNull: () => null
+}))
 const supportsCurrentRequests = vi.hoisted(() => vi.fn())
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeRpcClient>()),
@@ -54,6 +60,9 @@ function flush(): Promise<void> {
 beforeEach(() => {
   vi.clearAllMocks()
   supportsCurrentRequests.mockResolvedValue(false)
+  web.create.mockReturnValue({ readSession: web.read })
+  web.resolve.mockImplementation((id) => ({ id }))
+  web.read.mockResolvedValue({ messages: [] })
   clearRuntimeCompatibilityCacheForTests()
   delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
   vi.stubGlobal('window', {
@@ -153,14 +162,16 @@ describe('getNativeChatSessionTransport — selection', () => {
     })
   })
 
-  it('returns the local adapter on the web client even with an owner (R3 guard)', async () => {
+  it('captures the browser owner in its web adapter instead of the desktop bridge', async () => {
     ;(window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
     nativeChatReadSession.mockResolvedValue({ messages: [] })
     const transport = getNativeChatSessionTransport(ENV)
 
     await transport.readSession('claude', 'sess-1', 40, undefined)
 
-    expect(nativeChatReadSession).toHaveBeenCalledOnce()
+    expect(web.create).toHaveBeenCalledWith({ environment: { id: ENV } })
+    expect(web.read).toHaveBeenCalledWith('claude', 'sess-1', 40, undefined)
+    expect(nativeChatReadSession).not.toHaveBeenCalled()
     expect(runtimeEnvironmentsCall).not.toHaveBeenCalled()
   })
 })
@@ -542,6 +553,34 @@ describe('runtime subscribe', () => {
 
     expect(unsubscribe).toHaveBeenCalledOnce()
     expect(onAppended).not.toHaveBeenCalled()
+  })
+
+  it('opens the normal legacy stream when optional current-request discovery rejects', async () => {
+    supportsCurrentRequests.mockRejectedValueOnce(new Error('Optional probe failed'))
+    markRuntimeEnvironmentCompatible(ENV)
+    const { deliver } = stubSubscribe()
+    const onFrame = vi.fn()
+    const stop = getNativeChatSessionTransport(ENV).subscribe(
+      { subscriptionId: 'fallback', agent: 'codex', sessionId: 'sess-1' },
+      onFrame
+    )
+    await flushMicrotasks()
+    expect(runtimeEnvironmentsSubscribe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          capabilities: { transcriptPending: 1, transcriptSourceOrder: 1 }
+        })
+      }),
+      expect.any(Object)
+    )
+    deliver({ type: 'snapshot', messages: [message('legacy-output')] })
+    expect(onFrame).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'snapshot',
+        messages: [message('legacy-output')]
+      })
+    )
+    stop()
   })
 
   it('opts into current controls only on a capable runtime and preserves its marker', async () => {

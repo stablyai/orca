@@ -1,4 +1,5 @@
 import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import { invalidateMessageQuestionSession } from '../native-chat/message-question-repository'
 // Load session/ledger rows once and persist only changed rows inside the journal transaction.
 // Unreadable records remain present and immutable; every mutation of their ids is refused.
 
@@ -218,6 +219,7 @@ export function writeAgentSessionStoreRows(
     upsertRecord.run(sessionId, json)
   }
   for (const sessionId of writes.records.remove) {
+    invalidateMessageQuestionSession(db, sessionId)
     db.prepare('DELETE FROM agent_session_records WHERE session_id = ?').run(sessionId)
   }
   const upsertOperation = db.prepare(

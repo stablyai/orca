@@ -1,11 +1,12 @@
 import type { CurrentRequestsContract } from './agent-session-current-requests-capability'
 import type { AgentJournalRenderItem } from './agent-session-journal-types'
-import type { AsyncQuestionContributor } from './native-chat/input/native-chat-ask'
+import type { MessageQuestionOccurrence } from './message-question-occurrence'
+import type { AgentType } from './native-chat-types'
 
 export type SourceContext = { sessionId: string; boundary: string }
 export type CurrentRequestsPayload = {
   blocking: AgentJournalRenderItem[]
-  asyncQuestions: AsyncQuestionContributor[]
+  asyncQuestions: readonly MessageQuestionOccurrence[]
   context: SourceContext
 }
 
@@ -23,6 +24,17 @@ export type AgentSessionCurrentRequestsRead = {
   sessionId: string
   version: string
   cursor?: number
+}
+
+export type CancelCurrentQuestions = { sessionId: string; ids: string[] }
+export type NativeChatCancelCurrentQuestions = CancelCurrentQuestions & {
+  agent: AgentType
+  transcriptPath?: string
+}
+
+export type NativeChatCurrentRequestsRead = AgentSessionCurrentRequestsRead & {
+  agent: AgentType
+  transcriptPath?: string
 }
 
 export type AgentSessionCurrentRequestsPiece = {

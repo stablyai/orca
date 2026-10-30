@@ -146,6 +146,9 @@ export function journal(
   submissions: AgentJournalSubmission[] = []
 ) {
   const currentWork: StructuredAgentSessionCurrentWorkJournal = {
+    messageQuestions: () => {
+      throw new Error('This ownership fixture does not publish async questions')
+    },
     item: (itemId) => items.find((item) => item.itemId === itemId) ?? null,
     cursor: () => ({ epoch: EPOCH, sequence: items.length }),
     visitItems: (visit) => {

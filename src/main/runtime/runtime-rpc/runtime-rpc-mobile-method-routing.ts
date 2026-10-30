@@ -146,6 +146,7 @@ export const EXECUTION_HOST_METHODS = [
   'nativeChat.readSession',
   'nativeChat.subscribe',
   'nativeChat.currentRequests',
+  'nativeChat.cancelCurrentQuestions',
   'nativeChat.unsubscribe',
   // Mobile reports takeover out of band, matching desktop renderer signaling.
   'orchestration.workerTerminalUserInput',

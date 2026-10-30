@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { messageQuestionOccurrenceSchema } from './message-question-occurrence'
+import { waitForPromiseWithSignal } from './abort-signal-reason'
 import type { CurrentRequestsPayload } from './agent-session-current-requests-wire'
 import {
   AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
@@ -15,25 +17,9 @@ import type {
   AgentSessionCurrentRequestsRead
 } from './agent-session-current-requests-wire'
 
-const asyncContributorSchema = z.object({
-  sourceRowId: z.string(),
-  timestamp: z.number().finite().nullable(),
-  responseMode: z.literal('message'),
-  questions: z
-    .array(
-      z.object({
-        question: z.string(),
-        header: z.string().optional(),
-        multiSelect: z.boolean(),
-        hasPreviews: z.literal(true).optional(),
-        options: z.array(z.object({ label: z.string(), description: z.string().optional() }))
-      })
-    )
-    .min(1)
-})
 const payloadSchema = z.object({
   blocking: z.array(z.custom<AgentJournalRenderItem>(isAdmissibleAgentJournalRenderItem)),
-  asyncQuestions: z.array(asyncContributorSchema),
+  asyncQuestions: z.array(messageQuestionOccurrenceSchema),
   context: z.object({ sessionId: z.string(), boundary: z.string() })
 })
 function supported(contract: string): boolean {
@@ -45,7 +31,10 @@ function supported(contract: string): boolean {
 
 /** One in-flight piece per owner, including replacement subscriptions awaiting an old reply. */
 export function createAgentSessionCurrentRequestsReader(args: {
-  read: (request: AgentSessionCurrentRequestsRead) => Promise<AgentSessionCurrentRequestsPiece>
+  read: (
+    request: AgentSessionCurrentRequestsRead,
+    signal: AbortSignal
+  ) => Promise<AgentSessionCurrentRequestsPiece>
   complete: (
     marker: AgentSessionCurrentRequestsMarker,
     items: AgentJournalRenderItem[],
@@ -60,6 +49,28 @@ export function createAgentSessionCurrentRequestsReader(args: {
   let running = false
   let attempted: string | undefined
   let failedVersion: string | undefined
+  let activeRead: AbortController | undefined
+  async function readPiece(
+    request: AgentSessionCurrentRequestsRead
+  ): Promise<AgentSessionCurrentRequestsPiece> {
+    const controller = new AbortController()
+    activeRead = controller
+    const timeout = setTimeout(
+      () => controller.abort(new Error('Current-request read timed out')),
+      15_000
+    )
+    try {
+      return await waitForPromiseWithSignal(
+        args.read(request, controller.signal),
+        controller.signal
+      )
+    } finally {
+      clearTimeout(timeout)
+      if (activeRead === controller) {
+        activeRead = undefined
+      }
+    }
+  }
   // A read that failed in transit re-reads the same version with the stream's reconnect backoff.
   const retry = createReconnectScheduler({
     shouldStop: () => desired === undefined || desired.version !== failedVersion,
@@ -83,7 +94,7 @@ export function createAgentSessionCurrentRequestsReader(args: {
     try {
       while (current()) {
         reading = true
-        const piece = await args.read({
+        const piece = await readPiece({
           sessionId: marker.sessionId,
           version: marker.version,
           cursor
@@ -181,12 +192,14 @@ export function createAgentSessionCurrentRequestsReader(args: {
         return
       }
       desired = marker
+      activeRead?.abort()
       void pump()
     },
     invalidate(): void {
       generation += 1
       desired = undefined
       attempted = undefined
+      activeRead?.abort()
       retry.dispose()
       retry.reset()
     }

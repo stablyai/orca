@@ -8,3 +8,10 @@ export const CurrentRequestsParams = z
     cursor: z.number().int().nonnegative().optional()
   })
   .strict()
+
+export const CancelCurrentQuestionsParams = z
+  .object({
+    sessionId: SessionId,
+    ids: z.array(z.string().min(1)).min(1)
+  })
+  .strict()

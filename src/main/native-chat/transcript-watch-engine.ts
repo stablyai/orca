@@ -1,4 +1,4 @@
-import { acquireTranscriptCurrentQuestions } from './transcript-current-questions'
+import { createTranscriptQuestionRefresh } from './transcript-question-refresh'
 import type { NativeChatMessage, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
 import {
   boundaryFingerprint,
@@ -42,15 +42,6 @@ export async function installTranscriptWatcher(
   const { onAppend, onInitialSnapshot, onReplace, initialLimit } = args
   const decodeLifecycle = nativeChatTurnLifecycleDecoderForAgent(args.agent)
 
-  const questions = args.onCurrentRequests
-    ? acquireTranscriptCurrentQuestions(
-        filePath,
-        args.agent,
-        args.sessionId,
-        decode,
-        args.onCurrentRequests
-      )
-    : undefined
   const state = createIncrementalTranscriptState()
   let watchedVersion: TranscriptFileVersion | null = null
   let initialDrain = true,
@@ -58,6 +49,13 @@ export async function installTranscriptWatcher(
   let closed = false
   // Abort detaches gate waiters immediately and prevents in-flight drains admitting work after teardown.
   const gateAbort = new AbortController()
+  const questions = createTranscriptQuestionRefresh(
+    filePath,
+    decode,
+    args,
+    gateAbort.signal,
+    () => closed
+  )
   const reader = createTranscriptWatchReader({
     filePath,
     state,
@@ -127,7 +125,7 @@ export async function installTranscriptWatcher(
     if (contentReplaced) {
       resetIncrementalTranscriptState(state)
     }
-    await questions?.refresh()
+    questions.refresh()
     if (closed) {
       return
     }
@@ -247,6 +245,7 @@ export async function installTranscriptWatcher(
       return
     }
     try {
+      questions.refresh()
       const current = await readTranscriptFileVersion(filePath, gateAbort.signal)
       if (closed) {
         return
@@ -295,7 +294,7 @@ export async function installTranscriptWatcher(
         return
       }
       closed = true
-      questions?.dispose()
+      questions.dispose()
       gateAbort.abort(new Error('Native Chat transcript watcher unsubscribed'))
       scheduler.dispose()
       stopWslObservation()

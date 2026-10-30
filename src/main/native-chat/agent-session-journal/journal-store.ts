@@ -2,6 +2,7 @@
 
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
 import { randomUUID } from 'node:crypto'
+import { structuredMessageQuestions } from '../message-question-repository'
 import { createJournalPublicReader } from './journal-public-read'
 import type {
   AgentJournalAcceptanceReceipt,
@@ -237,6 +238,8 @@ export class AgentSessionJournal {
 
   /** Excludes client actions and recovery bookkeeping. */
   lastProviderActivityAt = (fence: number) => this.state.providerActivityAt.get(fence)
+
+  messageQuestions = () => structuredMessageQuestions(this.database, this.identity)
 
   submissions = (): AgentJournalSubmission[] => [...this.state.submissions.values()]
 

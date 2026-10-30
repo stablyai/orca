@@ -1,3 +1,4 @@
+import type { MessageQuestionOccurrence } from '../../../shared/message-question-occurrence'
 import { expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import { createAgentSessionCurrentRequestsReader } from '../../../shared/agent-session-current-requests-reader'
@@ -38,7 +39,7 @@ const prompt: AgentJournalRenderItem = {
 
 it('pulls a greater-than-frame record and greater-than-window collection losslessly with one piece in flight', async () => {
   const items = [prompt]
-  const projection = { identity: 'host', items, marker }
+  const projection = { identity: 'host', items, marker, json: JSON.stringify(items) }
   let inFlight = 0
   let maximum = 0
   const complete = vi.fn()
@@ -140,7 +141,20 @@ it('retires positive owner changes, rejects late reads, and relinquishes authori
 
 it('negotiates lossless message-answerable controls separately from v1 callbacks and installs restarted reads atomically', async () => {
   const v2 = { ...marker, contract: 'agent-session.current-requests.v2' as const }
-  const question = {
+  const question: MessageQuestionOccurrence = {
+    id: 'question-1',
+    sourceId: 'source-1',
+    context: 'context',
+    callSlot: 0,
+    order: [1, 0],
+    turnId: null,
+    resolution: {
+      state: 'pending',
+      reason: null,
+      factId: null,
+      resolvedBy: null,
+      resolvedAt: null
+    } as const,
     sourceRowId: 'outside-history',
     timestamp: 10,
     responseMode: 'message' as const,
@@ -158,7 +172,7 @@ it('negotiates lossless message-answerable controls separately from v1 callbacks
     asyncQuestions: [question],
     context: { sessionId: 's', boundary: 'context' }
   }
-  let current = { identity: 'host', items: payload, marker: v2 }
+  let current = { identity: 'host', items: payload, marker: v2, json: JSON.stringify(payload) }
   const complete = vi.fn()
   const error = vi.fn()
   let reads = 0
@@ -169,7 +183,8 @@ it('negotiates lossless message-answerable controls separately from v1 callbacks
         current = {
           identity: 'host',
           marker: { ...v2, version: 'replacement', revision: 2 },
-          items: { ...payload, asyncQuestions: [] }
+          items: { ...payload, asyncQuestions: [] },
+          json: JSON.stringify({ ...payload, asyncQuestions: [] })
         }
       }
       return readCurrentRequestsPiece(current, request)
@@ -196,4 +211,58 @@ it('negotiates lossless message-answerable controls separately from v1 callbacks
   await vi.waitFor(() => expect(legacyError).toHaveBeenCalledOnce())
   expect(legacyComplete).not.toHaveBeenCalled()
   legacy.invalidate()
+})
+
+it('settles a disposed read immediately so its replacement can finish while the old transport never answers', async () => {
+  let reads = 0
+  let oldSignal: AbortSignal | undefined
+  const complete = vi.fn()
+  const reader = createAgentSessionCurrentRequestsReader({
+    read: async (request, signal) => {
+      if (++reads === 1) {
+        oldSignal = signal
+        return new Promise(() => {})
+      }
+      return {
+        marker: { ...marker, version: request.version, revision: 2 },
+        json: '[]',
+        nextCursor: null
+      }
+    },
+    complete,
+    error: vi.fn(),
+    replaceMarker: vi.fn()
+  })
+  reader.observe(marker)
+  reader.invalidate()
+  const next = { ...marker, version: 'v2', revision: 2 }
+  reader.observe(next)
+  await vi.waitFor(() => expect(complete).toHaveBeenCalledWith(next, []))
+  expect(oldSignal?.aborted).toBe(true)
+  expect(reads).toBe(2)
+  reader.invalidate()
+})
+
+it('retries a timed-out piece through the existing backoff and completes after a legitimate transport wake', async () => {
+  vi.useFakeTimers()
+  const complete = vi.fn()
+  let calls = 0
+  const reader = createAgentSessionCurrentRequestsReader({
+    read: async () =>
+      ++calls === 1 ? new Promise(() => {}) : { marker, json: '[]', nextCursor: null },
+    complete,
+    error: vi.fn(),
+    replaceMarker: vi.fn()
+  })
+  try {
+    reader.observe(marker)
+    await vi.advanceTimersByTimeAsync(15_000)
+    expect(complete).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(complete).toHaveBeenCalledWith(marker, [])
+    expect(calls).toBe(2)
+  } finally {
+    reader.invalidate()
+    vi.useRealTimers()
+  }
 })
