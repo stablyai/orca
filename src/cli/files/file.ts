@@ -213,7 +213,8 @@ export const FILE_HANDLERS: Record<string, CommandHandler> = {
       worktree,
       relativePath,
       navigation: getFileOpenNavigation(ctx.flags),
-      ...position
+      ...position,
+      ...(ctx.flags.get('preview') === true ? { preview: true } : {})
     })
     requireOpened(result.result, relativePath)
     printResult(result, ctx.json, formatFileOpen)
