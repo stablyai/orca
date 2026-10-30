@@ -1,6 +1,7 @@
 import { clipboard } from 'electron'
 import { runProcess } from '@orca/process-host'
 import {
+  CLIPBOARD_TEXT_READ_FAILED_ERROR,
   CLIPBOARD_TEXT_READ_MAX_BYTES,
   CLIPBOARD_TEXT_READ_UNRESPONSIVE_ERROR,
   CLIPBOARD_TEXT_TOO_LARGE_ERROR
@@ -56,6 +57,11 @@ export function readClipboardTextWithBoundedWait(
           // killOnOutputLimit stopped the helper at the capture cap, so the item is
           // larger than what was captured; fail loudly instead of pasting partial text.
           throw new Error(CLIPBOARD_TEXT_TOO_LARGE_ERROR)
+        }
+        if (result.code !== 0) {
+          // A helper that exits nonzero delivered no trustworthy payload; an empty
+          // resolve would read as a successful paste of nothing.
+          throw new Error(CLIPBOARD_TEXT_READ_FAILED_ERROR)
         }
         return result.stdout
       },

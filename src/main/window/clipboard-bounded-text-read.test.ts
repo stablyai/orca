@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ProcessHost from '@orca/process-host'
 import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import {
+  CLIPBOARD_TEXT_READ_FAILED_ERROR,
   CLIPBOARD_TEXT_READ_MAX_BYTES,
   CLIPBOARD_TEXT_READ_UNRESPONSIVE_ERROR,
   CLIPBOARD_TEXT_TOO_LARGE_ERROR
@@ -105,6 +106,15 @@ describe('bounded clipboard text read', () => {
 
     await expect(readClipboardTextWithBoundedWait(darwinDeps())).rejects.toThrow(
       CLIPBOARD_TEXT_READ_UNRESPONSIVE_ERROR
+    )
+    expect(readClipboardTextDirectMock).not.toHaveBeenCalled()
+  })
+
+  it('reports a failed helper exit as a read failure instead of resolving an empty paste', async () => {
+    runProcessMock.mockResolvedValue(helperResult({ code: 1, stdout: '' }))
+
+    await expect(readClipboardTextWithBoundedWait(darwinDeps())).rejects.toThrow(
+      CLIPBOARD_TEXT_READ_FAILED_ERROR
     )
     expect(readClipboardTextDirectMock).not.toHaveBeenCalled()
   })
