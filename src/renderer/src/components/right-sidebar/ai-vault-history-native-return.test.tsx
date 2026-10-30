@@ -12,6 +12,7 @@ import {
   setLocalRuntimeCapabilitiesForTests
 } from '@/runtime/local-runtime-capabilities'
 import { STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY as HISTORY } from '../../../../shared/protocol-version'
+import { inPlaceSwitchCapability } from '../../../../shared/structured-agent-cli-conversation-adoption'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { AiVaultVirtualRow } from './AiVaultVirtualRow'
 import { useAiVaultPanelSessionResume } from './use-ai-vault-panel-session-resume'
@@ -54,7 +55,7 @@ vi.mock('@/lib/ai-vault-tab-title-requests', async (original) => ({
   collectAgentPaneConversations: mocks.panes
 }))
 
-const SWITCH = 'agent-session.structured.switch.creation-settlement-v1:codex'
+const SWITCH = inPlaceSwitchCapability('codex')
 const paired = {
   id: 'paired',
   name: 'Paired',

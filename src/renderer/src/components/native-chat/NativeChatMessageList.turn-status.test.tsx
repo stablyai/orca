@@ -2,6 +2,9 @@
 
 import '@testing-library/jest-dom/vitest'
 
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { cleanup, screen } from '@testing-library/react'
 import { render } from './native-chat-tooltip-test-harness'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -33,7 +36,18 @@ import type {
   AgentJournalTurnItem
 } from '../../../../shared/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { selectStructuredAgentSettledTurns } from '../../../../shared/structured-agent-session-turn-timing'
+import {
+  selectStructuredAgentSettledTurns,
+  selectStructuredAgentTurnBars
+} from '../../../../shared/structured-agent-session-turn-timing'
+import { agentSessionSwitchDeadline } from '../../../../shared/agent-session-switch-execution'
+import { claudeProviderHandle } from '../../../../shared/agent-session-provider-handle-encoding'
+import { createTrackedJournalOpener } from '../../../../main/native-chat/agent-session-journal/journal-host-database-test-support'
+import { importLegacyTranscriptIntoJournal } from '../../../../main/native-chat/agent-session-journal/journal-legacy-import'
+import {
+  captureSwitchStoppedCliTurn,
+  catchUpSwitchedCliTranscript
+} from '../../../../main/native-chat/agent-session-wire/structured-agent-session-switch-import'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
@@ -148,6 +162,100 @@ const usageLimitView = {
   }
 
   describe('NativeChatMessageList folded turn headers', () => {
+    it('renders an imported explicit Stop without inventing elapsed time and keeps timed cancellation', async () => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-renderer65-stop-import-'))
+      const journals = createTrackedJournalOpener()
+      const deadline = agentSessionSwitchDeadline()
+      try {
+        const recording = await readFile(
+          join(
+            import.meta.dirname,
+            '../../../../main/native-chat/agent-session-wire/__fixtures__/claude-cli-switch-2.1.302.jsonl'
+          ),
+          'utf8'
+        )
+        const rows = recording.trimEnd().split('\n')
+        const sessionId: string = JSON.parse(rows[0]!).sessionId
+        const filePath = join(root, 'cli.jsonl')
+        await writeFile(filePath, `${rows.slice(0, 2).join('\n')}\n`)
+        const source = { agent: 'claude' as const, sessionId, filePath }
+        const imported = await journals.open({
+          stateDirectory: root,
+          identity: {
+            sessionId: 'imported-stop',
+            workspaceId: 'folder',
+            hostId: 'local',
+            agent: 'claude',
+            providerHandle: claudeProviderHandle(sessionId, null)
+          }
+        })
+        expect(
+          await importLegacyTranscriptIntoJournal({
+            journal: imported,
+            agent: 'claude',
+            sessionId,
+            fence: 1,
+            options: { filePath }
+          })
+        ).toMatchObject({ ok: true, replaced: true })
+        expect(
+          selectStructuredAgentTurnBars(imported.snapshot().items, [], null).settledTurns.size
+        ).toBe(0)
+        const stopped = await captureSwitchStoppedCliTurn(source, true, deadline)
+        if (!stopped) {
+          throw new Error('Expected the recorded CLI turn to be working')
+        }
+        await catchUpSwitchedCliTranscript({
+          journal: imported,
+          source,
+          fence: 1,
+          deadline,
+          stopped
+        })
+        const snapshot = imported.snapshot()
+        const lifecycle = snapshot.items.find(({ body }) => body.kind === 'turn')
+        expect(lifecycle?.body).toMatchObject({
+          state: 'interrupted',
+          outcome: 'cancellation',
+          turnId: stopped.turnId
+        })
+        expect(lifecycle?.body).not.toHaveProperty('startedAt')
+        const items = [...snapshot.items, ...journal()]
+        const bars = selectStructuredAgentTurnBars(items, [], null)
+        expect(bars.settledTurns.get(stopped.userItemKey)).toEqual({
+          startedAt: null,
+          workedSeconds: null,
+          verdict: 'cancellation'
+        })
+        expect(bars.runningTiming).toBeNull()
+        render(
+          <NativeChatMessageList
+            session={{
+              ...session(),
+              agent: 'claude',
+              messages: projectStructuredAgentSessionMessages(items, [], [])
+            }}
+            journalItems={items}
+            settledTurns={bars.settledTurns}
+            isWorking={false}
+            expandSignal={false}
+          />
+        )
+        expect(
+          screen.getByText('Interrupted').closest('[data-native-chat-turn-status]')
+        ).toHaveAttribute('data-native-chat-turn-status', 'settled')
+        expect(screen.getByText('Interrupted after 12s')).toBeInTheDocument()
+        expect(screen.getAllByText('Worked for 12s')).toHaveLength(2)
+        expect(screen.queryByText(/^Working for/)).toBeNull()
+        expect(imported.snapshot()).toEqual(snapshot)
+      } finally {
+        cleanup()
+        deadline.dispose()
+        await journals.closeAll()
+        await rm(root, { recursive: true, force: true })
+      }
+    })
+
     it('says a crash-cut turn worked like a finished one and a stopped turn was interrupted', () => {
       render(
         <NativeChatMessageList

@@ -29,6 +29,11 @@ function turnStatusLabel(
         NATIVE_CHAT_TURN_STATUS_COPY.interruptedAfter,
         { value0: duration }
       )
+    case 'interrupted':
+      return translate(
+        'auto.components.AgentStateDot.interrupted',
+        NATIVE_CHAT_TURN_STATUS_COPY.interrupted
+      )
     case 'failedAfter':
       return translate(
         'components.native-chat.status.failedAfter',
@@ -58,7 +63,8 @@ export function NativeChatWorkingStatus({
   expanded?: boolean
   onToggleExpanded?: () => void
 }): React.JSX.Element {
-  const elapsedSeconds = useNativeChatElapsedSeconds(startedAt, workedSeconds == null)
+  const settled = workedSeconds != null || verdict === 'cancellation'
+  const elapsedSeconds = useNativeChatElapsedSeconds(startedAt, !settled)
 
   const { key, duration } = describeNativeChatTurnStatus({
     workedSeconds,
@@ -104,11 +110,15 @@ export function NativeChatWorkingStatus({
   return (
     <div
       className={className}
-      data-native-chat-turn-status={workedSeconds == null ? 'active' : 'settled'}
-      aria-label={translate(
-        'components.native-chat.status.responding',
-        NATIVE_CHAT_TURN_STATUS_COPY.responding
-      )}
+      data-native-chat-turn-status={settled ? 'settled' : 'active'}
+      aria-label={
+        key === 'interrupted'
+          ? label
+          : translate(
+              'components.native-chat.status.responding',
+              NATIVE_CHAT_TURN_STATUS_COPY.responding
+            )
+      }
     >
       <span>{label}</span>
       {caret}

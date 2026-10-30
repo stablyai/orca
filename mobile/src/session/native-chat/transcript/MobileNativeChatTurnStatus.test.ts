@@ -39,6 +39,9 @@ vi.mock('react-native', async () => {
 vi.mock('lucide-react-native', () => ({ ChevronRight: 'ChevronRight' }))
 
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
+import type { AgentJournalRenderItem } from '../../../../../src/shared/agent-session-journal-types'
+import { selectStructuredAgentTurnBars } from '../../../../../src/shared/structured-agent-session-turn-timing'
+import { activateMobileUiLocale, getMobileUiLocale } from '../../../i18n/mobile-i18n'
 import {
   findAllByHostType,
   findByHostType
@@ -131,6 +134,82 @@ describe('MobileNativeChatTurnStatus', () => {
     const tree = render({ startedAt: Date.now(), workedSeconds: 5 })
     expect(findAllByHostType(tree.root, 'Pressable')).toHaveLength(0)
     expect(labels(tree.root)).toEqual(['Worked for 5s'])
+  })
+
+  it('renders selector-derived untimed cancellation in Spanish without a clock across resume, preserving timed cancellation', async () => {
+    const items: AgentJournalRenderItem[] = [
+      {
+        itemId: 'stopped-user',
+        revision: 0,
+        sequence: 1,
+        observedAt: 1_000,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Hello' }] }
+      },
+      {
+        itemId: 'stopped-turn',
+        revision: 0,
+        sequence: 2,
+        observedAt: 22_000,
+        body: {
+          kind: 'turn',
+          turnId: 'stopped',
+          userItemId: 'stopped-user',
+          state: 'interrupted',
+          outcome: 'cancellation'
+        }
+      }
+    ]
+    const bars = selectStructuredAgentTurnBars(items, [], null)
+    const stopped = bars.settledTurns.get('stopped-user')
+    expect(stopped).toEqual({ startedAt: null, workedSeconds: null, verdict: 'cancellation' })
+    expect(bars.runningTiming).toBeNull()
+    if (!stopped) {
+      throw new Error('Expected the canonical stopped turn status')
+    }
+    const previousLocale = getMobileUiLocale()
+    try {
+      await activateMobileUiLocale('es')
+      act(() => {
+        renderer = create(createElement(MobileNativeChatTurnStatus, stopped))
+      })
+      const mounted = renderer
+      if (!mounted) {
+        throw new Error('Expected the mounted turn status')
+      }
+      expect(labels(mounted.root)).toEqual(['Interrumpido'])
+      expect(vi.getTimerCount()).toBe(0)
+      const clockReads = vi.spyOn(Date, 'now')
+      act(() => vi.advanceTimersByTime(12_000))
+      changeAppState('background')
+      act(() => vi.advanceTimersByTime(60_000))
+      expect(vi.getTimerCount()).toBe(0)
+      changeAppState('active')
+      act(() => vi.advanceTimersByTime(12_000))
+      expect(labels(mounted.root)).toEqual(['Interrumpido'])
+      expect(vi.getTimerCount()).toBe(0)
+      expect(clockReads).not.toHaveBeenCalled()
+
+      const timed = selectStructuredAgentTurnBars(
+        items.map((item) =>
+          item.body.kind === 'turn'
+            ? { ...item, body: { ...item.body, startedAt: 10_000, completedAt: 22_000 } }
+            : item
+        ),
+        [],
+        null
+      ).settledTurns.get('stopped-user')
+      expect(timed).toEqual({ startedAt: 10_000, workedSeconds: 12, verdict: 'cancellation' })
+      if (!timed) {
+        throw new Error('Expected the timed stopped turn status')
+      }
+      act(() => mounted.update(createElement(MobileNativeChatTurnStatus, timed)))
+      expect(labels(mounted.root)).toEqual(['Interrumpido tras 12 s'])
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      act(() => renderer?.unmount())
+      renderer = null
+      await activateMobileUiLocale(previousLocale)
+    }
   })
 
   it('holds no interval once the turn has settled', () => {

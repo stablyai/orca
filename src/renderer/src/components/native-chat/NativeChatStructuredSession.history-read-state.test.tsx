@@ -13,6 +13,7 @@ import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import { inPlaceSwitchCapability } from '../../../../shared/structured-agent-cli-conversation-adoption'
 
 const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
   (await import('./NativeChatStructuredSession.test-harness')).createStructuredSessionMocks()
@@ -314,7 +315,7 @@ it('gates the native header switch through capability hydration and live Chat UI
   await act(async () => {
     answer({
       ...response.result,
-      capabilities: ['agent-session.structured.switch.creation-settlement-v1:codex']
+      capabilities: [inPlaceSwitchCapability('codex')]
     })
     await status
   })
