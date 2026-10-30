@@ -6,6 +6,7 @@ import type {
 } from '../../../../shared/feature-wall-setup-steps'
 import { getFeatureWallSetupStepsForSection } from '../../../../shared/feature-wall-setup-steps'
 import { cn } from '@/lib/utils'
+import { useScrollEdgeFades } from '@/lib/use-scroll-edge-fades'
 import type { FeatureWallSetupProgress } from './feature-wall-setup-progress'
 import { FullDiskAccessSetupPrompt } from './FullDiskAccessSetupPrompt'
 import { AgentCapabilitiesSetupAction } from './AgentCapabilitiesSetupAction'
@@ -22,6 +23,12 @@ import {
   SetupWorkspacesVisual
 } from './FeatureWallSetupStepVisuals'
 import { AgentStep } from '../onboarding/AgentStep'
+import { useChatAgentDetection } from '../onboarding/use-onboarding-agent-surface'
+import type { AgentSurface } from '../onboarding/use-onboarding-flow-types'
+import { agentSurfaceSettingsUpdate } from '../onboarding/onboarding-flow-state'
+import { onboardingChatPermissionSetting } from '../onboarding/use-onboarding-flow-persistence'
+import { savedYoloPermissions } from '../onboarding/use-onboarding-yolo-permissions'
+import { applyAllAgentsPermission } from '../../../../shared/tui-agent-permission-choice'
 import { NotificationStep } from '../onboarding/NotificationStep'
 import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -189,13 +196,14 @@ function SelectedStepVisual(props: { stepId: FeatureWallSetupStepId }): React.JS
 function DefaultAgentAction(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const refreshDetectedAgents = useAppStore((s) => s.refreshDetectedAgents)
   const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
   const isDetectingAgents = useAppStore((s) => s.isDetectingAgents || s.isRefreshingAgents)
+  const { chatAgents, chatDetected, refreshDetectedAgents } = useChatAgentDetection()
   const selectedAgent =
     settings?.defaultTuiAgent && settings.defaultTuiAgent !== 'blank'
       ? settings.defaultTuiAgent
       : null
+  const agentSurface: AgentSurface = settings?.experimentalNativeChat === true ? 'chat' : 'terminal'
   const detectedSet = useMemo(() => new Set(detectedAgentIds ?? []), [detectedAgentIds])
   const handleSelectAgent = useCallback(
     (agent: TuiAgent) => {
@@ -203,6 +211,22 @@ function DefaultAgentAction(): React.JSX.Element {
     },
     [updateSettings]
   )
+  // Unlike onboarding, there is no Continue here, so each choice saves as it is made.
+  const handleAgentSurfaceChange = (surface: AgentSurface): void => {
+    const updates = agentSurfaceSettingsUpdate(settings, surface)
+    if (Object.keys(updates).length > 0) {
+      void updateSettings(updates)
+    }
+  }
+  const handleYoloPermissionsChange = (enabled: boolean): void => {
+    if (!settings) {
+      return
+    }
+    void updateSettings({
+      ...applyAllAgentsPermission(settings, enabled ? 'full-access' : 'own'),
+      ...onboardingChatPermissionSetting(settings.nativeChatPermissionMode, enabled, true)
+    })
+  }
 
   useEffect(() => {
     void refreshDetectedAgents()
@@ -211,10 +235,18 @@ function DefaultAgentAction(): React.JSX.Element {
   return (
     <div className="max-w-3xl">
       <AgentStep
+        agentSurface={agentSurface}
+        onAgentSurfaceChange={handleAgentSurfaceChange}
+        agentSurfaceSwitchable
+        chatAgents={chatAgents}
+        chatDetected={chatDetected}
+        nativeChatProviders={settings?.nativeChatProviders}
         selectedAgent={selectedAgent}
         onSelect={handleSelectAgent}
         detectedSet={detectedSet}
         isDetecting={isDetectingAgents}
+        yoloPermissions={savedYoloPermissions(settings)}
+        onYoloPermissionsChange={handleYoloPermissionsChange}
       />
     </div>
   )
@@ -269,6 +301,7 @@ export function FeatureWallSetupChecklist(
   const setupSteps = getFeatureWallSetupStepsForSection('setup')
   const parallelWorkSteps = getFeatureWallSetupStepsForSection('parallel-work')
   const visualBreakpoint = isEmbedded ? 'xl' : 'sm'
+  const panelFades = useScrollEdgeFades<HTMLDivElement>()
   const visualGridClass =
     visualBreakpoint === 'xl'
       ? 'gap-8 xl:grid-cols-[minmax(0,1fr)_auto] xl:gap-12'
@@ -316,55 +349,61 @@ export function FeatureWallSetupChecklist(
 
       <section
         className={cn(
-          'scrollbar-sleek min-h-0 overflow-y-auto',
+          'flex min-h-0 flex-col',
           isEmbedded
             ? 'pt-10 lg:border-l lg:border-border/50 lg:pl-14 lg:pt-0'
             : 'border-t border-border pt-5 md:border-l md:border-t-0 md:pl-7 md:pt-0'
         )}
       >
-        {activeStep ? (
-          <div className={cn('flex h-full flex-col', isEmbedded ? 'gap-4' : 'gap-3')}>
-            <div className="flex items-center justify-between gap-4">
-              <h3 className="min-w-0 text-xl font-semibold tracking-tight text-foreground">
-                {getLocalizedFeatureWallSetupChecklistCopy(activeStep).name}
-              </h3>
-              {/* Why: a "not done" pill on every open step is noise; only completion is news. */}
-              {activeDone ? (
-                <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                  <Check className="size-3.5" />
-                  {translate(
-                    'auto.components.feature.wall.FeatureWallSetupChecklist.13294d3405',
-                    'Done'
-                  )}
-                </span>
-              ) : null}
-            </div>
-            <div
-              className={cn(
-                'grid items-start',
-                hasStepVisual ? visualGridClass : 'max-w-3xl gap-5',
-                !hasStepVisual && isEmbedded ? 'max-w-none' : null
-              )}
-            >
-              <div className="min-w-0">
-                <p
-                  className={cn(
-                    'text-sm leading-relaxed text-muted-foreground',
-                    hasStepVisual && !isEmbedded ? 'pr-4 sm:pr-6' : null
-                  )}
-                >
-                  {getLocalizedFeatureWallSetupChecklistCopy(activeStep).description}
-                </p>
-                {/* Keep actions below the caption so a taller visual cannot push them down. */}
-                <div className={cn('min-w-0', isEmbedded ? 'mt-7' : 'mt-6')}>
-                  <SelectedStepAction {...props} />
-                </div>
+        {/* Scrolls inside the bordered column so the edge fades leave the divider whole. */}
+        <div
+          ref={panelFades.ref}
+          className={cn('scrollbar-sleek min-h-0 flex-1 overflow-y-auto', panelFades.className)}
+        >
+          {activeStep ? (
+            <div className={cn('flex h-full flex-col', isEmbedded ? 'gap-4' : 'gap-3')}>
+              <div className="flex items-center justify-between gap-4">
+                <h3 className="min-w-0 text-xl font-semibold tracking-tight text-foreground">
+                  {getLocalizedFeatureWallSetupChecklistCopy(activeStep).name}
+                </h3>
+                {/* Why: a "not done" pill on every open step is noise; only completion is news. */}
+                {activeDone ? (
+                  <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <Check className="size-3.5" />
+                    {translate(
+                      'auto.components.feature.wall.FeatureWallSetupChecklist.13294d3405',
+                      'Done'
+                    )}
+                  </span>
+                ) : null}
               </div>
-              <SelectedStepVisual stepId={activeStep.id} />
+              <div
+                className={cn(
+                  'grid items-start',
+                  hasStepVisual ? visualGridClass : 'max-w-3xl gap-5',
+                  !hasStepVisual && isEmbedded ? 'max-w-none' : null
+                )}
+              >
+                <div className="min-w-0">
+                  <p
+                    className={cn(
+                      'text-sm leading-relaxed text-muted-foreground',
+                      hasStepVisual && !isEmbedded ? 'pr-4 sm:pr-6' : null
+                    )}
+                  >
+                    {getLocalizedFeatureWallSetupChecklistCopy(activeStep).description}
+                  </p>
+                  {/* Keep actions below the caption so a taller visual cannot push them down. */}
+                  <div className={cn('min-w-0', isEmbedded ? 'mt-7' : 'mt-6')}>
+                    <SelectedStepAction {...props} />
+                  </div>
+                </div>
+                <SelectedStepVisual stepId={activeStep.id} />
+              </div>
+              <SelectedStepFooter stepId={activeStep.id} />
             </div>
-            <SelectedStepFooter stepId={activeStep.id} />
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </section>
     </div>
   )

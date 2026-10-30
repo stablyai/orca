@@ -26,6 +26,7 @@ import { renderTabBarItems } from './tab-bar-item-surface'
 import { TabBarStaticCreateMenu } from './tab-bar-static-create-menu'
 import ClientHostedBrowserTabRows from './ClientHostedBrowserTabRows'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
+import { advanceAgentSessionsTourPastNewTab } from '@/components/contextual-tours/agent-sessions-tour-new-tab'
 
 const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
 
@@ -218,6 +219,7 @@ export function renderTabBarSurface({
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             title={translate('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
             aria-label={translate('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
+            data-contextual-tour-target="tab-create-menu"
           >
             <Plus className="w-3.5 h-3.5" />
           </button>
@@ -230,6 +232,7 @@ export function renderTabBarSurface({
             // Why: Radix restores focus to the "+" trigger on close, stealing it from the freshly-mounted terminal.
             event.preventDefault()
             runPendingNewTabMenuFocusAfterClose()
+            advanceAgentSessionsTourPastNewTab()
           }}
         >
           {!terminalOnly && onOpenEntry ? (

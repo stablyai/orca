@@ -74,13 +74,17 @@ export function getContextualTourStartStepIndex(
   tour: ContextualTour,
   targetExists: (selector: string) => boolean
 ): number | null {
-  const requiredStepIndex = tour.steps.findIndex((step) => step.requiredForStart === true)
-  const startIndex = Math.max(requiredStepIndex, 0)
-  const step = tour.steps[startIndex]
-  if (!step || !targetExists(step.targetSelector)) {
-    return null
-  }
-  return startIndex
+  const requiredStepIndexes = tour.steps.flatMap((step, index) =>
+    step.requiredForStart === true ? [index] : []
+  )
+  // Several steps may qualify; start at the first whose target is on screen (e.g. + hidden).
+  const candidates = requiredStepIndexes.length > 0 ? requiredStepIndexes : [0]
+  return (
+    candidates.find((index) => {
+      const step = tour.steps[index]
+      return step !== undefined && targetExists(step.targetSelector)
+    }) ?? null
+  )
 }
 
 export function getVisibleContextualTourStepIndexes(

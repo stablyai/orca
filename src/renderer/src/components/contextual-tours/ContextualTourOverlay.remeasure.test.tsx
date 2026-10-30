@@ -5,6 +5,12 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ContextualTourOverlay } from './ContextualTourOverlay'
 import { useAppStore } from '@/store'
+import { getContextualTourStepIndex } from '../../../../shared/contextual-tours'
+
+const PARALLEL_STEP_INDEX = getContextualTourStepIndex(
+  'workspace-agent-sessions',
+  'agent-sessions-parallel'
+)
 
 let container: HTMLDivElement
 let root: Root
@@ -85,7 +91,7 @@ describe('ContextualTourOverlay re-measure triggers', () => {
     tourTarget('workspace-create-control', 300)
     useAppStore.setState({
       activeContextualTourId: 'workspace-agent-sessions',
-      activeContextualTourStepIndex: 1,
+      activeContextualTourStepIndex: PARALLEL_STEP_INDEX,
       activeModal: 'none',
       contextualToursOnboardingVisible: false,
       contextualToursBlockingSurfaceVisible: false,
@@ -111,7 +117,7 @@ describe('ContextualTourOverlay re-measure triggers', () => {
     const target = tourTarget('workspace-create-control', 300)
     useAppStore.setState({
       activeContextualTourId: 'workspace-agent-sessions',
-      activeContextualTourStepIndex: 1,
+      activeContextualTourStepIndex: PARALLEL_STEP_INDEX,
       activeModal: 'none',
       contextualToursOnboardingVisible: false,
       contextualToursBlockingSurfaceVisible: false,

@@ -5,6 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
+import { chooseOnboardingAgentSurface } from './helpers/onboarding-navigation'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   focusActiveTerminalInput,
@@ -42,7 +43,7 @@ async function stubFolderPicker(
 }
 
 async function selectCodexAndSkipToProject(page: Page): Promise<void> {
-  const codexButton = page.getByRole('button', { name: 'Codex', exact: true }).first()
+  const codexButton = page.getByRole('button', { name: /^Codex\b/ }).first()
   if (!(await codexButton.isVisible())) {
     await page.getByText(/Show \d+ more agents/).click()
   }
@@ -59,7 +60,7 @@ test('fresh profile opens a live project terminal @golden', async ({
 }) => {
   await waitForSessionReady(orcaPage)
   await expect(orcaPage.locator('#root')).toBeVisible()
-  await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible()
+  await chooseOnboardingAgentSurface(orcaPage)
 
   await selectCodexAndSkipToProject(orcaPage)
   const repoPath = await createGitRepo()

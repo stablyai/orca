@@ -11,7 +11,8 @@ import type { OnboardingState } from '../../../../shared/onboarding-state-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { applyAllAgentsPermission } from '../../../../shared/tui-agent-permission-choice'
 import type { AgentChatPermissionMode } from '../../../../shared/agent-chat-permission-mode'
-import type { StepId, StepNumber } from './use-onboarding-flow-types'
+import type { AgentSurface, StepId, StepNumber } from './use-onboarding-flow-types'
+import { agentSurfaceSettingsUpdate } from './onboarding-flow-state'
 
 export async function persistStep(
   stepNumber: number,
@@ -137,7 +138,9 @@ export function useCloseWith({ onOnboardingChange, startTimeRef, setError }: Clo
 
 type PersistCurrentStepDeps = {
   currentStepId: StepId
+  agentSurface: AgentSurface
   selectedAgent: TuiAgent | null
+  agentInteractedRef: { current: boolean }
   yoloPermissions: boolean
   /** Whether the person flipped Yolo mode in this flow; a replay left untouched keeps chats as set. */
   yoloPermissionsChosen: { readonly current: boolean }
@@ -155,7 +158,9 @@ export type PersistCurrentStepResult = {
 
 export function usePersistCurrentStep({
   currentStepId,
+  agentSurface,
   selectedAgent,
+  agentInteractedRef,
   yoloPermissions,
   yoloPermissionsChosen,
   theme,
@@ -170,9 +175,16 @@ export function usePersistCurrentStep({
       return { ok: false }
     }
     try {
+      if (currentStepId === 'agent_surface') {
+        // Why: the Chat UI choice saves with the default agent, so leaving mid-step changes nothing.
+        return { ok: true }
+      }
       if (currentStepId === 'agent') {
+        // Continue confirms the visible choice before late detection can replace it during the save.
+        agentInteractedRef.current = true
         const defaultTuiAgent = selectedAgentOrBlank(selectedAgent)
         await updateSettings({
+          ...agentSurfaceSettingsUpdate(settings, agentSurface),
           defaultTuiAgent,
           // Off adds no flag, as it always has: each agent's own settings apply.
           ...(yoloPermissionsChosen.current
@@ -228,6 +240,8 @@ export function usePersistCurrentStep({
       return { ok: false }
     }
   }, [
+    agentInteractedRef,
+    agentSurface,
     currentStepId,
     onboardingChecklist,
     onOnboardingChange,

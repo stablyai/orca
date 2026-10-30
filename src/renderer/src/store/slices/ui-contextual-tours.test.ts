@@ -1,7 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
-import type { ContextualTourId } from '../../../../shared/contextual-tours'
+import {
+  getContextualTour,
+  getContextualTourStepIndex,
+  type ContextualTourId
+} from '../../../../shared/contextual-tours'
 import { createUIStore, makePersistedUI } from './ui-slice-test-harness'
+
+const TERMINAL_SPLIT_TARGET =
+  getContextualTour('workspace-agent-sessions').steps.find(
+    (step) => step.id === 'agent-sessions-split'
+  )?.targetSelector ?? ''
+const PARALLEL_STEP_INDEX = getContextualTourStepIndex(
+  'workspace-agent-sessions',
+  'agent-sessions-parallel'
+)
 
 const mocks = vi.hoisted(() => ({
   sendNotesToActiveAgentSession: vi.fn(),
@@ -245,9 +258,7 @@ describe('createUISlice contextual tours', () => {
 
   it('force-starts a tour from an explicit user action even after auto tours are unavailable', () => {
     const store = createUIStore()
-    stubContextualTourTargets([
-      '[data-contextual-tour-target="terminal-pane-split-target"], [data-contextual-tour-target="workspace-agent-terminal-tip"]'
-    ])
+    stubContextualTourTargets([TERMINAL_SPLIT_TARGET])
     store.getState().hydratePersistedUI(
       makePersistedUI({
         contextualToursAutoEligible: false,
@@ -268,9 +279,7 @@ describe('createUISlice contextual tours', () => {
 
   it('preserves the bounded setup-guide parallel-work source on forced tour requests', () => {
     const store = createUIStore()
-    stubContextualTourTargets([
-      '[data-contextual-tour-target="terminal-pane-split-target"], [data-contextual-tour-target="workspace-agent-terminal-tip"]'
-    ])
+    stubContextualTourTargets([TERMINAL_SPLIT_TARGET])
     store.getState().hydratePersistedUI(
       makePersistedUI({
         contextualToursAutoEligible: false,
@@ -351,7 +360,7 @@ describe('createUISlice contextual tours', () => {
     })
     const store = createUIStore()
     stubContextualTourTargets([
-      '[data-contextual-tour-target="terminal-pane-split-target"], [data-contextual-tour-target="workspace-agent-terminal-tip"]',
+      TERMINAL_SPLIT_TARGET,
       '[data-contextual-tour-target="workspace-create-control"]'
     ])
     store.getState().hydratePersistedUI(makeAutoTourEligibleUI())
@@ -365,7 +374,7 @@ describe('createUISlice contextual tours', () => {
     store.getState().recordFeatureInteraction('terminal-pane-split')
 
     expect(store.getState().activeContextualTourId).toBe('workspace-agent-sessions')
-    expect(store.getState().activeContextualTourStepIndex).toBe(1)
+    expect(store.getState().activeContextualTourStepIndex).toBe(PARALLEL_STEP_INDEX)
     expect(store.getState().featureInteractions['terminal-pane-split']).toMatchObject({
       interactionCount: 1
     })
@@ -381,9 +390,7 @@ describe('createUISlice contextual tours', () => {
       }
     })
     const store = createUIStore()
-    stubContextualTourTargets([
-      '[data-contextual-tour-target="terminal-pane-split-target"], [data-contextual-tour-target="workspace-agent-terminal-tip"]'
-    ])
+    stubContextualTourTargets([TERMINAL_SPLIT_TARGET])
     store.getState().hydratePersistedUI(makeAutoTourEligibleUI({ sidebarOpen: false }))
     store
       .getState()
@@ -395,7 +402,7 @@ describe('createUISlice contextual tours', () => {
 
     expect(store.getState().sidebarOpen).toBe(true)
     expect(store.getState().activeContextualTourId).toBe('workspace-agent-sessions')
-    expect(store.getState().activeContextualTourStepIndex).toBe(1)
+    expect(store.getState().activeContextualTourStepIndex).toBe(PARALLEL_STEP_INDEX)
     expect(store.getState().contextualToursSeenIds).toEqual([])
     expect(store.getState().lastCompletedContextualTourId).toBeNull()
   })

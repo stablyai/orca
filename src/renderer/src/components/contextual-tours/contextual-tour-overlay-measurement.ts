@@ -1,4 +1,4 @@
-import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
+import { formatOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import type {
   ContextualTour,
   ContextualTourId,
@@ -21,11 +21,13 @@ import { translate } from '@/i18n/i18n'
 export type ContextualTourMeasurementAction =
   | { kind: 'wait' }
   | { kind: 'advance' }
+  | { kind: 'regress' }
   | { kind: 'cancel' }
 
 export type ContextualTourOverlayMeasurementResult =
   | { kind: 'wait' }
   | { kind: 'advance' }
+  | { kind: 'regress' }
   | { kind: 'cancel' }
   | {
       kind: 'render'
@@ -56,6 +58,20 @@ export function getContextualTourMeasurementAction(args: {
   visibleStepIndexes: readonly number[]
   activeStepIndex: number
 }): ContextualTourMeasurementAction {
+  const activeKind = args.tour.steps[args.activeStepIndex]?.primaryAction?.kind
+  if (
+    args.tour.id === 'workspace-agent-sessions' &&
+    (activeKind === 'split-chat-pane' || activeKind === 'split-terminal-pane')
+  ) {
+    const alternateKind =
+      activeKind === 'split-chat-pane' ? 'split-terminal-pane' : 'split-chat-pane'
+    const alternateIndex = args.visibleStepIndexes.find(
+      (index) => args.tour.steps[index]?.primaryAction?.kind === alternateKind
+    )
+    if (alternateIndex !== undefined) {
+      return { kind: alternateIndex < args.activeStepIndex ? 'regress' : 'advance' }
+    }
+  }
   if (args.visibleStepIndexes.some((index) => index > args.activeStepIndex)) {
     return { kind: 'advance' }
   }
@@ -81,7 +97,7 @@ export function measureContextualTourOverlayRenderState(args: {
   tour: ContextualTour
   activeStepIndex: number
   sidebarOpen: boolean
-  keybindings: Parameters<typeof formatShortcutLabel>[1]
+  keybindings: Parameters<typeof formatOptionalShortcutLabel>[1]
   previousTelemetryTotalSteps: number
 }): ContextualTourOverlayMeasurementResult {
   const targetExists = (selector: string): boolean =>
@@ -100,22 +116,27 @@ export function measureContextualTourOverlayRenderState(args: {
     activeStep
   })
 
-  if (visibleStepIndexes.length === 0 || !activeStep || !progress) {
+  if (visibleStepIndexes.length === 0 || !activeStep) {
     return { kind: 'cancel' }
   }
 
   if (!target) {
+    const actionKind = activeStep.primaryAction?.kind
+    const canSwitchSplitLesson =
+      args.tour.id === 'workspace-agent-sessions' &&
+      (actionKind === 'split-chat-pane' || actionKind === 'split-terminal-pane')
+    if (!progress && !canSwitchSplitLesson) {
+      return { kind: 'cancel' }
+    }
     const measurementAction = getContextualTourMeasurementAction({
       tour: args.tour,
       visibleStepIndexes,
       activeStepIndex: args.activeStepIndex
     })
-    if (measurementAction.kind === 'advance') {
-      return { kind: 'advance' }
-    }
-    if (measurementAction.kind === 'wait') {
-      return { kind: 'wait' }
-    }
+    return measurementAction
+  }
+
+  if (!progress) {
     return { kind: 'cancel' }
   }
 
@@ -145,7 +166,8 @@ export function measureContextualTourOverlayRenderState(args: {
       title: localizedCopy?.title ?? activeStep.title,
       body: formatContextualTourStepCopy(
         localizedCopy?.body ?? getContextualTourStepCopy(activeStep),
-        args.keybindings
+        args.keybindings,
+        localizedCopy?.bodyWithoutShortcut
       ),
       control: activeStep.control,
       primaryAction,
@@ -239,10 +261,16 @@ function withLocalizedLabel(
 
 function formatContextualTourStepCopy(
   copy: string,
-  keybindings: Parameters<typeof formatShortcutLabel>[1]
+  keybindings: Parameters<typeof formatOptionalShortcutLabel>[1],
+  copyWithoutShortcut?: string
 ): string {
-  return copy.replace(
-    '{terminal.splitRight}',
-    formatShortcutLabel('terminal.splitRight', keybindings)
-  )
+  if (!copy.includes('{terminal.splitRight}')) {
+    return copy
+  }
+  const shortcut = formatOptionalShortcutLabel('terminal.splitRight', keybindings)
+  // An unbound shortcut would leave "Press , or …"; name only the click path instead.
+  if (!shortcut && copyWithoutShortcut) {
+    return copyWithoutShortcut
+  }
+  return copy.replace('{terminal.splitRight}', shortcut ?? '')
 }

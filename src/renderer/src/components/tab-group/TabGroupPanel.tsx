@@ -330,6 +330,8 @@ export default function TabGroupPanel({
           <div
             className="pointer-events-none absolute inset-x-0 top-1/4 h-px"
             data-contextual-tour-target="workspace-agent-terminal-tip"
+            // Picks the chat or terminal split step of the agent-sessions tour.
+            data-active-content-type={activeTab?.contentType}
           />
         ) : null}
         {activeTab &&

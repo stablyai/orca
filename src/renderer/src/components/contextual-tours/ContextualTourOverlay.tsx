@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { useAppStore } from '@/store'
+import { runActiveNativeChatSplit } from '@/components/native-chat/native-chat-layout-actions'
 import {
   getContextualTour,
   type ContextualTourId,
@@ -170,6 +171,10 @@ export function ContextualTourOverlay(): JSX.Element | null {
       advanceContextualTour()
       return
     }
+    if (measurement.kind === 'regress') {
+      regressContextualTour()
+      return
+    }
     if (measurement.kind === 'wait') {
       return
     }
@@ -196,6 +201,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
     cancelContextualTour,
     emitContextualTourOutcome,
     keybindings,
+    regressContextualTour,
     sidebarOpen
   ])
 
@@ -317,6 +323,10 @@ export function ContextualTourOverlay(): JSX.Element | null {
     }
 
     const timeout = window.setTimeout(() => {
+      // Why: an open menu closes when focus leaves it, e.g. the + menu that just advanced this tour.
+      if (document.activeElement?.closest('[role="menu"]')) {
+        return
+      }
       const panel = panelRef.current
       const firstFocusable = panel ? getContextualTourFocusableElements(panel)[0] : null
       ;(firstFocusable ?? panel)?.focus({ preventScroll: true })
@@ -370,6 +380,14 @@ export function ContextualTourOverlay(): JSX.Element | null {
       },
       openWorkspaceComposer: openWorkspaceCreationComposerWithTourHandoff,
       dispatchTerminalPaneSplit: requestActiveTerminalPaneSplit,
+      splitActiveChat: () => {
+        const { activeWorktreeId, activeGroupIdByWorktree } = useAppStore.getState()
+        runActiveNativeChatSplit(
+          activeWorktreeId,
+          activeWorktreeId ? (activeGroupIdByWorktree[activeWorktreeId] ?? null) : null,
+          'right'
+        )
+      },
       schedule: (callback) => {
         window.setTimeout(callback, 0)
       }

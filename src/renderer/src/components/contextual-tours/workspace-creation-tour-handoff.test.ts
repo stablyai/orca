@@ -1,11 +1,24 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
+import { makeRepo } from '@/components/worktree-jump-palette-test-fixtures'
 import { openWorkspaceCreationComposerWithTourHandoff } from './workspace-creation-tour-handoff'
 import { requestContextualTourWhenReady } from './request-contextual-tour-when-ready'
+import { getContextualTourStepIndex } from '../../../../shared/contextual-tours'
+
+const PARALLEL_STEP_INDEX = getContextualTourStepIndex(
+  'workspace-agent-sessions',
+  'agent-sessions-parallel'
+)
 
 vi.mock('./request-contextual-tour-when-ready', () => ({
   requestContextualTourWhenReady: vi.fn()
 }))
+
+function mockStoreState(overrides: () => Partial<AppState>): void {
+  const real = useAppStore.getState()
+  vi.spyOn(useAppStore, 'getState').mockImplementation(() => ({ ...real, ...overrides() }))
+}
 
 describe('openWorkspaceCreationComposerWithTourHandoff', () => {
   afterEach(() => {
@@ -16,19 +29,16 @@ describe('openWorkspaceCreationComposerWithTourHandoff', () => {
   it('opens the workspace composer without a tour handoff outside the agent sessions tour', () => {
     const openModal = vi.fn()
     const detachContextualTourSource = vi.fn()
-    vi.spyOn(useAppStore, 'getState').mockImplementation(
-      () =>
-        ({
-          activeContextualTourId: null,
-          activeContextualTourStepIndex: 0,
-          activeContextualTourSource: null,
-          activeModal: 'none',
-          contextualToursSeenIds: [],
-          repos: [{ id: 'repo-1' }],
-          detachContextualTourSource,
-          openModal
-        }) as unknown as ReturnType<typeof useAppStore.getState>
-    )
+    mockStoreState(() => ({
+      activeContextualTourId: null,
+      activeContextualTourStepIndex: 0,
+      activeContextualTourSource: null,
+      activeModal: 'none',
+      contextualToursSeenIds: [],
+      repos: [makeRepo()],
+      detachContextualTourSource,
+      openModal
+    }))
 
     openWorkspaceCreationComposerWithTourHandoff()
 
@@ -43,21 +53,18 @@ describe('openWorkspaceCreationComposerWithTourHandoff', () => {
     const openModal = vi.fn()
     const detachContextualTourSource = vi.fn()
     const completeContextualTour = vi.fn()
-    let activeModal: ReturnType<typeof useAppStore.getState>['activeModal'] = 'none'
-    vi.spyOn(useAppStore, 'getState').mockImplementation(
-      () =>
-        ({
-          activeContextualTourId: 'workspace-agent-sessions',
-          activeContextualTourStepIndex: 1,
-          activeContextualTourSource: 'setup_guide_parallel_work',
-          activeModal,
-          contextualToursSeenIds: [],
-          repos: [{ id: 'repo-1' }],
-          detachContextualTourSource,
-          completeContextualTour,
-          openModal
-        }) as unknown as ReturnType<typeof useAppStore.getState>
-    )
+    let activeModal: AppState['activeModal'] = 'none'
+    mockStoreState(() => ({
+      activeContextualTourId: 'workspace-agent-sessions',
+      activeContextualTourStepIndex: PARALLEL_STEP_INDEX,
+      activeContextualTourSource: 'setup_guide_parallel_work',
+      activeModal,
+      contextualToursSeenIds: [],
+      repos: [makeRepo()],
+      detachContextualTourSource,
+      completeContextualTour,
+      openModal
+    }))
 
     openWorkspaceCreationComposerWithTourHandoff()
 
@@ -89,20 +96,17 @@ describe('openWorkspaceCreationComposerWithTourHandoff', () => {
     const openModal = vi.fn()
     const detachContextualTourSource = vi.fn()
     const completeContextualTour = vi.fn()
-    vi.spyOn(useAppStore, 'getState').mockImplementation(
-      () =>
-        ({
-          activeContextualTourId: 'workspace-agent-sessions',
-          activeContextualTourStepIndex: 1,
-          activeContextualTourSource: 'setup_guide_parallel_work',
-          activeModal: 'none',
-          contextualToursSeenIds: ['workspace-creation'],
-          repos: [{ id: 'repo-1' }],
-          detachContextualTourSource,
-          completeContextualTour,
-          openModal
-        }) as unknown as ReturnType<typeof useAppStore.getState>
-    )
+    mockStoreState(() => ({
+      activeContextualTourId: 'workspace-agent-sessions',
+      activeContextualTourStepIndex: PARALLEL_STEP_INDEX,
+      activeContextualTourSource: 'setup_guide_parallel_work',
+      activeModal: 'none',
+      contextualToursSeenIds: ['workspace-creation'],
+      repos: [makeRepo()],
+      detachContextualTourSource,
+      completeContextualTour,
+      openModal
+    }))
 
     openWorkspaceCreationComposerWithTourHandoff()
 
@@ -121,19 +125,16 @@ describe('openWorkspaceCreationComposerWithTourHandoff', () => {
   it('opens the composer without a project so the empty form can guide setup', () => {
     const openModal = vi.fn()
     const detachContextualTourSource = vi.fn()
-    vi.spyOn(useAppStore, 'getState').mockImplementation(
-      () =>
-        ({
-          activeContextualTourId: 'workspace-agent-sessions',
-          activeContextualTourStepIndex: 1,
-          activeContextualTourSource: 'setup_guide_parallel_work',
-          activeModal: 'none',
-          contextualToursSeenIds: [],
-          repos: [],
-          detachContextualTourSource,
-          openModal
-        }) as unknown as ReturnType<typeof useAppStore.getState>
-    )
+    mockStoreState(() => ({
+      activeContextualTourId: 'workspace-agent-sessions',
+      activeContextualTourStepIndex: PARALLEL_STEP_INDEX,
+      activeContextualTourSource: 'setup_guide_parallel_work',
+      activeModal: 'none',
+      contextualToursSeenIds: [],
+      repos: [],
+      detachContextualTourSource,
+      openModal
+    }))
 
     openWorkspaceCreationComposerWithTourHandoff()
 

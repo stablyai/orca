@@ -9,7 +9,7 @@ import type { OnboardingState } from '../../../../shared/onboarding-state-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { buildWindowsTerminalSnapshotPayload } from './windows-terminal-onboarding-telemetry'
 import { persistStep, type PersistCurrentStepResult } from './use-onboarding-flow-persistence'
-import { STEPS, type StepNumber } from './use-onboarding-flow-types'
+import { STEPS, type AgentSurface, type StepNumber } from './use-onboarding-flow-types'
 import {
   prepareSkippedOnboardingPreferences,
   resolveStepIndex,
@@ -44,6 +44,7 @@ type OnboardingFlowActionsArgs = {
   stepIndex: number
   setStepIndex: Dispatch<SetStateAction<number>>
   selectedAgent: TuiAgent | null
+  agentSurface: AgentSurface
   themeStepEntryThemeRef: { current: GlobalSettings['theme'] | null }
   setTheme: Dispatch<SetStateAction<GlobalSettings['theme']>>
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void
@@ -66,6 +67,7 @@ export function useOnboardingFlowActions({
   stepIndex,
   setStepIndex,
   selectedAgent,
+  agentSurface,
   themeStepEntryThemeRef,
   setTheme,
   updateSettings,
@@ -75,6 +77,10 @@ export function useOnboardingFlowActions({
   const nextInFlightRef = useRef(false)
   const trackCurrentStepCompleted = useCallback(
     (advancedVia: 'button' | 'keyboard'): void => {
+      // Step 1 spans the Chat/Terminal page and the agent page; only the agent page completes it.
+      if (currentStep.id === 'agent_surface') {
+        return
+      }
       const durationMs = consumeStepDurationMs()
       track('onboarding_step_completed', {
         step: currentStep.stepNumber,
@@ -184,6 +190,8 @@ export function useOnboardingFlowActions({
       themeBeforePreview: themeStepEntryThemeRef.current,
       settingsTheme: settings?.theme,
       selectedAgent,
+      agentSurface,
+      settings,
       setTheme,
       applyTheme: applyDocumentTheme,
       updateSettings,
@@ -234,6 +242,7 @@ export function useOnboardingFlowActions({
     currentStep.id,
     currentStep.stepNumber,
     currentStep.valueKind,
+    agentSurface,
     openModal,
     selectedAgent,
     settings,

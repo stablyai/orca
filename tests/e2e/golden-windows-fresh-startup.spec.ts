@@ -6,7 +6,9 @@ test.skip(process.platform !== 'win32', 'Fresh-profile fsync regression is Windo
 test('fresh Windows profile reaches onboarding @windows-fresh-startup-golden', async ({
   orcaPage
 }) => {
-  await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible({
+  await expect(
+    orcaPage.getByRole('heading', { name: /How do you want to work with agents/i })
+  ).toBeVisible({
     timeout: 30_000
   })
 })

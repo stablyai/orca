@@ -36,6 +36,21 @@ describe('OnboardingFlow', () => {
     vi.unstubAllGlobals()
   })
 
+  it('opens on the Chat or Terminal choice and resumes past both step-1 pages', () => {
+    const fresh = renderOnboardingFlow({
+      onboarding: getDefaultOnboardingState(),
+      onOnboardingChange: vi.fn()
+    })
+    expect(fresh).toContain('How do you want to work with agents?')
+    expect(fresh).toContain('1 of 5')
+
+    const resumed = renderOnboardingFlow({
+      onboarding: { ...getDefaultOnboardingState(), lastCompletedStep: 1 },
+      onOnboardingChange: vi.fn()
+    })
+    expect(resumed).toContain('Make it feel like home')
+  })
+
   it('does not render the removed agent setup or tour steps', () => {
     const html = renderOnboardingFlow({
       onboarding: {
@@ -132,7 +147,7 @@ describe('OnboardingFlow', () => {
     })
 
     expect(html).toContain('Set Windows terminal defaults')
-    expect(html).toContain('4 of 5')
+    expect(html).toContain('5 of 6')
   })
 
   it('drops the skipped integrations step from the stepper on Windows', () => {
@@ -154,8 +169,8 @@ describe('OnboardingFlow', () => {
     })
 
     expect(html).toContain('Set Windows terminal defaults')
-    // Installed gh skips Integrations entirely; Windows terminal is step three of the four visible steps.
-    expect(html).toContain('3 of 4')
+    // Installed gh skips Integrations entirely; Windows terminal is page four of the five visible pages.
+    expect(html).toContain('4 of 5')
     expect(html).not.toContain('Set up GitHub tasks')
     expect(html).not.toContain('Integrations')
   })
@@ -182,8 +197,8 @@ describe('OnboardingFlow', () => {
     expect(html).not.toContain('Set up GitHub tasks')
     expect(html).not.toContain('Connect your task sources')
     expect(html).not.toContain('Point Orca at some code')
-    // Installed gh and macOS skip Integrations/Windows terminal, leaving three visible steps.
-    expect(html).toContain('3 of 3')
+    // Installed gh and macOS skip Integrations/Windows terminal, leaving four visible pages.
+    expect(html).toContain('4 of 4')
     expect(html).not.toContain('Integrations')
   })
 

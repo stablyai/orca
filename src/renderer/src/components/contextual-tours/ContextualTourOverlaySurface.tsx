@@ -275,7 +275,7 @@ export function ContextualTourOverlaySurface({
         // Tours leave underlying UI interactive; only the callout panel captures pointer events.
         'fixed inset-0 z-[70] pointer-events-none'
       )}
-      data-contextual-tour-overlay=""
+      data-contextual-tour-overlay={activeTourId}
       role="presentation"
       onKeyDownCapture={onOverlayKeyDownCapture}
     >

@@ -2546,6 +2546,178 @@ html.native-shell .app-layout {
 }
 
 /* CLI feature tip — terminal cursor inside the agent-control command. */
+/* Onboarding launch demo: one 7s loop. The cursor clicks +, picks a (CLI) agent, and a terminal tab opens. */
+.onboarding-launch-demo * {
+  animation-duration: 7s;
+  animation-iteration-count: infinite;
+  animation-timing-function: steps(1, end);
+}
+
+.onboarding-launch-demo [data-demo='cursor'] {
+  animation-name: onboarding-launch-demo-cursor;
+  animation-timing-function: ease-in-out;
+  transform: translate(240px, 140px);
+}
+
+.onboarding-launch-demo [data-demo='menu'] {
+  animation-name: onboarding-launch-demo-menu;
+  opacity: 0;
+}
+
+.onboarding-launch-demo [data-demo='plus'] {
+  animation-name: onboarding-launch-demo-plus;
+}
+
+.onboarding-launch-demo [data-demo='picked-row'] {
+  animation-name: onboarding-launch-demo-picked-row;
+}
+
+.onboarding-launch-demo [data-demo='alt'] {
+  animation-name: onboarding-launch-demo-alt;
+  opacity: 0;
+}
+
+.onboarding-launch-demo [data-demo='new-tab'] {
+  animation-name: onboarding-launch-demo-new-tab;
+  max-width: 0;
+  padding-inline: 0;
+  border-width: 0;
+}
+
+.onboarding-launch-demo [data-demo='terminal'] {
+  animation-name: onboarding-launch-demo-terminal;
+  visibility: hidden;
+}
+
+@keyframes onboarding-launch-demo-cursor {
+  0%,
+  10% {
+    transform: translate(240px, 140px) scale(1);
+  }
+  24% {
+    transform: translate(80px, 10px) scale(1);
+  }
+  26% {
+    transform: translate(80px, 10px) scale(0.82);
+  }
+  28% {
+    transform: translate(80px, 10px) scale(1);
+  }
+  36%,
+  40% {
+    transform: translate(150px, 40px) scale(1);
+  }
+  52% {
+    transform: translate(130px, 112px) scale(1);
+  }
+  55% {
+    transform: translate(130px, 112px) scale(0.82);
+  }
+  57%,
+  88% {
+    transform: translate(130px, 112px) scale(1);
+  }
+  100% {
+    transform: translate(240px, 140px) scale(1);
+  }
+}
+
+@keyframes onboarding-launch-demo-menu {
+  0% {
+    opacity: 0;
+  }
+  27% {
+    opacity: 1;
+  }
+  56% {
+    opacity: 0;
+  }
+}
+
+@keyframes onboarding-launch-demo-plus {
+  0% {
+    background: transparent;
+  }
+  25% {
+    background: var(--accent);
+  }
+  56% {
+    background: transparent;
+  }
+}
+
+@keyframes onboarding-launch-demo-picked-row {
+  0% {
+    background: transparent;
+  }
+  50% {
+    background: var(--accent);
+  }
+  56% {
+    background: transparent;
+  }
+}
+
+@keyframes onboarding-launch-demo-alt {
+  0% {
+    opacity: 0;
+  }
+  33% {
+    opacity: 1;
+  }
+  44% {
+    opacity: 0;
+  }
+}
+
+@keyframes onboarding-launch-demo-new-tab {
+  0% {
+    max-width: 0;
+    padding-inline: 0;
+    border-width: 0;
+  }
+  57% {
+    max-width: 90px;
+    padding-inline: 8px;
+    border-width: 1px;
+  }
+  94% {
+    max-width: 0;
+    padding-inline: 0;
+    border-width: 0;
+  }
+}
+
+@keyframes onboarding-launch-demo-terminal {
+  0% {
+    visibility: hidden;
+  }
+  57% {
+    visibility: visible;
+  }
+  94% {
+    visibility: hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-launch-demo * {
+    animation: none !important;
+  }
+
+  .onboarding-launch-demo [data-demo='menu'] {
+    opacity: 1;
+  }
+
+  .onboarding-launch-demo [data-demo='picked-row'] {
+    background: var(--accent);
+  }
+
+  .onboarding-launch-demo [data-demo='cursor'] {
+    transform: translate(130px, 112px);
+  }
+}
+
 @keyframes cli-tip-caret {
   0%,
   45% {
@@ -2870,6 +3042,12 @@ html.native-shell .app-layout {
   color: rgb(22 163 74);
   font-weight: 600;
   animation: feature-wall-meta-pulse 1100ms ease-out 1;
+}
+
+/* Let users choose a tab before showing the next agent lesson. */
+body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
+  [data-contextual-tour-overlay='workspace-agent-sessions'] {
+  display: none;
 }
 
 .orca-contextual-tour-target-rings {

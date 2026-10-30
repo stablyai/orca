@@ -21,6 +21,7 @@ describe('performContextualTourStepAction', () => {
       openClientHostedBrowserSettings: vi.fn(),
       openWorkspaceComposer: vi.fn(),
       dispatchTerminalPaneSplit: vi.fn(),
+      splitActiveChat: vi.fn(),
       schedule: vi.fn()
     })
 
@@ -46,6 +47,7 @@ describe('performContextualTourStepAction', () => {
       openClientHostedBrowserSettings: vi.fn(),
       openWorkspaceComposer: vi.fn(),
       dispatchTerminalPaneSplit,
+      splitActiveChat: vi.fn(),
       schedule: vi.fn()
     })
 
@@ -74,6 +76,7 @@ describe('performContextualTourStepAction', () => {
       openClientHostedBrowserSettings: vi.fn(),
       openWorkspaceComposer,
       dispatchTerminalPaneSplit: vi.fn(),
+      splitActiveChat: vi.fn(),
       schedule: vi.fn()
     })
 
@@ -102,6 +105,7 @@ describe('performContextualTourStepAction', () => {
       openClientHostedBrowserSettings: vi.fn(),
       openWorkspaceComposer,
       dispatchTerminalPaneSplit: vi.fn(),
+      splitActiveChat: vi.fn(),
       schedule: vi.fn()
     })
 
@@ -127,6 +131,7 @@ describe('performContextualTourStepAction', () => {
       openClientHostedBrowserSettings,
       openWorkspaceComposer: vi.fn(),
       dispatchTerminalPaneSplit: vi.fn(),
+      splitActiveChat: vi.fn(),
       schedule: (callback) => {
         scheduled.push(callback)
       }

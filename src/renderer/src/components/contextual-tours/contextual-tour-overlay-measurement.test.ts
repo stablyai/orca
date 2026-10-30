@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getContextualTour } from '../../../../shared/contextual-tours'
+import { getContextualTour, getContextualTourStepIndex } from '../../../../shared/contextual-tours'
 import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 import {
   getContextualTourDisplayProgress,
@@ -75,7 +75,10 @@ describe('contextual tour overlay measurement', () => {
 
     const result = measureContextualTourOverlayRenderState({
       tour: getContextualTour('workspace-agent-sessions'),
-      activeStepIndex: 0,
+      activeStepIndex: getContextualTourStepIndex(
+        'workspace-agent-sessions',
+        'agent-sessions-split'
+      ),
       sidebarOpen: true,
       keybindings: undefined,
       previousTelemetryTotalSteps: 0
@@ -164,6 +167,38 @@ describe('contextual tour overlay measurement', () => {
       })
     ).toBe(true)
   })
+
+  it.each(['agent-sessions-split-chat', 'agent-sessions-split'] as const)(
+    'uses click-only instructions when %s has an unbound shortcut',
+    (stepId) => {
+      const target = document.createElement('div')
+      target.dataset.contextualTourTarget =
+        stepId === 'agent-sessions-split-chat'
+          ? 'chat-pane-split-target'
+          : 'terminal-pane-split-target'
+      target.getBoundingClientRect = () => new DOMRect(0, 0, 20, 20)
+      document.body.appendChild(target)
+
+      const result = measureContextualTourOverlayRenderState({
+        tour: getContextualTour('workspace-agent-sessions'),
+        activeStepIndex: getContextualTourStepIndex('workspace-agent-sessions', stepId),
+        sidebarOpen: true,
+        keybindings: { 'terminal.splitRight': [] },
+        previousTelemetryTotalSteps: 0
+      })
+
+      expect(result.kind).toBe('render')
+      if (result.kind !== 'render') {
+        throw new Error(`Expected render result, received ${result.kind}`)
+      }
+      expect(result.renderState.body).not.toContain('Unassigned')
+      expect(result.renderState.body).toBe(
+        stepId === 'agent-sessions-split-chat'
+          ? 'Click the split button at the top of the chat. Each side gets its own tabs.'
+          : 'Right-click the pane for split options.'
+      )
+    }
+  )
 })
 
 const { rejectAppStoreAccess } = vi.hoisted(() => ({

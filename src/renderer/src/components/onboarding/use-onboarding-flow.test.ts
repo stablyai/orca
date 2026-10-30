@@ -27,6 +27,8 @@ describe('prepareSkippedOnboardingPreferences', () => {
         themeBeforePreview: 'dark',
         settingsTheme: 'light',
         selectedAgent: null,
+        agentSurface: 'terminal',
+        settings: null,
         setTheme,
         applyTheme,
         updateSettings,
@@ -55,6 +57,8 @@ describe('prepareSkippedOnboardingPreferences', () => {
         themeBeforePreview: null,
         settingsTheme: 'light',
         selectedAgent: 'codex',
+        agentSurface: 'terminal',
+        settings: null,
         setTheme,
         applyTheme,
         updateSettings,
@@ -67,6 +71,70 @@ describe('prepareSkippedOnboardingPreferences', () => {
     expect(updateSettings).toHaveBeenCalledWith({ defaultTuiAgent: 'codex' })
     expect(setError).not.toHaveBeenCalled()
     expect(toast.error).not.toHaveBeenCalled()
+  })
+})
+
+describe('prepareSkippedOnboardingPreferences agent surface', () => {
+  it('keeps the saved Chat UI setting when skipping from the Chat or Terminal page', async () => {
+    const updateSettings = vi.fn().mockResolvedValue(undefined)
+
+    await expect(
+      prepareSkippedOnboardingPreferences({
+        currentStepId: 'agent_surface',
+        themeBeforePreview: null,
+        settingsTheme: 'dark',
+        selectedAgent: 'claude',
+        agentSurface: 'chat',
+        settings: { experimentalNativeChat: false },
+        setTheme: vi.fn(),
+        applyTheme: vi.fn(),
+        updateSettings,
+        setError: vi.fn()
+      })
+    ).resolves.toBe(true)
+
+    expect(updateSettings).not.toHaveBeenCalled()
+  })
+
+  it('saves the Chat UI pick with the agent when skipping from the agent page', async () => {
+    const updateSettings = vi.fn().mockResolvedValue(undefined)
+
+    await prepareSkippedOnboardingPreferences({
+      currentStepId: 'agent',
+      themeBeforePreview: null,
+      settingsTheme: 'dark',
+      selectedAgent: 'claude',
+      agentSurface: 'chat',
+      settings: { experimentalNativeChat: false },
+      setTheme: vi.fn(),
+      applyTheme: vi.fn(),
+      updateSettings,
+      setError: vi.fn()
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({
+      experimentalNativeChat: true,
+      defaultTuiAgent: 'claude'
+    })
+  })
+
+  it('writes nothing when the pick matches the saved Chat UI setting', async () => {
+    const updateSettings = vi.fn().mockResolvedValue(undefined)
+
+    await prepareSkippedOnboardingPreferences({
+      currentStepId: 'agent',
+      themeBeforePreview: null,
+      settingsTheme: 'dark',
+      selectedAgent: null,
+      agentSurface: 'terminal',
+      settings: { experimentalNativeChat: false },
+      setTheme: vi.fn(),
+      applyTheme: vi.fn(),
+      updateSettings,
+      setError: vi.fn()
+    })
+
+    expect(updateSettings).not.toHaveBeenCalled()
   })
 })
 

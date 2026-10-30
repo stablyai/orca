@@ -4,6 +4,7 @@ import {
   mergeContextualTourSeenIds
 } from './ui-slice-hydration-values'
 import { getContextualTourProgressionForFeatureInteraction } from './ui-slice-contextual-tour-progression'
+import { getContextualTourStepIndex } from '../../../../../shared/contextual-tours'
 import type { FeatureInteractionState } from '../../../../../shared/feature-interactions'
 
 export function createUiFeatureActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
@@ -72,7 +73,10 @@ export function createUiFeatureActions(set: UISliceSet, get: UISliceGet): Partia
           return {
             featureInteractions: next,
             sidebarOpen: true,
-            activeContextualTourStepIndex: s.activeContextualTourStepIndex + 1
+            activeContextualTourStepIndex: getContextualTourStepIndex(
+              'workspace-agent-sessions',
+              'agent-sessions-parallel'
+            )
           }
         }
         return { featureInteractions: next }

@@ -90,6 +90,7 @@ export function NativeChatPaneHeader({
               variant="pane-title"
               size="icon-xs"
               aria-label={split}
+              data-contextual-tour-target={focused ? 'chat-pane-split-target' : undefined}
               onClick={(event) => {
                 event.stopPropagation()
                 actions.onSplitRight()

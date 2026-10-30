@@ -28,8 +28,7 @@ export function getContextualTourProgressionForFeatureInteraction(
   }
   if (
     state.activeContextualTourId === 'workspace-agent-sessions' &&
-    state.activeContextualTourStepIndex === 0 &&
-    id === 'terminal-pane-split' &&
+    (step.id === 'agent-sessions-split' || step.id === 'agent-sessions-split-chat') &&
     !state.sidebarOpen
   ) {
     return 'reveal-sidebar-and-advance'

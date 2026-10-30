@@ -83,6 +83,10 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
   const hasSplitTerminalPane = useAppStore((state) =>
     hasFeatureInteraction(state.featureInteractions, 'terminal-pane-split')
   )
+  // Chat users learn tab splits instead, so either kind of split means the tour has nothing new to show.
+  const hasSplitTab = useAppStore((state) =>
+    hasFeatureInteraction(state.featureInteractions, 'tab-splits')
+  )
 
   useContextualTour(
     'workspace-agent-sessions',
@@ -90,9 +94,10 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
       activeWorktreeId &&
       activeView === 'terminal' &&
       workspaceSessionReady &&
-      activeTabType === 'terminal' &&
-      Boolean(activeTabId) &&
-      (!hasSplitTerminalPane || activeContextualTourId === 'workspace-agent-sessions')
+      (activeTabType === 'agent-session' ||
+        (activeTabType === 'terminal' && Boolean(activeTabId))) &&
+      (!(hasSplitTerminalPane || hasSplitTab) ||
+        activeContextualTourId === 'workspace-agent-sessions')
     ),
     'workspace_agent_sessions_visible'
   )
