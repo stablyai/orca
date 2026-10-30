@@ -1,6 +1,8 @@
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
+import type { ComponentProps } from 'react'
+import type { NativeChatCrewPanel } from '../orchestration-crew/NativeChatCrewPanel'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ImageBlobPng from '@/lib/image-blob-png'
@@ -15,6 +17,7 @@ type RetainedSessionFixture = Pick<NativeChatLiveSession, 'status'> & {
 const mocks = vi.hoisted(() => {
   const session: RetainedSessionFixture = { messages: [], status: 'ready' }
   return {
+    crewVisibility: vi.fn(),
     fetch: vi.fn(),
     convertImageBlobToPng: vi.fn(),
     writeClipboardImage: vi.fn(),
@@ -24,6 +27,13 @@ const mocks = vi.hoisted(() => {
     error: vi.fn()
   }
 })
+
+vi.mock('../orchestration-crew/NativeChatCrewPanel', () => ({
+  NativeChatCrewPanel: (props: ComponentProps<typeof NativeChatCrewPanel>) => {
+    mocks.crewVisibility(props.isVisible)
+    return null
+  }
+}))
 
 vi.mock('./use-native-chat-retained-session', () => ({
   useNativeChatRetainedSession: (): NativeChatLiveSession => ({
@@ -202,6 +212,7 @@ describe('NativeChatResolvedView image menu ownership', () => {
     const capturedImage = Promise.withResolvers<Blob>()
     mocks.fetch.mockResolvedValue({ ok: true, blob: () => capturedImage.promise })
     const view = render(<RetainedBridgeChat />)
+    expect(mocks.crewVisibility).toHaveBeenLastCalledWith(true)
     const owner = screen.getByTestId('retained-owner')
     const chatRoot = owner.querySelector('[data-native-chat-root]')
 
@@ -214,6 +225,7 @@ describe('NativeChatResolvedView image menu ownership', () => {
 
     // Hide without outside focus/pointer events, which can mask missing caller visibility.
     view.rerender(<RetainedBridgeChat visible={false} />)
+    expect(mocks.crewVisibility).toHaveBeenLastCalledWith(false)
     expect(owner.querySelector('[data-native-chat-root]')).toBe(chatRoot)
     await waitFor(() => expect(portaledMenu).not.toBeInTheDocument())
     expect(screen.queryByRole('menuitem', { name: 'Copy image', hidden: true })).toBeNull()
@@ -221,6 +233,7 @@ describe('NativeChatResolvedView image menu ownership', () => {
     await act(async () => capturedImage.resolve(new Blob(['hidden image'])))
     fireEvent.click(copyAction)
     view.rerender(<RetainedBridgeChat />)
+    expect(mocks.crewVisibility).toHaveBeenLastCalledWith(true)
     expect(screen.queryByRole('menu')).toBeNull()
     fireEvent.contextMenu(screen.getByText('Chat text'))
     await screen.findByRole('menu')

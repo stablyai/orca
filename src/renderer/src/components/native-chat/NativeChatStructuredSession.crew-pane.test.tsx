@@ -1,9 +1,11 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { holdPhysicalCloseTasks } from '../orchestration-crew/crew-menu.test-fixture'
+import type { OrchestrationCrewSnapshot } from '../../../../shared/orchestration-crew'
 import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
 
 const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
@@ -22,8 +24,8 @@ vi.mock('./NativeChatComposer', () => moduleFactories.nativeChatComposer())
 vi.mock('./NativeChatEmptyState', () => moduleFactories.nativeChatEmptyState())
 vi.mock('./NativeChatApprovalCard', () => moduleFactories.nativeChatApprovalCard())
 vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard())
-vi.mock('./use-orchestration-crew', () => ({
-  useOrchestrationCrew: () => ({
+const crew = vi.hoisted(() => {
+  const snapshot: OrchestrationCrewSnapshot = {
     status: 'ok',
     sections: {
       managedBy: [],
@@ -40,7 +42,13 @@ vi.mock('./use-orchestration-crew', () => ({
         }
       ]
     }
-  })
+  }
+  const release = vi.fn()
+  const subscribe = vi.fn((_listener: () => void) => release)
+  return { snapshot, release, subscribe }
+})
+vi.mock('../orchestration-crew/orchestration-crew-follow', () => ({
+  observeCrew: () => ({ subscribe: crew.subscribe, read: () => crew.snapshot })
 }))
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 
@@ -48,10 +56,13 @@ const first = testOrcaSessionId('11111111-1111-4111-8111-111111111111')
 const second = testOrcaSessionId('22222222-2222-4222-8222-222222222222')
 beforeEach(() => {
   resetStructuredSessionMocks()
+  crew.subscribe.mockClear()
+  crew.release.mockClear()
 })
 afterEach(() => {
   cleanup()
   localStorage.clear()
+  vi.restoreAllMocks()
 })
 
 it('handles sibling-composer Escape at the actual native pane boundary and keeps other panes and nested menus independent', async () => {
@@ -116,4 +127,70 @@ it('handles sibling-composer Escape at the actual native pane boundary and keeps
   expect(other.queryByRole('complementary', { name: 'Agent crew' })).not.toBeInTheDocument()
   expect(mocks.send).not.toHaveBeenCalled()
   expect(mocks.stop).not.toHaveBeenCalled()
+})
+
+it('ends only the native menu lifetime on hide, retaining disclosure and the subscribed Crew owner', async () => {
+  const tasks = holdPhysicalCloseTasks()
+  const user = userEvent.setup()
+  const content = (isVisible: boolean) => (
+    <TooltipProvider>
+      <NativeChatStructuredSession
+        isVisible={isVisible}
+        isFocusedGroup={false}
+        tabId="crew-first"
+        sessionId={first}
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    </TooltipProvider>
+  )
+  const view = render(content(true))
+  await user.click(screen.getByRole('button', { name: 'Show crew: 1 workers' }))
+  const panel = screen.getByRole('complementary', { name: 'Agent crew' })
+  const disclosure = screen.getByRole('button', { name: /Worker Check the result/ })
+  await user.click(disclosure)
+  const composer = screen.getByRole('textbox', { name: 'Message' })
+  await user.type(composer, 'Keep this draft')
+  const oldMore = screen.getByRole('button', { name: 'More for Worker' })
+  await user.click(oldMore)
+  const firstPopup = screen.getByRole('menu')
+  const oldFocus = vi.spyOn(oldMore, 'focus')
+
+  view.rerender(content(false))
+  expect(firstPopup.isConnected).toBe(false)
+  expect(oldMore.isConnected).toBe(false)
+  expect(tasks).toHaveLength(1)
+  expect(screen.getByRole('complementary', { name: 'Agent crew' })).toBe(panel)
+  expect(disclosure).toHaveAttribute('aria-expanded', 'true')
+  expect(crew.subscribe).toHaveBeenCalledOnce()
+  expect(crew.release).not.toHaveBeenCalled()
+
+  view.rerender(content(true))
+  expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+  const more = screen.getByRole('button', { name: 'More for Worker' })
+  expect(more).toHaveAttribute('aria-expanded', 'false')
+  expect(screen.getByRole('textbox', { name: 'Message' })).toBe(composer)
+  expect(composer).toHaveValue('Keep this draft')
+  await user.click(more)
+  const secondPopup = screen.getByRole('menu')
+  expect(secondPopup).not.toBe(firstPopup)
+  const focus = vi.spyOn(more, 'focus')
+  act(tasks[0])
+  expect(oldFocus).not.toHaveBeenCalled()
+  expect(focus).not.toHaveBeenCalled()
+  expect(screen.getByRole('menu')).toBe(secondPopup)
+  expect(more).toHaveAttribute('aria-expanded', 'true')
+  await user.keyboard('{Escape}')
+  expect(secondPopup.isConnected).toBe(false)
+  expect(tasks).toHaveLength(2)
+  act(tasks[1])
+  expect(focus).toHaveBeenCalledExactlyOnceWith({ preventScroll: true })
+  expect(more).toHaveFocus()
+  expect(disclosure).toHaveAttribute('aria-expanded', 'true')
+  expect(crew.subscribe).toHaveBeenCalledOnce()
+  expect(crew.release).not.toHaveBeenCalled()
+  expect(mocks.send).not.toHaveBeenCalled()
+  expect(mocks.stop).not.toHaveBeenCalled()
+  view.unmount()
+  expect(crew.release).toHaveBeenCalledOnce()
 })

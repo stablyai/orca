@@ -5,11 +5,13 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 export function NativeChatCrewPanel({
   target,
   party: suppliedParty,
-  sessionId
+  sessionId,
+  isVisible = true
 }: {
   target: RuntimeClientTarget | null
   party?: string | null
   sessionId?: string
+  isVisible?: boolean
 }): React.JSX.Element | null {
   const party =
     suppliedParty ??
@@ -17,5 +19,5 @@ export function NativeChatCrewPanel({
   if (!target || !party) {
     return null
   }
-  return <OrchestrationCrewPanel target={target} party={party} />
+  return <OrchestrationCrewPanel target={target} party={party} isVisible={isVisible} />
 }
