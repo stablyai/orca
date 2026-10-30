@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { runSleepWorktrees } from './sleep-worktree-flow'
 import { selectExecutionHostDisplayLabel } from '@/lib/execution-host-display-label'
@@ -19,6 +20,7 @@ function readStrings(value: unknown): string[] {
 }
 
 const SleepTwinWorkspaceDialog = React.memo(function SleepTwinWorkspaceDialog() {
+  useUiLanguageRevision()
   const activeModal = useAppStore((s) => s.activeModal)
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)

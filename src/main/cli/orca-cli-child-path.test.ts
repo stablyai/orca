@@ -45,6 +45,24 @@ describe('prependOrcaCliDirToChildPath', () => {
       expect(shim.ensureLinuxTerminalOrcaCliShimDir).not.toHaveBeenCalled()
     }
   )
+  it('exports the owning packaged Linux launcher and profile together with PATH', () => {
+    const env = {
+      PATH: `/usr/bin:${SHIM_DIR}::/bin`,
+      ORCA_CLI_COMMAND: '/other/orca',
+      ORCA_USER_DATA_PATH: '/other/profile'
+    }
+    const launcher = prependOrcaCliDirToChildPath(env, {
+      isPackaged: true,
+      userDataPath: USER_DATA,
+      platform: 'linux'
+    })
+
+    expect(launcher).toBe(join(SHIM_DIR, 'orca'))
+    expect(env.ORCA_CLI_COMMAND).toBe(launcher)
+    expect(env.ORCA_USER_DATA_PATH).toBe(USER_DATA)
+    expect(env.PATH).toBe(`${SHIM_DIR}:/usr/bin:/bin`)
+  })
+
   it('puts a Windows execution host CLI first on Path without a POSIX restore dir', () => {
     const binDir = join(USER_DATA, 'cli', 'bin')
     const launcher = join(binDir, 'orca.exe')

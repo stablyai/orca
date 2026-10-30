@@ -124,6 +124,74 @@ describe('Codex structured service tier without send-path catalog waits', () => 
 })
 
 describe('Codex service tier across clients and rest', () => {
+  it.each([
+    ['opening null', null, 'default'],
+    ['configured tier', undefined, 'priority'],
+    ['configuration failure', undefined, undefined]
+  ] as const)(
+    'seeds exact-child tier knowledge from %s without filling a sparse request',
+    async (name, openingTier, expected) => {
+      const codex = fakeCodex({
+        'thread/start': () => ({
+          thread: { id: THREAD_ID },
+          model: 'gpt-live',
+          reasoningEffort: 'high',
+          ...(openingTier === null ? { serviceTier: null } : {})
+        }),
+        'config/read': () => {
+          if (name === 'configuration failure') {
+            throw new Error('config unavailable')
+          }
+          return {
+            config: {
+              service_tier: 'priority',
+              model: 'unrelated-config-model',
+              model_reasoning_effort: 'low'
+            }
+          }
+        }
+      })
+      codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'sparse')
+      const adapter = adapterFor(codex)
+      try {
+        const acquired = await acquireReadyCodexForTest(adapter, {
+          identity: identityFor('session-1'),
+          fence: 7,
+          spawnToken: 'spawn-1'
+        })
+        const applied = adapter.readAppliedInputOptions({
+          sessionId: 'session-1',
+          fence: 7,
+          acquisitionGeneration: acquired.acquisitionGeneration,
+          next: {}
+        })
+        expect(applied?.active).toEqual({
+          model: 'gpt-live',
+          effort: 'high',
+          ...(expected ? { serviceTier: expected } : {})
+        })
+        const config = codex.connections[0].calls.filter((call) => call.method === 'config/read')
+        expect(config).toHaveLength(openingTier === null ? 0 : 1)
+        if (config.length) {
+          expect(config[0].params).toEqual({ cwd: '/work/repo' })
+        }
+        await adapter.dispatch({
+          sessionId: 'session-1',
+          fence: 7,
+          clientMessageId: 'sparse',
+          body: USER_MESSAGE,
+          executionOptions: {}
+        })
+        const sent = codex.connections[0].calls.find((call) => call.method === 'turn/start')?.params
+        expect(sent).not.toHaveProperty('model')
+        expect(sent).not.toHaveProperty('effort')
+        expect(sent).not.toHaveProperty('serviceTier')
+      } finally {
+        await adapter.closeAll()
+      }
+    }
+  )
+
   it('applies an older client Fast toggle through the adapter as the Fast tier', async () => {
     const codex = fakeCodex({ 'model/list': () => listing() })
     codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'turn-fast')
@@ -168,6 +236,21 @@ describe('Codex service tier across clients and rest', () => {
     const turn = codex.connections[0].calls.find((call) => call.method === 'turn/start')?.params
     expect(turn).toMatchObject({ serviceTier: 'priority' })
     expect(turn).not.toHaveProperty('fastMode')
+    finishTurn(codex, 'turn-fast')
+    codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'captured-fast')
+    await adapter.dispatch({
+      sessionId: 'session-1',
+      fence: 7,
+      clientMessageId: 'captured-fast',
+      body: USER_MESSAGE,
+      executionOptions: { fastMode: 'true' }
+    })
+    const captured = codex.connections[0].calls.findLast(
+      (call) => call.method === 'turn/start'
+    )?.params
+    expect(captured).toMatchObject({ serviceTier: 'priority' })
+    expect(captured).not.toHaveProperty('model')
+    expect(captured).not.toHaveProperty('effort')
   })
 
   it('takes a tier at rest but not an older client Fast toggle', () => {

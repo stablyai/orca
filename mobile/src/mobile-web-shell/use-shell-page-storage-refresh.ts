@@ -4,7 +4,7 @@ import { useFocusEffect } from 'expo-router'
 import { subscribeMirroredKey } from '../storage/mirrored-storage-keys'
 import { TERMINAL_SHORTCUT_STORAGE_KEYS } from './page-storage-keys'
 
-export function useShellPageStorageRefresh(refresh: () => Promise<void>, publish: () => void) {
+export function useShellPageStorageRefresh(refresh: () => Promise<unknown>, publish: () => void) {
   useFocusEffect(
     useCallback(() => {
       let focused = true

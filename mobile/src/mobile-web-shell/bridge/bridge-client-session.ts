@@ -3,7 +3,8 @@ import type {
   BridgeGrants,
   BridgeHostMessage,
   BridgeInitHost,
-  BridgeInitRoute
+  BridgeInitRoute,
+  BridgeUiLocale
 } from './bridge-envelope'
 import { ZERO_SAFE_AREA_INSETS, type BridgeSafeAreaInsets } from './bridge-safe-area-insets'
 import { EMPTY_PAGE_GEOMETRY, type BridgePageGeometry } from './bridge-page-geometry'
@@ -28,6 +29,8 @@ export type BridgeShellSession = {
   foldDivision: BridgeFoldDivision | null
   /** The keys the shell's rail shows beside this page; empty for every shell before the field. */
   terminalKeyRail: BridgeTerminalKeyRail
+  // Null means an older shell sent no language; the page then follows the WebView's languages.
+  uiLocale: BridgeUiLocale | null
   /** Null for a shell too old to name it; the page's own `loadHosts()` then answers with nothing. */
   host: BridgeInitHost | null
   storage: Readonly<Record<string, string>>
@@ -53,6 +56,7 @@ export function readShellSession(
     foldDivision: message.foldDivision ?? null,
     terminalKeyRail: message.terminalKeyRail ?? [],
     colorScheme: message.colorScheme ?? 'dark',
+    uiLocale: message.uiLocale ?? null,
     host: message.host ?? null,
     storage: message.storage ?? {},
     storageOversize: message.storageOversize ?? [],

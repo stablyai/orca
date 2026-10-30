@@ -28,13 +28,27 @@ import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 
 export const STATUS_LABELS: Record<SshConnectionStatus, string> = {
-  disconnected: 'Disconnected',
-  connecting: 'Connecting…',
-  'auth-failed': 'Auth failed',
-  'deploying-relay': 'Deploying relay…',
-  connected: 'Connected',
-  reconnecting: 'Reconnecting…',
-  'reconnection-failed': 'Reconnection failed',
+  get disconnected() {
+    return translate('settings.ssh.status.disconnected', 'Disconnected')
+  },
+  get connecting() {
+    return translate('settings.ssh.status.connecting', 'Connecting…')
+  },
+  get 'auth-failed'() {
+    return translate('settings.ssh.status.auth-failed', 'Auth failed')
+  },
+  get 'deploying-relay'() {
+    return translate('settings.ssh.status.deploying-relay', 'Deploying relay…')
+  },
+  get connected() {
+    return translate('settings.ssh.status.connected', 'Connected')
+  },
+  get reconnecting() {
+    return translate('settings.ssh.status.reconnecting', 'Reconnecting…')
+  },
+  get 'reconnection-failed'() {
+    return translate('settings.ssh.status.reconnection-failed', 'Reconnection failed')
+  },
   get error() {
     return translate('auto.components.settings.SshTargetCard.18968ede9e', 'Error')
   }
@@ -175,7 +189,7 @@ export function SshTargetCard({
     }
     // Reveal repetitive Connect labels on hover/focus while retaining width to avoid shifts.
     return (
-      <span className="opacity-0 transition-opacity group-hover/row:opacity-100 group-has-[:focus-visible]/row:opacity-100">
+      <span className="opacity-0 transition-opacity group-hover/row:opacity-100 [[class~='group/row']:has(:focus-visible)_&]:opacity-100">
         {button}
       </span>
     )

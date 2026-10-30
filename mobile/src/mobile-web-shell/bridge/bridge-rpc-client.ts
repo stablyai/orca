@@ -65,34 +65,33 @@ export type BridgeRpcClientOptions = {
   onDiagnostic?: (diagnostic: BridgeRpcClientDiagnostic) => void
 }
 
-export type BridgeRpcClient = RpcClient & BridgeShellSessionListeners & BridgeRpcClientMembers
-
-type BridgeRpcClientMembers = {
-  /**
-   * Asks the shell to draw its key rail, while a terminal and its key row are on screen, until the
-   * dispose is called; `listener` takes each press. Nothing is sent to a shell without the grant.
-   */
-  claimTerminalKeyRail: ReturnType<typeof createBridgeClientTerminalKeys>['claim']
-  getShellSession: () => BridgeShellSession | null
-  // False without navigate lets tap handlers fall back safely instead of throwing into uncaught UI callbacks.
-  notifyNavigate: (href: string, replace?: boolean) => boolean
-  // The page owns no native history; ask the shell to pop. Missing grant returns false; older shells may also drop the new notify, so callers retain their router fallback.
-  notifyNavigateBack: () => boolean
-  // False means missing externalLink grant or refused URL; callers must offer another outcome for the tap.
-  notifyExternalLink: (url: string) => boolean
-  // Use the existing request/id/cap lane but keep native methods inside the bridge’s typed surface; they are device verbs, not catalogued desktop RPCs.
-  callNativeVerb: (verb: BridgeNativeVerb, params: unknown) => Promise<RpcSuccess>
-  // Only the page can report a painted tree; WebView commit and ready happen before that proof exists.
-  notifyPagePainted: () => void
-  // Claim Back until disposal; invoke consumers newest-first with false fallthrough. Return unhandled presses to the shell so a race with sheet closure cannot swallow navigation.
-  claimBack: (consumer: PageBackConsumer) => () => void
-  notifyStorageWrite: (key: string, value: string | null) => boolean
-  notifyHaptics: (kind: BridgeHapticsKind) => boolean
-  // Never throw from error-boundary reporting. False means no frame left; shell load recovery covers reports that cannot be sent, without retrying this fault.
-  notifyPageFault: (error: unknown) => boolean
-  // After applying a one-shot param, ask its holder to clear that value (ruling 34). A failed clear is repaired when init delivers the still-held request again.
-  clearRouteParam: (param: BridgeClearableRouteParam, value: string) => boolean
-}
+export type BridgeRpcClient = RpcClient &
+  BridgeShellSessionListeners & {
+    /**
+     * Asks the shell to draw its key rail, while a terminal and its key row are on screen, until the
+     * dispose is called; `listener` takes each press. Nothing is sent to a shell without the grant.
+     */
+    claimTerminalKeyRail: ReturnType<typeof createBridgeClientTerminalKeys>['claim']
+    getShellSession: () => BridgeShellSession | null
+    // False without navigate lets tap handlers fall back safely instead of throwing into uncaught UI callbacks.
+    notifyNavigate: (href: string, replace?: boolean) => boolean
+    // The page owns no native history; ask the shell to pop. Missing grant returns false; older shells may also drop the new notify, so callers retain their router fallback.
+    notifyNavigateBack: () => boolean
+    // False means missing externalLink grant or refused URL; callers must offer another outcome for the tap.
+    notifyExternalLink: (url: string) => boolean
+    // Use the existing request/id/cap lane but keep native methods inside the bridge’s typed surface; they are device verbs, not catalogued desktop RPCs.
+    callNativeVerb: (verb: BridgeNativeVerb, params: unknown) => Promise<RpcSuccess>
+    // Only the page can report a painted tree; WebView commit and ready happen before that proof exists.
+    notifyPagePainted: () => void
+    // Claim Back until disposal; invoke consumers newest-first with false fallthrough. Return unhandled presses to the shell so a race with sheet closure cannot swallow navigation.
+    claimBack: (consumer: PageBackConsumer) => () => void
+    notifyStorageWrite: (key: string, value: string | null) => boolean
+    notifyHaptics: (kind: BridgeHapticsKind) => boolean
+    // Never throw from error-boundary reporting. False means no frame left; shell load recovery covers reports that cannot be sent, without retrying this fault.
+    notifyPageFault: (error: unknown) => boolean
+    // After applying a one-shot param, ask its holder to clear that value (ruling 34). A failed clear is repaired when init delivers the still-held request again.
+    clearRouteParam: (param: BridgeClearableRouteParam, value: string) => boolean
+  }
 
 // Expose synchronous RpcClient getters from init-primed state so first renders match native clients. Page close settles its own work, never the native client shared by other screens.
 // Ungated calls before init throw for mount-order bugs; after close, teardown calls are inert and getters retain a disconnected snapshot. Stream failures notify listeners.
@@ -136,9 +135,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
 
   const subscriptions = new BridgeClientSubscriptions({
     send: (frame) => posted(frame),
-    onDroppedBinaryFrame: () => {
-      report({ kind: 'binary-frame-dropped' })
-    }
+    onDroppedBinaryFrame: () => report({ kind: 'binary-frame-dropped' })
   })
 
   const handshake = createBridgeInitHandshake(() => {
@@ -323,6 +320,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     // Allow listener registration before init so providers can observe the first state change; it reads no unprimed value.
     onStateChange: (listener) => cache.onStateChange(listener),
     notifyForeground: notifications.notifyForeground,
+    probeLivenessNow: notifications.notifyLivenessProbe,
     notifyNavigate: notifications.notifyNavigate,
     notifyNavigateBack: notifications.notifyNavigateBack,
     notifyExternalLink: notifications.notifyExternalLink,

@@ -25,7 +25,7 @@ vi.mock('lucide-react-native', () => ({
   Monitor: 'Monitor',
   Smartphone: 'Smartphone',
   ChevronsRight: 'ChevronsRight',
-  Plus: 'Plus'
+  Ellipsis: 'Ellipsis'
 }))
 vi.mock('../layout/side-rail', () => ({
   useSideRailContent: vi.fn(),
@@ -33,16 +33,17 @@ vi.mock('../layout/side-rail', () => ({
   useSideRailStrip: () => ({ height: 500 })
 }))
 import { useShellTerminalKeyRail } from './shell-terminal-key-rail.web'
-import { TerminalKeyRail, useShellKeyRail } from '../mobile-web-shell/terminal-key-rail'
+import { TerminalKeyRail } from '../mobile-web-shell/terminal-key-rail'
+import { useShellKeyRail } from '../mobile-web-shell/use-shell-key-rail'
 
 const initialToolbar: BridgeTerminalToolbar = {
   canSend: true,
   canCompose: true,
-  canPaste: true,
   keyboardVisible: false,
   liveInputEnabled: true,
   phoneDisplayMode: false,
-  customKeys: []
+  runsAgent: false,
+  modifiers: { ctrl: 'off', alt: 'off', shift: 'off' }
 }
 let page: ReturnType<typeof create> | undefined
 let native: ReturnType<typeof create> | undefined
@@ -117,7 +118,7 @@ it('keeps the native scroll view mounted across toolbar-only updates without rel
     { liveInputEnabled: false },
     { phoneDisplayMode: true },
     { canSend: false },
-    { customKeys: [{ id: 'build', label: 'Build' }] }
+    { modifiers: { ctrl: 'once', alt: 'off', shift: 'off' } as const }
   ]) {
     const toolbar = { ...initialToolbar, ...update }
     act(() => page!.update(createElement(Page, { toolbar })))

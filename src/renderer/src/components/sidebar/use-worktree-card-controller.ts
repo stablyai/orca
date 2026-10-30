@@ -91,10 +91,6 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     isActive: props.isActive,
     activationRowKey: props.activationRowKey,
     onActivate: props.onActivate,
-    // Why: pressing a row inside a multi-selection starts a group drag; only the click may collapse the selection.
-    activateOnPress:
-      props.activateOnPress === true &&
-      !(props.isMultiSelected && (props.selectedWorktrees?.length ?? 0) > 1),
     onWorktreeCardClick: props.onWorktreeCardClick,
     onImmediateActivate: props.onImmediateActivate,
     isDeleting: linked.isDeleting,

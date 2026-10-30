@@ -4,7 +4,7 @@ import {
   type AiVaultListResult,
   type AiVaultSession
 } from '../../../../shared/ai-vault-types'
-import { describeAiVaultScanError } from '../../../../shared/ai-vault-scan-error-message'
+import { aiVaultScanErrorText } from './ai-vault-scan-issue-copy'
 import type { ExecutionHostScope } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import type { AiVaultSessionLimit } from './ai-vault-session-limit'
@@ -85,7 +85,7 @@ export function useAiVaultSessionRefresh(
   publicationGateRef.current ??= new AiVaultSessionPublicationGate()
   const scanScopeKey = `${aiVaultSessionResultCacheKey(executionHostScope, scopePaths)}\n${sessionLimit}`
   // Kept through rescans so a repeat failure doesn't blink; shown only for the scope that failed.
-  const error = failure?.scopeKey === scanScopeKey ? describeAiVaultScanError(failure.cause) : null
+  const error = failure?.scopeKey === scanScopeKey ? aiVaultScanErrorText(failure.cause) : null
   const scopePathsRef = useRef<readonly string[]>(scopePaths)
   scopePathsRef.current = scopePaths
   const executionHostScopeRef = useRef<ExecutionHostScope>(executionHostScope)

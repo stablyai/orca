@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { salvagedOptional } from '../../../../src/shared/zod-salvage'
+import { SUPPORTED_UI_LOCALES } from '../../../../src/shared/ui-locale'
 import { NODE_PLATFORM_NAMES } from '../../transport/mobile-runtime-host-platform'
 import { RpcEnvelopeFieldsSchema } from '../../transport/rpc-envelope-fields'
 import { isRpcResponse } from '../../transport/rpc-response-shape'
@@ -107,6 +108,11 @@ export type BridgeInitHost = z.infer<typeof BridgeInitHostSchema>
 export const BridgeColorSchemeSchema = z.enum(['light', 'dark'])
 
 export type BridgeColorScheme = z.infer<typeof BridgeColorSchemeSchema>
+
+// The app's resolved UI language, so page chrome matches the native chrome and the in-app override.
+export const BridgeUiLocaleSchema = z.enum(SUPPORTED_UI_LOCALES)
+
+export type BridgeUiLocale = z.infer<typeof BridgeUiLocaleSchema>
 
 export const BridgeInitStorageSchema = z
   .record(
@@ -274,6 +280,8 @@ const BridgeHostMessageSchema = z.union([
     /** The keys the shell's rail shows beside this page, which then drops them from its own row.
      *  Absent reads as no rail. */
     terminalKeyRail: salvagedOptional('terminalKeyRail', BridgeTerminalKeyRailSchema).optional(),
+    // Older pages strip this key; a locale this page does not ship is salvaged rather than refusing init.
+    uiLocale: salvagedOptional('uiLocale', BridgeUiLocaleSchema).optional(),
     host: BridgeInitHostSchema.optional(),
     storage: BridgeInitStorageSchema.optional(),
     refreshTerminalShortcuts: salvagedOptional('refreshTerminalShortcuts', z.boolean()).optional(),

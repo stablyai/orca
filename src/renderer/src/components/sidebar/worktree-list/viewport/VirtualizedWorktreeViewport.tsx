@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useProjectHeaderHostContexts } from './use-project-header-host-contexts'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { WorktreeListScrollToTopButton } from '../../WorktreeListScrollToTopButton'
 import { renderWorktreeSidebarDropIndicators } from './drop-indicators'
 import { useWorktreeListScrollToTop } from './use-scroll-to-top'
@@ -42,6 +43,7 @@ const WORKTREE_SIDEBAR_SCROLL_STYLE: React.CSSProperties = {
 export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewport(
   props: VirtualizedWorktreeViewportProps
 ) {
+  useUiLanguageRevision()
   const {
     rows,
     groupBy,

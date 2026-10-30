@@ -5,6 +5,7 @@ import {
   saveTerminalSplitLayout,
   type TerminalSplitLayout
 } from '../storage/preferences'
+import { translate } from '../i18n/mobile-i18n'
 
 export function useTerminalSplitLayout() {
   const [terminalSplitLayout, setLayout] = useState<TerminalSplitLayout>('auto')
@@ -28,8 +29,11 @@ export function useTerminalSplitLayout() {
     setLayout(layout)
     void saveTerminalSplitLayout(layout).catch(() => {
       Alert.alert(
-        'Layout could not be saved',
-        'This layout applies for now. Choose it again to retry saving.'
+        translate('session.terminalSplitLayout.saveFailedTitle', 'Layout could not be saved'),
+        translate(
+          'session.terminalSplitLayout.saveFailedMessage',
+          'This layout applies for now. Choose it again to retry saving.'
+        )
       )
     })
   }, [])

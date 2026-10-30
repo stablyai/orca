@@ -1,0 +1,589 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schemas/plugins/orca-catalog.v2.schema.json",
+  "title": "Orca plugin catalog",
+  "description": "The orca-catalog.json file that lists installable plugins and their releases.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "description": "JSON Schema URL for editor completion. Ignored by Orca.",
+      "x-orca-since": "1.4.245",
+      "type": "string",
+      "maxLength": 2048
+    },
+    "catalogVersion": {
+      "type": "number",
+      "const": 2,
+      "description": "Catalog format. Raised only for a change older Orca cannot ignore; a newer Orca reads this one.",
+      "x-orca-since": "1.4.245"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Catalog display name.",
+      "x-orca-since": "1.4.245",
+      "examples": [
+        "Orca Plugins"
+      ]
+    },
+    "owner": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$",
+      "description": "Account that publishes the catalog.",
+      "x-orca-since": "1.4.245",
+      "examples": [
+        "stablyai"
+      ]
+    },
+    "plugins": {
+      "maxItems": 2048,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/CatalogEntry"
+      },
+      "description": "Listed plugins, at most 2048. Each `id` should appear once; Orca keeps the first. An entry this Orca cannot read is skipped, never fatal.",
+      "x-orca-since": "1.4.245"
+    }
+  },
+  "required": [
+    "catalogVersion",
+    "name",
+    "owner",
+    "plugins"
+  ],
+  "$defs": {
+    "CatalogEntry": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*\\.[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "description": "`<publisher>.<id>`: the publisher is the repository owner, lowercased (Orca installs under this key, whatever the manifest's deprecated `publisher` says), and the id is the manifest's `id`. Each half is at most 64 characters, and the reserved names `constructor` and `prototype` are refused.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "acme.gleam-syntax"
+          ]
+        },
+        "source": {
+          "$ref": "#/$defs/CatalogGitSource"
+        },
+        "ownerId": {
+          "description": "GitHub's numeric id of the repository owner, recorded the first time the plugin was listed. Names can be renamed or re-registered; this id cannot. Informational: Orca does not read it yet, and older Orca ignores it.",
+          "x-orca-since": "1.4.246",
+          "examples": [
+            1234567
+          ],
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "description": {
+          "description": "Listing text shown in the catalog.",
+          "x-orca-since": "1.4.245",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "categories": {
+          "description": "Lowercase slugs used to filter the catalog, each listed once. At most 16; extras are ignored.",
+          "x-orca-since": "1.4.245",
+          "uniqueItems": true,
+          "maxItems": 16,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          }
+        },
+        "releases": {
+          "description": "Installable releases, newest first. Orca installs the first one whose `minimumOrca` it meets, so keep older releases listed when you raise `engines.orca`. At most 32.",
+          "x-orca-since": "1.4.245",
+          "minItems": 1,
+          "maxItems": 32,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CatalogRelease"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "releases"
+      ],
+      "description": "One installable plugin."
+    },
+    "CatalogGitSource": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "git",
+          "description": "Source kind. Only `git` is supported.",
+          "x-orca-since": "1.4.245"
+        },
+        "url": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32768,
+          "description": "HTTPS or SSH URL of the plugin repository.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "https://github.com/acme/orca-gleam-syntax.git"
+          ]
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Branch or tag the author publishes from. Each release pins an exact commit.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "main"
+          ]
+        },
+        "path": {
+          "description": "Directory inside the repository that holds `orca-plugin.json`, so one repository can publish many plugins. Use `/` separators, with no leading `/`, `.` or `..`. Omit when the plugin is the repository root.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "plugins/gleam-syntax"
+          ],
+          "type": "string",
+          "maxLength": 1024,
+          "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:\\/[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$"
+        }
+      },
+      "required": [
+        "kind",
+        "url",
+        "ref"
+      ],
+      "description": "Where the plugin source lives."
+    },
+    "CatalogRelease": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "The manifest's `version` for this release.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "1.2.0"
+          ]
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$",
+          "description": "Full SHA-1 commit Orca checks out for this release.",
+          "x-orca-since": "1.4.245"
+        },
+        "contentHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "SHA-256 of the plugin's installed files, as Orca computes it at install.",
+          "x-orca-since": "1.4.245"
+        },
+        "execution": {
+          "type": "string",
+          "enum": [
+            "data",
+            "declarative",
+            "sandboxed-ui",
+            "trusted-worker"
+          ],
+          "description": "The manifest's `execution` profile.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "data"
+          ]
+        },
+        "minimumOrca": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "description": "The manifest's `engines.orca` without `>=`. Older Orca lists the plugin but will not install it.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "1.4.245"
+          ]
+        },
+        "types": {
+          "description": "Optional; Orca derives it from `contributes` and `execution`. When present, every kind of contribution the release carries, matching its manifest exactly. `instructions` needs the `declarative` profile or higher, `panel` and `editor` need `sandboxed-ui`, and `worker` needs `trusted-worker`.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            [
+              "syntax"
+            ]
+          ],
+          "uniqueItems": true,
+          "minItems": 1,
+          "maxItems": 9,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "interface-language",
+              "app-theme",
+              "terminal-theme",
+              "icon-theme",
+              "syntax",
+              "instructions",
+              "panel",
+              "editor",
+              "worker"
+            ]
+          }
+        },
+        "name": {
+          "description": "The manifest's `name`, so Orca can suggest the plugin before downloading it.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "Gleam"
+          ],
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "license": {
+          "description": "SPDX license expression.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "MIT"
+          ],
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^\\(?[A-Za-z0-9][A-Za-z0-9.+-]*(?: (?:AND|OR|WITH) \\(?[A-Za-z0-9][A-Za-z0-9.+-]*\\)?)*\\)?$"
+        },
+        "repository": {
+          "description": "Source repository page, https only.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "https://github.com/acme/orca-gleam-syntax"
+          ],
+          "type": "string",
+          "maxLength": 2048,
+          "pattern": "^https:\\/\\/\\S+$"
+        },
+        "homepage": {
+          "description": "Project homepage, https only.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "https://example.com/gleam"
+          ],
+          "type": "string",
+          "maxLength": 2048,
+          "pattern": "^https:\\/\\/\\S+$"
+        },
+        "updatedAt": {
+          "description": "When this release was published, as an ISO 8601 date or date-time.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "2026-10-20"
+          ],
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            }
+          ]
+        },
+        "changelog": {
+          "description": "What changed in this release, as plain text. At most 2000 characters.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "Adds highlighting for use expressions."
+          ],
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "images": {
+          "description": "Icon, cover and screenshots for the listing, shown before anything is downloaded.",
+          "x-orca-since": "1.4.245",
+          "$ref": "#/$defs/CatalogImages"
+        },
+        "themePreview": {
+          "description": "Up to 4 theme palettes for listing art. Display only; the installed theme files decide the real colors.",
+          "x-orca-since": "1.4.245",
+          "maxItems": 4,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CatalogThemePreview"
+          }
+        },
+        "contributes": {
+          "description": "What the release adds, as the listing shows it. Generate it with the catalog tooling; Orca refuses an install whose manifest says otherwise.",
+          "x-orca-since": "1.4.245",
+          "maxItems": 64,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CatalogContribution"
+          }
+        },
+        "capabilities": {
+          "description": "Every capability the release asks for. Orca refuses an install whose manifest asks for different ones.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            [
+              "notifications:show"
+            ]
+          ],
+          "maxItems": 7,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "workspace:read",
+              "agent:read",
+              "terminal:send",
+              "notifications:show",
+              "storage:own",
+              "secrets:own",
+              "settings:own"
+            ]
+          }
+        },
+        "fileTypes": {
+          "description": "Extensions, without the dot, that this release opens. Orca suggests the plugin when such a file has no viewer.",
+          "x-orca-since": "1.4.245",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9+_-]{0,15}$"
+          }
+        },
+        "editorFileTypes": {
+          "description": "The `fileTypes` this release opens in a custom editor. Orca suggests the plugin for such a file even when it already opens it as text.",
+          "x-orca-since": "1.4.245",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9+_-]{0,15}$"
+          }
+        }
+      },
+      "required": [
+        "version",
+        "commit",
+        "contentHash",
+        "execution",
+        "minimumOrca"
+      ],
+      "description": "The exact release the catalog vouches for. Orca refuses bytes that differ."
+    },
+    "CatalogImages": {
+      "type": "object",
+      "properties": {
+        "icon": {
+          "$ref": "#/$defs/CatalogImage"
+        },
+        "cover": {
+          "$ref": "#/$defs/CatalogImage"
+        },
+        "screenshots": {
+          "description": "Screenshots, at most 6.",
+          "x-orca-since": "1.4.245",
+          "maxItems": 6,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CatalogImage"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "description": "Images extracted from the release by catalog CI, which re-encodes them and strips metadata. Same rules as the manifest: icon PNG, WEBP, static, at least 128×128, square, at most 256 KB. Cover PNG, JPEG, WEBP, static, at least 800×500, at most 1024 KB. Screenshots PNG, JPEG, WEBP, static, at least 1280×800, at most 1536 KB. Images must not imitate Orca's trust badges."
+    },
+    "CatalogImage": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:[\\\\/][^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$",
+          "description": "File in the catalog repository, relative to its root. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "assets/acme.gleam/cover.png"
+          ]
+        },
+        "alt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "description": "What the image shows, for screen readers. Required.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "The Dusk theme on a terminal"
+          ]
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "SHA-256 of the file's bytes; Orca refuses bytes that differ.",
+          "x-orca-since": "1.4.245"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096,
+          "description": "Width in pixels.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            1600
+          ]
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096,
+          "description": "Height in pixels.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            1000
+          ]
+        }
+      },
+      "required": [
+        "path",
+        "alt",
+        "sha256",
+        "width",
+        "height"
+      ],
+      "additionalProperties": false,
+      "description": "An image stored in the catalog repository."
+    },
+    "CatalogThemePreview": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Theme name.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "Dusk"
+          ]
+        },
+        "base": {
+          "type": "string",
+          "enum": [
+            "light",
+            "dark"
+          ],
+          "description": "Light or dark theme.",
+          "x-orca-since": "1.4.245"
+        },
+        "background": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Window background.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "#1b1430"
+          ]
+        },
+        "foreground": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Main text.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "#1b1430"
+          ]
+        },
+        "accent": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Accent, such as buttons.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "#1b1430"
+          ]
+        },
+        "surface": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Cards and sidebars.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "#1b1430"
+          ]
+        }
+      },
+      "required": [
+        "label",
+        "base",
+        "background",
+        "foreground",
+        "accent",
+        "surface"
+      ],
+      "additionalProperties": false,
+      "description": "Colors to draw a theme card before install."
+    },
+    "CatalogContribution": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "panels",
+            "commands",
+            "events",
+            "languagePacks",
+            "keybindings",
+            "vmRecipes",
+            "themes",
+            "terminalThemes",
+            "iconThemes",
+            "syntaxes",
+            "customEditors",
+            "newFiles"
+          ],
+          "description": "Contribution point.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "themes"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "description": "What the item is called in Orca.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "Dusk"
+          ]
+        },
+        "detail": {
+          "description": "Extra context, such as file extensions.",
+          "x-orca-since": "1.4.245",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      },
+      "required": [
+        "kind",
+        "name"
+      ],
+      "description": "One thing the release adds to Orca."
+    }
+  }
+}

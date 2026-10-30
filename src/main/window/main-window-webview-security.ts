@@ -24,6 +24,7 @@ import { registerHostFrameNavigationGuard } from './host-frame-navigation-guard'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 import { parseChromeExtensionUrl } from '../../shared/browser-extension-url'
 import { getBrowserExtensionSessionForProfile } from '../browser/extensions/browser-extension-session-loader'
+import { installBrowserJavaScriptDialogs } from '../browser/browser-javascript-dialogs'
 
 /** orca-preview is outside normal browser URL admission; require the doc partition and a main-minted user-preview grant. */
 function isAdmissibleDocPreviewAttach(partition: string, src: string): boolean {
@@ -51,7 +52,11 @@ function isAdmissibleExtensionPageAttach(partition: string, src: string): boolea
 
 export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): void {
   installPrivilegedWindowNavigationPolicy(mainWindow.webContents)
-  // New shell documents discard preview ownership bookkeeping; revoke grants the replacement renderer cannot release.
+  // Why: plugin panels are frames of this renderer; same IP-handling fence as doc preview guests.
+  mainWindow.webContents.setWebRTCIPHandlingPolicy('disable_non_proxied_udp')
+  // Why here and on every fresh shell document: the renderer holds the only record of which
+  // preview owns which grant, and a reload throws that record away. Grants it can no longer
+  // release would stay live read authorities for the rest of the process.
   revokeAllDocPreviewGrants()
   mainWindow.webContents.on('did-start-navigation', (details) => {
     if (details.isMainFrame && !details.isSameDocument) {
@@ -129,6 +134,7 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     }
     // Install popup/navigation policy at creation or early redirects/target=_blank can outrun registration.
     browserManager.attachGuestPolicies(guest)
+    installBrowserJavaScriptDialogs(guest, () => browserManager.resolvePagePromptTarget(guest))
     // Route guests stay blank until exact main-owned registration and override generic popup routing.
     browserRouteWebContentsRegistry.attachGuest(guest)
     // Proxies cannot block WebRTC UDP; enforce it per WebContents.

@@ -26,16 +26,17 @@ function clearGrace(): void {
   graceTimer = null
 }
 
-function armDwell(worktreeId: string): void {
+function prewarm(worktreeId: string): void {
+  clearDwell()
+  clearGrace()
+  prewarmedWorktreeId = worktreeId
+  setTerminalPrewarmWorktrees('hover', [worktreeId])
+}
+
+function armDwell(worktreeId: string, delayMs = HOVER_PREWARM_DWELL_MS): void {
   clearDwell()
   dwellWorktreeId = worktreeId
-  dwellTimer = setTimeout(() => {
-    dwellTimer = null
-    dwellWorktreeId = null
-    clearGrace()
-    prewarmedWorktreeId = worktreeId
-    setTerminalPrewarmWorktrees('hover', [worktreeId])
-  }, HOVER_PREWARM_DWELL_MS)
+  dwellTimer = setTimeout(() => prewarm(worktreeId), delayMs)
 }
 
 // Rows scrolling under a resting pointer fire pointerenter; restart the dwell so scrolling never prewarms.
@@ -63,6 +64,13 @@ export function noteWorktreeRowHoverStart(worktreeId: string): void {
     return
   }
   armDwell(worktreeId)
+}
+
+/** A press is intent enough to skip the hover dwell; the mount still waits a task so it can't delay the press's focus move or drag start. */
+export function noteWorktreeRowPress(worktreeId: string): void {
+  if (prewarmedWorktreeId !== worktreeId) {
+    armDwell(worktreeId, 0)
+  }
 }
 
 export function noteWorktreeRowHoverEnd(worktreeId: string): void {

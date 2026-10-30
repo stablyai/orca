@@ -54,7 +54,8 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     ...(options.pageGeometry === undefined ? {} : { pageGeometry: options.pageGeometry }),
     ...(options.foldDivision === undefined ? {} : { foldDivision: options.foldDivision }),
     ...(options.terminalKeyRail === undefined ? {} : { terminalKeyRail: options.terminalKeyRail }),
-    ...(options.colorScheme === undefined ? {} : { colorScheme: options.colorScheme })
+    ...(options.colorScheme === undefined ? {} : { colorScheme: options.colorScheme }),
+    ...(options.uiLocale === undefined ? {} : { uiLocale: options.uiLocale })
   })
   let closed = false
   // Close ends document service until the next ready. Native delivery preserves frame order, so stragglers remain between those markers without an epoch.
@@ -131,6 +132,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
           foldDivision: routes.foldDivision(),
           terminalKeyRail: routes.terminalKeyRail(),
           colorScheme: routes.colorScheme(),
+          uiLocale: routes.uiLocale(),
           pageRoutes,
           ...(parsedRouteGrants?.success === true
             ? { pageRouteGrants: parsedRouteGrants.data }
@@ -322,6 +324,9 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     },
     publishColorScheme: (next) => {
       routes.publishColorScheme(next, deliverable())
+    },
+    publishUiLocale: (next) => {
+      routes.publishUiLocale(next, deliverable())
     },
     sendBack: back.send,
     readSessionBack: () => ({

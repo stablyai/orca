@@ -22,6 +22,7 @@ import { useFileExplorerWatch } from './useFileExplorerWatch'
 import type { useFileExplorerSelection } from './useFileExplorerSelection'
 import type { useFileExplorerTree } from './useFileExplorerTree'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import type { LocalPathOpenOwner } from '@/lib/local-path-open-guard'
 
 type UseFileExplorerTreePaneStateParams = {
   onRevealOutsideRoot?: () => void
@@ -43,6 +44,7 @@ type UseFileExplorerTreePaneStateParams = {
   rowProjection: FileExplorerRowProjection
   rowExpandedPaths: Set<string>
   visibleRowCount: number
+  pathOwner: LocalPathOpenOwner
 }
 
 type UseFileExplorerTreePaneStateResult = {
@@ -81,7 +83,8 @@ export function useFileExplorerTreePaneState({
   selectedNode,
   rowProjection,
   rowExpandedPaths,
-  visibleRowCount
+  visibleRowCount,
+  pathOwner
 }: UseFileExplorerTreePaneStateParams): UseFileExplorerTreePaneStateResult {
   const {
     dirCache,
@@ -174,6 +177,7 @@ export function useFileExplorerTreePaneState({
   })
 
   useFileExplorerTreeLoadEffects({
+    workspaceKey: activeWorktreeId,
     visibleFilesWorktreePath,
     displayRootPath,
     expanded: effectiveExpanded,
@@ -283,7 +287,8 @@ export function useFileExplorerTreePaneState({
     refreshDir,
     handleClick: handlers.handleClick,
     toggleDir: hasNameFilter ? handleToggleNameFilterDir : toggleDir,
-    scrollToIndex: rowScrolling.scrollToIndex
+    scrollToIndex: rowScrolling.scrollToIndex,
+    pathOwner
   })
 
   return {

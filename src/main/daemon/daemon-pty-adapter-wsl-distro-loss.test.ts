@@ -2,10 +2,11 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { WslRunningDistrosRead } from '../wsl-background-distro-gate'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import type { DaemonServer } from './daemon-server'
+import { setActiveSink } from '../observability/tracer'
 import { HistoryManager } from './history-manager'
 import { WslBridgeBootIdentity } from './daemon-wsl-bridge-boot-identity'
 import {
@@ -129,6 +130,13 @@ describe('a WSL bridge pane exit', () => {
 
   it('logs what the running list said, so a run can tell host loss from a raced reboot', async () => {
     const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+    const spans: unknown[] = []
+    setActiveSink({
+      push: (span) => spans.push(span),
+      flush: () => {},
+      close: () => {}
+    })
+    onTestFinished(() => setActiveSink(null))
     for (const [distros, verdict] of [
       [[], 'lost'],
       [['Ubuntu'], 'running']
@@ -145,6 +153,12 @@ describe('a WSL bridge pane exit', () => {
           )
         )
       )
+      // Kept in the local trace too: a packaged build keeps no console (verify-18).
+      expect(spans.at(-1)).toMatchObject({
+        name: 'wsl.bridge-exit',
+        attributes: { verdict, code: 1 }
+      })
+      expect(JSON.stringify(spans.at(-1))).not.toContain('Ubuntu')
     }
   })
 

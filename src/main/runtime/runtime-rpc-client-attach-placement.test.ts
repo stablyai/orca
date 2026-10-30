@@ -19,7 +19,6 @@ function runtimeRecordingPlacement() {
     machineNameReady: async () => undefined,
     getStatus: () => ({ graphStatus: 'unavailable' }),
     cleanupSubscriptionsForConnection: () => {},
-    cancelMobileDictationForConnection: () => {},
     onClientDisconnected: () => {},
     placeUnshownLiveTerminals
   } as unknown as OrcaRuntimeService

@@ -1,12 +1,20 @@
-import { expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
+import type { WorktreeOperationOwnerRecord } from './worktree-operation-route'
 import { worktreeOwnerRowsTokenOf } from './worktree-owner-rows-token'
 
-const row = { id: 'repo::/w', repoId: 'repo', hostId: 'local' as const, sortOrder: 1 }
+const a: WorktreeOperationOwnerRecord = { id: 'a', repoId: 'r1', hostId: 'ssh:one' }
+const b: WorktreeOperationOwnerRecord = { id: 'b', repoId: 'r1' }
 
-it('keeps the token across non-owner row patches and changes it for owner changes', () => {
-  const token = worktreeOwnerRowsTokenOf({ repo: [row] })
-  const reranked = { ...row, sortOrder: 2 }
-  expect(worktreeOwnerRowsTokenOf({ repo: [reranked] })).toBe(token)
-  expect(worktreeOwnerRowsTokenOf({ repo: [{ ...row, hostId: 'runtime:env' }] })).not.toBe(token)
-  expect(worktreeOwnerRowsTokenOf({ other: [row] })).not.toBe(token)
+describe('worktreeOwnerRowsTokenOf', () => {
+  it('keeps the token across non-owner patches and changes it for owner changes', () => {
+    const base = worktreeOwnerRowsTokenOf({ r1: [a, b] })
+    expect(worktreeOwnerRowsTokenOf({ r1: [{ ...a }, b] })).toBe(base)
+    expect(worktreeOwnerRowsTokenOf({ r1: [a, { ...b, hostId: undefined }] })).toBe(base)
+    expect(worktreeOwnerRowsTokenOf({ r1: [{ ...a, hostId: 'ssh:two' }, b] })).not.toBe(base)
+  })
+
+  it('treats a row reorder as an owner change', () => {
+    const base = worktreeOwnerRowsTokenOf({ r1: [a, b] })
+    expect(worktreeOwnerRowsTokenOf({ r1: [b, a] })).not.toBe(base)
+  })
 })

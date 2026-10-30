@@ -1,4 +1,5 @@
 import { Pressable, Text } from 'react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { authFailedBannerStyles as styles } from './auth-failed-banner-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
@@ -11,13 +12,21 @@ export function AuthFailedBannerActions({
   onRepair: () => void
   onRemove: () => void
 }) {
+  const t = useMobileTranslation()
   useMobileColorScheme()
   return (
     <>
       <Pressable style={styles.action} onPress={onRepair}>
-        <Text style={styles.actionText}>Re-pair</Text>
+        <Text style={styles.actionText}>
+          {t('components.authFailedBannerActions.repair', 'Re-pair')}
+        </Text>
       </Pressable>
-      <Text style={styles.note}>Reconnect or remove this host from the Orca app.</Text>
+      <Text style={styles.note}>
+        {t(
+          'components.authFailedBannerActions.webNote',
+          'Reconnect or remove this host from the Orca app.'
+        )}
+      </Text>
     </>
   )
 }

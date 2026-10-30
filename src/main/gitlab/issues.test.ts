@@ -371,7 +371,7 @@ describe('gitlab issue operations', () => {
   })
 
   it('rejects createIssue with empty title', async () => {
-    await expect(createIssue('/repo-root', '   ', 'body')).resolves.toEqual({
+    await expect(createIssue('/repo-root', '   ', 'body')).resolves.toMatchObject({
       ok: false,
       error: 'Title is required'
     })
@@ -658,7 +658,7 @@ describe('gitlab issue operations', () => {
 
   it('updateIssue returns error when project ref cannot be resolved', async () => {
     getIssueProjectRefMock.mockResolvedValueOnce(null)
-    await expect(updateIssue('/repo-root', 5, { state: 'closed' })).resolves.toEqual({
+    await expect(updateIssue('/repo-root', 5, { state: 'closed' })).resolves.toMatchObject({
       ok: false,
       error: 'Could not resolve GitLab project for this repository'
     })

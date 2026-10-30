@@ -6,7 +6,11 @@ import {
   buildDashboardBucketCounts,
   createDashboardBucketCountsCache
 } from './build-dashboard-bucket-counts'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 
 export type AgentBucketCounts = Record<DashboardBucket, number>
 
@@ -28,10 +32,16 @@ export type AgentBucketCountState = Pick<
   | 'folderWorkspaces'
   | 'acknowledgedAgentsByPaneKey'
   | 'agentStatusEpoch'
-> & {
-  // Counts never render generated conversation names; keep this path off settings subscriptions.
-  settings: null
-}
+  | 'settings'
+  | 'detectedWorktreesByRepo'
+  | 'projectGroups'
+  | 'restoredRuntimeHostIdByWorkspaceSessionKey'
+  | 'activeWorktreeId'
+  | 'activeWorkspaceExecutionHostId'
+  | 'runtimeEnvironments'
+  | 'runtimeEnvironmentCatalogHydrated'
+  | 'removedRuntimeEnvironmentIds'
+>
 
 // Compare slice identities directly: useShallow allocates entries/Maps per store write. This pure state projection shares one allocation-free unchanged path across consumers.
 let previousState: AgentBucketCountState | null = null
@@ -59,7 +69,17 @@ export function selectAgentBucketCountState(s: AppState): AgentBucketCountState 
     previous.paneForegroundAgentByPaneKey === s.paneForegroundAgentByPaneKey &&
     selectFolderWorkspaces(previous) === selectFolderWorkspaces(s) &&
     previous.acknowledgedAgentsByPaneKey === s.acknowledgedAgentsByPaneKey &&
-    previous.agentStatusEpoch === s.agentStatusEpoch
+    previous.agentStatusEpoch === s.agentStatusEpoch &&
+    previous.settings === s.settings &&
+    selectDetectedWorktreesByRepo(previous) === selectDetectedWorktreesByRepo(s) &&
+    previous.projectGroups === s.projectGroups &&
+    previous.restoredRuntimeHostIdByWorkspaceSessionKey ===
+      s.restoredRuntimeHostIdByWorkspaceSessionKey &&
+    previous.activeWorktreeId === s.activeWorktreeId &&
+    previous.activeWorkspaceExecutionHostId === s.activeWorkspaceExecutionHostId &&
+    previous.runtimeEnvironments === s.runtimeEnvironments &&
+    previous.runtimeEnvironmentCatalogHydrated === s.runtimeEnvironmentCatalogHydrated &&
+    previous.removedRuntimeEnvironmentIds === s.removedRuntimeEnvironmentIds
   ) {
     return previous
   }
@@ -79,7 +99,15 @@ export function selectAgentBucketCountState(s: AppState): AgentBucketCountState 
     folderWorkspaces: selectFolderWorkspaces(s),
     acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
     agentStatusEpoch: s.agentStatusEpoch,
-    settings: null
+    settings: s.settings,
+    detectedWorktreesByRepo: selectDetectedWorktreesByRepo(s),
+    projectGroups: s.projectGroups,
+    restoredRuntimeHostIdByWorkspaceSessionKey: s.restoredRuntimeHostIdByWorkspaceSessionKey,
+    activeWorktreeId: s.activeWorktreeId,
+    activeWorkspaceExecutionHostId: s.activeWorkspaceExecutionHostId,
+    runtimeEnvironments: s.runtimeEnvironments,
+    runtimeEnvironmentCatalogHydrated: s.runtimeEnvironmentCatalogHydrated,
+    removedRuntimeEnvironmentIds: s.removedRuntimeEnvironmentIds
   }
   return previousState
 }

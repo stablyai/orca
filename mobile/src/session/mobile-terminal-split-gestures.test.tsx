@@ -226,7 +226,11 @@ it.each(['touch', 'wheel', 'mouse', 'tap'] as const)(
         })
         expect(activeHandleRef.current).toBe(handle)
         if (gesture === 'mouse' || gesture === 'tap') {
-          expect(send.mock.calls.at(-1)).toEqual([handle, expect.stringContaining('\x1b[<0;')])
+          expect(send.mock.calls.at(-1)).toEqual([
+            handle,
+            expect.stringContaining('\x1b[<0;'),
+            'pointer'
+          ])
         } else {
           expect(request).toHaveBeenCalledWith(
             'terminal.send',

@@ -66,19 +66,22 @@ export function handleMarkdownPreviewSystemLinkClick({
     (classified?.kind === 'file' && classified.line !== undefined)
   ) {
     const cleanUri = absolutePathToFileUri(classified.absolutePath)
-    void window.api.shell.pathExists(classified.absolutePath).then((exists) => {
-      if (!exists) {
-        toast.error(
-          translate(
-            'auto.components.editor.MarkdownPreview.6c043947ae',
-            'File not found: {{value0}}',
-            { value0: classified.relativePath ?? classified.absolutePath }
+    // A click is a user act: it may start the link's stopped WSL distro.
+    void window.api.shell
+      .pathExists(classified.absolutePath, { wakeWslDistro: true })
+      .then((exists) => {
+        if (!exists) {
+          toast.error(
+            translate(
+              'auto.components.editor.MarkdownPreview.6c043947ae',
+              'File not found: {{value0}}',
+              { value0: classified.relativePath ?? classified.absolutePath }
+            )
           )
-        )
-        return
-      }
-      void window.api.shell.openFileUri(cleanUri, LOCAL_EXECUTION_HOST_ID)
-    })
+          return
+        }
+        void window.api.shell.openFileUri(cleanUri, LOCAL_EXECUTION_HOST_ID)
+      })
     return true
   }
   void window.api.shell.openFileUri(parsed.toString(), LOCAL_EXECUTION_HOST_ID)

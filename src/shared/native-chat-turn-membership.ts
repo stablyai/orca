@@ -28,7 +28,7 @@ import { inSendOrder } from './native-chat/native-chat-send-order'
 import { runningStructuredAgentSessionTurnScope } from './structured-agent-session-live-turn'
 import { nativeChatOpeningTurnKey } from './native-chat-messages-waiting-behind-live-turn'
 import type { AgentSessionLatestTurn } from './agent-session-wire'
-import { nativeChatTurnRowAttribution } from './native-chat-turn-row-attribution'
+import { nativeChatTurnRowAttribution } from './native-chat/transcript/native-chat-turn-row-attribution'
 
 /** Turn scopes identify hosts that also run /compact through the send path; older hosts omit them. */
 export function hostStatesTurnScopes(items: readonly AgentJournalRenderItem[]): boolean {

@@ -1,4 +1,4 @@
-/// STA-3433: use HID taps; CGEventPostToPid lacks window association and AppKit drops presses.
+/// Foreground (--restore-window) clicks: HID taps behind a focused-recipient fence; background clicks use BackgroundInputTransport.
 /// Pace down/up events or WindowServer can drop mouseUp.
 public enum SyntheticMouseClickDelivery {
     public static let maxClickCount = 3
@@ -67,6 +67,50 @@ public enum SyntheticMouseClickDelivery {
             match = candidate
         }
         return match
+    }
+
+    public static func deliverScroll<Event>(
+        move: Event,
+        wheel: Event,
+        target: Recipient,
+        currentObservation: () -> RecipientObservation,
+        post: (Event) -> Void,
+        pause: (UInt32) -> Void
+    ) throws {
+        try requireRecipient(target, currentObservation: currentObservation)
+        post(move)
+        pause(interEventPauseMicroseconds)
+        try requireRecipient(target, currentObservation: currentObservation)
+        post(wheel)
+    }
+
+    public static func deliverDrag<Event>(
+        move: Event,
+        down: Event,
+        dragged: [Event],
+        up: Event,
+        target: Recipient,
+        currentObservation: () -> RecipientObservation,
+        post: (Event) -> Void,
+        pause: (UInt32) -> Void
+    ) throws {
+        try requireRecipient(target, currentObservation: currentObservation)
+        post(move)
+        try requireRecipient(target, currentObservation: currentObservation)
+        post(down)
+        pause(interEventPauseMicroseconds)
+        for event in dragged {
+            post(event)
+            pause(10_000)
+        }
+        post(up)
+    }
+
+    private static func requireRecipient(_ target: Recipient, currentObservation: () -> RecipientObservation) throws {
+        let observation = currentObservation()
+        guard observation == .focused(target) else {
+            throw FenceFailure.recipientChanged(expected: target, actual: observation.recipient, deliveredPresses: 0)
+        }
     }
 
     public static func deliver<Event>(

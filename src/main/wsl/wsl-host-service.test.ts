@@ -14,7 +14,6 @@ import { getPreferredPairingOffer } from '../../shared/runtime-environments'
 import type { WslHostStatus } from '../../shared/wsl-host-types'
 import { OrcadHostUnsupportedError } from '../orcad/orcad-host-unavailable'
 import { RemoteNodeRuntimeSelfTestError } from '../ssh/orcad-remote-node-runtime-report'
-import { wsl1DistroMessage, WslDistroVersion1Error } from './wsl-distro-unsupported'
 import { WslHostService, type WslHostConnector } from './wsl-host-service'
 import { wakeRememberedWslHosts } from './wsl-host-early-wake'
 import { WslOrcadLaunchDeferredError } from './wsl-orcad-connection-errors'
@@ -314,7 +313,8 @@ describe('WslHostService', () => {
     await expect(service.add({ distro: 'Debian' })).resolves.toEqual({
       ok: false,
       kind: 'server-files-missing',
-      message: 'This build of Orca can’t run WSL hosts (server files missing).'
+      message: 'This build of Orca can’t run WSL hosts (server files missing).',
+      errorCode: 'serverFilesMissing'
     })
     expect(connector.listDistros).not.toHaveBeenCalled()
     await expect(service.connect('wsl:ubuntu')).rejects.toThrow('server files missing')
@@ -775,7 +775,6 @@ describe('WslHostService', () => {
   })
 
   it.each([
-    ['unsupported-wsl1', () => new WslDistroVersion1Error('Ubuntu'), wsl1DistroMessage('Ubuntu')],
     [
       'unsupported-distro',
       () => new OrcadHostUnsupportedError('No Orca runtime supports linux-arm64-glibc.'),

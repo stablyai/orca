@@ -40,7 +40,7 @@ vi.mock('lucide-react-native', () => ({
   Monitor: 'Monitor',
   Smartphone: 'Smartphone',
   ChevronsRight: 'ChevronsRight',
-  Plus: 'Plus'
+  Ellipsis: 'Ellipsis'
 }))
 import { SideRailProvider } from '../layout/side-rail'
 import { useShellTerminalKeyRail } from './shell-terminal-key-rail'
@@ -48,11 +48,11 @@ import { useShellTerminalKeyRail } from './shell-terminal-key-rail'
 const toolbar: BridgeTerminalToolbar = {
   canSend: true,
   canCompose: true,
-  canPaste: true,
   keyboardVisible: false,
   liveInputEnabled: true,
   phoneDisplayMode: false,
-  customKeys: [],
+  runsAgent: false,
+  modifiers: { ctrl: 'off', alt: 'off', shift: 'off' },
   directionPadEnabled: false
 }
 type Input = {

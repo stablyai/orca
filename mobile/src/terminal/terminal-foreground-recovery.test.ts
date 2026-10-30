@@ -28,6 +28,7 @@ function terminalHandle(): TerminalWebViewHandle {
     reflow: vi.fn(),
     clear: vi.fn(),
     fitDimensions: vi.fn(() => null),
+    scrollToBottom: vi.fn(),
     resetZoom: vi.fn(),
     cancelSelect: vi.fn(),
     doSelectAll: vi.fn(),

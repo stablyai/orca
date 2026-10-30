@@ -12,6 +12,7 @@ import { useSerializedStoredState } from '../storage/use-serialized-stored-state
 import { colors } from '../theme/mobile-theme'
 import { styles } from './terminal-shortcut-settings-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
   TERMINAL_ACCESSORY_KEYS,
   type TerminalAccessoryKey
@@ -37,6 +38,7 @@ function ShortcutBarRow({
   onToggle: (visible: boolean) => void
 }): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   return (
     <View style={styles.reorderRowContent}>
       <View style={styles.keycap}>
@@ -46,7 +48,13 @@ function ShortcutBarRow({
         <Text style={styles.rowLabel}>{shortcutKey.accessibilityLabel ?? shortcutKey.label}</Text>
       </View>
       <Switch
-        accessibilityLabel={`Show ${shortcutKey.accessibilityLabel ?? shortcutKey.label} shortcut`}
+        accessibilityLabel={t(
+          'components.terminalShortcutSettings.showShortcut',
+          'Show {{label}} shortcut',
+          {
+            label: shortcutKey.accessibilityLabel ?? shortcutKey.label
+          }
+        )}
         value={visible}
         onValueChange={onToggle}
         trackColor={{ false: colors.borderSubtle, true: colors.textSecondary }}
@@ -70,6 +78,7 @@ export function TerminalShortcutSettings({
   onDragActiveChange
 }: Props): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const hasPad = useDirectionPadAvailable()
   const defaultLayout = useCallback(() => getDefaultTerminalAccessoryLayout(hasPad), [hasPad])
   const loadShortcutLayout = useCallback(() => loadTerminalAccessoryLayout(hasPad), [hasPad])
@@ -174,17 +183,27 @@ export function TerminalShortcutSettings({
     <>
       {hasPad ? (
         <>
-          <Text style={[styles.groupHeading, styles.groupTopGap]}>DIRECTION PAD</Text>
+          <Text style={[styles.groupHeading, styles.groupTopGap]}>
+            {t('components.terminalShortcutSettings.directionPad', 'DIRECTION PAD')}
+          </Text>
           <View style={[styles.section, styles.sectionTopGap]}>
             <View style={styles.row}>
               <View style={styles.rowContent}>
-                <Text style={styles.rowLabel}>Show D-pad</Text>
+                <Text style={styles.rowLabel}>
+                  {t('components.terminalShortcutSettings.showDirectionPad', 'Show D-pad')}
+                </Text>
                 <Text style={styles.rowSublabel}>
-                  Pin the direction pad in the side rail. Arrow shortcuts below are independent.
+                  {t(
+                    'components.terminalShortcutSettings.showDirectionPadDescription',
+                    'Pin the arrow pad in the side rail. Without it, the rail lists the arrow keys.'
+                  )}
                 </Text>
               </View>
               <Switch
-                accessibilityLabel="Show D-pad"
+                accessibilityLabel={t(
+                  'components.terminalShortcutSettings.showDirectionPad',
+                  'Show D-pad'
+                )}
                 value={shortcutLayout.directionPadEnabled !== false}
                 onValueChange={(enabled) =>
                   setShortcutLayout((current) => {
@@ -200,10 +219,14 @@ export function TerminalShortcutSettings({
           </View>
         </>
       ) : null}
-      <Text style={[styles.groupHeading, styles.groupTopGap]}>SHORTCUT BAR</Text>
+      <Text style={[styles.groupHeading, styles.groupTopGap]}>
+        {t('components.terminalShortcutSettings.moreKeys', 'MORE KEYS')}
+      </Text>
       <Text style={styles.groupDescription}>
-        Toggle keys to show or hide them, and hold the grip to drag a key into the order you want on
-        the terminal shortcut bar.
+        {t(
+          'components.terminalShortcutSettings.moreKeysDescription',
+          'These keys sit under ⋯ on the terminal key row. Toggle keys to show or hide them, and hold the grip to drag a key into the order you want. A key already on the row, like Esc or the arrows, is left out of ⋯.'
+        )}
       </Text>
       <View style={[styles.section, styles.sectionTopGap]}>
         <DragReorderList
@@ -228,20 +251,29 @@ export function TerminalShortcutSettings({
           onPress={resetBuiltInKeys}
         >
           <View style={styles.rowContent}>
-            <Text style={styles.rowLabel}>Reset Defaults</Text>
+            <Text style={styles.rowLabel}>
+              {t('components.terminalShortcutSettings.resetDefaults', 'Reset Defaults')}
+            </Text>
             <Text style={styles.rowSublabel}>
-              Restore the default shortcut order, visibility and D-pad
+              {t(
+                'components.terminalShortcutSettings.resetDescription',
+                'Show every built-in shortcut key in the original order'
+              )}
             </Text>
           </View>
         </Pressable>
       </View>
 
-      <Text style={[styles.groupHeading, styles.groupTopGap]}>CUSTOM SHORTCUTS</Text>
+      <Text style={[styles.groupHeading, styles.groupTopGap]}>
+        {t('components.terminalShortcutSettings.customShortcuts', 'CUSTOM SHORTCUTS')}
+      </Text>
       <View style={[styles.section, styles.sectionTopGap]}>
         {customKeys.length === 0 ? (
           <>
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No custom shortcuts defined yet.</Text>
+              <Text style={styles.emptyText}>
+                {t('components.terminalShortcutSettings.empty', 'No custom shortcuts defined yet.')}
+              </Text>
             </View>
             <View style={styles.separator} />
           </>
@@ -267,7 +299,13 @@ export function TerminalShortcutSettings({
                   </Text>
                 </View>
                 <Switch
-                  accessibilityLabel={`Show ${key.label} shortcut`}
+                  accessibilityLabel={t(
+                    'components.terminalShortcutSettings.showShortcut',
+                    'Show {{label}} shortcut',
+                    {
+                      label: key.label
+                    }
+                  )}
                   value={key.visible !== false}
                   onValueChange={(visible) =>
                     setCustomKeys((current) => {
@@ -289,7 +327,11 @@ export function TerminalShortcutSettings({
                   onPress={() => handleDeleteCustomKey(key)}
                   hitSlop={8}
                   accessibilityRole="button"
-                  accessibilityLabel={`Remove ${key.label}`}
+                  accessibilityLabel={t(
+                    'components.terminalShortcutSettings.removeShortcut',
+                    'Remove {{label}}',
+                    { label: key.label }
+                  )}
                 >
                   <X size={16} color={colors.statusRed} />
                 </Pressable>
@@ -302,8 +344,15 @@ export function TerminalShortcutSettings({
           onPress={() => setShowCustomKeyModal(true)}
         >
           <View style={styles.rowContent}>
-            <Text style={styles.rowLabel}>Add Custom Shortcut…</Text>
-            <Text style={styles.rowSublabel}>Create key combo or text macro</Text>
+            <Text style={styles.rowLabel}>
+              {t('components.terminalShortcutSettings.addShortcut', 'Add Custom Shortcut…')}
+            </Text>
+            <Text style={styles.rowSublabel}>
+              {t(
+                'components.terminalShortcutSettings.addDescription',
+                'Create key combo or text macro'
+              )}
+            </Text>
           </View>
           <ChevronRight size={16} color={colors.textMuted} />
         </Pressable>

@@ -1,3 +1,4 @@
+import { mobileNativeChatDraftDestination } from './native-chat/composer/mobile-native-chat-draft-inputs'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -90,6 +91,7 @@ vi.mock('./use-mobile-native-chat-session', () => ({
 }))
 vi.mock('./use-mobile-structured-agent-session', () => ({
   useMobileStructuredAgentSession: () => ({
+    asyncQuestionSourceScope: 'journal/host/session/epoch',
     session: structuredSessionState,
     ...structuredActivity,
     queued: { cards: [], send: vi.fn(), delete: vi.fn(), edit: vi.fn() },
@@ -167,6 +169,7 @@ const sendWithOutcome = vi.mocked(NativeChatSend.sendMobileNativeChatMessageWith
 
 const ORIGIN = {
   draftKey: 'h\0w\0tab-1',
+  draftDestination: mobileNativeChatDraftDestination('h\0w\0tab-1'),
   draftEditGeneration: 0,
   pendingKey: 'h\0w\0tab-1\0session-1',
   normalizedText: 'look',

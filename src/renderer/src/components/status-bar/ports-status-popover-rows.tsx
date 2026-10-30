@@ -86,7 +86,14 @@ export function PortRow({
   const runtimeTarget = useWorktreeRuntimeTarget(
     port.kind === 'workspace' ? port.owner.worktreeId : activeWorktreeId
   )
-  const processLabel = port.processName ?? (port.pid ? `PID ${port.pid}` : 'Unknown process')
+  const processLabel =
+    port.processName ??
+    (port.pid
+      ? `PID ${port.pid}`
+      : translate(
+          'auto.components.status.bar.ports.status.popover.rows.unknownProcess',
+          'Unknown process'
+        ))
   const canStop = canStopWorkspacePort(port)
   const openBrowserLabel = translate(
     'auto.components.status.bar.ports.status.popover.rows.085f4f0334',

@@ -4,6 +4,7 @@ import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
 import { AgentBrowserBridgeRawProcess } from './agent-browser-bridge-raw-process'
 import type { AgentBrowserCleanupOptions } from './agent-browser-bridge-types'
 import { AGENT_BROWSER_CLEANUP_TIMEOUT_MS } from './agent-browser-bridge-types'
+import { waitForAgentBrowserSessionExit } from './agent-browser-session-reset'
 import { runOutsideRemoteCliBrowserScope } from '../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 
 export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawProcess {
@@ -62,6 +63,11 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
     ) {
       this.activeWebContentsPerWorktree.set(owningWorktreeId, newWebContentsId)
     }
+    for (const [key, heldWebContentsId] of this.heldPersonSelections) {
+      if (heldWebContentsId === oldWebContentsId) {
+        this.heldPersonSelections.set(key, newWebContentsId)
+      }
+    }
     this.options.onTabsChanged?.(owningWorktreeId ?? undefined)
   }
   protected async ensureSession(
@@ -75,8 +81,17 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
     }
     this.assertCommandAdmission()
 
-    if (this.sessions.has(sessionName)) {
+    const existing = this.sessions.get(sessionName)
+    if (existing?.webContentsId === webContentsId) {
       return
+    }
+    if (existing) {
+      // A renderer reload gives the page a new guest without a process-swap notice.
+      await this.destroySession(sessionName, {
+        closeTimeoutMs: AGENT_BROWSER_CLEANUP_TIMEOUT_MS,
+        keepQueuedCommands: true
+      })
+      this.assertCommandAdmission()
     }
 
     // Coalesce creation to avoid leaking duplicate proxies and debugger connections.
@@ -186,6 +201,11 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
           ['--session', sessionName, 'close'],
           options.closeTimeoutMs === undefined ? undefined : { timeoutMs: options.closeTimeoutMs }
         )
+        await waitForAgentBrowserSessionExit({
+          ownsSocketDirectory: this.ownsAgentBrowserSocketDirectory,
+          socketDirectory: this.agentBrowserEnv.AGENT_BROWSER_SOCKET_DIR,
+          sessionName
+        })
       } catch {}
 
       await session.proxy.stop()

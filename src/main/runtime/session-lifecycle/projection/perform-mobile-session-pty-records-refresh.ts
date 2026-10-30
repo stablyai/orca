@@ -183,7 +183,13 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
         const targetGroupId = snapshot?.tabGroups?.find((group) =>
           group.tabOrder.includes(tab.parentTabId)
         )?.id
-        const trigger = { automatic, targetsHost, targetGroupId }
+        // An explicit tab open is the user's act; an automatic probe never starts a stopped distro.
+        const trigger = {
+          automatic,
+          targetsHost,
+          targetGroupId,
+          ...(automatic ? {} : { wslUserAct: true as const })
+        }
         let startupCwdFallback: RuntimeMobileSessionTabActivationResult['startupCwdFallback']
         try {
           if (ORCA_LAYOUT_OWNER_IS_MAIN) {

@@ -1,3 +1,4 @@
+import { taskProviderErrorMessage } from '@/lib/task-provider-error-copy'
 import type { TaskPageLinearListProjectionModel } from './use-task-page-linear-list-projection'
 import React, { useMemo, useCallback } from 'react'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
@@ -174,7 +175,7 @@ export function useTaskPageLinearBoard(model: TaskPageLinearListProjectionModel)
           })
           applyFallbackState(previousState)
           toast.error(
-            result.error ??
+            taskProviderErrorMessage(result) ||
               translate('auto.components.TaskPage.6775c05483', 'Failed to update Linear state')
           )
           return

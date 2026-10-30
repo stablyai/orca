@@ -8,6 +8,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shar
 import { seedBrowserLinkTestStore, WORKSPACE, URL_TO_OPEN } from './browser-link-open.test-fixture'
 import { captureLinkOpenIntent } from './link-open-intent'
 import { openHttpLink } from './http-link-routing'
+import { openAppHttpLink } from './app-http-link-open'
 import { httpLinkActionDestinationsFor, openRoutedHttpLink } from './http-link-destinations'
 import * as workspaceBrowserTabOpen from './workspace-browser-tab-open'
 import type { DocPreviewExternalLink } from '../../../shared/doc-preview-scheme'
@@ -520,3 +521,38 @@ it.each([
     }
   }
 )
+
+it('opens a link from Orca UI as a browser tab in the active workspace', async () => {
+  const openUrl = vi.fn()
+  vi.stubGlobal('window', { ...window, api: { ...window.api, shell: { openUrl } } })
+  const completed = observeBrowserLinkOpen()
+
+  openAppHttpLink(URL_TO_OPEN)
+
+  expect(await completed).toMatchObject({ status: 'opened' })
+  expect(useAppStore.getState().browserTabsByWorktree[WORKSPACE]).toHaveLength(1)
+  expect(openUrl).not.toHaveBeenCalled()
+})
+
+it('opens a link from Orca UI in the system browser when the workspace browser cannot open pages', () => {
+  const openUrl = vi.fn(() => Promise.resolve())
+  vi.stubGlobal('window', { ...window, api: { ...window.api, shell: { openUrl } } })
+  // A paired web client without browser streaming has no in-app browser.
+  vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+
+  openAppHttpLink(URL_TO_OPEN)
+
+  expect(openUrl).toHaveBeenCalledExactlyOnceWith(URL_TO_OPEN)
+  expect(useAppStore.getState().browserTabsByWorktree[WORKSPACE] ?? []).toHaveLength(0)
+})
+
+it('opens a link from Orca UI in the system browser on the escape modifier click', () => {
+  const openUrl = vi.fn(() => Promise.resolve())
+  vi.stubGlobal('window', { ...window, api: { ...window.api, shell: { openUrl } } })
+
+  // Shift plus both platform keys reads as the escape modifier on every OS.
+  openAppHttpLink(URL_TO_OPEN, { event: { shiftKey: true, metaKey: true, ctrlKey: true } })
+
+  expect(openUrl).toHaveBeenCalledExactlyOnceWith(URL_TO_OPEN)
+  expect(useAppStore.getState().browserTabsByWorktree[WORKSPACE] ?? []).toHaveLength(0)
+})

@@ -1,3 +1,4 @@
+import { terminalInputSend } from '../terminal/mobile-terminal-operations'
 import { pendingSelectionWantsHandle } from './pending-session-selection'
 import { useEffect, useCallback, useRef } from 'react'
 import type { TerminalWebViewHandle } from '../terminal/terminal-webview-contract'
@@ -39,6 +40,13 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     notifyTerminalFrameHeight,
     notifyTerminalFrameWidth
   } = scope
+  const sendTerminalUserInput = useCallback<typeof terminalInputSend.request>(
+    (client, params, options) => {
+      terminalRefs.current.get(params.terminal)?.scrollToBottom()
+      return terminalInputSend.request(client, params, options)
+    },
+    [terminalRefs]
+  )
   // Store the ref but subscribe only after web-ready so init cannot precede xterm loading.
   const setTerminalWebViewRef = useCallback((handle: string, ref: TerminalWebViewHandle | null) => {
     terminalDiagnosticsRef.current.webViewRef(handle, ref != null)
@@ -222,6 +230,7 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     }
   }, [activeSessionTab, fileDocs, readFileTab])
   return {
+    sendTerminalUserInput,
     setTerminalWebViewRef,
     handleTerminalWebReady,
     notifyTerminalFrame,

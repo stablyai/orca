@@ -1,3 +1,4 @@
+import { upgradeStoredStructuredAgentSessionOwnerExitEvidence } from '../native-chat/agent-session-wire/structured-agent-session-lease-release'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -218,3 +219,86 @@ describe('a failed acquisition', () => {
     }
   )
 })
+
+it.each([10, 100])(
+  'bounds same-fence evidence work with %s records and duplicate events',
+  async (population) => {
+    const releasedWriter = { fence: 7, generation: 'released-writer-generation' }
+    const evidence = {
+      kind: 'kill-delivered' as const,
+      detail: 'writer terminated',
+      observedAt: 90000,
+      ownerFence: releasedWriter.fence
+    }
+    const records = Array.from({ length: population }, (_, index) =>
+      agentSessionRecordFixture(
+        agentSessionLeaseFixture({
+          sessionId: index === 0 ? SESSION : `session-other-${index}`,
+          runtimeFence: releasedWriter.fence,
+          ownerProcess: null,
+          reservedSpawnToken: null,
+          claimStatus: 'released',
+          deathEvidence: evidence
+        })
+      )
+    )
+    await seedTestAgentSessionRecordStore(directory, { records })
+    const store = await open()
+    const unrelated = records.slice(1).map((record) => store.getRecord(record.sessionId))
+    const transition = vi.spyOn(store, 'transitionHandoff')
+    const notified = vi.fn()
+    const unsubscribe = store.onDeathEvidence(notified)
+    const event = {
+      type: 'ended' as const,
+      sessionId: SESSION,
+      fence: releasedWriter.fence,
+      acquisitionGeneration: releasedWriter.generation,
+      cause: 'requested-close' as const,
+      reason: 'late exit',
+      observedAt: 91000
+    }
+    try {
+      await upgradeStoredStructuredAgentSessionOwnerExitEvidence(
+        store,
+        { ...event, deathEvidenceKind: 'kill-delivered' },
+        92000
+      )
+      expect(transition).not.toHaveBeenCalled()
+      await upgradeStoredStructuredAgentSessionOwnerExitEvidence(store, event, 92000)
+      expect(transition).toHaveBeenCalledOnce()
+      expect(notified).toHaveBeenCalledExactlyOnceWith(SESSION)
+      records
+        .slice(1)
+        .forEach((record, index) =>
+          expect(store.getRecord(record.sessionId)).toBe(unrelated[index])
+        )
+      expect((await open()).getRecord(SESSION)?.lease.deathEvidence?.kind).toBe('exit-observed')
+      transition.mockClear()
+      notified.mockClear()
+      for (let index = 0; index < population; index++) {
+        await upgradeStoredStructuredAgentSessionOwnerExitEvidence(store, event, 92000)
+      }
+      expect(transition).not.toHaveBeenCalled()
+      expect(notified).not.toHaveBeenCalled()
+      await store.transitionHandoff(SESSION, (current) => ({
+        ...current,
+        lease: {
+          ...current.lease,
+          ...agentSessionLeaseFixture({ runtimeFence: 8, provenHandleLinkId: null })
+        }
+      }))
+      const successor = store.getRecord(SESSION)
+      transition.mockClear()
+      notified.mockClear()
+      for (let index = 0; index < population; index++) {
+        await upgradeStoredStructuredAgentSessionOwnerExitEvidence(store, event, 93000)
+      }
+      expect(transition).not.toHaveBeenCalled()
+      expect(notified).not.toHaveBeenCalled()
+      expect(store.getRecord(SESSION)).toBe(successor)
+    } finally {
+      unsubscribe()
+      transition.mockRestore()
+    }
+  }
+)

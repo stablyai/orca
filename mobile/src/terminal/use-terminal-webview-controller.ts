@@ -281,6 +281,10 @@ export function useTerminalWebViewController(
         postMessage({ type: 'clear' })
       },
       fitDimensions,
+      scrollToBottom() {
+        writeCoalescer.flushNow()
+        postMessage({ type: 'scroll-to-bottom' })
+      },
       resetZoom() {
         postMessage({ type: 'reset-zoom' })
       },

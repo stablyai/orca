@@ -13,7 +13,6 @@ import { requestOrcadTerminalCensus } from '../ssh/orcad-terminal-census-client'
 import { subscribeSystemPowerLifecycle } from '../system-power-lifecycle'
 import {
   deferUntilWslDistroRunning,
-  readConfirmedRunningWslDistros,
   readSettledConfirmedRunningWslDistros
 } from '../wsl-background-distro-gate'
 import type { WslDistroHolder } from './wsl-distro-holder'
@@ -48,13 +47,14 @@ export function createWslOrcadLivenessSupervisor(options: {
 }): WslOrcadLivenessSupervisor {
   return new WslOrcadLivenessSupervisor({
     manager: options.manager,
-    readRunning: (afterExit) =>
-      afterExit
-        ? readSettledConfirmedRunningWslDistros(
-            afterExit.distro,
-            afterExit.exitedAt === null ? undefined : afterExit.exitedAt + EXIT_SETTLE_MS
-          )
-        : readConfirmedRunningWslDistros(),
+    readRunning: ({ distro, exitedAt, probedAfter }) => {
+      const settled =
+        exitedAt === null || exitedAt === undefined ? undefined : exitedAt + EXIT_SETTLE_MS
+      return readSettledConfirmedRunningWslDistros(
+        distro,
+        probedAfter === undefined ? settled : Math.max(settled ?? -Infinity, probedAfter)
+      )
+    },
     readIdentity: (distro, orcadPid) => readWslGuestIdentity(transportFor(distro), orcadPid),
     openWatch: (connection) =>
       probeThenWatchWslOrcadBridges(
@@ -70,8 +70,19 @@ export function createWslOrcadLivenessSupervisor(options: {
     hasUserVisibleWork: options.hasUserVisibleWork,
     deferUntilRunning: deferUntilWslDistroRunning,
     requireRunning: async (distro) =>
-      confirmsRunning(await readConfirmedRunningWslDistros(), wslDistroHolderKey(distro)),
-    ensureHolder: (distro) => options.holder.ensureHeld(distro),
+      confirmsRunning(
+        await readSettledConfirmedRunningWslDistros(distro),
+        wslDistroHolderKey(distro)
+      ),
+    // Liveness is background work: the holder may re-spawn only into a distro that runs (E9).
+    ensureHolder: (distro) =>
+      options.holder.ensureHeld(distro, {
+        requireRunning: async () =>
+          confirmsRunning(
+            await readSettledConfirmedRunningWslDistros(distro),
+            wslDistroHolderKey(distro)
+          )
+      }),
     subscribePower: subscribeSystemPowerLifecycle
   })
 }

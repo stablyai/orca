@@ -3,6 +3,8 @@ export type FederationEffect = {
   action?: string
   role?: string
   id?: string
+  /** A created worktree's name. */
+  name?: string
   state?: string
   tabId?: string
   leafId?: string

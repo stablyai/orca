@@ -181,6 +181,8 @@ export async function createWslWatcher(
       return
     }
     stopped = true
+    // Stop queued UNC stats without cancelling the conservative overflow refresh.
+    root.batch.statAbortController.abort()
     // First: the overflow refresh below reads the root, which would boot a just-stopped distro.
     deps.onUnexpectedStop?.(root, distro)
     markOverflowWithoutUncStat(root)

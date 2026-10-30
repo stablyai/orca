@@ -1,4 +1,5 @@
 import { killWslChannelsInCloseGrace } from '../wsl/wsl-command-channel'
+import { markHostShuttingDown } from '../host-shutdown-state'
 import { app, type Event } from 'electron'
 import { closeAllWatchers } from '../ipc/filesystem/watchers/filesystem-watcher-shutdown'
 import { disposeWorktreeBaseDirectoryWatchers } from '../ipc/worktree-base-directory-watcher'
@@ -111,6 +112,7 @@ function installWillQuitHandler(): void {
     // Include pane grids still inside their write burst in final save.
     const paneGridFlush = state.runtime?.flushPaneGrids() ?? null
     // A renderer can veto before-quit; push must survive until quit is committed.
+    markHostShuttingDown()
     state.desktopPushService?.stop()
     state.unsubscribeSystemResumeBroadcast?.()
     state.unsubscribeSystemResumeBroadcast = null
@@ -131,10 +133,16 @@ function installWillQuitHandler(): void {
     // Final stats flush closes working sessions synchronously; quit supplies no terminating hook to preserve their duration.
     state.starNag?.stop()
     state.automations?.stop()
-    // Await plugin shutdown/SIGKILL escalation or forked hosts can outlive Electron.
+    // Why: plugin hosts are forked children; dispose sends shutdown and
+    // escalates to SIGKILL so they cannot outlive the app. The promise joins
+    // the teardown barrier below — quitting before it resolves would let
+    // Electron exit first and orphan the hosts.
+    state.pluginKillListService?.dispose()
     state.pluginKillListService = null
     state.pluginMarketplaceService = null
     state.pluginMarketplaceInstaller = null
+    state.pluginAutoUpdater?.dispose()
+    state.pluginAutoUpdater = null
     const pluginHostShutdown = state.pluginService?.dispose() ?? Promise.resolve()
     const codexBackfillRecoveryShutdown = stopCodexStateDbBackfillRecoveries()
     stopCodexAccountSessionBridges()

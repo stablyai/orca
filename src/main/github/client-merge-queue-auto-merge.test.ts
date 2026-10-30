@@ -91,7 +91,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
       })
     ).resolves.toEqual({ ok: true })
     await expect(
-      updatePRTitle('/repo-root', 7, 'New title', undefined, {
+      updatePRTitle('/repo-root', 7, '  New title @literal  ', undefined, {
         owner: 'stablyai',
         repo: 'orca',
         host: 'github.com'
@@ -131,7 +131,14 @@ describe('GitHub GraphQL rate-limit guard', () => {
     )
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       4,
-      ['pr', 'edit', '7', '--title', 'New title', '--repo', 'stablyai/orca'],
+      [
+        'api',
+        '-X',
+        'PATCH',
+        'repos/stablyai/orca/pulls/7',
+        '--raw-field',
+        'title=  New title @literal  '
+      ],
       { cwd: '/repo-root', host: 'github.com' }
     )
   })
@@ -251,7 +258,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
         repo: 'orca',
         host: 'github.com'
       })
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       ok: false,
       error: 'GitHub does not support auto-merge for stacked pull requests.'
     })
@@ -272,7 +279,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
         repo: 'orca',
         host: 'github.com'
       })
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       ok: false,
       error: 'This pull request can already be merged. Use Merge instead of auto-merge.'
     })
@@ -294,7 +301,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
         repo: 'orca',
         host: 'github.com'
       })
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       ok: false,
       error: `Failed to enable auto-merge for pull request: ${providerError}`
     })
@@ -311,9 +318,11 @@ describe('GitHub GraphQL rate-limit guard', () => {
         repo: 'orca',
         host: 'github.com'
       })
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       ok: false,
-      error: 'Failed to disable auto-merge for pull request: gh: pull request is already closed'
+      error: 'Failed to disable auto-merge for pull request: gh: pull request is already closed',
+      errorCode: 'github.autoMergeDisableFailed',
+      errorDetail: 'gh: pull request is already closed'
     })
   })
 
@@ -558,6 +567,47 @@ describe('GitHub GraphQL rate-limit guard', () => {
 
     expect(
       ghExecFileAsyncMock.mock.calls.filter((call) => call[0].includes('graphql'))
+    ).toHaveLength(1)
+  })
+
+  it('reuses repository metadata between PR details and sidebar refreshes', async () => {
+    getOwnerRepoMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
+    const prView = {
+      number: 7,
+      title: 'PR',
+      state: 'OPEN',
+      url: 'https://github.com/stablyai/orca/pull/7',
+      statusCheckRollup: [],
+      updatedAt: '2026-04-01T00:00:00Z',
+      isDraft: false,
+      mergeable: 'MERGEABLE',
+      reviewDecision: 'APPROVED',
+      mergeStateStatus: 'CLEAN',
+      autoMergeRequest: null,
+      baseRefName: 'main',
+      headRefOid: 'head-oid'
+    }
+    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args.includes('graphql')) {
+        return {
+          stdout: JSON.stringify({
+            data: { repository: { autoMergeAllowed: true, mergeQueue: { id: 'queue-id' } } }
+          })
+        }
+      }
+      return { stdout: JSON.stringify(args[0] === 'pr' ? prView : { stack: null }) }
+    })
+
+    await expect(
+      getWorkItemByOwnerRepo('/repo-root', { owner: 'stablyai', repo: 'orca' }, 7, 'pr')
+    ).resolves.toMatchObject({ mergeQueueRequired: true, autoMergeAllowed: true })
+    await expect(getPRForBranch('/repo-root', 'feature/test', 7)).resolves.toMatchObject({
+      mergeQueueRequired: true,
+      autoMergeAllowed: true
+    })
+
+    expect(
+      ghExecFileAsyncMock.mock.calls.filter(([args]) => args.includes('graphql'))
     ).toHaveLength(1)
   })
 

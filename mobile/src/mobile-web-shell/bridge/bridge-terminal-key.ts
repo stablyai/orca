@@ -18,7 +18,7 @@ export const BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY = 'terminal-key-rail-claim'
 /** Shell to page, a frame: one press of a key on the rail. */
 export const BRIDGE_TERMINAL_KEY_FRAME = 'terminalKey'
 
-/** The rail vocabulary declared by the optional terminalKeyRail grant. */
+/** Terminal keys the rail can send; the page applies its held modifiers, as its own key row does. */
 export const BRIDGE_TERMINAL_KEY_IDS = [
   'escape',
   'tab',
@@ -28,38 +28,35 @@ export const BRIDGE_TERMINAL_KEY_IDS = [
   'arrowLeft',
   'arrowRight',
   'enter',
-  'ctrlC',
-  'paste',
-  'space',
-  'backspace',
-  'delete',
-  'ctrlD',
-  'ctrlL',
-  'ctrlZ',
-  'ctrlR',
-  'ctrlA',
-  'ctrlE',
-  'ctrlW',
-  'ctrlU'
+  'ctrlC'
 ] as const
+
+/** Sticky modifiers: a tap applies to the next key, a double tap keeps it on. */
+export const BRIDGE_TERMINAL_MODIFIER_IDS = ['ctrl', 'alt', 'shift'] as const
 
 export const BRIDGE_TERMINAL_TOOLBAR_KEY_IDS = [
   'toggleKeyboard',
   'toggleDisplayMode',
   'toggleInputMode',
-  'addCustomKey'
+  'moreKeys'
 ] as const
+
+const StickyModifierLatchSchema = z.enum(['off', 'once', 'locked'])
 
 export const BridgeTerminalToolbarSchema = z.object({
   canSend: z.boolean(),
   canCompose: z.boolean(),
-  canPaste: z.boolean(),
   keyboardVisible: z.boolean(),
   liveInputEnabled: z.boolean(),
   phoneDisplayMode: z.boolean(),
-  visibleBuiltInIds: z.array(z.string()).optional(),
-  directionPadEnabled: z.boolean().optional(),
-  customKeys: z.array(z.object({ id: z.string().min(1), label: z.string() }))
+  /** Agent tabs get the agent row (⇧tab, ⏎, ^C), shells the shell row, as the page's own row does. */
+  runsAgent: z.boolean(),
+  modifiers: z.object({
+    ctrl: StickyModifierLatchSchema,
+    alt: StickyModifierLatchSchema,
+    shift: StickyModifierLatchSchema
+  }),
+  directionPadEnabled: z.boolean().optional()
 })
 export type BridgeTerminalToolbar = z.infer<typeof BridgeTerminalToolbarSchema>
 
@@ -73,25 +70,24 @@ export function sameTerminalKeyRailToolbar(
   return (
     a.canSend === b.canSend &&
     a.canCompose === b.canCompose &&
-    a.canPaste === b.canPaste &&
     a.keyboardVisible === b.keyboardVisible &&
     a.liveInputEnabled === b.liveInputEnabled &&
     a.phoneDisplayMode === b.phoneDisplayMode &&
-    a.directionPadEnabled === b.directionPadEnabled &&
-    a.visibleBuiltInIds?.length === b.visibleBuiltInIds?.length &&
-    (a.visibleBuiltInIds?.every((id, index) => id === b.visibleBuiltInIds?.[index]) ?? true) &&
-    a.customKeys.length === b.customKeys.length &&
-    a.customKeys.every(
-      (key, index) => key.id === b.customKeys[index]?.id && key.label === b.customKeys[index]?.label
-    )
+    a.runsAgent === b.runsAgent &&
+    a.modifiers.ctrl === b.modifiers.ctrl &&
+    a.modifiers.alt === b.modifiers.alt &&
+    a.modifiers.shift === b.modifiers.shift &&
+    a.directionPadEnabled === b.directionPadEnabled
   )
 }
 
 export const BridgeTerminalKeyIdSchema = z.union([
   z.enum(BRIDGE_TERMINAL_KEY_IDS),
+  z.enum(BRIDGE_TERMINAL_MODIFIER_IDS),
   z.enum(BRIDGE_TERMINAL_TOOLBAR_KEY_IDS),
-  z.custom<`custom:${string}` | `deleteCustom:${string}`>(
-    (value) => typeof value === 'string' && /^(custom|deleteCustom):.+$/.test(value)
+  // One printable character, typed with the held modifiers.
+  z.custom<`char:${string}`>(
+    (value) => typeof value === 'string' && /^char:[\x21-\x7e]$/.test(value)
   )
 ])
 export type BridgeTerminalKeyId = z.infer<typeof BridgeTerminalKeyIdSchema>

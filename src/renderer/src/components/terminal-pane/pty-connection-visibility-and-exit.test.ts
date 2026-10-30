@@ -1,5 +1,6 @@
 import { describe, vi } from 'vitest'
 import { registerPtyConnectionVisibilityResumeSizeTests } from './pty-connection-visibility-resume-size.spec'
+import { registerPtyConnectionMobileOverlayRefreshTests } from './pty-connection-mobile-overlay-refresh.spec'
 import { registerPtyConnectionHiddenCodexQueriesTests } from './pty-connection-hidden-codex-queries.spec'
 import { registerPtyConnectionHiddenDeliveryGateTests } from './pty-connection-hidden-delivery-gate.spec'
 import { registerPtyConnectionParkRevealModelSnapshotTests } from './pty-connection-park-reveal-model-snapshot.spec'
@@ -14,6 +15,7 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
 )
 
 describe('pty-connection-visibility-resume-size', registerPtyConnectionVisibilityResumeSizeTests)
+describe('pty-connection-mobile-overlay-refresh', registerPtyConnectionMobileOverlayRefreshTests)
 describe('pty-connection-hidden-codex-queries', registerPtyConnectionHiddenCodexQueriesTests)
 describe('pty-connection-hidden-delivery-gate', registerPtyConnectionHiddenDeliveryGateTests)
 describe(

@@ -1,4 +1,5 @@
 import { hostDictationErrorMessage } from '../../../src/shared/host-dictation-error-messages'
+import { translate } from '../i18n/mobile-i18n'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import type { RpcResponse } from '../transport/types'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
@@ -17,8 +18,6 @@ export type MobileSpeechModel = MobileSpeechModelReply
 
 // Map setup errors to the setup sheet instead of leaving the mic entry point at a toast.
 const SETUP_REQUIRED_CODES = new Set(['voice_dictation_disabled', 'voice_model_not_selected'])
-const LEGACY_DESKTOP_SPEECH_SETUP_MESSAGE =
-  'Update the paired desktop Orca app to use mobile voice settings.'
 
 // Older runtimes predate models.list; show upgrade guidance. Keep the raw refusal because guidance needs both code and message.
 function isLegacyDesktopSpeechSetupReply(reply: RpcResponse): boolean {
@@ -34,7 +33,12 @@ function isLegacyDesktopSpeechSetupReply(reply: RpcResponse): boolean {
 }
 
 // Headless servers lacked speech from 1.4.229 until #31174; name the required fix.
-const SPEECHLESS_SERVER_MESSAGE = 'Update Orca on this server to use voice dictation.'
+function speechlessServerMessage(): string {
+  return translate(
+    'dictation.setup.serverUpdateRequired',
+    'Update Orca on this server to use voice dictation.'
+  )
+}
 
 function isSpeechlessServerError(message: string): boolean {
   return message.startsWith('speech_unavailable')
@@ -42,9 +46,53 @@ function isSpeechlessServerError(message: string): boolean {
 
 export function dictationFailureMessage(message: string): string {
   if (isSpeechlessServerError(message)) {
-    return SPEECHLESS_SERVER_MESSAGE
+    return speechlessServerMessage()
   }
-  return hostDictationErrorMessage(message) ?? message
+  const fallback = hostDictationErrorMessage(message)
+  if (fallback === undefined) {
+    return message
+  }
+  switch (message) {
+    case 'dictation_already_active':
+      return translate('dictation.setup.alreadyActive', fallback)
+    case 'dictation_requires_mobile_client':
+      return translate('dictation.setup.repairRequired', fallback)
+    case 'dictation_owner_mismatch':
+    case 'dictation_stream_not_started':
+    case 'dictation_stream_closing':
+      return translate('dictation.setup.sessionLost', fallback)
+    default:
+      return fallback
+  }
+}
+
+export function dictationSessionErrorMessage(
+  kind: 'permission-denied' | 'unavailable' | 'no-speech' | 'interrupted' | 'input-closed'
+): string {
+  switch (kind) {
+    case 'permission-denied':
+      return translate(
+        'hooks.useMobileDictation.microphonePermissionDenied',
+        'Microphone permission denied'
+      )
+    case 'unavailable':
+      return translate(
+        'hooks.useMobileDictation.microphoneInitFailed',
+        'Failed to initialize microphone'
+      )
+    case 'no-speech':
+      return translate('hooks.useMobileDictation.noSpeech', 'No speech detected.')
+    case 'interrupted':
+      return translate(
+        'hooks.useMobileDictation.microphoneInterrupted',
+        'Voice dictation stopped because the microphone was interrupted. Try again.'
+      )
+    case 'input-closed':
+      return translate(
+        'hooks.useMobileDictation.inputClosed',
+        'Voice dictation stopped because this session is no longer accepting input. Try again.'
+      )
+  }
 }
 
 function isSpeechlessServerReply(reply: RpcResponse): boolean {
@@ -58,14 +106,19 @@ export function isDictationSetupRequiredError(message: string): boolean {
 export async function fetchDictationSetup(client: RpcOperationSender): Promise<MobileSpeechSetup> {
   const reply = await requestDictationSetupReply(client)
   if (isLegacyDesktopSpeechSetupReply(reply)) {
-    throw new Error(LEGACY_DESKTOP_SPEECH_SETUP_MESSAGE)
+    throw new Error(
+      translate(
+        'dictation.setup.desktopUpdateRequired',
+        'Update the paired desktop Orca app to use mobile voice settings.'
+      )
+    )
   }
   if (isSpeechlessServerReply(reply)) {
-    throw new Error(SPEECHLESS_SERVER_MESSAGE)
+    throw new Error(speechlessServerMessage())
   }
   return interpretOrThrowRefusalMessage(
     () => dictationSetupRead.interpret(reply),
-    'Failed to load dictation models'
+    translate('dictation.setup.loadFailed', 'Failed to load dictation models')
   )
 }
 
@@ -88,7 +141,7 @@ export async function downloadDictationModel(
   const reply = await dictationModelDownload.request(client, { modelId })
   interpretOrThrowRefusalMessage(
     () => dictationModelDownload.interpret(reply),
-    'Failed to start download'
+    translate('dictation.setup.downloadFailed', 'Failed to start download')
   )
 }
 
@@ -99,7 +152,7 @@ export async function deleteDictationModel(
   const reply = await dictationModelDelete.request(client, { modelId })
   return interpretOrThrowRefusalMessage(
     () => dictationModelDelete.interpret(reply),
-    'Failed to delete model'
+    translate('dictation.setup.deleteFailed', 'Failed to delete model')
   )
 }
 
@@ -110,7 +163,7 @@ export async function setDictationConfig(
   const reply = await dictationConfigWrite.request(client, params)
   return interpretOrThrowRefusalMessage(
     () => dictationConfigWrite.interpret(reply),
-    'Failed to update dictation settings'
+    translate('dictation.setup.updateFailed', 'Failed to update dictation settings')
   )
 }
 
@@ -133,7 +186,9 @@ export function dictationNeedsSetup(setup: MobileSpeechSetup): boolean {
 }
 
 // Keep copy short and host-neutral: the paired computer may be a headless server.
-export const CLOUD_MODEL_NEEDS_KEY = 'Needs an OpenAI key'
+export function cloudModelNeedsKey(): string {
+  return translate('dictation.setup.cloudModelNeedsKey', 'Needs an OpenAI key')
+}
 
 export type DictationModelRowAction =
   | 'in-use'

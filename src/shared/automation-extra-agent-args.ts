@@ -76,9 +76,49 @@ function hasControlCharacter(value: string): boolean {
   return false
 }
 
+// One English table: `error` stays English for older readers; the renderer translates by code.
+export const EXTRA_AGENT_ARGS_FAILURE_COPY = {
+  unsupportedAgent: "Extra arguments aren't supported for this agent yet.",
+  tooLarge: 'Extra arguments must be 4 KB or less.',
+  controlCharacters: 'Extra arguments cannot contain control characters or line breaks.',
+  invalid: 'Extra arguments are invalid: {{detail}}',
+  shellSyntax: "{{text}} uses shell syntax that extra arguments don't allow.",
+  terminator: '"--" isn\'t allowed in extra arguments.',
+  notAnOption:
+    '"{{token}}" isn\'t an option. Extra arguments for {{agent}} accept only: {{allowed}}.',
+  optionNotAllowed:
+    '"{{option}}" isn\'t allowed in extra arguments for {{agent}}. Allowed: {{allowed}}.',
+  missingValue: '"{{option}}" needs a value.',
+  valueNotAllowed:
+    '"{{option}} {{value}}" isn\'t allowed. {{agent}} extra arguments accept only "{{option}} {{prefix}}<level>".',
+  modelRepeated: 'Extra arguments set the model more than once.',
+  effortRepeated: 'Extra arguments set the effort more than once.'
+} as const
+
+export type ExtraAgentArgsFailureCode = keyof typeof EXTRA_AGENT_ARGS_FAILURE_COPY
+
+export type ExtraAgentArgsFailure = {
+  ok: false
+  error: string
+  errorCode: ExtraAgentArgsFailureCode
+  errorParams?: Record<string, string>
+}
+
+function extraAgentArgsFailure(
+  errorCode: ExtraAgentArgsFailureCode,
+  params?: Record<string, string>
+): ExtraAgentArgsFailure {
+  // One pass so a value containing "{{x}}" stays verbatim.
+  const error = EXTRA_AGENT_ARGS_FAILURE_COPY[errorCode].replace(
+    /\{\{(\w+)\}\}/g,
+    (slot, name: string) => params?.[name] ?? slot
+  )
+  return { ok: false, error, errorCode, ...(params ? { errorParams: params } : {}) }
+}
+
 export type ParsedExtraAgentArgs =
   | { ok: true; tokens: string[]; kinds: ReadonlySet<ExtraAgentArgKind> }
-  | { ok: false; error: string }
+  | ExtraAgentArgsFailure
 
 export type MergedAgentArgs = { ok: true; agentArgs: string } | { ok: false; error: string }
 
@@ -122,26 +162,25 @@ export function parseExtraAgentArgs(args: {
 }): ParsedExtraAgentArgs {
   const options = EXTRA_AGENT_ARG_OPTIONS[args.agent]
   if (!options) {
-    return { ok: false, error: `Extra arguments aren't supported for this agent yet.` }
+    return extraAgentArgsFailure('unsupportedAgent')
   }
   if (new TextEncoder().encode(args.extraAgentArgs).length > EXTRA_AGENT_ARGS_MAX_BYTES) {
-    return { ok: false, error: 'Extra arguments must be 4 KB or less.' }
+    return extraAgentArgsFailure('tooLarge')
   }
   if (hasControlCharacter(args.extraAgentArgs)) {
-    return { ok: false, error: 'Extra arguments cannot contain control characters or line breaks.' }
+    return extraAgentArgsFailure('controlCharacters')
   }
   const text = args.extraAgentArgs.trim()
   const tokenized = tokenizeStartupCommand(text, 'posix')
   if (!tokenized.ok) {
-    return { ok: false, error: `Extra arguments are invalid: ${tokenized.error}` }
+    return extraAgentArgsFailure('invalid', { detail: tokenized.error })
   }
   // Reject command syntax instead of silently turning it into literal argument text.
   const divergent = tokenized.spans.find((span) => span.divergesFromShell)
   if (divergent) {
-    return {
-      ok: false,
-      error: `${text.slice(divergent.start, divergent.end)} uses shell syntax that extra arguments don't allow.`
-    }
+    return extraAgentArgsFailure('shellSyntax', {
+      text: text.slice(divergent.start, divergent.end)
+    })
   }
   const label = TUI_AGENT_DISPLAY_NAMES[args.agent]
   const allowed = allowedOptionList(options)
@@ -150,35 +189,35 @@ export function parseExtraAgentArgs(args: {
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index]
     if (token === '--') {
-      return { ok: false, error: `"--" isn't allowed in extra arguments.` }
+      return extraAgentArgsFailure('terminator')
     }
     if (!token.startsWith('-')) {
-      return {
-        ok: false,
-        error: `"${token}" isn't an option. Extra arguments for ${label} accept only: ${allowed}.`
-      }
+      return extraAgentArgsFailure('notAnOption', { token, agent: label, allowed })
     }
     const match = matchOption(tokens.slice(index, index + 2), options)
     if (!match) {
-      return {
-        ok: false,
-        error: `"${optionName(token)}" isn't allowed in extra arguments for ${label}. Allowed: ${allowed}.`
-      }
+      return extraAgentArgsFailure('optionNotAllowed', {
+        option: optionName(token),
+        agent: label,
+        allowed
+      })
     }
     const name = optionName(token)
     const { value } = match
     if (!value) {
-      return { ok: false, error: `"${name}" needs a value.` }
+      return extraAgentArgsFailure('missingValue', { option: name })
     }
     const { kind, valuePrefix } = match.option
     if (valuePrefix && (!value.startsWith(valuePrefix) || value.length === valuePrefix.length)) {
-      return {
-        ok: false,
-        error: `"${name} ${value}" isn't allowed. ${label} extra arguments accept only "${name} ${valuePrefix}<level>".`
-      }
+      return extraAgentArgsFailure('valueNotAllowed', {
+        option: name,
+        value,
+        agent: label,
+        prefix: valuePrefix
+      })
     }
     if (kind !== 'repeatable' && kinds.has(kind)) {
-      return { ok: false, error: `Extra arguments set the ${kind} more than once.` }
+      return extraAgentArgsFailure(kind === 'model' ? 'modelRepeated' : 'effortRepeated')
     }
     kinds.add(kind)
     index += match.consumed - 1

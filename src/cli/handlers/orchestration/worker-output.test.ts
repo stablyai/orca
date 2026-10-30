@@ -99,6 +99,21 @@ describe('worker-start plain formatting', () => {
       })
     ).toBe('Worker ctx_ready [ready] for task_1')
   })
+
+  it('names the workspace a start created', () => {
+    expect(
+      formatWorkerStart({
+        taskId: 'task_1',
+        dispatchId: 'ctx_ready',
+        state: 'ready',
+        effects: [
+          { kind: 'worktree', action: 'created_child', id: 'repo::/w/otter', name: 'otter' },
+          { kind: 'terminal', id: 'term_worker' }
+        ],
+        residualResources: []
+      })
+    ).toBe('Worker ctx_ready [ready] for task_1\nCreated workspace: otter')
+  })
 })
 
 describe('worker-read plain formatting', () => {

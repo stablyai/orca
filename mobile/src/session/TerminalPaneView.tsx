@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AppState, StyleSheet, View, Text, Pressable } from 'react-native'
 import { useFocusEffect } from 'expo-router'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { ParsedFileLinkLocation } from '../../../src/shared/file-link-location'
 import { terminalPaneKeyboardLayout } from './mobile-terminal-pane-layout'
 import { colors, spacing } from '../theme/mobile-theme'
@@ -80,6 +81,7 @@ export function TerminalPaneView({
   onCellBoxChange
 }: TerminalPaneViewProps) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const [visited, setVisited] = useState(visible)
   if (visible && !visited) {
     setVisited(true)
@@ -132,15 +134,26 @@ export function TerminalPaneView({
       {splitIndex !== undefined && (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`${title || 'Terminal'}, ${active ? 'focused' : 'tap to focus'}`}
+          accessibilityLabel={
+            active
+              ? t('session.terminalPaneView.focusedPane', '{{title}}, focused', {
+                  title: title || t('session.terminalPaneView.terminal', 'Terminal')
+                })
+              : t('session.terminalPaneView.tapToFocusPane', '{{title}}, tap to focus', {
+                  title: title || t('session.terminalPaneView.terminal', 'Terminal')
+                })
+          }
           accessibilityState={{ selected: active }}
           onPress={() => onTerminalTap(handle)}
           style={[styles.paneHeading, active && styles.paneHeadingActive]}
           onLayout={(event) => setHeadingHeight(event.nativeEvent.layout.height)}
         >
           <Text numberOfLines={1} style={styles.paneTitle}>
-            {title || 'Terminal'}
-            {active ? ' · Input' : ''}
+            {active
+              ? t('session.terminalPaneView.inputPane', '{{title}} · Input', {
+                  title: title || t('session.terminalPaneView.terminal', 'Terminal')
+                })
+              : title || t('session.terminalPaneView.terminal', 'Terminal')}
           </Text>
         </Pressable>
       )}

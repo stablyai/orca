@@ -13,24 +13,24 @@ import {
   buildWorkspaceRunContext,
   type WorkspaceRunContext
 } from '../../shared/task-source-context'
+import {
+  automationRunFailure,
+  type AutomationRunFailure
+} from '../../shared/automation-run-failure-copy'
 import { AutomationDispatchCancelledError } from './automation-dispatch-cancelled-error'
 import { isOrcadFencedAutomation, ORCAD_FENCED_AUTOMATION } from './orcad-fenced-automation'
 
 export type AutomationRunTargetResult =
   | { ok: true; cwd: string; repo: Repo; setup?: ProjectHostSetup }
-  | { ok: false; error: string }
+  | ({ ok: false } & AutomationRunFailure)
 
 // Keep diagnoses distinct and stable: skip coalescing keys on exact error text.
-const CAPTURED_HOST_REFUSALS: Record<AutomationCapturedHostIssue, string> = {
-  [AUTOMATION_ORPHAN_ISSUES.targetMissing]:
-    'The automation host is no longer registered, so this automation has nowhere to run.',
-  [AUTOMATION_ORPHAN_ISSUES.targetReplaced]:
-    'The automation host was removed and re-registered, so this automation must be re-adopted before it can run.',
-  [AUTOMATION_ORPHAN_ISSUES.workspaceHostAmbiguous]:
-    'The automation workspace spans more than one host, so Orca cannot tell which one to run it on.'
+const CAPTURED_HOST_REFUSALS: Record<AutomationCapturedHostIssue, () => AutomationRunFailure> = {
+  [AUTOMATION_ORPHAN_ISSUES.targetMissing]: () => automationRunFailure('targetMissing'),
+  [AUTOMATION_ORPHAN_ISSUES.targetReplaced]: () => automationRunFailure('targetReplaced'),
+  [AUTOMATION_ORPHAN_ISSUES.workspaceHostAmbiguous]: () =>
+    automationRunFailure('workspaceHostAmbiguous')
 }
-
-const NO_RUNNABLE_HOST = 'This automation has no host to run on.'
 
 type AutomationRunTargetOptions = {
   allowRemoteHostScheduling?: boolean
@@ -46,16 +46,16 @@ function getLegacyPrecheckCwd(store: Store, automation: Automation): string | nu
   return store.getRepo(getAutomationLegacyRepoId(automation))?.path ?? null
 }
 
-function resolveAutomationOwnerRefusal(store: Store, automation: Automation): string | null {
+function resolveAutomationOwnerRefusal(
+  store: Store,
+  automation: Automation
+): AutomationRunFailure | null {
   if (store.automationOwnerPrecondition(automation.id)?.selector.kind !== 'orphan') {
     return null
   }
   const issue = store.automationCapturedHostIssue(automation)
-  return issue ? CAPTURED_HOST_REFUSALS[issue] : NO_RUNNABLE_HOST
+  return issue ? CAPTURED_HOST_REFUSALS[issue]() : automationRunFailure('noRunnableHost')
 }
-
-const LEGACY_TWIN_REFUSAL =
-  'This automation was saved before Orca tracked which host it runs on, and its project is on more than one host. Open the automation and pick the host it should run on.'
 
 function resolveLegacyAutomationRunTarget(
   store: Store,
@@ -65,16 +65,16 @@ function resolveLegacyAutomationRunTarget(
   const rows = store.getRepos().filter((entry) => entry.id === repoId)
   // Reject twin repos before getRepo or owner resolution silently selects one host.
   if (rows.length > 1) {
-    return { ok: false, error: LEGACY_TWIN_REFUSAL }
+    return { ok: false, ...automationRunFailure('legacyTwinHosts') }
   }
   const ownerRefusal = resolveAutomationOwnerRefusal(store, automation)
   if (ownerRefusal) {
-    return { ok: false, error: ownerRefusal }
+    return { ok: false, ...ownerRefusal }
   }
   const repo = rows[0]
   const cwd = getLegacyPrecheckCwd(store, automation)
   if (!repo || !cwd) {
-    return { ok: false, error: 'Automation run target is no longer available.' }
+    return { ok: false, ...automationRunFailure('targetUnavailable') }
   }
   return { ok: true, cwd, repo }
 }
@@ -151,60 +151,41 @@ export function resolveAutomationRunTarget(
     parsedHost?.kind === 'runtime' &&
     (!options.allowRemoteHostScheduling || automation.schedulerOwner !== 'remote_host_service')
   ) {
-    return {
-      ok: false,
-      error:
-        'Remote-server automation scheduling is not available from this Orca client yet. Run this automation on the remote server or update Orca when durable remote scheduling is available.'
-    }
+    return { ok: false, ...automationRunFailure('remoteSchedulingUnavailable') }
   }
 
   // Use the list’s host-generation verdict: matching IDs and paths can survive host replacement.
   const hostIssue = store.automationCapturedHostIssue(automation)
   if (hostIssue) {
-    return { ok: false, error: CAPTURED_HOST_REFUSALS[hostIssue] }
+    return { ok: false, ...CAPTURED_HOST_REFUSALS[hostIssue]() }
   }
 
   const setup = store
     .getProjectHostSetups()
     .find((candidate) => candidate.id === context.projectHostSetupId)
   if (!setup) {
-    return {
-      ok: false,
-      error: 'Project is not set up on the selected automation host anymore.'
-    }
+    return { ok: false, ...automationRunFailure('projectSetupMissing') }
   }
   if (setup.setupState !== 'ready') {
     return {
       ok: false,
-      error: `Project setup on the selected automation host is ${setup.setupState}.`
+      ...automationRunFailure('projectSetupNotReady', { setupState: setup.setupState })
     }
   }
   // Derived project IDs evolve; compare stable repo, host and path identities instead.
   if (setup.hostId !== context.hostId || setup.repoId !== context.repoId) {
-    return {
-      ok: false,
-      error: 'Automation run target no longer matches the selected project host setup.'
-    }
+    return { ok: false, ...automationRunFailure('targetSetupMismatch') }
   }
 
   const repo = store.getRepo(context.repoId)
   if (!repo) {
-    return {
-      ok: false,
-      error: 'Repository for the selected automation host is no longer available.'
-    }
+    return { ok: false, ...automationRunFailure('repoUnavailable') }
   }
   if (getRepoExecutionHostId(repo) !== context.hostId) {
-    return {
-      ok: false,
-      error: 'Repository is no longer attached to the selected automation host.'
-    }
+    return { ok: false, ...automationRunFailure('repoDetached') }
   }
   if (repo.path !== setup.path || context.path !== setup.path) {
-    return {
-      ok: false,
-      error: 'Project path for the selected automation host has changed.'
-    }
+    return { ok: false, ...automationRunFailure('projectPathChanged') }
   }
 
   return { ok: true, cwd: setup.path, repo, setup }

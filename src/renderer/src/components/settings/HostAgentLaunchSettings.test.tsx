@@ -6,10 +6,15 @@ import userEvent from '@testing-library/user-event'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  agentLaunchSettingsMutationUpdates,
   projectAgentLaunchSettings,
-  type AgentLaunchSettings
+  type AgentLaunchSettings,
+  type AgentLaunchSettingsMutation
 } from '../../../../shared/agent-launch-settings'
 import { HostAgentLaunchSettings } from './HostAgentLaunchSettings'
+import * as permissionControls from './AgentPermissionChoiceControls'
+import { SettingsSegmentedControl } from './SettingsFormControls'
+import type { AgentPermissionChoice } from '../../../../shared/tui-agent-permission-choice'
 import { TooltipProvider } from '../ui/tooltip'
 import type { AgentPermissionsRenderer } from './AgentLaunchSettingsCatalog'
 import { AgentPermissionsSetting, AgentsPane } from './AgentsPane'
@@ -36,15 +41,20 @@ vi.mock('./agent-launch-settings-transport', () => ({
 }))
 vi.mock('@/hooks/useDetectedAgents', () => ({
   useDetectedAgents: (target: unknown) => {
-    transport.detection(target)
     return {
-      detectedIds: ['claude'],
+      detectedIds: transport.detection(target) ?? ['claude'],
       detectionFailed: false,
       isRefreshing: false,
       refresh: vi.fn()
     }
   }
 }))
+async function selectLegacyPermission(label: string, name: string) {
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: label }))
+  await user.click(await screen.findByRole('menuitemradio', { name: new RegExp(name) }))
+}
+
 const host = () =>
   projectAgentLaunchSettings({
     agentDefaultArgs: { claude: '--host-marker' },
@@ -70,7 +80,7 @@ beforeEach(() => {
   vi.mocked(toast.success).mockClear()
   transport.read.mockReset().mockResolvedValue(host())
   transport.mutate.mockReset().mockResolvedValue(host())
-  transport.detection.mockClear()
+  transport.detection.mockReset()
   transport.auto.mockReset().mockResolvedValue(true)
   transport.native.mockReset().mockResolvedValue(true)
   transport.own.mockReset().mockResolvedValue(false)
@@ -99,11 +109,13 @@ describe('host launch settings form', () => {
   it('shows resolved launch defaults in a collapsed legacy host row', async () => {
     transport.read.mockResolvedValue(projectAgentLaunchSettings({ agentDefaultArgs: {} }))
     render(pane(17))
-    const installed = (await screen.findByText('Installed')).closest('section')
-    if (!installed) {
-      throw new Error('missing installed agents section')
+    const row = (await screen.findByRole('radiogroup', { name: 'Claude availability' })).closest(
+      '.py-3'
+    )
+    if (!(row instanceof HTMLElement)) {
+      throw new Error('missing Claude settings row')
     }
-    expect(within(installed).getByText('--dangerously-skip-permissions')).toBeTruthy()
+    expect(within(row).getByText('--dangerously-skip-permissions')).toBeTruthy()
     expect(transport.mutate).not.toHaveBeenCalled()
   })
 
@@ -122,7 +134,8 @@ describe('host launch settings form', () => {
         </TooltipProvider>
       )
       await screen.findByDisplayValue('--host-marker')
-      const auto = screen.getByRole('radio', { name: 'Auto' })
+      await userEvent.click(screen.getByRole('button', { name: 'Agent Permissions' }))
+      const auto = await screen.findByRole('menuitemradio', { name: /Approve for me/ })
       expect(auto.getAttribute('aria-disabled') === 'true').toBe(!supported)
       fireEvent.click(auto)
       if (supported) {
@@ -154,7 +167,7 @@ describe('host launch settings form', () => {
         </TooltipProvider>
       )
       await screen.findByDisplayValue('--host-marker')
-      fireEvent.click(screen.getByRole('radio', { name: 'Manual' }))
+      await selectLegacyPermission('Agent Permissions', "Each agent's own settings")
       await waitFor(() =>
         expect(transport.mutate).toHaveBeenCalledWith(
           { environmentId: 'ssh-host', pairingRevision: 17 },
@@ -180,30 +193,161 @@ describe('host launch settings form', () => {
     </TooltipProvider>
   )
 
-  it('changes only the agents Auto does not cover from the Other agents control', async () => {
-    const automatic = projectAgentLaunchSettings(
-      applyAgentPermissionMode({ mode: 'auto', ...applyAgentPermissionMode({ mode: 'yolo' }) })
-    )
-    transport.read.mockResolvedValue(automatic)
-    transport.mutate.mockResolvedValue(automatic)
-    render(fullPane())
-    const others = await screen.findByRole('radiogroup', { name: 'Permissions for other agents' })
-    fireEvent.focus(screen.getByRole('button', { name: 'Supported agents' }))
-    expect((await screen.findByRole('tooltip')).textContent).toContain(
-      'Claude, Claude Agent Teams, and Codex'
-    )
-    expect(within(others).getByRole('radio', { name: 'Yolo' }).getAttribute('aria-checked')).toBe(
-      'true'
-    )
-    fireEvent.click(within(others).getByRole('radio', { name: 'Manual' }))
-    await waitFor(() =>
-      expect(transport.mutate).toHaveBeenCalledWith(
-        { environmentId: 'ssh-host', pairingRevision: 17 },
-        { type: 'permissions', mode: 'manual', exceptAuto: true, syncNativeChat: true },
-        expect.any(AbortSignal)
+  it.each([false, true])(
+    'changes only agents without Auto from the legacy secondary picker (mixed=%s)',
+    async (mixed) => {
+      const source = applyAgentPermissionMode({
+        mode: 'auto',
+        ...applyAgentPermissionMode({ mode: 'yolo' })
+      })
+      const automatic = projectAgentLaunchSettings({
+        ...source,
+        agentDefaultArgs: { ...source.agentDefaultArgs, ...(mixed ? { gemini: '' } : {}) }
+      })
+      transport.read.mockResolvedValue(automatic)
+      transport.mutate.mockResolvedValue(automatic)
+      render(fullPane())
+      const trigger = await screen.findByRole('button', { name: 'Permissions for other agents' })
+      expect(trigger.textContent).toContain(mixed ? 'Mixed' : 'Full access')
+      fireEvent.focus(screen.getByRole('button', { name: 'Supported agents' }))
+      expect((await screen.findByRole('tooltip')).textContent).toContain(
+        'Claude, Claude Agent Teams, and Codex'
       )
-    )
-  })
+      await userEvent.click(screen.getByRole('button', { name: 'Permissions for other agents' }))
+      expect(
+        screen.getByRole('menuitemradio', { name: /Full access/ }).getAttribute('aria-checked')
+      ).toBe(String(!mixed))
+      expect(screen.queryByRole('menuitemradio', { name: /Approve for me/ })).toBeNull()
+      await userEvent.click(
+        screen.getByRole('menuitemradio', { name: /Each agent's own settings/ })
+      )
+      await waitFor(() =>
+        expect(transport.mutate).toHaveBeenCalledWith(
+          { environmentId: 'ssh-host', pairingRevision: 17 },
+          { type: 'permissions', mode: 'manual', exceptAuto: true, syncNativeChat: true },
+          expect.any(AbortSignal)
+        )
+      )
+    }
+  )
+
+  it.each(['own', 'full-access'] as const)(
+    'preserves the former secondary path inputs and rejection outcomes for %s',
+    async (choice) => {
+      const saved = {
+        agentPermissionDefault: 'auto',
+        agentPermissionOverrides: { claude: 'ask', gemini: 'own', goose: 'full-access' }
+      } as const
+      const initial = projectAgentLaunchSettings(saved)
+      const mutation = { type: 'permission', choice, withoutAuto: true } as const
+      const acknowledged = projectAgentLaunchSettings({
+        ...saved,
+        ...agentLaunchSettingsMutationUpdates(saved, mutation, 'darwin')
+      })
+      expect(acknowledged.agentPermission?.default).toBe('auto')
+      expect(acknowledged.agentPermission?.overrides).toMatchObject({
+        claude: 'ask',
+        gemini: choice,
+        goose: choice
+      })
+      const requests: AgentLaunchSettingsMutation[][] = []
+      for (const presentation of ['segments', 'menu']) {
+        // Former secondary view, exercising the same production caller and failed-save path.
+        const previous =
+          presentation === 'segments'
+            ? vi
+                .spyOn(permissionControls, 'AllAgentsPermissionSetting')
+                .mockImplementation((props) => (
+                  <SettingsSegmentedControl<AgentPermissionChoice | 'mixed'>
+                    value={props.withoutAutoChoice ?? 'mixed'}
+                    onChange={(next) => {
+                      if (next !== 'mixed') {
+                        props.onChangeWithoutAuto(next)
+                      }
+                    }}
+                    ariaLabel="Permissions for other agents"
+                    size="sm"
+                    options={[
+                      { value: 'own', label: 'Own settings' },
+                      { value: 'full-access', label: 'Full access' }
+                    ]}
+                  />
+                ))
+            : undefined
+        transport.read.mockResolvedValue(initial)
+        transport.mutate
+          .mockReset()
+          .mockRejectedValueOnce(new Error('offline'))
+          .mockResolvedValueOnce(acknowledged)
+        const view = render(fullPane())
+        try {
+          const user = userEvent.setup()
+          const trigger =
+            presentation === 'menu'
+              ? await screen.findByRole('button', { name: 'Permissions for other agents' })
+              : null
+          if (trigger) {
+            expect(trigger.textContent).toContain('Mixed')
+          } else {
+            await screen.findByRole('radiogroup', { name: 'Permissions for other agents' })
+          }
+          const select = async () => {
+            if (trigger) {
+              await user.click(trigger)
+            }
+            const role = trigger ? 'menuitemradio' : 'radio'
+            const group = screen.getByRole(trigger ? 'group' : 'radiogroup', {
+              name: 'Permissions for other agents'
+            })
+            const items = within(group).getAllByRole(role)
+            expect(items).toHaveLength(2)
+            expect(items.every((item) => item.getAttribute('aria-checked') === 'false')).toBe(true)
+            await user.click(
+              within(group).getByRole(role, {
+                name:
+                  choice === 'own' ? /(?:Each agent's own settings|Own settings)/ : /Full access/
+              })
+            )
+          }
+          await select()
+          const alert = await screen.findByRole('alert')
+          expect(alert.textContent).toBe(
+            'Couldn’t save agent settings. Check the host connection and try again.'
+          )
+          expect(transport.mutate).toHaveBeenCalledExactlyOnceWith(
+            { environmentId: 'ssh-host', pairingRevision: 17 },
+            mutation,
+            expect.any(AbortSignal)
+          )
+          if (trigger) {
+            expect(trigger.textContent).toContain('Mixed')
+          }
+          await select()
+          await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+          requests.push(transport.mutate.mock.calls.map((call) => call[1]))
+          const selected = trigger
+            ? trigger.textContent
+            : screen
+                .getByRole('radio', { name: choice === 'own' ? 'Own settings' : 'Full access' })
+                .getAttribute('aria-checked')
+          if (trigger) {
+            expect(selected).toContain(
+              choice === 'own' ? "Each agent's own settings" : 'Full access'
+            )
+          } else {
+            expect(selected).toBe('true')
+          }
+        } finally {
+          view.unmount()
+          previous?.mockRestore()
+        }
+      }
+      expect(requests).toEqual([
+        [mutation, mutation],
+        [mutation, mutation]
+      ])
+    }
+  )
 
   it('marks an exception and opens its own permission control from the badge', async () => {
     const yolo = applyAgentPermissionMode({ mode: 'yolo' })
@@ -214,12 +358,14 @@ describe('host launch settings form', () => {
     transport.read.mockResolvedValue(settings)
     transport.mutate.mockResolvedValue(settings)
     render(fullPane())
-    fireEvent.click(await screen.findByRole('button', { name: 'Claude permissions: Manual' }))
-    const control = await screen.findByRole('radiogroup', { name: 'Claude permissions' })
-    await waitFor(() =>
-      expect(document.activeElement).toBe(within(control).getByRole('radio', { name: 'Manual' }))
+    const user = userEvent.setup()
+    await user.click(
+      await screen.findByRole('button', { name: "Claude permissions: Agents' own settings" })
     )
-    fireEvent.click(within(control).getByRole('radio', { name: 'Auto' }))
+    const control = await screen.findByRole('button', { name: 'Claude permissions' })
+    await waitFor(() => expect(document.activeElement).toBe(control))
+    await user.keyboard('{Enter}')
+    await user.click(await screen.findByRole('menuitemradio', { name: /Approve for me/ }))
     await waitFor(() =>
       expect(transport.mutate).toHaveBeenCalledWith(
         { environmentId: 'ssh-host', pairingRevision: 17 },
@@ -229,10 +375,52 @@ describe('host launch settings form', () => {
     )
   })
 
+  it('keeps legacy mixed global state unselected and omits unsupported row Auto', async () => {
+    transport.detection.mockReturnValue(['claude', 'gemini'])
+    transport.read.mockResolvedValue(
+      projectAgentLaunchSettings({
+        ...applyAgentPermissionMode({ mode: 'yolo' }),
+        agentDefaultArgs: {
+          ...applyAgentPermissionMode({ mode: 'yolo' }).agentDefaultArgs,
+          claude: ''
+        }
+      })
+    )
+    render(fullPane())
+    const global = await screen.findByRole('button', { name: 'Agent Permissions' })
+    expect(global.textContent).toContain('Mixed')
+    const user = userEvent.setup()
+    await user.click(global)
+    expect(
+      screen
+        .getAllByRole('menuitemradio')
+        .every((item) => item.getAttribute('aria-checked') === 'false')
+    ).toBe(true)
+    await user.keyboard('{Escape}')
+    const gemini = screen.getByText('Gemini', { selector: 'span' }).closest('div.py-3')
+    if (!(gemini instanceof HTMLElement)) {
+      throw new Error('Missing Gemini row')
+    }
+    const expand = within(gemini).queryByRole('button', { name: 'Expand agent settings' })
+    if (expand) {
+      await user.click(expand)
+    }
+    await user.click(within(gemini).getByRole('button', { name: 'Gemini permissions' }))
+    expect(screen.queryByRole('menuitemradio', { name: /Approve for me/ })).toBeNull()
+    await user.click(screen.getByRole('menuitemradio', { name: /Full access/ }))
+    await waitFor(() =>
+      expect(transport.mutate).toHaveBeenCalledWith(
+        { environmentId: 'ssh-host', pairingRevision: 17 },
+        { type: 'permissions', agent: 'gemini', mode: 'yolo', syncNativeChat: true },
+        expect.any(AbortSignal)
+      )
+    )
+  })
+
   it('replaces custom arguments with the expected mode from the row', async () => {
     render(fullPane())
     await screen.findByDisplayValue('--host-marker')
-    fireEvent.click(screen.getByRole('button', { name: 'Replace with Manual' }))
+    fireEvent.click(screen.getByRole('button', { name: "Replace with Agents' own settings" }))
     await waitFor(() =>
       expect(transport.mutate).toHaveBeenCalledWith(
         { environmentId: 'ssh-host', pairingRevision: 17 },
@@ -251,7 +439,7 @@ describe('host launch settings form', () => {
     transport.read.mockResolvedValue(settings)
     transport.mutate.mockResolvedValue(settings)
     render(fullPane())
-    fireEvent.click(await screen.findByRole('button', { name: 'Replace with Yolo' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Replace with Full access' }))
     await waitFor(() =>
       expect(transport.mutate).toHaveBeenCalledWith(
         { environmentId: 'ssh-host', pairingRevision: 17 },
@@ -369,7 +557,7 @@ describe('host launch settings form', () => {
     )
     expect(updateDesktop).not.toHaveBeenCalled()
     expect(desktop.agentDefaultEnv?.claude?.DESKTOP_KEY).toBe('desktop-secret')
-    fireEvent.click(screen.getByRole('radio', { name: 'Manual' }))
+    await selectLegacyPermission('Agent Permissions', "Each agent's own settings")
     await waitFor(() =>
       expect(transport.mutate).toHaveBeenCalledWith(
         { environmentId: 'ssh-host', pairingRevision: 17 },

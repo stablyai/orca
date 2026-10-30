@@ -195,6 +195,11 @@ const TurnLifecycleFields = {
 const KnownItemBody = z.discriminatedUnion('kind', [
   MessageBody,
   z.object({
+    kind: z.literal('agent-start'),
+    dispatchId: z.string().min(1),
+    task: z.string()
+  }),
+  z.object({
     kind: z.literal('tool-call'),
     ...ToolMetadata,
     name: z.string(),

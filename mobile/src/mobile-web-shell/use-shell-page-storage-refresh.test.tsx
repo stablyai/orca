@@ -7,6 +7,7 @@ import {
   persistMirrored,
   hydrateMirroredStorage,
   readMirroredStorage,
+  retainMirroredStorage,
   writeMirroredStorage
 } from '../storage/mirrored-storage-keys'
 import { TERMINAL_SHORTCUT_STORAGE_KEYS } from './page-storage-keys'
@@ -88,6 +89,8 @@ it.each(TERMINAL_SHORTCUT_STORAGE_KEYS)(
   async (key) => {
     focus.active = false
     store.values.set(key, 'initial')
+    // The shell screen holds its route's keys while mounted, as use-page-host-snapshot does.
+    const releaseKeys = retainMirroredStorage([key])
     let page = 'initial'
     const save = vi.fn((value: string) => persistMirrored(key, value))
     const load = async () => store.values.get(key) ?? 'initial'
@@ -148,5 +151,6 @@ it.each(TERMINAL_SHORTCUT_STORAGE_KEYS)(
       await later
     })
     expect(publish).toHaveBeenCalledTimes(afterUnmount)
+    releaseKeys()
   }
 )

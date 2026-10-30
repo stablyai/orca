@@ -14,6 +14,7 @@ import {
   type BridgeHapticsKind
 } from './bridge-haptics-notify'
 import { captureBridgeError } from './bridge-error-capture'
+import { BRIDGE_LIVENESS_PROBE_NOTIFY } from './bridge-liveness-probe-notify'
 import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge-page-back'
 import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
 import {
@@ -41,6 +42,7 @@ export type BridgeClientNotifications = {
   notifyExternalLink: (url: string) => boolean
   notifyStorageWrite: (key: string, value: string | null) => boolean
   notifyHaptics: (kind: BridgeHapticsKind) => boolean
+  notifyLivenessProbe: () => void
   notifyPageFault: (error: unknown) => boolean
   notifyPagePainted: () => void
   notifyBackClaim: (claimed: boolean) => void
@@ -117,6 +119,9 @@ export function createBridgeClientNotifications(
     notifyHaptics: (kind) =>
       deps.hasGrant(BRIDGE_HAPTICS_GRANT) &&
       post({ v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_HAPTICS_NOTIFY, kind }),
+    notifyLivenessProbe: () => {
+      post({ v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_LIVENESS_PROBE_NOTIFY })
+    },
     notifyPageFault: (error) => {
       if (deps.isClosed() || !deps.hasGrant(BRIDGE_FAULT_GRANT)) {
         return false

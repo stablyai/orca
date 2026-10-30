@@ -1,215 +1,37 @@
-import { createElement, useLayoutEffect } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { describe, expect, it, vi } from 'vitest'
+import { act } from 'react-test-renderer'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type {
   AgentSessionModelCatalogResult,
   AgentSessionOptionResult,
   AgentSessionOptionsResult
 } from '../../../src/shared/agent-session-wire'
-import type { SessionOptionDescriptor } from '../../../src/shared/native-chat/input/native-chat-session-options'
-import type { RpcClient } from '../transport/rpc-client'
-import type {
-  StructuredAgentSessionMutate,
-  StructuredAgentSessionMutationResult
-} from './mobile-structured-agent-session-rpc'
-import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
+import type { StructuredAgentSessionMutationResult } from './mobile-structured-agent-session-rpc'
 import { rememberMobileCreatedStructuredSession } from './mobile-created-structured-sessions'
+import type { AcpThinkingOptionsFixtureModule } from '../../../src/shared/acp-thinking-options.test-fixture-contract'
+import {
+  type Controller,
+  settle,
+  OPTIONS,
+  FAST_OPTIONS,
+  FAST_OPTIONS_ON,
+  deferred,
+  optionsClient,
+  queuedReads,
+  recordingMutate,
+  accepted,
+  mountOptions,
+  descriptorFor,
+  currentValueOf,
+  BASE
+} from './use-mobile-structured-agent-options.test-fixture'
 
-const OPTIONS: AgentSessionOptionsResult = {
-  models: [
-    {
-      id: 'gpt-live',
-      label: 'GPT Live',
-      isDefault: true,
-      defaultEffort: 'medium',
-      efforts: [
-        { value: 'medium', label: 'Medium' },
-        { value: 'high', label: 'High' }
-      ]
-    },
-    {
-      id: 'gpt-fast',
-      label: 'GPT Fast',
-      isDefault: false,
-      defaultEffort: 'low',
-      efforts: [
-        { value: 'low', label: 'Low' },
-        { value: 'medium', label: 'Medium' }
-      ]
-    }
-  ],
-  current: { model: 'gpt-live', effort: 'medium' }
-}
-
-const FAST_OPTIONS: AgentSessionOptionsResult = {
-  ...OPTIONS,
-  models: OPTIONS.models.map((model) => ({ ...model, supportsFastMode: true })),
-  fastModeSupport: { supported: true },
-  current: { ...OPTIONS.current, fastMode: false, confirmed: ['fastMode'] }
-}
-
-const FAST_OPTIONS_ON: AgentSessionOptionsResult = {
-  ...FAST_OPTIONS,
-  current: { ...FAST_OPTIONS.current, fastMode: true }
-}
-
-function deferred<T>() {
-  let resolve!: (value: T) => void
-  const promise = new Promise<T>((accept) => {
-    resolve = accept
-  })
-  return { promise, resolve }
-}
-
-function rpcSuccess(result: unknown) {
-  return { id: 'rpc-1', ok: true as const, result, _meta: { runtimeId: 'runtime-1' } }
-}
-
-type SentRequest = { method: string; params: unknown }
-
-function optionsClient(
-  reads: () => Promise<AgentSessionOptionsResult>,
-  catalog?: (params: unknown) => Promise<AgentSessionModelCatalogResult>
-) {
-  const sent: SentRequest[] = []
-  const client: RpcClient = {
-    sendRequest: async (method: string, params?: unknown) => {
-      sent.push({ method, params })
-      if (method === 'agentSession.modelCatalog') {
-        // Without a scripted catalog, the host predates the method.
-        return catalog
-          ? rpcSuccess(await catalog(params))
-          : {
-              id: 'rpc-1',
-              ok: false as const,
-              error: { code: 'method_not_found', message: 'Unknown method' },
-              _meta: { runtimeId: 'runtime-1' }
-            }
-      }
-      return rpcSuccess(method === 'agentSession.options' ? await reads() : {})
-    },
-    subscribe: () => () => {},
-    updateTerminalSubscriptionViewport: () => {},
-    getState: () => 'connected',
-    getReconnectAttempt: () => 0,
-    getLastConnectedAt: () => null,
-    onStateChange: () => () => {},
-    notifyForeground: () => {},
-    close: () => {}
-  }
-  const methods = (name: string) => sent.filter((entry) => entry.method === name)
-  return { client, sent, methods, optionReads: () => methods('agentSession.options').length }
-}
-
-function queuedReads(...results: AgentSessionOptionsResult[]) {
-  let index = 0
-  return () => Promise.resolve(results[Math.min(index++, results.length - 1)]!)
-}
-
-type MutateCall = { method: string; fields: Record<string, unknown> }
-
-// Use an untyped mock: a concrete fixture cannot satisfy arbitrary TValue from the generic mutation caller.
-function recordingMutate(
-  next: (call: number) => Promise<StructuredAgentSessionMutationResult<AgentSessionOptionResult>>
-) {
-  const calls: MutateCall[] = []
-  const mock = vi.fn()
-  mock.mockImplementation(
-    (method: string, _fingerprintMethod: string, fields: Record<string, unknown>) => {
-      calls.push({ method, fields })
-      return next(calls.length - 1)
-    }
+let recordedOmpOptions: AcpThinkingOptionsFixtureModule['recordedOmpOptions']
+beforeAll(async () => {
+  const fixtures = await vi.importActual<AcpThinkingOptionsFixtureModule>(
+    '../../../src/main/acp/acp-thinking-options.test-fixture'
   )
-  const mutate: StructuredAgentSessionMutate = mock
-  return { calls, mutate }
-}
-
-function accepted(
-  value: AgentSessionOptionResult,
-  sameFence: boolean
-): StructuredAgentSessionMutationResult<AgentSessionOptionResult> {
-  return { status: 'accepted', value, sameFence }
-}
-
-type Controller = ReturnType<typeof useMobileStructuredAgentOptions>
-
-type ProbeProps = {
-  agent: string | null
-  client: RpcClient | null
-  sessionId: string | null
-  fence: number | null
-  mutate: StructuredAgentSessionMutate
-  optionStamp?: string
-  turnId?: string | null
-  onRender: (controller: Controller) => void
-}
-
-function Probe(props: ProbeProps): null {
-  const controller = useMobileStructuredAgentOptions({
-    agent: props.agent,
-    client: props.client,
-    sessionId: props.sessionId,
-    enabled: true,
-    fence: props.fence,
-    mutate: props.mutate,
-    turnId: props.turnId ?? null,
-    ...(props.optionStamp ? { optionStamp: props.optionStamp } : {}),
-    hostSupport: { permissionModes: true, statusFeed: false }
-  })
-  useLayoutEffect(() => props.onRender(controller), [controller, props.onRender])
-  return null
-}
-
-async function settle() {
-  await act(async () => {
-    await Promise.resolve()
-    await Promise.resolve()
-  })
-}
-
-async function mountOptions(props: Omit<ProbeProps, 'onRender'>) {
-  let rendered: Controller | null = null
-  const onRender = (controller: Controller) => {
-    rendered = controller
-  }
-  let renderer: ReactTestRenderer | null = null
-  await act(async () => {
-    renderer = create(createElement(Probe, { ...props, onRender }))
-  })
-  await settle()
-  const current = (): Controller => {
-    if (!rendered) {
-      throw new Error('probe never rendered')
-    }
-    return rendered
-  }
-  return {
-    current,
-    rerender: async (next: Partial<Omit<ProbeProps, 'onRender'>>) => {
-      await act(async () => {
-        renderer?.update(createElement(Probe, { ...props, ...next, onRender }))
-      })
-      await settle()
-    },
-    unmount: async () => {
-      await act(async () => renderer?.unmount())
-    }
-  }
-}
-
-function descriptorFor(
-  snapshot: readonly SessionOptionDescriptor[],
-  id: string
-): SessionOptionDescriptor | undefined {
-  return snapshot.find((entry) => entry.id === id)
-}
-
-function currentValueOf(snapshot: readonly SessionOptionDescriptor[], id: string) {
-  const kind = descriptorFor(snapshot, id)?.kind
-  return kind && 'currentValue' in kind ? kind.currentValue : undefined
-}
-
-const BASE = { agent: 'codex', sessionId: 'session-1', fence: 1 } as const
+  recordedOmpOptions = fixtures.recordedOmpOptions
+})
 
 describe('useMobileStructuredAgentOptions fast mode', () => {
   it('round-trips a boolean fastMode pick as the wire string and remembers the decoded pick', async () => {
@@ -260,77 +82,97 @@ describe('useMobileStructuredAgentOptions fast mode', () => {
     await act(async () => {
       outcome = await harness.current().setStructuredOption('fastMode', true)
     })
-    expect(outcome).toBe(false)
-    expect(calls).toEqual([])
-    await harness.unmount()
-  })
-
-  it('offers no Fast row when the session reports fast mode unsupported', async () => {
-    const client = optionsClient(
-      queuedReads({ ...FAST_OPTIONS, fastModeSupport: { supported: false, reason: 'account' } })
-    )
-    const { mutate } = recordingMutate(async () => ({ status: 'rejected' }))
-    const harness = await mountOptions({ ...BASE, client: client.client, mutate })
-
-    expect(descriptorFor(harness.current().optionSnapshot, 'fastMode')).toBeUndefined()
-    await harness.unmount()
-  })
-
-  it('offers no Fast row when the model capability is unknown', async () => {
-    const client = optionsClient(
-      queuedReads({
-        ...FAST_OPTIONS,
-        models: OPTIONS.models
+    expect(outcome).toBe(true)
+    expect(calls).toEqual([
+      expect.objectContaining({
+        fields: expect.objectContaining({ key: 'fastMode', value: 'true' })
       })
-    )
+    ])
+    await harness.unmount()
+  })
+
+  it.each([
+    [
+      'session reports unsupported',
+      { ...FAST_OPTIONS, fastModeSupport: { supported: false, reason: 'account' } }
+    ],
+    ['model capability is unknown', { ...FAST_OPTIONS, models: OPTIONS.models }]
+  ] as const)('offers no Fast row when %s', async (_reason, answer) => {
+    const client = optionsClient(queuedReads(answer))
     const { mutate } = recordingMutate(async () => ({ status: 'rejected' }))
     const harness = await mountOptions({ ...BASE, client: client.client, mutate })
-
     expect(descriptorFor(harness.current().optionSnapshot, 'fastMode')).toBeUndefined()
     await harness.unmount()
   })
 })
 
 describe('useMobileStructuredAgentOptions post-write refresh', () => {
-  it('reads options back after an accepted same-fence write and applies the refreshed value', async () => {
-    const client = optionsClient(queuedReads(FAST_OPTIONS, FAST_OPTIONS_ON))
-    const { mutate } = recordingMutate(async () =>
-      accepted({ key: 'fastMode', value: 'true', options: {} }, true)
-    )
-    const harness = await mountOptions({ ...BASE, client: client.client, mutate })
-
-    expect(client.optionReads()).toBe(1)
-    expect(currentValueOf(harness.current().optionSnapshot, 'fastMode')).toBe(false)
-
-    await act(async () => {
-      await harness.current().setStructuredOption('fastMode', true)
-    })
-    await settle()
-
-    expect(client.optionReads()).toBe(2)
-    expect(currentValueOf(harness.current().optionSnapshot, 'fastMode')).toBe(true)
-    await harness.unmount()
-  })
-
-  it('skips the refresh when the write landed against a different fence', async () => {
-    const client = optionsClient(queuedReads(FAST_OPTIONS, FAST_OPTIONS_ON))
-    const { mutate } = recordingMutate(async () =>
-      accepted({ key: 'fastMode', value: 'true', options: {} }, false)
-    )
-    const harness = await mountOptions({ ...BASE, client: client.client, mutate })
-
-    await act(async () => {
-      await harness.current().setStructuredOption('fastMode', true)
-    })
-    await settle()
-
-    expect(client.optionReads()).toBe(1)
-    expect(currentValueOf(harness.current().optionSnapshot, 'fastMode')).toBe(false)
-    await harness.unmount()
-  })
+  it.each([true, false])(
+    'revalidates an accepted operation with sameFence=%s',
+    async (sameFence) => {
+      const client = optionsClient(queuedReads(FAST_OPTIONS, FAST_OPTIONS_ON))
+      // The reply settles the operation; only the query installs the chat's selection.
+      const { mutate } = recordingMutate(async () =>
+        accepted({ key: 'fastMode', value: 'true', options: {} }, sameFence)
+      )
+      const harness = await mountOptions({ ...BASE, client: client.client, mutate })
+      expect(client.optionReads()).toBe(1)
+      expect(currentValueOf(harness.current().optionSnapshot, 'fastMode')).toBe(false)
+      await act(async () => {
+        await harness.current().setStructuredOption('fastMode', true)
+      })
+      await settle()
+      expect(client.optionReads()).toBe(2)
+      expect(currentValueOf(harness.current().optionSnapshot, 'fastMode')).toBe(true)
+      await harness.unmount()
+    }
+  )
 })
 
 describe('useMobileStructuredAgentOptions reads', () => {
+  it('offers unknown OMP suggestions for a saved model without choosing effort, then sends the literal pick', async () => {
+    const { models } = recordedOmpOptions('loaded').read()
+    const answer: AgentSessionOptionsResult = {
+      models,
+      current: { model: 'target', defaulted: [], acceptedInputSources: { model: 'saved' } }
+    }
+    const client = optionsClient(queuedReads(answer), async () => ({
+      origin: 'probe',
+      fetchedAt: 1,
+      models
+    }))
+    const { calls, mutate } = recordingMutate(async () =>
+      accepted({ key: 'effort', value: 'auto', options: { model: 'target', effort: 'auto' } }, true)
+    )
+    const harness = await mountOptions({
+      ...BASE,
+      agent: 'omp',
+      client: client.client,
+      mutate,
+      sendSelection: true
+    })
+    const effort = descriptorFor(harness.current().optionSnapshot, 'effort')
+    expect(effort).toMatchObject({
+      settable: true,
+      kind: {
+        type: 'select',
+        choices: [
+          { value: 'off', label: 'Off' },
+          expect.objectContaining({ value: 'auto', label: 'Auto' })
+        ]
+      }
+    })
+    expect(currentValueOf(harness.current().optionSnapshot, 'effort')).toBeUndefined()
+    expect(harness.current().sendSelection()).toEqual({ selection: { model: 'target' } })
+    await act(async () => {
+      expect(await harness.current().setStructuredOption('effort', 'auto')).toBe(true)
+    })
+    expect(calls).toEqual([
+      { method: 'agentSession.setOption', fields: { key: 'effort', value: 'auto' } }
+    ])
+    await harness.unmount()
+  })
+
   it('re-reads the options each turn, as desktop does', async () => {
     const client = optionsClient(queuedReads(OPTIONS))
     const { mutate } = recordingMutate(async () => ({ status: 'unknown' }))
@@ -705,19 +547,269 @@ describe('useMobileStructuredAgentOptions after a lost pick reply', () => {
       : null
   }
 
-  it('keeps the confirmed model after a lost pick reply, as desktop does', async () => {
-    const client = optionsClient(() => Promise.resolve(answer('m1', 'priority')))
+  it('draws the tier the host reconciled to, stays usable through a failed read, and takes the reconnect read', async () => {
+    const pendingRead = deferred<AgentSessionOptionsResult>()
+    const reads = [
+      () => Promise.resolve(answer('m1', 'priority')),
+      () => Promise.reject(new Error('terminal reconciliation offline')),
+      () => Promise.reject(new Error('status reconciliation offline')),
+      () => pendingRead.promise,
+      () => Promise.resolve(answer('m2', 'flex'))
+    ]
+    const client = optionsClient(() =>
+      (reads.shift() ?? (() => Promise.resolve(answer('m2', 'flex'))))()
+    )
     const { mutate } = recordingMutate(async () => ({ status: 'unknown' }))
     const harness = await mountOptions({ ...BASE, client: client.client, mutate })
-
-    let picked = true
-    await act(async () => {
-      picked = await harness.current().setStructuredOption('model', 'm2')
-    })
-    expect(picked).toBe(false)
-    expect(currentValueOf(harness.current().optionSnapshot, 'model')).toBe('m1')
     expect(speed(harness.current())?.value).toBe('priority')
+
+    // The host switched and set Standard, but its reply never arrived.
+    await act(async () => {
+      await harness.current().setStructuredOption('model', 'm2')
+    })
+    expect(currentValueOf(harness.current().optionSnapshot, 'model')).toBe('m2')
+    expect(speed(harness.current())).toEqual({ value: 'default', choices: ['default', 'flex'] })
     expect(harness.current().pendingOptionId).toBeNull()
+
+    expect(client.optionReads()).toBe(2) // The terminal wake consumed its failed query.
+    // The status-triggered read fails independently: nothing changes.
+    await harness.rerender({ optionStamp: 'status-1' })
+    expect(speed(harness.current())?.value).toBe('default')
+
+    // A read in flight when the user picks Flex answers for the old state and is dropped.
+    await harness.rerender({ optionStamp: 'status-2' })
+    let picked = false
+    await act(async () => {
+      picked = await harness.current().setStructuredOption('serviceTier', 'flex')
+    })
+    expect(picked).toBe(true)
+    await act(async () => pendingRead.resolve(answer('m1', 'priority')))
+    await settle()
+    expect(currentValueOf(harness.current().optionSnapshot, 'model')).toBe('m2')
+    expect(speed(harness.current())?.value).toBe('flex')
+
+    // Reconnected, the host's answer stands.
+    await harness.rerender({ optionStamp: 'status-3' })
+    expect(currentValueOf(harness.current().optionSnapshot, 'model')).toBe('m2')
+    expect(speed(harness.current())?.value).toBe('flex')
+    expect(client.optionReads()).toBe(6)
     await harness.unmount()
   })
+})
+
+it('joins the post-receipt menu read with an unchanged phone option stamp', async () => {
+  const initial: AgentSessionOptionsResult = {
+    models: [{ id: 'family', label: 'Family', isDefault: false, efforts: [], effortsKnown: false }],
+    current: { model: 'family' }
+  }
+  const ready = deferred<AgentSessionOptionsResult>()
+  let reads = 0
+  const client = optionsClient(() => (++reads === 1 ? Promise.resolve(initial) : ready.promise))
+  const { mutate } = recordingMutate(async () =>
+    accepted({ key: 'model', value: 'family', options: { model: 'family' } }, true)
+  )
+  const harness = await mountOptions({
+    ...BASE,
+    agent: 'antigravity',
+    client: client.client,
+    mutate,
+    optionStamp: 'family|own'
+  })
+  expect(descriptorFor(harness.current().optionSnapshot, 'effort')).toBeUndefined()
+  await act(async () => {
+    expect(await harness.current().setStructuredOption('model', 'family')).toBe(true)
+  })
+  expect(descriptorFor(harness.current().optionSnapshot, 'model')?.settable).toBe(true)
+  await act(async () => {
+    ready.resolve({
+      ...initial,
+      models: [
+        {
+          id: 'family',
+          label: 'Family',
+          isDefault: false,
+          efforts: [
+            { value: 'low', label: 'Low' },
+            { value: 'high', label: 'High' }
+          ]
+        }
+      ],
+      current: { model: 'family', effort: 'low' }
+    })
+  })
+  await settle()
+  expect(currentValueOf(harness.current().optionSnapshot, 'effort')).toBe('low')
+  expect(descriptorFor(harness.current().optionSnapshot, 'effort')?.settable).toBe(true)
+  await harness.unmount()
+})
+
+it('phone retains a queried seed-catalog base across its fence until later metadata arrives', async () => {
+  const catalog = deferred<AgentSessionModelCatalogResult>()
+  let reads = 0
+  const client = optionsClient(
+    () =>
+      ++reads === 1
+        ? Promise.resolve({
+            ...OPTIONS,
+            current: {
+              model: 'gpt-live',
+              effort: 'high',
+              defaulted: ['model'],
+              acceptedInputSources: { effort: 'saved' }
+            }
+          })
+        : deferred<AgentSessionOptionsResult>().promise,
+    () => catalog.promise
+  )
+  const { mutate } = recordingMutate(async () => accepted({ key: 'effort', value: 'low' }, true))
+  rememberMobileCreatedStructuredSession('answered-retention', 'worktree')
+  const harness = await mountOptions({
+    ...BASE,
+    sessionId: 'answered-retention',
+    client: client.client,
+    mutate,
+    sendSelection: true,
+    coherentCatalog: true
+  })
+  expect(harness.current().sendSelection()).toEqual({ selection: { effort: 'high' } })
+  await harness.rerender({ fence: 2 })
+  expect(harness.current().sendSelection()).toEqual({ selection: { effort: 'high' } })
+  await act(async () =>
+    catalog.resolve({
+      origin: 'probe',
+      fetchedAt: 1,
+      models: OPTIONS.models,
+      listingNamesConfiguredModel: true
+    })
+  )
+  await settle()
+  expect(harness.current().sendSelection()).toEqual({ selection: { effort: 'high' } })
+  await harness.unmount()
+})
+
+it('phone captures accepted echoed inputs, preserves false, and freezes empty vs legacy presence', async () => {
+  let answer: AgentSessionOptionsResult = {
+    ...FAST_OPTIONS,
+    models: [
+      {
+        id: 'opus',
+        label: 'Opus',
+        isDefault: true,
+        supportsFastMode: true,
+        efforts: [{ value: 'high', label: 'High' }]
+      }
+    ],
+    current: {
+      model: 'opus',
+      effort: 'high',
+      fastMode: false,
+      confirmed: ['fastMode'],
+      acceptedInputSources: {}
+    }
+  }
+  const client = optionsClient(async () => answer)
+  const { mutate } = recordingMutate(async () => accepted({ key: 'model', value: 'opus' }, true))
+  const harness = await mountOptions({
+    ...BASE,
+    agent: 'claude',
+    client: client.client,
+    mutate,
+    sendSelection: true
+  })
+  expect(harness.current().sendSelection()).toEqual({ selection: {} })
+  answer = {
+    ...answer,
+    current: { ...answer.current, acceptedInputSources: { model: 'saved', fastMode: 'policy' } }
+  }
+  await harness.rerender({ optionStamp: 'saved-origin' })
+  await settle()
+  const captured = harness.current().sendSelection()
+  expect(captured).toEqual({ selection: { model: 'opus', fastMode: 'false' } })
+  answer = {
+    ...answer,
+    current: { ...answer.current, effort: 'high', acceptedInputSources: { effort: 'saved' } }
+  }
+  await harness.rerender({ optionStamp: 'other-client' })
+  await settle()
+  expect(harness.current().sendSelection()).toEqual({ selection: { effort: 'high' } })
+  expect(captured).toEqual({ selection: { model: 'opus', fastMode: 'false' } })
+  await harness.unmount()
+})
+
+it('refuses a typed literal at an unresolved fence and accepts it when that fence is ready with no menu', async () => {
+  const pending = deferred<AgentSessionOptionsResult>()
+  let reads = 0
+  const client = optionsClient(() =>
+    ++reads === 1 ? Promise.resolve({ models: [], current: {} }) : pending.promise
+  )
+  const { calls, mutate } = recordingMutate(async () =>
+    accepted({ key: 'model', value: 'literal', options: { model: 'literal' } }, true)
+  )
+  const view = await mountOptions({ ...BASE, client: client.client, mutate })
+  await view.rerender({ fence: 2 })
+  let result = true
+  await act(async () => {
+    result = await view.current().setStructuredOption('model', 'literal')
+  })
+  expect(result).toBe(false)
+  expect(calls).toHaveLength(0)
+  await act(async () => pending.resolve({ models: [], current: {} }))
+  await settle()
+  await act(async () => {
+    result = await view.current().setStructuredOption('model', 'literal')
+  })
+  expect(result).toBe(true)
+  expect(calls).toHaveLength(1)
+  await view.unmount()
+})
+
+import type { PiRefreshFixtureModule } from '../../../src/shared/structured-agent-session-option-refresh.test-fixture-contract'
+const { piOptionRefreshContract } = await vi.importActual<PiRefreshFixtureModule>(
+  '../../../src/main/native-chat/agent-session-wire/structured-agent-session-option-refresh.test-fixture'
+)
+
+describe('Pi catalog refresh completion', () => {
+  piOptionRefreshContract(
+    async (host) => {
+      const first = optionsClient(
+        () => host.options(),
+        () => host.catalog()
+      )
+      const second = optionsClient(
+        () => host.options(),
+        () => host.catalog()
+      )
+      const { mutate } = recordingMutate(async (_call, fields) => {
+        if (typeof fields.value !== 'string') {
+          throw new Error('missing effort')
+        }
+        return accepted(await host.acceptEffort(fields.value), true)
+      })
+      const harness = await mountOptions({
+        ...BASE,
+        agent: 'pi',
+        sendSelection: true,
+        sessionId: host.record.sessionId,
+        client: first.client,
+        mutate
+      })
+      return {
+        snapshot: () => harness.current().optionSnapshot,
+        capture: () => harness.current().sendSelection().selection,
+        demand: () => harness.current().optionSurface.demandModelCatalog?.(),
+        pick: (value) => harness.current().setStructuredOption('effort', value),
+        replace: async (fence, otherHost) =>
+          harness.rerender({ fence, client: otherHost ? second.client : first.client }),
+        close: () => harness.unmount()
+      }
+    },
+    async (work) => {
+      await act(async () => {
+        work()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      await settle()
+    }
+  )
 })

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import {
   filterWorkspaceCleanupCandidates,
-  getWorkspaceCleanupGitLabel,
+  getWorkspaceCleanupGitState,
   getWorkspaceCleanupReviewInfo
 } from './workspace-cleanup-presentation'
 import {
@@ -121,7 +121,7 @@ describe('workspace cleanup presentation', () => {
       blockers: ['unknown-base']
     })
 
-    expect(getWorkspaceCleanupGitLabel(candidate)).toBe('Unknown')
+    expect(getWorkspaceCleanupGitState(candidate)).toBe('unknown')
     expect(
       filterWorkspaceCleanupCandidates(
         [candidate],

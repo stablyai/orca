@@ -30,6 +30,9 @@ vi.mock('electron', () => ({
   }
 }))
 
+const track = vi.hoisted(() => vi.fn())
+vi.mock('../telemetry/client', () => ({ track }))
+
 import { registerWslMoveHandlers } from './wsl-move-handlers'
 
 let userDataPath: string
@@ -39,6 +42,7 @@ beforeEach(() => {
   registerWslMoveDesktopRewriteStore({ id: 'renderer-a', side: 'renderer' })
   seedWslMoveCutover(userDataPath, cutover('move-1', 'destination-committed'))
   flushStorageData.mockReset()
+  track.mockReset()
   registerWslMoveHandlers(
     () => userDataPath,
     (senderId) => senderId === MAIN_WINDOW_ID
@@ -113,6 +117,29 @@ describe('WSL move IPC', () => {
     try {
       expect(invoke('wslMove:listUnfinished')).toEqual(open)
       expect(invoke('wslMove:listPendingRendererRewrites')).toEqual(pending)
+    } finally {
+      resetWslHostsGateForTests()
+    }
+  })
+
+  it('under a remote policy block keeps the way back and unfinished moves, and refuses a new move', async () => {
+    const unfinished = invoke('wslMove:listUnfinished')
+    configureWslHostsGate({
+      hasSavedWslHost: () => false,
+      hasWslMoveCutover: () => true,
+      policy: () => 'block'
+    })
+    try {
+      expect(invoke('wslMove:listUnfinished')).toEqual(unfinished)
+      expect(invoke('wslMove:listPendingRendererRewrites')).toMatchObject([
+        { migrationId: 'move-1' }
+      ])
+      expect(
+        await invoke('wslMove:useProjectHereAgain', { kind: 'repo', id: 'not-moved-repo' })
+      ).not.toMatchObject({ reason: 'gated-off' })
+      expect(
+        await invoke('wslMove:start', { distro: 'Ubuntu', repoIds: ['repo-1'] })
+      ).toMatchObject({ outcome: 'refused', code: 'wsl_move_unavailable' })
     } finally {
       resetWslHostsGateForTests()
     }
@@ -242,6 +269,8 @@ describe('WSL move IPC', () => {
       reason: 'gated-off'
     })
     expect(listWslMoveCutovers(userDataPath)).toHaveLength(1)
+    // Requests the gate or the window check turned away never reach undo, so they are not counted.
+    expect(track).not.toHaveBeenCalled()
   })
 
   // The host's copy of the agent kept running beside the one resumed here.
@@ -265,6 +294,10 @@ describe('WSL move IPC', () => {
       expect(stopHostCopies).toHaveBeenCalledOnce()
       expect(listWslMoveCutovers(userDataPath)).toHaveLength(1)
       expect(isWslMoveWindowWriteHeld()).toBe(false)
+      expect(track).toHaveBeenCalledWith('wsl_move_undo', {
+        outcome: reason.replaceAll('-', '_'),
+        duration_bucket: expect.any(String)
+      })
     }
   )
 })

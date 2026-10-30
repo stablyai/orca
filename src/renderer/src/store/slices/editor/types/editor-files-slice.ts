@@ -85,6 +85,13 @@ export type EditorFilesSlice = {
     onShown?: (result: EditorOpenResult | null) => void
   ) => EditorOpenResult | null
   openNewMarkdownInActiveWorkspace: (groupId: string) => Promise<void>
+  /** Creates a plugin's new-file type at the active workspace root and opens it. */
+  openNewPluginFileInActiveWorkspace: (
+    newFile: { pluginKey: string; id: string; title: string; extension: string },
+    groupId?: string
+  ) => Promise<void>
+  /** Creates an untitled file of `extension` holding `content` at the active workspace root. */
+  openSampleFileInActiveWorkspace: (sample: { extension: string; content: string }) => Promise<void>
   // Why: sequences openFile/setMarkdownViewMode/reveal around an async Monaco remount. See docs/markdown-internal-link-opening-design.md.
   activateMarkdownLink: (
     rawHref: string | undefined,
@@ -149,7 +156,7 @@ export type EditorFilesSlice = {
     relativePath: string,
     language: string,
     staged: boolean,
-    options?: EditorOpenTargetOptions & { selection?: EditorTabSelection }
+    options?: EditorOpenTargetOptions & { selection?: EditorTabSelection; oldPath?: string }
   ) => void
   openBranchDiff: (
     worktreeId: string,

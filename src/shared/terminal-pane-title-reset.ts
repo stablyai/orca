@@ -1,6 +1,6 @@
 // CLIs can leave agent names/spinners after exit; replace them only when the agent is known gone.
 
-import { resolveExplicitTerminalTitleAgentType } from './terminal-title-agent-type'
+import { resolveTerminalTitlePolicyAgentType } from './terminal-title-agent-type'
 
 export function neutralTerminalTitle(defaultTitle: string | null | undefined): string {
   return defaultTitle?.trim() || 'Terminal'
@@ -11,7 +11,7 @@ export function titleAfterConfirmedShell(
   title: string | null | undefined,
   defaultTitle: string | null | undefined
 ): string | null {
-  if (!title || resolveExplicitTerminalTitleAgentType(title) === null) {
+  if (!title || resolveTerminalTitlePolicyAgentType(title) === null) {
     return null
   }
   return neutralTerminalTitle(defaultTitle)

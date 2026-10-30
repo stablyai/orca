@@ -20,6 +20,7 @@ export const CLI_MAIN_ENTRY_NAMES = [
   'skills/bundled-skill-install/cli-entry',
   'macos-tree-clone',
   'orcad/orcad-stale-lock-reclaim',
+  'plugins/plugin-authoring-checks',
   ...[
     'access',
     'active-location',
@@ -54,6 +55,7 @@ const WORKER_THREAD_ENTRY_NAMES = [
   'foreign-sqlite-reader-entry',
   'main-thread-hang-watchdog-entry',
   'port-scan-command-worker-entry',
+  'command-path-directory-worker-entry',
   'worker-thread-child-process-entry',
   'usage-scan-worker-entry',
   'workspace-space-scan-worker-entry',

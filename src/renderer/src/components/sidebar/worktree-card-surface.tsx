@@ -36,7 +36,6 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
     handlePointerDown,
     handlePointerEnter,
     handlePointerLeave,
-    handleMouseDown,
     handleDoubleClick,
     handleDragStart,
     handleDragEnd,
@@ -81,10 +80,9 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
       }
       data-worktree-lineage-drop-target={isLineageDropTarget || undefined}
       onClick={handleClick}
-      onPointerDown={handlePointerDown}
+      onPointerDown={affiliateListMode ? undefined : handlePointerDown}
       onPointerEnter={affiliateListMode ? undefined : handlePointerEnter}
       onPointerLeave={affiliateListMode ? undefined : handlePointerLeave}
-      onMouseDown={handleMouseDown}
       onDoubleClick={affiliateListMode ? undefined : handleDoubleClick}
       draggable={!affiliateListMode && nativeDragEnabled && !isDeleting && !titleRenaming}
       onDragStart={!affiliateListMode && nativeDragEnabled ? handleDragStart : undefined}
@@ -142,6 +140,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
             open={showRenameErrorDialog}
             onOpenChange={setShowRenameErrorDialog}
             worktreeId={worktree.id}
+            executionHostId={worktree.hostId}
             worktreeName={worktree.displayName}
             error={worktree.firstAgentMessageRenameError}
           />

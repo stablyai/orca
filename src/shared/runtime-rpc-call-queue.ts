@@ -61,7 +61,7 @@ function isLongWaitRuntimeMethod(method: string): boolean {
 
 // Byte-range reads (media, paged files, downloads) are bulk: a playing video must not hold terminal or workspace slots.
 function isBulkReadRuntimeMethod(method: string): boolean {
-  return method === 'files.readChunk'
+  return method === 'files.readChunk' || method === 'files.readDocPreviewChunk'
 }
 
 export class RuntimeRpcCallQueuePool {

@@ -33,6 +33,8 @@ type PageActivity = {
 
 /** One page-targeted command, held from when it is queued until it settles. */
 export type AgentCommandLease = {
+  /** The command came from an agent's CLI, not a person's relayed input. */
+  agent: boolean
   run: <T>(execute: () => Promise<T>) => Promise<T>
   end: () => void
 }
@@ -50,7 +52,11 @@ type BrowserAgentActivityDeps = {
   worktreeForPage: (browserPageId: string) => string | null
 }
 
-const NOT_AN_AGENT: AgentCommandLease = { run: (execute) => execute(), end: () => {} }
+const NOT_AN_AGENT: AgentCommandLease = {
+  agent: false,
+  run: (execute) => execute(),
+  end: () => {}
+}
 
 /** Which pages an agent drives, and the show-before-act handshake for its pointer. */
 export class BrowserAgentActivity {
@@ -91,6 +97,7 @@ export class BrowserAgentActivity {
       }
     }
     return {
+      agent: true,
       run: async (execute) => {
         owned.executing = true
         try {
@@ -103,6 +110,10 @@ export class BrowserAgentActivity {
       },
       end
     }
+  }
+
+  isActive(browserPageId: string): boolean {
+    return this.pages.has(browserPageId)
   }
 
   end(browserPageId: string): void {

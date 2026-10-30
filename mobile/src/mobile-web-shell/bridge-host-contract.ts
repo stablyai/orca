@@ -8,7 +8,12 @@ import type { TerminalBacklogEnd, TerminalBacklogTimers } from './bridge-termina
 import type { RpcClient } from '../transport/rpc-client'
 import type { BridgeSessionBack } from './bridge-host-back'
 import type { BridgeRefusal } from './bridge/bridge-caps'
-import type { BridgeColorScheme, BridgeInitHost, BridgeInitRoute } from './bridge/bridge-envelope'
+import type {
+  BridgeColorScheme,
+  BridgeInitHost,
+  BridgeInitRoute,
+  BridgeUiLocale
+} from './bridge/bridge-envelope'
 import type { BridgeClearableRouteParam } from './bridge/bridge-route-update'
 import type { BridgeSafeAreaInsets } from './bridge/bridge-safe-area-insets'
 import type { BridgeFoldDivision } from './bridge/bridge-fold-division'
@@ -85,6 +90,8 @@ export type BridgeHostOptions = {
   /** The keys the shell's rail shows beside the page. None when absent; moved later with
    *  `publishTerminalKeyRail`. */
   terminalKeyRail?: BridgeTerminalKeyRail
+  // Absent until the shell knows its language; publishUiLocale moves it later.
+  uiLocale?: BridgeUiLocale
   // Read identity at forward time because this host outlives renders; replace the page placeholder as init promised or the desktop refuses spoofed sends.
   readClientIdentity: () => string | null
   // Read allowlisted storage synchronously for every init so document reloads include writes made since mount.
@@ -142,6 +149,7 @@ export type BridgeHost = {
   /** Tells this session the shell's key rail shows or hides, over the same re-sent `init`. */
   publishTerminalKeyRail: (next: BridgeTerminalKeyRail) => void
   publishColorScheme: (next: BridgeColorScheme) => void
+  publishUiLocale: (next: BridgeUiLocale) => void
   /**
    * Hands the page one press on the key rail. False when this session was not granted the rail,
    * which is every page older than it, or when no document holds the view.

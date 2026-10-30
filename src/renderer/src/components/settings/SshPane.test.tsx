@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resetSshConfigPassiveSyncForTests } from '../../lib/ssh-config-passive-sync'
 import type { SshConnectionState, SshTarget } from '../../../../shared/ssh-types'
-import { setRendererUiLanguage } from '@/i18n/i18n'
+import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { SshPane } from './SshPane'
 
@@ -95,14 +95,14 @@ afterEach(async () => {
   resetSshConfigPassiveSyncForTests()
   mocks.connectionStates.clear()
   vi.clearAllMocks()
-  await setRendererUiLanguage('en')
+  await i18n.changeLanguage(await loadRendererUiLanguage('en'))
 })
 
 describe('SSH import count notices', () => {
   it.each(['en', 'ko'] as const)(
     'uses complete %s sentences and preserves the no-change branch',
     async (language) => {
-      await setRendererUiLanguage(language)
+      await i18n.changeLanguage(await loadRendererUiLanguage(language))
       const importConfig = vi.fn(
         async (_args?: {
           reAdopt?: boolean

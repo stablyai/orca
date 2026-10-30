@@ -9,6 +9,7 @@ import {
 import { HostRouteNoticeBanner } from '../components/HostRouteNoticeBanner'
 import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileUiLocale } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { BridgeInitRoute } from './bridge/bridge-envelope'
 import type { BridgeClearableRouteParam } from './bridge/bridge-route-update'
@@ -37,7 +38,7 @@ import { ShellStateScreen } from './ShellStateScreen'
 import { useReportedShellOverlayLoad, type ShellOverlayLoad } from './shell-overlay-load'
 import { pageSafeAreaInsets, usePublishedSafeAreaInsets } from './page-safe-area-insets'
 import { usePageFoldDivision, usePublishedFoldDivision } from './page-fold-division'
-import { usePublishedShellKeyRail, useShellKeyRail } from './terminal-key-rail'
+import { usePublishedShellKeyRail, useShellKeyRail } from './use-shell-key-rail'
 import { hostProfileUnreadableLine, pageFaultLine } from './shell-lifecycle-log'
 import { recordShellLifecycleLine } from './shell-lifecycle-line-recorder'
 
@@ -71,6 +72,7 @@ export function MobileWebShellScreen({
   runtime
 }: MobileWebShellScreenProps) {
   const colorScheme = useMobileColorScheme()
+  const uiLocale = useMobileUiLocale()
   const insets = useSafeAreaInsets()
   const overlay = onOverlayLoad !== undefined
   const router = useRouter()
@@ -154,6 +156,7 @@ export function MobileWebShellScreen({
     foldDivision: pageFold.division,
     terminalKeyRail: keyRail.keys,
     colorScheme,
+    uiLocale,
     pageRoutes,
     pageRouteGrants,
     routeGrants,

@@ -50,6 +50,7 @@ function subscriptionHarness(opts: {
     reflow: vi.fn(),
     clear: vi.fn(),
     fitDimensions: vi.fn(() => fit),
+    scrollToBottom: vi.fn(),
     resetZoom: vi.fn(),
     cancelSelect: vi.fn(),
     doSelectAll: vi.fn(),

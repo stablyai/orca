@@ -2,7 +2,6 @@ import { createElement, startTransition, Suspense, type ReactNode } from 'react'
 import { ScrollView } from 'react-native'
 import { act, create, type ReactTestInstance } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
-import { TERMINAL_ACCESSORY_KEY_DEFINITIONS } from '../terminal/terminal-key-definitions'
 import type { SideRailStrip } from '../layout/side-rail-strip'
 
 const outlet = vi.hoisted((): { node: ReactNode } => ({ node: null }))
@@ -30,7 +29,7 @@ vi.mock('lucide-react-native', () => ({
   Monitor: 'Monitor',
   Smartphone: 'Smartphone',
   ChevronsRight: 'ChevronsRight',
-  Plus: 'Plus'
+  Ellipsis: 'Ellipsis'
 }))
 vi.mock('expo-router', async () => ({ useFocusEffect: (await import('react')).useEffect }))
 vi.mock('../layout/side-rail', () => ({
@@ -40,13 +39,20 @@ vi.mock('../layout/side-rail', () => ({
   useSideRailDirectionPadAvailable: () => railState.capable,
   useSideRailStrip: () => railState.strip
 }))
-import {
-  TerminalKeyRail,
-  terminalKeyRailKeys,
-  useShellKeyRail,
-  usePublishedShellKeyRail
-} from './terminal-key-rail'
+import { TerminalKeyRail, terminalKeyRailKeys } from './terminal-key-rail'
+import { useShellKeyRail, usePublishedShellKeyRail } from './use-shell-key-rail'
 import type { BridgeTerminalToolbar } from './bridge/bridge-terminal-key'
+
+const SHELL_TOOLBAR: BridgeTerminalToolbar = {
+  canSend: true,
+  canCompose: true,
+  keyboardVisible: false,
+  liveInputEnabled: true,
+  phoneDisplayMode: false,
+  runsAgent: false,
+  modifiers: { ctrl: 'off', alt: 'off', shift: 'off' },
+  directionPadEnabled: false
+}
 
 let renderer: ReturnType<typeof create> | undefined
 afterEach(() => {
@@ -62,17 +68,7 @@ it.each(['left', 'right'] as const)(
   async (side) => {
     vi.useFakeTimers()
     railState.strip = { side, width: 84, height: 500, top: 0, bottom: 0 }
-    const toolbar = {
-      canSend: true,
-      canCompose: true,
-      canPaste: true,
-      keyboardVisible: false,
-      liveInputEnabled: true,
-      phoneDisplayMode: false,
-      customKeys: [],
-      directionPadEnabled: true,
-      visibleBuiltInIds: ['tab']
-    }
+    const toolbar = { ...SHELL_TOOLBAR, directionPadEnabled: true }
     const send = vi.fn(() => true)
     let keys = terminalKeyRailKeys(500, toolbar)
     const render = () =>
@@ -140,7 +136,11 @@ function mount() {
   const send = vi.fn((_key: string) => true)
   act(() => {
     renderer = create(
-      createElement(TerminalKeyRail, { keys: terminalKeyRailKeys(100), onKey: send })
+      createElement(TerminalKeyRail, {
+        keys: terminalKeyRailKeys(100, SHELL_TOOLBAR),
+        toolbar: SHELL_TOOLBAR,
+        onKey: send
+      })
     )
   })
   const root = renderer!.root
@@ -148,11 +148,36 @@ function mount() {
   return { send, root, key }
 }
 const touch = (pageY: number) => ({ nativeEvent: { pageX: 20, pageY } })
-it('publishes the complete key vocabulary even when only two buttons fit', () => {
-  expect([...terminalKeyRailKeys(100)].sort()).toEqual(
-    [...TERMINAL_ACCESSORY_KEY_DEFINITIONS.map((key) => key.id), 'paste'].sort()
-  )
-  expect(terminalKeyRailKeys(0)).toEqual([])
+it("lists the page key bar's shell and agent rows, whatever the strip's height", () => {
+  const controls = ['toggleKeyboard', 'toggleDisplayMode', 'toggleInputMode']
+  const arrows = ['arrowUp', 'arrowDown', 'arrowLeft', 'arrowRight']
+  const shellRow = [
+    'escape',
+    'ctrl',
+    'tab',
+    'alt',
+    'shift',
+    'char:/',
+    'char:|',
+    'char:~',
+    'char:-',
+    'char::'
+  ]
+  const agentRow = ['escape', 'shiftTab', 'enter', 'ctrlC', 'ctrl', 'char:/', 'char:@', 'char:!']
+  expect(terminalKeyRailKeys(100, SHELL_TOOLBAR)).toEqual([
+    ...controls,
+    ...shellRow,
+    ...arrows,
+    'moreKeys'
+  ])
+  expect(terminalKeyRailKeys(100, { ...SHELL_TOOLBAR, runsAgent: true })).toEqual([
+    ...controls,
+    ...agentRow,
+    ...arrows,
+    'moreKeys'
+  ])
+  expect(terminalKeyRailKeys(0, SHELL_TOOLBAR)).toEqual([])
+  expect(terminalKeyRailKeys(100)).toEqual([])
 })
 
 it('uses a vertical scroll view and sends a tap only on release', () => {
@@ -260,8 +285,8 @@ it('does not send a non-repeatable key during a swipe', () => {
 it.each([
   ['Escape', 'escape'],
   ['Tab', 'tab'],
-  ['Interrupt terminal', 'ctrlC'],
-  ['Paste from clipboard', 'paste']
+  ['Control', 'ctrl'],
+  ['Type ~', 'char:~']
 ])('sends held non-repeatable %s on release under native long-press suppression', (label, id) => {
   const { send, key } = mount()
   const button = key(label)
@@ -277,18 +302,9 @@ it.each([
   expect(send).toHaveBeenCalledExactlyOnceWith(id)
 })
 
-it('renders stateful toolbar and custom keys in the same scroll view with protected gestures', () => {
-  const toolbar = {
-    canSend: true,
-    canCompose: true,
-    canPaste: true,
-    keyboardVisible: false,
-    liveInputEnabled: true,
-    phoneDisplayMode: false,
-    customKeys: [{ id: 'build', label: 'Build' }]
-  }
+it('renders the bar controls, ⋯ and sticky modifiers in the same scroll view', () => {
   const send = vi.fn((_key: string) => true)
-  const render = (next = toolbar) =>
+  const render = (next: BridgeTerminalToolbar) =>
     act(() => {
       const element = createElement(TerminalKeyRail, {
         keys: terminalKeyRailKeys(100, next),
@@ -301,8 +317,9 @@ it('renders stateful toolbar and custom keys in the same scroll view with protec
         renderer = create(element)
       }
     })
-  render()
+  render(SHELL_TOOLBAR)
   const key = (label: string) => renderer!.root.findByProps({ accessibilityLabel: label })
+  const keysMode = 'Keys mode: typing goes straight to the terminal. Switch to Message mode'
   const press = (label: string) =>
     act(() => {
       const button = key(label)
@@ -311,49 +328,40 @@ it('renders stateful toolbar and custom keys in the same scroll view with protec
       button.props.onPress()
     })
   press('Show keyboard')
-  press('Switch to phone mode')
-  press('Switch to buffered command input')
-  press('Add custom shortcut')
-  press('Send Build')
+  press('Phone width')
+  press(keysMode)
+  press('Control')
+  press('More keys and actions')
   expect(send.mock.calls.map(([key]) => key)).toEqual([
     'toggleKeyboard',
     'toggleDisplayMode',
     'toggleInputMode',
-    'addCustomKey',
-    'custom:build'
+    'ctrl',
+    'moreKeys'
   ])
-  send.mockClear()
-  const custom = key('Send Build')
-  act(() => {
-    custom.props.onPressIn(touch(20))
-    custom.props.onLongPress()
-    custom.props.onPressOut()
-    custom.props.onPress()
-  })
-  expect(send).toHaveBeenCalledExactlyOnceWith('deleteCustom:build')
-  render({ ...toolbar, keyboardVisible: true, canSend: false })
+  const latchStyle = (label: string) =>
+    renderer!.root
+      .findByProps({ accessibilityLabel: label })
+      .props.style({ pressed: false })
+      .filter(Boolean)
+  render({ ...SHELL_TOOLBAR, modifiers: { ctrl: 'once', alt: 'locked', shift: 'off' } })
+  expect(key('Control').props.accessibilityState).toEqual({ selected: true })
+  expect(key('Alt').props.accessibilityState).toEqual({ selected: true })
+  expect(key('Shift').props.accessibilityState).toEqual({ selected: false })
+  expect(latchStyle('Control')).not.toEqual(latchStyle('Alt'))
+  render({ ...SHELL_TOOLBAR, keyboardVisible: true, canSend: false })
   expect(key('Dismiss keyboard').props.disabled).toBe(false)
-  expect(key('Switch to phone mode').props.disabled).toBe(true)
-  expect(key('Send Build').props.disabled).toBe(true)
-  press('Dismiss keyboard')
-  expect(send).toHaveBeenLastCalledWith('toggleKeyboard')
+  expect(key('Phone width').props.disabled).toBe(true)
+  expect(key('Control').props.disabled).toBe(true)
+  expect(key('More keys and actions').props.disabled).toBeFalsy()
 })
 
-it('renders saved built-in order and visibility independently from the D-pad and custom order', () => {
+it('lists the arrows only while the D-pad is off', () => {
   railState.strip = { side: 'right', width: 84, height: 500, top: 0, bottom: 0 }
-  let toolbar = {
-    canSend: true,
-    canCompose: true,
-    canPaste: false,
-    keyboardVisible: false,
-    liveInputEnabled: true,
-    phoneDisplayMode: false,
-    visibleBuiltInIds: ['ctrlU', 'tab'],
-    directionPadEnabled: true,
-    customKeys: [
-      { id: 'second', label: 'Second' },
-      { id: 'first', label: 'First' }
-    ]
+  let toolbar: BridgeTerminalToolbar = {
+    ...SHELL_TOOLBAR,
+    runsAgent: true,
+    directionPadEnabled: true
   }
   const send = vi.fn(() => true)
   const render = () =>
@@ -375,17 +383,8 @@ it('renders saved built-in order and visibility independently from the D-pad and
       .findByType(ScrollView)
       .findAll((node) => String(node.type) === 'Pressable')
       .map((node) => node.props.accessibilityLabel)
-  expect(labels()).toEqual([
-    'Show keyboard',
-    'Switch to phone mode',
-    'Switch to buffered command input',
-    'Clear line before cursor',
-    'Tab',
-    'Send Second',
-    'Send First',
-    'Add custom shortcut'
-  ])
-  expect(renderer!.root.findAllByProps({ accessibilityLabel: 'D-pad up' })).toHaveLength(1)
+  expect(labels()).not.toContain('Arrow Up')
+  expect(labels()).toContain('Interrupt terminal')
   act(() => {
     const up = renderer!.root.findByProps({ accessibilityLabel: 'D-pad up' })
     up.props.onPressIn(touch(20))
@@ -396,7 +395,7 @@ it('renders saved built-in order and visibility independently from the D-pad and
   toolbar = { ...toolbar, directionPadEnabled: false }
   render()
   expect(renderer!.root.findAllByProps({ accessibilityLabel: 'D-pad up' })).toHaveLength(0)
-  expect(labels()).not.toContain('Arrow Up')
+  expect(labels()).toContain('Arrow Up')
 })
 
 function mountRailHost() {
@@ -416,17 +415,7 @@ function mountRailHost() {
   act(() => {
     renderer = create(createElement(TerminalKeyRailHost))
   })
-  const toolbar: BridgeTerminalToolbar = {
-    canSend: true,
-    canCompose: true,
-    canPaste: true,
-    keyboardVisible: false,
-    liveInputEnabled: true,
-    phoneDisplayMode: false,
-    directionPadEnabled: false,
-    visibleBuiltInIds: ['arrowUp'],
-    customKeys: [{ id: 'build', label: 'Build' }]
-  }
+  const toolbar = SHELL_TOOLBAR
   const claim = (owner = 'pane-a', next = toolbar) =>
     act(() => {
       reportClaim(true, owner, structuredClone(next))
@@ -509,7 +498,7 @@ it.each(['owner', 'toolbar', 'keys', 'release', 'overlay', 'layout'])(
       h.claim('pane-a', { ...h.toolbar, canSend: false })
     }
     if (change === 'keys') {
-      h.claim('pane-a', { ...h.toolbar, visibleBuiltInIds: ['arrowUp', 'tab'] })
+      h.claim('pane-a', { ...h.toolbar, runsAgent: true })
     }
     if (change === 'release') {
       act(() => h.reportClaim(false))
@@ -531,17 +520,7 @@ it.each(['owner', 'toolbar', 'keys', 'release', 'overlay', 'layout'])(
 it('cancels held input when only the owner changes and keys stay identical', async () => {
   vi.useFakeTimers()
   railState.strip = { side: 'right', width: 84, height: 500, top: 0, bottom: 0 }
-  const toolbar: BridgeTerminalToolbar = {
-    canSend: true,
-    canCompose: true,
-    canPaste: true,
-    keyboardVisible: false,
-    liveInputEnabled: true,
-    phoneDisplayMode: false,
-    directionPadEnabled: false,
-    visibleBuiltInIds: ['arrowUp'],
-    customKeys: []
-  }
+  const toolbar = SHELL_TOOLBAR
   const keys = terminalKeyRailKeys(500, toolbar)
   const send = vi.fn(() => true)
   const render = (inputOwner: string) =>
@@ -580,13 +559,14 @@ it('keeps the committed shell sender while a bridge transition is suspended', ()
   const committed = vi.fn((_key: string, _owner?: string) => true)
   const next = vi.fn((_key: string, _owner?: string) => false)
   const publish = vi.fn()
-  const keys = terminalKeyRailKeys(500)
+  const keys = terminalKeyRailKeys(500, SHELL_TOOLBAR)
   const pending = new Promise<void>(() => {})
   function Host({ send, suspend = false }: { send: typeof committed; suspend?: boolean }) {
     usePublishedShellKeyRail(
       keys,
       { publishTerminalKeyRail: publish, sendTerminalKey: send },
-      'pane-a'
+      'pane-a',
+      SHELL_TOOLBAR
     )
     if (suspend) {
       throw pending

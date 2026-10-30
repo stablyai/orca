@@ -29,6 +29,7 @@ function refitHarness(cellWidth: number, split = false) {
       cols: Math.floor(frame.width / cellWidth),
       rows: 47
     })),
+    scrollToBottom: vi.fn(),
     resetZoom: vi.fn(),
     cancelSelect: vi.fn(),
     doSelectAll: vi.fn(),

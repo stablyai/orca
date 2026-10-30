@@ -167,7 +167,11 @@ describe('Grok’s default comes from what a chat with no pick runs', () => {
     const { catalog, host } = await openGrokHost('grok-4.6')
     expect((await host.readOptions(SESSION)).current).toMatchObject({ model: 'grok-4.6' })
 
-    const answer = await catalog.read({ agent: 'grok', workspacePath: '/elsewhere' })
+    const answer = await catalog.read({
+      agent: 'grok',
+      workspacePath: '/elsewhere',
+      waitForListing: true
+    })
     expect(answer).toMatchObject({
       listingNamesConfiguredModel: true,
       defaultHoldsInEveryWorkspace: true
@@ -184,13 +188,21 @@ describe('Grok’s default comes from what a chat with no pick runs', () => {
     const prompt = await rig.frame('session/prompt')
     rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
     // The start taught the catalog before any options read.
-    expect(firstFrame(await catalog.read({ agent: 'grok', workspacePath: '/elsewhere' }))).toEqual({
+    expect(
+      firstFrame(
+        await catalog.read({ agent: 'grok', workspacePath: '/elsewhere', waitForListing: true })
+      )
+    ).toEqual({
       model: 'grok-4.6',
       effort: 'high'
     })
 
     expect((await host.readOptions(SESSION)).current).toMatchObject({ model: 'grok-4.6' })
-    const answer = await catalog.read({ agent: 'grok', workspacePath: '/elsewhere' })
+    const answer = await catalog.read({
+      agent: 'grok',
+      workspacePath: '/elsewhere',
+      waitForListing: true
+    })
     expect(answer).toMatchObject({ listingNamesConfiguredModel: true })
     expect(firstFrame(answer)).toEqual({ model: 'grok-4.6', effort: 'high' })
   })
@@ -205,7 +217,11 @@ describe('Grok’s default comes from what a chat with no pick runs', () => {
     )
     catalog.recordLiveListing(OTHER_CHAT, newer.startListing())
     await host.readOptions(SESSION)
-    const answer = await catalog.read({ agent: 'grok', workspacePath: '/elsewhere' })
+    const answer = await catalog.read({
+      agent: 'grok',
+      workspacePath: '/elsewhere',
+      waitForListing: true
+    })
     expect(firstFrame(answer)).toEqual({ model: 'grok-4.7', effort: 'high' })
   })
 })

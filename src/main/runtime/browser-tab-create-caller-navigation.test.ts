@@ -98,6 +98,7 @@ function createPairedRuntime() {
   internals.resolveGitWorktreeSelector = async () => ({ id: WT })
   internals.offscreenBrowserBackend = {
     closeTab: vi.fn(),
+    ownsTab: () => true,
     createTab: vi.fn(async (options: { browserPageId?: string }) => ({
       browserPageId: options.browserPageId ?? 'page-new'
     }))

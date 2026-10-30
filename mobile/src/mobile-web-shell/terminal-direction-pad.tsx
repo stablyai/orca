@@ -16,17 +16,28 @@ import {
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { translate } from '../i18n/mobile-i18n'
 
 export const TERMINAL_DIRECTION_KEYS = ['arrowUp', 'arrowLeft', 'arrowRight', 'arrowDown'] as const
 type DirectionKey = (typeof TERMINAL_DIRECTION_KEYS)[number]
 export type TerminalDirectionPadHandle = { cancel: () => void }
 
 const DIRECTIONS = [
-  { key: 'arrowUp', label: 'up', glyph: '↑' },
-  { key: 'arrowLeft', label: 'left', glyph: '←' },
-  { key: 'arrowRight', label: 'right', glyph: '→' },
-  { key: 'arrowDown', label: 'down', glyph: '↓' }
+  { key: 'arrowUp', glyph: '↑' },
+  { key: 'arrowLeft', glyph: '←' },
+  { key: 'arrowRight', glyph: '→' },
+  { key: 'arrowDown', glyph: '↓' }
 ] as const
+
+function directionLabel(key: DirectionKey): string {
+  return key === 'arrowUp'
+    ? translate('mobileWebShell.terminalDirectionPad.up', 'D-pad up')
+    : key === 'arrowLeft'
+      ? translate('mobileWebShell.terminalDirectionPad.left', 'D-pad left')
+      : key === 'arrowRight'
+        ? translate('mobileWebShell.terminalDirectionPad.right', 'D-pad right')
+        : translate('mobileWebShell.terminalDirectionPad.down', 'D-pad down')
+}
 
 export const TerminalDirectionPad = forwardRef<
   TerminalDirectionPadHandle,
@@ -73,8 +84,11 @@ export const TerminalDirectionPad = forwardRef<
     <Pressable
       key={direction.key}
       accessibilityRole="button"
-      accessibilityLabel={`D-pad ${direction.label}`}
-      accessibilityHint="Sends an arrow key. Hold to repeat."
+      accessibilityLabel={directionLabel(direction.key)}
+      accessibilityHint={translate(
+        'mobileWebShell.terminalDirectionPad.hint',
+        'Sends an arrow key. Hold to repeat.'
+      )}
       accessibilityState={{ disabled: !enabled }}
       disabled={!enabled}
       style={({ pressed }) => [styles.key, pressed && styles.pressed, !enabled && styles.disabled]}

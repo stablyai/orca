@@ -30,10 +30,13 @@ import {
   getWslHookReconciliationAction,
   getWslReconciliationKey,
   installManagedHooksIntoWslRuntime,
+  isWslHookDistroBlocked,
+  skippedWslHookInstallStatus,
   refreshWslRuntimeUserHooks
 } from './codex-hook-wsl-runtime'
 import {
   createCodexWslRuntimeHookInstallPlan,
+  isCodexWslRuntimeHome,
   type CodexWslRuntimeHookTarget,
   type WslCanonicalPathSettlement
 } from './codex-wsl-hook-install-plan'
@@ -102,6 +105,11 @@ export class CodexHookService {
       if (action === 'none') {
         return
       }
+      // The probe settled after the install; the distro may have stopped since (E9).
+      const distro = resolvedPlan?.wslDistro ?? wslPlan?.wslDistro
+      if (!distro || (await isWslHookDistroBlocked(distro))) {
+        return
+      }
       if (action === 'remove') {
         try {
           removeStaleWslRuntimeManagedHookTrustEntries(
@@ -117,6 +125,9 @@ export class CodexHookService {
         return
       }
       const status = await installManagedHooksIntoWslRuntime(resolvedPlan)
+      if (!status) {
+        return
+      }
       if (status.state === 'error') {
         console.warn('[codex-hook-service] failed to reconcile WSL hook path', status.detail)
         return
@@ -170,8 +181,13 @@ export class CodexHookService {
   ): Promise<AgentHookInstallStatus> {
     if (isHooksEnabled()) {
       // Install hooks into the managed account's launch home, where its Codex reads trust.
+      const wslStatus = await this.installForRuntimeHomeSerialized(runtimeHomePath, target)
+      // A WSL home skipped for a stopped distro must not fall to the host writer, over UNC.
+      if (!wslStatus && runtimeHomePath && isCodexWslRuntimeHome(runtimeHomePath, target)) {
+        return skippedWslHookInstallStatus(runtimeHomePath)
+      }
       return (
-        (await this.installForRuntimeHomeSerialized(runtimeHomePath, target)) ??
+        wslStatus ??
         (await this.installForLaunchPrep(
           runtimeHomePath ?? undefined,
           launchesCodex,
