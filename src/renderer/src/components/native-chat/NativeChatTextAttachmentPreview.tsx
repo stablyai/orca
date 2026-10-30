@@ -8,6 +8,7 @@ import {
   SheetTitle,
   SheetDescription
 } from '@/components/ui/sheet'
+import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
@@ -40,6 +41,23 @@ export function NativeChatTextAttachmentPreview({
     path,
     read
   )
+  const [pageInput, setPageInput] = useState({ source, display, value: '1' })
+  if (pageInput.source !== source || pageInput.display !== display) {
+    setPageInput({ source, display, value: String((display?.page ?? 0) + 1) })
+  }
+  const commitPage = (value: string) => {
+    setPageInput({ source, display, value: String((display?.page ?? 0) + 1) })
+    const page = Number(value)
+    if (
+      !busy &&
+      Number.isInteger(page) &&
+      page >= 1 &&
+      page <= source.pageCount &&
+      !(display?.page === page - 1 && display.subpage === 0)
+    ) {
+      void load(page - 1)
+    }
+  }
   const name =
     text === undefined
       ? chatTextAttachmentName(
@@ -237,11 +255,13 @@ export function NativeChatTextAttachmentPreview({
               min={1}
               max={source.pageCount}
               disabled={busy}
-              value={(display?.page ?? 0) + 1}
-              onChange={(event) => {
-                const page = Number(event.target.value)
-                if (Number.isInteger(page) && page >= 1 && page <= source.pageCount) {
-                  void load(page - 1)
+              value={pageInput.value}
+              onChange={(event) => setPageInput({ source, display, value: event.target.value })}
+              onBlur={(event) => commitPage(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !isImeOwnedKeyboardEvent(event)) {
+                  event.preventDefault()
+                  event.currentTarget.blur()
                 }
               }}
             />{' '}

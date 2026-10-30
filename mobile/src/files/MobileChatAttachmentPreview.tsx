@@ -2,7 +2,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { Translate } from '../i18n/mobile-i18n'
 import { createMobileChatAttachmentReader } from './mobile-chat-attachment-read'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { useMemo, useState, useEffect, useCallback } from 'react'
+import { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
@@ -38,6 +38,31 @@ export function MobileChatAttachmentPreview({ params }: { params: MobileFilePrev
     path,
     read
   )
+  const [pageInput, setPageInput] = useState({ source, display, value: '1' })
+  if (pageInput.source !== source || pageInput.display !== display) {
+    setPageInput({ source, display, value: String((display?.page ?? 0) + 1) })
+  }
+  const commitPage = (value: string) => {
+    setPageInput({ source, display, value: String((display?.page ?? 0) + 1) })
+    const page = Number(value)
+    if (
+      !busy &&
+      Number.isInteger(page) &&
+      page >= 1 &&
+      page <= source.pageCount &&
+      !(display?.page === page - 1 && display.subpage === 0)
+    ) {
+      void load(page - 1)
+    }
+  }
+  const scrollRef = useRef<ScrollView>(null)
+  const displayedPage = display?.page
+  const displayedSubpage = display?.subpage
+  useEffect(() => {
+    if (displayedPage !== undefined) {
+      scrollRef.current?.scrollTo({ y: 0, animated: false })
+    }
+  }, [source, displayedPage, displayedSubpage])
   // Reserve envelope space, then validate actual JSON escaping before publishing to the phone clipboard.
   const smallCopy = source.size !== null && source.size + 4096 <= MOBILE_BRIDGE_MAX_FRAME_BYTES
   const copy = async () => {
@@ -127,7 +152,7 @@ export function MobileChatAttachmentPreview({ params }: { params: MobileFilePrev
           {formatAttachmentPreviewError(error, t)}
         </Text>
       ) : null}
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.textContent}>
+      <ScrollView ref={scrollRef} style={styles.scroll} contentContainerStyle={styles.textContent}>
         {segments}
       </ScrollView>
       <View style={[styles.topBar, { flexWrap: 'wrap' }]}>
@@ -150,14 +175,10 @@ export function MobileChatAttachmentPreview({ params }: { params: MobileFilePrev
           accessibilityLabel={t('chat.textAttachmentPreview.attachmentPage', 'Attachment page')}
           style={styles.meta}
           keyboardType="number-pad"
-          value={String((display?.page ?? 0) + 1)}
+          value={pageInput.value}
           editable={!busy}
-          onChangeText={(value) => {
-            const page = Number(value)
-            if (Number.isInteger(page) && page >= 1 && page <= source.pageCount) {
-              void load(page - 1)
-            }
-          }}
+          onChangeText={(value) => setPageInput({ source, display, value })}
+          onEndEditing={(event) => commitPage(event.nativeEvent.text)}
         />
         <Text style={styles.meta}>
           / {source.pageCount}

@@ -2,6 +2,10 @@ import { createElement, Profiler } from 'react'
 import * as mobileLanguage from '../i18n/mobile-i18n'
 import { act, create, type ReactTestRenderer, type ReactTestInstance } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
+import {
+  AttachmentTextSource,
+  ATTACHMENT_TEXT_PAGE_BYTES
+} from '../../../src/shared/attachment-text-source'
 import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../src/shared/mobile-bridge-frame-bytes'
 import {
   forgetHostDescriptor,
@@ -625,4 +629,146 @@ it('keeps large full Copy and Save disabled with the same localized F2 explanati
     'Copie complète et enregistrement après la mise à jour.'
   )
   expect(mocks.write).not.toHaveBeenCalled()
+})
+
+it('commits mobile page drafts and resets only committed scroll presentation while retaining its owners', async () => {
+  serveAttachment(Buffer.from('a\n'.repeat(ATTACHMENT_TEXT_PAGE_BYTES * 6)))
+  const normal = mocks.send.getMockImplementation()!
+  const gate = Promise.withResolvers<void>()
+  const pageCalls = vi.spyOn(AttachmentTextSource.prototype, 'page')
+  const scrollTo = vi.fn()
+  const offsets: number[] = []
+  let held = false
+  mocks.send.mockImplementation(
+    async (method: string, request?: { offset: number; length: number }) => {
+      if (method === 'agentSessionAttachment.readTextChunk' && request) {
+        offsets.push(request.offset)
+        if (
+          held &&
+          (request.offset === 0 || request.offset === 11 * ATTACHMENT_TEXT_PAGE_BYTES - 3)
+        ) {
+          await gate.promise
+        }
+      }
+      return normal(method, request)
+    }
+  )
+  const route = normalizeMobileFilePreviewRouteParams({
+    hostId: 'owner',
+    worktreeId: 'work',
+    source: 'chatAttachment',
+    absolutePath: path
+  })
+  const ui = () => createElement(MobileFilePreviewScreen, { route })
+  const input = () => tree!.root.find((node) => String(node.type) === 'TextInput')
+  const scroll = () => tree!.root.find((node) => String(node.type) === 'ScrollView')
+  const edit = (value: string) => act(() => input().props.onChangeText(value))
+  const commit = async (value = input().props.value) => {
+    await act(async () => {
+      input().props.onEndEditing({ nativeEvent: { text: value } })
+    })
+  }
+  try {
+    await act(async () => {
+      tree = create(ui(), {
+        createNodeMock: (element) => (String(element.type) === 'ScrollView' ? { scrollTo } : null)
+      })
+    })
+    const inputNode = input()
+    const scrollNode = scroll()
+    const owner = pageCalls.mock.contexts.at(-1)
+    expect(scrollTo).toHaveBeenCalledTimes(1)
+    for (const page of ['3', '5']) {
+      edit(page)
+      await commit()
+      expect(input().props.value).toBe(page)
+    }
+    expect(pageCalls.mock.contexts.at(-1)).toBe(owner)
+    expect(scrollTo).toHaveBeenCalledTimes(3)
+    const before = offsets.slice()
+    held = true
+    edit('1')
+    await act(async () => {})
+    expect(offsets).toEqual(before)
+    expect(input().props.value).toBe('1')
+    expect(input().props.editable).toBe(true)
+    edit('12')
+    expect(offsets).toEqual(before)
+    expect(input().props.onSubmitEditing).toBeUndefined()
+    await commit()
+    expect(offsets).toEqual([...before, 11 * ATTACHMENT_TEXT_PAGE_BYTES - 3])
+    expect(input().props.editable).toBe(false)
+    expect(button('Next').props.disabled).toBe(true)
+    expect(button('First').props.disabled).toBe(true)
+    expect(scrollTo).toHaveBeenCalledTimes(3)
+    expect(scroll()).toBe(scrollNode)
+    expect(textIn(scroll())).toBe('a'.repeat(256))
+    const pendingCalls = pageCalls.mock.calls.length
+    await commit('12')
+    expect(pageCalls).toHaveBeenCalledTimes(pendingCalls)
+    await act(async () => {
+      held = false
+      gate.resolve()
+    })
+    expect(input().props.value).toBe('12')
+    expect(scrollTo).toHaveBeenCalledTimes(4)
+    expect(scrollTo).toHaveBeenLastCalledWith({ y: 0, animated: false })
+    const committedCalls = pageCalls.mock.calls.length
+    for (const invalid of ['', '0', '13', '1.5', 'bad']) {
+      edit(invalid)
+      expect(input().props.value).toBe(invalid)
+      await commit()
+      expect(input().props.value).toBe('12')
+    }
+    await commit()
+    expect(pageCalls).toHaveBeenCalledTimes(committedCalls)
+    expect(scrollTo).toHaveBeenCalledTimes(4)
+    await act(async () => button('Next').props.onPress())
+    expect(scrollTo).toHaveBeenCalledTimes(5)
+    await commit()
+    expect(scrollTo).toHaveBeenCalledTimes(6)
+    expect(pageCalls).toHaveBeenCalledTimes(committedCalls + 2)
+    expect(pageCalls.mock.contexts.at(-1)).toBe(owner)
+    const reads = offsets.slice()
+    await act(async () => {
+      await mobileLanguage.activateMobileUiLocale('en')
+    })
+    await act(async () => {
+      tree!.update(ui())
+    })
+    expect(input()).toBe(inputNode)
+    expect(scroll()).toBe(scrollNode)
+    expect(offsets).toEqual(reads)
+    expect(scrollTo).toHaveBeenCalledTimes(6)
+    edit('9')
+    await act(async () => button('First').props.onPress())
+    expect(input().props.value).toBe('1')
+    expect(scrollTo).toHaveBeenCalledTimes(7)
+    edit('8')
+    await act(async () => button('Retry').props.onPress())
+    expect(input().props.value).toBe('1')
+    expect(pageCalls.mock.contexts.at(-1)).not.toBe(owner)
+    expect(scrollTo).toHaveBeenCalledTimes(8)
+    const retriedOwner = pageCalls.mock.contexts.at(-1)
+    edit('7')
+    await act(async () => {
+      mocks.generation += 1
+      tree!.update(ui())
+    })
+    expect(input().props.value).toBe('1')
+    expect(pageCalls.mock.contexts.at(-1)).not.toBe(retriedOwner)
+    expect(scroll()).toBe(scrollNode)
+    expect(scrollTo).toHaveBeenCalledTimes(9)
+    console.info(
+      'PR35636 mobile pager presentation',
+      JSON.stringify({
+        offsets,
+        pageCalls: pageCalls.mock.calls.length,
+        scrollResets: scrollTo.mock.calls.length
+      })
+    )
+  } finally {
+    gate.resolve()
+    pageCalls.mockRestore()
+  }
 })

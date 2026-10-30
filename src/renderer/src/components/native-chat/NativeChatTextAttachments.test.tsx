@@ -14,6 +14,10 @@ import {
 } from './NativeChatTextAttachments'
 import { NativeChatTextAttachmentPreview } from './NativeChatTextAttachmentPreview'
 import { AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY } from '../../../../shared/agent-session-runtime-capabilities'
+import {
+  AttachmentTextSource,
+  ATTACHMENT_TEXT_PAGE_BYTES
+} from '../../../../shared/attachment-text-source'
 import { NativeChatMarkdownImageOwnerContext } from './native-chat-markdown-image-owner'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 
@@ -633,4 +637,130 @@ it('presents owned reader and hook failures in the current locale without re-rea
   view.unmount()
   await i18n.changeLanguage('en')
   i18n.removeResourceBundle(language, 'translation')
+})
+
+it('commits page drafts once without requesting uncached digit prefixes and synchronizes navigation', async () => {
+  const content = Buffer.from('a\n'.repeat(ATTACHMENT_TEXT_PAGE_BYTES * 6))
+  const gate = Promise.withResolvers<void>()
+  const pageCalls = vi.spyOn(AttachmentTextSource.prototype, 'page')
+  let held = false
+  let fail = false
+  const offsets: number[] = []
+  const normal = mocks.rpc.getMockImplementation()!
+  mocks.rpc.mockImplementation(async (...args) => {
+    if (args[1] === 'status.get') {
+      return normal(...args)
+    }
+    const request = args[2]
+    offsets.push(request.offset)
+    if (held && (request.offset === 0 || request.offset === 11 * ATTACHMENT_TEXT_PAGE_BYTES - 3)) {
+      await gate.promise
+    }
+    if (fail) {
+      fail = false
+      throw new Error('offline')
+    }
+    const chunk = content.subarray(request.offset, request.offset + request.length)
+    return {
+      snapshot: 'a'.repeat(64),
+      size: content.length,
+      contentBase64: chunk.toString('base64'),
+      bytesRead: chunk.length,
+      eof: request.offset + chunk.length === content.length
+    }
+  })
+  try {
+    const view = render(
+      <NativeChatTextAttachmentPreview path={path} target={target} onClose={() => {}} />
+    )
+    const input = () => {
+      const node = screen.getByRole('spinbutton', { name: 'Attachment page' })
+      if (!(node instanceof HTMLInputElement)) {
+        throw new Error('Expected page input')
+      }
+      return node
+    }
+    const edit = (value: string) => fireEvent.change(input(), { target: { value } })
+    const commit = () => fireEvent.blur(input())
+    const ready = () => waitUntilEnabled('Copy contents')
+    await ready()
+    for (const page of ['3', '5']) {
+      edit(page)
+      commit()
+      await ready()
+      expect(input().value).toBe(page)
+    }
+    const before = offsets.slice()
+    held = true
+    await act(async () => {
+      edit('1')
+    })
+    expect(offsets).toEqual(before)
+    expect(input().value).toBe('1')
+    expect(input().disabled).toBe(false)
+    await act(async () => {
+      edit('12')
+    })
+    expect(offsets).toEqual(before)
+    act(() => input().focus())
+    fireEvent.keyDown(input(), { key: 'Enter', isComposing: true })
+    expect(document.activeElement).toBe(input())
+    expect(offsets).toEqual(before)
+    fireEvent.keyDown(input(), { key: 'Enter' })
+    await waitFor(() => expect(offsets).toEqual([...before, 11 * ATTACHMENT_TEXT_PAGE_BYTES - 3]))
+    expect(input().disabled).toBe(true)
+    const pendingCalls = pageCalls.mock.calls.length
+    commit()
+    expect(pageCalls).toHaveBeenCalledTimes(pendingCalls)
+    await act(async () => {
+      held = false
+      gate.resolve()
+    })
+    await ready()
+    expect(input().value).toBe('12')
+    const committedCalls = pageCalls.mock.calls.length
+    for (const invalid of ['', '0', '13', '1.5']) {
+      edit(invalid)
+      expect(input().value).toBe(invalid)
+      commit()
+      expect(input().value).toBe('12')
+    }
+    commit()
+    expect(pageCalls).toHaveBeenCalledTimes(committedCalls)
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    await ready()
+    expect(screen.getByText(/Section 2\//)).toBeTruthy()
+    commit()
+    await ready()
+    expect(screen.getByText(/Section 1\//)).toBeTruthy()
+    expect(pageCalls).toHaveBeenCalledTimes(committedCalls + 2)
+    edit('9')
+    fireEvent.click(screen.getByRole('button', { name: 'First' }))
+    await ready()
+    expect(input().value).toBe('1')
+    fail = true
+    edit('6')
+    commit()
+    await screen.findByRole('alert')
+    edit('7')
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    await ready()
+    expect(input().value).toBe('1')
+    edit('8')
+    view.rerender(
+      <NativeChatTextAttachmentPreview
+        path={path.replace('.txt', '-other.txt')}
+        target={target}
+        onClose={() => {}}
+      />
+    )
+    await ready()
+    expect(input().value).toBe('1')
+    process.stdout.write(
+      `PR35636 desktop pager presentation ${JSON.stringify({ offsets, pageCalls: pageCalls.mock.calls.length })}\n`
+    )
+  } finally {
+    gate.resolve()
+    pageCalls.mockRestore()
+  }
 })
