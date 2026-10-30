@@ -1,8 +1,14 @@
 import { AppState } from 'react-native'
-import { loadPushNotificationsEnabled } from '../storage/preferences'
-import { ensureDesktopNotificationChannel } from './desktop-notification-channel'
+import { refreshPushConsent } from './push-consent-preparation'
+import {
+  prepareNativePushToken,
+  qualifyNativePushToken,
+  observeNativePushToken,
+  settleTokenPreparations,
+  type TokenPreparation
+} from './push-native-preparation'
 import { startMobilePushLeaseRenewal } from './mobile-push-lease-renewal'
-import { addPushTokenListener, getDevicePushToken, type MobilePushToken } from './push-token'
+import { addPushTokenListener, type MobilePushToken } from './push-token'
 import { startPushRoutePublication, type PushRoutePublication } from './push-route-declaration'
 
 export type MobilePushOwner = ReturnType<typeof createMobilePushOwner>
@@ -11,30 +17,36 @@ export function createMobilePushOwner(
   current: () => boolean,
   generation: () => number,
   localIntentSettled: () => boolean,
+  retireObsoletePreparations: () => void,
   changed: () => void
 ) {
   let active = true
+  let enabled: boolean | undefined
   let stopLease = () => {}
   let stopToken = () => {}
+  let stopConsent = () => {}
+  let nativeInterest: (() => void) | undefined
   let observation: object = {}
-  let acquisition: Promise<void> | undefined
   let renewalWake = false
   const root: {
     token: MobilePushToken | null
-    enabled: boolean | undefined
+    readonly enabled: boolean | undefined
     intent: number
     renewal: number
     publication: PushRoutePublication
-    isCurrent: () => boolean
-    invalidate: () => void
-    rederive: () => void
-    refresh: () => void
-    currentToken: () => Promise<MobilePushToken | null>
-    start: () => void
-    stop: () => void
+    isCurrent(): boolean
+    invalidate(): void
+    rederive(): void
+    refresh(): void
+    acceptHostConsent(enabled: boolean): void
+    prepareCurrentToken(isCurrent: () => boolean): TokenPreparation
+    start(): void
+    stop(): void
   } = {
     token: null,
-    enabled: undefined,
+    get enabled() {
+      return enabled
+    },
     intent: generation(),
     renewal: 0,
     publication: startPushRoutePublication(() =>
@@ -42,59 +54,103 @@ export function createMobilePushOwner(
         ? { token: root.token, intent: root.intent }
         : undefined
     ),
-    isCurrent: () => active && current() && localIntentSettled() && root.intent === generation(),
+    isCurrent: (): boolean =>
+      active && current() && localIntentSettled() && root.intent === generation(),
     invalidate() {
-      root.enabled = undefined
+      enabled = undefined
+      stopConsent()
+      retireNative()
       changed()
       root.publication.wake('input')
     },
     rederive() {
       root.intent = generation()
-      void refresh()
+      refresh()
     },
-    refresh: () => {
-      void refresh()
+    refresh,
+    acceptHostConsent(value: boolean) {
+      applyConsent(value, false)
     },
-    async currentToken(): Promise<MobilePushToken | null> {
-      if (!root.token) {
-        let timer: ReturnType<typeof setTimeout> | undefined
-        await Promise.race([
-          acquisition ?? Promise.resolve(),
-          new Promise<void>((resolve) => {
-            timer = setTimeout(resolve, 2000)
-          })
-        ]).finally(() => clearTimeout(timer))
-      }
-      return root.isCurrent() ? root.token : null
+    prepareCurrentToken(isCurrent: () => boolean) {
+      return prepareNativePushToken(isCurrent, () => root.token)
     },
     start() {
-      stopLease = startMobilePushLeaseRenewal(async () => {
-        if (!root.isCurrent()) {
-          return
+      stopLease = startMobilePushLeaseRenewal(
+        async () => {
+          if (!root.isCurrent()) {
+            return
+          }
+          root.renewal++
+          renewalWake = true
+          changed()
+          refresh()
+        },
+        () => {
+          retireNative()
+          changed()
         }
-        root.renewal++
-        renewalWake = true
-        changed()
-        void refresh()
-      }, changed)
+      )
       stopToken = addPushTokenListener((token) => {
         if (!active || !current()) {
           return
         }
         observation = {}
+        observeNativePushToken()
+        retireNative()
         root.token = token
+        settleTokenPreparations()
         changed()
-        void refresh()
+        refresh()
       })
-      void refresh()
+      refresh()
       changed()
     },
     stop() {
       active = false
+      stopConsent()
+      retireNative()
       changed()
       root.publication.stop()
       stopLease()
       stopToken()
+    }
+  }
+  function retireNative(): void {
+    nativeInterest?.()
+    nativeInterest = undefined
+    settleTokenPreparations()
+    retireObsoletePreparations()
+  }
+  function applyConsent(value: boolean, mayStart: boolean): void {
+    enabled = value
+    if (!value) {
+      retireNative()
+      return
+    }
+    if (root.isCurrent() && AppState.currentState === 'active' && !root.token && !nativeInterest) {
+      const intent = root.intent
+      const observed = observation
+      const valid = () =>
+        root.isCurrent() &&
+        root.intent === intent &&
+        observed === observation &&
+        enabled === true &&
+        AppState.currentState === 'active'
+      const interest = qualifyNativePushToken(
+        valid,
+        (token) => {
+          if (nativeInterest === interest) {
+            nativeInterest = undefined
+          }
+          if (valid()) {
+            root.token = token
+            changed()
+            project()
+          }
+        },
+        mayStart
+      )
+      nativeInterest = interest
     }
   }
   function project(): void {
@@ -103,55 +159,21 @@ export function createMobilePushOwner(
     }
     root.publication.wake(renewalWake ? 'renewal' : 'input')
     renewalWake = false
-    if (root.token && root.enabled) {
+    if (root.token && enabled) {
       changed()
     }
   }
-  async function refresh(): Promise<void> {
+  function refresh(): void {
     const observed = observation
     const intent = root.intent
     const valid = () => root.isCurrent() && root.intent === intent && observation === observed
-    try {
-      const enabled = await loadPushNotificationsEnabled()
+    stopConsent = refreshPushConsent(valid, (preference) => {
       if (!valid()) {
         return
       }
-      root.enabled = enabled
-      if (enabled && AppState.currentState === 'active' && !root.token && !acquisition) {
-        const pending = (async () => {
-          await ensureDesktopNotificationChannel()
-          if (!valid() || AppState.currentState !== 'active') {
-            return
-          }
-          const token = await getDevicePushToken()
-          if (valid()) {
-            root.token = token
-            changed()
-          }
-        })()
-          .catch(() => {})
-          .finally(() => {
-            if (acquisition === pending) {
-              acquisition = undefined
-            }
-            if (!root.isCurrent()) {
-              return
-            }
-            if (root.intent !== intent) {
-              void refresh()
-            } else if (observation === observed) {
-              project()
-            }
-          })
-        acquisition = pending
-      }
+      applyConsent(preference.value ?? false, true)
       project()
-    } catch {
-      if (valid()) {
-        root.enabled = undefined
-        project()
-      }
-    }
+    })
   }
   return root
 }

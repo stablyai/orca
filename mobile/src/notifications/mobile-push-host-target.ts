@@ -1,8 +1,8 @@
 import { AppState } from 'react-native'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import type { MobilePushOwner } from './mobile-push-token-owner'
+import type { MobilePushToken } from './push-token'
 import { mobilePushRouteKey } from './push-route-declaration'
-import type { RouteKeyPreparation } from './push-route-declaration-build'
 import {
   loadNotificationDeliveryPreferences,
   notificationPreferencesFilter
@@ -16,7 +16,7 @@ export type HostPushState = {
   routeKeySupported?: boolean
   capabilityProbeStop: (() => void) | null
   chain: Promise<void>
-  preparation?: RouteKeyPreparation & { releaseIfObsolete(): void }
+  preparation?: { releaseIfObsolete(): void }
   running?: boolean
   dirty?: boolean
   target?: {
@@ -27,6 +27,31 @@ export type HostPushState = {
   }
 }
 
+export function holdHostPushPreparation(
+  state: HostPushState,
+  handle: { release(): void },
+  valid: () => boolean,
+  retired: () => void
+): () => void {
+  const finish = () => {
+    handle.release()
+    if (state.preparation === preparation) {
+      state.preparation = undefined
+    }
+  }
+  const preparation = {
+    releaseIfObsolete() {
+      if (!valid()) {
+        retired()
+        finish()
+      }
+    }
+  }
+  state.preparation = preparation
+  preparation.releaseIfObsolete()
+  return finish
+}
+
 export async function registerMobilePushTarget(
   root: MobilePushOwner,
   state: HostPushState,
@@ -34,12 +59,14 @@ export async function registerMobilePushTarget(
   generation: number,
   isCurrent: () => boolean
 ): Promise<true | 'stale' | undefined> {
-  root.enabled = true
+  if (!root.isCurrent() || !isCurrent()) {
+    return
+  }
+  root.acceptHostConsent(true)
   const renewal = root.renewal
   const capable = state.routeKeySupported
-  const token = await root.currentToken()
   let released = false
-  const valid = () =>
+  const tokenCurrent = () =>
     !released &&
     root.isCurrent() &&
     isCurrent() &&
@@ -48,8 +75,22 @@ export async function registerMobilePushTarget(
     root.renewal === renewal &&
     state.supported === true &&
     capable === state.routeKeySupported &&
-    AppState.currentState === 'active' &&
-    JSON.stringify(root.token) === JSON.stringify(token)
+    AppState.currentState === 'active'
+  const handle = root.prepareCurrentToken(tokenCurrent)
+  const finishToken = holdHostPushPreparation(state, handle, tokenCurrent, () => {
+    released = true
+  })
+  let token: MobilePushToken | undefined
+  try {
+    const result = await handle.result
+    if (result.status !== 'ready') {
+      return
+    }
+    token = result.token
+  } finally {
+    finishToken()
+  }
+  const valid = () => tokenCurrent() && JSON.stringify(root.token) === JSON.stringify(token)
   if (!token || !valid()) {
     return
   }
@@ -60,16 +101,9 @@ export async function registerMobilePushTarget(
   let routeKey: string | undefined
   if (capable) {
     const handle = mobilePushRouteKey(valid)
-    const preparation = {
-      ...handle,
-      releaseIfObsolete() {
-        if (!valid()) {
-          released = true
-          handle.release()
-        }
-      }
-    }
-    state.preparation = preparation
+    const finishKey = holdHostPushPreparation(state, handle, valid, () => {
+      released = true
+    })
     try {
       const result = await handle.result
       if (result.status === 'retired') {
@@ -77,10 +111,7 @@ export async function registerMobilePushTarget(
       }
       routeKey = result.status === 'ready' ? result.routeKey : undefined
     } finally {
-      handle.release()
-      if (state.preparation === preparation) {
-        state.preparation = undefined
-      }
+      finishKey()
     }
   }
   if (!valid() || capable !== state.routeKeySupported) {

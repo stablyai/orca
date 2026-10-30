@@ -198,7 +198,14 @@ export async function unregisterPushForRemovedHost(hostId: string): Promise<() =
 
 function invalidateIntent(): void {
   consentGeneration++
+  retireObsoletePreparations()
   owner?.invalidate()
+}
+
+function retireObsoletePreparations(): void {
+  for (const state of hostsById.values()) {
+    state.preparation?.releaseIfObsolete()
+  }
 }
 
 function rederiveOwner(): void {
@@ -212,6 +219,7 @@ export function startPushTokenSync(): () => void {
     () => owner === root,
     () => consentGeneration,
     () => localOperations === 0,
+    retireObsoletePreparations,
     () => {
       for (const state of hostsById.values()) {
         state.preparation?.releaseIfObsolete()
@@ -232,7 +240,11 @@ export function startPushTokenSync(): () => void {
 export function resetPushRegistrationForTests(): void {
   owner?.stop()
   owner = undefined
+  const retired = [...hostsById.values()]
   hostsById.clear()
+  for (const state of retired) {
+    state.preparation?.releaseIfObsolete()
+  }
   resetRegistrationRecords()
   consentGeneration = 0
   localOperations = 0

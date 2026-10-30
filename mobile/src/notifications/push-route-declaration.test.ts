@@ -221,7 +221,7 @@ it.each([
     )
     const consentReads = vi.spyOn(
       await import('../storage/preferences'),
-      'loadPushNotificationsEnabled'
+      'readPushNotificationsPreference'
     )
     const registration = await import('./push-registration')
     const replies = Array.from({ length: count }, () => Promise.withResolvers<void>())

@@ -32,7 +32,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient, SendRequestOptions } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import {
-  loadPushNotificationsEnabled,
+  readPushNotificationsPreference,
   loadRemotePushHostRegistrations,
   savePushNotificationsEnabled,
   saveRemotePushHostRegistrations,
@@ -49,7 +49,7 @@ import {
 } from './push-registration'
 
 vi.mock('../storage/preferences', () => ({
-  loadPushNotificationsEnabled: vi.fn(),
+  readPushNotificationsPreference: vi.fn(),
   savePushNotificationsEnabled: vi.fn(),
   loadRemotePushHostRegistrations: vi.fn(),
   saveRemotePushHostRegistrations: vi.fn()
@@ -123,7 +123,10 @@ beforeEach(() => {
   enabled = false
   stored = { registeredHostIds: [], pendingUnregisterHostIds: [] }
 
-  vi.mocked(loadPushNotificationsEnabled).mockImplementation(async () => enabled)
+  vi.mocked(readPushNotificationsPreference).mockImplementation(async () => ({
+    value: enabled,
+    loaded: true
+  }))
   vi.mocked(savePushNotificationsEnabled).mockImplementation(async (value) => {
     enabled = value
   })

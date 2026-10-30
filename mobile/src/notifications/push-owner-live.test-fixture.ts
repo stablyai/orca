@@ -6,6 +6,7 @@ import {
   companion,
   httpResult,
   integer,
+  ownerCleanup,
   post,
   record,
   text
@@ -16,6 +17,8 @@ import { readStoredHostProfilesForMutation } from '../transport/host-metadata-st
 import { savePairedHost, removeHost } from '../transport/host-store'
 import * as publication from './push-route-declaration'
 import { pushRoutePreparationSnapshotForTests } from './push-route-declaration-build'
+import { pushNativeSnapshotForTests } from './push-native-preparation'
+import { pushConsentSnapshotForTests } from './push-consent-preparation'
 import {
   attachPushRegistration,
   resetPushRegistrationForTests,
@@ -100,6 +103,7 @@ it('runs the actual current-owner, prepared sender and signed publisher against 
       })
     }).then(async (response) => httpResult(await response.json()))
   }) satisfies typeof fetch)
+  let primary: { failed: true; error: unknown } | undefined
   try {
     await companion('mobile', async (op, data) => {
       if (op === 'start') {
@@ -109,8 +113,25 @@ it('runs the actual current-owner, prepared sender and signed publisher against 
         expect(ports.storage.has('orca:push-route-version')).toBe(false)
         ports.keyRead = Promise.withResolvers<void>()
         ports.keyReadStarted = Promise.withResolvers<void>()
+        ports.nativeHold = Promise.withResolvers<string>()
         stop = startPushTokenSync()
+        await drain()
+        expect(pushNativeSnapshotForTests()).toMatchObject({ physical: 1, assignment: 1 })
+        expect(ports.nativeCalls).toBe(1)
+        expect(ports.keys.size).toBe(0)
+        stop()
+        expect(pushNativeSnapshotForTests()).toMatchObject({
+          assignment: 0,
+          entries: 0,
+          callables: 0
+        })
+        stop = startPushTokenSync()
+        await drain()
+        ports.nativeHold.resolve(ports.native.token)
+        ports.nativeHold = undefined
         await ports.keyReadStarted.promise
+        expect(ports.nativeCalls).toBe(1)
+        expect(pushConsentSnapshotForTests().physical).toBe(0)
       } else if (op === 'attach') {
         expect(ports.keyReads).toBe(1)
         for (const host of ['A', 'B']) {
@@ -245,13 +266,23 @@ it('runs the actual current-owner, prepared sender and signed publisher against 
       }
     })
     expect(ports.storage.get('orca:pushServiceNotificationsEnabled')).toBe('true')
-  } finally {
-    ports.keyRead?.resolve()
-    ports.finalFailure?.resolve()
-    stop?.()
-    preparations.mockRestore()
-    resetPushRegistrationForTests()
-    vi.unstubAllGlobals()
-    vi.useRealTimers()
+  } catch (error) {
+    primary = { failed: true, error }
   }
+  const cleanup = ownerCleanup(primary)
+  for (const release of [
+    () => ports.nativeHold?.resolve(ports.native.token),
+    () => ports.keyRead?.resolve(),
+    () => ports.finalFailure?.resolve(),
+    () => stop?.(),
+    () => preparations.mockRestore(),
+    resetPushRegistrationForTests,
+    drain,
+    () => vi.unstubAllGlobals(),
+    () => vi.useRealTimers()
+  ]) {
+    await cleanup.run(release)
+  }
+  ports.nativeHold = undefined
+  cleanup.finish()
 }, 120_000)

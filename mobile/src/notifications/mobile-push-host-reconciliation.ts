@@ -1,10 +1,14 @@
 import { AppState } from 'react-native'
 import { readRecords, mutateRecords } from './mobile-push-registration-records'
-import { registerMobilePushTarget, type HostPushState } from './mobile-push-host-target'
+import {
+  registerMobilePushTarget,
+  holdHostPushPreparation,
+  type HostPushState
+} from './mobile-push-host-target'
 import { NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import { startRuntimeCapabilityProbe } from '../transport/runtime-capability-probe'
-import { loadPushNotificationsEnabled } from '../storage/preferences'
+import { preparePushConsent } from './push-consent-preparation'
 import type { MobilePushOwner } from './mobile-push-token-owner'
 
 type PushClient = RpcOperationSender
@@ -34,6 +38,22 @@ export async function reconcileHost(
   const isCurrent = () => hostsById.get(hostId) === state && state.connection.client === client
   const dispatchCurrent = () =>
     context.localOperations === 0 && generation === context.consentGeneration && isCurrent()
+  const consentCurrent = () =>
+    dispatchCurrent() && context.owner === root && (root === undefined || root.isCurrent())
+  const observeConsent = async () => {
+    let retired = false
+    const valid = () => !retired && consentCurrent()
+    const handle = preparePushConsent(valid)
+    const finish = holdHostPushPreparation(state, handle, valid, () => {
+      retired = true
+    })
+    try {
+      const result = await handle.result
+      return retired ? { status: 'retired' as const } : result
+    } finally {
+      finish()
+    }
+  }
   const value = await readRecords()
   if (!dispatchCurrent()) {
     return
@@ -57,7 +77,8 @@ export async function reconcileHost(
     if (!dispatchCurrent()) {
       return
     }
-    if (!(await loadPushNotificationsEnabled()) || !dispatchCurrent()) {
+    const consent = await observeConsent()
+    if (consent.status === 'retired' || !consent.preference.value || !consentCurrent()) {
       return
     }
   }
@@ -78,13 +99,13 @@ export async function reconcileHost(
   if (!state.supported || !dispatchCurrent()) {
     return
   }
-  const enabled = await loadPushNotificationsEnabled()
-  if (!dispatchCurrent()) {
+  const consent = await observeConsent()
+  if (consent.status === 'retired' || !consentCurrent()) {
     return
   }
-  if (!enabled) {
+  if (!consent.preference.value) {
     if (root && root.isCurrent()) {
-      root.enabled = false
+      root.acceptHostConsent(false)
     }
     // Saved consent recovers a disable even if its pending-record write failed.
     if (
