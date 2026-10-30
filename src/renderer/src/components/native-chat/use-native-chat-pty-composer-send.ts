@@ -36,7 +36,7 @@ export function useNativeChatPtyComposerSend(args: {
   isDispatchingSessionOption: boolean
   launchDraft?: NativeChatLaunchDraft | null
   launchDraftResolved: boolean
-  readTerminalScreen?: () => string | null
+  readTerminalDraft?: () => string | null
   resolveTarget: () => NativeChatResolvedTarget | null
   classifySend: NativeChatPickerState['classifySend']
   onOptimisticSend?: (text: string, imagePaths?: string[]) => string | undefined
@@ -79,7 +79,7 @@ export function useNativeChatPtyComposerSend(args: {
       launchDraft: args.launchDraft,
       launchDraftResolved: args.launchDraftResolved,
       agent: args.agent,
-      readScreen: () => args.readTerminalScreen?.()
+      readInputLine: () => args.readTerminalDraft?.()
     })
     let pendingId: string | undefined
     const sendOptions =

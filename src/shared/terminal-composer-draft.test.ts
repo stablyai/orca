@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   detectTerminalComposerDraft,
-  hasTerminalComposerPlaceholder
+  hasTerminalComposerPlaceholder,
+  readTerminalComposerTypedText
 } from './terminal-composer-draft'
 
 describe('detectTerminalComposerDraft', () => {
@@ -268,5 +269,66 @@ describe('detectTerminalComposerDraft', () => {
         cursorViewportRow: 8
       })
     ).toMatchObject({ text: 'first line', endRow: 8 })
+  })
+})
+
+describe('readTerminalComposerTypedText', () => {
+  const suggestionOnly = {
+    rows: ['────────', '❯'],
+    typedRows: ['────────', '❯'],
+    promptGlyphBoldRows: [false, false],
+    rowsBelow: ['  and close the pull request', '────────'],
+    typedRowsBelow: ['', '────────'],
+    beforeCursor: '❯ ',
+    afterCursor: '',
+    rawAfterCursor: 'proceed with the release',
+    cursorHidden: false,
+    cursorViewportRow: 8
+  }
+
+  it('reads a composer showing only a dim suggestion as empty', () => {
+    expect(readTerminalComposerTypedText(suggestionOnly)).toBe('')
+  })
+
+  it('keeps typed text and drops the dim suggestion rows after it', () => {
+    expect(
+      readTerminalComposerTypedText({
+        ...suggestionOnly,
+        rows: ['────────', '❯ ship it'],
+        typedRows: ['────────', '❯ ship it'],
+        beforeCursor: '❯ ship it'
+      })
+    ).toBe('ship it')
+  })
+
+  it('keeps undimmed text even when it reads like a stock placeholder', () => {
+    expect(
+      readTerminalComposerTypedText({
+        ...suggestionOnly,
+        rows: ['────────', '❯ Try "write a migration"'],
+        typedRows: ['────────', '❯ Try "write a migration"'],
+        beforeCursor: '❯ ',
+        afterCursor: 'Try "write a migration"',
+        rawAfterCursor: 'Try "write a migration"'
+      })
+    ).toBe('Try "write a migration"')
+  })
+
+  it('keeps indentation the user typed on continuation lines', () => {
+    expect(
+      readTerminalComposerTypedText({
+        ...suggestionOnly,
+        rows: ['────────', '❯ def f():', '      return 1'],
+        typedRows: ['────────', '❯ def f():', '      return 1'],
+        promptGlyphBoldRows: [false, false, false],
+        beforeCursor: '      return 1'
+      })
+    ).toBe('def f():\n    return 1')
+  })
+
+  it('returns null when no composer is visible', () => {
+    expect(
+      readTerminalComposerTypedText({ ...suggestionOnly, rows: ['Do you want to proceed?'] })
+    ).toBeNull()
   })
 })

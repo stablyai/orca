@@ -89,7 +89,8 @@ export function readTerminalCursorLineContext<Cell extends TerminalCursorCell>(
   const promptGlyphBoldRows: boolean[] = []
   const rowsWrapped: boolean[] = []
   const rowRadius = Math.max(0, Math.floor(rowsAroundCursor))
-  const start = Math.max(buffer.viewportY, cursorRow - rowRadius)
+  // The cursor lives on the live screen; bound by it, not the viewport, so scrollback doesn't cut the input.
+  const start = Math.max(buffer.baseY, cursorRow - rowRadius)
   for (let row = start; row <= cursorRow; row += 1) {
     const line = buffer.getLine(row)
     const nextLineIsWrapped = buffer.getLine(row + 1)?.isWrapped ?? false
@@ -105,7 +106,7 @@ export function readTerminalCursorLineContext<Cell extends TerminalCursorCell>(
   const typedRowsBelow: string[] = []
   const rowsBelowWrapped: boolean[] = []
   const rowsBelowCustomForeground: boolean[] = []
-  const end = Math.min(buffer.viewportY + terminal.rows - 1, cursorRow + rowRadius)
+  const end = Math.min(buffer.baseY + terminal.rows - 1, cursorRow + rowRadius)
   for (let row = cursorRow + 1; row <= end; row += 1) {
     const line = buffer.getLine(row)
     const nextLineIsWrapped = buffer.getLine(row + 1)?.isWrapped ?? false
