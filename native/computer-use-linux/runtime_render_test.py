@@ -202,6 +202,19 @@ class SnapshotFixture(ExitStack):
 
 
 class RuntimeRenderTest(unittest.TestCase):
+    def test_key_requests_reject_missing_payload_without_input(self):
+        root = FakeAccessible("frame", "Editor")
+        root.get_state_set = lambda: FakeStateSet(FakeStateType.ACTIVE)
+        with SnapshotFixture(root), \
+             patch.object(runtime.Atspi, "generate_keyboard_event", create=True) as keyboard, \
+             patch.object(runtime.subprocess, "run") as process:
+            for payload in ({}, {"key": None}, {"key": ""}):
+                with self.subTest(payload=payload):
+                    with self.assertRaisesRegex(RuntimeError, "key is required"):
+                        runtime.run_operation({"tool": "press_key", "app": "Fixture", "noScreenshot": True, **payload})
+            keyboard.assert_not_called()
+            process.assert_not_called()
+
     def test_focus_search_keeps_transient_accessible_wrappers_alive(self):
         class TransientNode:
             def __init__(self, depth):
