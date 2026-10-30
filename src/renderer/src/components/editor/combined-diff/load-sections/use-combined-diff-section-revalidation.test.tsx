@@ -4,6 +4,8 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/hooks/worktree-file-change-event'
 import type { OpenFile } from '@/store/slices/editor'
 import type { FsChangedPayload } from '../../../../../../shared/filesystem-entry-types'
+import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import { useCombinedDiffEntrySet } from '../resolve-changes/use-combined-diff-entry-set'
 import { useCombinedDiffSectionRevalidation } from './use-combined-diff-section-revalidation'
 
 const review: OpenFile = {
@@ -50,6 +52,50 @@ function dispatch(payload: FsChangedPayload, runtimeEnvironmentId: string | null
 }
 
 afterEach(cleanup)
+
+it('reloads only loaded rows whose own path status changed', () => {
+  const file: OpenFile = { ...review, combinedAreaFilter: 'unstaged' }
+  const unstaged: GitStatusEntry[] = ['a.ts', 'b.ts', 'c.ts'].map((path) => ({
+    path,
+    status: 'modified',
+    area: 'unstaged'
+  }))
+  const staged: GitStatusEntry = { ...unstaged[1]!, area: 'staged', added: 1 }
+  const requestSectionReload = vi.fn()
+  const registry = {
+    loadedIndicesRef: { current: new Set([0, 1, 2]) },
+    loadingIndicesRef: { current: new Set<number>() }
+  }
+  const sectionsRef = { current: [] }
+  const hook = renderHook(
+    ({ entries }: { entries: GitStatusEntry[] }) => {
+      const entrySet = useCombinedDiffEntrySet({
+        file,
+        gitStatusEntries: entries,
+        liveBranchEntries: [],
+        sectionsRef
+      })
+      useCombinedDiffSectionRevalidation({
+        file,
+        gitStatusEntries: entries,
+        registry,
+        requestSectionReload,
+        sectionIndexByKeyRef: { current: new Map() },
+        sectionEntries: entrySet.entries,
+        shouldAutoReloadFromGitStatus: entrySet.shouldAutoReloadFromGitStatus,
+        treeMode: entrySet.treeMode
+      })
+    },
+    { initialProps: { entries: [...unstaged, staged] } }
+  )
+
+  hook.rerender({ entries: [staged, unstaged[2]!, unstaged[0]!, unstaged[1]!] })
+  expect(requestSectionReload).not.toHaveBeenCalled()
+
+  hook.rerender({ entries: [...unstaged, { ...staged, added: 2 }] })
+  hook.rerender({ entries: unstaged })
+  expect(requestSectionReload.mock.calls).toEqual([[1], [1]])
+})
 
 it('re-reads every loaded and in-flight section of a mounted review when its workspace catches up', () => {
   const requestSectionReload = renderReview()

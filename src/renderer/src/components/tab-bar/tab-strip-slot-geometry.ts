@@ -2,6 +2,7 @@
 const SLOT_SELECTOR = '[data-tab-strip-slot]'
 /** Marks the slot of the tab that renders active; it is sticky, so it docks to the edge it would scroll past. */
 const DOCK_SELECTOR = '[data-active-tab-dock]'
+const DOCK_DISABLED_ATTRIBUTE = 'data-active-tab-dock-disabled'
 
 export type ActiveTabDockSide = 'start' | 'end'
 
@@ -14,7 +15,18 @@ function getSlotId(slot: HTMLElement): string {
 }
 
 function getActiveTabDock(strip: HTMLElement): HTMLElement | null {
-  return strip.querySelector<HTMLElement>(`:scope > ${DOCK_SELECTOR}`)
+  return strip.hasAttribute(DOCK_DISABLED_ATTRIBUTE)
+    ? null
+    : strip.querySelector<HTMLElement>(`:scope > ${DOCK_SELECTOR}`)
+}
+
+export function updateTabStripDockAvailability(strip: HTMLElement): void {
+  const dock = strip.querySelector<HTMLElement>(`:scope > ${DOCK_SELECTOR}`)
+  // Leave room for another tab beside the dock, or inactive tabs become unreachable.
+  strip.toggleAttribute(
+    DOCK_DISABLED_ATTRIBUTE,
+    dock !== null && strip.clientWidth < dock.getBoundingClientRect().width * 2
+  )
 }
 
 export function findTabStripSlot(strip: HTMLElement, tabId: string): HTMLElement | undefined {

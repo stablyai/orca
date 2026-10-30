@@ -44,9 +44,10 @@ function holder(release: () => Promise<WslDistroHolderAdoption[]>): WslDistroHol
 describe('WSL holder release on uninstall', () => {
   it('succeeds only when every recorded holder is proven gone', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
-    await expect(
-      releaseWslHoldersForUninstall(holder(async () => [{ distro: 'ubuntu', state: 'exited' }]))
-    ).resolves.toBe(0)
+    const released = holder(async () => [{ distro: 'ubuntu', state: 'exited' }])
+    await expect(releaseWslHoldersForUninstall(released)).resolves.toBe(0)
+    // Uninstall trusts a matching holder command line; nothing later could release it.
+    expect(released.releaseAll).toHaveBeenCalledWith({ forUninstall: true })
     await expect(releaseWslHoldersForUninstall(holder(async () => []))).resolves.toBe(0)
     await expect(
       releaseWslHoldersForUninstall(

@@ -27,7 +27,9 @@ export function searchSshConfigHosts(
   hosts: SshConfigHost[],
   existingTargets: readonly Pick<SshTarget, 'configHost' | 'label'>[],
   query = '',
-  suppressedAliases: readonly string[] = []
+  suppressedAliases: readonly string[] = [],
+  // Aliases the import skips because an existing target already has their route.
+  routeDuplicateAliases: ReadonlySet<string> = new Set()
 ): SshConfigHostListResult {
   const existingAliases = new Set(
     existingTargets.flatMap((target) =>
@@ -48,12 +50,14 @@ export function searchSshConfigHosts(
       continue
     }
     seenAliases.add(normalizedAlias)
-    const alreadyInOrca = existingAliases.has(normalizedAlias)
+    const aliasInOrca = existingAliases.has(normalizedAlias)
+    const alreadyInOrca = aliasInOrca || routeDuplicateAliases.has(normalizedAlias)
     // Tombstones suppress bulk import, not picker visibility, so deleting a target cannot make config look empty.
-    const previouslyRemoved = !alreadyInOrca && suppressedAliasSet.has(normalizedAlias)
+    // Alias-only, because Restore re-adopts by alias.
+    const previouslyRemoved = !aliasInOrca && suppressedAliasSet.has(normalizedAlias)
     totalHostCount += 1
     // Match passive import: Add all preserves tombstones.
-    newHostCount += alreadyInOrca || previouslyRemoved ? 0 : 1
+    newHostCount += alreadyInOrca || suppressedAliasSet.has(normalizedAlias) ? 0 : 1
     if (!matchesQuery(entry, normalizedQuery)) {
       continue
     }
@@ -76,13 +80,14 @@ export function listUserSshConfigHostSummaries(
   existingTargets: readonly Pick<SshTarget, 'configHost' | 'label'>[],
   query?: string,
   suppressedAliases?: readonly string[],
-  options?: { refresh?: boolean }
+  options?: { refresh?: boolean; routeDuplicateAliases?: ReadonlySet<string> }
 ): SshConfigHostListResult {
   return searchSshConfigHosts(
     getUserSshConfigHosts(options?.refresh === true),
     existingTargets,
     query,
-    suppressedAliases
+    suppressedAliases,
+    options?.routeDuplicateAliases
   )
 }
 

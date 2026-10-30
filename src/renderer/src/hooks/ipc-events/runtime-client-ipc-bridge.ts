@@ -1,3 +1,4 @@
+import { consumeLinearIssueRead } from '@/store/slices/linear/linear-issue-publication'
 import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/pty-shutdown-exit-deferral'
 import {
   dispatchTerminalSideEffectBatch,
@@ -181,12 +182,11 @@ export function registerRuntimeClientIpcBridge(
       return
     }
     if (event.type === 'linearLinkedIssueUpdated') {
-      void useAppStore
-        .getState()
-        .refreshLinearIssue(event.identifier, event.workspaceId)
-        .catch((error) => {
-          console.error('Failed to refresh updated Linear issue:', error)
-        })
+      void consumeLinearIssueRead(
+        useAppStore.getState().refreshLinearIssue(event.identifier, event.workspaceId)
+      ).catch((error) => {
+        console.error('Failed to refresh updated Linear issue:', error)
+      })
       return
     }
     // This window builds its sidebar from its own store, never from a host's phone feed.

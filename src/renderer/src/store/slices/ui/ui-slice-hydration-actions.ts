@@ -44,6 +44,10 @@ import {
 } from '../../../lib/setup-script-prompt'
 import { isBundledPetId, DEFAULT_PET_ID } from '../../../components/pet/pet-models'
 import { getRepoHostIdentity } from '../repo-host-identity'
+import {
+  withWslMovedRepoIds,
+  withWslMovedSetupScriptDismissals
+} from '../../repos/wsl-moved-repo-ui-retention'
 import type { PersistedUIWriteBaseline } from '../persisted-ui-write-baseline'
 import {
   capturePersistedUIWriteBaseline,
@@ -75,7 +79,12 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
       set((s) => {
         const manualRepoOrder = normalizeManualRepoOrder(ui.manualRepoOrder)
         const orderedRepos = applyManualRepoOrder(s.repos, manualRepoOrder)
-        const validRepoIds = new Set(s.repos.map((repo) => repo.id))
+        const listedRepoIds = new Set(s.repos.map((repo) => repo.id))
+        // An empty catalog keeps everything; otherwise a moved repo whose host has not loaded stays.
+        const validRepoIds =
+          listedRepoIds.size === 0
+            ? listedRepoIds
+            : withWslMovedRepoIds(listedRepoIds, s.wslMovedProjects)
         const validRepoHostIdentities = new Set(s.repos.map(getRepoHostIdentity))
         const persistedFilterRepoIds = sanitizePersistedRepoIds(ui.filterRepoIds)
         const persistedAgentsFilterRepoIds = sanitizePersistedRepoIds(ui.agentsFilterRepoIds)
@@ -168,6 +177,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           editorFontZoomLevel: ui.editorFontZoomLevel ?? 0,
           worktreeCardProperties: normalizeWorktreeCardProperties(ui.worktreeCardProperties),
           _worktreeCardModeDefaulted: ui._worktreeCardModeDefaulted === true,
+          showAgentModels: ui.showAgentModels !== false,
           agentActivityDisplayMode: normalizeAgentActivityDisplayMode(ui.agentActivityDisplayMode),
           workspaceStatuses: normalizeWorkspaceStatuses(ui.workspaceStatuses),
           workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
@@ -224,9 +234,13 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           setupScriptPromptDismissedRepoIds:
             validRepoHostIdentities.size === 0
               ? sanitizeSetupScriptPromptDismissals(ui.setupScriptPromptDismissedRepoIds)
-              : filterSetupScriptPromptDismissalsToValidRepos(
+              : withWslMovedSetupScriptDismissals(
                   ui.setupScriptPromptDismissedRepoIds,
-                  validRepoHostIdentities
+                  filterSetupScriptPromptDismissalsToValidRepos(
+                    ui.setupScriptPromptDismissedRepoIds,
+                    validRepoHostIdentities
+                  ),
+                  s.wslMovedProjects
                 ),
           setupGuideSidebarDismissed: ui.setupGuideSidebarDismissed === true,
           setupGuideBrowserMilestoneMigrated: ui.setupGuideBrowserMilestoneMigrated === true,
@@ -243,6 +257,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           statusBarCompactChangeNoticeDismissed: ui.statusBarCompactChangeNoticeDismissed !== false,
           // Why: default false so existing users still see the CTA; only explicit dismissal persists true.
           usageEmptyStateDismissed: ui.usageEmptyStateDismissed === true,
+          pluginsAlphaNoticeDismissed: ui.pluginsAlphaNoticeDismissed === true,
           codexTerminalServerIsolationNoticeSeen:
             ui.codexTerminalServerIsolationNoticeSeen === true,
           codexSharedSettingsNoticeSeen: ui.codexSharedSettingsNoticeSeen === true,

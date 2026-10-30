@@ -7,9 +7,14 @@ import type { WslOrcadConnection } from './wsl-orcad-connection'
 import type { WslOrcadConnectionStatus } from './wsl-orcad-connection-status'
 import { EXIT_SETTLE_MS } from './wsl-orcad-liveness-evidence'
 import { WSL_ORCAD_HEARTBEAT_MS } from './wsl-orcad-liveness-state'
+import { WSL_ORCAD_IDLE_VERIFY_MS } from './wsl-orcad-liveness-monitor'
 import { WslDistroNotRunningError } from './wsl-orcad-connection-errors'
 import { WslOrcadLivenessSupervisor } from './wsl-orcad-liveness-supervisor'
 import { WSL_ORCAD_RECONNECT_DELAYS_MS } from './wsl-orcad-reconnect-backoff'
+import {
+  WSL_ORCAD_STOPPING_POLL_MS,
+  WSL_ORCAD_STOPPING_WINDOW_MS
+} from './wsl-orcad-liveness-stopping-poll'
 import type { WslOrcadWatch } from './wsl-orcad-watch'
 
 const CENSUS: OrcadTerminalCensus = {
@@ -24,12 +29,13 @@ function harness(options: { visible?: boolean } = {}) {
   let pid = 100
   let connection: WslOrcadConnection | null = null
   const statuses: WslOrcadConnectionStatus[] = []
-  const watches: { exit: (code: number | null) => void; closed: boolean }[] = []
+  const watches: { exit: (code: number | null) => void; idle: () => void; closed: boolean }[] = []
   const state: {
     visible: boolean
     running: WslRunningDistrosRead
     identity: WslGuestIdentity | null
     watchSignal: WslOrcadWatch['signal']
+    watchProves: boolean
     ensureFails: number
     ensureError?: Error
   } = {
@@ -37,6 +43,7 @@ function harness(options: { visible?: boolean } = {}) {
     running: { status: 'confirmed', distros: ['Ubuntu'] },
     identity: { distroInstance: 'boot:1', orcad: 'orcad:100' },
     watchSignal: 'ready',
+    watchProves: true,
     ensureFails: 0
   }
   const deferred: (() => unknown)[] = []
@@ -70,7 +77,9 @@ function harness(options: { visible?: boolean } = {}) {
       return connection
     }
   )
-  const readRunning = vi.fn(async () => state.running)
+  const readRunning = vi.fn(
+    async (_target: { distro: string; exitedAt?: number | null }) => state.running
+  )
   const requireRunning = vi.fn(async (_distro: string) => true)
   const readIdentity = vi.fn(async () => state.identity)
   const collectCensus = vi.fn(async () => CENSUS)
@@ -90,18 +99,27 @@ function harness(options: { visible?: boolean } = {}) {
     readIdentity,
     openWatch: async () => {
       if (state.watchSignal !== 'ready') {
-        return { signal: state.watchSignal, onExit: () => {}, close: () => {} }
+        return {
+          signal: state.watchSignal,
+          onExit: () => {},
+          close: () => {},
+          proving: () => false
+        }
       }
-      const record = { exit: (_code: number | null) => {}, closed: false }
+      const record = { exit: (_code: number | null) => {}, idle: () => {}, closed: false }
       watches.push(record)
       return {
         signal: 'ready',
         onExit: (listener) => {
           record.exit = listener
         },
+        onIdle: (listener) => {
+          record.idle = listener
+        },
         close: () => {
           record.closed = true
-        }
+        },
+        proving: () => !record.closed && state.watchProves
       }
     },
     collectCensus,
@@ -294,7 +312,8 @@ describe('WslOrcadLivenessSupervisor', () => {
     await h.supervisor.connect('Ubuntu')
     h.state.identity = { distroInstance: 'boot:1', orcad: null }
     h.lastWatch().exit(0)
-    await h.advance(5_000)
+    // The distro stays listed: the list is watched through the stopping window before any exec.
+    await h.advance(5_000 + WSL_ORCAD_STOPPING_WINDOW_MS)
     const states = h.statuses.map((status) =>
       status.state === 'reconnecting' ? `${status.state}:${status.reason}` : status.state
     )
@@ -331,6 +350,10 @@ describe('WslOrcadLivenessSupervisor', () => {
     for (const [, opts] of recoveryCalls) {
       expect(opts).toMatchObject({ requireRunning: h.requireRunning })
     }
+    // Its backoff gate reads too: every read names the distro, so the wiring can settle it.
+    for (const [target] of h.readRunning.mock.calls) {
+      expect(target).toMatchObject({ distro: 'Ubuntu' })
+    }
   })
 
   it('reports ready itself when a user connect supersedes a recovery', async () => {
@@ -338,8 +361,8 @@ describe('WslOrcadLivenessSupervisor', () => {
     await h.supervisor.connect('Ubuntu')
     h.state.identity = { distroInstance: 'boot:1', orcad: null }
     h.lastWatch().exit(0)
-    // A clean exit is settled (and the list re-read) before the verdict, as a failed one is.
-    await h.advance(EXIT_SETTLE_MS)
+    // A clean exit is settled (and the list watched) before the verdict, as a failed one is.
+    await h.advance(EXIT_SETTLE_MS + WSL_ORCAD_STOPPING_WINDOW_MS)
     expect(h.statuses.at(-1)).toMatchObject({ state: 'reconnecting' })
     await h.supervisor.connect('Ubuntu')
     expect(h.statuses.at(-1)).toEqual({ state: 'ready', census: null })
@@ -379,7 +402,7 @@ describe('WslOrcadLivenessSupervisor', () => {
     const h = harness()
     await h.supervisor.connect('Ubuntu')
     h.lastWatch().exit(0)
-    await h.advance(EXIT_SETTLE_MS)
+    await h.advance(EXIT_SETTLE_MS + WSL_ORCAD_STOPPING_WINDOW_MS)
     expect(h.statuses).toEqual([])
     expect(h.watches).toHaveLength(2)
     expect(h.ensure).toHaveBeenCalledTimes(1)
@@ -413,6 +436,15 @@ describe('WslOrcadLivenessSupervisor', () => {
     await h.advance(EXIT_SETTLE_MS)
     // A list probe begun inside the window may still show the stopping distro; it must not answer.
     expect(h.readRunning).toHaveBeenNthCalledWith(2, { distro: 'Ubuntu', exitedAt })
+  })
+
+  it('asks for a settled read of its own distro on every check, not a bare list (E9)', async () => {
+    const h = harness()
+    await h.supervisor.connect('Ubuntu')
+    h.lastWatch().exit(1)
+    await h.settle()
+    // The wiring answers a distro-scoped read only from a probe past that distro's stop settle.
+    expect(h.readRunning).toHaveBeenNthCalledWith(1, { distro: 'Ubuntu' })
   })
 
   it('waits for a still-listed distro to settle after a failed exit before probing inside it', async () => {
@@ -459,6 +491,60 @@ describe('WslOrcadLivenessSupervisor', () => {
     expect(h.readRunning).toHaveBeenCalledTimes(1)
     expect(h.readIdentity).toHaveBeenCalledTimes(1)
     expect(h.ensureHolder).toHaveBeenCalledWith('Ubuntu')
+  })
+
+  it('verifies fully on a heartbeat while its watch holds no open socket to prove orcad', async () => {
+    const h = harness()
+    await h.supervisor.connect('Ubuntu')
+    // The desktop's sockets are all closed: the watch proves nothing, so ask the guest.
+    h.state.watchProves = false
+    await h.advance(WSL_ORCAD_HEARTBEAT_MS)
+    expect(h.readIdentity).toHaveBeenCalledTimes(2)
+    // Same orcad: still ready, no verdict change.
+    expect(h.statuses.filter((status) => status.state !== 'ready')).toEqual([])
+  })
+
+  it('bounds detection to the idle verify period while no desktop socket is open', async () => {
+    const h = harness()
+    h.state.watchProves = false
+    await h.supervisor.connect('Ubuntu')
+    const reads = h.readIdentity.mock.calls.length
+    await h.advance(WSL_ORCAD_IDLE_VERIFY_MS - 1)
+    expect(h.readIdentity).toHaveBeenCalledTimes(reads)
+    await h.advance(1)
+    expect(h.readIdentity).toHaveBeenCalledTimes(reads + 1)
+    await h.advance(WSL_ORCAD_IDLE_VERIFY_MS)
+    expect(h.readIdentity).toHaveBeenCalledTimes(reads + 2)
+    // With a socket open again, ticks go back to the heartbeat's cheap running-list read.
+    h.state.watchProves = true
+    await h.advance(WSL_ORCAD_IDLE_VERIFY_MS + WSL_ORCAD_HEARTBEAT_MS)
+    expect(h.readIdentity).toHaveBeenCalledTimes(reads + 2)
+  })
+
+  it('brings the next full check forward when the last desktop socket closes normally', async () => {
+    const h = harness()
+    await h.supervisor.connect('Ubuntu')
+    const reads = h.readIdentity.mock.calls.length
+    await h.advance(WSL_ORCAD_HEARTBEAT_MS / 2)
+    // The desktop closed its last socket: nothing proves orcad until the next check.
+    h.state.watchProves = false
+    h.lastWatch().idle()
+    await h.advance(WSL_ORCAD_IDLE_VERIFY_MS - 1)
+    expect(h.readIdentity).toHaveBeenCalledTimes(reads)
+    await h.advance(1)
+    expect(h.readIdentity).toHaveBeenCalledTimes(reads + 1)
+  })
+
+  it('treats a socket orcad closed for another reason as a verify, not a verdict', async () => {
+    const h = harness()
+    await h.supervisor.connect('Ubuntu')
+    // A watch riding the desktop's sockets reports no exit code.
+    h.lastWatch().exit(null)
+    await h.advance(5_000 + WSL_ORCAD_STOPPING_WINDOW_MS)
+    expect(h.readIdentity).toHaveBeenCalledTimes(2)
+    expect(h.statuses.filter((status) => status.state !== 'ready')).toEqual([])
+    expect(h.ensure).toHaveBeenCalledTimes(1)
+    expect(h.watches).toHaveLength(2)
   })
 
   it('treats a heartbeat far past due as a pause and verifies fully', async () => {
@@ -528,5 +614,68 @@ describe('WslOrcadLivenessSupervisor', () => {
     h.lastWatch().exit(1)
     await h.advance(1_000)
     expect(h.statuses.map((status) => status.state)).toEqual(['distro-stopped'])
+  })
+
+  describe('after an exit, while the distro may still be stopping (E9)', () => {
+    const STOPPED: WslRunningDistrosRead = { status: 'confirmed', distros: [] }
+
+    it('publishes distro-stopped within a poll of the list dropping it, never exec-ing into it', async () => {
+      const h = harness()
+      await h.supervisor.connect('Ubuntu')
+      const identityReads = h.readIdentity.mock.calls.length
+      h.lastWatch().exit(null)
+      await h.advance(EXIT_SETTLE_MS + 2_000)
+      // Still listed mid-window: only the list was read, nothing ran inside the distro.
+      expect(h.readIdentity).toHaveBeenCalledTimes(identityReads)
+      expect(h.statuses).toEqual([])
+
+      h.state.running = STOPPED
+      await h.advance(WSL_ORCAD_STOPPING_POLL_MS)
+      expect(h.statuses).toEqual([
+        { state: 'distro-stopped', terminals: 'exited', recovering: false }
+      ])
+      expect(h.readIdentity).toHaveBeenCalledTimes(identityReads)
+    })
+
+    it('falls back to the identity check once the window ends with the distro still listed', async () => {
+      const h = harness()
+      await h.supervisor.connect('Ubuntu')
+      const identityReads = h.readIdentity.mock.calls.length
+      h.supervisor.noteHolderExit('Ubuntu', { code: 1 })
+      await h.advance(EXIT_SETTLE_MS + WSL_ORCAD_STOPPING_WINDOW_MS - WSL_ORCAD_STOPPING_POLL_MS)
+      expect(h.readIdentity).toHaveBeenCalledTimes(identityReads)
+      await h.advance(WSL_ORCAD_STOPPING_POLL_MS)
+      expect(h.readIdentity).toHaveBeenCalledTimes(identityReads + 1)
+      expect(h.statuses).toEqual([])
+    })
+
+    it('adds no running-list reads to heartbeats while the distro runs', async () => {
+      const h = harness()
+      await h.supervisor.connect('Ubuntu')
+      await h.advance(WSL_ORCAD_HEARTBEAT_MS * 3)
+      expect(h.readRunning).toHaveBeenCalledTimes(3)
+    })
+
+    it('ends a recovery backoff when the distro then stops, rather than wait it out', async () => {
+      const h = harness()
+      await h.supervisor.connect('Ubuntu')
+      // orcad crashed and keeps failing to relaunch: recovery sits in a long backoff.
+      h.state.identity = { distroInstance: 'boot:1', orcad: null }
+      h.state.ensureFails = 100
+      h.lastWatch().exit(0)
+      await h.advance(EXIT_SETTLE_MS + WSL_ORCAD_STOPPING_WINDOW_MS + 8_000)
+      const waiting = h.statuses.at(-1)
+      expect(waiting).toMatchObject({ state: 'reconnecting' })
+      expect(waiting && 'retryInMs' in waiting ? waiting.retryInMs : 0).toBeGreaterThan(2_000)
+
+      h.state.running = STOPPED
+      h.supervisor.noteHolderExit('Ubuntu', { code: 1 })
+      await h.advance(EXIT_SETTLE_MS + 100)
+      expect(h.statuses.at(-1)).toEqual({
+        state: 'distro-stopped',
+        terminals: 'exited',
+        recovering: false
+      })
+    })
   })
 })

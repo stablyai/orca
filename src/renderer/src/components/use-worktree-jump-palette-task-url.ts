@@ -1,7 +1,10 @@
+import { useLinearIssueResult } from '@/hooks/linear-issue-committed-state'
+import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
+import { defaultScopeSource } from '@/lib/default-creation-host'
 import {
-  selectCanonicalProjects,
-  selectCanonicalProjectHostSetups
-} from '@/store/project-host-setup-selector'
+  mapLinearIssueRead,
+  type LinearIssueLease
+} from '@/store/slices/linear/linear-issue-publication'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import {
@@ -43,8 +46,8 @@ function getComposerDefaultWorkspaceTarget(state: ReturnType<typeof useAppStore.
   const activeRepoId = resolveComposerActiveRepoId(state.repos, eligibleRepos, state.activeRepoId)
   const resolution = resolveWorkspaceCreationTarget({
     eligibleRepos,
-    projects: selectCanonicalProjects(state),
-    projectHostSetups: selectCanonicalProjectHostSetups(state),
+    projects: state.projects,
+    projectHostSetups: state.projectHostSetups,
     activeRepoId,
     focusedHostScope: state.workspaceHostScope
   })
@@ -68,12 +71,30 @@ export function useWorktreeJumpPaletteTaskUrl({
     () => (taskSourceUrl ? getCmdJTaskUrlCreatePreview(taskSourceUrl) : null),
     [taskSourceUrl]
   )
-  const [linearIssuePreview, setLinearIssuePreview] = useState<CmdJLinearIssuePreview | null>(null)
+  const creationTarget = getComposerDefaultWorkspaceTarget(useAppStore.getState())
+  const linearSource =
+    (creationTarget
+      ? buildTaskSourceContextFromRepo({
+          provider: 'linear',
+          projectId: creationTarget.projectId,
+          repo: creationTarget.repo,
+          projectHostSetupId: creationTarget.projectHostSetupId
+        })
+      : null) ?? defaultScopeSource(useAppStore.getState().settings)
+  const linearScopeKey = useAppStore(() => getLinearSourceScope(linearSource).contextKey)
+  const linearResult = useLinearIssueResult<CmdJLinearIssuePreview | null>(
+    JSON.stringify([linearScopeKey, visible, createWorktreeName, linearIssueUrlIntent]),
+    null,
+    getLinearSourceScope(linearSource)
+  )
+  const { read: consumeLinearRead } = linearResult
+  const linearIssuePreview = linearResult.data
+  const setLinearIssuePreview = linearResult.setData
   const [githubWorkItemPreview, setGithubWorkItemPreview] =
     useState<CmdJGitHubWorkItemPreview | null>(null)
   const linearLookupRef = useRef<{
     query: string
-    promise: Promise<CmdJLinearIssuePreview>
+    lease: LinearIssueLease<CmdJLinearIssuePreview>
   } | null>(null)
   const githubLookupRef = useRef<{
     query: string
@@ -107,26 +128,41 @@ export function useWorktreeJumpPaletteTaskUrl({
       sourceContext
     }
     setLinearIssuePreview(pending)
-    const promise = lookupLinearIssueUrl({
-      intent: linearIssueUrlIntent,
-      knownStatus: state.linearStatus,
-      sourceContext,
-      fetchLinearIssue: state.fetchLinearIssue
-    })
-      .catch(() => null)
-      .then((issue): CmdJLinearIssuePreview => ({ ...pending, issue, loading: false }))
-    linearLookupRef.current = { query: createWorktreeName, promise }
-    void promise.then((preview) => {
-      if (linearGenerationRef.current === generation) {
-        setLinearIssuePreview(preview)
-      }
-    })
+    const read = mapLinearIssueRead(
+      lookupLinearIssueUrl({
+        intent: linearIssueUrlIntent,
+        knownStatus: state.linearStatus,
+        sourceContext,
+        fetchLinearIssue: state.fetchLinearIssue
+      }),
+      (issue): CmdJLinearIssuePreview => ({ ...pending, issue, loading: false }),
+      (): CmdJLinearIssuePreview => ({ ...pending, issue: null, loading: false })
+    )
+    const lease = read.acquire(() => linearGenerationRef.current === generation)
+    linearLookupRef.current = { query: createWorktreeName, lease }
+    const update = () => {
+      const view = lease.currentView()
+      consumeLinearRead(lease, view, {
+        data: view.kind === 'loading' ? { ...pending, issue: view.data?.issue ?? null } : view.data
+      })
+    }
+    const unsubscribe = lease.subscribe(update)
+    update()
     return () => {
       if (linearGenerationRef.current === generation) {
         linearGenerationRef.current += 1
       }
+      unsubscribe()
+      lease.release()
     }
-  }, [createWorktreeName, linearIssueUrlIntent, visible])
+  }, [
+    createWorktreeName,
+    linearIssueUrlIntent,
+    visible,
+    linearScopeKey,
+    consumeLinearRead,
+    setLinearIssuePreview
+  ])
 
   useLayoutEffect(() => {
     const generation = ++githubGenerationRef.current

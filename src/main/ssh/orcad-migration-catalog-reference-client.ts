@@ -1,7 +1,7 @@
 import { parseOrcadMigrationCatalogReferenceAbortResult } from '../../shared/orcad-migration/orcad-migration-catalog-state'
 import type {
-  OrcadMigrationCatalogReferenceAbortResult,
-  OrcadMigrationManifest
+  OrcadMigrationCatalogReference,
+  OrcadMigrationCatalogReferenceAbortResult
 } from '../../shared/orcad-migration/orcad-migration-manifest'
 import { ORCAD_MIGRATION_CATALOG_ABORT_BY_REFERENCE_RUNTIME_CAPABILITY } from '../../shared/orcad-runtime-capabilities'
 import { parsePairingCode } from '../../shared/pairing'
@@ -19,7 +19,7 @@ export const ORCAD_MIGRATION_DESTINATION_ABORT_BY_REFERENCE_UNSUPPORTED =
 /** Abort by manifest identity when the full request cannot fit the sealed frame. */
 export async function abortRemoteOrcadMigrationCatalogByReference(
   pairingCode: string,
-  manifest: OrcadMigrationManifest,
+  manifest: OrcadMigrationCatalogReference,
   options: CatalogRequestOptions = {}
 ): Promise<OrcadMigrationCatalogReferenceAbortResult> {
   const pairing = parsePairingCode(pairingCode)

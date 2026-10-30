@@ -1,4 +1,5 @@
 import { agentPromptObservationSignal } from './agent-prompt-signals'
+import { assertTerminalInputAdmitted } from '../../terminal-input-admission'
 import type {
   AgentPromptExpectedBinding,
   RuntimeAgentPromptWriteOptions
@@ -144,6 +145,7 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
       // Claude can lose the start of a large bracketed paste split across writes; send the whole frame together.
       renderGate?.arm()
       const initialWrite = submitWithPaste ? pastePayload + AGENT_PROMPT_SUBMIT : pastePayload
+      assertTerminalInputAdmitted(this, ptyId, options.inputSource)
       if (!this.ptyController?.write(ptyId, initialWrite, options.inputKind)) {
         throw new Error('terminal_not_writable')
       }

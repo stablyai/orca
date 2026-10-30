@@ -1,4 +1,5 @@
 import { parseTerminalAttachmentLaunchResult } from '../../../../shared/terminal-attachment-launch-result'
+import { REMOTE_RUNTIME_PTY_HONOURS_TAB_SHELL_OVERRIDE } from './remote-runtime-pty-shell'
 import { terminalLaunchFacts } from '../../../../shared/agent-session-resume'
 import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
@@ -19,6 +20,7 @@ import type { AcceptedInputOptions } from './pty-preconnect-input-buffer'
 import type { TerminalInputCall } from './terminal-input-call'
 import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 import { isSshSignInPendingTerminalError } from './terminal-ssh-sign-in-error'
+import { terminalCreateThemeParams } from './terminal-view-attributes-publisher'
 /* eslint-disable max-lines -- Why: remote PTY transport keeps lifecycle, JSON fallback, and binary stream wiring together so reconnect/destroy ordering stays testable as one behavior surface. */
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import {
@@ -58,6 +60,7 @@ import type {
   PtyTransportRecoveryState
 } from './pty-transport-types'
 import { createPtyOutputProcessor } from './pty-output-processor'
+import { localizeWslDistroHoldText } from '@/lib/wsl-distro-hold-copy'
 import { isSshSessionGoneError } from './pty-connection/pty-connect-limits'
 import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from '../../runtime/runtime-rpc-result'
 import {
@@ -335,7 +338,15 @@ export function createRemoteRuntimePtyTransport(
     })
   }
 
-  const recoveryInputHold = createRemoteRuntimeRecoveryInputHold({ holdBeforeFirstConnect: true })
+  const recoveryInputHold = createRemoteRuntimeRecoveryInputHold({
+    holdBeforeFirstConnect: true,
+    // A closed pane has nobody left to tell.
+    onTypingDiscardedBeforeBind: () => {
+      if (!destroyed) {
+        opts.onTypingDiscardedBeforeBind?.()
+      }
+    }
+  })
   let isFirstConnect = true
   let heldInputRelease: {
     stream: RemoteRuntimeMultiplexedTerminal
@@ -692,7 +703,7 @@ export function createRemoteRuntimePtyTransport(
       surfacedErrorMessages.delete(oldest)
     }
     surfacedErrorMessages.add(message)
-    storedCallbacks.onError?.(message)
+    storedCallbacks.onError?.(localizeWslDistroHoldText(message))
   }
 
   function markRecoveryHealthy(result?: PtyConnectResult): void {
@@ -2966,6 +2977,9 @@ export function createRemoteRuntimePtyTransport(
               ...(meta?.terminalOwner && meta.seq !== undefined
                 ? { terminalOwner: meta.terminalOwner }
                 : {}),
+              ...(meta?.lastTitle !== undefined && meta.seq !== undefined
+                ? { lastTitle: meta.lastTitle }
+                : {}),
               ...(meta?.alternateScreen !== undefined && meta.seq !== undefined
                 ? { alternateScreen: meta.alternateScreen }
                 : {}),
@@ -3554,8 +3568,11 @@ export function createRemoteRuntimePtyTransport(
         ...originOptions,
         ...(launchTokenToSend !== undefined ? { launchToken: launchTokenToSend } : {}),
         ...(launchAgentToSend !== undefined ? { launchAgent: launchAgentToSend } : {}),
+        ...(REMOTE_RUNTIME_PTY_HONOURS_TAB_SHELL_OVERRIDE && opts.shellOverride
+          ? { shell: opts.shellOverride }
+          : {}),
         ...spawnIntentParams,
-        ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
+        ...terminalCreateThemeParams(terminalColorQueryReplies),
         ...(terminalKittyKeyboardProtocol === true ? { terminalKittyKeyboardProtocol: true } : {}),
         tabId,
         leafId,
@@ -3780,7 +3797,12 @@ export function createRemoteRuntimePtyTransport(
 
     attach(options) {
       settleSignInConnectWait()
-      recoveryInputHold.expect(null)
+      // Why: like the local attach, keys typed before it reach the terminal this pane names, never another.
+      recoveryInputHold.expect(
+        opts.bufferInputUntilConnect && opts.releasePreconnectInput?.() !== false
+          ? restoredInputEndpoint(options.existingPtyId)
+          : null
+      )
       attachPane(options, false)
     },
 

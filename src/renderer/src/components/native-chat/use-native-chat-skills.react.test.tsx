@@ -35,8 +35,7 @@ function stateForHost(hostId: string) {
     activeWorktreeId: 'worktree-1',
     folderWorkspaces: [],
     projectGroups: [],
-    endpointProjects: [],
-    endpointProjectHostSetups: [],
+    projects: [],
     repos: [
       {
         id: 'repo-1',

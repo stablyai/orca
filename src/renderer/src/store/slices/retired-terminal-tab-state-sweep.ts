@@ -55,6 +55,7 @@ export function buildRetiredTerminalTabStateSweepPatch(
       tabId: string,
       paneKeys?: ReadonlySet<string>
     ) => Pick<RetiredTerminalTabSweepState, 'paneForegroundAgentByPaneKey'> | null
+    changedAgentPaneKeys?: Set<string>
   }
 ): Partial<RetiredTerminalTabSweepState> | null {
   if (tabIds.length === 0) {
@@ -67,7 +68,7 @@ export function buildRetiredTerminalTabStateSweepPatch(
     if (!opts?.paneKeys) {
       retireParkedTerminalTab(tabId)
     }
-    const { patch } = buildAgentStatusTabPrefixDropPatch(
+    const { patch, removedPaneKeys } = buildAgentStatusTabPrefixDropPatch(
       swept,
       tabId,
       opts?.paneKeys ? [] : retireAgentPaneAuthorityAliasesByOwnerTab(tabId),
@@ -77,6 +78,9 @@ export function buildRetiredTerminalTabStateSweepPatch(
         ...(opts?.preserveActivityClearedState ? { preserveActivityClearedState: true } : {})
       }
     )
+    for (const key of removedPaneKeys) {
+      opts?.changedAgentPaneKeys?.add(key)
+    }
     const foreground = opts?.foregroundPatch
       ? opts.foregroundPatch(swept.paneForegroundAgentByPaneKey, tabId, opts.paneKeys)
       : opts?.paneKeys

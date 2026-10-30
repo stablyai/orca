@@ -21,6 +21,7 @@ import { resolveUnixShellPath } from '../providers/local-pty-utils'
 import type { PtySpawnOptions, PtySpawnResult } from '../providers/pty-provider-contract'
 import { injectHistoryEnv, injectWslFishHistoryEnv, logHistoryInjection } from '../terminal-history'
 import { addWslEnvKeys } from '../wsl-env'
+import { holdPassiveRestoreOfStoppedWslDistro } from './daemon-wsl-passive-restore-hold'
 
 export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
   // Checked again in doSpawn: retirement can close admission while spawn awaits.
@@ -178,6 +179,8 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
       // Keep an unverified recovered cwd; fall back when the folder probe proves it missing.
       return {
         ...restoreInfo,
+        // Why one probe for WSL too: a stat over \\wsl.localhost waits for a stopped distro and
+        // fails for reasons other than absence, which woke panes blank and at the root.
         cwd:
           recoveredCwd && (await probeRecoveredStartupCwdDirectory(recoveredCwd)) !== false
             ? recoveredCwd
@@ -188,6 +191,7 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     if (this.killedSessionTombstones.has(sessionId)) {
       throw new TerminalKilledError(sessionId)
     }
+    await holdPassiveRestoreOfStoppedWslDistro(opts, wslDistro)
 
     if (opts.isNewSession) {
       await this.replaceUnhealthyMacResolverDaemonBeforeNewPty()

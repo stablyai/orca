@@ -1,4 +1,5 @@
 import { defineMethod, defineStreamingMethod, type RpcContext } from '../core'
+import type { OrcadFeature } from '../orcad-feature-readiness'
 import { rpcCallerOperationKey } from '../rpc-caller-identity'
 import { HostAccountSignInFlows } from '../../host-account-sign-in-flows'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -46,7 +47,7 @@ function signInOwner({ caller }: Pick<RpcContext, 'caller'>): string {
   return rpcCallerOperationKey(caller)
 }
 
-export const ACCOUNT_METHODS = [
+const ACCOUNT_METHOD_DEFINITIONS = [
   // Only the owning desktop pushes this host's account launch environment, including WSL.
   defineMethod({
     name: 'accounts.setHostLaunchEnv',
@@ -270,3 +271,15 @@ export const ACCOUNT_METHODS = [
     }
   })
 ]
+
+// The desktop's launch-env push and unsubscribes never touch the account services.
+const ACCOUNT_SERVICE_FREE_METHODS: ReadonlySet<string> = new Set([
+  'accounts.setHostLaunchEnv',
+  'accounts.unsubscribe'
+])
+
+export const ACCOUNT_METHODS = ACCOUNT_METHOD_DEFINITIONS.map((method) =>
+  ACCOUNT_SERVICE_FREE_METHODS.has(method.name)
+    ? method
+    : { ...method, requires: ['accounts'] satisfies OrcadFeature[] }
+)

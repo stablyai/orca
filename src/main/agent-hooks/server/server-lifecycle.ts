@@ -178,7 +178,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
             // A new session must not inherit the retired one's observation order.
             this.observations.rebind(event.paneKey)
           }
-          const enriched = this.applyNormalizedStatus(event, normalized.onAccepted)
+          const enriched = this.applyObservedLocalHook(event, normalized.onAccepted)
           if (enriched) {
             this.checkAgentPresenceAfterHook(event, enriched)
             this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
@@ -222,6 +222,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           if (address && typeof address === 'object') {
             this.port = address.port
           }
+          this.activateClaudeHelperObservations()
           this.maybeWriteEndpointFile()
         },
         (error) => console.error('[agent-hooks] server error', error)

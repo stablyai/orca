@@ -232,7 +232,8 @@ export abstract class AgentHookServerState extends AgentHookServerAuthorityState
     observedAt?: number,
     mutationBefore?: EnrichedAgentHookEventPayload,
     newRun?: boolean,
-    derivedFrom?: AgentHookEventPayload
+    derivedFrom?: AgentHookEventPayload,
+    retireBinding?: boolean
   ): EnrichedAgentHookEventPayload | undefined
   protected abstract emitEnrichedStatus(enriched: EnrichedAgentHookEventPayload): void
   protected abstract clearAssistantMessageRetry(paneKey: string): void

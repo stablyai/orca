@@ -30,8 +30,12 @@ export type TabEntryOptionsContext = {
   searchEngine?: SearchEngine
 }
 
-export const TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE =
-  'Absolute paths require a local workspace.'
+export function getTabEntryAbsolutePathRemoteBlockedMessage(): string {
+  return translate(
+    'auto.components.tab.bar.tab.create.entry.classifier.absolutePathRemoteBlocked',
+    'Absolute paths require a local workspace.'
+  )
+}
 
 export type TabEntryClassification =
   | { kind: 'empty'; message: string }
@@ -171,15 +175,7 @@ export function getTabEntryOptions(
 
   if (isTabEntryAbsolutePathLike(trimmed)) {
     if (!context.allowAbsolutePaths) {
-      return [
-        blockedOption(
-          'absolute-path-blocked',
-          translate(
-            'auto.components.tab.bar.tab.create.entry.classifier.absolutePathRemoteBlocked',
-            'Absolute paths require a local workspace.'
-          )
-        )
-      ]
+      return [blockedOption('absolute-path-blocked', getTabEntryAbsolutePathRemoteBlockedMessage())]
     }
     try {
       const filePath = validateNewTabEntryAbsolutePath(trimmed, context.localPlatform)

@@ -29,6 +29,7 @@ import { ProgramStatusFacetStore } from './program-status/facet-store'
 const UNORDERED_STATUS_ROW = Number.MAX_SAFE_INTEGER
 
 export abstract class AgentHookServerListeners extends AgentHookServerAuthorityProjection {
+  protected statusChangeNotificationVersion = 0
   protected cliWriterExecutionMatches: CliWriterExecutionMatches | null = null
 
   setCliWriterExecutionMatcher(...args: Parameters<typeof cliWriterExecutionMatcher>): void {
@@ -296,6 +297,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerAuthorityP
   }
 
   protected notifyStatusChangeListeners(): void {
+    this.statusChangeNotificationVersion++
     if (this.statusChangeListeners.size === 0 && this.providerSessionChangeListeners.size === 0) {
       return
     }

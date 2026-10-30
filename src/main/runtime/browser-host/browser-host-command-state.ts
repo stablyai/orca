@@ -1,3 +1,7 @@
+import {
+  BROWSER_COMMAND_CACHE_MAX_BYTES,
+  BROWSER_COMMAND_CACHE_MAX_BYTES_PER_PAGE
+} from '../../browser/browser-command-cache-bytes'
 import type {
   BrowserClientHostCommandEvent,
   BrowserClientHostCommandResult,
@@ -127,6 +131,8 @@ export type BrowserHostCommandLedgerOptions = {
   maxOutstandingCommandsPerPage?: number
   maxCachedResults?: number
   maxCachedResultsPerPage?: number
+  maxCachedResultBytes?: number
+  maxCachedResultBytesPerPage?: number
   maxPages?: number
 }
 
@@ -180,4 +186,25 @@ export function positiveBrowserHostCommandLimit(
     throw new Error('browser_host_command_limit_invalid')
   }
   return resolved
+}
+
+export function resolveBrowserHostCommandCacheLimits(options: BrowserHostCommandLedgerOptions) {
+  return {
+    maxResults: positiveBrowserHostCommandLimit(
+      options.maxCachedResults,
+      DEFAULT_MAX_CACHED_RESULTS
+    ),
+    maxResultsPerPage: positiveBrowserHostCommandLimit(
+      options.maxCachedResultsPerPage,
+      DEFAULT_MAX_CACHED_RESULTS_PER_PAGE
+    ),
+    maxBytes: positiveBrowserHostCommandLimit(
+      options.maxCachedResultBytes,
+      BROWSER_COMMAND_CACHE_MAX_BYTES
+    ),
+    maxBytesPerPage: positiveBrowserHostCommandLimit(
+      options.maxCachedResultBytesPerPage,
+      BROWSER_COMMAND_CACHE_MAX_BYTES_PER_PAGE
+    )
+  }
 }

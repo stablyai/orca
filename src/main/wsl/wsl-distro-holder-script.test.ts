@@ -75,6 +75,9 @@ function within(ms: number, promise: Promise<number | null>): Promise<number | n
   ])
 }
 
+/** Waits that end when the holder exits; generous so a loaded machine cannot fail them. */
+const RELEASE_BOUND_MS = 15_000
+
 const releasePath = (): string => join(home, '.orca', ORCAD_WSL_HOLDER_RELEASE_FILENAME)
 
 /** One fake /proc entry, as the kernel writes its status file. */
@@ -95,9 +98,28 @@ function fakeProcess(
 const blockedPath = (): string => join(home, '.orca', ORCAD_WSL_HOLDER_BLOCKED_FILENAME)
 
 /** A holder that already ran its start-up `rm -f`, then a request from an orcad that has exited. */
+/**
+ * A holder past its start-up cleanup: it clears stale notes as it starts, so once this sentinel is
+ * gone its `rm -f` of the request is done and a request written next survives (a timed wait
+ * raced it on a loaded machine).
+ */
+async function startHolderReady(
+  env: NodeJS.ProcessEnv = { HOME: home, PATH: process.env.PATH },
+  options: { procReadable?: boolean } = {}
+) {
+  const started = `${blockedPath()}.started`
+  writeFileSync(started, '')
+  const holder = startHolder(env, options)
+  await expect.poll(() => existsSync(started), { timeout: 15_000 }).toBe(false)
+  return holder
+}
+
+/** A holder past its start-up cleanup, then a request from an orcad that has exited. */
 async function holderWithRequest(options: { procReadable?: boolean; path?: string } = {}) {
-  const holder = startHolder({ HOME: home, PATH: options.path ?? process.env.PATH }, options)
-  expect(await within(300, holder.exited)).toBe('running')
+  const holder = await startHolderReady(
+    { HOME: home, PATH: options.path ?? process.env.PATH },
+    options
+  )
   const orcad = track(spawn('/bin/sh', ['-c', 'exit 0'], { stdio: 'ignore' }))
   await new Promise((resolve) => orcad.once('exit', resolve))
   writeFileSync(releasePath(), `${orcad.pid}\n`)
@@ -118,20 +140,18 @@ describe.skipIf(process.platform === 'win32')('WSL distro holder script', () => 
   })
 
   it('waits for the requesting orcad to exit, then claims the request and ends', async () => {
-    const holder = startHolder()
-    expect(await within(300, holder.exited)).toBe('running')
+    const holder = await startHolderReady()
     const orcad = track(spawn('/bin/sh', ['-c', 'sleep 30'], { stdio: 'ignore' }))
     writeFileSync(releasePath(), `${orcad.pid}\n`)
 
     expect(await within(2_500, holder.exited)).toBe('running')
     orcad.kill('SIGKILL')
-    expect(await within(4_000, holder.exited)).toBe(0)
+    expect(await within(RELEASE_BOUND_MS, holder.exited)).toBe(0)
     expect(existsSync(releasePath())).toBe(false)
   })
 
   it('keeps holding when a starting orcad withdrew the request first', async () => {
-    const holder = startHolder()
-    expect(await within(300, holder.exited)).toBe('running')
+    const holder = await startHolderReady()
     const orcad = track(spawn('/bin/sh', ['-c', 'sleep 30'], { stdio: 'ignore' }))
     writeFileSync(releasePath(), `${orcad.pid}\n`)
     await within(1_500, holder.exited)
@@ -141,8 +161,7 @@ describe.skipIf(process.platform === 'win32')('WSL distro holder script', () => 
   })
 
   it('ignores a request it cannot read as a pid', async () => {
-    const holder = startHolder()
-    expect(await within(300, holder.exited)).toBe('running')
+    const holder = await startHolderReady()
     writeFileSync(releasePath(), 'not-a-pid\n')
     expect(await within(2_500, holder.exited)).toBe('running')
   })
@@ -160,7 +179,7 @@ describe.skipIf(process.platform === 'win32')('WSL distro holder script', () => 
     expect(await within(2_500, exited)).toBe('running')
     expect(existsSync(releasePath())).toBe(true)
     rmSync(job, { recursive: true })
-    expect(await within(3_000, exited)).toBe(0)
+    expect(await within(RELEASE_BOUND_MS, exited)).toBe(0)
   })
 
   it('keeps the distro while a container runs, though its shim belongs to root', async () => {
@@ -170,7 +189,7 @@ describe.skipIf(process.platform === 'win32')('WSL distro holder script', () => 
     const { exited } = await holderWithRequest()
     expect(await within(2_500, exited)).toBe('running')
     rmSync(shim, { recursive: true })
-    expect(await within(3_000, exited)).toBe(0)
+    expect(await within(RELEASE_BOUND_MS, exited)).toBe(0)
   })
 
   it('does not count session plumbing, zombies, other users or its own children', async () => {
@@ -180,13 +199,12 @@ describe.skipIf(process.platform === 'win32')('WSL distro holder script', () => 
     }
     fakeProcess(pid++, { state: 'Z (zombie)' })
     fakeProcess(pid++, { uid: me + 1 })
-    const holder = startHolder()
+    const holder = await startHolderReady()
     fakeProcess(pid++, { name: 'sleep', ppid: holder.child.pid })
-    expect(await within(300, holder.exited)).toBe('running')
     const orcad = track(spawn('/bin/sh', ['-c', 'exit 0'], { stdio: 'ignore' }))
     await new Promise((resolve) => orcad.once('exit', resolve))
     writeFileSync(releasePath(), `${orcad.pid}\n`)
-    expect(await within(3_000, holder.exited)).toBe(0)
+    expect(await within(RELEASE_BOUND_MS, holder.exited)).toBe(0)
   })
 
   it('notes what keeps it holding, and clears the note once it releases', async () => {
@@ -195,7 +213,7 @@ describe.skipIf(process.platform === 'win32')('WSL distro holder script', () => 
     await expect.poll(() => existsSync(blockedPath()), { timeout: 5_000 }).toBe(true)
     expect(readFileSync(blockedPath(), 'utf8')).toBe('node\n')
     rmSync(job, { recursive: true })
-    expect(await within(3_000, exited)).toBe(0)
+    expect(await within(RELEASE_BOUND_MS, exited)).toBe(0)
     expect(existsSync(blockedPath())).toBe(false)
   })
 
@@ -232,16 +250,24 @@ describe.skipIf(process.platform === 'win32')('WSL distro holder script', () => 
     mkdirSync(dir)
     writeFileSync(join(dir, 'status'), 'Name:\tsecret\n')
     chmodSync(join(dir, 'status'), 0o000)
-    // The user's own unreadable entry holds.
+    // The user's own unreadable entry holds: wait for the holder's own note that it decided so,
+    // not for a clock, so a loaded machine cannot make this flaky.
     const own = await holderWithRequest()
-    expect(await within(2_500, own.exited)).toBe('running')
+    await expect
+      .poll(() => (existsSync(blockedPath()) ? readFileSync(blockedPath(), 'utf8') : ''), {
+        timeout: 15_000
+      })
+      .not.toBe('')
+    // Holding means the request stays unclaimed.
+    expect(existsSync(releasePath())).toBe(true)
     own.child.kill('SIGKILL')
+    await own.exited
     // Seen by another user, the same entry is someone else's and does not hold.
     const bin = join(home, 'bin')
     mkdirSync(bin)
     writeFileSync(join(bin, 'id'), `#!/bin/sh\necho ${me + 1}\n`, { mode: 0o755 })
     const other = await holderWithRequest({ path: `${bin}:${process.env.PATH}` })
-    expect(await within(3_000, other.exited)).toBe(0)
+    expect(await within(RELEASE_BOUND_MS, other.exited)).toBe(0)
   })
 
   it('cleans up a note a killed holder left half-written', async () => {

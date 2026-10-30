@@ -7,7 +7,10 @@ import {
 } from '../../../../shared/agent-title-owner'
 import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
-import { markRendererOwnedAgentStatusWrite } from './renderer-owned-agent-status-registry'
+import {
+  markRendererOwnedAgentStatusWrite,
+  resolveRendererOwnedAgentStatusTiming
+} from './renderer-owned-agent-status-registry'
 import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status-connection-ownership'
 import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
 import type { TerminalResidentBinding } from './terminal-resident-policy'
@@ -54,6 +57,9 @@ export function createTerminalResidentStatusObserver(services: {
     const normalizedTitle = title
       ? normalizeCompatibleAgentTitleForOwner(title, agentType ?? authoritativeAgent)
       : title
+    const timing = resolveRendererOwnedAgentStatusTiming(
+      state.agentStatusByPaneKey[services.binding.paneKey]
+    )
     if (services.binding.launchToken) {
       state.setAgentStatus(
         services.binding.paneKey,
@@ -61,7 +67,7 @@ export function createTerminalResidentStatusObserver(services: {
         normalizedTitle,
         quiet
           ? { updatedAt: observedAt, evidenceObservedAt: observedAt, stateStartedAt: observedAt }
-          : undefined,
+          : timing,
         routing,
         { launchToken: services.binding.launchToken }
       )
@@ -72,7 +78,7 @@ export function createTerminalResidentStatusObserver(services: {
         normalizedTitle,
         quiet
           ? { updatedAt: observedAt, evidenceObservedAt: observedAt, stateStartedAt: observedAt }
-          : undefined,
+          : timing,
         routing
       )
     }

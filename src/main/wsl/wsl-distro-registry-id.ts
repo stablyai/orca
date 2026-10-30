@@ -105,6 +105,19 @@ export async function resolveWslDistroName(
   return match ? match.distro : false
 }
 
+/**
+ * Whether the distro is registered, by name or (after a rename) by its recorded GUID; null when
+ * the registrations cannot be read.
+ */
+export async function isWslDistroRegistered(
+  distro: string,
+  distroGuid?: string,
+  query: RegQuery = defaultRegQuery
+): Promise<boolean | null> {
+  const name = await resolveWslDistroName(distro, distroGuid, query)
+  return name === null ? null : name !== false
+}
+
 const SHARED_READ_TTL_MS = 30_000
 const sharedReads = new Map<string, { at: number; id: Promise<string | null> }>()
 

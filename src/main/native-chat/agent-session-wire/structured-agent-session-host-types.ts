@@ -1,3 +1,4 @@
+import type { AgentModelCatalogSource } from '../agent-model-catalog/agent-model-catalog-service-contract'
 import type { StructuredAgentSessionDeliveryLoop } from './structured-agent-session-delivery-loop'
 import type {
   OpenedStructuredAgentSessionConversation,
@@ -89,14 +90,18 @@ export type StructuredAgentSessionProviderChild = StructuredAgentSessionProvider
   readonly startedFor?: string
   /** Launch-time permission mode, memory-only. */
   readonly permissionMode?: AgentChatPermissionChoice
-  /** Read adapter-held sends at each decision. */
+  /** The launch source that may publish observations for this child. */
+  readonly catalogSource?: AgentModelCatalogSource
   readonly heldSends?: () => ReadonlySet<string> | undefined
   readonly exitObservation?: DeferredStructuredAgentSessionEventSink['exitObservation']
   close?: StructuredAgentSessionChildClose
 }
 
-/** Root proof comes only from stopAgentSessionProviderRoot or observed exit. */
-export type StructuredAgentSessionStopVerdict = { rootGone: boolean }
+/** Writer death proof comes only from stopAgentSessionProviderRoot or observed exit. */
+export type StructuredAgentSessionStopVerdict = {
+  rootGone: boolean
+  deathEvidenceKind?: 'kill-delivered'
+}
 
 export type { StructuredAgentSessionChildEndCause }
 

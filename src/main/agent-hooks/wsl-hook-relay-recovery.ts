@@ -81,17 +81,33 @@ export class WslRelayRecovery {
       this.io.dropState(state)
       // E9: come back when the distro runs again (started by the user or another act), never boot it.
       let restarted = false
-      const restartOnce = (): void => {
-        if (!restarted && !this.io.isDisposed()) {
-          restarted = true
-          this.io.restart(state.distro, setup)
+      const restartOnce = (confirmedRunning = false): void => {
+        if (restarted || this.io.isDisposed()) {
+          return
         }
+        restarted = true
+        // A drained deferral is a hint: the relay spawn runs wsl.exe, which boots a distro that
+        // stopped again, so re-read a settled running list right before it.
+        const running = confirmedRunning
+          ? Promise.resolve(true)
+          : this.io.isDistroRunning(state.distro, performance.now()).catch(() => false)
+        void running.then((running) => {
+          if (this.io.isDisposed()) {
+            return
+          }
+          if (running) {
+            this.io.restart(state.distro, setup)
+            return
+          }
+          restarted = false
+          this.io.deferUntilRunning(state.distro, () => restartOnce())
+        })
       }
-      this.io.deferUntilRunning(state.distro, restartOnce)
+      this.io.deferUntilRunning(state.distro, () => restartOnce())
       const reprobe = setTimeout(() => {
         void this.io
           .isDistroRunning(state.distro, performance.now())
-          .then((running) => running && restartOnce())
+          .then((running) => running && restartOnce(true))
           .catch(() => {})
       }, REPROBE_AFTER_STOPPED_MS)
       reprobe.unref?.()

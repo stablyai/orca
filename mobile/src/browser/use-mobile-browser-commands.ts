@@ -1,4 +1,6 @@
-import { useCallback, useRef, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
+import type { Dispatch, SetStateAction } from 'react'
+import { translate } from '../i18n/mobile-i18n'
 import type { RpcClient } from '../transport/rpc-client'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { BrowserScreencastFrameMetadata } from '../transport/browser-screencast-protocol'
@@ -10,13 +12,10 @@ import {
   browserPointerClick,
   browserPointerDown,
   browserPointerMove,
-  browserPointerUp,
-  browserPointerWheel
+  browserPointerUp
 } from './mobile-browser-command-operations'
 import type { BrowserPageCommandSend, BrowserPageParams } from './use-mobile-browser-request'
 import {
-  browserWheelDeltaFromScreen,
-  computeBrowserFrameGeometry,
   computeBrowserTouchClickRadiusCss,
   mapScreenToBrowserPoint,
   type BrowserPoint,
@@ -25,15 +24,9 @@ import {
 } from './browser-touch-geometry'
 import type { BrowserPointerModifier } from './MobileBrowserPointerModifiers'
 import type { BrowserDialogState } from './mobile-browser-stream-events'
+import { useMobileBrowserWheelQueue } from './use-mobile-browser-wheel-queue'
 
 const TOUCH_CLICK_RADIUS_DIP = 14
-type PendingWheelCommand = {
-  base: BrowserPageParams
-  point: BrowserPoint
-  gestureId: number
-  dx: number
-  dy: number
-}
 type SendBrowserRequest = (
   send: BrowserPageCommandSend,
   options?: { showBusy?: boolean; suppressError?: boolean; timeoutMs?: number }
@@ -72,51 +65,36 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
     zoomRef
   } = args
 
-  const pendingWheelCommandRef = useRef<PendingWheelCommand | null>(null)
   const dialogAnswerTokenRef = useRef(0)
-
-  const wheelCommandInFlightRef = useRef(false)
-
-  const flushPendingWheelCommand = useCallback(() => {
-    if (wheelCommandInFlightRef.current) {
-      return
+  const { commandGenerationRef, commandsMountedRef, sendWheel } = useMobileBrowserWheelQueue({
+    client,
+    frameMetadataRef,
+    layoutRef,
+    pageParams,
+    setError,
+    zoomRef
+  })
+  // A send claims the draft here, so a repeat tap before re-render finds it empty. The pane remounts
+  // per page, so the draft outlives a reconnect; only unmount ends a send's claim on it.
+  const keyboardDraftRef = useRef({ mounted: true, value: keyboardValue })
+  useLayoutEffect(() => {
+    keyboardDraftRef.current.value = keyboardValue
+  }, [keyboardValue])
+  useEffect(() => {
+    const draft = keyboardDraftRef.current
+    draft.mounted = true
+    return () => {
+      draft.mounted = false
     }
-    const pending = pendingWheelCommandRef.current
-    if (!pending || !client) {
-      return
-    }
-    pendingWheelCommandRef.current = null
-    wheelCommandInFlightRef.current = true
-    void (async () => {
-      try {
-        const moveReply = await browserPointerMove.request(client, {
-          ...pending.base,
-          x: pending.point.x,
-          y: pending.point.y
-        })
-        browserPointerMove.interpret(moveReply)
-        const wheelReply = await browserPointerWheel.request(client, {
-          ...pending.base,
-          dx: pending.dx,
-          dy: pending.dy
-        })
-        browserPointerWheel.interpret(wheelReply)
-        setError(null)
-      } catch {
-        // Scroll bursts race navigation; keep usable stream instead of replacing it with transient selector errors.
-      } finally {
-        wheelCommandInFlightRef.current = false
-        flushPendingWheelCommand()
-      }
-    })()
-  }, [client])
+  }, [])
 
   const sendPointerClick = useCallback(
     async (point: BrowserPoint, button: 'left' | 'right') => {
       const base = pageParams()
-      if (!client || !base) {
+      if (!commandsMountedRef.current || !client || !base) {
         return
       }
+      const generation = commandGenerationRef.current
       try {
         browserPointerClick.interpret(
           await browserPointerClick.request(
@@ -141,11 +119,17 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
             { timeoutMs: 5_000 }
           )
         )
-        setError(null)
+        if (generation === commandGenerationRef.current) {
+          setError(null)
+        }
         return
       } catch (error) {
         // Why: a timed-out click may still run on the host, and the move/down/up replay drops modifiers.
-        if (isRpcDeliveryUnknown(error) || pointerModifiers.length > 0) {
+        if (
+          generation !== commandGenerationRef.current ||
+          isRpcDeliveryUnknown(error) ||
+          pointerModifiers.length > 0
+        ) {
           return
         }
       }
@@ -156,11 +140,17 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
           y: point.y
         })
         browserPointerMove.interpret(moveReply)
+        if (generation !== commandGenerationRef.current) {
+          return
+        }
         const downReply = await browserPointerDown.request(client, { ...base, button })
         browserPointerDown.interpret(downReply)
+        // Release an admitted press even when its pane retired while mouseDown was pending.
         const upReply = await browserPointerUp.request(client, { ...base, button })
         browserPointerUp.interpret(upReply)
-        setError(null)
+        if (generation === commandGenerationRef.current) {
+          setError(null)
+        }
       } catch {
         // Pointer sends race navigation; keep stream and surface actionable failures through navigation/stream paths.
       }
@@ -176,33 +166,6 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
     )
   }, [])
 
-  const sendWheel = useCallback(
-    (point: BrowserPoint, screenDx: number, screenDy: number, gestureId: number) => {
-      const base = pageParams()
-      if (!client || !base) {
-        return
-      }
-      const geometry = computeBrowserFrameGeometry(layoutRef.current, frameMetadataRef.current)
-      const delta = browserWheelDeltaFromScreen(screenDx, screenDy, geometry, zoomRef.current.scale)
-      if (Math.abs(delta.dx) < 1 && Math.abs(delta.dy) < 1) {
-        return
-      }
-      const pending = pendingWheelCommandRef.current
-      pendingWheelCommandRef.current =
-        pending && pending.base.page === base.page && pending.gestureId === gestureId
-          ? {
-              base,
-              point,
-              gestureId,
-              dx: pending.dx + delta.dx,
-              dy: pending.dy + delta.dy
-            }
-          : { base, point, gestureId, ...delta }
-      flushPendingWheelCommand()
-    },
-    [client, flushPendingWheelCommand, pageParams]
-  )
-
   const mapTouchPoint = useCallback((locationX: number, locationY: number): BrowserPoint | null => {
     return mapScreenToBrowserPoint(
       locationX,
@@ -214,24 +177,44 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
   }, [])
 
   const sendKeyboardText = useCallback(async () => {
-    const text = keyboardValue
+    const draft = keyboardDraftRef.current
+    const text = draft.value
     if (!text) {
       return
     }
+    draft.value = ''
     setKeyboardValue('')
+    let unconfirmed = false
     const result = await sendBrowserRequest(
-      async (rpc, page, options) =>
-        browserInsertText.interpret(
-          await browserInsertText.request(rpc, { ...page, text }, options)
-        ),
+      async (rpc, page, options) => {
+        try {
+          browserInsertText.interpret(
+            await browserInsertText.request(rpc, { ...page, text }, options)
+          )
+          return true
+        } catch (error) {
+          unconfirmed = isRpcDeliveryUnknown(error)
+          throw error
+        }
+      },
       { suppressError: true }
     )
-    if (result !== null) {
-      onToast('Sent')
-    } else {
-      setKeyboardValue(text)
+    if (!draft.mounted) {
+      return
     }
-  }, [keyboardValue, onToast, sendBrowserRequest])
+    if (result !== null) {
+      onToast(translate('browser.useBrowserCommands.sent', 'Sent'))
+      return
+    }
+    setKeyboardValue((current) => text + current)
+    if (unconfirmed) {
+      const warning = translate(
+        'browser.useBrowserCommands.deliveryUnconfirmed',
+        'Delivery unconfirmed — check page before retrying'
+      )
+      onToast(warning)
+    }
+  }, [onToast, sendBrowserRequest])
 
   const sendKeypress = useCallback(
     async (key: string) => {
@@ -257,6 +240,10 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
         async (rpc, page, options) => command.interpret(await command.request(rpc, page, options)),
         { suppressError: true, timeoutMs: 5_000 }
       )
+      const error = translate(
+        'browser.useBrowserCommands.dialogAnswerFailed',
+        'That answer did not reach the page.'
+      )
       // Refusal/timeout leaves page blocked, so retain card with error explanation.
       setDialog((current) =>
         current === null || current.pending !== token
@@ -264,7 +251,7 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
           : {
               ...current,
               pending: undefined,
-              ...(result === null ? { error: 'That answer did not reach the page.' } : {})
+              ...(result === null ? { error } : {})
             }
       )
     },

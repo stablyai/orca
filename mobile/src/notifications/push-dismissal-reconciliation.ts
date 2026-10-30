@@ -5,7 +5,7 @@ import { resolveHostIdForFingerprint } from './push-host-fingerprint'
 import { readNativeNotificationData } from './native-notification-data'
 import { readOrcaPushPayload, type OrcaPushPayload } from './push-payload'
 import { dismissRememberedPushNotifications } from './push-tray-dismissal'
-import { rememberPushDismissal } from './push-dismissal-watermarks'
+import { rememberPushDismissals } from './push-dismissal-watermarks'
 import {
   readPushNotificationIdentity,
   type PushNotificationIdentity
@@ -70,13 +70,15 @@ export async function requestNotificationCatchup(
       const id = readPushNotificationIdentity(raw)
       const payload = id ? requested.get(key(id)) : undefined
       if (payload && id) {
-        await rememberPushDismissal(payload)
         confirmed.push(payload)
         requested.delete(key(id))
       }
     }
-    if (confirmed.length && !isDisposed()) {
-      await dismissRememberedPushNotifications(confirmed[0]!.hostFingerprint, confirmed)
+    if (confirmed.length) {
+      await rememberPushDismissals(confirmed)
+      if (!isDisposed()) {
+        await dismissRememberedPushNotifications(confirmed[0]!.hostFingerprint, confirmed)
+      }
     }
   }
 }

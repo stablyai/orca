@@ -29,7 +29,7 @@ export abstract class OrcaRuntimeWithHeadlessPaneMoveToNewTab extends OrcaRuntim
   ): Promise<TerminalLeafMoveResult> {
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     const worktreeId =
-      explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
+      explicitWorktreeId ?? (await this.resolveWorkspaceSelector(worktreeSelector)).id
     if (this.getAvailableAuthoritativeWindow()) {
       return { status: 'not_held' }
     }

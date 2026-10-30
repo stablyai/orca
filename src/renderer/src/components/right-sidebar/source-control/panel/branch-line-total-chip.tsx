@@ -2,6 +2,7 @@ import React, { useMemo } from 'react'
 import type { GitBranchLineTotal } from '../../../../../../shared/git-status-types'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { getIntlLocale, translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 // Use raw digits for accessibility; some screen-reader locales split grouped numbers into separate values.
 function buildAccessibleLabel(added: number, removed: number): string {
@@ -108,6 +109,7 @@ export const SourceControlBranchLineTotalChip = React.memo(
   }: {
     branchLineTotal: GitBranchLineTotal | null | undefined
   }): React.JSX.Element | null {
+    const languageRevision = useUiLanguageRevision()
     const added = branchLineTotal?.added ?? 0
     const removed = branchLineTotal?.removed ?? 0
     const hasAdded = added > 0
@@ -193,7 +195,8 @@ export const SourceControlBranchLineTotalChip = React.memo(
         })
       }
       return rows
-    }, [added, removed, testAdded, testRemoved, generatedAdded, generatedRemoved])
+      // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+    }, [added, removed, testAdded, testRemoved, generatedAdded, generatedRemoved, languageRevision])
 
     if (!hasAdded && !hasRemoved) {
       return null

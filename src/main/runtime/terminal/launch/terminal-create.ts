@@ -1,4 +1,4 @@
-import { rememberTerminalCreateColors } from './terminal-create-colors'
+import { admitTerminalCreate } from './terminal-create-admission'
 import {
   recordTerminalLaunchMetadata,
   resolveTerminalLaunchResult,
@@ -27,10 +27,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
     // Internal creation evidence; RPC and preload callers never supply it.
     created?: dependencies.Worktree
   ): Promise<dependencies.RuntimeTerminalCreate> {
-    if (opts.startupAgent && worktreeSelector === undefined) {
-      throw new Error(`startupAgent ${opts.startupAgent} requires a workspace selector.`)
-    }
-    rememberTerminalCreateColors(opts)
+    const launcherSpawnArgs = admitTerminalCreate(worktreeSelector, opts)
     const presentation = dependencies.resolveTerminalPresentation(opts)
     // Start host-placeable terminals here; timing out a window-made start still ran it later and retries duplicated it.
     if (worktreeSelector !== undefined) {
@@ -38,7 +35,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
       if (!ptyController?.spawn) {
         throw new Error('runtime_unavailable')
       }
-      const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector, created)
+      const workspace = await this.resolveTerminalCreateLaunchScope(worktreeSelector, created, opts)
       const launchOpts = await this.resolveAgentTerminalCreateOptions(workspace, opts)
       const launchTitleAt = { sequence: this.nextTitleObservationSequence(), epochMs: Date.now() }
       let cwd = this.resolveWorkspaceTerminalStartupCwd(workspace, launchOpts.cwd) ?? workspace.path
@@ -139,6 +136,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
             leafId,
             ...dependencies.spawnShellInputs(launchOpts),
             ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
+            ...launcherSpawnArgs,
             terminalKittyKeyboardProtocol: launchOpts.terminalKittyKeyboardProtocol,
             ...(launchOpts.agentSessionClaim
               ? {

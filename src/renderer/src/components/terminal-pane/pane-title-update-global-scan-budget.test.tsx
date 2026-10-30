@@ -523,10 +523,10 @@ describe.each<ChatStatusConsumer>(['sidebar', 'parent picker', 'palette'])(
           expect(chatStatusLabels()).toEqual(Array(readerCount).fill('inactive'))
           expect(chatWork.hashes).toBeGreaterThan(0)
           const measured = measureChatTitleUpdate()
-          // Allow React snapshot checks/context renders; never an inventory scan per row.
+          // Stable chat/sleep snapshots must skip tab scans before React's equality gate.
+          expect(measured.tabs).toBe(0)
+          expect(measured.hashes).toBe(0)
           expect(measured.buckets).toBeLessThanOrEqual(readerCount * 6)
-          expect(measured.tabs).toBeLessThanOrEqual(readerCount * tabsPerWorkspace * 6)
-          expect(measured.hashes).toBeLessThanOrEqual(readerCount * tabsPerWorkspace * 6)
           return measured
         })
         for (const operation of ['buckets', 'tabs', 'hashes'] as const) {

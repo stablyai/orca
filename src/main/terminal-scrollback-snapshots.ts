@@ -54,7 +54,10 @@ function snapshotPath(ref: string, snapshotRoot: string): string | null {
   return join(snapshotRoot, `${ref}.bin`)
 }
 
-function snapshotReadPaths(ref: string, storage?: TerminalScrollbackSnapshotStorage): string[] {
+export function snapshotReadPaths(
+  ref: string,
+  storage?: TerminalScrollbackSnapshotStorage
+): string[] {
   const primaryRoot = getTerminalScrollbackSnapshotRoot(storage)
   const primaryPath = snapshotPath(ref, primaryRoot)
   if (!primaryPath) {
@@ -132,6 +135,11 @@ function readTrailingUtf8(path: string, maxBytes: number): string {
   } finally {
     closeSync(fd)
   }
+  return decodeFromFirstUtf8Boundary(bytes)
+}
+
+/** Decodes a tail slice, skipping continuation bytes of a character the slice cut in half. */
+export function decodeFromFirstUtf8Boundary(bytes: Buffer): string {
   let start = 0
   while (start < bytes.length && (bytes[start] & 0xc0) === 0x80) {
     start++
@@ -269,7 +277,12 @@ export function migrateWorkspaceSessionTerminalScrollbackSnapshots(
     const remainingBuffers: Record<string, string> = {}
     let layoutChanged = false
     for (const [leafId, buffer] of Object.entries(buffers)) {
-      const ref = writeTerminalScrollbackSnapshotSync({ tabId, leafId, buffer, storage })
+      const ref = writeTerminalScrollbackSnapshotSync({
+        tabId,
+        leafId,
+        buffer,
+        storage
+      })
       if (ref) {
         refs[leafId] = ref
         layoutChanged = true

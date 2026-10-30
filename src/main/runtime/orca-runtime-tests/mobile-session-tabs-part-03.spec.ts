@@ -103,7 +103,8 @@ describe('OrcaRuntimeService', () => {
       if (withOffscreen) {
         runtime.setOffscreenBrowserBackend({
           createTab: vi.fn(),
-          closeTab: closeOffscreenTab
+          closeTab: closeOffscreenTab,
+          ownsTab: () => true
         })
       }
       runtime.syncWindowGraph(0, {
@@ -149,7 +150,7 @@ describe('OrcaRuntimeService', () => {
       ])
       await expect(
         runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'client-page-1')
-      ).resolves.toEqual({ closed: true })
+      ).resolves.toEqual({ closed: true, retirementConfirmed: true })
 
       expect(closeClientPage).toHaveBeenCalledWith({
         worktree: `id:${TEST_WORKTREE_ID}`,
@@ -168,7 +169,8 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setOffscreenBrowserBackend({
       createTab: vi.fn(),
-      closeTab: closeOffscreenTab
+      closeTab: closeOffscreenTab,
+      ownsTab: () => true
     })
     runtime.setNotifier({
       worktreesChanged: vi.fn(),
@@ -251,7 +253,7 @@ describe('OrcaRuntimeService', () => {
       ]
     })
     closeProof.resolve()
-    await expect(closing).resolves.toEqual({ closed: true })
+    await expect(closing).resolves.toEqual({ closed: true, retirementConfirmed: true })
 
     expect(closeSessionTab).not.toHaveBeenCalled()
     expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([

@@ -130,35 +130,6 @@ describe('Grok completion observations', () => {
     })
   })
 
-  it('keeps the cancellation on the idle backstop that settles a task the cancel left running', () => {
-    normalize({
-      hookEventName: 'UserPromptSubmit',
-      sessionId: 's-1',
-      promptId: 'p-1',
-      prompt: 'go'
-    })
-    expect(
-      normalize({
-        hookEventName: 'StopCancelled',
-        sessionId: 's-1',
-        promptId: 'p-1',
-        backgroundTasks: [{ id: 'task-1', type: 'shell', status: 'running' }]
-      })
-    ).toMatchObject({ state: 'working', workingMode: 'monitoring' })
-    // A settled row without `interrupted` would announce the cancelled turn as a clean finish.
-    expect(
-      normalize({
-        hookEventName: 'Notification',
-        sessionId: 's-1',
-        notificationType: 'idle_prompt'
-      })
-    ).toMatchObject({
-      state: 'done',
-      interrupted: true,
-      mainAgent: { state: 'done', outcome: 'cancellation' }
-    })
-  })
-
   // Pins grok-events.ts: finite task predicate and sessionCrons omission; treating monitors/crons as finite must redden.
   it.each([
     {

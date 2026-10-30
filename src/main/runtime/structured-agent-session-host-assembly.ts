@@ -101,6 +101,15 @@ export async function installOnJournal(
       onState: delivery.reconcile
     })
   }
+  if (deps.onTurnAttention) {
+    const installed = host
+    const onTurnAttention = deps.onTurnAttention
+    installed.subscribeTurnCompletions({
+      id: 'host-turn-attention',
+      includePrompts: true,
+      emit: (event) => onTurnAttention(event, installed.readStatusSummary)
+    })
+  }
   // Prewarm catalogs at runtime start for local and remote hosts.
   const modelCatalog = host.deps.modelCatalog
   void modelCatalog?.prewarm()
@@ -120,9 +129,13 @@ export async function installOnJournal(
   const stopCommands = bindAtRestCommandContexts(
     registrations.map(({ adapter }) => adapter.atRestCommands)
   )
+  const unbindEnvironment = envResolvers.bindCatalogSources(
+    registrations.map(({ definition }) => definition.agent)
+  )
   try {
     setStructuredAgentSessionHost(host)
   } catch (error) {
+    unbindEnvironment()
     stopCommands()
     throw error
   }
@@ -132,6 +145,7 @@ export async function installOnJournal(
     journalDatabase,
     waitForRecovery: lifecycle.drain,
     stopBackgroundWork: () => {
+      unbindEnvironment()
       stopCommands()
       stopVisualsSweep?.()
       modelCatalog?.stop()

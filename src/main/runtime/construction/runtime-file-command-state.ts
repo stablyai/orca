@@ -85,14 +85,11 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
 
   abstract requireStore(): RuntimeStore
 
-  protected abstract resolveWorktreeSelector(selector: string): Promise<ResolvedWorktree>
-
   protected abstract resolveRepoSelector(selector: RuntimeRepoSelector): Promise<Repo>
 
   protected readonly fileCommands = new RuntimeFileCommands({
     getRuntimeId: () => this.runtimeId,
     requireStore: () => this.requireStore(),
-    resolveWorktreeSelector: (selector) => this.resolveWorktreeSelector(selector),
     resolveRuntimeFileTarget: async (selector) => {
       // Scratch folders are file-only; the general resolver also places chats.
       const scratchFolder = await resolveChatScratchSelectorFolder(selector)
@@ -118,7 +115,15 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
         this.notifyMobileSessionTabsChanged(id)
       }
     }),
-    openDiff: (worktreeId, filePath, relativePath, staged, runtimeEnvironmentId, navigation) => {
+    openDiff: (
+      worktreeId,
+      filePath,
+      relativePath,
+      staged,
+      runtimeEnvironmentId,
+      navigation,
+      oldPath
+    ) => {
       if (isChatScratchWorktreeId(worktreeId)) {
         throw new Error('chat_scratch_not_openable')
       }
@@ -131,7 +136,8 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
         relativePath,
         staged,
         runtimeEnvironmentId,
-        navigation
+        navigation,
+        ...(oldPath ? ([oldPath] as const) : [])
       )
     }
   })

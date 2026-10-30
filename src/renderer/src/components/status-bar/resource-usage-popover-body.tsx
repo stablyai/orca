@@ -200,17 +200,11 @@ export function renderResourceUsagePopoverFooter({
           onClick={() => void handleKillOrphans()}
           className="mt-2 inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
         >
-          {orphanCount === 1
-            ? translate(
-                'auto.components.status.bar.ResourceUsageStatusSegment.c7e3b1a0d9f2',
-                'End {{value0}} orphan terminal',
-                { value0: orphanCount }
-              )
-            : translate(
-                'auto.components.status.bar.ResourceUsageStatusSegment.d8f4c2b1e0a3',
-                'End {{value0}} orphan terminals',
-                { value0: orphanCount }
-              )}
+          {translate(
+            'auto.components.status.bar.ResourceUsageStatusSegment.endOrphanTerminals',
+            'End {{count}} orphan terminals',
+            { count: orphanCount, defaultValue_one: 'End {{count}} orphan terminal' }
+          )}
         </button>
       ) : null}
     </div>

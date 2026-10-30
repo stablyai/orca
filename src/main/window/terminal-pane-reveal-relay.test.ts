@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import type { BrowserWindow } from 'electron'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   TerminalPaneRevealRequest,
   TerminalPaneRevealTarget
@@ -33,18 +33,22 @@ const target: TerminalPaneRevealTarget = {
 }
 
 function createWindow(options: { rendererDestroyed?: boolean } = {}) {
-  const webContents = {
+  const webContents = Object.assign(new EventEmitter(), {
     isDestroyed: () => options.rendererDestroyed === true,
     send: vi.fn<(channel: string, request: TerminalPaneRevealRequest) => void>()
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the relay reads only isDestroyed and these two webContents members.
-  const mainWindow = { isDestroyed: () => false, webContents } as unknown as BrowserWindow
+  })
+  const windowEvents = Object.assign(new EventEmitter(), {
+    isDestroyed: () => false,
+    webContents
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies the relay's window/contents event, destruction and send surface.
+  const mainWindow = windowEvents as unknown as BrowserWindow
   const sentRequest = (): TerminalPaneRevealRequest => {
     const [channel, request] = webContents.send.mock.calls[0] ?? []
     expect(channel).toBe('ui:revealTerminalPane')
     return request ?? { ...target, requestId: '' }
   }
-  return { webContents, mainWindow, sentRequest }
+  return { webContents, mainWindow, windowEvents, sentRequest }
 }
 
 async function loadRelay() {
@@ -59,6 +63,98 @@ describe('revealTerminalPaneInWindow', () => {
   beforeEach(() => {
     ipcEmitter.removeAllListeners()
     mocks.focusExistingMainWindow.mockReset()
+  })
+
+  afterEach(() => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
+  })
+
+  it.each(['destroyed', 'render-process-gone', 'did-navigate', 'closed'])(
+    'retires a pending reveal on %s and ignores its late reply',
+    async (event) => {
+      vi.useFakeTimers()
+      const revealTerminalPaneInWindow = await loadRelay()
+      const { webContents, mainWindow, windowEvents, sentRequest } = createWindow()
+      let outcome: boolean | string | undefined
+      const pending = revealTerminalPaneInWindow(mainWindow, target).then(
+        (value) => (outcome = value),
+        (error: Error) => (outcome = error.message)
+      )
+
+      ;(event === 'closed' ? windowEvents : webContents).emit(event)
+      await Promise.resolve()
+      await Promise.resolve()
+
+      expect(outcome).toBe('renderer_unavailable')
+      await pending
+      reply(webContents, sentRequest().requestId, true)
+      expect(mocks.focusExistingMainWindow).not.toHaveBeenCalled()
+      expect(ipcEmitter.listenerCount('ui:terminalPaneRevealReply')).toBe(0)
+      expect(webContents.eventNames()).toEqual([])
+      expect(windowEvents.eventNames()).toEqual([])
+      expect(vi.getTimerCount()).toBe(0)
+    }
+  )
+
+  it('shares listeners across a burst and preserves another window after retirement', async () => {
+    vi.useFakeTimers()
+    const revealTerminalPaneInWindow = await loadRelay()
+    const retired = createWindow()
+    const survivor = createWindow()
+    const pending = Array.from({ length: 100 }, () =>
+      revealTerminalPaneInWindow(retired.mainWindow, target).catch((error: Error) => error.message)
+    )
+    const live = revealTerminalPaneInWindow(survivor.mainWindow, target)
+    expect(ipcEmitter.listenerCount('ui:terminalPaneRevealReply')).toBe(1)
+    for (const event of ['destroyed', 'render-process-gone', 'did-navigate']) {
+      expect(retired.webContents.listenerCount(event)).toBe(1)
+    }
+
+    retired.webContents.emit('render-process-gone')
+    await expect(Promise.all(pending)).resolves.toEqual(
+      Array.from({ length: 100 }, () => 'renderer_unavailable')
+    )
+    expect(retired.webContents.eventNames()).toEqual([])
+    expect(retired.windowEvents.eventNames()).toEqual([])
+    expect(vi.getTimerCount()).toBe(1)
+    reply(retired.webContents, retired.sentRequest().requestId, true)
+    expect(mocks.focusExistingMainWindow).not.toHaveBeenCalled()
+    reply(survivor.webContents, survivor.sentRequest().requestId, true)
+    await expect(live).resolves.toBe(true)
+    expect(mocks.focusExistingMainWindow).toHaveBeenCalledOnce()
+    expect(ipcEmitter.listenerCount('ui:terminalPaneRevealReply')).toBe(0)
+    expect(survivor.webContents.eventNames()).toEqual([])
+    expect(survivor.windowEvents.eventNames()).toEqual([])
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('keeps same-document navigation and an uncommitted navigation attempt live', async () => {
+    const revealTerminalPaneInWindow = await loadRelay()
+    const { webContents, mainWindow, sentRequest } = createWindow()
+    const pending = revealTerminalPaneInWindow(mainWindow, target)
+    webContents.emit('did-navigate-in-page', {}, '#section', true)
+    webContents.emit('did-start-navigation', {}, 'https://external.test', false, true)
+    reply(webContents, sentRequest().requestId, true)
+    await expect(pending).resolves.toBe(true)
+    expect(mocks.focusExistingMainWindow).toHaveBeenCalledOnce()
+  })
+
+  it('releases the request when sending to the renderer throws', async () => {
+    vi.useFakeTimers()
+    const revealTerminalPaneInWindow = await loadRelay()
+    const { webContents, mainWindow, windowEvents } = createWindow()
+    webContents.send.mockImplementation(() => {
+      throw new Error('Render frame was disposed')
+    })
+    await expect(revealTerminalPaneInWindow(mainWindow, target)).rejects.toThrow(
+      'renderer_unavailable'
+    )
+    expect(ipcEmitter.listenerCount('ui:terminalPaneRevealReply')).toBe(0)
+    expect(webContents.eventNames()).toEqual([])
+    expect(windowEvents.eventNames()).toEqual([])
+    expect(vi.getTimerCount()).toBe(0)
+    expect(mocks.focusExistingMainWindow).not.toHaveBeenCalled()
   })
 
   it('raises the window once the targeted renderer has revealed the pane', async () => {

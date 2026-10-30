@@ -1,7 +1,7 @@
 import { SessionOutputPlane } from './session-output-plane'
 import { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
-import type { SubprocessHandle } from './session-subprocess-handle'
 import { release } from 'node:os'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import type { PtyOwnerBackend } from '../../shared/pty-owner-backend'
 import { windowsPtyForOwnerBackend } from '../../shared/xterm-conpty-options'
 

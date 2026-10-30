@@ -242,6 +242,43 @@ describe('browserManager', () => {
     expect(item.setSavePath).toHaveBeenCalledWith(chosen)
   })
 
+  it("saves the page's next download where an agent asked and reports when it finishes", async () => {
+    webContentsFromIdMock.mockReturnValue(null)
+    const agentPath = join('/work', 'out', 'report.csv')
+    const claim = browserManager.claimNextDownload(414, agentPath)
+
+    const claimed = createDownloadItem()
+    browserManager.handleGuestWillDownload({ guestWebContentsId: 414, item: claimed })
+    await expect(claim.started).resolves.toBe(true)
+    expect(claimed.setSavePath).toHaveBeenCalledWith(agentPath)
+
+    const doneEvent = { preventDefault: () => {}, defaultPrevented: false }
+    getDownloadItemEventHandler(claimed, 'once', 'done')?.(doneEvent, 'completed')
+    await expect(claim.finished).resolves.toMatchObject({
+      status: 'completed',
+      savePath: agentPath
+    })
+
+    const next = createDownloadItem()
+    browserManager.handleGuestWillDownload({ guestWebContentsId: 414, item: next })
+    expect(next.setSavePath).toHaveBeenCalledWith(join('/downloads', 'report.csv'))
+    claim.release()
+  })
+
+  it("leaves an extension's save-dialog download where the user chose during an agent claim", () => {
+    webContentsFromIdMock.mockReturnValue(null)
+    const claim = browserManager.claimNextDownload(415, join('/work', 'out', 'report.csv'))
+    const item = createDownloadItem()
+    const chosen = join('/elsewhere', 'backup.json')
+
+    browserManager.markExtensionDownload(item)
+    browserManager.requestDownloadSavePath(item, chosen)
+    browserManager.handleGuestWillDownload({ guestWebContentsId: 415, item })
+
+    expect(item.setSavePath).toHaveBeenCalledWith(chosen)
+    claim.release()
+  })
+
   it('flushes started and terminal snapshots for downloads that finish before registration', () => {
     const rendererSendMock = vi.fn()
     const guest = {

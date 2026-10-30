@@ -5,6 +5,7 @@ import {
 } from '../terminal-side-effect-facts-handler'
 import { attachTerminalResidentPresentation } from './terminal-resident-presentation'
 import { captureNotificationTransportOwner } from '@/attention/notification-subject-owner'
+import { notifyTerminalTypingDiscardedBeforeBind } from '../terminal-input-not-sent-notice'
 import { terminalShowsReplayedHistory } from '../replayed-history-terminals'
 import { isWebTerminalSurfaceTabId } from '../../../../../shared/terminal-surface-id'
 import { shouldRetainDisposedPaneSpawn } from './disposed-spawn-retention'
@@ -141,6 +142,7 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
     ...(session.deps.onPreconnectInput
       ? { onPreconnectInput: session.deps.onPreconnectInput }
       : {}),
+    onTypingDiscardedBeforeBind: () => notifyTerminalTypingDiscardedBeforeBind(session.deps.tabId),
     env: session.paneEnv,
     ...(session.paneStartup?.envToDelete ? { envToDelete: session.paneStartup.envToDelete } : {}),
     command: session.shouldDeliverStartupViaTerminalPaste

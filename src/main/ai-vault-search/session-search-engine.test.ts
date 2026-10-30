@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { AiVaultSearchRequestSchema } from '../../shared/ai-vault-search-contract'
 import { SESSION_SEARCH_QUERY_MAX_LENGTH } from './session-search-engine-types'
 import type { SessionSearchRequest, SessionSearchResponse } from './session-search-engine-types'
 import { planSessionSearchQuery } from './session-search-query-planner'
@@ -242,6 +243,16 @@ describe('filters narrow retrieval, not just the page', () => {
     expect(
       ids(engine.search({ query: 'resolveTerminalPath', filters: { scopePaths: ['/target'] } }))
     ).toEqual(['2'])
+  })
+
+  it('reads a sub-millisecond `since` as the instant it names, whatever its offset', async () => {
+    const { db, engine } = await open('ss-engine-since-sub-ms')
+    addSyntheticSession(db, { id: 1, text: 'needle', updatedAt: '2026-01-01T08:00:00.000Z' })
+    addSyntheticSession(db, { id: 2, text: 'needle', updatedAt: '2026-01-01T08:00:00.001Z' })
+    for (const since of ['2026-01-01T10:00:00.0005+02:00', '2026-01-01T08:00:00.0005Z']) {
+      const { filters } = AiVaultSearchRequestSchema.parse({ query: 'needle', filters: { since } })
+      expect(ids(engine.search({ query: 'needle', filters }))).toEqual(['2'])
+    }
   })
 })
 

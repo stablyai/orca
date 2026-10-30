@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, readFileSync, writeFileSync } from 'node:fs'
 import type {
   GrantAccessOptions,
   WindowsAce,
@@ -87,6 +87,7 @@ function plainPath(addonPath: string): string {
 /** An in-memory stand-in for native/windows-security; files it creates are real. */
 export function createFakeWindowsSecurity(): FakeWindowsSecurity {
   const parked: (() => void)[] = []
+  const credentials = new Map<string, Buffer>()
   const record = <T extends FakeWindowsSecurityCall['op']>(
     op: T,
     addonPath: string,
@@ -106,6 +107,29 @@ export function createFakeWindowsSecurity(): FakeWindowsSecurity {
     callsFor: (op, path) =>
       fake.calls.filter((call) => call.op === op && (path === undefined || call.path === path)),
     currentUserSid: () => FAKE_USER_SID,
+    readGenericCredential: (target) => credentials.get(target) ?? null,
+    writeGenericCredential: (target, _user, bytes) => {
+      credentials.set(target, Buffer.from(bytes))
+    },
+    readFileWithDacl: (addonPath, maxBytes) => {
+      if (!existsSync(addonPath)) {
+        return null
+      }
+      const stat = lstatSync(addonPath)
+      if (!stat.isFile() || stat.size > maxBytes) {
+        throw win32Error('ReadFile')
+      }
+      return {
+        data: readFileSync(addonPath),
+        dacl: daclFromSddl(fake.dacls.get(plainPath(addonPath)) ?? INHERITED_SDDL)
+      }
+    },
+    clearStdHandleInheritance: () => [],
+    spawnDetachedIsolated: () => {
+      throw new Error('spawnDetachedIsolated is not faked')
+    },
+    isolatedSpawnBreaksAwayFromJob: () => true,
+    hasNativeExport: () => true,
     getDaclAces: (addonPath) => {
       const path = record('get', addonPath)
       return daclFromSddl(fake.dacls.get(path) ?? INHERITED_SDDL)

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Linking, View } from 'react-native'
-import { useNavigation, useNavigationContainerRef, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useNavigation, useNavigationContainerRef, useRouter } from 'expo-router'
 import {
   OrcaMobileWebShellView,
   parseMobileWebShellLoadState
@@ -9,6 +9,7 @@ import {
 import { HostRouteNoticeBanner } from '../components/HostRouteNoticeBanner'
 import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileUiLocale } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { BridgeInitRoute } from './bridge/bridge-envelope'
 import type { BridgeClearableRouteParam } from './bridge/bridge-route-update'
@@ -24,18 +25,21 @@ import { useNativeDeviceVerbs } from '../platform/use-native-device-verbs'
 import { useNativePdfViewer } from '../platform/native-pdf-view'
 import { useShellPageBack } from './use-shell-page-back'
 import { useShellStackPop } from './use-shell-stack-pop'
+import { usePageLocationOnFold } from './page-location-on-fold'
 import { useMobileWebShellSession } from './use-mobile-web-shell-session'
+import { useShellPageStorageRefresh } from './use-shell-page-storage-refresh'
 import { usePageHostSnapshot } from './use-page-host-snapshot'
 import { useReportedHostAreaServing } from './host-area-serving'
 import { isHostRouteOf } from './page-route-policy'
 import { nativeStackReturn } from './native-stack-return'
-import { usePageLocationOnFold } from './page-location-on-fold'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { storageReadParamsSchema, type BridgeNativeVerb } from './bridge/bridge-native-verbs'
 import { SHELL_OPENING_LABEL, ShellPageCover } from './ShellWaitingFrame'
+import { ShellStateScreen } from './ShellStateScreen'
 import { useReportedShellOverlayLoad, type ShellOverlayLoad } from './shell-overlay-load'
 import { pageSafeAreaInsets, usePublishedSafeAreaInsets } from './page-safe-area-insets'
-import { ShellStateScreen } from './ShellStateScreen'
+import { usePageFoldDivision, usePublishedFoldDivision } from './page-fold-division'
+import { usePublishedShellKeyRail, useShellKeyRail } from './use-shell-key-rail'
 import { hostProfileUnreadableLine, pageFaultLine } from './shell-lifecycle-log'
 import { recordShellLifecycleLine } from './shell-lifecycle-line-recorder'
 
@@ -69,6 +73,7 @@ export function MobileWebShellScreen({
   runtime
 }: MobileWebShellScreenProps) {
   const colorScheme = useMobileColorScheme()
+  const uiLocale = useMobileUiLocale()
   const insets = useSafeAreaInsets()
   const overlay = onOverlayLoad !== undefined
   const router = useRouter()
@@ -110,12 +115,26 @@ export function MobileWebShellScreen({
     updateNotice !== null && state.kind === 'ready' && noticeDismissedFor !== state.sessionId
   // Edge-to-edge disables adjustResize and zeroes WebView IME insets, so visualViewport never shrinks; publish native keyboard height to the page.
   const keyboardInset = Math.max(0, useKeyboardOcclusion())
-  const pageInsets = pageSafeAreaInsets({ insets, topCovered: noticeShown })
-  const { snapshot, unreadable, readStorage, refreshStorage, writeStorage, readWorkspaceKey } =
-    usePageHostSnapshot(hostId, route.pathname, ownsHostArea)
-  // Create the media registry before the bridge; its staged files must belong to this page session.
-  const serveDeviceVerb = useNativeDeviceVerbs(state.kind === 'ready' ? state.sessionId : null)
-  const servePdfView = useNativePdfViewer(hostId, state.kind === 'ready' ? state.sessionId : null)
+  const pageFold = usePageFoldDivision()
+  const pageInsets = pageSafeAreaInsets({
+    insets: pageFold.safeAreaInsets,
+    topCovered: noticeShown
+  })
+  const readySessionId = state.kind === 'ready' ? state.sessionId : null
+  const keyRail = useShellKeyRail({ sessionId: readySessionId, overlay, routeGrants })
+  const {
+    snapshot,
+    unreadable,
+    retry: retryHostSnapshot,
+    readStorage,
+    refreshStorage,
+    writeStorage,
+    readWorkspaceKey
+  } = usePageHostSnapshot(hostId, route.pathname, ownsHostArea)
+  // Create the media registry before the bridge; staged files belong to this page session.
+  const serveDeviceVerb = useNativeDeviceVerbs(readySessionId)
+  const servePdfView = useNativePdfViewer(hostId, readySessionId)
+  // Read the shell's storage for this host.
   const serveNativeVerb = (verb: BridgeNativeVerb, params: unknown): Promise<unknown> =>
     verb === 'native.storage.read'
       ? readWorkspaceKey(storageReadParamsSchema.parse(params).key).then((value) => ({ value }))
@@ -128,6 +147,7 @@ export function MobileWebShellScreen({
       console.warn('[web-shell] could not open a URL for the page', { url, error })
     })
   }
+
   // Push so Back reveals the mounted page without downloading or handshaking again, unless the page replaced itself.
   const openPageRoute = (href: string, replace = false) => {
     if (overlay) {
@@ -148,8 +168,8 @@ export function MobileWebShellScreen({
       })
       return
     }
-    // The wide host route owns the session area; dismissTo pops to it or replaces after a cold deep link, avoiding a second copy.
-    if (isWideLayout && isHostRouteOf(href, hostId)) {
+    // Host exits preserve notice params and replace cold deep links at either width.
+    if (isHostRouteOf(href, hostId)) {
       router.dismissTo(href)
       return
     }
@@ -166,7 +186,11 @@ export function MobileWebShellScreen({
     route,
     safeAreaInsets: pageInsets,
     keyboardInset,
+    pageGeometry: pageFold.geometry,
+    foldDivision: pageFold.division,
+    terminalKeyRail: keyRail.keys,
     colorScheme,
+    uiLocale,
     pageRoutes,
     pageRouteGrants,
     routeGrants,
@@ -192,6 +216,7 @@ export function MobileWebShellScreen({
     onPagePainted: reportPagePainted,
     onPageBackClaim: reportPageBackClaim,
     onPageLocation: (href) => holdPageLocation(href, ownsHostArea),
+    onTerminalKeyRailClaim: keyRail.reportClaim,
     onRouteParamClear: (param, value) => {
       onRouteParamClear?.(param, value)
     },
@@ -211,31 +236,32 @@ export function MobileWebShellScreen({
     onBinaryFramesDropped: reportDroppedBinaryFrames
   })
 
-  // paneKey changes keep the session mounted; publish the new route without reloading. The longer-lived host deduplicates routes and preserves any in-flight frame.
-  const publishRoute = bridge.publishRoute
-  useEffect(() => {
-    publishRoute(route)
-  }, [publishRoute, route])
+  // paneKey changes keep the session mounted; the host deduplicates routes and preserves in-flight frames.
+  useShellPageStorageRefresh(refreshStorage, bridge.publishStorage)
+  useEffect(() => bridge.publishRoute(route), [bridge.publishRoute, route])
 
   usePublishedSafeAreaInsets(bridge.publishSafeAreaInsets, pageInsets)
   const publishKeyboardInset = bridge.publishKeyboardInset
   useEffect(() => {
     publishKeyboardInset(keyboardInset)
   }, [publishKeyboardInset, keyboardInset])
+  usePublishedFoldDivision(bridge.publishFoldDivision, pageFold.division)
+  usePublishedShellKeyRail(keyRail.keys, bridge, keyRail.inputOwner, keyRail.toolbar)
 
   // Use navigation screen options to disable this stack entry’s gesture; the router has no such option.
   useShellPageBack({
     claimed: backClaimed,
+    isFocused: () => navigation.isFocused(),
     sendBack: bridge.sendBack,
     setOptions: navigation.setOptions
   })
   useReportedShellOverlayLoad(onOverlayLoad, state, pageFrame, downloadProgress)
 
-  // A rejected profile read creates no host; fail the document instead of leaving ready forever. Recovery refetches once, then exposes Try again.
+  // Profile failures preserve verified bundle bytes and retry the device store.
   useEffect(() => {
     if (unreadable) {
       console.warn('[web-shell] this host could not be read from the app store')
-      reportShellFailure('document-load-failed')
+      reportShellFailure('host-profile-unreadable')
     }
   }, [reportShellFailure, unreadable])
   useEffect(() => {
@@ -252,7 +278,12 @@ export function MobileWebShellScreen({
       <ShellStateScreen
         hostId={hostId}
         state={state}
-        onRetry={retry}
+        onRetry={() => {
+          if (unreadable) {
+            retryHostSnapshot()
+          }
+          retry()
+        }}
         downloadProgress={downloadProgress}
         host={snapshot?.host ?? null}
       />
@@ -260,6 +291,8 @@ export function MobileWebShellScreen({
   }
   return (
     <View
+      ref={pageFold.rootRef}
+      onLayout={pageFold.onRootLayout}
       style={[
         styles.shellRoot,
         // The page pads system bars from init insets; a visible banner owns the status-bar strip.
@@ -281,6 +314,7 @@ export function MobileWebShellScreen({
         ref={bridge.viewRef}
         // Overlays cannot cover the screen beneath; hide their opaque WebView until first paint.
         style={[styles.shellView, overlay && pageFrame !== 'painted' && styles.unpaintedOverlay]}
+        onLayout={pageFold.onShellLayout}
         generationDirectory={state.generationDirectory}
         sessionId={state.sessionId}
         bridgeEnabled={bridge.bridgeEnabled}
@@ -323,10 +357,6 @@ const styles = themedStyleSheet(() => ({
     flex: 1,
     backgroundColor: colors.bgBase
   },
-  shellView: {
-    flex: 1
-  },
-  unpaintedOverlay: {
-    opacity: 0
-  }
+  shellView: { flex: 1 },
+  unpaintedOverlay: { opacity: 0 }
 }))

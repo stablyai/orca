@@ -3,8 +3,8 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test, type TestInfo } from '@stablyai/playwright-test'
-import { fingerprintPluginConsent } from '../../src/shared/plugins/plugin-consent-fingerprint'
-import { pluginManifestSchema } from '../../src/shared/plugins/plugin-manifest'
+import { fingerprintPluginConsent } from '../../src/shared/plugins/approval/plugin-consent-fingerprint'
+import { pluginManifestSchema } from '../../src/shared/plugins/manifest/plugin-manifest'
 import { createRestartSession } from './helpers/orca-restart'
 
 const PLUGIN_COUNT = 20

@@ -91,7 +91,10 @@ export function fetchCombinedDiffSection({
       },
       {
         filePath: entry.path,
-        staged: 'area' in entry && entry.area === 'staged'
+        staged: 'area' in entry && entry.area === 'staged',
+        ...('area' in entry && entry.area === 'staged' && entry.status === 'renamed'
+          ? { oldPath: entry.oldPath }
+          : {})
       }
     )
   )

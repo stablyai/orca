@@ -1,9 +1,8 @@
-import { ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { getIndexedRepoMap } from '@/store/worktree-repo-index'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { workspaceNavigationToastAction } from '@/lib/workspace-navigation-toast-action'
 import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
 import { resolveIndexedWorktreeOwner } from '@/lib/worktree-runtime-owner-index'
@@ -60,9 +59,6 @@ export function showWorktreeCreationReadyToast(
     : translate('components.workspace.creation.worktreeReadyToast', 'Worktree {{name}} is ready', {
         name
       })
-  const goToLabel = isFolder
-    ? translate('components.workspace.creation.goToWorkspace', 'Go to workspace')
-    : translate('components.workspace.creation.goToWorktree', 'Go to worktree')
   let retired = false
   const retire = (): void => {
     retired = true
@@ -84,21 +80,11 @@ export function showWorktreeCreationReadyToast(
     duration: Infinity,
     onDismiss: retire,
     onAutoClose: retire,
-    action: {
-      label: (
-        <span className="inline-flex items-center gap-1.5">
-          <ExternalLink className="size-3" />
-          {goToLabel}
-        </span>
-      ),
-      onClick: () => {
-        retire()
-        activateAndRevealWorktree(worktree.id, {
-          sidebarRevealBehavior: 'auto',
-          navigationIntent: 'user-open',
-          ...(executionHostId ? { executionHostId } : {})
-        })
-      }
-    }
+    action: workspaceNavigationToastAction({
+      workspaceId: worktree.id,
+      executionHostId: executionHostId ?? undefined,
+      isFolder,
+      onNavigate: retire
+    })
   })
 }

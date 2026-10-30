@@ -220,6 +220,10 @@ export const GROK_ACP_DIALECT: AcpDialect = {
   toolSubagents: grokToolSubagents,
   subagentSessionEnd,
   notification,
+  textTaskCompletion: (method, params) =>
+    method.replace(/^_/, '') === 'x.ai/session/prompt_complete'
+      ? promptCompleteSchema.safeParse(params).data
+      : undefined,
   contextWindow,
   modelEfforts: grokModelEfforts,
   hookBlock,

@@ -1,7 +1,6 @@
 import { StyleSheet } from 'react-native'
-import { colors, getMobileColorScheme, spacing, radii, typography } from '../theme/mobile-theme'
+import { colors, getMobileColorScheme, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
 export const customKeyModalStyles = themedStyleSheet(() => ({
   header: {
@@ -236,17 +235,6 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
     fontSize: 13,
     fontWeight: '500',
     color: colors.textSecondary
-  },
-  fieldInput: {
-    backgroundColor: colors.bgBase,
-    color: colors.textPrimary,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    fontFamily: typography.monoFamily,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
   },
   switchRow: {
     flexDirection: 'row',

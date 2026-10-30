@@ -1,7 +1,6 @@
 import { nextQueryCandidate, parsePtyStartupQuery } from './pty-startup-query'
 import { PtyOwnerColorQueryReplies } from './pty-owner-color-query-replies'
 import { TerminalKittyKeyboardModeTracker } from './terminal-kitty-keyboard-mode-tracker'
-import type { TerminalOscColorQuerySlot } from './terminal-osc-color-reply'
 import type { PtyOwnerBackend } from './pty-owner-backend'
 import { PtyStartupReplyDelivery } from './pty-startup-reply-delivery'
 import { deliverTerminalQueryReplyPayload } from './terminal-query-reply-delivery'
@@ -21,7 +20,6 @@ export {
 export type { PtyStartupIngressIntent } from './pty-startup-ingress-intent'
 export type { PtyIngressEmission, PtyStartupIngressOptions } from './pty-startup-ingress-contract'
 
-const MAX_QUERY_CANDIDATE_CHARS = 64
 // Allow relay jitter before releasing torn echoes raw (#12112). Next reads/snapshot barriers usually end the wait;
 // only one projection’s echo-shaped bytes on an idle pane are exposed to this guess.
 const ECHO_CONTINUATION_HOLD_MS = 500
@@ -29,7 +27,8 @@ const ECHO_CONTINUATION_HOLD_MS = 500
 const DEFAULT_STARTUP_WINDOW_MS = 5_000
 
 /** Serialize source classification after shell-ready preprocessing; emit each accepted range once. Own all lifetime OSC 10/11
- * queries here and strip them so viewers cannot answer twice. Only Kitty authority expires with startup. */
+ * queries here and strip them so viewers cannot answer twice; a launcher-pinned PTY's OSC 4/12 and ?996n too. Only Kitty
+ * authority expires with startup. */
 export class PtyStartupIngress {
   private readonly colorQueries: PtyOwnerColorQueryReplies
   private readonly ownerBackend: PtyOwnerBackend
@@ -38,7 +37,8 @@ export class PtyStartupIngress {
   private readonly operations: PtyStartupIngressOperation[] = []
   private processing = false
   private closed = false
-  private kittyQueryOpen: boolean
+  /** Kitty authority closes with startup; a launcher-pinned PTY's appearance queries stay owned for life. */
+  private readonly scope: { kitty: boolean; appearance: boolean }
   private readonly kittyModes = new TerminalKittyKeyboardModeTracker()
   private rawHighWater = 0
   private queryPending: PtyIngressSourceSpan | null = null
@@ -56,8 +56,11 @@ export class PtyStartupIngress {
       Date.now() + (options.intent?.deadlineMs ?? DEFAULT_STARTUP_WINDOW_MS)
     )
     this.onEmission = options.onEmission
-    this.kittyQueryOpen = options.intent?.kittyKeyboardProtocol === true
-    if (options.intent && this.kittyQueryOpen) {
+    this.scope = {
+      kitty: options.intent?.kittyKeyboardProtocol === true,
+      appearance: this.colorQueries.ownsAppearance
+    }
+    if (options.intent && this.scope.kitty) {
       this.deadlineTimer = setTimeout(
         () => this.enqueue({ kind: 'expire' }),
         Math.max(0, options.intent.deadlineMs)
@@ -129,13 +132,13 @@ export class PtyStartupIngress {
         return
       case 'close-query':
         // Only Kitty authority closes; lifetime color replies and already-written echoes remain owner responsibilities.
-        this.kittyQueryOpen = false
-        if (this.queryPending?.data.startsWith('\x1b[')) {
+        this.scope.kitty = false
+        if (this.colorQueries.releasesTornCsi(this.queryPending?.data)) {
           this.releaseQueryPending()
         }
         return
       case 'expire':
-        this.kittyQueryOpen = false
+        this.scope.kitty = false
         this.releasePendingInSourceOrder(false)
         this.clearDeadline()
         return
@@ -147,7 +150,7 @@ export class PtyStartupIngress {
         this.releaseQueryPending()
         return
       case 'teardown':
-        this.kittyQueryOpen = false
+        this.scope.kitty = false
         this.releasePendingInSourceOrder(true)
         this.delivery.close()
         this.clearDeadline()
@@ -183,7 +186,7 @@ export class PtyStartupIngress {
           // ConPTY’s ESC-stripped echo may remain query-shaped, but leaking it is preferable to withholding ESC and timing out.
           if (this.queryPending) {
             const resolved = combinePtyIngressSourceSpans(this.queryPending, tail)
-            if (parsePtyStartupQuery(resolved.data, 0, this.kittyQueryOpen).kind !== 'none') {
+            if (parsePtyStartupQuery(resolved.data, 0, this.scope).kind !== 'none') {
               this.processQuerySpan(tail)
               return
             }
@@ -220,12 +223,12 @@ export class PtyStartupIngress {
     let scanOffset = 0
     let emittedOffset = 0
     while (scanOffset < input.data.length) {
-      const candidateIndex = nextQueryCandidate(input.data, scanOffset, this.kittyQueryOpen)
+      const candidateIndex = nextQueryCandidate(input.data, scanOffset, this.scope)
       if (candidateIndex === -1) {
         this.emit(slicePtyIngressSourceSpan(input, emittedOffset), false)
         return
       }
-      const query = parsePtyStartupQuery(input.data, candidateIndex, this.kittyQueryOpen)
+      const query = parsePtyStartupQuery(input.data, candidateIndex, this.scope)
       if (query.kind === 'none') {
         scanOffset = candidateIndex + 1
         continue
@@ -235,7 +238,7 @@ export class PtyStartupIngress {
           this.emit(slicePtyIngressSourceSpan(input, emittedOffset, candidateIndex), false)
         }
         const candidate = slicePtyIngressSourceSpan(input, candidateIndex)
-        if (candidate.data.length <= MAX_QUERY_CANDIDATE_CHARS) {
+        if (this.colorQueries.holdsCandidate(candidate.data)) {
           this.queryPending = candidate
           this.armQueryHold()
         } else {
@@ -248,32 +251,27 @@ export class PtyStartupIngress {
         this.emit(slicePtyIngressSourceSpan(input, emittedOffset, candidateIndex), false)
       }
       const querySpan = slicePtyIngressSourceSpan(input, candidateIndex, query.endIndex)
-      const answered =
+      // What stands in for an answered query: nothing, or a mixed OSC's SETs for the viewers.
+      const replacement =
         query.kind === 'kitty'
           ? this.delivery.answer(`\x1b[?${this.kittyModes.flags}u`, 'owner')
-          : this.answerColorQuery(query.slots)
-      if (query.kind === 'kitty' && answered) {
-        this.kittyQueryOpen = false
+            ? ''
+            : null
+          : this.colorQueries.answer(query, (reply) => this.delivery.answer(reply, 'owner'))
+      if (query.kind === 'kitty' && replacement !== null) {
+        this.scope.kitty = false
       }
       // A failed write passes the query on, except under ConPTY, whose ESC-stripped
       // echo of a downstream reply would leak into a cooked shell (#9651).
-      if (answered || (suppressConptyQuery && query.kind !== 'kitty')) {
-        this.emit(querySpan, true, '')
+      const seen = query.kind === 'appearance'
+      if (replacement !== null || (suppressConptyQuery && query.kind !== 'kitty')) {
+        this.emit(querySpan, true, replacement ?? this.colorQueries.forwardedSets(query), seen)
       } else {
-        this.emit(querySpan, false)
+        this.emit(querySpan, false, querySpan.data, seen)
       }
       scanOffset = query.endIndex
       emittedOffset = query.endIndex
     }
-  }
-
-  /** True when at least the first reply landed; a failed write stops the rest in order. */
-  private answerColorQuery(slots: readonly TerminalOscColorQuerySlot[]): boolean {
-    const replies = this.colorQueries.replies(slots)
-    return (
-      replies.length > 0 &&
-      replies.findIndex((reply) => !this.delivery.answer(reply, 'owner')) !== 0
-    )
   }
 
   private releaseQueryPending(): void {
@@ -288,7 +286,7 @@ export class PtyStartupIngress {
   /** Release query before echo defensively: it would own earlier bytes, though current classification never arms both.
    * Retain torn colors across barriers unless explicitly included: viewers lack reply authority, so only hold timeout/teardown ends them. */
   private releasePendingInSourceOrder(includeColorQuery: boolean): void {
-    if (includeColorQuery || this.queryPending?.data.startsWith('\x1b[')) {
+    if (includeColorQuery || this.colorQueries.releasesTornCsi(this.queryPending?.data)) {
       this.releaseQueryPending()
     }
     const pending = this.takeEchoPending()
@@ -332,11 +330,14 @@ export class PtyStartupIngress {
     this.queryHoldTimer = null
   }
 
-  private emit(span: PtyIngressSourceSpan, transformed: boolean, data = span.data): void {
-    if (this.kittyQueryOpen) {
+  /** `seen`: the owner already recorded these bytes' colour SETs while answering them in order. */
+  private emit(span: PtyIngressSourceSpan, transformed: boolean, data = span.data, seen = false) {
+    if (this.scope.kitty) {
       this.kittyModes.scan(data)
     }
-    this.colorQueries.observe(data)
+    if (!seen) {
+      this.colorQueries.observe(data)
+    }
     this.onEmission({ data, rawStartSeq: span.rawStartSeq, rawEndSeq: span.rawEndSeq, transformed })
   }
 

@@ -9,6 +9,7 @@ import * as model from './resource-pty-view-model'
 import { makeRepo, makeWorktree } from '../worktree-jump-palette-test-fixtures'
 
 vi.mock('@/i18n/i18n', () => ({
+  getIntlLocale: () => 'en',
   translate: (_key: string, fallback: string, values?: Record<string, string | number>) =>
     Object.entries(values ?? {}).reduce(
       (text, [key, value]) => text.replace(`{{${key}}}`, String(value)),

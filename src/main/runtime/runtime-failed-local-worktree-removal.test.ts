@@ -54,6 +54,8 @@ let worktreePath = ''
 let lockedFile = ''
 let worktreeId = ''
 let repo: Repo
+// Only Orca's follow-up delete names the locked file; Git's error names the checkout.
+const LOCKED_FILE_ERROR = /LICENSE could not be deleted/
 
 async function git(args: string[], cwd = repoPath): Promise<string> {
   const { stdout } = await execFileAsync('git', args, { cwd })
@@ -199,6 +201,10 @@ async function failInSession(): Promise<unknown> {
 
 describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails partway', () => {
   beforeEach(async () => {
+    // A git hook's GIT_DIR/GIT_INDEX_FILE would point the scratch repo's git, and Orca's, at the outer repo.
+    for (const key of Object.keys(process.env).filter((name) => name.startsWith('GIT_'))) {
+      vi.stubEnv(key, undefined)
+    }
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     scratchDir = await realpath(await mkdtemp(join(tmpdir(), 'orca-failed-removal-')))
     recordsDir = join(scratchDir, 'profile')
@@ -226,21 +232,25 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
     _resetPendingWorktreeRemovalsForTests()
     vi.mocked(removeHostTree).mockClear()
     vi.restoreAllMocks()
+    vi.unstubAllEnvs()
     await setImmutable(false, scratchDir)
     expect((await execFileAsync('find', [scratchDir, '-flags', '+uchg'])).stdout).toBe('')
     await removeTree(scratchDir)
   })
 
-  it('keeps the leftover listed with Git’s error after the startup finish fails', async () => {
+  it('keeps the leftover listed with the locked file’s error after the startup finish fails', async () => {
     const error = await failStartupFinish()
 
-    expect(String(error)).toMatch(/Operation not permitted/)
+    expect(String(error)).toMatch(LOCKED_FILE_ERROR)
     // Git removed registration and merged branch but left checkout files and Orca metadata.
     expect(await isRegistered(worktreePath)).toBe(false)
     expect(existsSync(lockedFile)).toBe(true)
     expect(await git(['branch', '--list', 'feature'])).toBe('')
     expect(await listedRows()).toEqual([
-      { path: worktreePath, removalError: expect.stringMatching(/Operation not permitted/) }
+      {
+        path: worktreePath,
+        removalError: expect.stringMatching(LOCKED_FILE_ERROR)
+      }
     ])
     // The leftover is not fenced: terminals may open in it while it waits for the user.
     beginTerminalInstall(worktreePath)()
@@ -385,7 +395,7 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
     )
     await _settlePendingWorktreeRemovalsForTests()
 
-    expect(String(error)).toMatch(/Operation not permitted/)
+    expect(String(error)).toMatch(LOCKED_FILE_ERROR)
     expect(await git(['remote'])).not.toContain(pushTarget.remoteName)
     expect(existsSync(lockedFile)).toBe(true)
   })
@@ -393,7 +403,7 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
   it('removes the push-target remote Orca added when the startup finish fails', async () => {
     const pushTarget = await addOrcaPushTargetRemote()
 
-    expect(String(await finishAtStartup([], pushTarget))).toMatch(/Operation not permitted/)
+    expect(String(await finishAtStartup([], pushTarget))).toMatch(LOCKED_FILE_ERROR)
 
     expect(await git(['remote'])).not.toContain(pushTarget.remoteName)
     expect(existsSync(lockedFile)).toBe(true)
@@ -456,7 +466,14 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
     expect(await isRegistered(worktreePath)).toBe(true)
     expect(await git(['branch', '--list', 'feature'])).not.toBe('')
     expect(purged).toEqual([])
-    expect(await readWorktreeRemovalRecords(recordsDir)).toEqual([])
+    expect(await readWorktreeRemovalRecords(recordsDir)).toEqual([
+      expect.objectContaining({
+        worktreeId,
+        failure: expect.objectContaining({
+          message: expect.stringMatching(/A different checkout is now at/)
+        })
+      })
+    ])
   })
 
   it('never deletes a worktree Git registers inside the leftover', async () => {

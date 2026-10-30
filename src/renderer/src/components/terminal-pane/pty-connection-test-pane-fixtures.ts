@@ -1,7 +1,7 @@
 import type { TerminalInputCall } from './terminal-input-call'
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
-import type { PtyReplayDataMeta } from './pty-transport-types'
+import type { PtyReplayDataMeta, PtyTransport } from './pty-transport-types'
 
 export const LEAF_1 = '11111111-1111-4111-8111-111111111111' as const
 export const LEAF_2 = '22222222-2222-4222-8222-222222222222' as const
@@ -28,7 +28,7 @@ export type ConnectCallbacks = {
 
 export type MockTransport = {
   retryRecovery?: () => boolean
-  attach: ReturnType<typeof vi.fn>
+  attach: Mock<PtyTransport['attach']>
   connect: ReturnType<typeof vi.fn> & {
     mockImplementation: (
       impl: (opts: { callbacks?: ConnectCallbacks } & Record<string, unknown>) => Promise<unknown>
@@ -43,7 +43,7 @@ export type MockTransport = {
   setOutputPaused?: ReturnType<typeof vi.fn>
   resize: ReturnType<typeof vi.fn>
   isConnected?: ReturnType<typeof vi.fn>
-  getPtyId: ReturnType<typeof vi.fn>
+  getPtyId: Mock<() => string | null>
   getConnectionId: ReturnType<typeof vi.fn>
   serializeBuffer?: ReturnType<typeof vi.fn>
   serializeBufferOutcome?: ReturnType<typeof vi.fn>
@@ -51,8 +51,8 @@ export type MockTransport = {
 
 export function createMockTransport(initialPtyId: string | null = null): MockTransport {
   let ptyId = initialPtyId
-  const transport = {
-    attach: vi.fn(({ existingPtyId }: { existingPtyId: string }) => {
+  const transport: MockTransport = {
+    attach: vi.fn<PtyTransport['attach']>(({ existingPtyId }) => {
       ptyId = existingPtyId
     }),
     connect: vi.fn().mockImplementation(async (opts: { sessionId?: string }) => {
@@ -77,7 +77,7 @@ export function createMockTransport(initialPtyId: string | null = null): MockTra
     getPtyId: vi.fn(() => ptyId),
     getConnectionId: vi.fn(() => null),
     serializeBuffer: undefined
-  } as MockTransport
+  }
   transport.isConnected = vi.fn(() => ptyId !== null)
   const sendInput = transport.sendInput as unknown as (data: string) => boolean
   // Why: query replies route through sendInputImmediate; delegate to the same spy so reply-delivery assertions still observe them (#7329).

@@ -13,6 +13,7 @@ import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 export async function postConversationReply(args: {
   canUseRepoMutationContext: boolean
@@ -62,7 +63,7 @@ export async function postConversationReply(args: {
 
   if (!result.ok) {
     toast.error(
-      result.error ||
+      codeHostErrorText(result) ||
         translate('auto.components.PullRequestPage.5821aab360', 'Failed to post reply.')
     )
     return false

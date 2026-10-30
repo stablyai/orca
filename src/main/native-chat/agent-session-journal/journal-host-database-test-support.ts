@@ -27,15 +27,15 @@ export function openTestJournalHostDatabase(stateDirectory: string): JournalHost
   return database
 }
 
-export function closeTestJournalHostDatabase(stateDirectory: string): void {
+export async function closeTestJournalHostDatabase(stateDirectory: string): Promise<void> {
   const directory = resolve(stateDirectory)
-  opened.get(directory)?.close()
+  await opened.get(directory)?.close()
   opened.delete(directory)
 }
 
-export function closeTestJournalHostDatabases(): void {
+export async function closeTestJournalHostDatabases(): Promise<void> {
   for (const database of opened.values()) {
-    database.close()
+    await database.close()
   }
   opened.clear()
 }
@@ -68,7 +68,7 @@ export function createTrackedJournalOpener(): TrackedJournalOpener {
     },
     closeAll: async () => {
       await Promise.allSettled(journals.splice(0).map((journal) => journal.close()))
-      closeTestJournalHostDatabases()
+      await closeTestJournalHostDatabases()
     }
   }
 }

@@ -12,6 +12,7 @@ import {
 } from '../../../src/shared/github/linked-pr-staleness'
 import type { MobileWorktreeSummary } from '../source-control/mobile-worktree-metadata-operations'
 import type { WorktreeGitHubPRLink } from '../source-control/mobile-pr-link'
+import { translate } from '../i18n/mobile-i18n'
 
 export type PrSidebarData = {
   pr: PRInfo
@@ -197,7 +198,12 @@ export async function loadPrSidebarData(
     }
   } catch (err) {
     // Rejected dependencies must settle as UI errors rather than unhandled rejections.
-    return failureState(err instanceof Error ? err.message : 'Unable to load pull request')
+    return err instanceof Error
+      ? failureState(err.message)
+      : {
+          kind: 'error',
+          message: translate('session.prSidebarState.loadFailed', 'Unable to load pull request')
+        }
   }
 }
 

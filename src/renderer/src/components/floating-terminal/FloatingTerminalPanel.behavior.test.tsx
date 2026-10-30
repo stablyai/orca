@@ -143,6 +143,8 @@ vi.mock('@/lib/connection-context', async () => {
 vi.mock('@/lib/create-untitled-markdown', () => ({
   createUntitledMarkdownFileWithTemplateSelection: vi.fn()
 }))
+// Why inline and sync: the shortcuts spec imports this module to assert the launch destination.
+vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: vi.fn(() => null) }))
 vi.mock('@/lib/ipc-error', async () => {
   return (await import('./floating-terminal-panel-test-module-mocks')).createIpcErrorModule()
 })

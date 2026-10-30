@@ -3,7 +3,11 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { handleSwitchTabAcrossAllTypes } from '../hooks/ipc-tab-switch'
-import { switchFloatingWorkspaceTab } from '@/lib/floating-workspace-terminal-actions'
+import {
+  createFloatingWorkspaceTerminalTab,
+  switchFloatingWorkspaceTab
+} from '@/lib/floating-workspace-terminal-actions'
+import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
 import type { Tab } from '../../../shared/tab-types'
 import { useRunningTerminalCloseConfirmStore } from '@/store/running-terminal-close-confirm'
@@ -12,8 +16,14 @@ import {
   ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT,
   type EditorRequestCmdSaveDetail
 } from './editor/editor-autosave'
+import { createTestStore, makeWorktree, TEST_REPO } from '@/store/slices/store-test-helpers'
+import { useTerminalKeyboardShortcuts } from './use-terminal-keyboard-shortcuts'
+import { agentMenuShortcutLabels } from './tab-bar/agent-menu-shortcut-labels'
 import { handleTerminalWorkspaceKeyDown } from './terminal-workspace-keydown'
 import type { TerminalActivationController } from './use-terminal-activation-actions'
+import type * as AgentTabShortcuts from './terminal-agent-tab-shortcut'
+import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TerminalAgentTabShortcut } from './terminal-agent-tab-shortcut'
 import { useTerminalBulkCloseActions } from './use-terminal-bulk-close-actions'
 import { makeOpenFile, makeUnifiedTab } from '../store/slices/store-session-test-harness'
 
@@ -30,7 +40,14 @@ const mocks = vi.hoisted(() => ({
   cancelStructuredAgentLaunch: vi.fn(),
   structuredSessionBusy: vi.fn<() => boolean>(),
   floatingFocused: false,
-  targetInsideFloatingPanel: false
+  targetInsideFloatingPanel: false,
+  resolveAgentShortcut: vi.fn<
+    (
+      args: Parameters<typeof AgentTabShortcuts.resolveTerminalAgentTabShortcut>[0]
+    ) => TerminalAgentTabShortcut
+  >(() => ({ actionId: null, agent: null })),
+  actualResolveAgentShortcut: vi.fn<typeof AgentTabShortcuts.resolveTerminalAgentTabShortcut>(),
+  launchAgentInNewTab: vi.fn()
 }))
 
 vi.mock('@/lib/agent-session/structured-agent-session-busy', async () => ({
@@ -58,9 +75,12 @@ vi.mock('@/lib/floating-workspace-terminal-actions', () => ({
 vi.mock('@/lib/terminal-shortcut-capture-notification', () => ({
   showTerminalShortcutCaptureNotification: vi.fn()
 }))
-vi.mock('./terminal-agent-tab-shortcut', () => ({
-  resolveTerminalAgentTabShortcut: () => ({ actionId: null, agent: null })
-}))
+vi.mock('./terminal-agent-tab-shortcut', async (importOriginal) => {
+  const actual = await importOriginal<typeof AgentTabShortcuts>()
+  mocks.actualResolveAgentShortcut.mockImplementation(actual.resolveTerminalAgentTabShortcut)
+  return { ...actual, resolveTerminalAgentTabShortcut: mocks.resolveAgentShortcut }
+})
+vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: mocks.launchAgentInNewTab }))
 
 vi.mock('./terminal/terminal-tab-actions', () => ({ closeTerminalTab: mocks.closeTerminalTab }))
 vi.mock('@/runtime/structured-agent-session-close', () => ({
@@ -83,7 +103,6 @@ const controller = {
   handleCloseAllFiles: vi.fn(),
   handleCloseBrowserTab: vi.fn(),
   handleCloseFile: vi.fn(),
-  handleNewAgentTab: vi.fn(),
   handleNewBrowserTab: vi.fn(),
   handleNewFile: vi.fn(),
   handleNewSimulatorTab: vi.fn(),
@@ -495,4 +514,163 @@ describe('tab.closeAll confirmation', () => {
     expect(queueEditorCloseRequests).not.toHaveBeenCalled()
     expect(closeFile).not.toHaveBeenCalled()
   })
+})
+
+describe('agent tab shortcuts', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.floatingFocused = false
+    mocks.state = {
+      activeGroupIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-group' },
+      groupsByWorktree: {}
+    }
+    mocks.resolveAgentShortcut.mockReturnValueOnce({
+      actionId: 'tab.newAgent.claude',
+      agent: 'claude'
+    })
+  })
+
+  function pressAgentShortcut(): void {
+    handleTerminalWorkspaceKeyDown(
+      new KeyboardEvent('keydown', { key: '1', ctrlKey: true, cancelable: true }),
+      controller,
+      'darwin'
+    )
+  }
+
+  it('opens the agent in the active worktree when the floating panel is not focused', () => {
+    pressAgentShortcut()
+
+    expect(mocks.launchAgentInNewTab).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ agent: 'claude', worktreeId: controller.activeWorktreeId })
+    )
+  })
+
+  it('opens the agent in the floating workspace when its panel owns focus', () => {
+    mocks.floatingFocused = true
+
+    pressAgentShortcut()
+
+    expect(mocks.resolveAgentShortcut).toHaveBeenCalledWith(
+      expect.objectContaining({ activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID })
+    )
+    expect(mocks.launchAgentInNewTab).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        agent: 'claude',
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        groupId: 'floating-group'
+      })
+    )
+  })
+})
+
+describe('agent shortcut delivery and deferred ownership', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.resolveAgentShortcut.mockReset()
+    mocks.floatingFocused = false
+    const store = createTestStore()
+    store.setState({
+      activeWorktreeId: controller.activeWorktreeId,
+      repos: [TEST_REPO],
+      worktreesByRepo: {
+        [TEST_REPO.id]: [makeWorktree({ id: controller.activeWorktreeId!, repoId: TEST_REPO.id })]
+      },
+      detectedAgentIds: ['codex'],
+      settings: { ...store.getState().settings!, experimentalNativeChat: false }
+    })
+    mocks.state = { ...store.getState() }
+  })
+  afterEach(cleanup)
+
+  it.each([false, true])(
+    'opens a terminal from a focused terminal through the shared resolver (floating: %s)',
+    (floating) => {
+      mocks.resolveAgentShortcut.mockImplementation(mocks.actualResolveAgentShortcut)
+      mocks.floatingFocused = floating
+      const press = (repeat: boolean): KeyboardEvent => {
+        const target = document.createElement('textarea')
+        target.classList.add('xterm-helper-textarea')
+        const event = new KeyboardEvent('keydown', {
+          key: 't',
+          code: 'KeyT',
+          metaKey: true,
+          cancelable: true,
+          repeat
+        })
+        Object.defineProperty(event, 'target', { value: target })
+        handleTerminalWorkspaceKeyDown(event, controller, 'darwin')
+        return event
+      }
+      expect(press(true).defaultPrevented).toBe(false)
+      expect(press(false).defaultPrevented).toBe(true)
+      expect(showTerminalShortcutCaptureNotification).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ actionId: 'tab.newTerminal' })
+      )
+      expect(createFloatingWorkspaceTerminalTab).toHaveBeenCalledTimes(floating ? 1 : 0)
+      expect(controller.handleNewTab).toHaveBeenCalledTimes(floating ? 0 : 1)
+      expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
+    }
+  )
+
+  it('omits an undelivered double-tap gesture while a real ordinary chord still launches', () => {
+    mocks.resolveAgentShortcut.mockImplementation(mocks.actualResolveAgentShortcut)
+    const keys = { 'tab.newAgent': [], 'tab.newAgent.codex': ['DoubleTap+Ctrl', 'Mod+Shift+X'] }
+    renderHook(() => useTerminalKeyboardShortcuts({ ...controller, keybindings: keys }))
+    for (let tap = 0; tap < 2; tap++) {
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Control', code: 'ControlLeft', ctrlKey: true })
+      )
+      window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Control', code: 'ControlLeft' }))
+    }
+    expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
+    expect(agentMenuShortcutLabels(controller.activeWorktreeId!, keys, 'linux').get('codex')).toBe(
+      'Ctrl+⇧+X'
+    )
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'x',
+        code: 'KeyX',
+        ctrlKey: true,
+        shiftKey: true,
+        cancelable: true
+      })
+    )
+    expect(mocks.launchAgentInNewTab).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ agent: 'codex' })
+    )
+  })
+
+  it.each(['workspace', 'host'])(
+    'drops a pending ordinary launch after its %s changed',
+    async (changed) => {
+      const detection = Promise.withResolvers<TuiAgent | null>()
+      mocks.resolveAgentShortcut.mockReturnValue({
+        actionId: 'tab.newAgent',
+        agent: null,
+        pendingAgent: detection.promise
+      })
+      handleTerminalWorkspaceKeyDown(
+        new KeyboardEvent('keydown', { key: 't', metaKey: true, altKey: true }),
+        controller,
+        'darwin'
+      )
+      if (changed === 'workspace') {
+        mocks.state.activeWorktreeId = 'another-workspace'
+      } else {
+        mocks.state.worktreesByRepo = {
+          [TEST_REPO.id]: [
+            makeWorktree({
+              id: controller.activeWorktreeId!,
+              repoId: TEST_REPO.id,
+              hostId: 'runtime:other'
+            })
+          ]
+        }
+      }
+      detection.resolve('codex')
+      await detection.promise
+      expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
+    }
+  )
 })

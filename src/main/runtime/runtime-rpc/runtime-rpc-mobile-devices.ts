@@ -79,8 +79,17 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
         throw new Error('delegated_device_revoke_failed')
       }
     }
+    let devices = registry.upsertDelegatedMobileDevices(parent, phones)
+    // A child removed on disk meanwhile is dropped by the save; one rerun mints it fresh.
+    if (devices.length < phones.length) {
+      const current = registry.getDevice(parentDeviceId)
+      if (current?.scope !== 'runtime') {
+        throw new Error('delegated_device_parent_unavailable')
+      }
+      devices = registry.upsertDelegatedMobileDevices(current, phones)
+    }
     return {
-      devices: registry.upsertDelegatedMobileDevices(parent, phones).map((device) => ({
+      devices: devices.map((device) => ({
         phoneKey: device.phoneKey,
         deviceId: device.deviceId,
         token: device.token

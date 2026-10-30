@@ -1,6 +1,6 @@
 import { performance } from 'node:perf_hooks'
 import { describe, it, expect } from 'vitest'
-import { extractTerminalFileLinks, extractTerminalFileLinkCandidates } from './terminal-links'
+import { extractTerminalFileLinkReadings } from './terminal-links'
 
 // Large space-padded newline-free ConPTY dashboards once caused overlapping-whitespace backtracking (#5970); bound fixture size without hiding the regression.
 describe('terminal-links ReDoS guard (#5970)', () => {
@@ -15,15 +15,14 @@ describe('terminal-links ReDoS guard (#5970)', () => {
   for (const [name, line] of cases) {
     it(`scans "${name}" in roughly linear time`, () => {
       const start = performance.now()
-      extractTerminalFileLinks(line)
-      extractTerminalFileLinkCandidates(line)
+      extractTerminalFileLinkReadings(line)
       const elapsedMs = performance.now() - start
       expect(elapsedMs).toBeLessThan(500)
     })
   }
 
   it('still detects separator paths that contain spaces', () => {
-    const links = extractTerminalFileLinks('/Users/a/Foo Bar/file.ts')
-    expect(links.some((link) => link.pathText === '/Users/a/Foo Bar/file.ts')).toBe(true)
+    const { guesses } = extractTerminalFileLinkReadings('/Users/a/Foo Bar/file.ts')
+    expect(guesses.some((link) => link.pathText === '/Users/a/Foo Bar/file.ts')).toBe(true)
   })
 })

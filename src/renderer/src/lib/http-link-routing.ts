@@ -1,7 +1,8 @@
-import type { ProjectCatalogReadState } from '@/store/project-host-setup-selector'
 import {
   localhostLabelRouteForHttpLink,
   openLabeledLocalhostLink,
+  type LocalhostLinkRepo,
+  type LocalhostLinkProject,
   type LocalhostLinkWorktree
 } from './http-link-localhost-route'
 import type { WorkspacePortScanResult } from '../../../shared/workspace-ports'
@@ -50,29 +51,30 @@ export type HttpLinkSourceOwner =
   | { kind: 'ssh'; connectionId: string }
   | { kind: 'unknown' }
 
-export type HttpLinkStoreState = ProjectCatalogReadState &
-  HttpLinkBrowserTabState & {
-    unifiedTabsByWorktree?: LinkSourceState['unifiedTabsByWorktree']
-    groupsByWorktree?: AppState['groupsByWorktree']
-    layoutByWorktree?: AppState['layoutByWorktree']
-    settings?: Partial<
-      Pick<
-        GlobalSettings,
-        | 'openLinksInAppInBackground'
-        | 'openLinksInApp'
-        | 'openLinksInAppModifierInverts'
-        | 'activeRuntimeEnvironmentId'
-        | 'localhostWorktreeLabelsEnabled'
-      >
-    > | null
-    setActiveWorktree: (worktreeId: string, executionHostId?: ExecutionHostId) => void
-    activeWorktreeId?: string | null
-    activeWorkspaceExecutionHostId?: ExecutionHostId | null
-    worktreesByRepo?: Record<string, LocalhostLinkWorktree[]>
-    allWorktrees?: () => LocalhostLinkWorktree[]
-    workspacePortScan?: { result: WorkspacePortScanResult } | null
-    workspacePortScansByKey?: Record<string, WorkspacePortScanResult>
-  }
+export type HttpLinkStoreState = HttpLinkBrowserTabState & {
+  unifiedTabsByWorktree?: LinkSourceState['unifiedTabsByWorktree']
+  groupsByWorktree?: AppState['groupsByWorktree']
+  layoutByWorktree?: AppState['layoutByWorktree']
+  settings?: Partial<
+    Pick<
+      GlobalSettings,
+      | 'openLinksInAppInBackground'
+      | 'openLinksInApp'
+      | 'openLinksInAppModifierInverts'
+      | 'activeRuntimeEnvironmentId'
+      | 'localhostWorktreeLabelsEnabled'
+    >
+  > | null
+  setActiveWorktree: (worktreeId: string, executionHostId?: ExecutionHostId) => void
+  activeWorktreeId?: string | null
+  activeWorkspaceExecutionHostId?: ExecutionHostId | null
+  repos?: readonly LocalhostLinkRepo[]
+  projects?: readonly LocalhostLinkProject[]
+  worktreesByRepo?: Record<string, LocalhostLinkWorktree[]>
+  allWorktrees?: () => LocalhostLinkWorktree[]
+  workspacePortScan?: { result: WorkspacePortScanResult } | null
+  workspacePortScansByKey?: Record<string, WorkspacePortScanResult>
+}
 
 export type HttpLinkGroupActionRequest = {
   workspaceId: string

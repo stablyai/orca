@@ -1,9 +1,8 @@
-import { sessionOutputPipelineOptions } from './session-output-pipeline-options'
+import { createSessionOutput } from './session-output-pipeline-options'
 import { isValidPtySize } from './daemon-pty-size'
 import type { SessionOutputPlane, AttachedClient } from './session-output-plane'
-import { createSessionOutputPipeline } from './session-output-pipeline'
 import { SessionProducerPause } from './session-producer-pause'
-import { SessionShellReadyBarrier } from './session-shell-ready-barrier'
+import { createSessionShellReady } from './session-shell-ready-barrier'
 import type { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
 import { SessionTerminationController } from './session-termination-controller'
 import type { ChildProcessVerdictRead, SubprocessHandle } from './session-subprocess-handle'
@@ -36,7 +35,7 @@ export class Session {
   private readonly onSessionExit?: (code: number) => void
   private readonly output: SessionOutputPlane
   private readonly producerPause: SessionProducerPause
-  private readonly shellReady: SessionShellReadyBarrier
+  private readonly shellReady: ReturnType<typeof createSessionShellReady>
   private readonly termination: SessionTerminationController
   readonly startupIngress: PtyStartupIngress
   private readonly recoveryBarrier: TerminalShellRecoveryBarrier
@@ -50,13 +49,11 @@ export class Session {
     this.processNameIsSpawnFile = opts.subprocess.processNameIsSpawnFile === true
     this.shellIsRootChild = opts.subprocess.shellIsRootChild === true
     this.onSessionExit = opts.onExit
-    const pipeline = createSessionOutputPipeline(
-      sessionOutputPipelineOptions(
-        opts,
-        this.incarnationId,
-        this.subprocess,
-        () => !this._disposed && this._state !== 'exited'
-      )
+    const pipeline = createSessionOutput(
+      opts,
+      this.incarnationId,
+      this.subprocess,
+      () => !this._disposed && this._state !== 'exited'
     )
     this.output = pipeline.output
     this.recoveryBarrier = pipeline.recoveryBarrier
@@ -68,17 +65,13 @@ export class Session {
       releaseProducerPause: (pauseOpts) => this.producerPause.release(pauseOpts)
     })
 
-    this.shellReady = new SessionShellReadyBarrier({
-      sessionId: this.sessionId,
-      subprocess: this.subprocess,
-      responderParser: this.output.responderParser,
-      shellReadySupported: opts.shellReadySupported,
-      ...(opts.reportReadinessEvent ? { reportReadinessEvent: opts.reportReadinessEvent } : {}),
-      shellReadyTimeoutMs: opts.shellReadyTimeoutMs,
-      installDeviceAttributesFilter: () => this.output.installDeviceAttributesFilter(),
-      releaseDeviceAttributesFilter: () => this.output.releaseDeviceAttributesFilter(),
-      acceptStartupIngress: (data) => this.startupIngress.accept(data)
-    })
+    this.shellReady = createSessionShellReady(
+      opts,
+      this.sessionId,
+      this.subprocess,
+      this.output,
+      (data) => this.startupIngress.accept(data)
+    )
 
     this.startupIngress = new PtyStartupIngress({
       ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
@@ -86,12 +79,20 @@ export class Session {
       write: (data) => this.subprocess.write(data),
       onEmission: (emission) => this.recoveryBarrier.accept(emission)
     })
-    this.subprocess.onData((data) => {
-      if (!this._disposed) {
-        this.shellReady.ingestSubprocessData(data)
-      }
-    })
-    this.subprocess.onExit((code, cause) => this.handleSubprocessExit(code, cause))
+    try {
+      this.subprocess.onData((data) => {
+        if (!this._disposed) {
+          this.shellReady.ingestSubprocessData(data)
+        }
+      })
+      this.subprocess.onExit((code, cause) => this.handleSubprocessExit(code, cause))
+    } catch (error) {
+      this._disposed = true
+      this.shellReady.dispose()
+      this.recoveryBarrier.dispose()
+      this.output.disposeEmulator()
+      throw error
+    }
   }
 
   get state(): SessionState {
@@ -116,6 +117,10 @@ export class Session {
 
   get hasAttachedClients(): boolean {
     return this.output.hasAttachedClients
+  }
+
+  get physicalCompletion(): Promise<void> {
+    return this.termination.physicalCompletion
   }
 
   get isTerminating(): boolean {

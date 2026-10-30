@@ -3,6 +3,9 @@ import { randomUUID } from 'node:crypto'
 import type { ProcessTerminationBarrier } from '@orca/process-host/process-spec'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { runWslProcess } from '../wsl/wsl-runner'
+import { WSL_UNC_RUNNING_LEASE_MS, wslDistroForPath } from '../wsl/wsl-unc-access-gate'
+import { isWslUserActFor } from '../wsl/wsl-user-act-scope'
+import { readWslDistroRunningState } from '../wsl-background-distro-gate'
 
 const GUEST_TERMINATION_ATTEMPTS = 40
 const GUEST_TERMINATION_INTERVAL_SECONDS = '0.025'
@@ -16,6 +19,8 @@ export type WslProcessGroupTermination = ProcessTerminationBarrier & {
 export function createWslProcessGroupTermination(distro: string): WslProcessGroupTermination {
   const marker = `__ORCA_WSL_PROCESS_GROUP_${randomUUID()}__=`
   let processGroupId: number | null = null
+  // When the guest proved it ran; a 'stopped' read probed before then cannot prove the group ended.
+  let groupObservedAt = -Infinity
   let stderrTail = ''
 
   const observeStderr = (chunk: Buffer | string): void => {
@@ -25,12 +30,24 @@ export function createWslProcessGroupTermination(distro: string): WslProcessGrou
     const parsed = match ? Number(match[1]) : 0
     if (Number.isSafeInteger(parsed) && parsed > 1) {
       processGroupId = parsed
+      groupObservedAt = performance.now()
     }
   }
 
   const terminate = async (signal: 'TERM' | 'KILL'): Promise<boolean> => {
     if (processGroupId === null) {
       return false
+    }
+    // A cancel or timeout can land after the distro stopped; a kill would boot it again (E9).
+    // A confirmed stop already ended the group, while an unanswered read proves nothing.
+    if (wslDistroForPath('', distro) && !isWslUserActFor(distro)) {
+      const state = await readWslDistroRunningState(distro, {
+        startedAfter: Math.max(groupObservedAt, performance.now() - WSL_UNC_RUNNING_LEASE_MS),
+        retryUnverifiable: true
+      })
+      if (state !== 'running') {
+        return state === 'stopped'
+      }
     }
     const script = [
       '_orca_group=$1',

@@ -22,37 +22,6 @@ export function getTerminalState(leaf: ReadonlyTerminalStateRecord): RuntimeTerm
   return 'unknown'
 }
 
-export function buildTerminalWaitResult(
-  handle: string,
-  condition: RuntimeTerminalWaitCondition,
-  leaf: ReadonlyTerminalStateRecord
-): RuntimeTerminalWait {
-  return buildTerminalWait(
-    handle,
-    condition,
-    getTerminalState(leaf),
-    leaf.lastExitCode,
-    undefined,
-    leaf.lastExitCause
-  )
-}
-
-export function buildTerminalWaitBlockedResult(
-  handle: string,
-  condition: RuntimeTerminalWaitCondition,
-  leaf: ReadonlyTerminalStateRecord,
-  blockedReason: RuntimeTerminalWaitBlockedReason
-): RuntimeTerminalWait {
-  return buildTerminalWait(
-    handle,
-    condition,
-    getTerminalState(leaf),
-    leaf.lastExitCode,
-    blockedReason,
-    leaf.lastExitCause
-  )
-}
-
 export function buildPtyTerminalWaitResult(
   handle: string,
   condition: RuntimeTerminalWaitCondition,

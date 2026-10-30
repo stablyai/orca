@@ -13,6 +13,7 @@ import { useLiveDashboardSnapshot } from './useLiveDashboardSnapshot'
 
 const mocks = vi.hoisted(() => ({
   acknowledgeAgents: vi.fn(),
+  subscribeAgentStatusChanges: vi.fn(() => vi.fn()),
   setActiveWorktree: vi.fn(),
   subscribeStore: vi.fn((_listener: (state: unknown, previousState: unknown) => void) => vi.fn()),
   onRevealAgent: vi.fn(),
@@ -48,6 +49,7 @@ vi.mock('@/store', () => ({
       getState: () => ({
         ...mocks.readSnapshotState(),
         acknowledgeAgents: mocks.acknowledgeAgents,
+        subscribeAgentStatusChanges: mocks.subscribeAgentStatusChanges,
         setActiveWorktree: mocks.setActiveWorktree
       }),
       subscribe: mocks.subscribeStore
@@ -114,8 +116,7 @@ function makeSnapshotWatchState(): DashboardSnapshotWatchState {
     activeWorktreeId: null,
     activeWorkspaceExecutionHostId: null,
     activeRepoId: null,
-    endpointProjects: [],
-    endpointProjectHostSetups: [],
+    projects: [],
     removedRuntimeEnvironmentIds: new Set()
   }
 }
@@ -364,8 +365,6 @@ describe('useDashboardPopoutBridge', () => {
       // A folder workspace is not a git worktree; its host resolves through these.
       { folderWorkspaces: [] },
       { projectGroups: [] },
-      { endpointProjects: [] },
-      { endpointProjectHostSetups: [] },
       { restoredRuntimeHostIdByWorkspaceSessionKey: {} },
       { runtimeEnvironments: [] },
       { runtimeEnvironmentCatalogHydrated: true },

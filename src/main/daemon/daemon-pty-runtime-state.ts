@@ -1,5 +1,8 @@
+import type { DaemonPtyAdapterOptions } from './daemon-pty-adapter-options'
+export type { DaemonPtyAdapterOptions, DaemonRespawnReason } from './daemon-pty-adapter-options'
 import { DaemonClient } from './client'
 import { DaemonPtyInputClosedIncarnations } from './daemon-pty-input-closed-incarnations'
+import { DaemonPtyInventoryObservation } from './daemon-pty-inventory-observation'
 import { createDaemonAuditEligibilityTracker } from './daemon-audit-eligibility-event'
 import type {
   DaemonAuditContext,
@@ -33,6 +36,7 @@ import { HistoryReader } from './history-reader'
 import type { PtyBackgroundStreamEvent } from '../providers/pty-provider-contract'
 import type { DaemonPtyRouterDataEvent, DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
 import type { ReadRunningWslDistros } from './daemon-wsl-bridge-exit'
+import { WslBridgeBootIdentity } from './daemon-wsl-bridge-boot-identity'
 
 export type PendingDaemonSpawnOperation = {
   exitsBySessionId: Map<string, { code: number; incarnationId?: string }[]>
@@ -51,26 +55,6 @@ export type SnapshotCheckpointResult = {
   snapshot: NonNullable<TakePendingOutputResult['snapshot']> | null
 }
 
-export type DaemonPtyAdapterOptions = {
-  socketPath: string
-  tokenPath: string
-  pidPath?: string
-  profileScope?: string
-  protocolVersion?: number
-  historyPath?: string
-  runtimeDir?: string
-  packagedAppVersion?: string | null
-  respawn?: (reason: DaemonRespawnReason) => Promise<void | (() => void)>
-  /** Test seam; production reads the shared, coalesced `wsl --list --running`. */
-  readRunningWslDistros?: ReadRunningWslDistros
-}
-
-export type DaemonRespawnReason =
-  | 'daemon_died'
-  | 'unhealthy_resolver'
-  | 'stale_bundle'
-  | 'severed_tcc_attribution'
-
 export type DaemonIdentityChangeEvent = {
   previous: DaemonEndpointIdentity
   current: DaemonEndpointIdentity
@@ -84,6 +68,7 @@ export type DaemonIdleRetirementResult =
 
 export abstract class DaemonPtyRuntimeState {
   protected readonly readRunningWslDistros: ReadRunningWslDistros | undefined
+  protected readonly wslBridgeBootIdentity: WslBridgeBootIdentity
   readonly protocolVersion: number
   protected socketPath: string
   protected tokenPath: string
@@ -122,8 +107,10 @@ export abstract class DaemonPtyRuntimeState {
   protected readonly hostLossSessionIds = new Set<string>()
   /** ORCA_PANE_KEY a WSL session was spawned with; its shell's folder is read by it at Sleep. */
   protected wslPaneKeysBySessionId = new Map<string, string>()
-  /** A sleeping WSL pane's shell folder, read before its final checkpoint; the checkpoint keeps it. */
-  protected sleepShellCwds = new Map<string, string>()
+  /** A WSL bridge shell's folder read before a final checkpoint (Sleep or quit); that checkpoint keeps it. */
+  protected probedShellCwds = new Map<string, string>()
+  /** Quit's whole wait for bridge shell folders; a slow distro must not hold up quitting. */
+  protected quitWslCwdBudgetMs = 1_000
   protected killedSessionTombstones = new Map<string, number>()
   protected sleepRestoreSessionIds = new Set<string>()
   protected coldRestoreCache = new ColdRestorePayloadCache(undefined, (sessionId) => {
@@ -133,6 +120,10 @@ export abstract class DaemonPtyRuntimeState {
   protected getSizeUnsupported = false
   protected sessionsAwaitingDaemonRecovery = new Set<string>()
   protected sessionIncarnations = new Map<string, string>()
+  protected readonly ptyInventory = new DaemonPtyInventoryObservation(
+    this.activeSessionIds,
+    this.sessionIncarnations
+  )
   protected inputClosedIncarnations = new DaemonPtyInputClosedIncarnations()
   protected pendingSpawnOperationsBySessionId = new Map<string, Set<PendingDaemonSpawnOperation>>()
   protected pendingClaimSpawnOperations = new Set<PendingDaemonSpawnOperation>()
@@ -181,8 +172,7 @@ export abstract class DaemonPtyRuntimeState {
     // Host loss leaves history unended, so the pane can still cold-restore (as after a crash).
     { closeHistory = true }: { closeHistory?: boolean } = {}
   ): void {
-    const currentIncarnationId = this.sessionIncarnations.get(sessionId)
-    if (currentIncarnationId !== undefined && expectedIncarnationId !== currentIncarnationId) {
+    if (!this.ptyInventory.retire(sessionId, expectedIncarnationId)) {
       return
     }
     this.activeSessionIds.delete(sessionId)
@@ -210,6 +200,7 @@ export abstract class DaemonPtyRuntimeState {
     }
     this.initialCwds.delete(sessionId)
     this.wslDistrosBySessionId.delete(sessionId)
+    this.wslBridgeBootIdentity.forget(sessionId)
     this.wslPaneKeysBySessionId.delete(sessionId)
     this.sessionIncarnations.delete(sessionId)
   }
@@ -240,6 +231,7 @@ export abstract class DaemonPtyRuntimeState {
     this.historyReader = opts.historyPath ? new HistoryReader(opts.historyPath) : null
     this.respawnFn = opts.respawn ?? null
     this.readRunningWslDistros = opts.readRunningWslDistros
+    this.wslBridgeBootIdentity = opts.wslBridgeBootIdentity ?? new WslBridgeBootIdentity()
     this.runtimeDir = opts.runtimeDir ?? opts.profileScope ?? null
     this.packagedAppVersion = opts.packagedAppVersion ?? null
     this.supportsCheckpoints = this.protocolVersion >= 4
@@ -249,6 +241,7 @@ export abstract class DaemonPtyRuntimeState {
       this.protocolVersion >= SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION
     this.supportsStartupIngress = supportsPtyStartupIngress(this.protocolVersion)
     this.client.onDisconnected(() => {
+      this.ptyInventory.reset()
       if (!this.respawnAdoptionClosed) {
         this.writeRecoveryAttempted = false
         for (const id of this.activeSessionIds) {

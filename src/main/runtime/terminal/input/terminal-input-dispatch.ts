@@ -8,7 +8,6 @@ import { wrapTerminalBracketedPasteText } from '../../../../shared/terminal-brac
 import { PROVEN_ABSENT_LEAF_PTY_TTL_MS } from '../../orca-runtime-core'
 import { pruneExpiredProvenAbsentLeafPtyVerdicts } from '../../proven-absent-leaf-pty-verdicts'
 import type { RuntimeTerminalSend } from '../../../../shared/runtime-types'
-import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 import type {
   RuntimeAgentPromptWriteOptions,
   TerminalHandleRecord
@@ -135,15 +134,7 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       enter?: boolean
       interrupt?: boolean
     },
-    options: {
-      signal?: AbortSignal
-      beforeWrite?: (ptyId: string) => void | Promise<void>
-      reserveWrite?: (ptyId: string) => void
-      afterWrite?: (ptyId: string) => void | Promise<void>
-      suffixFailureError?: string
-      inputKind: TerminalInputKind
-      requireWriteSettlement?: true
-    }
+    options: RuntimeTerminalWriteOptions
   ): Promise<RuntimeTerminalSend> {
     // Switch point: a saved pane main holds with no terminal yet starts first (once, shared).
     const starting = ORCA_LAYOUT_OWNER_IS_MAIN

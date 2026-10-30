@@ -69,6 +69,9 @@ function installAgentBrowserMock(): void {
     if (command[0] === 'screenshot') {
       return success({ path: screenshotPath })
     }
+    if (command.join(' ') === 'snapshot -i --delta') {
+      return success({ snapshot: { kind: 'unchanged', revision: 2, baseRevision: 1 } })
+    }
     if (command[0] === 'close') {
       return success({ closed: true })
     }
@@ -103,8 +106,9 @@ describe('ExternalChromiumBrowserProcess', () => {
     )
     await processHandle.start()
     const commands = processHandle.createCommands({
+      getRuntimeId: () => 'fixture-runtime',
       getAgentBrowserBridge: () => null,
-      resolveWorktreeSelector: async (selector) => ({ id: selector }),
+      resolveWorkspaceSelector: async (selector) => ({ id: selector }),
       resolveBrowserWorkspace: async (selector) => ({ id: selector }),
       resolveBrowserNetworkExecutionHost: () => {
         throw new Error('No browser network execution host')
@@ -146,6 +150,18 @@ describe('ExternalChromiumBrowserProcess', () => {
     await expect(
       commands.browserScreenshot({ format: 'png', worktree: 'worktree-1', page: 'page-1' })
     ).resolves.toEqual({ data: Buffer.from('fixture-image').toString('base64'), format: 'png' })
+    await expect(
+      commands.browserSnapshot({
+        interactive: true,
+        delta: true,
+        worktree: 'worktree-1',
+        page: 'page-1'
+      })
+    ).resolves.toMatchObject({
+      browserPageId: 'page-1',
+      snapshot: { kind: 'unchanged', revision: 2, baseRevision: 1 },
+      url: 'https://fixture.test/next'
+    })
     await expect(
       commands.browserExec({
         page: 'page-1',

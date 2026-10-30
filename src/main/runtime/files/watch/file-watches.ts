@@ -14,7 +14,7 @@ import type { DirEntry, FsChangeEvent } from '../../../../shared/filesystem-entr
 import { sortDirEntries } from '../../../../shared/file-name-sort'
 import { resolveAuthorizedPath } from '../../../ipc/filesystem/filesystem-auth'
 import { resolveRuntimeAuthorizedPath } from '../chat-scratch-file-root'
-import { watchWindowsRuntimeFileExplorer } from './windows-file-watch'
+import { WindowsRuntimeWatchPool } from './windows-runtime-watch-pool'
 import { beginWatcherInstall } from '../../../ipc/watcher-removal-gate'
 import {
   closeFileExplorerWatcherInWatcherProcess,
@@ -27,6 +27,8 @@ type RuntimeFileWatchHost = Pick<
 >
 
 export class RuntimeFileWatches {
+  private readonly windowsWatches = new WindowsRuntimeWatchPool()
+
   constructor(private readonly host: RuntimeFileWatchHost) {}
 
   async readFileExplorerDir(
@@ -63,7 +65,7 @@ export class RuntimeFileWatches {
           throw new Error('not_a_directory')
         }
         if (process.platform === 'win32') {
-          const close = watchWindowsRuntimeFileExplorer(rootPath, callback, onTerminalError)
+          const close = await this.windowsWatches.watch(rootPath, callback, onTerminalError, signal)
           return { unsubscribe: close, rootPaths: [target.path, rootPath] }
         }
         // #5308/#8212: isolate native faults and blocking crawls from main/serve.

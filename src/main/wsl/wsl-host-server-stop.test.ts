@@ -7,6 +7,7 @@ import {
   type WslHostRuntimeAccess,
   type WslHostServerStopSteps
 } from './wsl-host-server-stop'
+import type { WslHostPeerDesktops } from './wsl-host-peer-desktops'
 
 function census(liveSessions: number | null): OrcadTerminalCensus {
   return { liveSessions, startedSinceActivation: liveSessions, daemonProtocolVersion: 1 }
@@ -21,6 +22,7 @@ const RETIRED: OrcadDecommissionResult = {
 function steps(overrides: Partial<WslHostServerStopSteps> = {}) {
   const order: string[] = []
   const all: WslHostServerStopSteps = {
+    peerDesktops: vi.fn(async (): Promise<WslHostPeerDesktops> => ({ kind: 'none' })),
     endTerminals: vi.fn(async () => {
       order.push('endTerminals')
       return []
@@ -58,6 +60,45 @@ describe('stopWslHostServer', () => {
       'decommission'
     ])
     expect(all.decommission).toHaveBeenCalledWith(census(0), 'runtime-a')
+  })
+
+  it('keeps a server another Orca shares: only this desktop lets go, nothing ends', async () => {
+    const { all, order } = steps({
+      peerDesktops: vi.fn(async (): Promise<WslHostPeerDesktops> => ({
+        kind: 'shared',
+        names: ['Orca Dev']
+      }))
+    })
+    await expect(stopWslHostServer(all)).resolves.toEqual({
+      stopped: true,
+      keptForOtherDesktops: ['Orca Dev']
+    })
+    expect(order).toEqual(['closeBridge'])
+  })
+
+  it('refuses the teardown when the server cannot say who else uses it', async () => {
+    const { all, order } = steps({
+      peerDesktops: vi.fn(async () => {
+        throw new Error('runtime_device_required')
+      })
+    })
+    await expect(stopWslHostServer(all)).resolves.toMatchObject({
+      stopped: false,
+      verdict: 'unverifiable',
+      reason: expect.stringContaining('another Orca on this computer')
+    })
+    expect(order).toEqual(['closeBridge'])
+  })
+
+  it("keeps today's teardown, with a warning, for a server that predates the check", async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { all, order } = steps({
+      peerDesktops: vi.fn(async (): Promise<WslHostPeerDesktops> => ({ kind: 'unsupported' }))
+    })
+    await expect(stopWslHostServer(all)).resolves.toEqual({ stopped: true })
+    expect(order).toContain('decommission')
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('predates the shared-host check'))
+    warn.mockRestore()
   })
 
   it('names each terminal that refused, and still asks the server to stop', async () => {

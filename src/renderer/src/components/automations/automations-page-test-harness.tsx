@@ -1,4 +1,5 @@
-import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
+import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 /** Record child props to test page orchestration rather than presentation. Import this harness first so shared vi.mock registrations precede AutomationsPage loading. */
 
 import { act, createElement, StrictMode, type ReactNode } from 'react'
@@ -74,6 +75,7 @@ export type DetailPaneProps = {
 export type EditorDialogProps = {
   open: boolean
   isEditing: boolean
+  isSaving: boolean
   createDestination?: AutomationCreateDestinationControl
   editDestination?: AutomationCreateDestinationControl
   notice?: { message: string; recovery: string | null } | null
@@ -90,10 +92,7 @@ export type DeleteDialogProps = {
 }
 
 type AutomationsPageMocks = {
-  state: Record<string, unknown> & {
-    endpointProjects: Project[]
-    endpointProjectHostSetups: ProjectHostSetup[]
-  }
+  state: AutomationsPageFixtureState
   repoMap: Map<string, unknown>
   worktreeMap: Map<string, unknown>
   listPanel: ListPanelProps | null
@@ -111,7 +110,7 @@ type AutomationsPageMocks = {
 
 // Mock factories only close over this exported binding; vi.hoisted bindings cannot be exported.
 export const mocks: AutomationsPageMocks = {
-  state: { endpointProjects: [], endpointProjectHostSetups: [] },
+  state: { repos: [], projectHostSetups: [], worktreesByRepo: {} },
   repoMap: new Map<string, unknown>(),
   worktreeMap: new Map<string, unknown>(),
   listPanel: null,
@@ -248,7 +247,12 @@ vi.mock('./AutomationDeleteDialogs', () => ({
 }))
 
 import AutomationsPage from './AutomationsPage'
-import { makeAutomation, makeRun, makeStoreState } from './automations-page-fixtures'
+import {
+  makeAutomation,
+  makeRun,
+  makeStoreState,
+  type AutomationsPageFixtureState
+} from './automations-page-fixtures'
 
 function mockGroup<K extends string>(...names: K[]): Record<K, Mock> {
   return Object.fromEntries(names.map((name) => [name, vi.fn()])) as Record<K, Mock>
@@ -392,8 +396,10 @@ export function installAutomationsPageHarness(): void {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     vi.clearAllMocks()
+    setLocalRuntimeCapabilitiesForTests([])
     // Confirmed capabilities are module-level and must not leak between tests.
     resetAutomationCapabilityProbes()
+    resetHostStructuredAgentsForTests()
     // A prior test's wholesale mockImplementation must not leak forward.
     mocks.callRuntimeRpc.mockReset()
     mocks.callRuntimeRpc.mockImplementation(answerAutomationRpc)
@@ -429,5 +435,6 @@ export function installAutomationsPageHarness(): void {
       roots.splice(0).forEach((root) => root.unmount())
     })
     document.body.innerHTML = ''
+    setLocalRuntimeCapabilitiesForTests(null)
   })
 }

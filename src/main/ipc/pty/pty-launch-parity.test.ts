@@ -130,6 +130,11 @@ vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
 vi.mock('../../../shared/openssh-default-shell', () => ({
   readOpenSshDefaultShell: vi.fn(() => '')
 }))
+// Fake-win32 runs have no wsl.exe: the distro runs, so main's background-start hold passes (E9).
+vi.mock('../../wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  readWslDistroRunningState: vi.fn(async () => 'running')
+}))
 
 // Exercise real window-lane spawning through provider, telemetry and pane binding.
 describe('window lane: pty:spawn request -> provider', () => {
@@ -273,9 +278,9 @@ describe('launch facts outside the tables', () => {
         const paneKey = makePaneKey(pane.tabId, pane.leafId)
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: exposes the existing selector; empty-inventory Sleep needs only this local workspace identity.
         const selecting = lanes.runtime as unknown as {
-          resolveWorktreeSelector: () => Promise<{ id: string }>
+          resolveGitWorktreeSelector: () => Promise<{ id: string }>
         }
-        vi.spyOn(selecting, 'resolveWorktreeSelector').mockResolvedValue({ id: pane.worktreeId })
+        vi.spyOn(selecting, 'resolveGitWorktreeSelector').mockResolvedValue({ id: pane.worktreeId })
         const events: string[] = []
         const releases: ReturnType<typeof vi.fn<() => void>>[] = []
         const finishes: ReturnType<typeof vi.fn<() => void>>[] = []

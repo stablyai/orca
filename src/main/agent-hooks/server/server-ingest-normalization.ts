@@ -140,7 +140,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     if (statusDisposition === 'restart') {
       this.observations.rebind(event.paneKey)
     }
-    this.applyNormalizedStatus(event, normalized.onAccepted)
+    this.applyObservedLocalHook(event, normalized.onAccepted, record.receivedAt)
     if (event.payload.state !== 'done') {
       this.withdrawReplayObservation(this.resolvePaneKeyAlias(event.paneKey))
     }

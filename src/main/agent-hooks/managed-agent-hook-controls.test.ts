@@ -315,6 +315,23 @@ describe('managed agent hook controls', () => {
     expect(mocks.removeCodex).toHaveBeenCalledTimes(1)
   })
 
+  // R42: on a WSL host the bridge's panes in the same distro still run on these entries.
+  it('keeps shared entries when told to: off skips, and a disabled agent keeps its entry', async () => {
+    mocks.detect.mockResolvedValue({ codex: { state: 'found' } })
+    mocks.statusClaude.mockReturnValue({ agent: 'claude', state: 'installed' })
+    mocks.statusCodex.mockReturnValue({ agent: 'codex', state: 'installed' })
+
+    await applyAgentStatusHooksEnabled(false, null, { keepSharedEntries: true })
+    await applyAgentStatusHooksEnabled(
+      true,
+      { agentCmdOverrides: {}, disabledTuiAgents: ['claude'] },
+      { keepSharedEntries: true }
+    )
+
+    expect(mocks.removeClaude).not.toHaveBeenCalled()
+    expect(mocks.removeCodex).not.toHaveBeenCalled()
+  })
+
   it('awaits only the selected asynchronous removers during quit', async () => {
     let finishRemoval: ((value: ReturnType<typeof status>) => void) | undefined
     mocks.removeCodexAsync.mockImplementationOnce(

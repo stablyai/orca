@@ -10,7 +10,8 @@ import {
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { Trans } from 'react-i18next'
+import { i18n, translate } from '@/i18n/i18n'
 import type { JiraSite } from '../../../../shared/jira/jira-types'
 import type { RowEntry, SmartWorkspaceNameSelection } from './smart-workspace-name-field-model'
 
@@ -92,27 +93,32 @@ export function RowLabel({
   if (row.kind === 'use-name') {
     return (
       <span className="min-w-0 truncate">
-        {translate('auto.components.new.workspace.SmartWorkspaceNameField.b1a7d679ba', 'Use')}{' '}
-        <span className="font-medium text-foreground">
-          {translate('auto.components.new.workspace.SmartWorkspaceNameField.34ca97bce3', '"')}
-          {row.name}
-          {translate('auto.components.new.workspace.SmartWorkspaceNameField.766083a596', '"')}
-        </span>{' '}
-        {translate(
-          'auto.components.new.workspace.SmartWorkspaceNameField.a44229ce4d',
-          'as workspace name'
-        )}
+        <Trans
+          i18n={i18n}
+          defaults={translate(
+            'auto.components.new.workspace.SmartWorkspaceNameField.useAsWorkspaceName',
+            'Use <name>"{{name}}"</name> as workspace name'
+          )}
+          values={{ name: row.name }}
+          components={{ name: <span className="font-medium text-foreground" /> }}
+        />
       </span>
     )
   }
   if (row.kind === 'create-branch') {
     return (
       <span className="min-w-0 truncate">
-        {translate(
-          'auto.components.new.workspace.SmartWorkspaceNameField.2a0d535f69',
-          'Create new branch'
-        )}{' '}
-        <span className="font-mono text-[11px] font-medium text-foreground">{row.name}</span>
+        <Trans
+          i18n={i18n}
+          defaults={translate(
+            'auto.components.new.workspace.SmartWorkspaceNameField.createNewBranchNamed',
+            'Create new branch <name>{{name}}</name>'
+          )}
+          values={{ name: row.name }}
+          components={{
+            name: <span className="font-mono text-[11px] font-medium text-foreground" />
+          }}
+        />
       </span>
     )
   }

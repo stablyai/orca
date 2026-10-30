@@ -1,6 +1,6 @@
 import { Extension } from '@tiptap/core'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
-import { Plugin, PluginKey } from '@tiptap/pm/state'
+import { Plugin, PluginKey, type Transaction } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 
 type RichMarkdownAnnotationHighlightState = {
@@ -46,6 +46,18 @@ function createAnnotationDecorations(
   return decorations.length === 0 ? DecorationSet.empty : DecorationSet.create(doc, decorations)
 }
 
+function mapAnnotationRange(
+  range: RichMarkdownAnnotationHighlightRange | null,
+  transaction: Transaction
+): RichMarkdownAnnotationHighlightRange | null {
+  if (!range) {
+    return null
+  }
+  const from = transaction.mapping.map(Math.min(range.from, range.to), 1)
+  const to = transaction.mapping.map(Math.max(range.from, range.to), -1)
+  return from < to ? { from, to } : null
+}
+
 function createRichMarkdownAnnotationHighlightPlugin(): Plugin<RichMarkdownAnnotationHighlightState> {
   return new Plugin<RichMarkdownAnnotationHighlightState>({
     key: richMarkdownAnnotationHighlightPluginKey,
@@ -59,18 +71,26 @@ function createRichMarkdownAnnotationHighlightPlugin(): Plugin<RichMarkdownAnnot
         const meta = tr.getMeta(richMarkdownAnnotationHighlightPluginKey) as
           | RichMarkdownAnnotationHighlightMeta
           | undefined
+        const previousActiveRange = tr.docChanged
+          ? mapAnnotationRange(pluginState.activeRange, tr)
+          : pluginState.activeRange
+        const previousNoteRanges = tr.docChanged
+          ? pluginState.noteRanges.flatMap((range) => {
+              const mapped = mapAnnotationRange(range, tr)
+              return mapped ? [mapped] : []
+            })
+          : pluginState.noteRanges
         if (meta === null) {
           return {
             activeRange: null,
-            noteRanges: pluginState.noteRanges,
-            decorations: createAnnotationDecorations(tr.doc, null, pluginState.noteRanges)
+            noteRanges: previousNoteRanges,
+            decorations: createAnnotationDecorations(tr.doc, null, previousNoteRanges)
           }
         }
         if (meta) {
           const activeRange =
-            meta.activeRange === undefined ? pluginState.activeRange : meta.activeRange
-          const noteRanges =
-            meta.noteRanges === undefined ? pluginState.noteRanges : meta.noteRanges
+            meta.activeRange === undefined ? previousActiveRange : meta.activeRange
+          const noteRanges = meta.noteRanges === undefined ? previousNoteRanges : meta.noteRanges
           return {
             activeRange,
             noteRanges,
@@ -79,7 +99,8 @@ function createRichMarkdownAnnotationHighlightPlugin(): Plugin<RichMarkdownAnnot
         }
         if (tr.docChanged) {
           return {
-            ...pluginState,
+            activeRange: previousActiveRange,
+            noteRanges: previousNoteRanges,
             decorations: pluginState.decorations.map(tr.mapping, tr.doc)
           }
         }

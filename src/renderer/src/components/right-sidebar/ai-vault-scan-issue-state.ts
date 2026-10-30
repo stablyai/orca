@@ -1,4 +1,5 @@
 import type { AiVaultListResult, AiVaultScanIssue } from '../../../../shared/ai-vault-types'
+import { aiVaultScanIssueDisplayText } from './ai-vault-scan-issue-copy'
 
 export function blockingAiVaultScanIssue(
   result: AiVaultListResult | null
@@ -31,7 +32,7 @@ export function skippedAiVaultTranscriptReasons(result: AiVaultListResult | null
     if (issue.kind) {
       continue
     }
-    const message = issue.message.trim()
+    const message = aiVaultScanIssueDisplayText(issue).trim()
     if (message) {
       reasons.add(message)
     }

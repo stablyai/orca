@@ -14,6 +14,10 @@ import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-se
 import { agentSessionRecordFixture } from '../../../../shared/agent-session-record.test-fixture'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
+  agentModelCatalogFingerprintForRecord,
+  agentModelCatalogScopeFingerprint
+} from '../../../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
+import {
   call,
   clearStructuredHostStub,
   hostStub,
@@ -40,7 +44,7 @@ describe('agentSession.modelCatalog', () => {
     setStructuredAgentSessionHost(
       Object.assign(hostStub(), {
         deps: {
-          modelCatalog: { read },
+          modelCatalog: { read, demand: vi.fn(async () => {}) },
           store: {
             getRecord: () => record,
             getConversation: () => (record ? agentSessionConversationView(record) : null),
@@ -91,7 +95,7 @@ describe('agentSession.modelCatalog', () => {
       resolveAccountHome: async () => ({ variable: 'CODEX_HOME', path: '/account/other' }),
       probes: {
         codex: createCodexModelCatalogProbe({
-          resolveCommand: () => '/installed/codex',
+          resolveCommand: () => ({ command: '/installed/codex', prefixArgs: [] }),
           resolveEnvironment: async () => ({}),
           resolveLaunchArgs: () => ['-c', 'model_provider="work"'],
           runSession
@@ -158,11 +162,11 @@ describe('agentSession.modelCatalog', () => {
       STRUCTURED_CLIENT,
       { resolveStructuredAgentSessionLocalWorkspacePath }
     )
-    expect(resolveStructuredAgentSessionLocalWorkspacePath).toHaveBeenCalledWith('id:wt-1')
+    expect(resolveStructuredAgentSessionLocalWorkspacePath).not.toHaveBeenCalled()
     expect(read).toHaveBeenCalledWith({
       agent: 'codex',
       sessionId: SESSION,
-      workspacePath: '/repo/wt'
+      workspace: expect.objectContaining({ selector: 'id:wt-1', resolve: expect.any(Function) })
     })
   })
 
@@ -177,7 +181,10 @@ describe('agentSession.modelCatalog', () => {
         })
       }
     )
-    expect(read).toHaveBeenCalledWith({ agent: 'codex', workspacePath: null })
+    expect(read).toHaveBeenCalledWith({
+      agent: 'codex',
+      workspace: expect.objectContaining({ selector: 'id:missing', resolve: expect.any(Function) })
+    })
   })
 
   it('reads as before when no worktree is named', async () => {
@@ -198,6 +205,87 @@ describe('agentSession.modelCatalog', () => {
     await call('agentSession.modelCatalog', { agent: 'grok', savedOnly: true }, STRUCTURED_CLIENT)
     expect(read).toHaveBeenCalledWith({ agent: 'grok', savedOnly: true })
   })
+
+  it('answers cold saved-only without resolution and reuses prepared memory for another equivalent chat', async () => {
+    const pinned = { ...agentSessionRecordFixture(), provider: 'claude' }
+    const key = agentModelCatalogScopeFingerprint(
+      agentModelCatalogFingerprintForRecord(pinned),
+      '/project',
+      'saved-launch'
+    )
+    const seed = new AgentModelCatalogStore()
+    const saved = seed.recordSuccess(
+      key,
+      'claude',
+      {
+        origin: 'probe',
+        complete: true,
+        models: [{ id: 'saved', label: 'Saved', isDefault: false, efforts: [] }]
+      },
+      'discovery'
+    )!
+    const store = new AgentModelCatalogStore()
+    await store.attachPersistence({
+      load: async () => [saved],
+      save: () => {},
+      flush: async () => {}
+    })
+    const folder = vi.fn(async () => '/project')
+    const run = vi.fn(() => new Promise<never>(() => {}))
+    const resolve = vi.fn(async () => ({ identity: 'saved-launch', run }))
+    const catalog = createAgentModelCatalogService({
+      store,
+      getConversation: (id) => {
+        const held = { ...pinned, sessionId: id }
+        return held ? agentSessionConversationView(held) : undefined
+      },
+      getRecord: (id) => ({ ...pinned, sessionId: id }),
+      drivesRecord: () => true,
+      resolveAccountHome: vi.fn(() => new Promise<never>(() => {})),
+      recordWorkspacePath: folder,
+      probes: { claude: Object.assign(run, { resolve }) }
+    })
+    setStructuredAgentSessionHost(
+      Object.assign(hostStub(), {
+        sessionAgent: () => 'claude',
+        deps: {
+          modelCatalog: catalog,
+          store: {
+            getConversation: (id: string) => {
+              const held = { ...pinned, sessionId: id }
+              return held ? agentSessionConversationView(held) : undefined
+            },
+            getRecord: (id: string) => ({ ...pinned, sessionId: id })
+          },
+          adapter: {}
+        }
+      })
+    )
+    try {
+      const cold = await call(
+        'agentSession.modelCatalog',
+        { agent: 'claude', sessionId: 'session-cold-a', savedOnly: true },
+        STRUCTURED_CLIENT
+      )
+      expect(cold.ok, JSON.stringify(cold)).toBe(true)
+      expect(cold).toMatchObject({ result: { origin: 'unknown' } })
+      expect(folder).not.toHaveBeenCalled()
+      expect(resolve).not.toHaveBeenCalled()
+      await catalog.prepareSaved({ agent: 'claude', sessionId: 'session-cold-a' })
+      const calls = resolve.mock.calls.length
+      expect(
+        await call(
+          'agentSession.modelCatalog',
+          { agent: 'claude', sessionId: 'session-cold-b', savedOnly: true },
+          STRUCTURED_CLIENT
+        )
+      ).toMatchObject({ ok: true, result: { models: [{ id: 'saved' }] } })
+      expect(resolve).toHaveBeenCalledTimes(calls)
+      expect(run).not.toHaveBeenCalled()
+    } finally {
+      catalog.stop()
+    }
+  })
 })
 
 describe('agentSession.modelCatalog before anything built the host', () => {
@@ -210,7 +298,7 @@ describe('agentSession.modelCatalog before anything built the host', () => {
     setStructuredAgentSessionHost(
       Object.assign(hostStub(), {
         deps: {
-          modelCatalog: { read },
+          modelCatalog: { read, demand: vi.fn(async () => {}) },
           store: { getRecord: () => null, getConversation: () => null },
           adapter: {}
         }
@@ -276,7 +364,7 @@ describe('agentSession.modelCatalog for a chat on a model its CLI stopped listin
     setStructuredAgentSessionHost(
       Object.assign(hostStub(), {
         deps: {
-          modelCatalog: { read },
+          modelCatalog: { read, demand: vi.fn(async () => {}) },
           store: {
             getRecord: () => record,
             getConversation: () => (record ? agentSessionConversationView(record) : null),
@@ -289,7 +377,14 @@ describe('agentSession.modelCatalog for a chat on a model its CLI stopped listin
   })
 
   it("lists the chat's own model, so an older client that replaces an unlisted one keeps it", async () => {
-    const own = { id: 'opus[1m]', label: 'opus[1m]', isDefault: false, efforts: [] }
+    const own = {
+      id: 'opus[1m]',
+      label: 'Opus (1M context)',
+      description: 'opus[1m]',
+      isDefault: false,
+      efforts: [],
+      effortsKnown: false
+    }
     const forChat = { agent: 'claude', sessionId: record.sessionId }
     expect(await call('agentSession.modelCatalog', forChat, OLD_STRUCTURED_CLIENT)).toMatchObject({
       ok: true,

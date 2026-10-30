@@ -6,6 +6,10 @@ import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-
 import { worktreeCreateCapabilityRead } from './mobile-workspace-create-operations'
 import { MOBILE_TASKS_CAPABILITY } from './mobile-tasks-capability'
 import {
+  WORKTREE_OPEN_EXISTING_BRANCH_V2_RUNTIME_CAPABILITY,
+  WORKTREE_OPEN_EXISTING_BRANCH_V2_REQUEST_RUNTIME_CAPABILITY
+} from '../../../src/shared/worktree-runtime-capabilities'
+import {
   WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS,
   resolveWorktreeCreateIdempotencySupport,
   type WorktreeCreateIdempotencySupport
@@ -20,6 +24,8 @@ export type NewWorktreeRuntimeCapabilities = {
   tasksSupported: boolean
   worktreeCreateIdempotency: WorktreeCreateIdempotencySupport | false
   agentLaunch: AgentLaunchSupport | false
+  branchIntentV2: boolean
+  branchIntentV2Request: boolean
   hostPlatform: NodeJS.Platform | null
 }
 
@@ -44,6 +50,10 @@ export async function readNewWorktreeRuntimeCapabilities(
       return {
         tasksSupported: capabilities.includes(MOBILE_TASKS_CAPABILITY),
         agentLaunch: readAgentLaunchSupport(capabilities),
+        branchIntentV2: capabilities.includes(WORKTREE_OPEN_EXISTING_BRANCH_V2_RUNTIME_CAPABILITY),
+        branchIntentV2Request: capabilities.includes(
+          WORKTREE_OPEN_EXISTING_BRANCH_V2_REQUEST_RUNTIME_CAPABILITY
+        ),
         worktreeCreateIdempotency: supportsIdempotency
           ? advertisedIdempotency === undefined
             ? { dedupeTtlMs: WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS }
@@ -75,6 +85,7 @@ export function useNewWorktreeRuntimeCapabilities(
   hostPlatform: NodeJS.Platform | null
   getWorktreeCreateCutoverSupport: () => Promise<WorktreeCreateIdempotencySupport | false>
   getAgentLaunchSupport: () => Promise<AgentLaunchSupport | false>
+  getBranchIntentSupport: (intent: 'open-existing-v2' | 'create-new') => Promise<boolean>
 } {
   const [capabilityState, setCapabilityState] = useState<{
     client: RpcClient
@@ -191,6 +202,15 @@ export function useNewWorktreeRuntimeCapabilities(
     () => getCapabilities().then((capabilities) => capabilities?.agentLaunch ?? false),
     [getCapabilities]
   )
+  const getBranchIntentSupport = useCallback(
+    (intent: 'open-existing-v2' | 'create-new') =>
+      getCapabilities().then((capabilities) =>
+        intent === 'open-existing-v2'
+          ? capabilities?.branchIntentV2Request === true
+          : capabilities?.branchIntentV2 === true
+      ),
+    [getCapabilities]
+  )
   const capabilities =
     capabilityState?.client === client &&
     capabilityState?.generation === client?.getGeneration?.() &&
@@ -201,6 +221,7 @@ export function useNewWorktreeRuntimeCapabilities(
     tasksSupported: capabilities?.tasksSupported ?? false,
     hostPlatform: capabilities?.hostPlatform ?? null,
     getWorktreeCreateCutoverSupport,
-    getAgentLaunchSupport
+    getAgentLaunchSupport,
+    getBranchIntentSupport
   }
 }

@@ -1,3 +1,4 @@
+import { GitCommandTimeoutError } from '../../shared/git-command-timeout'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import type {
   LocalBaseRefRefreshResult,
@@ -19,7 +20,11 @@ import type {
   AddWorktreeResult,
   GitWorktreeExecOptions
 } from './worktree-operation-options'
-import { gitExecOptions, resolveWorktreeAddTimeoutMs } from './worktree-operation-options'
+import {
+  gitExecOptions,
+  resolveWorktreeAddTimeoutMs,
+  worktreeAddTimeoutMessage
+} from './worktree-operation-options'
 import { bumpWorktreeScanGeneration } from './worktree-scan-cache'
 import { assertNoPendingWorktreeRemovalConflict } from '../worktree-removal-table'
 import { createWorktreeCheckoutProgressReader } from './worktree-checkout-progress'
@@ -157,9 +162,9 @@ export async function trackSameNameRemoteBase(
   baseBranch: string,
   effectiveBase: string,
   options: AddWorktreeOptions
-): Promise<void> {
+): Promise<boolean> {
   if (!effectiveBase.startsWith('refs/remotes/')) {
-    return
+    return false
   }
   const parsed = parseRemoteTrackingLocalBaseRef(
     baseBranch,
@@ -167,15 +172,17 @@ export async function trackSameNameRemoteBase(
     options.remoteTrackingBase
   )
   if (parsed?.localBranch !== branch) {
-    return
+    return false
   }
   try {
     // Git 1.8+ resolves slash-containing remote names via fetch refspecs without another probe.
     await gitExecFileAsync(['branch', '--set-upstream-to', effectiveBase, branch], {
       ...gitExecOptions(worktreePath, options)
     })
+    return true
   } catch (error) {
     console.warn(`addWorktree: failed to track ${effectiveBase} for ${branch}`, error)
+    return false
   }
 }
 
@@ -223,6 +230,9 @@ async function performAddWorktree(
   let localBaseRefUpdateSuggestion: LocalBaseRefUpdateSuggestion | undefined
   const args = [...windowsLongPathGitArgs(repoPath), 'worktree', 'add']
   let effectiveBase: string | undefined
+  if (options.trackRemoteBranch && !baseBranch) {
+    throw new Error('Reuse branch requires a remote-tracking ref when the local branch is missing.')
+  }
   if (noCheckout) {
     args.push('--no-checkout')
   }
@@ -240,6 +250,11 @@ async function performAddWorktree(
         branch
       )
       effectiveBase = baseContext.effectiveBase
+      if (options.trackRemoteBranch && !effectiveBase.startsWith('refs/remotes/')) {
+        throw new Error(
+          'Reuse branch requires a remote-tracking ref when the local branch is missing.'
+        )
+      }
       pendingLocalBaseRefRefresh = baseContext.pendingLocalBaseRefRefresh
       localBaseRefUpdateSuggestion = baseContext.localBaseRefUpdateSuggestion
       args.push(effectiveBase)
@@ -260,6 +275,9 @@ async function performAddWorktree(
   } catch (error) {
     // Settle the refresh before leaving the caller's maintenance pause on failure.
     await pendingLocalBaseRefRefresh
+    if (error instanceof GitCommandTimeoutError) {
+      error.message = worktreeAddTimeoutMessage(error.timeoutMs)
+    }
     throw error
   } finally {
     checkoutProgress?.close()
@@ -271,9 +289,19 @@ async function performAddWorktree(
     return {}
   }
 
+  let upstreamWarning: string | undefined
   if (effectiveBase && baseBranch) {
     await persistWorktreeCreationBase(worktreePath, branch, effectiveBase, options)
-    await trackSameNameRemoteBase(worktreePath, branch, baseBranch, effectiveBase, options)
+    const tracked = await trackSameNameRemoteBase(
+      worktreePath,
+      branch,
+      baseBranch,
+      effectiveBase,
+      options
+    )
+    if (options.trackRemoteBranch && !tracked) {
+      upstreamWarning = `Could not set ${effectiveBase} as the upstream of "${branch}". Check the push destination before pushing; Git may use a different remote.`
+    }
   }
 
   // Git >= 2.37 can set an upstream on first push; --local intentionally writes shared repo config.
@@ -281,6 +309,7 @@ async function performAddWorktree(
   const localBaseRefRefresh = await pendingLocalBaseRefRefresh
   return {
     ...(localBaseRefRefresh ? { localBaseRefRefresh } : {}),
+    ...(upstreamWarning ? { upstreamWarning } : {}),
     ...(localBaseRefUpdateSuggestion ? { localBaseRefUpdateSuggestion } : {})
   }
 }

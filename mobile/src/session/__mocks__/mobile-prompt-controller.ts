@@ -1,6 +1,8 @@
 import './mobile-prompt-render-mocks'
 import { createElement } from 'react'
 import { Pressable } from 'react-native'
+import type { NativeChatMessage } from '../../../../src/shared/native-chat-types'
+import type { MobileNativeChatSendOutcome } from '../native-chat/mobile-native-chat-send'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { RpcResponse, ConnectionState } from '../../transport/types'
 import type { MobileNativeChatTab } from '../native-chat/mobile-native-chat-eligibility'
@@ -14,8 +16,15 @@ import type { AskAnswerSelection } from '../../../../src/shared/native-chat-ask-
 import { mobileNativeChatPromptDismissals } from '../native-chat/input/mobile-native-chat-prompt-dismissals'
 import { setMobileNativeChatDraftText } from '../native-chat/composer/mobile-native-chat-draft-store'
 export const visible = { value: true }
-const session = { messages: [], folded: [], status: 'ready', transcriptLoading: false }
-const structuredSession = {
+const messages: NativeChatMessage[] = []
+export const session = {
+  messages,
+  folded: [],
+  status: 'ready',
+  transcriptLoading: false
+}
+export const structuredSession = {
+  asyncQuestionSourceScope: 'journal/host/session/epoch',
   session,
   isWorking: false,
   turnId: null,
@@ -29,7 +38,7 @@ const structuredSession = {
   respondPermission: vi.fn(async () => true),
   respondQuestion: vi.fn(async () => true),
   cancelPrompt: vi.fn(async () => true),
-  sendWithOutcome: vi.fn(async () => 'accepted'),
+  sendWithOutcome: vi.fn<() => Promise<MobileNativeChatSendOutcome>>(async () => 'accepted'),
   cancel: vi.fn(),
   setStructuredOption: vi.fn(),
   invokeStructuredOption: vi.fn()
@@ -124,12 +133,13 @@ type HarnessProps = {
   tab?: MobileNativeChatTab
   tabId?: string
   connState?: ConnectionState
+  hostId?: string
 }
 function Harness(props: HarnessProps) {
-  const { tab = baseTab, tabId = 'tab-1', connState = 'connected' } = props
+  const { tab = baseTab, tabId = 'tab-1', connState = 'connected', hostId = 'host' } = props
   const current = useMobileNativeChatController({
     client,
-    hostId: 'host',
+    hostId,
     worktreeId: 'folder:work',
     activeSessionTab: tab,
     activeSessionTabId: tabId,
@@ -156,6 +166,8 @@ function Harness(props: HarnessProps) {
     onMicPressOut: vi.fn(),
     onMicPressIn: vi.fn(),
     micActive: false,
+    micStarting: false,
+    micProcessing: false,
     dictationMode: 'toggle',
     inputLockReason: connState === 'connected' ? null : 'disconnected',
     sendErrorMessage: null,
@@ -195,6 +207,9 @@ export function reset(rpcClient: RpcClient) {
   visible.value = true
   handleRef.current = 'term-1'
   lastProps = null
+  session.messages = []
+  structuredSession.asyncQuestionSourceScope = 'journal/host/session/epoch'
+  structuredSession.sendWithOutcome.mockReset().mockResolvedValue('accepted')
   sendError.mockReset()
   resolved.mockReset()
   mobileNativeChatPromptDismissals.clearForTests()

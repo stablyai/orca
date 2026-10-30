@@ -95,10 +95,13 @@ export type TerminalDocumentState = {
   sel: TerminalDocumentSelection | null
   longPressTimer: ReturnType<typeof setTimeout> | null
   longPressOrigin: TerminalDocumentTouchOrigin | null
+  interactionActive: boolean
   tapCandidate: TerminalDocumentTapCandidate | null
   bottomRowBackdrop: string
   surface: HTMLElement | null
   pendingTerm: TerminalDocumentTerminal | null
+  // The anchor the pending replay will restore; null after a clear or an alternate-screen snapshot.
+  pendingReplayScrollAnchorRows: number | null
   committedTerm: TerminalDocumentTerminal | null
   provisionalTerm: TerminalDocumentTerminal | null
   committedSurface: HTMLElement | null
@@ -217,11 +220,13 @@ function createTerminalDocumentState(): TerminalDocumentState {
     sel: null,
     longPressTimer: null,
     longPressOrigin: null,
+    interactionActive: true,
     tapCandidate: null,
     wheelAccumDeltaY: 0,
     bottomRowBackdrop: '',
     surface: null,
     pendingTerm: null,
+    pendingReplayScrollAnchorRows: null,
     committedTerm: null,
     provisionalTerm: null,
     committedSurface: null,
@@ -250,6 +255,7 @@ function createTerminalDocumentState(): TerminalDocumentState {
     scheduledFrames: [],
     framesStopped: false,
     touchGesture: {
+      active: false,
       lastX: 0,
       lastY: 0,
       lastTime: 0,

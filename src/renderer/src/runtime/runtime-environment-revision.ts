@@ -85,6 +85,14 @@ export function getRuntimeEnvironmentRevision(environmentId: string): number | u
   return revisionByEnvironmentId.get(environmentId)
 }
 
+/** Selected catalog projection also changes when a pending host key is proved at the same revision. */
+export function runtimeEnvironmentContinuityStamp(environmentId: string): string {
+  return JSON.stringify([
+    revisionByEnvironmentId.get(environmentId),
+    pendingContinuationByEnvironmentId.get(environmentId)
+  ])
+}
+
 /**
  * The newest pairing proven to be the same machine as `revision`. A holder of an older pairing may
  * follow a same-host rotation, but never a re-pair whose host identity is different or unresolved.

@@ -7,6 +7,7 @@ import type * as CodexConfigMirror from '../codex/codex-config-mirror'
 import type * as CodexHomePaths from '../codex/codex-home-paths'
 import type * as LegacyWslRuntimeAuthDrain from './legacy-wsl-runtime-auth-drain'
 import type * as WslCodexAuthBatchReader from './wsl-codex-auth-batch-reader'
+import type * as WslCodexSessionBridge from '../codex/wsl-codex-session-bridge'
 import { createSettings } from './runtime-home-settings-test-fixtures'
 import {
   createCodexAuthJson,
@@ -17,6 +18,8 @@ import {
   testState
 } from './runtime-home-service-test-harness'
 
+// These launches are the user's own, so the E9 exec gate lets their prep run.
+vi.mock('../wsl/wsl-background-exec-gate', () => ({ blockedWslDistroForExec: async () => null }))
 vi.mock('electron', () => ({
   app: {
     getPath: () => testState.userDataDir
@@ -50,7 +53,8 @@ describe('CodexRuntimeHomeService', () => {
     const wslHome = join(testState.userDataDir, 'wsl-home')
     vi.doMock('../wsl', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
-      getWslHome: () => wslHome
+      getWslHome: () => wslHome,
+      getWslHomeAsync: async () => wslHome
     }))
     const wslSystemHomePath = join(wslHome, '.codex')
     mkdirSync(wslSystemHomePath, { recursive: true })
@@ -100,7 +104,8 @@ describe('CodexRuntimeHomeService', () => {
     const wslHome = join(testState.userDataDir, 'wsl-home')
     vi.doMock('../wsl', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
-      getWslHome: () => wslHome
+      getWslHome: () => wslHome,
+      getWslHomeAsync: async () => wslHome
     }))
     const store = createStore(
       createSettings({
@@ -157,7 +162,8 @@ describe('CodexRuntimeHomeService', () => {
     const wslHome = join(testState.userDataDir, 'wsl-home')
     vi.doMock('../wsl', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
-      getWslHome: () => wslHome
+      getWslHome: () => wslHome,
+      getWslHomeAsync: async () => wslHome
     }))
     const store = createStore(
       createSettings({
@@ -197,7 +203,8 @@ describe('CodexRuntimeHomeService', () => {
     const wslHome = join(testState.userDataDir, 'debian-wsl-home')
     vi.doMock('../wsl', () => ({
       getDefaultWslDistro: () => null,
-      getWslHome: (distro: string) => (distro === 'Debian' ? wslHome : null)
+      getWslHome: (distro: string) => (distro === 'Debian' ? wslHome : null),
+      getWslHomeAsync: async (distro: string) => (distro === 'Debian' ? wslHome : null)
     }))
     vi.doMock('../../shared/wsl-paths', async (importOriginal) => {
       const actual = await importOriginal<typeof WslPaths>()
@@ -272,7 +279,8 @@ describe('CodexRuntimeHomeService', () => {
     const wslHome = join(testState.userDataDir, 'ubuntu-home')
     vi.doMock('../wsl', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
-      getWslHome: () => wslHome
+      getWslHome: () => wslHome,
+      getWslHomeAsync: async () => wslHome
     }))
     const managedHomePath = join(wslHome, '.local', 'share', 'orca', 'codex-accounts', 'a', 'home')
     const retiredBridgeRuns = vi.fn()
@@ -344,7 +352,8 @@ describe('CodexRuntimeHomeService', () => {
       const wslHome = `\\\\wsl.localhost\\Ubuntu${guestHome.replaceAll('/', '\\')}`
       vi.doMock('../wsl', () => ({
         getDefaultWslDistro: () => 'Ubuntu',
-        getWslHome: () => wslHome
+        getWslHome: () => wslHome,
+        getWslHomeAsync: async () => wslHome
       }))
       const ownerAuth = createCodexAuthJson(
         'owner@example.com',
@@ -424,6 +433,11 @@ describe('CodexRuntimeHomeService', () => {
       vi.doMock('../codex/codex-config-mirror', async (importOriginal) => ({
         ...(await importOriginal<typeof CodexConfigMirror>()),
         syncSystemConfigIntoManagedCodexHome: vi.fn()
+      }))
+      // Launch-time sibling bridging is covered elsewhere; this pins only the drain's own target.
+      vi.doMock('../codex/wsl-codex-session-bridge', async (importOriginal) => ({
+        ...(await importOriginal<typeof WslCodexSessionBridge>()),
+        startWslCodexSessionBridgeInBackground: vi.fn(() => Promise.resolve())
       }))
       const retiredHome = join(guestHome, '.local', 'share', 'orca', 'codex-runtime-home', 'home')
       const relativeSessionPath = join('sessions', '2026', '08', '26', 'retired.jsonl')

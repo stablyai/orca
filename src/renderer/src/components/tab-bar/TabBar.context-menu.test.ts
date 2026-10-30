@@ -35,8 +35,6 @@ const useAppStoreMock = vi.fn(
       activeTabId: string | null
       activeTabType: 'terminal' | 'editor' | 'browser' | 'simulator' | null
       gitStatusByWorktree: Record<string, never[]>
-      endpointProjects: never[]
-      endpointProjectHostSetups: never[]
       repos: never[]
       worktreesByRepo: Record<string, never[]>
       unifiedTabsByWorktree: Record<string, unknown[]>
@@ -53,8 +51,6 @@ const useAppStoreMock = vi.fn(
       activeTabId: appStoreSnapshot.activeTabId,
       activeTabType: appStoreSnapshot.activeTabType,
       gitStatusByWorktree: {},
-      endpointProjects: [],
-      endpointProjectHostSetups: [],
       repos: [],
       worktreesByRepo: {},
       unifiedTabsByWorktree: appStoreSnapshot.unifiedTabsByWorktree,
@@ -69,6 +65,7 @@ const useAppStoreMock = vi.fn(
 )
 
 vi.mock('react', async () => await stubHeadlessReact())
+vi.mock('@/store/plugin-new-files', () => ({ usePluginNewFiles: () => [] }))
 vi.mock('zustand/react/shallow', () => stubShallowSelector())
 // The headless React stub has no dispatcher for the hook each tab row subscribes to language changes with.
 vi.mock('react-i18next', async () => ({
@@ -99,8 +96,6 @@ useAppStoreExport.getState = vi.fn(() => ({
   activeTabId: appStoreSnapshot.activeTabId,
   activeTabType: appStoreSnapshot.activeTabType,
   gitStatusByWorktree: {},
-  endpointProjects: [],
-  endpointProjectHostSetups: [],
   repos: [],
   worktreesByRepo: {},
   unifiedTabsByWorktree: appStoreSnapshot.unifiedTabsByWorktree,

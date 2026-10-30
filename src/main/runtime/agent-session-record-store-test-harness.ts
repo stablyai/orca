@@ -35,11 +35,12 @@ function databaseFor(stateDirectory: string): Database.Database {
 
 export async function openTestAgentSessionRecordStore(
   stateDirectory: string,
-  options: { hostId?: string } = {}
+  options: { hostId?: string; legacySessionTabIds?: readonly string[] } = {}
 ): Promise<AgentSessionRecordStore> {
   return AgentSessionRecordStore.open({
     journalDatabase: openTestJournalHostDatabase(stateDirectory),
-    hostId: options.hostId ?? TEST_HOST_ID
+    hostId: options.hostId ?? TEST_HOST_ID,
+    legacySessionTabIds: options.legacySessionTabIds ?? []
   })
 }
 
@@ -131,7 +132,7 @@ export async function seedTestAgentSessionStoreFromNewerBuild(
   openTestJournalHostDatabase(stateDirectory).db.pragma(
     `user_version = ${JOURNAL_DB_SCHEMA_VERSION + 1}`
   )
-  closeTestJournalHostDatabase(stateDirectory)
+  await closeTestJournalHostDatabase(stateDirectory)
 }
 
 function parsed(json: unknown): unknown {

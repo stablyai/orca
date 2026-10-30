@@ -71,6 +71,23 @@ export function formatXColorRgbSpec(rgb: TerminalViewRgb): string {
   return `rgb:${padChannelTo16Bit(rgb[0])}/${padChannelTo16Bit(rgb[1])}/${padChannelTo16Bit(rgb[2])}`
 }
 
+// Match xterm’s relativeLuminance2 calculation for private DSR ?996n replies.
+function relativeLuminance([r, g, b]: TerminalViewRgb): number {
+  const linear = (channel: number): number => {
+    const c = channel / 255
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+  }
+  return linear(r) * 0.2126 + linear(g) * 0.7152 + linear(b) * 0.0722
+}
+
+/** The ?996n reply: xterm derives it from current colour luminance, not the app’s colorSchemeMode. */
+export function terminalColorSchemeReport(
+  foreground: TerminalViewRgb,
+  background: TerminalViewRgb
+): string {
+  return `\x1b[?997;${relativeLuminance(background) < relativeLuminance(foreground) ? 1 : 2}n`
+}
+
 export function terminalViewRgbToCssHex(rgb: readonly [number, number, number]): string {
   return `#${rgb.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`
 }

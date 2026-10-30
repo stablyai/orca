@@ -1,14 +1,14 @@
 import type { SessionOptions } from './session-options'
 import type { SubprocessHandle } from './session-subprocess-handle'
-import type { createSessionOutputPipeline } from './session-output-pipeline'
+import { createSessionOutputPipeline } from './session-output-pipeline'
 
-export function sessionOutputPipelineOptions(
+export function createSessionOutput(
   opts: SessionOptions,
   incarnationId: string,
   subprocess: SubprocessHandle,
   isAlive: () => boolean
-): Parameters<typeof createSessionOutputPipeline>[0] {
-  return {
+): ReturnType<typeof createSessionOutputPipeline> {
+  return createSessionOutputPipeline({
     incarnationId,
     startupCommand: opts.startupCommand,
     cols: opts.cols,
@@ -16,7 +16,8 @@ export function sessionOutputPipelineOptions(
     scrollback: opts.scrollback,
     wslDistro: opts.wslDistro,
     historySeedChunks: opts.historySeedChunks,
+    ownerBackend: opts.ownerBackend,
     subprocess,
     isAlive
-  }
+  })
 }

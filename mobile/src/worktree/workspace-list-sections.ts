@@ -18,7 +18,6 @@ import {
 } from './mobile-workspace-lineage'
 import {
   getPRLaneKey,
-  PR_GROUP_LABELS,
   PR_GROUP_ORDER
 } from '../../../src/shared/workspace-view/workspace-pr-groups'
 import type { FilterState, Section, SectionRepo, Worktree } from './workspace-list-types'
@@ -42,6 +41,7 @@ import {
   filterWorkspaceRows,
   type WorkspaceRowFactReader
 } from '../../../src/shared/workspace-view/workspace-row-filters'
+import { translate } from '../i18n/mobile-i18n'
 
 export type { FilterState, Section, SectionRepo, Worktree } from './workspace-list-types'
 
@@ -71,7 +71,7 @@ export function buildSectionRepoMap(
     if (!repoMap.has(w.repoId)) {
       repoMap.set(w.repoId, {
         id: w.repoId,
-        displayName: w.repo || 'Unknown',
+        displayName: w.repo || translate('common.unknown', 'Unknown'),
         // Why: labels key on host + path, so a shared '' would let one stand-in rename another.
         path: w.repoId,
         executionHostId: w.hostId
@@ -103,19 +103,9 @@ export function isWorktreeActive(
     unread?: boolean
   }
 ): boolean {
-  if (w.hasHostSidebarActivity !== undefined) {
-    return w.hasHostSidebarActivity
-  }
-  if (w.unread) {
-    return true
-  }
-  if (w.status) {
-    return w.status !== 'inactive'
-  }
-  if (w.liveTerminalCount > 0) {
-    return true
-  }
-  return false
+  return w.hasHostSidebarActivity !== undefined
+    ? w.hasHostSidebarActivity
+    : Boolean(w.unread) || (w.status ? w.status !== 'inactive' : w.liveTerminalCount > 0)
 }
 
 // Older hosts omit the main-worktree flag; use the legacy branch heuristic.
@@ -182,6 +172,14 @@ export function buildMobileWorkspacePlan(
   showPinnedInGroups = false,
   repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId> = new Map()
 ) {
+  const groupLabels = {
+    pinned: translate('worktree.workspaceListSections.pinned', 'Pinned'),
+    all: translate('worktree.workspaceListSections.all', 'All'),
+    done: translate('worktree.workspaceListSections.done', 'Done'),
+    'in-review': translate('worktree.workspaceListSections.inReview', 'In review'),
+    'in-progress': translate('worktree.workspaceListSections.inProgress', 'In progress'),
+    closed: translate('worktree.workspaceListSections.closed', 'Closed')
+  }
   const filtered = filterWorktrees(worktrees, filters, search, repoHostIdByRepoId)
   const sorted = sortWorktrees(filtered, sortMode, Date.now(), hostSortsByStamps(worktrees))
   const childrenByParentIdentity = getMobileWorkspaceLineageChildren(
@@ -203,12 +201,12 @@ export function buildMobileWorkspacePlan(
     sectionsOf: ({ pinned, natural: canonicalGroupWorktrees, displayRootByIdentity }) => {
       const sections: Section[] = []
       if (pinned.length > 0) {
-        sections.push(makeSection('pinned', 'Pinned', pinned, { icon: 'pin' }))
+        sections.push(makeSection('pinned', groupLabels.pinned, pinned, { icon: 'pin' }))
       }
       if (groupMode === 'none') {
         if (canonicalGroupWorktrees.length > 0) {
           sections.push(
-            makeSection('all', 'All', withFolderWorkspacesLast(canonicalGroupWorktrees))
+            makeSection('all', groupLabels.all, withFolderWorkspacesLast(canonicalGroupWorktrees))
           )
         }
       } else if (groupMode === 'repo') {
@@ -260,6 +258,7 @@ export function buildMobileWorkspacePlan(
             sections.push(
               makeSection(
                 getWorkspaceStatusGroupKey(status.id),
+                // Status names are the host's (user-editable) labels, as on desktop.
                 status.label,
                 withFolderWorkspacesLast(items)
               )
@@ -283,7 +282,7 @@ export function buildMobileWorkspacePlan(
             sections.push(
               makeSection(
                 getPRLaneKey(groupKey),
-                PR_GROUP_LABELS[groupKey],
+                groupLabels[groupKey],
                 withFolderWorkspacesLast(items)
               )
             )

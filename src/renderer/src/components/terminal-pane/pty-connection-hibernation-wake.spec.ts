@@ -771,10 +771,14 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         onDispatch: expect.any(Function)
       })
 
-      // Real user input fires the core signal and records activity.
+      // Real user input fires the core signal before onData, as xterm does; the key must reach the PTY before the store publishes activity.
       for (const listener of userInputListeners) {
         listener()
       }
+      sendTerminalInputThroughPane(pane, 'x')
+      expect(transport.sendInput).toHaveBeenLastCalledWith('x', 'driving')
+      expect(mockStoreState.recordTerminalInput).not.toHaveBeenCalled()
+      await Promise.resolve()
       expect(mockStoreState.recordTerminalInput).toHaveBeenCalledTimes(1)
 
       binding.dispose()

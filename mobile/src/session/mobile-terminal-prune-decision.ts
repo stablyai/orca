@@ -32,8 +32,8 @@ export function resolveRetainedTerminalHandles(context: {
   return new Set(context.liveHandles).add(activeHandle)
 }
 
-// Sweep the whole metrics map: chat-retained handles may already have left the subscription map; preserve identity on no-op.
-export function pruneTerminalKeyboardMetrics<T>(
+// Cached handles may outlive subscriptions; preserve map identity when nothing is retired.
+export function pruneTerminalHandleMap<T>(
   previous: Map<string, T>,
   shouldPrune: (handle: string) => boolean
 ): Map<string, T> {

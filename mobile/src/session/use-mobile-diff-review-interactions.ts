@@ -1,4 +1,5 @@
 import type { Dispatch, RefObject, SetStateAction } from 'react'
+import { translate } from '../i18n/mobile-i18n'
 import type { FlatList } from 'react-native'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
@@ -191,7 +192,12 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
       try {
         sourceFileDiffOpenRun.interpret(response)
       } catch (error) {
-        setActionError(refusedRpcMessageOrFallback(error, 'Unable to open in session'))
+        setActionError(
+          refusedRpcMessageOrFallback(
+            error,
+            translate('session.useDiffReviewInteractions.openFailed', 'Unable to open in session')
+          )
+        )
         return
       }
       onOpenSession()

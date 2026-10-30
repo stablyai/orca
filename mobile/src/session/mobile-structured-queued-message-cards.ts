@@ -1,7 +1,8 @@
+import { stripSentImagePromptMarkers } from '../../../src/shared/native-chat/transcript/native-chat-image-transcript-markers'
 // The shared projection decides each card's hold; this layer words it for the phone.
 
 import type { AgentSessionFailureFact } from '../../../src/shared/agent-session-failure'
-import { agentSessionWriteNoticeEnglish } from '../../../src/shared/agent-session-refusal-notice'
+import { mobileAgentSessionWriteNoticeText } from './agent-session-write-notice-copy'
 import type { AgentJournalSubmission } from '../../../src/shared/agent-session-journal-types'
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
@@ -35,7 +36,7 @@ function queuedMessageCardCaption(
       const notice = queuedMessageReturnedNotice(card, agentName, statedFailures)
       return notice === 'withdrawn'
         ? 'Stopped before it was sent'
-        : agentSessionWriteNoticeEnglish(notice)
+        : mobileAgentSessionWriteNoticeText(notice)
     }
     case 'paused':
       // Absent or unknown (newer host) marker: a plain pause, promising no release rule.
@@ -67,7 +68,13 @@ export function mobileQueuedMessageCards(
 ): MobileQueuedMessageCard[] {
   return projectQueuedMessageCards(queuedMessages, submissions, facts).map((card) => ({
     ...card,
-    line: queuedMessageCardLine(card),
+    line: queuedMessageCardLine({
+      ...card,
+      displayText: stripSentImagePromptMarkers(
+        card.displayText ?? card.text,
+        card.images?.length ?? 0
+      )
+    }),
     needsAttention: queuedMessageCardNeedsAttention(card),
     caption: queuedMessageCardCaption(card, facts.agentName, facts.statedFailures ?? []),
     attribution: agentMessageAttribution('From', card.from)

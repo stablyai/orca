@@ -16,8 +16,19 @@ export function applyWebSessionTabsSnapshot(
   snapshot: RuntimeMobileSessionTabsResult,
   environmentId: string,
   now = Date.now(),
-  options?: WebSessionTabsSnapshotApplyOptions
+  options?: WebSessionTabsSnapshotApplyOptions,
+  changedAgentPaneKeys?: Set<string>
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
+  if (changedAgentPaneKeys) {
+    return applyWebSessionTabsSnapshots(
+      state,
+      [snapshot],
+      environmentId,
+      now,
+      changedAgentPaneKeys,
+      options
+    )
+  }
   return applyWebSessionTabsSnapshotWithContext(
     state,
     snapshot,
@@ -28,15 +39,27 @@ export function applyWebSessionTabsSnapshot(
   )
 }
 
+export function createWebSessionTabsSnapshotPatch(
+  snapshot: RuntimeMobileSessionTabsResult,
+  environmentId: string
+) {
+  return (state: WebSessionTabsSyncState, keys: Set<string>) =>
+    applyWebSessionTabsSnapshot(state, snapshot, environmentId, undefined, undefined, keys)
+}
+
 export function applyWebSessionTabsSnapshots(
   state: WebSessionTabsSyncState,
   snapshots: readonly RuntimeMobileSessionTabsResult[],
   environmentId: string,
-  now = Date.now()
+  now = Date.now(),
+  changedAgentPaneKeys?: Set<string>,
+  options?: WebSessionTabsSnapshotApplyOptions
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
   return applyWebSessionTabsBatch(
     state,
-    snapshots.map((snapshot) => ({ snapshot, environmentId, now }))
+    snapshots.map((snapshot) => ({ snapshot, environmentId, now })),
+    changedAgentPaneKeys,
+    options
   )
 }
 
@@ -46,10 +69,13 @@ function applyWebSessionTabsBatch(
     snapshot: RuntimeMobileSessionTabsResult
     environmentId: string
     now?: number
-  }[]
+  }[],
+  changedAgentPaneKeys?: Set<string>,
+  options?: WebSessionTabsSnapshotApplyOptions
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
   const nextState = { ...state }
   const batchContext: WebSessionTabsBatchContext = {
+    changedAgentPaneKeys,
     agentPaneKeysByTabId: null,
     changedRecords: new Set(),
     openFilesIndex: null
@@ -61,7 +87,8 @@ function applyWebSessionTabsBatch(
       snapshot,
       environmentId,
       now ?? Date.now(),
-      batchContext
+      batchContext,
+      options
     )
     if (patch === nextState) {
       continue
@@ -125,10 +152,12 @@ export function decideWebSessionTabsSnapshotOperations(
 
 export function applyWebSessionTabsSnapshotOperations(
   state: WebSessionTabsSyncState,
-  operations: readonly DecidedWebSessionTabsSnapshotOperation[]
+  operations: readonly DecidedWebSessionTabsSnapshotOperation[],
+  changedAgentPaneKeys?: Set<string>
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
   return applyWebSessionTabsBatch(
     state,
-    operations.filter(({ decision }) => decision.apply)
+    operations.filter(({ decision }) => decision.apply),
+    changedAgentPaneKeys
   )
 }

@@ -121,9 +121,6 @@ describe('MarkdownPreview http link routing (Cmd vs Cmd+Shift click)', () => {
     }
     // openHttpLink reads the store through this injected accessor, not @/store.
     registerHttpLinkStoreAccessor(() => ({
-      repos: [],
-      endpointProjects: [],
-      endpointProjectHostSetups: [],
       settings: { openLinksInApp: true, activeRuntimeEnvironmentId: null },
       setActiveWorktree: setActiveWorktreeMock,
       createBrowserTab: createBrowserTabMock

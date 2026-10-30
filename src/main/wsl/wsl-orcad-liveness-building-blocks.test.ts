@@ -25,6 +25,7 @@ function fakeWatch(signal: WslOrcadWatch['signal']) {
       exit = listener
     }),
     close: vi.fn(),
+    proving: () => signal === 'ready',
     exit: (code: number | null) => exit?.(code)
   }
   return watch

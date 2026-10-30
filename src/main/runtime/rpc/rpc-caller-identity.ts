@@ -11,6 +11,8 @@ export type RpcCallerIdentity =
   | { kind: 'paired-device'; deviceId: string }
 
 export const DESKTOP_RPC_CALLER: RpcCallerIdentity = { kind: 'desktop' }
+/** Stamped by the owner-token runtime socket, which only the local `orca` CLI holds. */
+export const LOCAL_CLI_RPC_CALLER: RpcCallerIdentity = { kind: 'local-cli' }
 
 /** The orca CLI agents run, locally or forwarded from a remote host; relayed devices are people. */
 export function isAgentRpcCaller(caller: RpcCallerIdentity | undefined): boolean {
@@ -18,7 +20,7 @@ export function isAgentRpcCaller(caller: RpcCallerIdentity | undefined): boolean
 }
 
 /** Trust explicit transport identity; unnamed declared clients have none. Temporarily, no declared client means local CLI.
- * SSH CLI bridges/browser automation share that namespace; before plugins ship, require explicit local-cli stamping (plan §4). */
+ * The runtime socket stamps local-cli explicitly; plugin approval never trusts identity alone (it needs the approve fingerprint). */
 export function resolveRpcCallerIdentity(
   transport:
     | Pick<RpcDispatchStreamingOptions, 'caller' | 'clientKind' | 'pairedDeviceId'>

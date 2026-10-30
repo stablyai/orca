@@ -82,11 +82,11 @@ export type RuntimeServiceCommandSurface = {
   feedMobileDictation: RuntimeMobileDictationController['feed']
   finishMobileDictation: RuntimeMobileDictationController['finish']
   cancelMobileDictation: RuntimeMobileDictationController['cancel']
-  cancelMobileDictationForConnection: RuntimeMobileDictationController['cancelForConnection']
   getAllBrowserDrivers: RuntimeBrowserDriverController['getAll']
   reclaimBrowserForDesktop: RuntimeBrowserDriverController['reclaimForDesktop']
   notifyMessageArrived(handle: string, messageType?: string): void
   waitForMessage: RuntimeMessageWaiters['wait']
+  notifyMessageWaiters: RuntimeMessageWaiters['notify']
   cancelMessageWaiters: RuntimeMessageWaiters['cancel']
 }
 
@@ -195,10 +195,10 @@ export function installRuntimeServiceCommandSurface(
     feedMobileDictation: dictation.feed.bind(dictation),
     finishMobileDictation: dictation.finish.bind(dictation),
     cancelMobileDictation: dictation.cancel.bind(dictation),
-    cancelMobileDictationForConnection: dictation.cancelForConnection.bind(dictation),
     getAllBrowserDrivers: browsers.getAll.bind(browsers),
     reclaimBrowserForDesktop: browsers.reclaimForDesktop.bind(browsers),
     waitForMessage: waiters.wait.bind(waiters),
+    notifyMessageWaiters: waiters.notify.bind(waiters),
     cancelMessageWaiters: waiters.cancel.bind(waiters)
   })
 }

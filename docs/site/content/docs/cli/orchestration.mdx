@@ -24,11 +24,11 @@ Use it when you need ownership, completion tracking, or a DAG. For one-off promp
 
 - **Run** — durable namespace and home inbox. Never schedules or places workers.
 - **Task** — a work item with a spec, dependencies, and status: `pending`, `ready`, `dispatched`, `completed`, `failed`, or `blocked`.
-- **Dispatch** — one attempt of a task on a terminal; lifecycle authority for `worker_done` / heartbeat.
+- **Dispatch** — one attempt of a task on a terminal; lifecycle authority for `worker_done`.
 - **Message** — inbox mail (`status`, `dispatch`, `worker_done`, `escalation`, `question`, `heartbeat`, …).
 - **Decision gate** — a coordinator-owned question that blocks a task until it is resolved.
 
-Completion authority comes from the active dispatch context. Worker completion and heartbeat messages should include both `taskId` and `dispatchId`.
+Completion authority comes from the active dispatch context. Worker completion messages should include both `taskId` and `dispatchId`.
 
 Task IDs printed in terminals, such as `task_...`, are clickable links. Clicking one asks the Orca runtime for the task's current dispatch and focuses the assigned terminal, including when the task lives in a remote or SSH runtime.
 
@@ -113,9 +113,9 @@ orca orchestration dispatch --task <taskId> --to <workerHandle> --inject --json
 
 ## Messaging notes
 
-- Default `check` is the bound Run's oldest unacked Delivery (FIFO). Replay until `--ack`.
-- `--peek` / `--all` do not consume mail.
-- Group addresses: `@all`, `@idle`, `@claude`, `@codex`, `@opencode`, `@gemini`, `@droid`, `@grok`, `@cursor`, `@worktree:<id>` — never for `worker_done` / heartbeat.
+- Default `check` returns the bound Run's oldest unread mail as one Delivery (FIFO) and marks it handled. `--ack <deliveryId>` acknowledges a Delivery from an older Orca that does not mark it; alone it reads no new mail, and with `--wait` it then waits for and takes the next Delivery.
+- `--peek` / `--all` do not consume mail and return no `deliveryId`, so they do not drain a mailbox on their own. `--all` and a Run `--peek` show at most 100 rows. To drain, repeat plain `check` until `deliveryId` is `null`.
+- Group addresses: `@all`, `@idle`, `@claude`, `@codex`, `@opencode`, `@gemini`, `@droid`, `@grok`, `@cursor`, `@worktree:<id>` — never for `worker_done`.
 - Every group except `@worktree:<id>` means the live Dispatches of the sender's own Run, delivered to their Dispatch mailboxes (or child Run mailboxes for nested coordinators). A sender in no Run is refused; `--run` must match the audience and never grants membership.
 - Run groups exclude their owning coordinator. A worker raising a blocker sends to `run:<id>`. `@worktree:<id>` includes coordinators in that workspace.
 - Quote PowerShell group addresses: `--to "@all"`.
@@ -135,19 +135,16 @@ Dispatched workers receive a preamble that tells them how to communicate with th
 - Send `worker_done` exactly once, even on failure, with `--outcome`.
 - Include a short `--body` summary: what was done, what was found, and what remains.
 - Include both task and dispatch IDs so stale retries cannot complete the wrong dispatch.
-- Send `heartbeat` messages during long active work.
-- Use `orca orchestration ask` for blocking questions instead of local TUI prompts.
+- Use `orca orchestration ask` for questions instead of local TUI prompts, then end your turn. Orca wakes you with the answer as mail; `check` shows it.
 
 ```bash
 orca orchestration ask \
-  --to <coordinatorHandle> \
   --question "Should I update the shared component or only this page?" \
   --options "shared,page-only" \
-  --timeout-ms 600000 \
   --json
 ```
 
-With `--json`, `ask` prints the standard `{id, ok, result, _meta}` envelope, so workers read the answer with `jq -r .result.answer`.
+`ask` records the question and returns at once with `pending: true`. Add `--wait` (or `--resume <message_id>`) to block until the answer instead; with `--json`, read it with `jq -r .result.answer`.
 
 ## Decision gates
 

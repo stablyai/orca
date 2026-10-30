@@ -33,11 +33,15 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     ],
     identityFlagRoles: { from: 'caller', terminal: 'target' },
     notes: [
+      'With --spec and no bound Run, a coordinator gets a new Run bound to it, named after the Task title; the receipt names the Run it created or joined.',
       'Current and existing worktrees never rerun setup; a fresh agent terminal is created unless --terminal is explicit.',
       'When reusing --terminal, pass --worktree for that terminal; current means the coordinator worktree.',
+      "Reusing a settled worker's terminal with --terminal before its autoReleaseAt cancels that automatic release; after it, the start is refused while the release runs.",
+      'A terminal the user kept open is refused for --terminal (terminal_kept_open); start the worker in another terminal.',
       '--agent takes an Orca agent id enabled on the worker server, such as claude, codex, cursor, antigravity, muse, zcode, opencode, or opencode2.',
       '--model supports Claude, Codex, Cursor, Antigravity, and Muse opaque provider model ids; --effort requires --model. OMP accepts --model only; --effort is unsupported. Neither can combine with --terminal. OpenCode model selection requires an existing worktree, a verified execution-host CLI, and an available model; effort is unsupported. Other agents, including zcode, launch with the model from their own config.',
       'New worktrees use agent-first creation and default --setup to run. Repository start-immediately runs setup beside the agent; wait-for-setup gates agent readiness and task input.',
+      'New worktrees without --name get the name Orca gives an unnamed workspace; the receipt names it. Servers older than this change still require --name.',
       'Creation flags (--name, --repo, --base-branch, --display-name, --comment, --setup) are rejected for current/existing worktrees. Use exact --repo on the selected server; project/host convenience routing remains on worktree create.',
       "How the worker runs follows the user's own setting for new agent tabs; there is no flag for it and no caller needs to ask. A dispatch the setting cannot apply to still starts, so the placement, agent, and launch options passed here are always the ones honoured.",
       'Drive every worker the same way whichever way it was started: the same orchestration verbs, the same handle. Mail, dispatch, worker-show, worker-read and the whole lifecycle behave identically. The start receipt records which one ran, for operators and telemetry.',
@@ -67,6 +71,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'The default auto source uses an exact hook-reported transcript when available and otherwise returns labeled terminal output.',
       'A Dispatch created by orchestration dispatch reads from its adopted terminal with worker status unsupervised.',
+      'Output stays readable after the terminal is released, including an automatic release after worker_done.',
       'A returned cursor is pinned to the exact source; start a fresh read if Orca reports source_changed.'
     ]
   },
@@ -79,6 +84,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'retry-request'],
     notes: [
       'A Dispatch created by orchestration dispatch is fenced without closing its unsupervised terminal process.',
+      'processAction closed_agent_terminal means Orca issued the close (do not also run terminal close); stop_unknown exits 1 and may still report it when the agent exit was not proven.',
       'Never deletes the worktree, setup terminal, configured tabs, or unrelated processes.'
     ]
   },
@@ -101,8 +107,9 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
       'Post-completion cleanup for a settled (succeeded or failed) worker; closes only the exact coordinator-owned agent terminal of that worker.',
       'A settled Dispatch created by orchestration dispatch has no owned terminal resource and is reported retained without process action.',
       'An inspectable output archive is preserved before the terminal closes, so worker-read still returns output afterwards.',
-      'Never closes setup terminals, configured tabs, reused or pre-existing terminals, user-taken-over terminals, or unproven identities.',
-      'Idempotent: repeating the call reports already_released. Only release_unknown exits 1; retained, release_pending, and already_released exit 0.'
+      'Never closes setup terminals, configured tabs, reused or pre-existing terminals, terminals the user kept open, or unproven identities.',
+      'Idempotent: repeating the call reports already_released. Only release_unknown exits 1; retained, release_pending, and already_released exit 0.',
+      'On a runtime that advertises orchestration.worker-auto-release.v1, an accepted worker_done already schedules this release about 2 minutes later (autoReleaseAt in worker-show and worker-list); call it only to release sooner or to clear a worker-retain. Chat workers follow autoReleaseAt too. autoReleaseAt is absent while its agent works again, and set afresh when it next goes idle.'
     ]
   },
   {
@@ -113,6 +120,8 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'retry-request'],
     notes: [
       'Records a durable user-requested exception; a later explicit worker-release clears it and releases the terminal.',
+      'Cancels the automatic release an accepted worker_done schedules; it also works on an active worker, before it reports.',
+      'For a worker on a connected server, the retain is recorded on that server when it supports automatic release.',
       'A settled Dispatch created by orchestration dispatch has no owned terminal resource and is reported retained without process action.',
       'Performs no process or filesystem action.'
     ]
@@ -125,6 +134,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'run', 'terminal-state', 'include-remote', 'cursor', 'limit'],
     notes: [
       'Terminal state is process accounting and is reported separately from Task status; a completed Task can still own a live terminal.',
+      'A reclaimable worker with resource.autoReleaseAt is released automatically at that time unless it is reused with worker-start --terminal, retained, or kept open by the user.',
       'Context-only Dispatches created by orchestration dispatch are included as unsupervised with terminal state retained.',
       'Returns at most 100 local rows, newest first, by default; --include-remote adds connected-server observations when the host supports fleet listing. Continue with the opaque page.nextCursor value unchanged.',
       'Without --run the list is scoped to the Run bound to the calling terminal, and to every Run when there is no binding; the receipt reports which in scope.source (flag, bound, or all).'

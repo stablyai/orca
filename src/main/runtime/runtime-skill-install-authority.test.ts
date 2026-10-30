@@ -40,4 +40,14 @@ describe('createSkillInstallAuthority', () => {
 
     await expect(authority.resolveWorktree(WORKTREE_ID)).resolves.toBeNull()
   })
+
+  it('never resolves a folder workspace as a worktree, where only repo rows fence the host', async () => {
+    const authority = createSkillInstallAuthority(
+      createHost({
+        showManagedWorktree: async () => ({ id: 'folder:remote-folder', path: '/srv/remote' })
+      })
+    )
+
+    await expect(authority.resolveWorktree('folder:remote-folder')).resolves.toBeNull()
+  })
 })

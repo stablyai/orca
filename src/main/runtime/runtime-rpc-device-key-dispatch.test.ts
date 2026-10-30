@@ -1,14 +1,4 @@
-import {
-  openSessionSearchHarness,
-  addSyntheticSession
-} from '../ai-vault-search/session-search-engine-test-fixture'
-import { createSessionSearchService } from '../ai-vault-search/session-search-service'
-import { setSessionSearchService } from '../ai-vault-search/session-search-service-registry'
-import {
-  installSessionSearchScopeCatalogSource,
-  resetSessionSearchScopeCatalogForTests
-} from '../ai-vault-search/session-search-scope-catalog'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import nacl from 'tweetnacl'
@@ -19,6 +9,12 @@ import { DeviceRegistry } from './device-registry'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import type { AuthenticatedMobileSocket } from './rpc/mobile-socket-wiring'
+import { visibleSnapshot } from './rpc/methods/session-tabs-snapshot.test-fixture'
+import {
+  authenticateMobileWsSession,
+  createEncryptedWsResponseReader,
+  sendEncryptedWsRequest
+} from './runtime-rpc-mobile-ws-test-harness'
 
 function keyedServer() {
   const userDataPath = mkdtempSync(join(tmpdir(), 'orca-device-key-dispatch-'))
@@ -60,7 +56,7 @@ function keyedServer() {
     const reply: unknown = JSON.parse(replies.at(-1)!)
     return reply
   }
-  return { server, registry, keyed, legacy, send, userDataPath }
+  return { server, registry, keyed, legacy, send }
 }
 
 describe('requests on a key-authenticated socket', () => {
@@ -146,45 +142,71 @@ describe('pairing.registerDeviceKey over the dispatcher', () => {
   )
 })
 
-it('carries canonical intent through the actual key-authenticated dispatch into native results', async () => {
-  const { send, userDataPath, server } = keyedServer()
-  const index = await openSessionSearchHarness('sta10541-key-native')
-  try {
-    addSyntheticSession(index.db, { id: 1, cwd: '/repo/app' })
-    addSyntheticSession(index.db, { id: 2, cwd: '/other' })
-    setSessionSearchService(
-      createSessionSearchService({
-        engine: index.engine,
-        indexer: {
-          status: () => {
-            throw new Error('not called')
-          },
-          reconcile: async () => undefined
+describe('streams on an authenticated phone socket', () => {
+  it('re-project when the phone later updates its capabilities on that socket', async () => {
+    const snapshot = {
+      ...visibleSnapshot(),
+      tabs: [
+        {
+          type: 'agent-session' as const,
+          id: 'claude',
+          sessionId: 'claude-session',
+          agent: 'claude',
+          title: 'Claude chat',
+          isActive: true
         }
+      ]
+    }
+    const cleanups = new Map<string, () => void>()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: phone auth and session.tabs.subscribe read only these members.
+    const runtime = {
+      configureNotificationDismissalStore: () => {},
+      getRuntimeId: () => 'test-runtime',
+      getStartedAt: () => 1,
+      machineNameReady: async () => undefined,
+      getStatus: () => ({ graphStatus: 'unavailable' }),
+      onClientDisconnected: () => {},
+      cleanupSubscriptionsForConnection: () => {},
+      listMobileSessionTabs: async () => snapshot,
+      registerSubscriptionCleanup: (id: string, cleanup: () => void) => cleanups.set(id, cleanup),
+      cleanupSubscription: (id: string) => cleanups.get(id)?.(),
+      onMobileSessionTabsChanged: () => () => {}
+    } as unknown as OrcaRuntimeService
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath: mkdtempSync(join(tmpdir(), 'orca-phone-capability-dispatch-')),
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    await server.start()
+    const offer = server.createPairingOffer({ address: '127.0.0.1', name: 'p', scope: 'mobile' })
+    if (!offer.available) {
+      throw new Error('WebSocket pairing unavailable')
+    }
+    // Token auth carries no capabilities, as a phone's does before its advisory update.
+    const session = await authenticateMobileWsSession(offer.pairingUrl)
+    const reader = createEncryptedWsResponseReader(session)
+    try {
+      sendEncryptedWsRequest(session, {
+        id: 'tabs',
+        method: 'session.tabs.subscribe',
+        params: { worktree: 'id:wt-1' }
       })
-    )
-    installSessionSearchScopeCatalogSource(() => ({
-      repos: [{ id: 'app', path: '/repo/app', displayName: 'app', badgeColor: '', addedAt: 1 }],
-      projects: [],
-      projectHostSetups: [],
-      worktreeMeta: {},
-      settings: { workspaceDir: '', nestWorkspaces: false }
-    }))
-    expect(
-      await send({
-        id: 'key-search',
-        method: 'aiVault.searchSessions',
+      expect(JSON.stringify(await reader.next('tabs'))).toContain('Open on desktop')
+      sendEncryptedWsRequest(session, {
+        id: 'caps',
+        method: 'runtime.clientCapabilities.update',
         params: {
-          query: 'needle',
-          within: { kind: 'project', projectKey: 'repo:app', canonicalProjectKey: 'repo:app' }
+          clientCapabilities: ['agent-session.structured.v1', 'agent-session.structured.claude.v1']
         }
       })
-    ).toMatchObject({ ok: true, result: { kind: 'results', hits: [{ sessionId: '1' }] } })
-  } finally {
-    setSessionSearchService(null)
-    resetSessionSearchScopeCatalogForTests()
-    await index.close()
-    await server.stop()
-    rmSync(userDataPath, { recursive: true, force: true })
-  }
+      const recovered = await reader.next('tabs')
+      expect(recovered).toMatchObject({ result: { type: 'updated' } })
+      expect(JSON.stringify(recovered)).toContain('Claude chat')
+    } finally {
+      reader.dispose()
+      session.ws.close()
+      await server.stop()
+    }
+  })
 })
