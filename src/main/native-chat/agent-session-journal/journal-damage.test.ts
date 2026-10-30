@@ -142,18 +142,21 @@ describe('a damaged chat', () => {
     })
   })
 
-  it("reads past damage to a newer build's row, which fails the load as a newer Orca's instead", async () => {
-    await writeChat()
-    await withJournalDatabase((db) => {
-      updateTestJournalRowJson(db, IDENTITY.sessionId, 3, '}{')
-      const newer = { ...JSON.parse(storedRowJson(db, 5)), kind: 'checkpoint' }
-      updateTestJournalRowJson(db, IDENTITY.sessionId, 5, JSON.stringify(newer))
-    })
-    const before = await storedRows()
+  it.each([1, 3])(
+    "reads past damage at row %i to a newer build's row, which fails the load as a newer Orca's instead",
+    async (damaged) => {
+      await writeChat()
+      await withJournalDatabase((db) => {
+        updateTestJournalRowJson(db, IDENTITY.sessionId, damaged, '}{')
+        const newer = { ...JSON.parse(storedRowJson(db, 5)), kind: 'checkpoint' }
+        updateTestJournalRowJson(db, IDENTITY.sessionId, 5, JSON.stringify(newer))
+      })
+      const before = await storedRows()
 
-    await expect(open()).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
-    expect(await storedRows()).toEqual(before)
-  })
+      await expect(open()).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
+      expect(await storedRows()).toEqual(before)
+    }
+  )
 })
 
 describe('a chat whose saved state cannot be read right now', () => {

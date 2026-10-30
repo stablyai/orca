@@ -197,3 +197,32 @@ it('opens a chat whole while its cache rebuild is between pages, then from the f
   expect(cached?.projectionThrough).toBe(rig.state().lastSequence)
   expect(cached && encodeJournalState(cached.state)).toEqual(encodeJournalState(rig.state()))
 })
+
+// The check runs inside the publishing transaction, against the epoch the caller last saw.
+it('refuses to publish a new epoch over one the caller did not see, writing nothing', () => {
+  seedOutcomeRows(database, [projectionEpochRow, item(2)])
+  const before = database.db.prepare('SELECT * FROM journal_rows ORDER BY seq').all()
+  const committed = vi.fn()
+  expect(() =>
+    publishNewEpoch({
+      database,
+      identity: {
+        sessionId,
+        workspaceId: 'ws',
+        hostId: 'host',
+        agent: 'codex',
+        providerHandle: codexProviderHandle('thread-1')
+      },
+      epoch: 'replacement',
+      reason: 'handle_forked',
+      fence: 2,
+      now: 20_000,
+      expectedEpoch: 'an-epoch-replaced-meanwhile',
+      queue: { cards: [], receipt: { write: () => {}, committed } },
+      onPublished: committed
+    })
+  ).toThrow(expect.objectContaining({ code: 'journal_row_rejected' }))
+  expect(committed).not.toHaveBeenCalled()
+  expect(database.db.prepare('SELECT * FROM journal_rows ORDER BY seq').all()).toEqual(before)
+  expect(restoreJournal(database.db, sessionId)?.state.epoch).toBe(epoch)
+})
