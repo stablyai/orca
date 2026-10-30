@@ -18,6 +18,7 @@ export type BrowserDownloadClaim = {
 }
 
 type PendingDownloadClaim = {
+  clickedGuestWebContentsId: number
   savePath: string
   start: (started: boolean) => void
   finish: (event: BrowserDownloadFinishedEvent) => void
@@ -69,6 +70,7 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
     const started = Promise.withResolvers<boolean>()
     const finished = Promise.withResolvers<BrowserDownloadFinishedEvent>()
     const claim: PendingDownloadClaim = {
+      clickedGuestWebContentsId: guestWebContentsId,
       savePath,
       start: started.resolve,
       finish: finished.resolve
@@ -85,8 +87,12 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
     }
   }
 
-  protected hasDownloadClaim(guestWebContentsId: number): boolean {
-    return this.downloadClaimsByGuestId.has(guestWebContentsId)
+  protected isAwaitingDownloadFrom(
+    guestWebContentsId: number,
+    rootGuestWebContentsId: number
+  ): boolean {
+    const claim = this.downloadClaimsByGuestId.get(rootGuestWebContentsId)
+    return claim?.clickedGuestWebContentsId === guestWebContentsId
   }
 
   handleGuestWillDownload(args: { guestWebContentsId: number; item: Electron.DownloadItem }): void {
