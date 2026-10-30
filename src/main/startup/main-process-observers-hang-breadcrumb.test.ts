@@ -76,6 +76,9 @@ vi.mock('../claude-usage/store', () => ({ ClaudeUsageStore: class {} }))
 vi.mock('../codex-usage/store', () => ({ CodexUsageStore: class {} }))
 vi.mock('../opencode-usage/store', () => ({ OpenCodeUsageStore: class {} }))
 vi.mock('../muse-usage/store', () => ({ MuseUsageStore: class {} }))
+vi.mock('../discord-presence/install-discord-presence', () => ({
+  installDiscordPresence: () => () => {}
+}))
 vi.mock('../repo-maintenance-idle-gate', () => ({
   installRepoMaintenanceIdleGate: () => () => {}
 }))

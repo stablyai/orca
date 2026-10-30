@@ -26,6 +26,7 @@ import { CodexUsageStore } from '../codex-usage/store'
 import { OpenCodeUsageStore } from '../opencode-usage/store'
 import { MuseUsageStore } from '../muse-usage/store'
 import { installRepoMaintenanceIdleGate } from '../repo-maintenance-idle-gate'
+import { installDiscordPresence } from '../discord-presence/install-discord-presence'
 import { mainProcessState as state } from './main-process-state'
 import { runAfterFirstWindowShown } from './first-window-deferral'
 
@@ -80,6 +81,9 @@ export function initializeMainProcessObservers(): void {
     unsubscribeStatusChanges()
     unsubscribeStatusFreshness()
     uninstallHookStatusRepublish()
+  }
+  if (!state.isServeMode) {
+    state.uninstallDiscordPresence = installDiscordPresence(store)
   }
   // Initialize before IPC/renderers can track; the telemetry client gates dev/disabled cases itself.
   // Load the SDK after first paint (#35752); headless serve and GPU failures never show a window.
