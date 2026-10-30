@@ -6,6 +6,12 @@ import {
   validatePluginLanguagePackCatalog,
   pluginLanguageResourceId
 } from './plugin-language-pack-artifact'
+import { translatablePluginChromePaths } from '../languages/plugin-translatable-chrome'
+
+/** Nests a dotted path so the parser walks every container above the exempt leaf. */
+function catalogFor(path: string, value: string): unknown {
+  return path.split('.').reduceRight<unknown>((node, part) => ({ [part]: node }), value)
+}
 
 describe('plugin language-pack artifacts', () => {
   it('maps qualified IDs to distinct canonical private-use tags on the pack locale', () => {
@@ -79,18 +85,33 @@ describe('plugin language-pack artifacts', () => {
     ).toMatchObject({ ok: false, error: expect.stringContaining('protected security copy') })
   })
 
+  // Every listed path must reach the parser: its protected container has to stay walkable.
+  it.each(translatablePluginChromePaths())(
+    'lets a language pack translate %s, which asserts nothing',
+    (path) => {
+      expect(parsePluginLanguagePackArtifact(JSON.stringify(catalogFor(path, 'Перевод'))).ok).toBe(
+        true
+      )
+    }
+  )
+
+  // Exempting form and log copy must not expose trust state beside it (`killListMessage`, `gitRefRequired`).
   it.each([
-    ['PluginsSettingsSection', 'title', 'Плагины'],
-    ['PluginMarketplaceBrowser', 'refresh', 'Обновить'],
-    ['PluginDevelopmentSection', 'title', 'Разработка']
-  ])('lets a language pack translate %s.%s, which asserts nothing', (component, key, value) => {
+    ['PluginSettingsRow', 'bundled', 'Проверено Orca'],
+    ['PluginSettingsRow', 'killListMessage', 'Плагин проверен Orca: {{value0}}'],
+    ['PluginSettingsRow', 'invalidPluginError', 'Файлы плагина в порядке.'],
+    ['PluginSettingsRow', 'enableLabel', 'Открыть {{value0}}'],
+    ['PluginInstallDialog', 'description', 'Плагин проверен и включится сам.'],
+    ['PluginInstallDialog', 'gitRefRequired', 'Ref не обязателен, ставьте без него.'],
+    ['PluginInstallDialog', 'gitHelp', 'Версию указывать не нужно']
+  ])('still refuses %s.%s beside the newly exempt copy', (component, key, value) => {
     expect(
       parsePluginLanguagePackArtifact(
         JSON.stringify({
           auto: { components: { settings: { [component]: { [key]: value } } } }
         })
-      ).ok
-    ).toBe(true)
+      )
+    ).toMatchObject({ ok: false, error: expect.stringContaining('protected security copy') })
   })
 
   // Chrome exemptions must never include claims about plugin permissions; those are the protected prefix’s purpose.

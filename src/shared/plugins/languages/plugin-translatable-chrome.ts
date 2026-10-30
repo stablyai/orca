@@ -61,7 +61,32 @@ const TRANSLATABLE_PLUGIN_CHROME = new Set([
   'auto.components.settings.plugins.search.install',
   'auto.components.settings.plugins.search.permissions',
   'auto.components.settings.plugins.search.logs',
-  'auto.components.settings.plugins.search.development'
+  'auto.components.settings.plugins.search.development',
+
+  // Maturity badge on the pane heading: how finished the feature is, not what a plugin may do.
+  'auto.components.settings.PluginsSettingsSection.alpha',
+
+  // Install form labels and blank-field checks; pinning advice and `description` stay protected.
+  'auto.components.settings.PluginInstallDialog.cancel',
+  'auto.components.settings.PluginInstallDialog.gitLabel',
+  'auto.components.settings.PluginInstallDialog.gitPlaceholder',
+  'auto.components.settings.PluginInstallDialog.gitTab',
+  'auto.components.settings.PluginInstallDialog.gitUrlRequired',
+  'auto.components.settings.PluginInstallDialog.install',
+  'auto.components.settings.PluginInstallDialog.installing',
+  'auto.components.settings.PluginInstallDialog.localLabel',
+  'auto.components.settings.PluginInstallDialog.localPlaceholder',
+  'auto.components.settings.PluginInstallDialog.localRequired',
+  'auto.components.settings.PluginInstallDialog.localTab',
+  'auto.components.settings.PluginInstallDialog.source',
+  'auto.components.settings.PluginInstallDialog.title',
+
+  // Installed-row log controls; trust state and enable/disable stay protected.
+  'auto.components.settings.PluginSettingsRow.loadingLogs',
+  'auto.components.settings.PluginSettingsRow.logCount',
+  'auto.components.settings.PluginSettingsRow.moreActions',
+  'auto.components.settings.PluginSettingsRow.noLogs',
+  'auto.components.settings.PluginSettingsRow.viewLogs'
 ])
 
 /** True when a protected-prefix path is plugin chrome a language pack may translate. */
