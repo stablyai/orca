@@ -11918,7 +11918,6 @@
         },
         "PluginThemeUseNow": {
           "label": "Utiliser maintenant :",
-          "useName": "Utiliser maintenant : {{value0}}",
           "useForLight": "Utiliser en clair :",
           "useForDark": "Utiliser en sombre :"
         },

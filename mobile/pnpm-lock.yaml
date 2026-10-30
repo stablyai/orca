@@ -176,6 +176,7 @@ patchedDependencies:
   '@xterm/addon-webgl@0.20.0-beta.300': 5349718f2c19d9319a81552580bf9618ded9b00f3707a5c6cdbbae1910849cd9
   braces@3.0.3: c07bb14cec04bc891e1fe529720444cc9729a25117f9aaf24253cfe3132a34fd
   expo-notifications@55.0.27: ce20843a3daad4185d7e8571788fa323ba4d11984936188790858650a61749c0
+  expo-router@55.0.18: 5cdc178be0ec617ebb8dec85eebe4effeca13a6551b87fcb7bcd20ec0d2a313d
   node-forge@1.4.0: 2798686e4488058ad81c3b8e32eb763c0feff21f4c717ce4d13b6ef2432cd5b8
   query-string@9.5.1: 8624f1beedd0705bfdaf287519ed6363662a0c96f01fd594508b34583bf30d8b
   react-native-webview@13.16.2: 55b7bce35c78ee1a50c4b99ad65b52982f3cfa73da6f61d0853c4d03219eec06
@@ -264,7 +265,7 @@ importers:
         version: 55.0.27(patch_hash=ce20843a3daad4185d7e8571788fa323ba4d11984936188790858650a61749c0)(expo@55.0.31)(react-native@0.83.10(patch_hash=22bc31f0a057b1f96d9949b38a7ccde81225f617c0f243820dc8a455c91debfb)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.2(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)(supports-color@8.1.1)(typescript@7.0.2)
       expo-router:
         specifier: ^55.0.18
-        version: 55.0.18(589555b6d8c5573172d9947cbca71959)
+        version: 55.0.18(patch_hash=5cdc178be0ec617ebb8dec85eebe4effeca13a6551b87fcb7bcd20ec0d2a313d)(589555b6d8c5573172d9947cbca71959)
       expo-secure-store:
         specifier: ^55.0.18
         version: 55.0.18(expo@55.0.31)
@@ -8918,7 +8919,7 @@ snapshots:
       ws: 8.22.0
       zod: 3.25.76(patch_hash=8f57d8e7910df51ec3c40c412b4f8fb3d01fd65e1889c057aae0e4a15483bcec)
     optionalDependencies:
-      expo-router: 55.0.18(589555b6d8c5573172d9947cbca71959)
+      expo-router: 55.0.18(patch_hash=5cdc178be0ec617ebb8dec85eebe4effeca13a6551b87fcb7bcd20ec0d2a313d)(589555b6d8c5573172d9947cbca71959)
       react-native: 0.83.10(patch_hash=22bc31f0a057b1f96d9949b38a7ccde81225f617c0f243820dc8a455c91debfb)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.2(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.8)(supports-color@8.1.1)
     transitivePeerDependencies:
       - '@expo/dom-webview'
@@ -9252,7 +9253,7 @@ snapshots:
       react: 19.2.8
     optionalDependencies:
       '@expo/metro-runtime': 55.0.12(@expo/dom-webview@55.0.6)(expo@55.0.31)(react-dom@19.2.8(react@19.2.8))(react-native@0.83.10(patch_hash=22bc31f0a057b1f96d9949b38a7ccde81225f617c0f243820dc8a455c91debfb)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.2(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)
-      expo-router: 55.0.18(589555b6d8c5573172d9947cbca71959)
+      expo-router: 55.0.18(patch_hash=5cdc178be0ec617ebb8dec85eebe4effeca13a6551b87fcb7bcd20ec0d2a313d)(589555b6d8c5573172d9947cbca71959)
       react-dom: 19.2.8(react@19.2.8)
     transitivePeerDependencies:
       - supports-color
@@ -12396,7 +12397,7 @@ snapshots:
       - supports-color
       - typescript
 
-  expo-router@55.0.18(589555b6d8c5573172d9947cbca71959):
+  expo-router@55.0.18(patch_hash=5cdc178be0ec617ebb8dec85eebe4effeca13a6551b87fcb7bcd20ec0d2a313d)(589555b6d8c5573172d9947cbca71959):
     dependencies:
       '@expo/log-box': 55.0.13(@expo/dom-webview@55.0.6)(expo@55.0.31)(react-native@0.83.10(patch_hash=22bc31f0a057b1f96d9949b38a7ccde81225f617c0f243820dc8a455c91debfb)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.2(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)
       '@expo/metro-runtime': 55.0.12(@expo/dom-webview@55.0.6)(expo@55.0.31)(react-dom@19.2.8(react@19.2.8))(react-native@0.83.10(patch_hash=22bc31f0a057b1f96d9949b38a7ccde81225f617c0f243820dc8a455c91debfb)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.2(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)

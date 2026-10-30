@@ -1,22 +1,25 @@
 // @vitest-environment happy-dom
 
+import {
+  mockCreateTab,
+  mockWaitForAgentReady,
+  mockPasteDraftWhenAgentReady,
+  mockCreateStructuredCodexSessionLaunchIntent,
+  mockRetryStructuredAgentSessionLaunchIntent,
+  mockLaunchStructuredCodexSession,
+  mockRefreshLocalStructuredSessionTabs,
+  mockToastError,
+  mockCallStructuredAgentSession,
+  mockCreateSupport,
+  structuredLaunchIntent,
+  liveStore,
+  main
+} from './launch-agent-structured-chat-test-fixture'
 import type { AppState } from '@/store/types'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { createGlobalSettingsFixture } from '../../../shared/global-settings-test-fixture'
 import type { launchAgentInNewTab } from './launch-agent-in-new-tab'
-import {
-  createTestStore,
-  makeWorktree,
-  makeTab,
-  makeUnifiedTab,
-  makeTabGroup,
-  seedStore,
-  TEST_REPO
-} from '@/store/slices/store-test-helpers'
-import {
-  drawTabsFromMain,
-  type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+import { makeUnifiedTab } from '@/store/slices/store-test-helpers'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { isPendingTab } from '@/runtime/layout-owner-pending-tabs'
 import {
@@ -24,29 +27,16 @@ import {
   getStructuredLaunchStateBySessionId
 } from './agent-session/launch/structured-agent-session-launch-registry'
 import { resetStructuredAgentLaunchPersistenceForTests } from './agent-session/launch/structured-agent-session-launch-persistence'
-import type * as LaunchErrors from '@/lib/structured-agent-session-launch-errors'
+import * as capabilities from '@/runtime/local-runtime-capabilities'
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 
-const mockCreateTab = vi.hoisted(() => vi.fn())
-const mockSetTabViewMode = vi.hoisted(() => vi.fn())
-const mockWaitForAgentReady = vi.hoisted(() => vi.fn())
-const mockPasteDraftWhenAgentReady = vi.hoisted(() => vi.fn())
-const mockMarkNativeChatLaunchPromptFailed = vi.hoisted(() => vi.fn())
-const mockCreateStructuredCodexSessionLaunchIntent = vi.hoisted(() => vi.fn())
-const mockAbandonStructuredAgentSessionLaunchIntent = vi.hoisted(() => vi.fn())
-const mockLaunchStructuredCodexSession = vi.hoisted(() => vi.fn())
-const mockRefreshLocalStructuredSessionTabs = vi.hoisted(() => vi.fn())
-const mockToastError = vi.hoisted(() => vi.fn())
-const mockCallStructuredAgentSession = vi.hoisted(() => vi.fn())
-const mockCreateSupport = vi.hoisted(() => vi.fn())
-const mockCreateUnifiedTab = vi.hoisted(() => vi.fn<AppState['createUnifiedTab']>())
-const mockRetryStructuredAgentSessionLaunchIntent = vi.hoisted(() =>
-  vi.fn<
-    (intent: ReturnType<typeof structuredLaunchIntent>) => ReturnType<typeof structuredLaunchIntent>
-  >()
-)
-const STRUCTURED_HOST_CAPABILITIES = ['agent-session.structured.v1']
-let hostCapabilities: readonly string[] | null = STRUCTURED_HOST_CAPABILITIES
+const mockCreateUnifiedTab = vi.fn<AppState['createUnifiedTab']>()
+const mockSetTabViewMode = vi.fn<AppState['setTabViewMode']>()
+const mockMarkNativeChatLaunchPromptFailed = vi.fn<AppState['markNativeChatLaunchPromptFailed']>()
+const STRUCTURED_HOST_CAPABILITIES = ['agent-session.structured.v1'] as const
+let hostCapabilities: ReturnType<typeof capabilities.readLocalRuntimeCapabilitiesOrUnknown> =
+  STRUCTURED_HOST_CAPABILITIES
+const state = () => liveStore().getState()
 
 function launchScenarioSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings {
   return createGlobalSettingsFixture({
@@ -62,225 +52,28 @@ function launchScenarioSettings(overrides: Partial<GlobalSettings> = {}): Global
   })
 }
 
-function structuredLaunchIntent(worktreeId: string, sessionId = 'codex-session-1') {
-  return {
-    sessionId,
-    worktreeId,
-    executionHostId: 'local' as const,
-    target: { kind: 'local' as const },
-    params: {
-      envelope: {
-        sessionId,
-        clientOperationId: `operation-${sessionId}`,
-        expectedRuntimeFence: null,
-        payloadFingerprint: 'f'.repeat(64)
-      },
-      worktree: `id:${worktreeId}`,
-      agent: 'codex' as const
-    }
-  }
-}
-
-const owner = vi.hoisted((): { store: ReturnType<typeof createTestStore> | null } => ({
-  store: null
-}))
-function state(): AppState {
-  return owner.store!.getState()
-}
-vi.mock('@/store', async () =>
-  (await import('./launch-parity-renderer.test-fixture')).launchStoreModuleMock(owner)
-)
-vi.mock('@/runtime/runtime-rpc-client', async (original) =>
-  (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
-  ).runtimeRpcClientWithLayoutApply(await original())
-)
-vi.mock('@/runtime/runtime-layout-client', async (original) =>
-  (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
-  ).runtimeLayoutClientWithTestFrames(await original())
-)
-vi.mock('sonner', () => ({ toast: { message: vi.fn(), error: mockToastError } }))
-vi.mock('@/components/tab-bar/reconcile-order', () => ({ reconcileTabOrder: vi.fn(() => []) }))
-vi.mock('@/lib/agent-paste-draft', () => ({
-  pasteDraftWhenAgentReady: mockPasteDraftWhenAgentReady
-}))
-vi.mock('@/lib/agent-ready-wait', () => ({ waitForAgentReady: mockWaitForAgentReady }))
-vi.mock('@/lib/telemetry', () => ({
-  track: vi.fn(),
-  tuiAgentToAgentKind: (agent: string) => agent
-}))
-vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
-  createWebRuntimeSessionTerminal: vi.fn(),
-  createWebRuntimeAgentSessionTerminalWithLaunchDraft: vi.fn()
-}))
-vi.mock('@/runtime/web-runtime-session-environment', () => ({
-  isWebRuntimeSessionActive: vi.fn(() => false)
-}))
-vi.mock('../../../shared/terminal-surface-id', () => ({
-  isWebTerminalSurfaceTabId: vi.fn(() => false)
-}))
-const launchErrorMocks = vi.hoisted(() => {
-  class StructuredAgentSessionCreateRefusalError extends Error {}
-  class StructuredAgentSessionHostDeclinedError extends StructuredAgentSessionCreateRefusalError {}
-  class StructuredAgentSessionHostUnreachableError extends StructuredAgentSessionCreateRefusalError {}
-  class StructuredAgentSessionOwnerUnresolvedError extends Error {}
-  return {
-    StructuredAgentSessionCreateRefusalError,
-    StructuredAgentSessionHostDeclinedError,
-    StructuredAgentSessionHostUnreachableError,
-    StructuredAgentSessionOwnerUnresolvedError
-  }
-})
-
-vi.mock('@/lib/structured-agent-session-launch-errors', async () => ({
-  ...(await vi.importActual<typeof LaunchErrors>('@/lib/structured-agent-session-launch-errors')),
-  ...launchErrorMocks
-}))
-
-vi.mock('@/lib/structured-agent-session-launch-create-call', () => ({
-  launchStructuredAgentSession: mockLaunchStructuredCodexSession
-}))
-
-vi.mock('@/lib/launch-structured-agent-session', () => {
-  return {
-    createStructuredAgentSessionLaunchIntent: mockCreateStructuredCodexSessionLaunchIntent,
-    abandonStructuredAgentSessionLaunchIntent: mockAbandonStructuredAgentSessionLaunchIntent,
-    retryStructuredAgentSessionLaunchIntent: mockRetryStructuredAgentSessionLaunchIntent,
-    launchStructuredAgentSession: mockLaunchStructuredCodexSession,
-    StructuredAgentSessionCreateRefusalError:
-      launchErrorMocks.StructuredAgentSessionCreateRefusalError,
-    StructuredAgentSessionHostDeclinedError:
-      launchErrorMocks.StructuredAgentSessionHostDeclinedError,
-    StructuredAgentSessionHostUnreachableError:
-      launchErrorMocks.StructuredAgentSessionHostUnreachableError,
-    StructuredAgentSessionOwnerUnresolvedError:
-      launchErrorMocks.StructuredAgentSessionOwnerUnresolvedError
-  }
-})
-vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({
-  refreshLocalStructuredSessionTabs: mockRefreshLocalStructuredSessionTabs
-}))
-vi.mock('@/runtime/local-structured-session-owner', () => ({
-  LOCAL_STRUCTURED_SESSION_OWNER: 'local-structured-session'
-}))
-vi.mock('@/runtime/local-runtime-capabilities', () => ({
-  readLocalRuntimeCapabilitiesOrUnknown: () => hostCapabilities,
-  ensureLocalRuntimeCapabilities: async () => hostCapabilities,
-  awaitLocalRuntimeCapabilities: () => ({ known: Promise.resolve([]), stop: () => {} })
-}))
-vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getExecutionHostIdForWorktree: () =>
-    state().repos[0]?.connectionId ? `ssh:${state().repos[0]!.connectionId}` : 'local',
-  runtimeEnvironmentIdOrLocalUnlessTwin: () => null
-}))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: (target: unknown, method: string, params: unknown) =>
-    method === 'agentSession.createSupport'
-      ? mockCreateSupport()
-      : mockCallStructuredAgentSession(target, method, params)
-}))
-
-let main: TabsDrawnFromMain
 let warnings: MockInstance<typeof console.warn>
 const owned: ReturnType<typeof launchAgentInNewTab>[] = []
 const lateCreates: (() => void)[] = []
 // No initial chat mode proves availability rejection preceded terminal-tab adoption.
 describe('structured chat adoption guard on the launch path', () => {
   beforeEach(async () => {
-    vi.resetAllMocks()
     localStorage.clear()
     resetStructuredAgentLaunchRegistryForTests()
     resetStructuredAgentLaunchPersistenceForTests()
-    owner.store = createTestStore()
-    const chat = makeUnifiedTab({
-      id: 'structured-agent-session-codex-session-1',
-      contentType: 'agent-session',
-      entityId: 'codex-session-1',
-      worktreeId: 'wt-1',
-      groupId: 'group-1'
-    })
-    seedStore(owner.store, {
-      activeRepoId: 'repo-1',
-      activeWorktreeId: 'wt-1',
-      settings: launchScenarioSettings(),
-      projects: [
-        {
-          id: 'repo-1',
-          displayName: 'repo',
-          badgeColor: '',
-          sourceRepoIds: ['repo-1'],
-          createdAt: 0,
-          updatedAt: 0,
-          localWindowsRuntimePreference: { kind: 'inherit-global' }
-        }
-      ],
-      repos: [{ ...TEST_REPO, id: 'repo-1', connectionId: null, path: '/repo' }],
-      sshConnectionStates: new Map(
-        ['ssh-a', 'runtime-ssh-a'].map((targetId) => [
-          targetId,
-          {
-            targetId,
-            status: 'connected' as const,
-            error: null,
-            reconnectAttempt: 0,
-            remotePlatform: 'linux' as const
-          }
-        ])
-      ),
-      runtimeStatusByEnvironmentId: new Map([
-        [
-          'web-runtime',
-          {
-            checkedAt: 0,
-            status: {
-              hostPlatform: 'linux',
-              runtimeId: 'web-runtime',
-              rendererGraphEpoch: 0,
-              graphStatus: 'ready',
-              authoritativeWindowId: null,
-              liveTabCount: 0,
-              liveLeafCount: 0,
-              runtimeProtocolVersion: 3,
-              minCompatibleRuntimeClientVersion: 3
-            }
-          }
-        ]
-      ]),
-      worktreesByRepo: {
-        'repo-1': [
-          makeWorktree({
-            id: 'wt-1',
-            repoId: 'repo-1',
-            path: '/repo/worktree',
-            projectId: 'repo-1'
-          })
-        ]
-      },
-      tabsByWorktree: { 'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })] },
-      unifiedTabsByWorktree: { 'wt-1': [chat] },
-      groupsByWorktree: {
-        'wt-1': [
-          makeTabGroup({
-            id: 'group-1',
-            worktreeId: 'wt-1',
-            tabOrder: [chat.id],
-            activeTabId: chat.id
-          })
-        ]
-      },
-      layoutByWorktree: { 'wt-1': { type: 'leaf', groupId: 'group-1' } },
-      activeGroupIdByWorktree: { 'wt-1': 'group-1' }
-    })
+    liveStore().setState({ settings: launchScenarioSettings() })
     mockCreateUnifiedTab.mockImplementation(state().createUnifiedTab)
-    owner.store.setState({
+    liveStore().setState({
       createUnifiedTab: mockCreateUnifiedTab,
-      createTab: mockCreateTab,
       setTabViewMode: mockSetTabViewMode,
       markNativeChatLaunchPromptFailed: mockMarkNativeChatLaunchPromptFailed
     })
-    mockCreateTab.mockReturnValue({ id: 'tab-1' })
-    main = await drawTabsFromMain(owner.store)
+    vi.spyOn(capabilities, 'readLocalRuntimeCapabilitiesOrUnknown').mockImplementation(
+      () => hostCapabilities
+    )
+    vi.spyOn(capabilities, 'ensureLocalRuntimeCapabilities').mockImplementation(
+      async () => hostCapabilities
+    )
     warnings = vi.spyOn(console, 'warn')
     mockWaitForAgentReady.mockResolvedValue({ ready: true, reason: 'foreground-match' })
     mockPasteDraftWhenAgentReady.mockResolvedValue(true)
@@ -352,9 +145,6 @@ describe('structured chat adoption guard on the launch path', () => {
     for (const id of ['codex-session-1', 'codex-session-2']) {
       retireStructuredAgentSessionLaunchCancellationTombstone('wt-1', id)
     }
-    main.close()
-    vi.restoreAllMocks()
-    owner.store = null
   })
 
   it('takes the structured path when the chat-default view is selected', async () => {
@@ -396,7 +186,7 @@ describe('structured chat adoption guard on the launch path', () => {
   })
 
   it('takes the structured path when a Codex model and effort are already saved', async () => {
-    owner.store!.setState({
+    liveStore().setState({
       settings: launchScenarioSettings({
         nativeChatSessionOptions: {
           codex: { model: 'gpt-5.6-sol', valuesByModel: { 'gpt-5.6-sol': { effort: 'medium' } } }
@@ -448,7 +238,7 @@ describe('structured chat adoption guard on the launch path', () => {
 
   // WSL-bound Claude accounts must decline before opening a chat that could only fail Retry.
   it('opens the terminal, and no chat, when this machine declines the chat', async () => {
-    owner.store!.setState({ unifiedTabsByWorktree: {} })
+    liveStore().setState({ unifiedTabsByWorktree: {} })
     mockCreateSupport.mockResolvedValue({ supported: false, reason: 'wsl' })
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
@@ -507,7 +297,7 @@ describe('structured chat adoption guard on the launch path', () => {
 
   // Recheck persisted opt-in against current default view; the hidden toggle can remain enabled under Terminal chat.
   it('ignores a stale structured opt-in while the default view is Terminal chat', async () => {
-    owner.store!.setState({ settings: launchScenarioSettings({ experimentalNativeChat: false }) })
+    liveStore().setState({ settings: launchScenarioSettings({ experimentalNativeChat: false }) })
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
@@ -615,7 +405,7 @@ describe('structured chat adoption guard on the launch path', () => {
   })
 
   it('settles a successful create and opens its chat without an inventory refresh', async () => {
-    owner.store!.setState({ unifiedTabsByWorktree: {} })
+    liveStore().setState({ unifiedTabsByWorktree: {} })
     expect(state().getTab('structured-agent-session-codex-session-1')).toBeNull()
     mockRefreshLocalStructuredSessionTabs.mockRejectedValue(new Error('inventory unavailable'))
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
@@ -643,7 +433,7 @@ describe('structured chat adoption guard on the launch path', () => {
   })
 
   it('re-checks a chat whose visibility proof is unknown through its own Retry, with its own intent', async () => {
-    owner.store!.setState({ unifiedTabsByWorktree: {} })
+    liveStore().setState({ unifiedTabsByWorktree: {} })
     const firstIntent = structuredLaunchIntent('wt-1', 'codex-session-1')
     const secondIntent = structuredLaunchIntent('wt-1', 'codex-session-2')
     mockCreateStructuredCodexSessionLaunchIntent
@@ -657,7 +447,7 @@ describe('structured chat adoption guard on the launch path', () => {
       .mockRejectedValueOnce(new Error('inventory unavailable'))
       .mockResolvedValueOnce([])
       .mockImplementationOnce(() => {
-        owner.store!.setState({
+        liveStore().setState({
           unifiedTabsByWorktree: {
             'wt-1': [
               makeUnifiedTab({
@@ -730,7 +520,7 @@ describe('structured chat adoption guard on the launch path', () => {
     const replacement = state().unifiedTabsByWorktree['wt-1']!.find(
       (row) => row.entityId === secondIntent.sessionId
     )!
-    owner.store!.setState({ unifiedTabsByWorktree: { 'wt-1': [replacement] } })
+    liveStore().setState({ unifiedTabsByWorktree: { 'wt-1': [replacement] } })
     expect(state().getTab(`structured-agent-session-${firstIntent.sessionId}`)).toBeNull()
     expect(state().getTab(replacement.id)).toBe(replacement)
   })
@@ -777,7 +567,7 @@ describe('structured chat adoption guard on the launch path', () => {
   })
 
   it('keeps an SSH Codex tab on the bridge', async () => {
-    owner.store!.setState({ repos: [{ ...state().repos[0]!, connectionId: 'ssh-a' }] })
+    liveStore().setState({ repos: [{ ...state().repos[0]!, connectionId: 'ssh-a' }] })
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     launchAgentInNewTab({ requestId: 'request-18', agent: 'codex', worktreeId: 'wt-1' })
@@ -793,7 +583,7 @@ describe('structured chat adoption guard on the launch path', () => {
   })
 
   it('keeps a runtime-paired Codex tab on the bridge', async () => {
-    owner.store!.setState({ repos: [{ ...state().repos[0]!, connectionId: 'runtime-ssh-a' }] })
+    liveStore().setState({ repos: [{ ...state().repos[0]!, connectionId: 'runtime-ssh-a' }] })
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     launchAgentInNewTab({ requestId: 'request-19', agent: 'codex', worktreeId: 'wt-1' })

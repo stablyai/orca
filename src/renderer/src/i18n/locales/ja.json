@@ -11420,7 +11420,6 @@
         },
         "PluginThemeUseNow": {
           "label": "今すぐ使う:",
-          "useName": "今すぐ使う: {{value0}}",
           "useForLight": "ライトで使う:",
           "useForDark": "ダークで使う:"
         },

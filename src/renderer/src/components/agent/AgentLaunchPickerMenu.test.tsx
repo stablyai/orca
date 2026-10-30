@@ -47,22 +47,7 @@ function show(value: AgentPickerEntry, others: AgentPickerEntry[] = []) {
         <DropdownMenu defaultOpen modal={false}>
           <DropdownMenuTrigger>New tab</DropdownMenuTrigger>
           <DropdownMenuContent>
-            <AgentLaunchPickerMenu
-              entries={entries}
-              model={{
-                state: 'settled',
-                rows: entries.flatMap((entry) => entry.rows),
-                detection: {
-                  detectedIds: entries.map((entry) => entry.agent),
-                  isLoading: false,
-                  isRefreshing: false,
-                  detectionFailed: false,
-                  needsServerUpdate: false,
-                  refresh: async () => entries.map((entry) => entry.agent)
-                }
-              }}
-              runLaunch={launch}
-            />
+            <AgentLaunchPickerMenu entries={entries} runLaunch={launch} />
           </DropdownMenuContent>
         </DropdownMenu>
       </TooltipProvider>
