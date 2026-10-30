@@ -45,7 +45,7 @@ export function claudeNamingInvocation(
       const [cwd, baseEnv, configuredArgs] = await Promise.all([directory, inherited, args])
       const resolved = await resolveClaudeChildEnvSources({
         resolveEnv: () => overlay,
-        resolveInheritedEnv: () => baseEnv,
+        resolveInheritedEnv: () => Promise.resolve(baseEnv),
         resolveWorkingDirectory: () => cwd,
         ...(settings
           ? {

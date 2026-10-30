@@ -144,7 +144,7 @@ it('keeps an accepted old-context append separate from Clear and names the commi
       ...fields,
       envelope: {
         sessionId: HOST_TEST_SESSION,
-        clientOperationId: 'naming-clear-0000000000000000000000000001',
+        clientOperationId: fixture.operationId(),
         expectedRuntimeFence:
           host.deps.store.requireWritableRecord(HOST_TEST_SESSION).lease.runtimeFence,
         payloadFingerprint: computeAgentSessionPayloadFingerprint({
@@ -288,7 +288,7 @@ it('names the materialized committed rewind fork at rest and never replays it on
       ...fields,
       envelope: {
         sessionId: HOST_TEST_SESSION,
-        clientOperationId: 'naming-fork-00000000000000000000000000001',
+        clientOperationId: fixture.operationId(),
         expectedRuntimeFence:
           host.deps.store.requireWritableRecord(HOST_TEST_SESSION).lease.runtimeFence,
         payloadFingerprint: computeAgentSessionPayloadFingerprint({

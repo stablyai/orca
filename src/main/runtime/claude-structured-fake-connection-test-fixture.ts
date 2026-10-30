@@ -30,6 +30,7 @@ export function fakeClaude(providerSession: string) {
       pid: 4321 + connections.length,
       closed: false,
       initializationResult: async () => {
+        await Promise.resolve()
         connection.calls.push({ subtype: 'initialize' })
         if (selfExit) {
           const error = new Error(selfExit.message)

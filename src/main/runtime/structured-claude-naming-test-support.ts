@@ -256,6 +256,7 @@ export async function createClaudeNamingRuntime(
     controls,
     native,
     install,
+    operationId,
     async create(source: string | null = file, sessionId = HOST_TEST_SESSION) {
       if (!host) {
         throw new Error('install the runtime first')

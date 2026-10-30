@@ -113,6 +113,7 @@ it('joins an issued control after stopDelivery before closing adapters and the d
 }) => {
   const control = Promise.withResolvers<void>()
   const controlEntered = Promise.withResolvers<void>()
+  let stopping: Promise<void> | undefined
   const fixture = await createClaudeNamingRuntime({
     beforeControl: async () => {
       controlEntered.resolve()
@@ -121,8 +122,15 @@ it('joins an issued control after stopDelivery before closing adapters and the d
   })
   onTestFinished(async () => {
     control.resolve()
-    await fixture.dispose()
-    vi.restoreAllMocks()
+    try {
+      await stopping
+    } finally {
+      try {
+        await fixture.dispose()
+      } finally {
+        vi.restoreAllMocks()
+      }
+    }
   })
   await writeNativeNamingConversation(fixture.file, fixture.nativeId, fixture.root)
   const host = await fixture.install()
@@ -138,7 +146,7 @@ it('joins an issued control after stopDelivery before closing adapters and the d
   const stopDelivery = vi.spyOn(host, 'stopDelivery')
   const closeAdapters = vi.spyOn(adapter, 'closeAll')
   const closeDatabase = vi.spyOn(host.deps.journalDatabase, 'close')
-  const stopping = stopStructuredAgentSessionRuntime()
+  stopping = stopStructuredAgentSessionRuntime()
   await vi.waitFor(() => expect(stopDelivery).toHaveBeenCalledOnce())
   host.deps.nameProviderConversation?.({
     ...host.deps.store.requireWritableRecord(HOST_TEST_SESSION),
@@ -168,6 +176,7 @@ it('joins already-issued root cleanup after startup expiry even when delivery an
   const warn = vi.fn()
   const closeEntered = Promise.withResolvers<void>()
   const rootExit = Promise.withResolvers<boolean>()
+  let stopping: Promise<void> | undefined
   const fixture = await createClaudeNamingRuntime({
     initialize: initialize.promise,
     deps: { startupLimits: { ceilingMs: 5000 }, logger: { warn, error: vi.fn() } },
@@ -187,9 +196,16 @@ it('joins already-issued root cleanup after startup expiry even when delivery an
     releaseAppend.resolve()
     initialize.resolve()
     rootExit.resolve(true)
-    await fixture.dispose()
-    vi.restoreAllMocks()
-    vi.useRealTimers()
+    try {
+      await stopping
+    } finally {
+      try {
+        await fixture.dispose()
+      } finally {
+        vi.restoreAllMocks()
+        vi.useRealTimers()
+      }
+    }
   })
   await writeNativeNamingConversation(fixture.file, fixture.nativeId, fixture.root)
   const host = await fixture.install()
@@ -207,8 +223,8 @@ it('joins already-issued root cleanup after startup expiry even when delivery an
   }
   const closeAdapters = vi.spyOn(adapter, 'closeAll')
   const closeDatabase = vi.spyOn(host.deps.journalDatabase, 'close')
-  const stopping = stopStructuredAgentSessionRuntime()
-  expect(stopDelivery).toHaveBeenCalledOnce()
+  stopping = stopStructuredAgentSessionRuntime()
+  await vi.waitFor(() => expect(stopDelivery).toHaveBeenCalledOnce())
   await vi.advanceTimersByTimeAsync(5000)
   await closeEntered.promise
   expect(closeAdapters).not.toHaveBeenCalled()
