@@ -1,3 +1,4 @@
+import type { BrowserSnapshotOptions } from '../../shared/rpc-contract/browser-params'
 import type {
   BrowserBackResult,
   BrowserEvalResult,
@@ -6,7 +7,6 @@ import type {
   BrowserReloadResult,
   BrowserScreenshotResult,
   BrowserScrollResult,
-  BrowserSnapshotOptions,
   BrowserSnapshotResult,
   BrowserWaitResult
 } from '../../shared/runtime-types'

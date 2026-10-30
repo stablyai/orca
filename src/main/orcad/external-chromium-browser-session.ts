@@ -12,8 +12,8 @@ import {
 import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../shared/runtime-types'
 import { Screenshot } from '../../shared/rpc-contract/browser-params'
 import {
-  AgentBrowserScreenshotResult,
-  agentBrowserScreenshotArgs
+  agentBrowserScreenshotArgs,
+  readAgentBrowserScreenshot
 } from '../browser/agent-browser-screenshot-arguments'
 import { runProcess } from '@orca/process-host'
 
@@ -155,19 +155,13 @@ export class ExternalChromiumBrowserSession {
 
   async screenshot(params: Record<string, unknown>, full: boolean): Promise<unknown> {
     const options = Screenshot.parse(params)
-    const format = options.format === 'jpeg' ? 'jpeg' : 'png'
-    const { path, changed, annotations } = AgentBrowserScreenshotResult.parse(
-      await this.run(agentBrowserScreenshotArgs(options, full), { cliArgv: true })
+    const raw = await this.run(
+      agentBrowserScreenshotArgs(options, { outputDir: this.profilePath, fullPage: full }),
+      { cliArgv: true }
     )
-    if (!path) {
-      if (changed === false) {
-        return { data: '', format, changed, annotations }
-      }
-      throw new BrowserError('browser_error', 'Screenshot returned no file path')
-    }
-    const data = (await readFile(path)).toString('base64')
-    await rm(path, { force: true }).catch(() => undefined)
-    return { data, format, changed, annotations }
+    return readAgentBrowserScreenshot(raw, options.format ?? 'png', (bytes) =>
+      bytes.toString('base64')
+    )
   }
 
   async pdf(): Promise<unknown> {

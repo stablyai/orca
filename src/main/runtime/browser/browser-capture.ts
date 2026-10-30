@@ -1,5 +1,5 @@
+import type { BrowserScreenshotOptions } from '../../../shared/rpc-contract/browser-params'
 import type {
-  BrowserScreenshotOptions,
   BrowserScreenshotResult,
   BrowserCaptureStartResult,
   BrowserCaptureStopResult,

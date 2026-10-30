@@ -9,16 +9,6 @@ import type { BROWSER_UNAVAILABLE_ERROR_CODE } from './runtime-session-contracts
 
 export type BrowserSnapshotRef = { ref: string; role: string; name: string }
 
-export type BrowserSnapshotOptions = {
-  interactive?: boolean
-  compact?: boolean
-  depth?: number
-  selector?: string
-  urls?: boolean
-  delta?: boolean
-  full?: boolean
-}
-
 // agent-browser's `snapshot --delta` answer; `full` carries the tree, the others change the last one.
 export type BrowserSnapshotDelta =
   | { kind: 'full'; revision: number; tree: string }
@@ -65,12 +55,6 @@ export type BrowserSelectResult = { selected: string }
 export type BrowserScrollResult = { scrolled: 'up' | 'down' }
 export type BrowserBackResult = { url: string; title: string }
 export type BrowserReloadResult = { url: string; title: string }
-export type BrowserScreenshotOptions = {
-  format?: 'png' | 'jpeg'
-  ifChanged?: boolean
-  annotate?: boolean
-}
-
 export type BrowserScreenshotAnnotation = {
   ref: string
   number: number

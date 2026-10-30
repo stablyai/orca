@@ -1,5 +1,5 @@
+import type { BrowserSnapshotOptions } from '../../shared/rpc-contract/browser-params'
 import type {
-  BrowserSnapshotOptions,
   BrowserSnapshotResult,
   BrowserClickResult,
   BrowserGotoResult,

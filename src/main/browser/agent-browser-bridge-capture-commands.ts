@@ -1,19 +1,14 @@
-import { randomUUID } from 'node:crypto'
-import { existsSync, readFileSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
+import type { BrowserScreenshotOptions } from '../../shared/rpc-contract/browser-params'
 import { z } from 'zod'
 import { app, nativeImage, type WebContents } from 'electron'
-import type {
-  BrowserScreenshotOptions,
-  BrowserScreenshotResult,
-  BrowserEvalResult
-} from '../../shared/runtime-types'
+import type { BrowserScreenshotResult, BrowserEvalResult } from '../../shared/runtime-types'
 import { BrowserError } from './cdp-bridge'
-import { captureFullPageScreenshot } from './cdp-screenshot'
+import { captureFullPageScreenshot, SCREENSHOT_TIMEOUT_MS, withTimeout } from './cdp-screenshot'
 import {
-  AgentBrowserScreenshotResult,
-  agentBrowserScreenshotArgs
+  agentBrowserScreenshotArgs,
+  readAgentBrowserScreenshot
 } from './agent-browser-screenshot-arguments'
+import { readRasterImageDimensions } from '../../shared/raster-image-dimensions'
 import { acquireElectronDebugger } from './electron-debugger-lease'
 import { sendGuestCdpCommand } from './guest-cdp-command'
 import { AgentBrowserBridgeUtilityCommands } from './agent-browser-bridge-utility-commands'
@@ -29,17 +24,15 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
   ): Promise<BrowserScreenshotResult> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName, target) => {
       const wc = this.requireTargetWebContents(target)
-      // agent-browser's default name is per millisecond, so two pages could share (and delete) one file.
-      const outputPath = join(
-        app.getPath('temp'),
-        `orca-screenshot-${randomUUID()}.${options.format === 'jpeg' ? 'jpg' : 'png'}`
-      )
       const raw = await this.execAgentBrowser(
         sessionName,
-        agentBrowserScreenshotArgs(options, false, outputPath),
+        agentBrowserScreenshotArgs(options, { outputDir: app.getPath('temp') }),
         { cliArgv: true }
       )
-      return this.readScreenshotFromResult(raw, options.format, wc)
+      const format = options.format ?? 'png'
+      return readAgentBrowserScreenshot(raw, format, (bytes) =>
+        encodeInCssPixels(bytes, format, wc)
+      )
     })
   }
 
@@ -58,35 +51,6 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
         throw new BrowserError('browser_error', (error as Error).message)
       }
     })
-  }
-
-  private async readScreenshotFromResult(
-    raw: unknown,
-    format: BrowserScreenshotOptions['format'],
-    wc: WebContents
-  ): Promise<BrowserScreenshotResult> {
-    const screenshotFormat = format === 'jpeg' ? 'jpeg' : 'png'
-    const parsed = AgentBrowserScreenshotResult.safeParse(raw)
-    if (!parsed.success) {
-      throw new BrowserError('browser_error', 'Screenshot returned no file path')
-    }
-    const { path, changed, annotations } = parsed.data
-    if (!path) {
-      if (changed === false) {
-        return { data: '', format: screenshotFormat, changed, annotations }
-      }
-      throw new BrowserError('browser_error', 'Screenshot returned no file path')
-    }
-    if (!existsSync(path)) {
-      throw new BrowserError('browser_error', `Screenshot file not found: ${path}`)
-    }
-    try {
-      const data = await readInCssPixels(path, screenshotFormat, wc)
-      return { data, format: screenshotFormat, changed, annotations }
-    } finally {
-      // The bytes are ours now; nothing else reads this capture's file.
-      rmSync(path, { force: true })
-    }
   }
 
   async evaluate(
@@ -172,8 +136,8 @@ const CssViewportMetrics = z.object({
 })
 
 // Captures come back in device pixels (HiDPI, zoom, emulated DPR); CSS pixels keep x/y equal to page coordinates.
-async function readInCssPixels(
-  path: string,
+async function encodeInCssPixels(
+  bytes: Buffer,
   format: 'png' | 'jpeg',
   wc: WebContents
 ): Promise<string> {
@@ -181,7 +145,11 @@ async function readInCssPixels(
   let metrics: unknown
   try {
     release = acquireElectronDebugger(wc).release
-    metrics = await sendGuestCdpCommand(wc, 'Page.getLayoutMetrics', {})
+    metrics = await withTimeout(
+      sendGuestCdpCommand(wc, 'Page.getLayoutMetrics', {}),
+      SCREENSHOT_TIMEOUT_MS,
+      'Screenshot timed out — the browser page did not respond.'
+    )
   } catch (error) {
     if (error instanceof BrowserError) {
       throw error
@@ -193,20 +161,18 @@ async function readInCssPixels(
   } finally {
     release()
   }
-  const bytes = readFileSync(path)
   const viewport = CssViewportMetrics.safeParse(metrics)
-  const image = nativeImage.createFromBuffer(bytes)
-  const { width, height } = image.getSize()
-  if (!viewport.success || width === 0 || height === 0) {
+  const size = readRasterImageDimensions(bytes)
+  if (!viewport.success || !size || size.width === 0 || size.height === 0) {
     return bytes.toString('base64')
   }
   // The viewport sizes leave out scrollbars the image includes; the axis without one gives the true ratio.
   const { clientWidth, clientHeight } = viewport.data.cssVisualViewport
-  const scale = Math.max(clientWidth / width, clientHeight / height)
-  const cssWidth = Math.round(width * scale)
-  if (!(scale > 0) || cssWidth === width) {
+  const scale = Math.max(clientWidth / size.width, clientHeight / size.height)
+  const cssWidth = Math.round(size.width * scale)
+  if (!(scale > 0) || cssWidth === size.width) {
     return bytes.toString('base64')
   }
-  const resized = image.resize({ width: cssWidth, quality: 'best' })
+  const resized = nativeImage.createFromBuffer(bytes).resize({ width: cssWidth, quality: 'best' })
   return (format === 'jpeg' ? resized.toJPEG(90) : resized.toPNG()).toString('base64')
 }

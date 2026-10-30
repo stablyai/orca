@@ -1,4 +1,4 @@
-import type { BrowserSnapshotOptions } from '../../shared/runtime-types'
+import type { BrowserSnapshotOptions } from '../../shared/rpc-contract/browser-params'
 
 export function agentBrowserSnapshotArgs(options: BrowserSnapshotOptions): string[] {
   const args = ['snapshot']
