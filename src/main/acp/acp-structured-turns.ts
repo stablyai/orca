@@ -29,7 +29,7 @@ export type AcpDispatchSettlement = { clientMessageId: string } & (
 type Send = { clientMessageId: string; prompt: ContentBlock[]; requestedAt: number }
 
 export type AcpStructuredTurnsDeps = {
-  connection: Pick<AcpStructuredConnection, 'prompt' | 'cancel'>
+  connection: Pick<AcpStructuredConnection, 'prompt' | 'cancel'> & { readonly closed?: boolean }
   withdrawRequests: () => void
   lane: AcpStructuredLane
   agentName: string
@@ -187,20 +187,9 @@ export class AcpStructuredTurns {
     const meta = lane.translator.injectsPromptIdentity
       ? { promptId, requestId: promptId }
       : undefined
-    const answered = this.deps.connection.prompt(send.prompt, meta)
-    if (this.steers.length > 0) {
-      this.cancelForSteer()
-    }
-    answered.then(
-      (result) => {
-        if (this.active !== send) {
-          return
-        }
-        lane.apply(lane.translator.promptResult(send.clientMessageId, result, this.deps.now()))
-        this.accept(send.clientMessageId)
-        this.finish(send)
-      },
-      (error: unknown) => {
+    const answered = this.deps.connection.prompt(send.prompt, meta, (response) => {
+      if ('error' in response) {
+        const error = response.error
         if (this.active !== send || error instanceof AcpConnectionClosedError) {
           // Connection teardown owns unknown-send settlement.
           return
@@ -219,8 +208,21 @@ export class AcpStructuredTurns {
           return
         }
         this.agentFailed(send, error)
+      } else {
+        const result = response.value
+        if (this.active !== send) {
+          return
+        }
+        lane.apply(lane.translator.promptResult(send.clientMessageId, result, this.deps.now()))
+        this.accept(send.clientMessageId)
+        this.finish(send)
       }
-    )
+    })
+    // Response ownership is transferred by the synchronous receive callback above.
+    void answered.catch(() => {})
+    if (this.steers.length > 0 && !this.deps.connection.closed) {
+      this.cancelForSteer()
+    }
   }
 
   private agentFailed(send: Send, error: AcpAgentError): void {
@@ -254,7 +256,7 @@ export class AcpStructuredTurns {
     if (this.steerCancelled === send) {
       this.steerCancelled = null
     }
-    const next = this.ended ? undefined : this.steers.shift()
+    const next = this.ended || this.deps.connection.closed ? undefined : this.steers.shift()
     if (next) {
       this.start(next)
     } else if (!this.active) {

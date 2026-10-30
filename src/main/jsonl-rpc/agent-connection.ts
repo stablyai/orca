@@ -31,7 +31,7 @@ export class JsonlRpcAgentConnection {
   private readonly managed: ManagedProviderProcess
   private readonly peer: JsonlRpcPeer
   private closing = false
-  private finishObservedExit?: () => void
+  private inputDone?: Promise<void>
   private streamExitTimer?: ReturnType<typeof setTimeout>
 
   constructor(
@@ -95,19 +95,7 @@ export class JsonlRpcAgentConnection {
         ),
         managed.spawnAbsence
       )
-      this.peer.finishOnInputEnd(error)
-      const stdout = managed.child.stdout
-      let finished = false
-      let timer: ReturnType<typeof setTimeout> | undefined
       const finish = (): void => {
-        if (finished) {
-          return
-        }
-        finished = true
-        clearTimeout(timer)
-        stdout.removeListener('end', finish)
-        stdout.removeListener('close', finish)
-        this.finishObservedExit = undefined
         this.peer.close(error)
         managed.child.removeListener('error', this.onError)
         try {
@@ -116,22 +104,18 @@ export class JsonlRpcAgentConnection {
           this.diagnose('Agent exit observer failed')
         }
       }
-      this.finishObservedExit = finish
-      if (
-        this.closing ||
-        exit.processless ||
-        this.peer.closed ||
-        stdout.destroyed ||
-        stdout.readableEnded
-      ) {
+      this.inputDone = this.peer.finishOnInputEnd(error).then(finish, (failure: unknown) => {
+        const error = failure instanceof Error ? failure : new Error(String(failure))
+        this.peer.close(error)
+        try {
+          options.onClose?.(error)
+        } catch {
+          this.diagnose('Agent RPC close observer failed')
+        }
         finish()
-      } else {
-        stdout.once('end', finish)
-        stdout.once('close', finish)
-        // A descendant can inherit stdout after the provider root exits.
-        timer = setTimeout(finish, 1_000)
-        timer.unref()
-      }
+        throw error
+      })
+      void this.inputDone.catch(() => {})
     })
   }
 
@@ -139,7 +123,7 @@ export class JsonlRpcAgentConnection {
     return this.managed.child.pid
   }
   get closed(): boolean {
-    return this.peer.closed
+    return this.closing || this.managed.rootVerdict === 'exited' || this.peer.closed
   }
   get rootVerdict(): ManagedProviderProcess['rootVerdict'] {
     return this.managed.rootVerdict
@@ -164,11 +148,13 @@ export class JsonlRpcAgentConnection {
     params: Record<string, unknown> = {},
     options: JsonlRpcRequestOptions = {}
   ): Promise<unknown> {
-    return this.peer.request(command, params, options)
+    return this.closing
+      ? Promise.reject(new JsonlRpcStreamClosedError())
+      : this.peer.request(command, params, options)
   }
 
   send(record: JsonlRpcRecord): Promise<void> {
-    return this.peer.send(record)
+    return this.closing ? Promise.reject(new JsonlRpcStreamClosedError()) : this.peer.send(record)
   }
 
   pauseReading(): void {
@@ -183,9 +169,12 @@ export class JsonlRpcAgentConnection {
   close(error?: Error): Promise<ProviderProcessCloseResult> {
     this.closing = true
     clearTimeout(this.streamExitTimer)
-    this.finishObservedExit?.()
-    this.peer.close(error)
-    return this.managed.close()
+    this.peer.beginInputCompletion(error ?? new JsonlRpcStreamClosedError())
+    return this.managed.close().then(async (result) => {
+      await (this.inputDone ?? this.peer.finishOnInputEnd(error ?? new JsonlRpcStreamClosedError()))
+      this.peer.close(error)
+      return result
+    })
   }
 
   private readonly onError = (error: Error): void => this.peer.close(error)

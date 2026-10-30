@@ -32,7 +32,10 @@ vi.mock('../crash-reporting/self-initiated-tree-kill-log', () => ({
 let directory: string | undefined
 const children: ReturnType<typeof createFakePipedChild>[] = []
 afterEach(async () => {
-  children.forEach((child) => child.emit('exit', 0, null))
+  children.forEach((child) => {
+    child.emit('exit', 0, null)
+    child.stdout.end()
+  })
   await stopStructuredAgentSessionRuntime()
   children.length = 0
   vi.useRealTimers()
@@ -87,7 +90,10 @@ it('settles a production failed Pi start after background kill, then delivers on
       const child = createFakePipedChild(9000100 + children.length * 100)
       children.push(child)
       if (child.pid !== 9000200) {
-        child.stdin.once('finish', () => child.emit('exit', 0, null))
+        child.stdin.once('finish', () => {
+          child.emit('exit', 0, null)
+          child.stdout.end()
+        })
         child.stdin.on('data', (bytes) => {
           const frame = JSON.parse(String(bytes))
           const emit = (value: unknown) => child.stdout.write(`${JSON.stringify(value)}\n`)

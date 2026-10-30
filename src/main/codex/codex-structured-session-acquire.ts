@@ -14,12 +14,16 @@ import {
 } from './codex-structured-acquisition-lifecycle'
 import { CodexSubagentExecutions } from './codex-subagent-executions'
 import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
-import { createCodexSessionJournalTranslator } from './codex-structured-session-journal'
+import {
+  createCodexSessionJournalTranslator,
+  createCodexAcquisitionJournalDisposer
+} from './codex-structured-session-journal'
 import { spawnCodexAppServerConnection } from './codex-app-server-connection'
 import { codexSpawnedProcessIdentity } from './codex-structured-owner-identity'
 import {
   closeCodexPublishedSession,
-  handleCodexSessionExit
+  handleCodexSessionExit,
+  observeCodexSessionExit
 } from './codex-structured-session-close'
 import { openCodexStructuredSession } from './codex-structured-session-start'
 import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agent-session-failure'
@@ -36,6 +40,7 @@ import {
 import type { CodexStructuredSessionTeardown } from './codex-structured-session-teardown'
 import type { CodexStructuredNotificationRetry } from './codex-structured-notification-retry'
 import type { deliverCodexServerRequest } from './codex-structured-provider-events'
+import { readCodexThreadId } from './codex-structured-thread-facts'
 import { codexAcquisitionNotificationHandler } from './codex-structured-acquisition-notification'
 
 export async function acquireCodexStructuredSession(input: {
@@ -47,8 +52,7 @@ export async function acquireCodexStructuredSession(input: {
   deliver: (
     acquisition: CodexAcquisitionAttempt['window'],
     sessionId: string,
-    event: () => unknown,
-    retainedBytes?: number
+    event: () => unknown
   ) => void
   handleServerRequest: (
     sessionId: string,
@@ -84,6 +88,9 @@ export async function acquireCodexStructuredSession(input: {
     subagentExecutions,
     prompts: acquisition.prompts
   })
+  attempt.dispose = createCodexAcquisitionJournalDisposer(acquisition, translator, () =>
+    unbindReadingControl?.()
+  )
   const open = deps.openConnection ?? spawnCodexAppServerConnection
   const spawnIdentity = codexSpawnedProcessIdentity(acquireInput, deps.readProcessStartTime)
   try {
@@ -139,99 +146,108 @@ export async function acquireCodexStructuredSession(input: {
           dispatchEchoes,
           primaryThreadId: () => primaryThreadId,
           notificationRetries,
+          onRetired: (method, params, observedAt, dispatchSequenceAtReceipt) => {
+            const threadId = readCodexThreadId(params) ?? primaryThreadId
+            if (threadId) {
+              translator?.handle({
+                type: 'notification',
+                sessionId,
+                threadId,
+                method,
+                params,
+                ...(observedAt === undefined ? {} : { observedAt }),
+                ...(dispatchSequenceAtReceipt === undefined ? {} : { dispatchSequenceAtReceipt })
+              })
+            }
+          },
           deliver: input.deliver,
           now: deps.now ?? Date.now
         }),
         onServerRequest: (request) =>
-          input.deliver(
-            acquisition,
-            sessionId,
-            () => input.handleServerRequest(sessionId, request),
-            Buffer.byteLength(JSON.stringify(request), 'utf8')
-          ),
+          input.deliver(acquisition, sessionId, () => {
+            const threadId = readCodexThreadId(request.params) ?? primaryThreadId
+            if (acquisition.isRetired && threadId) {
+              translator?.handle({
+                type: 'server-request',
+                sessionId,
+                threadId,
+                method: request.method,
+                params: request.params
+              })
+            } else {
+              input.handleServerRequest(sessionId, request)
+            }
+          }),
         onUnhandledFrame: (kind, payload) =>
-          input.deliver(
-            acquisition,
-            sessionId,
-            () => input.handleUnhandledFrame(sessionId, kind, payload),
-            Buffer.byteLength(JSON.stringify(payload ?? null), 'utf8')
-          ),
+          input.deliver(acquisition, sessionId, () => {
+            const threadId = readCodexThreadId(payload) ?? primaryThreadId
+            if (acquisition.isRetired && threadId) {
+              translator?.handle({ type: 'provider-frame', sessionId, threadId, kind, payload })
+            } else {
+              input.handleUnhandledFrame(sessionId, kind, payload)
+            }
+          }),
         onSpawned: spawnIdentity.onSpawned,
         onExit: (error, exit) => {
-          acquisition.appliedSettings.end()
-          try {
-            if (attempt.acquisitionGeneration && !sessions.has(sessionId)) {
-              attempt.exitProven = true
-              attempt.exitError = error
-              attempt.dispose?.()
-              acquisitions.deleteIfCurrent(sessionId, attempt)
-              deps.onEvent?.({
-                type: 'ended',
+          const observedAt = deps.now?.() ?? Date.now()
+          observeCodexSessionExit(sessions.get(sessionId), acquisition.connection, observedAt)
+          const finish = (): void => {
+            acquisition.appliedSettings.end()
+            try {
+              if (attempt.acquisitionGeneration && !sessions.has(sessionId)) {
+                attempt.exitProven = true
+                attempt.exitError = error
+                attempt.dispose?.()
+                acquisitions.deleteIfCurrent(sessionId, attempt)
+                deps.onEvent?.({
+                  type: 'ended',
+                  sessionId,
+                  fence: acquireInput.fence,
+                  acquisitionGeneration,
+                  reason: error.message,
+                  cause:
+                    attempt.cancelled && attempt.requestedClose !== false
+                      ? 'requested-close'
+                      : 'unexpected-exit',
+                  failure: attempt.cancelled
+                    ? agentSessionFailureFact('hostFault')
+                    : providerSpawnAbsent(error)
+                      ? providerStartupFailureFact(error)
+                      : agentSessionFailureFact('providerExited', {
+                          detail: providerDiagnosticOf(error)
+                        }),
+                  observedAt: deps.now?.() ?? Date.now()
+                })
+              }
+              if (sessions.get(sessionId)?.connection === acquisition.connection) {
+                attempt.exitProven = true
+                attempt.exitError = error
+              }
+              handleCodexSessionExit({
+                sessions,
                 sessionId,
-                fence: acquireInput.fence,
-                acquisitionGeneration,
-                reason: error.message,
-                cause:
-                  attempt.cancelled && attempt.requestedClose !== false
-                    ? 'requested-close'
-                    : 'unexpected-exit',
-                failure: attempt.cancelled
-                  ? agentSessionFailureFact('hostFault')
-                  : providerSpawnAbsent(error)
-                    ? providerStartupFailureFact(error)
-                    : agentSessionFailureFact('providerExited', {
-                        detail: providerDiagnosticOf(error)
-                      }),
-                observedAt: deps.now?.() ?? Date.now()
+                connection: acquisition.connection,
+                error,
+                // A previously unproven Orca close still owns this exit.
+                ...(exit?.expected ? { closedByOrca: true as const } : {}),
+                ...(deps.logger ? { logger: deps.logger } : {}),
+                prompts: acquisition.prompts,
+                ...(deps.onEvent ? { onEvent: deps.onEvent } : {})
               })
+            } finally {
+              notificationRetries.clear(sessionId, acquisition.connection)
             }
-            if (sessions.get(sessionId)?.connection === acquisition.connection) {
-              attempt.exitProven = true
-              attempt.exitError = error
-            }
-            handleCodexSessionExit({
-              sessions,
-              sessionId,
-              connection: acquisition.connection,
-              error,
-              // A previously unproven Orca close still owns this exit.
-              ...(exit?.expected ? { closedByOrca: true as const } : {}),
-              ...(deps.logger ? { logger: deps.logger } : {}),
-              prompts: acquisition.prompts,
-              ...(deps.onEvent ? { onEvent: deps.onEvent } : {})
-            })
-          } finally {
-            notificationRetries.clear(sessionId, acquisition.connection)
           }
+          return exit?.inputDone ? exit.inputDone.then(finish, finish) : finish()
         }
       }
     )
     acquisition.connection = connection
-    if (connection.pauseReading && connection.resumeReading) {
-      unbindReadingControl = acquireInput.events?.bindReadingControl?.({
-        pauseReading: connection.pauseReading,
-        resumeReading: () => {
-          connection.resumeReading?.()
-          notificationRetries.retry(sessionId, connection)
-        }
-      })
-    }
     acquisitions.assertCurrent(sessionId, attempt)
     const process = await spawnIdentity.read(connection.pid)
     acquisitions.assertCurrent(sessionId, attempt)
     assertCodexConnectionOpen(connection, sessionId)
     attempt.acquisitionGeneration = acquisitionGeneration
-    let disposed = false
-    attempt.dispose = () => {
-      if (disposed) {
-        return
-      }
-      disposed = true
-      unbindReadingControl?.()
-      acquisition.prompts.clear()
-      acquisition.drain()
-      translator?.dispose()
-    }
     attempt.open = (openInput) =>
       openCodexStructuredSession(
         {
@@ -250,7 +266,18 @@ export async function acquireCodexStructuredSession(input: {
             primaryThreadId = threadId
           },
           forceCloseUnexpected: input.forceCloseUnexpected,
-          ...(unbindReadingControl ? { unbindReadingControl } : {})
+          bindReadingControl: () => {
+            if (connection.pauseReading && connection.resumeReading) {
+              unbindReadingControl = acquireInput.events?.bindReadingControl?.({
+                pauseReading: connection.pauseReading,
+                resumeReading: () => {
+                  connection.resumeReading?.()
+                  notificationRetries.retry(sessionId, connection)
+                }
+              })
+            }
+            return unbindReadingControl
+          }
         },
         openInput
       )
@@ -263,8 +290,7 @@ export async function acquireCodexStructuredSession(input: {
         attempt,
         cause: error,
         dispose: () => {
-          unbindReadingControl?.()
-          translator?.dispose()
+          attempt.dispose?.()
         }
       })
     }

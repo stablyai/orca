@@ -96,7 +96,8 @@ it('settles a refused Codex exit through the host in one commit, then permits a 
     logger: recording.logger,
     onFailed
   })
-  deferred.bind({ journal, fence: 7, publish: () => undefined })
+  const publish = vi.fn()
+  deferred.bind({ journal, fence: 7, publish })
   const translator = createCodexJournalTranslator({
     sink: deferred.sink,
     sessionId: SESSION,
@@ -179,12 +180,13 @@ it('settles a refused Codex exit through the host in one commit, then permits a 
     options: new Map(),
     reportedOptions: {}
   }
-  const gate = Promise.withResolvers<void>()
-  const blocked = journal.readInOrder(() => gate.promise)
-  // Saturate the queue to force host settlement after the provider's exit rows are refused.
-  for (let index = 0; index < 1_024; index++) {
-    deferred.sink.publish({ lifecycle: true, coalescingKey: `limit-${index}` })
-  }
+  const fault = new Error('fixture publication failed')
+  publish.mockImplementationOnce(() => {
+    throw fault
+  })
+  deferred.sink.publish({ lifecycle: true })
+  await expect(deferred.drained()).resolves.toEqual({ ok: false, error: fault })
+  expect(onFailed).toHaveBeenCalledExactlyOnceWith(fault)
   const exited = handleCodexSessionExit({
     sessions: new Map([[SESSION, codexSession]]),
     sessionId: SESSION,
@@ -197,19 +199,17 @@ it('settles a refused Codex exit through the host in one commit, then permits a 
       }
     }
   })
-  gate.resolve()
-  await blocked
   expect(exited).toBe(true)
-  expect(admission).toHaveReturnedWith({ accepted: false, reason: 'backpressure' })
+  expect(admission).toHaveReturnedWith({ accepted: false, reason: 'failed' })
   expect(recording.entries).toContainEqual({
     level: 'warn',
     message: "Codex's final rows were refused; the host settles the turn instead",
-    fields: { scope: 'codex-exit-rows', sessionId: SESSION, reason: 'backpressure' }
+    fields: { scope: 'codex-exit-rows', sessionId: SESSION, reason: 'failed' }
   })
   expect(codexSession.ended).toBe(true)
   expect(events).toHaveLength(1)
-  await expect(deferred.drained()).resolves.toEqual({ ok: true })
-  expect(onFailed).not.toHaveBeenCalled()
+  await expect(deferred.drained()).resolves.toEqual({ ok: false, error: fault })
+  expect(onFailed).toHaveBeenCalledExactlyOnceWith(fault)
   expect(journal.snapshot()).toEqual(before)
   expect(commits).not.toHaveBeenCalled()
   let record: AgentSessionRecord = agentSessionRecordFixture(

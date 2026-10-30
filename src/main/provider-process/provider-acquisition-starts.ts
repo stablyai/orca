@@ -19,12 +19,22 @@ export type ProviderStartAttempt<Connection extends ProviderAcquisitionConnectio
 export class ProviderAcquisitionStarts<Connection extends ProviderAcquisitionConnection> {
   private readonly failed = new Map<string, Connection>()
 
+  constructor(
+    private readonly closeConnection: (
+      connection: Connection
+    ) => Promise<boolean | ProviderProcessCloseResult> = (connection) =>
+      connection.close().catch(() => false)
+  ) {}
+
   /** Install cancellation before acquisition can yield. */
   begin(signal: AbortSignal | undefined): ProviderStartAttempt<Connection> {
     const attempt: ProviderStartAttempt<Connection> = {
       signal: signal ?? new AbortController().signal,
       connection: null,
-      stopConnection: () => void attempt.connection?.close().catch(() => false)
+      stopConnection: () =>
+        void (attempt.connection
+          ? this.closeConnection(attempt.connection).catch(() => false)
+          : undefined)
     }
     attempt.signal.addEventListener('abort', attempt.stopConnection, { once: true })
     return attempt
@@ -34,7 +44,7 @@ export class ProviderAcquisitionStarts<Connection extends ProviderAcquisitionCon
   track(attempt: ProviderStartAttempt<Connection>, connection: Connection): void {
     attempt.connection = connection
     if (attempt.signal.aborted) {
-      void connection.close().catch(() => false)
+      void this.closeConnection(connection).catch(() => false)
     }
   }
 
@@ -58,7 +68,7 @@ export class ProviderAcquisitionStarts<Connection extends ProviderAcquisitionCon
     if (!connection) {
       return true
     }
-    const result = await connection.close().catch(() => false)
+    const result = await this.closeConnection(connection)
     const proven =
       typeof result === 'boolean'
         ? result

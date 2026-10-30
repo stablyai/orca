@@ -39,3 +39,8 @@ export function settleAcpResponse(
     pending.resolve(frame.result)
   }
 }
+
+export function invalidAcpResponseId(record: unknown): number | undefined {
+  const response = z.object({ id: z.number(), method: z.undefined().optional() }).safeParse(record)
+  return response.success ? response.data.id : undefined
+}

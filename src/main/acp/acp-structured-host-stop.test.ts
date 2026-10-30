@@ -33,8 +33,8 @@ describe('a Grok chat Stop', () => {
     const answered: { cancel: boolean; atClose: boolean | null } = { cancel: false, atClose: null }
     const cancellation = deferred<void>()
     first.agent.on('session/cancel', () => cancellation.resolve())
-    const close = first.close.bind(first)
-    first.close = async () => {
+    const close = first.closeOutcome.bind(first)
+    first.closeOutcome = async () => {
       answered.atClose ??= answered.cancel
       return close()
     }

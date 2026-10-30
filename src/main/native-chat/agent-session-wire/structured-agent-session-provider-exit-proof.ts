@@ -1,6 +1,7 @@
 import { isAgentSessionWireRefusalCode } from '../../../shared/agent-session-wire-refusals'
 import {
   AgentSessionAcquisitionExitProvenError,
+  AgentSessionPreSpawnError,
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionAcquisitionRefusal,
   AgentSessionAcquisitionRootExitObservedError,
@@ -23,9 +24,18 @@ export async function rethrowAfterAgentSessionAcquisitionCleanup(
           new AggregateError([cause, cleanupError], cleanupError.message),
           cleanupError.deathEvidenceKind
         )
-      : new AgentSessionAcquisitionExitUnprovenError(
-          new AggregateError([cause, cleanupError], 'agent session acquisition cleanup failed')
-        )
+      : isAgentSessionPreSpawnError(cleanupError)
+        ? new AgentSessionPreSpawnError(
+            new AggregateError([cause, cleanupError], cleanupError.message),
+            { reason: cleanupError.reason }
+          )
+        : cleanupError instanceof AgentSessionAcquisitionExitProvenError
+          ? new AgentSessionAcquisitionExitProvenError(
+              new AggregateError([cause, cleanupError], cleanupError.message)
+            )
+          : new AgentSessionAcquisitionExitUnprovenError(
+              new AggregateError([cause, cleanupError], 'agent session acquisition cleanup failed')
+            )
   }
   if (released) {
     throw provenExitAcquisitionFailure(cause)

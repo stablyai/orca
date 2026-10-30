@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto'
+import { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
+import { activeProviderContext } from '../../shared/agent-session-provider-context'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { claudePipedFixture, SESSION } from './structured-claude-piped-test-support'
 import { CLAUDE_READER_DRAIN_AFTER_EXIT_MS } from '../claude/claude-stream-json-connection'
@@ -56,6 +59,25 @@ function killEvidence() {
 
 it('preserves actual TRUE writer-close through published close, join, and a healthy successor', async () => {
   await attach()
+  await fixture.healthy('Complete the original dispatch before close.')
+  const providerId = activeProviderContext(fixture.record()).head!.handle.nativeId
+  for (const index of [1, 2, 3]) {
+    fixture.emit(0, {
+      type: 'user',
+      session_id: providerId,
+      uuid: `s1-result-${index}`,
+      message: {
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: `s1-tool-${index}`,
+            content: `complete finite S1 body ${index}`
+          }
+        ]
+      }
+    })
+  }
   const old = fixture.host.collaboratorsForTests().sessions.get(SESSION)!.child!
   const events = vi.spyOn(fixture.host, 'handleAdapterEvent')
   fixture.permitKill.add(0)
@@ -80,10 +102,44 @@ it('preserves actual TRUE writer-close through published close, join, and a heal
     expect(reopened.getRecord(SESSION)?.lease.deathEvidence).toEqual(
       fixture.record().lease.deathEvidence
     )
+    const journal = new AgentSessionJournal({
+      database,
+      identity: {
+        sessionId: SESSION,
+        workspaceId: 'workspace-1',
+        hostId: 'local',
+        agent: 'claude',
+        providerHandle: activeProviderContext(fixture.record()).head!.handle
+      }
+    })
+    await journal.open()
+    const tools = journal.snapshot().items.filter((row) => row.body.kind === 'tool-call')
+    expect(tools.map((row) => row.itemId)).toEqual(
+      [1, 2, 3].map(
+        (index) => `orca:${encodeURIComponent(`claude-tool:${providerId}:s1-tool-${index}`)}`
+      )
+    )
+    expect(tools.map((row) => row.body)).toEqual(
+      [1, 2, 3].map((index) =>
+        expect.objectContaining({
+          callId: `s1-tool-${index}`,
+          state: 'completed',
+          output: {
+            head: `complete finite S1 body ${index}`,
+            byteLength: 25,
+            truncated: false,
+            digest: createHash('sha256').update(`complete finite S1 body ${index}`).digest('hex')
+          }
+        })
+      )
+    )
+    await journal.close()
   } finally {
     database.close()
   }
   expect(fixture.connections[0]!.exitVerdict).toMatchObject({ root: 'live', killDelivered: true })
+  expect(fixture.children[0]!.exitCode).toBeNull()
+  expect(fixture.children[0]!.killed).toBe(false)
   expect(await fixture.connections[0]!.close()).toBe(true)
   expect(events.mock.calls.filter(([event]) => event.type === 'ended')).toHaveLength(1)
   expect(events.mock.calls).toContainEqual([
@@ -275,6 +331,10 @@ it('keeps undelivered close retryable until an actual root event, without invent
   const retried = fixture.connections[0]!.close()
   await forceTime()
   expect(await retried).toBe(false)
+  fixture.children[0]!.stdout.end()
+  await forceTime()
+  expect(fixture.record().lease.claimStatus).toBe('live')
+  expect(fixture.adapter.hasOwnedAcquisition!(SESSION)).toBe(true)
   fixture.observedExit(0)
   await forceTime()
   await fixture.drain()
@@ -295,6 +355,19 @@ it('keeps an actual processless failure and an absent-session close distinct fro
     .catch((error: unknown) => error)
   expect(failed).toBeInstanceOf(Error)
   expect(fixture.connections[0]!.exitVerdict).toMatchObject({ processless: true })
+  const outcome = await fixture.connections[0]!.closeOutcome()
+  expect(outcome).toMatchObject({
+    accepted: true,
+    physical: { processless: true },
+    receive: { state: 'failed' }
+  })
+  if (outcome.receive.state !== 'failed') {
+    throw new Error('processless SDK failure was hidden')
+  }
+  await expect(fixture.connections[0]!.close()).rejects.toBe(outcome.receive.error)
+  expect(fixture.children[0]!.pid).toBeUndefined()
+  expect(fixture.children[0]!.exitCode).toBeNull()
+  expect(fixture.children[0]!.kill).not.toHaveBeenCalled()
   expect(fixture.record().lease).toMatchObject({
     claimStatus: 'released',
     deathEvidence: { kind: 'pid-absent' }

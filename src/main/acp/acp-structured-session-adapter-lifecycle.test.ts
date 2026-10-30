@@ -401,7 +401,7 @@ describe('ACP startup that never answers', () => {
     expect(await rig.adapter.closeSession(SESSION)).toBe(true)
     expect(await opening).toBeInstanceOf(Error)
     expect(rig.child().exited).toBe(true)
-    expect(rig.ended).toMatchObject([{ cause: 'requested-close' }])
+    await waitFor(() => expect(rig.ended).toMatchObject([{ cause: 'requested-close' }]))
   })
 
   it('leaves a published child alone when the acquisition signal aborts later', async () => {
@@ -463,7 +463,7 @@ describe('ACP startup that never answers', () => {
     })
     expect(rig.spawned.filter((step) => step === 'spawn')).toHaveLength(1)
     child.exit()
-    expect(rig.ended).toMatchObject([{ cause: 'requested-close' }])
+    await waitFor(() => expect(rig.ended).toMatchObject([{ cause: 'requested-close' }]))
     expect(await rig.adapter.closeSession(SESSION)).toBe(true)
   })
 
@@ -540,3 +540,56 @@ describe('ACP session release', () => {
     await expect(rig.adapter.closeSession(SESSION)).resolves.toBe(true)
   })
 })
+
+it.each(['publish', 'cancel', 'exit'] as const)(
+  'retains ACP callback 2049 before initialization, then transfers on %s',
+  async (outcome) => {
+    const controller = new AbortController()
+    const entered = Promise.withResolvers<void>()
+    let answer: (() => void) | undefined
+    const rig = await openAcpAdapterRig({
+      script: (agent) => {
+        agent.on('initialize', (frame) => {
+          for (let index = 0; index < 2049; index++) {
+            agent.notify('session/update', {
+              sessionId: PROVIDER_SESSION,
+              update: {
+                sessionUpdate: 'tool_call',
+                toolCallId: `startup-${index}`,
+                title: 'echo output',
+                kind: 'execute',
+                status: 'completed',
+                content: [{ type: 'content', content: { type: 'text', text: `received-${index}` } }]
+              }
+            })
+          }
+          answer = () =>
+            agent.reply(frame, { protocolVersion: 1, agentCapabilities: { loadSession: true } })
+          entered.resolve()
+        })
+      }
+    })
+    const starting = rig.acquire({ signal: controller.signal })
+    await entered.promise
+    if (outcome === 'cancel') {
+      controller.abort(new Error('cancel startup'))
+    }
+    if (outcome === 'exit') {
+      rig.child().exit()
+    } else {
+      answer?.()
+    }
+    await starting
+    if (outcome === 'publish') {
+      expect(rig.openFailure()).toBeUndefined()
+    } else {
+      expect(rig.openFailure()).toBeInstanceOf(Error)
+    }
+    await rig.adapter.closeAll()
+    const journal = await rig.rig.reopenJournal()
+    const tools = journal.snapshot().items.filter((item) => item.body.kind === 'tool-call')
+    expect(tools).toHaveLength(2049)
+    expect(JSON.stringify(tools.at(-1)?.body)).toContain('received-2048')
+    expect(new Set(tools.map((item) => item.itemId)).size).toBe(2049)
+  }
+)

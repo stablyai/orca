@@ -24,8 +24,8 @@ function watchClose(child: FakeAcpChild, turn: { ended: boolean }) {
     cancels: null,
     turnEnded: null
   }
-  const close = child.close.bind(child)
-  child.close = async (error?: Error) => {
+  const close = child.closeOutcome.bind(child)
+  child.closeOutcome = async (error?: Error) => {
     atClose.cancels ??= framesOf(child, 'session/cancel').length
     atClose.turnEnded ??= turn.ended
     return close(error)

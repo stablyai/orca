@@ -1,3 +1,5 @@
+import type { ProviderReceiveDisposition } from '../provider-process/provider-source-completion'
+import type { ProviderProcessCloseResult } from '../provider-process/provider-process-close'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { spawnProcess } from '@orca/process-host'
 import {
@@ -14,6 +16,13 @@ import { AcpConnectionClosedError, AcpSignInPromptError } from './acp-errors'
 import { resolveAcpPeerOptions, type AcpPeerOptions } from './acp-peer-limits'
 import { AcpSessionRuntime, type AcpSessionRuntimeOptions } from './acp-session-runtime'
 
+export type AcpCloseOutcome = {
+  accepted: boolean
+  physical: ProviderProcessCloseResult
+  receive: ProviderReceiveDisposition
+  cleanupError?: unknown
+}
+
 export type AcpSignInWatch = {
   /** Returns a valid link, null for a malformed sign-in line, or undefined for other output. */
   read(line: string, source: 'stdout' | 'stderr'): string | null | undefined
@@ -28,7 +37,12 @@ const SIGN_IN_LINE_MAX_CHARS = 32_768
 export type AcpAgentConnectionOptions = Omit<AcpSessionRuntimeOptions, 'peer'> & {
   peer?: Omit<AcpPeerOptions, 'closeOnInputEnd'>
   /** Process exit evidence, including expected closes and processless spawn failures. */
-  onExit?: (error: Error, context: { expected: boolean; exit: ProviderProcessExit }) => void
+  onExit?: (
+    error: Error,
+    context: { expected: boolean; exit: ProviderProcessExit; inputDone?: Promise<void> }
+  ) => void | Promise<void>
+  /** Finite input and response normalization have finished; never join process cleanup here. */
+  onInputComplete?: (error?: Error) => void
   onOutput?: () => void
   signIn?: AcpSignInWatch
 }
@@ -46,6 +60,11 @@ export class AcpAgentConnection extends AcpSessionRuntime {
   private readonly managed: ManagedProviderProcess
   private readonly lifecycle: { closing: boolean; error?: Error }
   private readonly diagnoseLifecycle: (message: string) => void
+  private inputDone?: Promise<void>
+  private receiveResult?: Promise<ProviderReceiveDisposition>
+  private closeAttempt?: Promise<AcpCloseOutcome>
+  private exitPublication?: Promise<void>
+  private readonly onInputComplete: AcpAgentConnectionOptions['onInputComplete']
   readonly spawned: Promise<void>
 
   constructor(
@@ -101,20 +120,25 @@ export class AcpAgentConnection extends AcpSessionRuntime {
       onAuthAnswered: (signedIn) => signIn?.answered?.(signedIn),
       onClose: (error) => {
         lifecycle.error ??= error
+        // A preclosed pipe can report loss while the base constructor is still running.
+        void Promise.resolve()
+          .then(() => this.completeInput(error))
+          .catch((failure: unknown) => diagnose(`ACP input completion failed: ${String(failure)}`))
         if (lifecycle.closing || managed.rootVerdict === 'exited') {
           return
         }
-        void managed.close().then(
-          (result) => {
+        void managed
+          .close()
+          .then((result) => {
             if (result.root !== 'exited') {
               diagnose('ACP agent exit was not proven after transport failure')
             }
-          },
-          (failure: unknown) => diagnose(`ACP agent cleanup failed: ${String(failure)}`)
-        )
+          })
+          .catch((failure: unknown) => diagnose(`ACP agent cleanup failed: ${String(failure)}`))
         options.onClose?.(error)
       }
     })
+    this.onInputComplete = options.onInputComplete
     this.managed = managed
     this.lifecycle = lifecycle
     this.diagnoseLifecycle = diagnose
@@ -147,9 +171,15 @@ export class AcpAgentConnection extends AcpSessionRuntime {
           new AcpConnectionClosedError(managed.stderrTail().trim() || `${launch.command} exited`),
         managed.spawnAbsence
       )
-      super.close(error)
+      this.drainNotifications(error)
+      const inputDone = this.completeInput(error)
       try {
-        options.onExit?.(error, { expected: lifecycle.closing, exit })
+        this.exitPublication = Promise.resolve(
+          options.onExit?.(error, { expected: lifecycle.closing, exit, inputDone })
+        )
+        void this.exitPublication.catch((failure: unknown) =>
+          diagnose(`ACP exit listener failed: ${String(failure)}`)
+        )
       } catch (failure) {
         diagnose(`ACP exit listener failed: ${String(failure)}`)
       }
@@ -204,6 +234,9 @@ export class AcpAgentConnection extends AcpSessionRuntime {
   }
 
   pauseReading(): void {
+    if (this.lifecycle.closing || this.managed.rootVerdict === 'exited' || this.closed) {
+      return
+    }
     this.managed.child.stdout.pause()
   }
 
@@ -211,12 +244,78 @@ export class AcpAgentConnection extends AcpSessionRuntime {
     this.managed.child.stdout.resume()
   }
 
-  override close(error?: Error): Promise<boolean> {
+  private completeInput(error?: Error): Promise<void> {
+    this.inputDone ??= Promise.resolve()
+      .then(() => this.finishInput())
+      .then(
+        () => {
+          super.close(error)
+          this.onInputComplete?.(this.lifecycle.error ?? error)
+        },
+        (failure: unknown) => {
+          const error = failure instanceof Error ? failure : new Error(String(failure))
+          super.close(error)
+          this.onInputComplete?.(error)
+          throw error
+        }
+      )
+    return this.inputDone
+  }
+
+  closeOutcome(error?: Error): Promise<AcpCloseOutcome> {
+    if (this.closeAttempt) {
+      return this.closeAttempt
+    }
     this.lifecycle.closing ||= this.managed.rootVerdict !== 'exited'
     this.drainNotifications(error)
-    return this.managed
-      .close()
-      .then((result) => result.root === 'exited' || result.killDelivered === true)
-      .finally(() => super.close(error))
+    const attempt = this.managed.close().then(async (physical): Promise<AcpCloseOutcome> => {
+      const accepted = physical.root === 'exited' || physical.killDelivered === true
+      let receive: ProviderReceiveDisposition = { state: 'retained' }
+      if (accepted || this.inputEnding) {
+        this.receiveResult ??= this.completeInput(error).then(
+          () => ({ state: 'complete' as const }),
+          (error: unknown) => ({ state: 'failed' as const, error })
+        )
+        receive = await this.receiveResult
+      }
+      const cleanupError =
+        physical.root === 'exited'
+          ? await this.exitPublication?.then(
+              () => undefined,
+              (error: unknown) => error
+            )
+          : undefined
+      return {
+        accepted,
+        physical,
+        receive,
+        ...(cleanupError === undefined ? {} : { cleanupError })
+      }
+    })
+    this.closeAttempt = attempt
+    void attempt.then(
+      (outcome) => {
+        if (!outcome.accepted && this.closeAttempt === attempt) {
+          this.closeAttempt = undefined
+        }
+      },
+      () => {
+        if (this.closeAttempt === attempt) {
+          this.closeAttempt = undefined
+        }
+      }
+    )
+    return attempt
+  }
+
+  override async close(error?: Error): Promise<boolean> {
+    const outcome = await this.closeOutcome(error)
+    if (outcome.receive.state === 'failed') {
+      throw outcome.receive.error
+    }
+    if (outcome.cleanupError !== undefined) {
+      throw outcome.cleanupError
+    }
+    return outcome.accepted
   }
 }

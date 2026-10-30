@@ -1,10 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { withProviderDiagnostic } from '../../shared/agent-session-failure'
-import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
 import {
   AgentSessionAcquisitionExitProvenError,
   AgentSessionAcquisitionExitUnprovenError,
-  AgentSessionAcquisitionRootExitObservedError,
   AgentSessionAcquisitionRefusal,
   AgentSessionPreSpawnError,
   isAgentSessionPreSpawnError,
@@ -19,9 +17,8 @@ import { acpAgentName } from './acp-structured-agent-definitions'
 import { acquireAcpStructuredSession } from './acp-structured-acquire'
 import { rejectedAcpDispatch, type AcpStructuredSession } from './acp-structured-session'
 import type { ProviderStartAttempt } from '../provider-process/provider-acquisition-starts'
-import { waitForAcpExit, type AcpStructuredConnection } from './acp-structured-connection'
+import * as acpConnection from './acp-structured-connection'
 import { AcpConnectionClosedError } from './acp-errors'
-import { withProviderSpawnAbsence } from '../provider-process/provider-executable-missing'
 import { applyAcpMessageOptions } from './acp-message-execution-options'
 import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
 import { awaitAcpTurnEnd, interruptAcpTurn } from './acp-structured-stop'
@@ -58,7 +55,7 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
   copyConversation: NonNullable<SessionAdapter['copyConversation']> = (input) =>
     this.copies.copy(input)
 
-  supportsLocation = (location: AgentSessionExecutionLocation): boolean => {
+  supportsLocation: NonNullable<SessionAdapter['supportsLocation']> = (location) => {
     const { spec, isWindowsProcessStartTimeAvailable } = this.deps
     return supportsAcpStructuredLocation(spec, location, isWindowsProcessStartTimeAvailable)
   }
@@ -84,7 +81,7 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
 
   private async start(
     input: StructuredAgentSessionAcquireInput,
-    attempt: ProviderStartAttempt<AcpStructuredConnection>
+    attempt: ProviderStartAttempt<acpConnection.AcpStructuredConnection>
   ): Promise<AgentSessionAcquisition> {
     const sessionId = input.identity.sessionId
     const generation = this.deps.mintGeneration?.() ?? randomUUID()
@@ -108,7 +105,6 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
         forceClose: (id) => this.children.stopAfterFailure(id)
       })
       if (attempt.signal.aborted) {
-        session.dispose()
         throw new Error('closed while starting')
       }
       this.children.sessions.set(sessionId, session)
@@ -117,17 +113,19 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
       const { connection } = attempt
       if (connection && error instanceof AcpConnectionClosedError) {
         // Wait briefly for process exit so startup failures include final diagnostics.
-        await waitForAcpExit(connection, this.stopGraceMs(), attempt.signal)
+        await acpConnection.waitForAcpExit(connection, this.stopGraceMs(), attempt.signal)
       }
       // Capture spontaneous exit before close can classify it as requested.
       const exitedOnItsOwn = connection?.exited === true && !attempt.signal.aborted
-      if (connection && !(await connection.close().catch(() => false))) {
-        // Retain failed cleanup for retry before another child can spawn.
-        this.children.starts.retainFailed(sessionId, connection)
-        throw new AgentSessionAcquisitionExitUnprovenError(error)
-      }
-      if (connection?.lastCloseResult?.killDelivered && !connection.exited) {
-        throw new AgentSessionAcquisitionRootExitObservedError(error, 'kill-delivered')
+      const outcome = await connection?.closeOutcome()
+      if (connection && outcome) {
+        if (!outcome.accepted) {
+          this.children.starts.retainFailed(sessionId, connection)
+        }
+        const report = acpConnection.acpCloseReport(connection, outcome, error)
+        if (report) {
+          throw report
+        }
       }
       if (attempt.signal.aborted) {
         const closed = new Error(
@@ -136,10 +134,7 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
         )
         throw connection ? closed : new AgentSessionPreSpawnError(closed)
       }
-      // Once the exit is proven, the start's error names a CLI or folder the spawn found missing.
-      if (error instanceof Error && connection?.exited) {
-        withProviderSpawnAbsence(error, connection.spawnAbsence)
-      }
+      acpConnection.tagAcpSpawnAbsence(error, connection ?? undefined)
       if (connection && exitedOnItsOwn && !isAgentSessionPreSpawnError(error)) {
         throw new AgentSessionAcquisitionExitProvenError(
           withObservedProviderExit(
@@ -178,7 +173,7 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
 
   async dispatch(input: Parameters<SessionAdapter['dispatch']>[0]): Promise<DispatchOutcome> {
     const lost = this.children.sessions.get(input.sessionId)
-    if (lost && lost.journalClosed !== null) {
+    if (lost && (lost.journalClosed !== null || lost.closeRequested)) {
       // Protocol loss prevents dispatch even before exit is proven.
       return rejectedAcpDispatch(lost)
     }
@@ -187,7 +182,11 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     if (!Array.isArray(prompt)) {
       return { state: 'rejected', ...prompt }
     }
-    if (this.children.sessions.get(input.sessionId) !== session || session.journalClosed !== null) {
+    if (
+      this.children.sessions.get(input.sessionId) !== session ||
+      session.journalClosed !== null ||
+      session.closeRequested
+    ) {
       // Attachment reads may outlive the child; this send never reached it.
       return rejectedAcpDispatch(session)
     }
@@ -199,7 +198,9 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
       input.executionOptions,
       (key, value) => this.setOption({ sessionId, fence, key, value, signal }),
       () =>
-        this.children.sessions.get(input.sessionId) === session && session.journalClosed === null,
+        this.children.sessions.get(input.sessionId) === session &&
+        session.journalClosed === null &&
+        !session.closeRequested,
       signal
     )
     if (!optionsApplied) {
@@ -326,11 +327,8 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
   }
 
   private live(sessionId: string): AcpStructuredSession {
-    const session = this.children.sessions.get(sessionId)
-    if (!session || !childState.isAcpReadySession(session) || session.journalClosed !== null) {
-      throw new Error(`no live ${this.deps.spec.agent} child owns ${sessionId}`)
-    }
-    return session
+    const child = this.children.sessions.get(sessionId)
+    return childState.requireAcpLiveSession(child, this.deps.spec.agent, sessionId)
   }
 
   private readonly stopGraceMs = (): number => this.deps.stopGraceMs ?? ACP_STOP_GRACE_MS

@@ -198,6 +198,11 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
           await beforeDispatch?.()
           child.calls.push('send')
         },
+        closeOutcome: async () => ({
+          accepted: await child.connection.close(),
+          physical: child.connection.exitVerdict,
+          receive: { state: 'complete' }
+        }),
         close: async () => {
           child.connection.closed = true
           return !behavior.closeUnproven

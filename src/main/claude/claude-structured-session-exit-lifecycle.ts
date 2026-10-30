@@ -43,7 +43,7 @@ export function observeClaudeSessionExit(
   session.events?.observeExit?.(claudeHeldSends(session), observedAt)
   lifecycle.sessions.delete(sessionId)
   // Run tree cleanup before recovery; an exit callback proves only root exit.
-  const closePromise = session.connection.close().catch(() => false)
+  const closePromise = session.connection.closeOutcome()
   const exit: ClaudeSessionExit = {
     connection: session.connection,
     session,
@@ -87,7 +87,8 @@ export function settleClaudeUnexpectedExit(
       return
     }
     exits.delete(sessionId)
-    const report = claudeCloseReport(exit.connection, true, exit.error)
+    const outcome = (await exit.closePromise) ?? (await exit.connection.closeOutcome())
+    const report = claudeCloseReport(exit.connection, outcome, exit.error)
     lifecycle.settledExitErrors.set(sessionId, report ?? exit.error)
     const ended: ClaudeStructuredSessionEvent = {
       type: 'ended',

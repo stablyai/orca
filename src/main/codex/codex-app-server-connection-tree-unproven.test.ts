@@ -167,7 +167,10 @@ describe('Codex process-tree diagnostic after a forced close', () => {
     child.emit('exit', 0, null)
     await vi.advanceTimersByTimeAsync(0)
     expect(onExit).toHaveBeenCalledTimes(1)
-    expect(onExit).toHaveBeenCalledWith(expect.any(Error), { expected: true })
+    expect(onExit).toHaveBeenCalledWith(expect.any(Error), {
+      expected: true,
+      inputDone: expect.any(Promise)
+    })
     expect(connection.closeResult).toMatchObject({ root: 'exited', tree: 'unverifiable' })
     expect(connection.processTreeUnproven).toBe(true)
   })

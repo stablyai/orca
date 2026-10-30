@@ -394,3 +394,53 @@ describe('ACP session runtime', () => {
     expect(await runtime.prompt([...textPrompt])).toEqual({ stopReason: 'end_turn' })
   })
 })
+
+it('projects local and terminal prompt refusal once, without creating a native lookup', async () => {
+  const normalizePromptError = vi.fn((error: Error) => error)
+  const { runtime } = fixture({}, { normalizePromptError })
+  const received = vi.fn()
+  await expect(runtime.prompt([...textPrompt], undefined, received)).rejects.toThrow(
+    'has not started'
+  )
+  expect(received).toHaveBeenCalledOnce()
+  await runtime.start(startOptions)
+  runtime.close()
+  received.mockClear()
+  await expect(runtime.prompt([...textPrompt], undefined, received)).rejects.toThrow()
+  expect(received).toHaveBeenCalledOnce()
+  expect(normalizePromptError).not.toHaveBeenCalled()
+})
+
+it('projects replies in wire order and never redelivers when the consumer throws or advances a prompt', async () => {
+  const order: string[] = []
+  const { runtime, agent } = fixture(
+    {},
+    {
+      onExtensionNotification: () => {
+        order.push('notification')
+      }
+    }
+  )
+  await runtime.start(startOptions)
+  agent.on('session/prompt', (frame) => {
+    agent.reply(frame, { stopReason: 'end_turn' })
+    agent.notify('vendor/after-response', {})
+  })
+  const fault = new Error('original consumer failed')
+  const received = vi.fn(() => {
+    order.push('response')
+    throw fault
+  })
+  await expect(runtime.prompt([...textPrompt], undefined, received)).rejects.toBe(fault)
+  expect(received).toHaveBeenCalledOnce()
+  expect(order).toEqual(['response', 'notification'])
+  const requested = Promise.withResolvers<void>()
+  agent.on('session/prompt', () => {
+    requested.resolve()
+  })
+  const held = runtime.prompt([...textPrompt])
+  await requested.promise
+  await expect(runtime.prompt([...textPrompt])).rejects.toThrow('already in progress')
+  runtime.close()
+  await expect(held).rejects.toThrow()
+})

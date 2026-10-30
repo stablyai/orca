@@ -27,15 +27,22 @@ export async function releaseClaudeAcquisition(input: {
   if (!exit || input.sessions.has(input.sessionId) || input.acquisitions.get(input.sessionId)) {
     return closeClaudeSession(input)
   }
-  const firstProof = exit.closePromise ? await exit.closePromise : false
+  const firstProof = exit.closePromise ? await exit.closePromise : undefined
   // Retry tree verification on the same connection after an unproven close.
-  const retriedProof = firstProof || (await exit.connection.close())
+  const retriedProof = firstProof?.accepted ? firstProof : await exit.connection.closeOutcome()
   const report = claudeCloseReport(exit.connection, retriedProof, exit.error)
-  if (retriedProof || (report && !(report instanceof AgentSessionAcquisitionExitUnprovenError))) {
+  if (
+    retriedProof.accepted ||
+    (report && !(report instanceof AgentSessionAcquisitionExitUnprovenError))
+  ) {
     try {
       await input.onExitProven?.(input.sessionId, exit)
     } catch (error) {
-      throw claudeAcquisitionCleanupError(exit.connection, error)
+      throw claudeAcquisitionCleanupError(
+        exit.connection,
+        report ? new AggregateError([report, error], report.message) : error,
+        retriedProof.physical
+      )
     }
     // Retain unproven exits for retries; observed root exits are removed by their own settlement.
     if (input.exits.get(input.sessionId) === exit) {

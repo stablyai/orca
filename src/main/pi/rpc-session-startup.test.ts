@@ -1,3 +1,5 @@
+import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   closePiRpcAdapterFixtures,
@@ -234,5 +236,72 @@ it('keeps native idle reports off current and action progress and rejects pre-co
     expect(after.current.confirmed).not.toContain('model')
   } finally {
     held.resolve(state)
+  }
+})
+
+it('finishes initialization before binding pressure and lets only the sink resume future input', async () => {
+  const h = await setup()
+  const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+  const reply = Promise.withResolvers<unknown>()
+  const pause = vi.fn()
+  const resume = vi.fn()
+  const { acquired, child } = await restart(
+    h,
+    (connection) => {
+      connection.requestOverride = (command) =>
+        command === 'get_state' ? reply.promise : undefined
+      connection.pauseReading = pause
+      connection.resumeReading = resume
+    },
+    { events: deferred.sink }
+  )
+  deferred.bind({ journal: h.rig.journal, fence: 8, publish: () => {} })
+  const opening = openAt8(h, acquired.acquisitionGeneration)
+  const gate = Promise.withResolvers<void>()
+  try {
+    for (let index = 0; index < 1025; index++) {
+      deferred.sink.appendItem(
+        { provider: 'orca', clientMessageId: `pressure-${index}` },
+        { kind: 'status', tone: 'info', text: `received-${index}` },
+        { lifecycle: true, turnScope: { kind: 'thread' } }
+      )
+    }
+    expect(pause).not.toHaveBeenCalled()
+    reply.resolve(state)
+    await opening
+    expect(pause).not.toHaveBeenCalled()
+    const blocked = h.rig.journal.readInOrder(() => {
+      for (let index = 0; index < 1025; index++) {
+        deferred.sink.appendItem(
+          { provider: 'orca', clientMessageId: `held-${index}` },
+          { kind: 'status', tone: 'info', text: `held-${index}` },
+          { lifecycle: true, turnScope: { kind: 'thread' } }
+        )
+      }
+      return gate.promise
+    })
+    expect(pause).toHaveBeenCalledOnce()
+    child.receive({ type: 'agent_start' })
+    expect(resume).not.toHaveBeenCalled()
+    gate.resolve()
+    await blocked
+    await expect(deferred.drained()).resolves.toEqual({ ok: true })
+    expect(resume).toHaveBeenCalledOnce()
+    await h.adapter.closeSession(sessionId)
+    await h.adapter.drainObservedExits()
+    const resumedAtExit = resume.mock.calls.length
+    await deferred.drained()
+    expect(resume).toHaveBeenCalledTimes(resumedAtExit)
+    const reopened = await h.rig.reopenJournal()
+    expect(
+      reopened
+        .snapshot()
+        .items.filter((row) => row.body.kind === 'status' && row.body.text.startsWith('received-'))
+    ).toHaveLength(1025)
+  } finally {
+    gate.resolve()
+    reply.resolve(state)
+    await opening.catch(() => {})
+    deferred.close()
   }
 })

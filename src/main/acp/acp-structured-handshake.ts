@@ -72,19 +72,34 @@ export async function initializeAcpStructuredSession(
   let liveLane: AcpStructuredLane | null = null
   let takeover: ReturnType<typeof acpReopenTakeover> | null = null
   let replayed: AcpLoadHistoryFrame[] | null = null
+  const acceptStarted = (received: Awaited<ReturnType<AcpStructuredConnection['start']>>): void => {
+    started = received
+    liveLane ??= input.lanes.create(received.sessionId)
+    if (received.kind !== 'new') {
+      replayed = input.lanes.finishLoad()
+      liveLane.translator.finishLoad()
+    }
+    options.adoptSession(received.response, received.kind === 'new' ? 'new' : 'loaded')
+    liveLane.apply(liveLane.translator.contextModels(received.response.models, now()))
+  }
   if (resume) {
     const attaching = input.lanes.create(resume.sessionId, true)
     liveLane = attaching
     try {
-      started = await connection.start({
-        cwd: launch.cwd,
-        mcpServers: [],
-        sessionId: resume.sessionId,
-        ...setup
-      })
+      const response = await connection.start(
+        {
+          cwd: launch.cwd,
+          mcpServers: [],
+          sessionId: resume.sessionId,
+          ...setup
+        },
+        acceptStarted
+      )
+      if (!started) {
+        acceptStarted(response)
+      }
+      started = response
       assertStarting()
-      replayed = input.lanes.finishLoad()
-      attaching.translator.finishLoad()
     } catch (error) {
       assertStarting()
       takeover = acpReopenTakeover(error, resume, {
@@ -96,10 +111,18 @@ export async function initializeAcpStructuredSession(
   }
   if (!started || !liveLane) {
     liveLane?.dispose()
+    liveLane = null
     input.lanes.clear()
-    started = await connection.start({ cwd: launch.cwd, mcpServers: [], ...setup })
+    const response = await connection.start(
+      { cwd: launch.cwd, mcpServers: [], ...setup },
+      acceptStarted
+    )
+    if (!started) {
+      acceptStarted(response)
+    }
+    started = response
+    liveLane ??= input.lanes.create(response.sessionId)
     assertStarting()
-    liveLane = input.lanes.create(started.sessionId)
   }
   // Only a load that reopened the chat's own conversation catches up, and only from what that
   // conversation replayed; a replacement session has no history of the chat's to add.
@@ -126,8 +149,6 @@ export async function initializeAcpStructuredSession(
   }
   const childStops = await probeAcpChildStops(connection, spec.dialect)
   assertStarting()
-  options.adoptSession(started.response, started.kind === 'new' ? 'new' : 'loaded')
-  liveLane.apply(liveLane.translator.contextModels(started.response.models, now()))
   const mode = spec.permissionModeConfig
   if (mode && acquire.permissionMode !== 'own') {
     // Fail startup rather than silently use a different permission mode.

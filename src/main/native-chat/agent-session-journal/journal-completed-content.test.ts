@@ -102,8 +102,6 @@ it.each(['acp', 'pi'] as const)(
       generation: GENERATION,
       namespace: NAMESPACE,
       agent: 'grok',
-      pauseReading: vi.fn(),
-      resumeReading: vi.fn(),
       onInputAccepted: vi.fn(),
       onFailed
     })

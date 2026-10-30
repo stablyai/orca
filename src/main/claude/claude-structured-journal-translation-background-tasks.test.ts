@@ -1,4 +1,3 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import type {
@@ -165,90 +164,6 @@ function persistedTarget(
 }
 
 describe('claude journal translation — background task rows', () => {
-  it('persists one terminal row at the hard watermark without an opcode fallback', async () => {
-    const persisted = new Map<string, AgentJournalItemBody>()
-    const appendEntered = Promise.withResolvers<void>()
-    const appendGate = Promise.withResolvers<void>()
-    const target = persistedTarget(persisted)
-    const appendItem = target.journal.appendItem.bind(target.journal)
-    vi.spyOn(target.journal, 'appendItem').mockImplementationOnce(async (...args) => {
-      appendEntered.resolve()
-      await appendGate.promise
-      return appendItem(...args)
-    })
-    const deferred = createDeferredStructuredAgentSessionEventSink({
-      ...testEventSinkLogging(),
-      watermarks: {
-        pauseQueuedOperations: 1,
-        maxQueuedOperations: 4,
-        lowQueuedOperations: 0,
-        maxQueuedBytes: 1_000_000
-      }
-    })
-    const translator = createClaudeJournalTranslator({
-      sink: deferred.sink,
-      fallbackIdPrefix: 'hard-watermark'
-    })
-    const providerResume = vi.fn()
-    let sinkPaused = false
-    deferred.sink.bindReadingControl?.({
-      pauseReading: () => {
-        sinkPaused = true
-      },
-      resumeReading: () => {
-        sinkPaused = false
-        const admission = translator.retryPendingTaskRows?.() ?? { accepted: true }
-        if (!sinkPaused && (admission.accepted || admission.reason !== 'backpressure')) {
-          providerResume()
-        }
-      }
-    })
-    deferred.bind(target)
-    deferred.sink.appendItem(
-      { provider: 'orca', clientMessageId: 'blocked-prefill' },
-      { kind: 'message', role: 'system', blocks: [{ type: 'text', text: 'prefill' }] },
-      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-    )
-    await appendEntered.promise
-    const notification = systemFrame({
-      subtype: 'task_notification',
-      task_id: 'hard-watermark-task',
-      tool_use_id: 'toolu-hard-watermark',
-      status: 'failed',
-      summary: 'The real provider task failed',
-      uuid: 'hard-watermark-notification'
-    })
-
-    translator.handle(notification)
-    translator.handle(notification)
-    expect(deferred.state().queuedOperations).toBe(4)
-    expect(translator.retryPendingTaskRows?.()).toEqual({
-      accepted: false,
-      reason: 'backpressure'
-    })
-    expect(
-      [...persisted.values()].filter(
-        (body) => body.kind === 'message' && blockOf(body)?.taskId === 'hard-watermark-task'
-      )
-    ).toEqual([])
-
-    appendGate.resolve()
-    await vi.waitFor(() => expect(providerResume).toHaveBeenCalledOnce())
-    await expect(deferred.drained()).resolves.toEqual({ ok: true })
-    const taskRows = [...persisted.values()].filter(
-      (body) => body.kind === 'message' && blockOf(body)?.taskId === 'hard-watermark-task'
-    )
-    expect(taskRows).toHaveLength(1)
-    expect(blockOf(taskRows[0])?.error).toBeUndefined()
-    expect(blockOf(taskRows[0])?.summary).toBe('The real provider task failed')
-    expect(
-      [...persisted.values()].some(
-        (body) =>
-          body.kind === 'status' && body.providerFrame?.kind.includes('task_notification') === true
-      )
-    ).toBe(false)
-  })
-
   it('coalesces an unbound overflow patch and aliased final notification', async () => {
     const persisted = new Map<string, AgentJournalItemBody>()
     const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())

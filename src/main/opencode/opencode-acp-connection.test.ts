@@ -17,6 +17,7 @@ import { OPENCODE_ACP_DIALECT } from '../acp/acp-dialects/opencode-dialect'
 import { readOpenCodePromptFailure } from '../foreign-sqlite-readers/readers/opencode-prompt-failure'
 import type { OpenCodePromptFailureQuery } from '../foreign-sqlite-readers/opencode-prompt-failure-result'
 import SyncDatabase from '../sqlite/sync-database'
+import type { AcpAgentConnection, AcpAgentConnectionOptions } from '../acp/acp-agent-connection'
 import { createOpenCodeAcpConnection } from './opencode-acp-connection'
 
 const cleanups: (() => Promise<void>)[] = []
@@ -31,6 +32,7 @@ afterEach(async () => {
 async function fixture(
   native: unknown,
   options: {
+    deferConnection?: boolean
     stale?: boolean
     unavailable?: boolean
     readGate?: Promise<void>
@@ -92,26 +94,51 @@ async function fixture(
     await options.readGate
     return result
   })
-  const connection = createOpenCodeAcpConnection(
-    {
-      command: 'opencode2',
-      args: ['acp'],
-      cwd: directory,
-      env: { XDG_DATA_HOME: dataHome },
-      envToDelete: ['OPENCODE_DB']
-    },
-    {},
-    () => child,
-    readFailure
-  )
+  let connection: AcpAgentConnection | undefined
+  const inputComplete = vi.fn()
+  const connect = (_launch: unknown, handlers: AcpAgentConnectionOptions) =>
+    (connection ??= createOpenCodeAcpConnection(
+      {
+        command: 'opencode2',
+        args: ['acp'],
+        cwd: directory,
+        env: { XDG_DATA_HOME: dataHome },
+        envToDelete: ['OPENCODE_DB']
+      },
+      {
+        ...handlers,
+        onInputComplete: (error) => {
+          inputComplete(error)
+          handlers.onInputComplete?.(error)
+        }
+      },
+      () => child,
+      readFailure
+    ))
   cleanups.push(async () => {
     child.emit('exit', 0, null)
-    await connection.close()
+    await connection?.close()
     db.close()
     rmSync(directory, { recursive: true, force: true })
   })
-  await connection.start({ cwd: directory, mcpServers: [] })
-  return { connection, readFailure, dbPath, agent, child, cwd: directory }
+  if (!options.deferConnection) {
+    await connect(undefined, {}).start({ cwd: directory, mcpServers: [] })
+  }
+  return {
+    get connection() {
+      if (!connection) {
+        throw new Error('connection not created')
+      }
+      return connection
+    },
+    connect,
+    inputComplete,
+    readFailure,
+    dbPath,
+    agent,
+    child,
+    cwd: directory
+  }
 }
 
 const quota = { type: 'provider.quota', message: 'Free usage limit reached.', status: 429 }
@@ -178,18 +205,35 @@ describe('OpenCode ACP native failure recovery', () => {
     if (!spec) {
       throw new Error('OpenCode 2 launch specification missing')
     }
-    const { connection, agent, cwd } = await fixture({ ...quota, retryAfterMs: 60_000 })
+    const f = await fixture({ ...quota, retryAfterMs: 60_000 }, { deferConnection: true })
+    const { agent, cwd } = f
+    const firstSettled = deferred<void>()
+    const secondSettled = deferred<void>()
     const rig = await openAcpAdapterRig({
       spec,
       launch: { cwd },
-      deps: { connect: () => connection, now: Date.now }
+      deps: {
+        connect: f.connect,
+        now: Date.now,
+        onDispatchSettledLate: ({ clientMessageId }) => {
+          if (clientMessageId === 'first') {
+            firstSettled.resolve()
+          }
+          if (clientMessageId === 'second') {
+            secondSettled.resolve()
+          }
+        }
+      }
     })
     cleanups.push(async () => {
       await rig.adapter.closeSession(SESSION)
     })
     await rig.acquire()
+    const prompts = vi.spyOn(f.connection, 'prompt')
     await sendHello(rig, 'first')
-    await rig.settle()
+    await firstSettled.promise
+    await expect(prompts.mock.results[0].value).rejects.toMatchObject({ message: quota.message })
+    await rig.rig.eventSink.written?.()
     expect((await rig.rig.rows()).map((row) => row.body)).toContainEqual(
       expect.objectContaining({
         kind: 'status',
@@ -204,7 +248,9 @@ describe('OpenCode ACP native failure recovery', () => {
     expect((await rig.rig.turns())[0]?.outcome).toBe('failure')
     agent.on('session/prompt', (frame) => agent.reply(frame, { stopReason: 'end_turn' }))
     await sendHello(rig, 'second')
-    await rig.settle()
+    await secondSettled.promise
+    await expect(prompts.mock.results[1].value).resolves.toMatchObject({ stopReason: 'end_turn' })
+    await rig.rig.eventSink.written?.()
     expect((await rig.rig.turns()).map((turn) => turn.outcome)).toEqual(['failure', 'success'])
   })
 
@@ -309,22 +355,55 @@ describe('OpenCode ACP native failure recovery', () => {
     })
   })
 
-  it('does not revise a closed connection with a late native read', async () => {
-    const started = deferred<void>()
-    const gate = deferred<void>()
-    const { connection, child } = await fixture(quota, {
-      readGate: gate.promise,
-      readStarted: () => started.resolve()
-    })
-    const pending = connection.prompt([{ type: 'text', text: 'hello' }])
-    await started.promise
-    child.emit('exit', 0, null)
-    gate.resolve()
-    await expect(pending).rejects.toMatchObject({
-      name: 'AcpAuthRequiredError',
-      message: 'Authentication required: provider authentication required'
-    })
-  })
+  it.each(['resolve', 'reject'] as const)(
+    'retires native normalization before a held read can %s late',
+    async (late) => {
+      const started = deferred<void>()
+      const gate = Promise.withResolvers<void>()
+      const f = await fixture(quota, {
+        deferConnection: true,
+        readGate: gate.promise,
+        readStarted: () => started.resolve()
+      })
+      const settled = deferred<void>()
+      const deliveries: unknown[] = []
+      const rig = await openAcpAdapterRig({
+        spec: acpLaunchSpecFor('opencode2')!,
+        launch: { cwd: f.cwd },
+        deps: {
+          connect: f.connect,
+          onDispatchSettledLate: (value) => {
+            deliveries.push(value)
+            settled.resolve()
+          }
+        }
+      })
+      await rig.acquire()
+      await sendHello(rig, 'held-native')
+      await started.promise
+      f.child.emit('exit', 0, null)
+      await f.connection.close()
+      await settled.promise
+      await rig.rig.eventSink.written?.()
+      expect(f.inputComplete).toHaveBeenCalledOnce()
+      expect(deliveries).toHaveLength(1)
+      expect((await rig.rig.turns()).at(-1)).toMatchObject({ outcome: 'failure' })
+      const before = await rig.rig.rows()
+      if (late === 'resolve') {
+        gate.resolve()
+      } else {
+        gate.reject(new Error('late native failure'))
+      }
+      await gate.promise.catch(() => {})
+      // Joining the original worker observes its late resolution without reviving the retired turn.
+      await Promise.allSettled(f.readFailure.mock.results.map((result) => result.value))
+      await rig.rig.eventSink.written?.()
+      expect(await rig.rig.rows()).toEqual(before)
+      expect(deliveries).toHaveLength(1)
+      expect(f.inputComplete).toHaveBeenCalledOnce()
+      await rig.adapter.closeAll()
+    }
+  )
 
   it('keeps genuine authentication failures classified as signed out', async () => {
     const { connection } = await fixture({

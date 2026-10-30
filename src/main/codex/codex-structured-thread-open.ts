@@ -57,7 +57,8 @@ export async function openCodexThread(
   },
   /** null: no deadline; the start that opens the thread bounds it (`signal`). */
   timeoutMs: number | null | undefined,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  received?: (opened: CodexOpenedThread) => void
 ): Promise<CodexOpenedThread> {
   const resumeThreadId = launch.resumeThreadId
   const config = { ...launch.threadConfig, ...shellEnvironmentSetConfig(launch.commandEnv) }
@@ -66,15 +67,20 @@ export async function openCodexThread(
     ...launch.permissionPolicy,
     ...(Object.keys(config).length > 0 ? { config } : {})
   }
+  let supersededThreadId: string | undefined
+  let result: CodexOpenedThread | undefined
+  const onResult = (value: unknown): void => {
+    result = normalizeCodexOpenedThread(value, resumeThreadId, supersededThreadId)
+    received?.(result)
+  }
   const startThread = (): Promise<unknown> => {
     throwIfSignalAborted(signal)
     return connection.request(
       'thread/start',
       { ...threadSettings, ...(launch.model ? { model: launch.model } : {}) },
-      { timeoutMs }
+      { timeoutMs, ...(received ? { onResult } : {}) }
     )
   }
-  let supersededThreadId: string | undefined
   let opened: unknown
   if (!resumeThreadId) {
     opened = await startThread()
@@ -89,7 +95,7 @@ export async function openCodexThread(
       opened = await connection.request(
         'thread/resume',
         { ...resumeParams, excludeTurns: true },
-        { timeoutMs }
+        { timeoutMs, ...(received ? { onResult } : {}) }
       )
     } catch (error) {
       throwIfSignalAborted(signal)
@@ -115,6 +121,19 @@ export async function openCodexThread(
       opened = await startThread()
     }
   }
+  if (result) {
+    return result
+  }
+  const normalized = normalizeCodexOpenedThread(opened, resumeThreadId, supersededThreadId)
+  received?.(normalized)
+  return normalized
+}
+
+function normalizeCodexOpenedThread(
+  opened: unknown,
+  resumeThreadId: string | null,
+  supersededThreadId: string | undefined
+): CodexOpenedThread {
   const threadId = readCodexThreadId(opened)
   if (!threadId) {
     throw new Error('codex app-server did not name the thread it opened')

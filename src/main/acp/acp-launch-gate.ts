@@ -1,12 +1,12 @@
 // Fence chat starts during host account/runtime changes to prevent stale writes or deleted-file use.
 
 import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { ProviderAcquisitionConnection } from '../provider-process/provider-acquisition-starts'
+import type { AcpStructuredConnection } from './acp-structured-connection'
 
 export class AcpLaunchGate {
   private operating = false
   private readonly starts = new Map<AbortController, Promise<void>>()
-  private readonly retained = new Set<ProviderAcquisitionConnection>()
+  private readonly retained = new Set<Pick<AcpStructuredConnection, 'onExit' | 'closeOutcome'>>()
   private readonly refusal: string
 
   constructor(private readonly label: string) {
@@ -33,7 +33,7 @@ export class AcpLaunchGate {
   }
 
   /** Retain spawned children even after acquisition finishes, before their chats are loaded. */
-  retain(connection: ProviderAcquisitionConnection): void {
+  retain(connection: Pick<AcpStructuredConnection, 'onExit' | 'closeOutcome'>): void {
     this.retained.add(connection)
     connection.onExit(() => this.retained.delete(connection))
   }
@@ -58,15 +58,26 @@ export class AcpLaunchGate {
 
   private async stopRetained(): Promise<void> {
     const owners = [...this.retained]
-    const closes = await Promise.allSettled(owners.map((owner) => owner.close()))
+    const closes = await Promise.allSettled(owners.map((owner) => owner.closeOutcome()))
     closes.forEach((close, index) => {
-      const result = close.status === 'fulfilled' ? close.value : false
-      if (typeof result === 'boolean' ? result : result.root === 'exited') {
+      if (
+        close.status === 'fulfilled' &&
+        close.value.accepted &&
+        close.value.receive.state !== 'retained'
+      ) {
         this.retained.delete(owners[index])
       }
     })
     if (this.retained.size > 0) {
       throw new Error(`${this.label} could not be stopped on this host. Try again.`)
+    }
+    for (const result of closes) {
+      if (result.status === 'rejected') {
+        throw result.reason
+      }
+      if (result.value.receive.state === 'failed') {
+        throw result.value.receive.error
+      }
     }
   }
 }

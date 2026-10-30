@@ -81,3 +81,13 @@ export function buildClaudeChildProcessEnv(
   stripClaudeChildSessionStamps(env, platform)
   return { ...env, ...configuredEnv }
 }
+
+export function deleteClaudeLaunchEnvKeys(
+  env: Record<string, string>,
+  keys: readonly string[]
+): Record<string, string> {
+  for (const key of keys) {
+    delete env[key]
+  }
+  return env
+}

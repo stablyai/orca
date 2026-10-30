@@ -41,6 +41,7 @@ function recordingQuery(setPermissionMode: Query['setPermissionMode']): Query {
     yield* []
   })()
   return Object.assign(messages, {
+    receiveCompleted: Promise.resolve(),
     setPermissionMode,
     interrupt: unusedControl,
     setMcpPermissionModeOverride: unusedControl,

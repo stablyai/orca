@@ -48,18 +48,19 @@ export async function resolveClaudeAcquisitionLaunch(args: {
   const { input, deps, sessions, acquisitions, exits, callbacks, previous, attempt } = args
   const sessionId = input.identity.sessionId
   return withAgentSessionCreatePhase('auth_settle', input.recordPhase, async () => {
-    if (
-      previous &&
-      claudeCloseReport(
+    if (previous) {
+      const cancelled = await cancelClaudeAcquisitionAttempt(previous)
+      const report = claudeCloseReport(
         previous.connection,
-        await cancelClaudeAcquisitionAttempt(previous),
-        new Error(`claude acquisition for session ${sessionId} could not be stopped`)
-      ) instanceof AgentSessionAcquisitionExitUnprovenError
-    ) {
-      acquisitions.restoreIfCurrent(sessionId, attempt, previous)
-      throw new AgentSessionAcquisitionExitUnprovenError(
-        new Error(`claude acquisition for session ${sessionId} could not be stopped`)
+        cancelled,
+        cancelled?.receive.state === 'failed'
+          ? cancelled.receive.error
+          : new Error(`claude acquisition for session ${sessionId} could not be stopped`)
       )
+      if (report instanceof AgentSessionAcquisitionExitUnprovenError) {
+        acquisitions.restoreIfCurrent(sessionId, attempt, previous)
+        throw report
+      }
     }
     acquisitions.assertCurrent(sessionId, attempt)
     let resumeSession = sessions.get(sessionId)
@@ -73,8 +74,10 @@ export async function resolveClaudeAcquisitionLaunch(args: {
     }
     const retainedExit = exits.get(sessionId)
     if (retainedExit) {
-      const firstProof = retainedExit.closePromise ? await retainedExit.closePromise : false
-      const proven = firstProof || (await retainedExit.connection.close().catch(() => false))
+      const firstProof = retainedExit.closePromise ? await retainedExit.closePromise : undefined
+      const proven = firstProof?.accepted
+        ? firstProof
+        : await retainedExit.connection.closeOutcome()
       const cleanupError = claudeCloseReport(retainedExit.connection, proven, retainedExit.error)
       if (cleanupError instanceof AgentSessionAcquisitionExitUnprovenError) {
         throw cleanupError

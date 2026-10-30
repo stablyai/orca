@@ -13,11 +13,12 @@ export function codexAcquisitionNotificationHandler(input: {
   dispatchEchoes: CodexDispatchEchoes
   primaryThreadId: () => string | null
   notificationRetries: CodexStructuredNotificationRetry
-  deliver: (
-    acquisition: CodexAcquisitionWindow,
-    sessionId: string,
-    event: () => unknown,
-    retainedBytes?: number
+  deliver: (acquisition: CodexAcquisitionWindow, sessionId: string, event: () => unknown) => void
+  onRetired: (
+    method: string,
+    params: unknown,
+    observedAt?: number,
+    dispatchSequenceAtReceipt?: number
   ) => void
   now: () => number
 }): NonNullable<CodexAppServerConnectionHandlers['onNotification']> {
@@ -39,18 +40,16 @@ export function codexAcquisitionNotificationHandler(input: {
         input.acquisition.appliedSettings.observe(settings)
       }
     }
-    input.deliver(
-      input.acquisition,
-      input.sessionId,
-      () =>
-        input.notificationRetries.handle(
-          input.sessionId,
-          method,
-          params,
-          observedAt,
-          dispatchSequenceAtReceipt
-        ),
-      Buffer.byteLength(JSON.stringify(params ?? null), 'utf8')
+    input.deliver(input.acquisition, input.sessionId, () =>
+      input.acquisition.isRetired
+        ? input.onRetired(method, params, observedAt, dispatchSequenceAtReceipt)
+        : input.notificationRetries.handle(
+            input.sessionId,
+            method,
+            params,
+            observedAt,
+            dispatchSequenceAtReceipt
+          )
     )
   }
 }

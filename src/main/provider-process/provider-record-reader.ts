@@ -4,15 +4,16 @@ import {
   type NdjsonRejectedRecord
 } from '../../shared/main-process-ndjson-framer'
 
-type RecordReaderStream = Pick<Readable, 'on' | 'pause' | 'resume' | 'setEncoding'>
+import { createProviderSourceCompletion } from './provider-source-completion'
 
 export type ProviderRecordReader = {
   pause: () => void
   resume: () => void
+  finish: () => Promise<void>
 }
 
 export function createProviderRecordReader(input: {
-  stdout: RecordReaderStream
+  stdout: Readable
   onRecord: (record: unknown, line: string) => void
   onRejected: (rejected: NdjsonRejectedRecord) => void
   onFatal: (error: Error) => void
@@ -24,16 +25,26 @@ export function createProviderRecordReader(input: {
     shouldPause: () => paused
   })
 
-  input.stdout.setEncoding('utf8').on('data', (chunk: string) => {
-    try {
-      framer.feed(chunk)
-    } catch (error) {
-      input.onFatal(error instanceof Error ? error : new Error(String(error)))
+  const source = createProviderSourceCompletion(input.stdout, {
+    data: (chunk) => framer.feed(chunk),
+    end: (natural) => framer.finish(natural),
+    error: (error) => {
+      paused = false
+      framer.finish(false)
+      input.onFatal(error)
+    },
+    draining: () => {
+      paused = false
+      framer.drain()
     }
   })
 
   return {
+    finish: source.finish,
     pause: () => {
+      if (source.ending) {
+        return
+      }
       paused = true
       input.stdout.pause()
     },

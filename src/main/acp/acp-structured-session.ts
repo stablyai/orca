@@ -11,6 +11,7 @@ import {
 import { providerExitStatusText } from '../provider-process/provider-process-exit-status'
 import type { AcpLaunchSpec } from './acp-launch-specs'
 import type { AcpChildStops } from './acp-dialects/acp-dialect'
+import { isAcpReadySession, type AcpStructuredChild } from './acp-structured-child'
 import { acpAgentName } from './acp-structured-agent-definitions'
 import type { AcpSessionEvent } from './acp-session-runtime'
 import type { AcpStructuredConnection } from './acp-structured-connection'
@@ -40,7 +41,6 @@ export type AcpStructuredSession = {
   ended: boolean
   exitObservedAt: number | null
   unbindReadingControl?: () => void
-  dispose: () => void
   open: (signal: AbortSignal) => Promise<StructuredAgentSessionProviderOpenResult>
 }
 
@@ -81,25 +81,49 @@ export function asReattachHistory(params: unknown): unknown {
   return { ...params, _meta: { ...marked, isReplay: true } }
 }
 
-/** Close journaling once; unproven exits remain unverifiable until the host settles them. */
-export function closeAcpSessionJournal(
-  session: AcpStructuredSession,
-  reason: string,
-  cause?: Error,
-  verdict: StructuredAgentSessionTurnVerdict = UNVERIFIABLE_TURN_VERDICT,
-  endedAt: number = Date.now()
+/** Called only by the acquisition's completed-input closure, independently of process proof. */
+export function retireAcpSessionInput(
+  session: AcpStructuredChild | null,
+  lane: AcpStructuredLane | null,
+  at: number,
+  cause?: Error
 ): void {
-  if (session.journalClosed !== null) {
+  if (!isAcpReadySession(session)) {
+    lane?.flush()
+    lane?.dispose()
+    session?.unbindReadingControl?.()
     return
   }
+  const interrupted =
+    session.journalClosed === null && !session.closeRequested && session.connection.exited
+  const endedAt = session.exitObservedAt ?? at
+  const verdict: StructuredAgentSessionTurnVerdict = interrupted
+    ? { state: 'interrupted', completedAt: endedAt }
+    : UNVERIFIABLE_TURN_VERDICT
+  session.journalClosed ??= session.closeRequested
+    ? `${session.spec.agent} ACP agent closed by Orca`
+    : `${session.spec.agent} ACP agent exited`
+  const reason = acpSessionEndReason(session)
   session.events?.observeExit?.(session.turns.heldSends)
-  session.journalClosed = reason
   session.prompts.clear()
   session.turns.end(reason, cause)
   session.lane.apply([{ type: 'session.ended', verdict, endedAt }])
   session.lane.flush()
   session.lane.dispose()
   session.unbindReadingControl?.()
+}
+
+function acpSessionEndReason(session: AcpStructuredSession): string {
+  const stderr = session.connection.stderrTail()
+  const how = providerExitStatusText(session.connection.exitStatus)
+  // Process exit can follow stream loss; keep that earlier reason when stderr is absent.
+  const lead =
+    session.journalClosed !== null && !stderr
+      ? session.journalClosed
+      : `${session.spec.agent} ACP agent exited`
+  return session.closeRequested
+    ? `${session.spec.agent} ACP agent closed by Orca`
+    : `${lead}${how ? ` ${how}` : ''}${stderr ? `: ${stderr}` : ''}`
 }
 
 export function endAcpStructuredSession(
@@ -110,29 +134,13 @@ export function endAcpStructuredSession(
   if (session.ended) {
     return
   }
+  observedAt = session.exitObservedAt ?? observedAt
   session.ended = true
   session.events?.observeExit?.(undefined, observedAt)
   session.exitObservedAt = observedAt
   const stderr = session.connection.stderrTail()
   const how = providerExitStatusText(session.connection.exitStatus)
-  // Process exit can follow stream loss; keep that earlier reason when stderr is absent.
-  const lead =
-    session.journalClosed !== null && !stderr
-      ? session.journalClosed
-      : `${session.spec.agent} ACP agent exited`
-  const reason = session.closeRequested
-    ? `${session.spec.agent} ACP agent closed by Orca`
-    : `${lead}${how ? ` ${how}` : ''}${stderr ? `: ${stderr}` : ''}`
-  // Spontaneous exit interrupts now; requested close leaves the host to revise an unverifiable turn.
-  closeAcpSessionJournal(
-    session,
-    reason,
-    undefined,
-    session.closeRequested
-      ? UNVERIFIABLE_TURN_VERDICT
-      : { state: 'interrupted', completedAt: observedAt },
-    observedAt
-  )
+  const reason = acpSessionEndReason(session)
   // The tail spans the whole run, so a startup warning can still be in it: a log, not the cause.
   const detail = providerDiagnostic([how, stderr].filter(Boolean).join('\n'), 'log')
   onEvent?.({

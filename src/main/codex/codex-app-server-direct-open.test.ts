@@ -11,7 +11,10 @@ it('ends a direct open and reaps its child when initialize never answers', async
   child.stdout = new PassThrough()
   child.stderr = new PassThrough()
   child.stdin = new PassThrough()
-  child.stdin.on('finish', () => child.emit('exit', 0, null))
+  child.stdin.on('finish', () => {
+    child.emit('exit', 0, null)
+    child.stdout.end()
+  })
   const opening = openCodexAppServerConnection(
     { command: 'codex', args: ['app-server'] },
     {},

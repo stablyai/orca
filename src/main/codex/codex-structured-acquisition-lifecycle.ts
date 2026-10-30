@@ -39,7 +39,6 @@ export async function closeFailedCodexAcquisition(input: {
   if (isCodexAppServerHandshakeExitUnprovenError(input.cause)) {
     input.attempt.window.connection = input.cause.connection
   }
-  input.dispose()
   try {
     if (!(await input.registry.closeFailedAttempt(input.sessionId, input.attempt))) {
       throw new AgentSessionAcquisitionExitUnprovenError(input.cause)
@@ -52,6 +51,7 @@ export async function closeFailedCodexAcquisition(input: {
       new AggregateError([input.cause, cleanupError], 'codex acquisition cleanup failed')
     )
   }
+  input.dispose()
   if (
     input.attempt.window.connection?.closeResult?.killDelivered &&
     input.attempt.window.connection.closeResult.root !== 'exited'

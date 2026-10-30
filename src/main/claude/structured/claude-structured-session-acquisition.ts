@@ -30,10 +30,8 @@ import { readClaudeTranscriptEntryUuid } from '../claude-transcript-entry-uuid'
 import { claudeTurnResumePointWriter } from '../claude-structured-resume-point'
 import { withAgentSessionCreatePhase } from '../../observability/agent-session-instrumentation'
 import { resolveClaudeAcquisitionLaunch } from '../claude-structured-acquisition-launch'
-import {
-  bindClaudeConnectionJournalControls,
-  createClaudeSessionJournalTranslator
-} from '../claude-structured-session-journal-control'
+import { createClaudeSessionJournalTranslator } from '../claude-structured-session-journal-control'
+import { bindClaudeContextUsageCapture } from '../claude-context-usage'
 import { isRootClaudeFrame } from '../claude-turn-opening'
 
 export async function acquireClaudeSession({
@@ -50,7 +48,7 @@ export async function acquireClaudeSession({
   const sessionId = input.identity.sessionId
   const prompts = new ClaudePromptRegistry()
   const { previous, attempt } = acquisitions.start(sessionId, prompts)
-  let unbindReadingControl: (() => void) | undefined
+  let unbindContextUsage: (() => void) | undefined
   let liveSession: sessionState.ClaudeSession | null = null
   let firstRootInit: sessionState.ClaudeSession['firstRootInit']
   let observedLeafUuid: string | null = null,
@@ -72,6 +70,8 @@ export async function acquireClaudeSession({
   const contextActivity = translator?.contextActivity ?? 0
   const recordTurnEnd = claudeTurnResumePointWriter(sessionId, sessions, deps)
   const observedOptions: sessionState.ClaudeSession['reportedOptions'] = {}
+  const emit = (event: sessionState.ClaudeStructuredSessionEvent): void =>
+    liveSession ? callbacks.emit(liveSession, input.events, event) : translator?.handle(event)
   const onMessage = (message: Record<string, unknown>): void => {
     const init = readClaudeInit(message)
     if (readClaudeFrameString(message, 'session_id') !== expectedProviderSessionId) {
@@ -142,7 +142,7 @@ export async function acquireClaudeSession({
             }
           })
         }
-        callbacks.emit(liveSession, input.events, {
+        emit({
           type: 'message',
           sessionId,
           message,
@@ -167,9 +167,11 @@ export async function acquireClaudeSession({
       }
     }
   }
-  const emit = (event: Parameters<typeof callbacks.emit>[2]): void =>
-    callbacks.deliver(attempt, sessionId, () => callbacks.emit(liveSession, input.events, event))
-  const { canUseTool, onUserDialog } = buildClaudePermissionCallbacks({ sessionId, prompts, emit })
+  const { canUseTool, onUserDialog } = buildClaudePermissionCallbacks({
+    sessionId,
+    prompts,
+    emit: (event) => callbacks.deliver(attempt, sessionId, () => emit(event))
+  })
 
   try {
     const launch = await resolveClaudeAcquisitionLaunch({
@@ -223,8 +225,7 @@ export async function acquireClaudeSession({
       )
     )
     attempt.connection = connection
-    unbindReadingControl = bindClaudeConnectionJournalControls(
-      input.events,
+    unbindContextUsage = bindClaudeContextUsageCapture(
       connection,
       translator,
       deps.now ? { now: deps.now } : {}
@@ -258,7 +259,7 @@ export async function acquireClaudeSession({
       prompts,
       translator,
       events: input.events,
-      ...(unbindReadingControl ? { unbindReadingControl } : {}),
+      ...(unbindContextUsage ? { unbindReadingControl: unbindContextUsage } : {}),
       process,
       acquisitionGeneration: sessionState.mintClaudeAcquisitionGeneration(deps),
       options: launch.savedOptions.options,
@@ -291,7 +292,7 @@ export async function acquireClaudeSession({
     }
     return acquisition
   } catch (error) {
-    unbindReadingControl?.()
+    unbindContextUsage?.()
     throw await resolveClaudeAcquisitionError({
       error,
       sessionId,

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { acpLaunchSpecFor } from '../../../acp/acp-launch-specs'
+import { FakeAcpChild } from '../../../acp/acp-scripted-connection.test-fixture'
 import type * as LaunchSpecs from '../../../acp/acp-launch-specs'
 import { writeRuntimeReleaseReceipt } from '../../../node-runtime/managed-runtime-release'
 import type { RpcContext } from '../core'
@@ -128,7 +129,8 @@ it('removes the files only once every chat and unclosed child that may run them 
     return frames.at(-1)
   }
   // A sign-in child whose close was never proven still holds the files.
-  const child = { close: vi.fn(async () => false), onExit: () => {} }
+  const child = new FakeAcpChild({ command: spec.command, args: [], cwd: release }, {})
+  const proveClose = vi.spyOn(child, 'proveClose').mockResolvedValue(false)
   spec.launchGate.retain(child)
   chats.loaded = ['chat-1']
   expect(await removed()).toMatchObject({
@@ -136,13 +138,18 @@ it('removes the files only once every chat and unclosed child that may run them 
     operation: { kind: 'remove', phase: 'failed', error: expect.stringContaining('stopped') }
   })
 
-  child.close.mockResolvedValue(true)
+  expect(child.exited).toBe(false)
+  expect(existsSync(join(release, 'server'))).toBe(true)
+  proveClose.mockRestore()
   chats.loaded = ['chat-2']
   expect(await removed()).toMatchObject({
     installedVersion: null,
     source: null,
     operation: { kind: 'remove', phase: 'succeeded' }
   })
+  expect(child.exited).toBe(true)
+  expect(child.closes).toBe(2)
+  child.agent.close()
   expect(chats.closed).toEqual(['chat-1', 'chat-2'])
   expect(existsSync(join(host.dataDirectory, 'rt'))).toBe(false)
   transport.abort()

@@ -1,3 +1,7 @@
+import type { ClaudeOpenTurn } from './claude-open-turn'
+import type { createClaudeStreamedThinking } from './claude-streamed-thinking'
+import type { ClaudeStreamedTextCheckpoints } from './claude-streamed-text-checkpoints'
+import { claudeStreamTurnSource, claudeStreamTurnStartSource } from './claude-turn-opening'
 import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
 import { claudeRecord, claudeText } from './claude-structured-item-translation'
 
@@ -125,4 +129,31 @@ export function createClaudeStreamedBlockRegistry(
     },
     clear: () => messages.clear()
   }
+}
+
+export function journalClaudeStreamEvent({
+  message,
+  observedAt,
+  streamedBlocks,
+  streamedThinking,
+  streamedText,
+  turn
+}: {
+  message: Record<string, unknown>
+  observedAt: number
+  streamedBlocks: ClaudeStreamedBlockRegistry
+  streamedThinking: Pick<ReturnType<typeof createClaudeStreamedThinking>, 'observe'>
+  streamedText: Pick<ClaudeStreamedTextCheckpoints, 'append'>
+  turn: Pick<ClaudeOpenTurn, 'ensureOpen'>
+}): boolean {
+  const delta = streamedBlocks.observe(message, observedAt)
+  const thinking = streamedThinking.observe(message, observedAt)
+  // Prefer message_start; use the first content delta for older streams that omit it.
+  const source =
+    delta || thinking ? claudeStreamTurnSource(message) : claudeStreamTurnStartSource(message)
+  turn.ensureOpen(message, source, observedAt)
+  if (delta) {
+    streamedText.append(delta.identity, delta.text, delta.parentToolUseId)
+  }
+  return delta !== null || thinking
 }

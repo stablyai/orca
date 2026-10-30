@@ -263,8 +263,8 @@ describe('codex goal lifecycle resume', () => {
     goals.dispose()
   })
 
-  it('retries a journal-derived transition after lifecycle backpressure', async () => {
-    const journal = goalJournal({ watermarks: { maxLifecycleQueuedOperations: 1 } })
+  it('retains a journal-derived transition under pacing pressure', async () => {
+    const journal = goalJournal({ watermarks: { pauseQueuedOperations: 1 } })
     const goals = new CodexJournalGoals(journal.sink, () => ({
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     }))
@@ -283,7 +283,7 @@ describe('codex goal lifecycle resume', () => {
         method: 'thread/goal/updated',
         params: goalFrame({ status: 'paused' })
       })
-    ).toEqual({ accepted: false, reason: 'backpressure' })
+    ).toEqual({ accepted: true })
 
     journal.rebind()
     await journal.drained()

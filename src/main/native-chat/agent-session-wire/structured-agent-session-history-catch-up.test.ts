@@ -1,3 +1,7 @@
+import {
+  closeProviderTimelineRigs,
+  openProviderTimelineRig
+} from '../agent-session-timeline/provider-timeline-assembler-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -196,4 +200,87 @@ describe('history catch-up runner', () => {
       await rm(root, { recursive: true, force: true })
     }
   })
+})
+
+it('orders catch-up after 1024 live obligations, preserves saved identities, and reopens without duplicates', async () => {
+  const rig = await openProviderTimelineRig(
+    {},
+    { agent: 'codex', providerHandle: codexProviderHandle('thread') }
+  )
+  const sink = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+  sink.bind({ journal: rig.journal, fence: 1, publish: () => {} })
+  const identity = { provider: 'codex' as const, threadId: 'thread', turnId: 'turn', ordinal: 0 }
+  const body = (text: string) => ({
+    kind: 'message' as const,
+    role: 'assistant' as const,
+    blocks: [{ type: 'text' as const, text }]
+  })
+  const scope = { kind: 'thread' as const }
+  await rig.journal.appendItem(identity, body('old saved prefix'), { fence: 1, turnScope: scope })
+  const key = agentJournalItemKey(identity)
+  const saved = rig.journal.item(key)
+  if (!saved) {
+    throw new Error('saved prefix missing')
+  }
+  const batch = createHistoryCatchUpBatch()
+  batch.revise(
+    { kind: 'item', identity, body: body('caught-up full reply'), turnScope: scope },
+    { canonicalItemId: saved.itemId, revision: saved.revision }
+  )
+  const plan = batch.finish('recorded-history', ['stable-history-key'])
+  const admitted = Promise.withResolvers<void>()
+  const source = {
+    ...sink.sink,
+    tryAppendTransition: (
+      transition: Parameters<NonNullable<StructuredAgentSessionEventSink['tryAppendTransition']>>[0]
+    ) => {
+      const result = sink.sink.tryAppendTransition?.(transition)
+      admitted.resolve()
+      return result ?? { accepted: false as const, reason: 'failed' as const }
+    }
+  }
+  try {
+    const result = runHistoryCatchUp({
+      agentName: 'Codex',
+      scope: 'test-catch-up',
+      timeoutMs: 5_000,
+      sessionId: 'session-timeline',
+      sink: source,
+      readView: () => 'same-thread',
+      sameView: (a, b) => a === b,
+      prepare: async () => {
+        // One catch-up is one operation; these 1024 live lifecycle writes consumed the old cap.
+        for (let ordinal = 1; ordinal <= 1024; ordinal++) {
+          sink.sink.appendItem({ ...identity, ordinal }, body(`live-${ordinal}`), {
+            lifecycle: true,
+            turnScope: scope
+          })
+        }
+        return plan
+      }
+    })
+    await admitted.promise
+    sink.sink.appendItem({ ...identity, ordinal: 1025 }, body('live-after-catch-up'), {
+      lifecycle: true,
+      turnScope: scope
+    })
+    expect(await result).toBe('committed')
+    expect(await sink.sink.written?.()).toEqual({ ok: true })
+    const before = rig.journal.snapshot().items
+    expect(before).toHaveLength(1026)
+    expect(before[0]).toMatchObject({
+      itemId: saved.itemId,
+      revision: saved.revision + 1,
+      body: body('caught-up full reply')
+    })
+    expect(before.slice(1).map((row) => row.body)).toEqual([
+      ...Array.from({ length: 1024 }, (_, i) => body(`live-${i + 1}`)),
+      body('live-after-catch-up')
+    ])
+    const reopened = await rig.reopenJournal()
+    expect(reopened.snapshot().items).toEqual(before)
+  } finally {
+    sink.close()
+    await closeProviderTimelineRigs()
+  }
 })

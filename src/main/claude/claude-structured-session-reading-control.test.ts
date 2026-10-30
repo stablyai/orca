@@ -100,7 +100,7 @@ describe('Claude structured reading control', () => {
     expect(events.unbind).toHaveBeenCalledOnce()
   })
 
-  it('unbinds when acquisition fails after the connection opens', async () => {
+  it('keeps initialization readable until a session can publish', async () => {
     const claude = fakeClaude()
     const open = claude.openConnection
     claude.openConnection = async (launch, handlers = {}) => {
@@ -120,7 +120,8 @@ describe('Claude structured reading control', () => {
         events: events.sink
       })
     ).rejects.toThrow('exited (code 1)')
-    expect(events.unbind).toHaveBeenCalledOnce()
+    expect(events.control()).toBeUndefined()
+    expect(events.unbind).not.toHaveBeenCalled()
   })
 
   it('unbinds when the published provider exits unexpectedly', async () => {
@@ -212,16 +213,14 @@ describe('Claude structured reading control', () => {
     await adapter.drainObservedExits()
   })
 
-  it('automatically retries a hard-watermark row before resuming SDK reads', async () => {
+  it('transfers rows before resuming SDK reads under pressure', async () => {
     const persisted = new Map<string, AgentJournalItemBody>()
     const target = persistedTarget(persisted)
     const deferred = createDeferredStructuredAgentSessionEventSink({
       ...testEventSinkLogging(),
       watermarks: {
         pauseQueuedOperations: 1,
-        maxQueuedOperations: 4,
-        lowQueuedOperations: 0,
-        maxQueuedBytes: 1_000_000
+        lowQueuedOperations: 0
       }
     })
     deferred.bind(target)
@@ -263,7 +262,7 @@ describe('Claude structured reading control', () => {
     }
     claude.connections[0].handlers.onMessage?.(notification)
     claude.connections[0].handlers.onMessage?.(notification)
-    expect(deferred.state().queuedOperations).toBe(4)
+    expect(deferred.state().queuedOperations).toBe(5)
 
     appendGate.resolve()
     await vi.waitFor(() => expect(resumeReading).toHaveBeenCalledOnce())
@@ -272,6 +271,7 @@ describe('Claude structured reading control', () => {
       (body) => body.kind === 'message' && blockOf(body)?.taskId === 'hard-watermark-task'
     )
     expect(taskRows).toHaveLength(1)
+    expect(blockOf(taskRows[0])?.error).toBeUndefined()
     expect(blockOf(taskRows[0])?.summary).toBe('The real provider task failed')
     expect(
       [...persisted.values()].some(

@@ -1,34 +1,22 @@
+import {
+  boundedUtf8Prefix,
+  NDJSON_MAX_LINE_BYTES,
+  type NdjsonRejectedRecord
+} from './ndjson-record'
+export { NDJSON_MAX_LINE_BYTES, NdjsonLineTooLongError, encodeNdjson } from './ndjson-record'
+export type { NdjsonRejectedRecord } from './ndjson-record'
 import { ownRetainedString } from './own-retained-string'
-
-export const NDJSON_MAX_LINE_BYTES = 16 * 1024 * 1024
 
 const REJECTED_LINE_PREFIX_MAX_BYTES = 64 * 1024
 // Bound paused complete records separately from the unterminated suffix: individually valid records can still accumulate.
 const PAUSED_COMPLETE_RECORD_QUEUE_MAX_BYTES = 64 * 1024 * 1024
 
-export class NdjsonLineTooLongError extends Error {
-  constructor(
-    readonly lineBytes: number,
-    readonly maxLineBytes: number
-  ) {
-    super(`NDJSON line exceeds max ${maxLineBytes} bytes (${lineBytes} bytes encoded)`)
-    this.name = 'NdjsonLineTooLongError'
-  }
-}
-
-export type NdjsonRejectedRecord =
-  | {
-      kind: 'line-too-long'
-      maxLineBytes: number
-      observedBytes: number
-      prefix: string
-      droppedCompleteRecords?: true
-    }
-  | { kind: 'invalid-json'; line: string; error: Error }
-
 export type IncrementalNdjsonFramer = {
   feed(chunk: string): void
   resume(): void
+  /** Transfer complete records already received, even when future reads are paused. */
+  drain(): void
+  finish(natural: boolean): string | undefined
   reset(): void
   /** Once input has ended: the unterminated last line, never parsed as a record. */
   takeTail(): string
@@ -37,23 +25,6 @@ export type IncrementalNdjsonFramer = {
 export type IncrementalNdjsonFramerOptions = {
   maxLineBytes?: number
   shouldPause?: () => boolean
-}
-
-function boundedUtf8Prefix(value: string, maxBytes: number): string {
-  if (Buffer.byteLength(value, 'utf8') <= maxBytes) {
-    return value
-  }
-  let low = 0
-  let high = Math.min(value.length, maxBytes)
-  while (low < high) {
-    const midpoint = Math.ceil((low + high) / 2)
-    if (Buffer.byteLength(value.slice(0, midpoint), 'utf8') <= maxBytes) {
-      low = midpoint
-    } else {
-      high = midpoint - 1
-    }
-  }
-  return value.slice(0, low)
 }
 
 // Why: a strict slice is a V8 SlicedString that pins all of `source`; the whole string needs no copy.
@@ -150,69 +121,77 @@ export function createIncrementalNdjsonFramer(
     retainPendingSuffix(newlineIndex === -1 ? input : input.slice(newlineIndex + 1), source)
   }
 
+  let draining = false
+  let activeInput: { input: string; cursor: number } | null = null
   const process = (input: string): void => {
-    let cursor = 0
-    while (cursor < input.length) {
-      const newlineIndex = input.indexOf('\n', cursor)
-      const hasNewline = newlineIndex !== -1
-      const end = hasNewline ? newlineIndex : input.length
-      const segment = input.slice(cursor, end)
-      cursor = hasNewline ? end + 1 : end
+    const frame = { input, cursor: 0 }
+    const parent = activeInput
+    activeInput = frame
+    try {
+      while (frame.cursor < input.length) {
+        const newlineIndex = input.indexOf('\n', frame.cursor)
+        const hasNewline = newlineIndex !== -1
+        const end = hasNewline ? newlineIndex : input.length
+        const segment = input.slice(frame.cursor, end)
+        frame.cursor = hasNewline ? end + 1 : end
 
-      if (discardingOversizedLine) {
-        if (hasNewline) {
-          discardingOversizedLine = false
-          clearLine()
-        } else {
-          return
-        }
-      } else {
-        const segmentBytes = unbounded ? 0 : Buffer.byteLength(segment, 'utf8')
-        const nextLineBytes = lineBytes + segmentBytes
-        if (nextLineBytes > maxLineBytes) {
-          rememberPrefix(segment, segmentBytes)
-          const rejected: NdjsonRejectedRecord = {
-            kind: 'line-too-long',
-            maxLineBytes,
-            observedBytes: nextLineBytes,
-            prefix: ownRetainedString(prefixSegments.join(''))
+        if (discardingOversizedLine) {
+          if (hasNewline) {
+            discardingOversizedLine = false
+            clearLine()
+          } else {
+            return
           }
-          clearLine()
-          discardingOversizedLine = !hasNewline
-          onRejected(rejected)
-        } else if (!hasNewline) {
-          const pending = detachFrom(segment, input)
-          if (!unbounded) {
-            rememberPrefix(pending, segmentBytes)
-          }
-          lineSegments.push(pending)
-          lineBytes = nextLineBytes
-          return
         } else {
-          lineSegments.push(segment)
-          const line = lineSegments.length === 1 ? lineSegments[0] : lineSegments.join('')
-          clearLine()
-          if (!/^\s*$/.test(line)) {
-            let parsed: unknown
-            try {
-              parsed = JSON.parse(line)
-            } catch (error) {
-              onRejected({
-                kind: 'invalid-json',
-                line,
-                error: error instanceof Error ? error : new Error(String(error))
-              })
-              continue
+          const segmentBytes = unbounded ? 0 : Buffer.byteLength(segment, 'utf8')
+          const nextLineBytes = lineBytes + segmentBytes
+          if (nextLineBytes > maxLineBytes) {
+            rememberPrefix(segment, segmentBytes)
+            const rejected: NdjsonRejectedRecord = {
+              kind: 'line-too-long',
+              maxLineBytes,
+              observedBytes: nextLineBytes,
+              prefix: ownRetainedString(prefixSegments.join(''))
             }
-            onRecord(parsed, line)
+            clearLine()
+            discardingOversizedLine = !hasNewline
+            onRejected(rejected)
+          } else if (!hasNewline) {
+            const pending = detachFrom(segment, input)
+            if (!unbounded) {
+              rememberPrefix(pending, segmentBytes)
+            }
+            lineSegments.push(pending)
+            lineBytes = nextLineBytes
+            return
+          } else {
+            lineSegments.push(segment)
+            const line = lineSegments.length === 1 ? lineSegments[0] : lineSegments.join('')
+            clearLine()
+            if (!/^\s*$/.test(line)) {
+              let parsed: unknown
+              try {
+                parsed = JSON.parse(line)
+              } catch (error) {
+                onRejected({
+                  kind: 'invalid-json',
+                  line,
+                  error: error instanceof Error ? error : new Error(String(error))
+                })
+                continue
+              }
+              onRecord(parsed, line)
+            }
           }
         }
-      }
 
-      if (options.shouldPause?.() && cursor < input.length) {
-        retainPausedInput(input.slice(cursor), input)
-        return
+        if (!draining && options.shouldPause?.() && frame.cursor < input.length) {
+          retainPausedInput(input.slice(frame.cursor), input)
+          return
+        }
       }
+    } finally {
+      activeInput = parent
     }
   }
 
@@ -272,6 +251,33 @@ export function createIncrementalNdjsonFramer(
         }
       }
     },
+    drain(): void {
+      if (draining) {
+        return
+      }
+      draining = true
+      try {
+        if (activeInput) {
+          const remainder = activeInput.input.slice(activeInput.cursor)
+          activeInput.cursor = activeInput.input.length
+          process(remainder)
+        }
+        const queued = pausedCompleteInput
+        pausedCompleteInput = []
+        pausedCompleteInputBytes = 0
+        process(queued.join(''))
+      } finally {
+        draining = false
+      }
+    },
+    finish(natural): string | undefined {
+      this.drain()
+      const tail = this.takeTail()
+      if (natural && tail.trim()) {
+        process(`${tail}\n`)
+      }
+      return natural ? undefined : tail
+    },
     takeTail(): string {
       const tail =
         discardingOversizedLine || discardingPausedSuffix
@@ -291,15 +297,6 @@ export function createIncrementalNdjsonFramer(
       pausedCompleteInputOverflowed = false
     }
   }
-}
-
-export function encodeNdjson(msg: unknown, maxLineBytes = NDJSON_MAX_LINE_BYTES): string {
-  const line = JSON.stringify(msg)
-  const lineBytes = Buffer.byteLength(line, 'utf8')
-  if (lineBytes > maxLineBytes) {
-    throw new NdjsonLineTooLongError(lineBytes, maxLineBytes)
-  }
-  return `${line}\n`
 }
 
 export type NdjsonParser = Pick<IncrementalNdjsonFramer, 'feed' | 'reset'>

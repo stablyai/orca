@@ -13,7 +13,7 @@ import { resolveAcpLaunchInvocation } from './acp-structured-launch-resolution'
 import { prepareAcpLaunch } from './acp-structured-launch-preparation'
 import { acpPrivateTempConnect } from './acp-private-temp'
 import { AcpRpcError } from './acp-errors'
-import type { AcpStructuredConnection } from './acp-structured-connection'
+import { closeAcpAcquisition, type AcpStructuredConnection } from './acp-structured-connection'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
 
 type TextInput = Parameters<NonNullable<StructuredAgentSessionAdapter['generateText']>>[0]
@@ -30,7 +30,9 @@ const TASK_ENV_TO_DELETE = [
 
 /** Disposable native tasks belong to the adapter so shutdown also owns uncertain closes. */
 export class AcpTextTasks {
-  private readonly children = new ProviderAcquisitionStarts<AcpStructuredConnection>()
+  private readonly children = new ProviderAcquisitionStarts<AcpStructuredConnection>(
+    closeAcpAcquisition
+  )
   private readonly shutdown = new AbortController()
   private readonly pending = new Set<Promise<string | null>>()
 

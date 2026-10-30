@@ -77,7 +77,10 @@ function fakeServer(agent: AcpScriptedAgent, stderr = new PassThrough()) {
     stderr,
     kill: vi.fn(() => true)
   })
-  child.stdin.once('finish', () => child.emit('exit', 0, null))
+  child.stdin.once('finish', () => {
+    child.emit('exit', 0, null)
+    child.stdout.end()
+  })
   return child
 }
 
@@ -459,7 +462,21 @@ it('never shows a link that is not a Google sign-in back to this host', async ()
 it('retains an unclosed sign-in child for both launch entry points until its exit is proven', async () => {
   const close = vi.fn(async () => false)
   const old = await signInAgainst(printed(GOOGLE_LINK), {
-    configure: (connection) => void vi.spyOn(connection, 'close').mockImplementation(close)
+    configure: (connection) => {
+      const closeOutcome = connection.closeOutcome.bind(connection)
+      vi.spyOn(connection, 'closeOutcome').mockImplementation(async () =>
+        (await close())
+          ? closeOutcome()
+          : {
+              accepted: false,
+              physical: {
+                root: connection.rootVerdict,
+                tree: connection.lastCloseResult?.tree ?? null
+              },
+              receive: { state: 'retained' }
+            }
+      )
+    }
   })
   await stateAfter(old.flowId, 'starting')
   old.finishBrowser()

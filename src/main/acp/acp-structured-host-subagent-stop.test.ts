@@ -6,6 +6,7 @@ import type { PipedChildProcess, PipedProcessSpawner } from '@orca/process-host/
 import { isSubagentBlock } from '../../shared/native-chat-types'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+import { PROVIDER_INPUT_EXIT_GRACE_MS } from '../provider-process/provider-source-completion'
 import type { terminateProviderProcessTree } from '../provider-process/provider-process-teardown'
 import { createAcpAgentConnection } from './acp-agent-connection'
 import { AcpScriptedAgent, deferred, type FakeFrame } from './acp-scripted-agent.test-support'
@@ -139,6 +140,7 @@ describe('Grok child outcome during a full host Stop', () => {
       settledAt: STOP_AT + 233
     })
     await vi.advanceTimersByTimeAsync(EXIT_AFTER_STOP_MS - 233)
+    await vi.advanceTimersByTimeAsync(PROVIDER_INPUT_EXIT_GRACE_MS)
     expect(fixture.childWork.views()).toMatchObject([
       { membership: 'settled', outcome: 'cancelled' }
     ])
@@ -152,6 +154,7 @@ describe('Grok child outcome during a full host Stop', () => {
   it('leaves the child unverifiable when shutdown supplies no authoritative outcome', async () => {
     const fixture = await stoppingChild(false)
     await vi.advanceTimersByTimeAsync(EXIT_AFTER_STOP_MS)
+    await vi.advanceTimersByTimeAsync(PROVIDER_INPUT_EXIT_GRACE_MS)
     const [unavailable] = await fixture.rosters()
     expect(fixture.childWork.views()).toMatchObject([{ membership: 'settled', outcome: 'unknown' }])
     expect(unavailable.row.itemId).toBe(fixture.original.row.itemId)

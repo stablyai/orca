@@ -742,6 +742,8 @@ describe('Claude stream-json connection', () => {
     expect(connection.exitVerdict.root).toBe('live')
     await until(() => exit, 'the distinct child exit')
     expect(connection.exitVerdict.root).toBe('exited')
+    await expect(connection.close()).rejects.toThrow('child transport fault')
+    openConnections.splice(openConnections.indexOf(connection), 1)
   })
 
   it('proves the exit of a child that ignores a graceful shutdown', async () => {

@@ -2,12 +2,14 @@ import { randomUUID } from 'node:crypto'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { ProviderAcquisitionStarts } from '../provider-process/provider-acquisition-starts'
 import { copyAcpConversation } from './acp-conversation-copy'
-import type { AcpStructuredConnection } from './acp-structured-connection'
+import { closeAcpAcquisition, type AcpStructuredConnection } from './acp-structured-connection'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
 
 /** Copy children never gate the original chat's start. */
 export class AcpConversationCopies {
-  private readonly children = new ProviderAcquisitionStarts<AcpStructuredConnection>()
+  private readonly children = new ProviderAcquisitionStarts<AcpStructuredConnection>(
+    closeAcpAcquisition
+  )
   private readonly shutdown = new AbortController()
   private readonly pending = new Set<Promise<unknown>>()
 

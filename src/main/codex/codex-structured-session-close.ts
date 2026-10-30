@@ -11,6 +11,18 @@ import {
 import type { StructuredAgentSessionEndedEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
+export function observeCodexSessionExit(
+  session: CodexSession | undefined,
+  connection: CodexAppServerConnection | null,
+  observedAt: number
+): void {
+  if (session && session.connection === connection) {
+    session.exitObservedAt ??= observedAt
+    session.events?.observeExit?.(session.dispatchEchoes.heldSends(), observedAt)
+    session.turnOpenWaits.releaseAll()
+  }
+}
+
 export function handleCodexSessionExit(input: {
   sessions: Map<string, CodexSession>
   sessionId: string

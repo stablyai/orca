@@ -19,6 +19,8 @@ export type CodexPendingRequest = {
   timer: ReturnType<typeof setTimeout> | undefined
   /** Runs on reply/timeout before promise continuations; replies retain stdout notification order. */
   onReply?: () => void
+  /** Transfers successful response ownership before source completion can retire its consumer. */
+  onResult?: (result: unknown) => void
 }
 
 export function createCodexAppServerRecordDispatcher(input: {
@@ -123,7 +125,12 @@ export function createCodexAppServerRecordDispatcher(input: {
       )
       return
     }
-    waiter.resolve(message.result)
+    try {
+      waiter.onResult?.(message.result)
+      waiter.resolve(message.result)
+    } catch (cause) {
+      waiter.reject(cause instanceof Error ? cause : new Error(String(cause)))
+    }
   }
 
   const rejectOversized = (rejected: NdjsonRejectedRecord & { kind: 'line-too-long' }): void => {

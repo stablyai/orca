@@ -9,7 +9,7 @@ import { RevisionedState } from '../runtime/revisioned-state'
 import { antigravityBrowserHelperWorks } from './antigravity-browser-helper'
 import { AcpLaunchGate } from '../acp/acp-launch-gate'
 
-type SignInOwner = Pick<AcpAgentConnection, 'close' | 'onExit' | 'exited'>
+type SignInOwner = Pick<AcpAgentConnection, 'close' | 'closeOutcome' | 'onExit' | 'exited'>
 const retained = new ProviderAcquisitionStarts<SignInOwner>()
 const folder = hostFolderAccountBinding('GEMINI_HOME', 'antigravity-chat', ['antigravity-acp'])
 

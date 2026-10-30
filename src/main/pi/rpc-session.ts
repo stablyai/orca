@@ -1,16 +1,11 @@
+import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import type {
   StructuredAgentSessionAcquireInput,
-  StructuredAgentSessionLifecycleEvent,
   AgentSessionDispatchOutcome
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { providerTimelineSink } from '../native-chat/agent-session-timeline/provider-timeline-plan'
 import { JsonlRpcTimelineLane } from '../jsonl-rpc/timeline-lane'
-import {
-  JsonlRpcAgentConnection,
-  type JsonlRpcAgentConnectionOptions
-} from '../jsonl-rpc/agent-connection'
-import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
+import { JsonlRpcAgentConnection } from '../jsonl-rpc/agent-connection'
 import { piExitFailure } from './rpc-exit-classification'
 import { PiRpcTurns } from './rpc-turns'
 import { PiRpcDialogCallbacks } from './rpc-dialog-callbacks'
@@ -19,39 +14,13 @@ import type { PiRpcResolvedLaunch } from './rpc-launch-resolution'
 import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import { PiRpcSessionStartup } from './rpc-session-startup'
-import { PiHistoryCapture, type PiHistoryCaptureDeps } from './rpc-history-capture'
+import { PiHistoryCapture } from './rpc-history-capture'
 
-export type PiRpcConnection = Pick<
-  JsonlRpcAgentConnection,
-  | 'request'
-  | 'send'
-  | 'close'
-  | 'pauseReading'
-  | 'resumeReading'
-  | 'pid'
-  | 'closed'
-  | 'rootVerdict'
-  | 'processless'
-  | 'spawnAbsence'
-  | 'lastCloseResult'
-  | 'onExit'
->
-export type PiRpcSessionDeps = PiHistoryCaptureDeps & {
-  openConnection?: (
-    launch: ProviderProcessLaunch,
-    handlers: JsonlRpcAgentConnectionOptions
-  ) => PiRpcConnection
-  onLifecycle: (event: StructuredAgentSessionLifecycleEvent) => void
-  onSettled: (input: {
-    sessionId: string
-    clientMessageId: string
-    fence: number
-    outcome: AgentSessionDispatchOutcome
-  }) => void
-  logger: StructuredAgentSessionLogger
-}
+import type { PiRpcConnection, PiRpcSessionDeps } from './rpc-session-contract'
+export type { PiRpcConnection, PiRpcSessionDeps } from './rpc-session-contract'
 
 export class PiRpcSession {
+  private exitObservedAt?: number
   readonly connection: PiRpcConnection
   readonly lane: JsonlRpcTimelineLane
   readonly turns: PiRpcTurns
@@ -75,6 +44,7 @@ export class PiRpcSession {
   private failedCause?: Error
   private exitDelivery: Promise<void> = Promise.resolve()
   private releaseAfterExit?: () => void
+  private unbindReadingControl?: () => void
 
   constructor(
     readonly input: StructuredAgentSessionAcquireInput,
@@ -95,8 +65,6 @@ export class PiRpcSession {
       agent: 'pi',
       generation,
       namespace: input.identity.sessionId,
-      pauseReading: () => this.connection?.pauseReading(),
-      resumeReading: () => this.connection?.resumeReading(),
       onFailed: (reason) => this.fail(new Error(reason)),
       onInputAccepted: (clientMessageId) =>
         this.settle(clientMessageId, {
@@ -152,6 +120,10 @@ export class PiRpcSession {
           .finally(() => this.releaseAfterExit?.())
       }
     })
+    this.connection.onExit(() => {
+      this.exitObservedAt ??= Date.now()
+      this.input.events?.observeExit?.(this.heldSends, this.exitObservedAt)
+    })
     this.startup = new PiRpcSessionStartup(
       input,
       this.connection,
@@ -181,6 +153,12 @@ export class PiRpcSession {
 
   async open(signal: AbortSignal): Promise<StructuredAgentSessionProviderOpenResult> {
     const result = await this.startup.run(this.resolvedLaunch, signal)
+    if (!this.publishedExit) {
+      this.unbindReadingControl = this.input.events?.bindReadingControl?.({
+        pauseReading: () => this.connection.pauseReading(),
+        resumeReading: () => this.connection.resumeReading()
+      })
+    }
     this.openedLink = result.link ?? null
     this.history.start(this.startup.historyAnchor)
     this.startup.reportAfterOpen(this.generation, result.reportedOptions)
@@ -254,7 +232,9 @@ export class PiRpcSession {
       return
     }
     this.publishedExit = true
-    const observedAt = Date.now()
+    this.unbindReadingControl?.()
+    this.unbindReadingControl = undefined
+    const observedAt = this.exitObservedAt ?? Date.now()
     this.input.events?.observeExit?.(this.heldSends, observedAt)
     const cause = (this.failedCause ??= error)
     this.dialogs.cancelAll()

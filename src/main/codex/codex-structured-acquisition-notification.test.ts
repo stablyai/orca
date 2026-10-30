@@ -15,9 +15,10 @@ it('does not revive a no-turn send when its idle thread unloads', () => {
       sessionFor: () => undefined,
       translate: () => ({ accepted: true })
     }),
-    deliver: (acquisition, _sessionId, event, bytes) => {
-      acquisition.buffer(event, bytes)
+    deliver: (acquisition, _sessionId, event) => {
+      acquisition.buffer(event)
     },
+    onRetired: () => {},
     now: () => 0
   })
   echoes.arm('no-turn-send')

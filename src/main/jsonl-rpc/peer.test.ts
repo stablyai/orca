@@ -374,3 +374,71 @@ describe('JSON-lines RPC peer', () => {
     expect(input.listenerCount('data')).toBe(0)
   })
 })
+
+it.each(['close', 'input-end', 'reentrant-close'] as const)(
+  'transfers complete paused records before %s notifies the owner',
+  async (ending) => {
+    const seen: string[] = []
+    const { peer, input } = fixture({
+      onRecord: (record) => {
+        seen.push(record.type)
+        peer.pauseReading()
+        if (ending === 'reentrant-close' && record.type === 'first') {
+          peer.close()
+        }
+      },
+      onClose: () => seen.push('closed')
+    })
+    input.write(
+      '{"type":"first"}\n{"type":"complete-tool-result","text":"whole output"}\n{"partial":'
+    )
+    if (ending === 'input-end') {
+      input.emit('end')
+    } else {
+      peer.close()
+    }
+    expect(seen).toEqual(['first', 'complete-tool-result', 'closed'])
+    peer.resumeReading()
+    expect(seen).toHaveLength(3)
+  }
+)
+
+it.each([true, false])(
+  'delivers valid final JSON once at natural EOF, excluding forced suffixes (natural=%s)',
+  async (natural) => {
+    const onRecord = vi.fn()
+    const { peer, input } = fixture({ onRecord })
+    input.write('{"type":"last","body":"whole"}')
+    if (natural) {
+      input.end()
+      await new Promise<void>((resolve) => setImmediate(resolve))
+    } else {
+      vi.useFakeTimers()
+      const done = peer.finishOnInputEnd(new Error('exit'))
+      await vi.advanceTimersByTimeAsync(1_000)
+      await done
+      peer.close()
+    }
+    expect(onRecord.mock.calls).toEqual(natural ? [[{ type: 'last', body: 'whole' }]] : [])
+  }
+)
+
+it.each(['close', 'source-error'] as const)(
+  'transfers resident stdout before %s finalizes its lane',
+  async (ending) => {
+    const order: string[] = []
+    const { peer, input } = fixture({
+      onRecord: (record) => order.push(record.type),
+      onClose: (error) => order.push(error.message)
+    })
+    peer.pauseReading()
+    input.write('{"type":"complete-result","text":"whole output"}\n')
+    expect(input.readableLength).toBeGreaterThan(0)
+    const failure = new Error('actual source failure')
+    void (ending === 'source-error' ? input.emit('error', failure) : peer.close(failure))
+    expect(order).toEqual(['complete-result', failure.message])
+    void (ending === 'source-error'
+      ? await expect(peer.finishOnInputEnd(failure)).rejects.toThrow(failure.message)
+      : await expect(peer.finishOnInputEnd(failure)).resolves.toBeUndefined())
+  }
+)

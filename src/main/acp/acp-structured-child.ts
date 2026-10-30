@@ -1,3 +1,4 @@
+import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { SubmissionRejectionFact } from '../../shared/agent-session-failure'
 import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
 import type { StructuredAgentSessionSetOptionInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
@@ -26,7 +27,6 @@ export type AcpStructuredChild = Pick<
   unbindReadingControl?: () => void
   open: (signal: AbortSignal) => Promise<StructuredAgentSessionProviderOpenResult>
   closing?: Promise<boolean>
-  dispose: () => void
 }
 
 export function isAcpReadySession(
@@ -78,4 +78,50 @@ export function assertAcpStartingSession(
       session.connection.stderrTail() || `${session.spec.command} closed while starting`
     )
   }
+}
+
+export function observeAcpChildExit(
+  getSession: () => AcpStructuredChild | null,
+  observedAt: number,
+  inputDone: Promise<void> | undefined,
+  onExit: (session: AcpStructuredChild | null) => void,
+  onConnectionLost: (session: AcpStructuredChild | null, error: Error) => void
+): void | Promise<void> {
+  const session = getSession()
+  if (session) {
+    session.exitObservedAt ??= observedAt
+    session.events?.observeExit?.(session.turns?.heldSends, observedAt)
+  }
+  return inputDone
+    ? inputDone.then(
+        () => onExit(getSession()),
+        (error: unknown) => {
+          onConnectionLost(getSession(), error instanceof Error ? error : new Error(String(error)))
+          onExit(getSession())
+        }
+      )
+    : onExit(session)
+}
+
+export function assertAcpBeforeSpawn(abandoned: () => boolean, agentName: string): void {
+  if (abandoned()) {
+    throw new AgentSessionPreSpawnError(new Error(`${agentName} was closed before it started`))
+  }
+}
+
+export function requireAcpLiveSession(
+  session: AcpStructuredChild | undefined,
+  agent: string,
+  sessionId: string
+): AcpStructuredSession {
+  if (
+    !session ||
+    !isAcpReadySession(session) ||
+    session.journalClosed !== null ||
+    session.closeRequested ||
+    session.connection.closed
+  ) {
+    throw new Error(`no live ${agent} child owns ${sessionId}`)
+  }
+  return session
 }

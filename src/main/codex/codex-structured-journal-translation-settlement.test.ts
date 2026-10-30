@@ -101,10 +101,8 @@ function hardWatermarkDeferred() {
     ...testEventSinkLogging(),
     watermarks: {
       pauseQueuedBytes: 1,
-      maxQueuedBytes: 1,
       lowQueuedBytes: 0,
       pauseQueuedOperations: 1,
-      maxQueuedOperations: 0,
       lowQueuedOperations: 0
     }
   })
@@ -171,7 +169,7 @@ function expectLifecycleBatchBounds(batches: readonly LifecycleBatch[]): void {
 }
 
 describe('codex journal translation', () => {
-  it('admits turn start and turn settlement publications across the hard watermark', async () => {
+  it('admits turn start and turn settlement publications across the pacing watermark', async () => {
     const bodies: AgentJournalItemBody[] = []
     const publishes: string[] = []
     const deferred = hardWatermarkDeferred()
@@ -194,7 +192,7 @@ describe('codex journal translation', () => {
     expect(translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }))).toEqual({
       accepted: true
     })
-    expect(deferred.state()).toMatchObject({ queuedOperations: 5, backpressured: true })
+    expect(deferred.state()).toMatchObject({ queuedOperations: 6, backpressured: true })
 
     deferred.bind(deferredTarget(bodies, publishes))
     await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })
@@ -205,10 +203,10 @@ describe('codex journal translation', () => {
       expect.objectContaining({ kind: 'tool-call', state: 'failed' }),
       expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'completed' })
     ])
-    expect(publishes).toHaveLength(2)
+    expect(publishes).toHaveLength(3)
   })
 
-  it('admits terminal session settlement publication across the hard watermark', async () => {
+  it('admits terminal session settlement publication across the pacing watermark', async () => {
     const bodies: AgentJournalItemBody[] = []
     const publishes: string[] = []
     const deferred = hardWatermarkDeferred()
@@ -237,7 +235,7 @@ describe('codex journal translation', () => {
         acquisitionGeneration: 'generation-1'
       })
     ).toEqual({ accepted: true })
-    expect(deferred.state()).toMatchObject({ queuedOperations: 5, backpressured: true })
+    expect(deferred.state()).toMatchObject({ queuedOperations: 6, backpressured: true })
 
     deferred.bind(deferredTarget(bodies, publishes))
     await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })
@@ -254,7 +252,7 @@ describe('codex journal translation', () => {
       }),
       expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'interrupted' })
     ])
-    expect(publishes).toHaveLength(2)
+    expect(publishes).toHaveLength(3)
   })
 
   it('retries a rejected terminal admission without losing tool, prompt, turn, or session truth', () => {

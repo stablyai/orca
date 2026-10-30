@@ -33,8 +33,6 @@ async function setup(request = vi.fn(async (_command: string): Promise<unknown> 
     agent: 'pi',
     generation: 'generation-1',
     namespace: 'session-timeline',
-    pauseReading: vi.fn(),
-    resumeReading: vi.fn(),
     onInputAccepted: accepted,
     onFailed: failed
   })

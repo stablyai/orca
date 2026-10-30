@@ -53,7 +53,7 @@ type CodexOpenContext = {
   subagentExecutions: CodexSubagentExecutions
   setPrimaryThreadId: (threadId: string) => void
   forceCloseUnexpected: CodexStructuredSessionTeardown['forceCloseUnexpected']
-  unbindReadingControl?: () => void
+  bindReadingControl: () => (() => void) | undefined
 }
 
 /** The host owns the open promise and closes the spawned child if this rejects. */
@@ -98,25 +98,28 @@ export async function openCodexStructuredSession(
     ...launch.commandEnv,
     ...(launch.visuals ? { [NATIVE_CHAT_SCRATCH_DIR_ENV]: launch.visuals.folder } : {})
   }
+  const adoptOpened = (opened: Awaited<ReturnType<typeof openCodexThread>>): void => {
+    start.setPrimaryThreadId(opened.threadId)
+    attempt.window.appliedSettings.observe(opened)
+    const restored = translator?.restoreThread(opened.threadId, opened.thread ?? {})
+    if (restored && !restored.accepted) {
+      throw AgentSessionAcquisitionRefusal.historyTooLarge(
+        'Codex thread history exceeds the bounded restore queue; history was not partially imported.'
+      )
+    }
+  }
   const opened = await waitForPromiseWithSignal(
     openCodexThread(
       connection,
       { ...threadLaunch, commandEnv },
       // Long rollout/MCP setup relies on the host ceiling and cancellation unless a timeout is supplied.
       deps.requestTimeoutMs ?? null,
-      openInput.signal
+      openInput.signal,
+      adoptOpened
     ),
     openInput.signal
   )
   current()
-  start.setPrimaryThreadId(opened.threadId)
-  attempt.window.appliedSettings.observe(opened)
-  const restored = translator?.restoreThread(opened.threadId, opened.thread ?? {})
-  if (restored && !restored.accepted) {
-    throw AgentSessionAcquisitionRefusal.historyTooLarge(
-      'Codex thread history exceeds the bounded restore queue; history was not partially imported.'
-    )
-  }
   if (
     translator &&
     input.events &&
@@ -189,8 +192,7 @@ export async function openCodexStructuredSession(
       codexChildWorkSink(sessionId, deps, input.events)
     ),
     forceCloseUnexpected: (reason) =>
-      start.forceCloseUnexpected(sessionId, input.fence, generation, reason),
-    ...(start.unbindReadingControl ? { unbindReadingControl: start.unbindReadingControl } : {})
+      start.forceCloseUnexpected(sessionId, input.fence, generation, reason)
   }
   current()
   sessions.set(sessionId, session)
@@ -198,6 +200,7 @@ export async function openCodexStructuredSession(
     event()
   }
   current()
+  session.unbindReadingControl = start.bindReadingControl()
   acquisitions.deleteIfCurrent(sessionId, attempt)
   session.skillReport = new CodexSkillReport({
     connection,

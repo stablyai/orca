@@ -473,9 +473,9 @@ describe('a structured Claude session over agentSession.*', () => {
       await ok('agentSession.create', createIntentParams())
       const first = claude.live()
       first.exitVerdict = { root: 'exited', tree }
-      first.close = async () => {
+      first.closeOutcome = async () => {
         first.closed = true
-        return false
+        return { accepted: false, physical: first.exitVerdict, receive: { state: 'complete' } }
       }
       const host = getStructuredAgentSessionHost()
       await host?.close(SESSION, 'evict')
@@ -511,9 +511,9 @@ describe('a structured Claude session over agentSession.*', () => {
       const created = await ok<{ fence: number }>('agentSession.create', createIntentParams())
       const connection = claude.live()
       connection.exitVerdict = { root: 'exited', tree }
-      connection.close = async () => {
+      connection.closeOutcome = async () => {
         connection.closed = true
-        return false
+        return { accepted: false, physical: connection.exitVerdict, receive: { state: 'complete' } }
       }
       connection.send = async (message, beforeDispatch) => {
         await beforeDispatch?.()

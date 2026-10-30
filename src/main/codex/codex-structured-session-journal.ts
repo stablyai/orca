@@ -41,3 +41,23 @@ export function createCodexSessionJournalTranslator(input: {
       })
     : null
 }
+
+export function createCodexAcquisitionJournalDisposer(
+  acquisition: CodexAcquisitionAttempt['window'],
+  translator: ReturnType<typeof createCodexSessionJournalTranslator>,
+  unbind: () => void
+): () => void {
+  let disposed = false
+  return () => {
+    if (disposed) {
+      return
+    }
+    disposed = true
+    unbind?.()
+    // Retired callbacks use the acquisition translator, never the published-session lookup.
+    acquisition.retire()
+    acquisition.prompts.clear()
+    translator?.flush()
+    translator?.dispose()
+  }
+}

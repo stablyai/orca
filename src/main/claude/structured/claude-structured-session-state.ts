@@ -6,15 +6,11 @@ import type { SubmissionRejectionFact } from '../../../shared/agent-session-fail
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type * as SessionAdapter from '../../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type {
-  ClaudeStreamJsonConnection,
-  openClaudeStreamJsonConnection
-} from '../claude-stream-json-connection'
+import type * as ClaudeConnection from '../claude-stream-json-connection'
 import type { ClaudeStructuredLaunch } from '../claude-structured-launch-resolution'
 import type { StructuredLaunchRequest } from '../../runtime/structured-agent-launch-composition'
 import type { ClaudeJournalTranslator } from '../claude-journal-translator-contract'
 import type { ClaudePendingPrompt, ClaudePromptRegistry } from '../claude-prompt-registry'
-import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acquisition'
 import { randomUUID } from 'node:crypto'
 import type { AgentSessionFastModeState } from '../../../shared/agent-session-wire'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
@@ -100,7 +96,7 @@ export type ClaudeStructuredSessionAdapterDeps = {
     evidence: AgentChildWorkEvidence[],
     producer?: StructuredAgentSessionChildWorkProducer
   ) => void
-  openConnection?: typeof openClaudeStreamJsonConnection
+  openConnection?: typeof ClaudeConnection.openClaudeStreamJsonConnection
   readProcessStartTime?: (pid: number) => Promise<number | null>
   mintLinkId?: () => string
   mintAcquisitionGeneration?: () => string
@@ -144,7 +140,7 @@ export type ClaudeDispatchWaiter = {
 }
 
 export type ClaudeSession = {
-  connection: ClaudeStreamJsonConnection
+  connection: ClaudeConnection.ClaudeStreamJsonConnection
   providerSessionId: string
   /** Latest main-chain message seen on the live stream, mid-turn included. */
   leafUuid: string | null
@@ -237,11 +233,11 @@ export function mintClaudeAcquisitionGeneration(deps: ClaudeStructuredSessionAda
 /** Retain observed exits until settlement so delayed acquisition cleanup can find their proof. */
 export type ClaudeSessionExit = {
   observedAt: number
-  connection: ClaudeStreamJsonConnection
+  connection: ClaudeConnection.ClaudeStreamJsonConnection
   session: ClaudeSession
   error: Error
   /** The exit path's first proof attempt; retries must observe this result. */
-  closePromise?: Promise<boolean>
+  closePromise?: Promise<ClaudeConnection.ClaudeCloseOutcome>
   /** Shared lifecycle settlement for concurrent proof retries. */
   settlementPromise?: Promise<void>
   /** Never-rejecting cleanup/settlement barrier for exits observed before lifecycle publication. */
@@ -249,9 +245,10 @@ export type ClaudeSessionExit = {
 }
 
 export type ClaudeAcquisitionAttempt = {
-  connection: ClaudeStreamJsonConnection | null
+  connection: ClaudeConnection.ClaudeStreamJsonConnection | null
   prompts: ClaudePromptRegistry
   buffered: (() => void)[]
+  dispose?: () => void
   published: boolean
   cancelled: boolean
   exitProven: boolean
@@ -341,18 +338,25 @@ export class ClaudeAcquisitionRegistry {
 
 export async function cancelClaudeAcquisitionAttempt(
   attempt: ClaudeAcquisitionAttempt | undefined
-): Promise<boolean> {
+): Promise<ClaudeConnection.ClaudeCloseOutcome | undefined> {
   if (!attempt) {
-    return true
+    return undefined
   }
-  return cancelProcessAcquisition({
-    cancel: () => {
-      attempt.cancelled = true
-    },
-    connection: () => attempt.connection,
-    exitProven: () => attempt.exitProven,
-    finished: attempt.finished
-  })
+  attempt.cancelled = true
+  const before = attempt.connection
+  let outcome = await before?.closeOutcome()
+  if (outcome && !outcome.accepted) {
+    return outcome
+  }
+  // Completion starts before acquisition catch can wait on the same connection.
+  await attempt.finished
+  if (attempt.connection && attempt.connection !== before) {
+    outcome = await attempt.connection.closeOutcome()
+  }
+  if (outcome?.receive.state !== 'retained' && !attempt.published) {
+    attempt.dispose?.()
+  }
+  return outcome
 }
 
 export type ClaudeAcquireCallbacks = {

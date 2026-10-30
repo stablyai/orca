@@ -163,13 +163,9 @@ export type DeferredStructuredAgentSessionEventSink = {
 
 export type StructuredAgentSessionSinkWatermarks = {
   pauseQueuedBytes: number
-  maxQueuedBytes: number
   lowQueuedBytes: number
   pauseQueuedOperations: number
-  maxQueuedOperations: number
   lowQueuedOperations: number
-  maxLifecycleQueuedBytes: number
-  maxLifecycleQueuedOperations: number
 }
 
 export type StructuredAgentSessionReadingControl = {
@@ -179,13 +175,9 @@ export type StructuredAgentSessionReadingControl = {
 
 const DEFAULT_WATERMARKS: StructuredAgentSessionSinkWatermarks = {
   pauseQueuedBytes: 16 * 1024 * 1024,
-  maxQueuedBytes: 32 * 1024 * 1024,
   lowQueuedBytes: 8 * 1024 * 1024,
   pauseQueuedOperations: 512,
-  maxQueuedOperations: 1_024,
-  lowQueuedOperations: 256,
-  maxLifecycleQueuedBytes: 16 * 1024 * 1024,
-  maxLifecycleQueuedOperations: 1_024
+  lowQueuedOperations: 256
 }
 
 export function createDeferredStructuredAgentSessionEventSink(deps: {

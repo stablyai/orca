@@ -104,10 +104,21 @@ type InterruptingQuery = {
   }) => Promise<SDKControlInterruptResponse | undefined>
 }
 
-export function createClaudeControlSurface(query: Query): ClaudeControlSurface {
+export function createClaudeControlSurface(
+  query: Query,
+  unavailable?: () => Error | null
+): ClaudeControlSurface {
+  const run = <T>(
+    subtype: string,
+    request: () => Promise<T>,
+    timeoutMs?: number | null
+  ): Promise<T> => {
+    const error = unavailable?.()
+    return error ? Promise.reject(error) : runClaudeControl(subtype, request, timeoutMs)
+  }
   return {
     interrupt: (options) =>
-      runClaudeControl(
+      run(
         'interrupt',
         () =>
           (query as unknown as InterruptingQuery).interrupt(
@@ -117,46 +128,44 @@ export function createClaudeControlSurface(query: Query): ClaudeControlSurface {
       ),
     cancelAsyncMessage: (uuid, options) => {
       const cancel = claudeQueryAsyncCanceller(query)
-      return cancel
-        ? runClaudeControl('cancel_async_message', () => cancel(uuid), options?.timeoutMs).then(
-            (cancelled) => cancelled === true
-          )
-        : Promise.resolve(false)
+      return run(
+        'cancel_async_message',
+        () => (cancel ? cancel(uuid) : Promise.resolve(false)),
+        options?.timeoutMs
+      ).then((cancelled) => cancelled === true)
     },
     setModel: (model, options) =>
-      runClaudeControl('set_model', () => query.setModel(model), options?.timeoutMs).then(() => {}),
+      run('set_model', () => query.setModel(model), options?.timeoutMs).then(() => {}),
     setPermissionMode: (mode, options) =>
-      runClaudeControl(
-        'set_permission_mode',
-        () => query.setPermissionMode(mode),
-        options?.timeoutMs
-      ).then(() => {}),
-    applyFlagSettings: (settings, options) =>
-      runClaudeControl(
-        'apply_flag_settings',
-        () => query.applyFlagSettings(settings),
-        options?.timeoutMs
-      ).then(() => {}),
-    stopTask: (taskId, options) =>
-      runClaudeControl('stop_task', () => query.stopTask(taskId), options?.timeoutMs).then(
+      run('set_permission_mode', () => query.setPermissionMode(mode), options?.timeoutMs).then(
         () => {}
       ),
+    applyFlagSettings: (settings, options) =>
+      run('apply_flag_settings', () => query.applyFlagSettings(settings), options?.timeoutMs).then(
+        () => {}
+      ),
+    stopTask: (taskId, options) =>
+      run('stop_task', () => query.stopTask(taskId), options?.timeoutMs).then(() => {}),
     supportedModels: (options) =>
-      runClaudeControl('list_models', () => query.supportedModels(), options?.timeoutMs),
-    initializationResult: () =>
-      runClaudeControl('initialize', () => query.initializationResult(), null),
+      run('list_models', () => query.supportedModels(), options?.timeoutMs),
+    initializationResult: () => run('initialize', () => query.initializationResult(), null),
     getContextUsage: (options) =>
-      runClaudeControl('get_context_usage', () => query.getContextUsage(), options?.timeoutMs),
+      run('get_context_usage', () => query.getContextUsage(), options?.timeoutMs),
     getSettings: (options) => {
       const read = claudeQuerySettingsReader(query)
-      return read
-        ? runClaudeControl('get_settings', read, options?.timeoutMs)
-        : Promise.reject(
-            new ClaudeControlRequestError(
-              'get_settings',
-              'this SDK exposes no get_settings request'
-            )
-          )
+      return run(
+        'get_settings',
+        () =>
+          read
+            ? read()
+            : Promise.reject(
+                new ClaudeControlRequestError(
+                  'get_settings',
+                  'this SDK exposes no get_settings request'
+                )
+              ),
+        options?.timeoutMs
+      )
     }
   }
 }

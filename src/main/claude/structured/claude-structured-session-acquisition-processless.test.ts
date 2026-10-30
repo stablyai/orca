@@ -19,7 +19,11 @@ const IDENTITY: AgentSessionJournalIdentity = {
 describe('Claude structured processless acquisition', () => {
   it('classifies pre-pid error and close as processless with idempotent cleanup', async () => {
     const fault = new Error('spawn claude ENOENT')
-    const close = vi.fn(async () => true)
+    const closeOutcome = vi.fn(async () => ({
+      accepted: true,
+      physical: { root: 'exited' as const, tree: 'exited' as const, processless: true },
+      receive: { state: 'failed' as const, error: fault }
+    }))
     const openConnection: typeof openClaudeStreamJsonConnection = async (
       _launch,
       handlers = {}
@@ -43,7 +47,10 @@ describe('Claude structured processless acquisition', () => {
         applyFlagSettings: async () => {},
         send: async () => {},
         stopTask: async () => {},
-        close
+        closeOutcome,
+        close: async () => {
+          throw fault
+        }
       }
       return connection
     }
@@ -68,8 +75,8 @@ describe('Claude structured processless acquisition', () => {
 
     expect(error).toBeInstanceOf(AgentSessionPreSpawnError)
     expect(error).toMatchObject({ message: fault.message })
-    expect(close).toHaveBeenCalledOnce()
+    expect(closeOutcome).toHaveBeenCalledOnce()
     await expect(adapter.releaseAcquisition({ sessionId: IDENTITY.sessionId })).resolves.toBe(true)
-    expect(close).toHaveBeenCalledOnce()
+    expect(closeOutcome).toHaveBeenCalledOnce()
   })
 })

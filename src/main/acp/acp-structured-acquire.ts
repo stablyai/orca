@@ -11,10 +11,11 @@ import { providerSpawnedProcessIdentity } from '../provider-process/provider-spa
 import { acpPrivateTempConnect } from './acp-private-temp'
 import {
   assertAcpStartingSession,
+  assertAcpBeforeSpawn,
+  observeAcpChildExit,
   isAcpReadySession,
   type AcpStructuredChild
 } from './acp-structured-child'
-import type { AcpSessionEvent } from './acp-session-runtime'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import { acpAgentName } from './acp-structured-agent-definitions'
 import { AcpStructuredLane, acpLaneChildWorkDelivery } from './acp-structured-lane'
@@ -23,13 +24,15 @@ import { prepareAcpStructuredLaunch } from './acp-structured-launch-preparation'
 import { AcpStructuredOptions } from './acp-structured-options'
 import { AcpStructuredPrompts } from './acp-structured-prompts'
 import { AcpLoadHistory } from './acp-history-replay'
-import { asReattachHistory, routeAcpSessionEvent } from './acp-structured-session'
+import {
+  asReattachHistory,
+  routeAcpSessionEvent,
+  retireAcpSessionInput
+} from './acp-structured-session'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
 import type { AcpStructuredTurnsDeps } from './acp-structured-turns'
 import { RequestPermissionResponseSchema } from './generated/acp-protocol.generated'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-
-const MAX_EARLY_FRAMES = 2_048
 
 export async function acquireAcpStructuredSession(input: {
   acquire: StructuredAgentSessionAcquireInput
@@ -58,14 +61,11 @@ export async function acquireAcpStructuredSession(input: {
   if (!sink) {
     throw new AgentSessionPreSpawnError(new Error(`${spec.agent} chats need a journal sink`))
   }
-  const closedBeforeSpawn = () => {
-    if (input.abandoned()) {
-      throw new AgentSessionPreSpawnError(new Error(`${agentName} was closed before it started`))
-    }
-  }
+  const closedBeforeSpawn = () => assertAcpBeforeSpawn(input.abandoned, agentName)
   closedBeforeSpawn()
   const launch = await prepareAcpStructuredLaunch(deps, acquire, closedBeforeSpawn)
   let session: AcpStructuredChild | null = null
+  const current = () => session
   // Use a slot so closure writes do not conflict with control-flow narrowing.
   const slot: {
     lane: AcpStructuredLane | null
@@ -83,115 +83,14 @@ export async function acquireAcpStructuredSession(input: {
         (!session.turns.running && !session.turns.stopped && session.lane.openTurnId !== null))
   )
   const early: (() => void)[] = []
+  let earlySessionId: string | null = launch.resume?.sessionId ?? null
   const whenLane = (deliver: () => void): void => {
     if (slot.lane) {
       deliver()
-    } else if (early.length < MAX_EARLY_FRAMES) {
+    } else {
       early.push(deliver)
     }
   }
-  // Keep the last abort check and spawn synchronous when no temp directory is needed.
-  const connect = spec.privateTempDirectory
-    ? await acpPrivateTempConnect(deps, closedBeforeSpawn)
-    : deps.connect
-  const connection = connect(
-    {
-      command: launch.command,
-      args: launch.args,
-      cwd: launch.cwd,
-      env: launch.env,
-      envToDelete: launch.envToDelete
-    },
-    {
-      clientInfo: { name: 'orca', version: '1' },
-      ...(spec.signIn ? { signIn: spec.signIn } : {}),
-      onPermission: (request, context) => {
-        if (!isAcpReadySession(session) || !session.turns?.acceptsRequests) {
-          // No interactive prompt remains during Stop, steering or an agent-initiated turn.
-          return { outcome: { outcome: 'cancelled' } }
-        }
-        // Do not auto-approve questions or permissions enforced by the agent's own mode.
-        const claimed = spec.dialect.request?.('session/request_permission', request)
-        if (launch.fullAccess && !spec.permissionModeConfig && !claimed) {
-          const allow = request.options.find((option) => option.kind === 'allow_once')
-          if (allow) {
-            return { outcome: { outcome: 'selected', optionId: allow.optionId } }
-          }
-        }
-        return prompts
-          .handle('session/request_permission', request, context)
-          .then((reply) => RequestPermissionResponseSchema.parse(reply))
-      },
-      onRequest: (method, params, context) => prompts.handle(method, params, context),
-      onExtensionNotification: (method, params) =>
-        whenLane(() => {
-          if (slot.reattaching) {
-            slot.history?.keep(method, params)
-          }
-          slot.lane?.apply(
-            slot.lane.translator.notification(
-              method,
-              slot.reattaching ? asReattachHistory(params) : params,
-              now()
-            )
-          )
-        }),
-      onDiagnostic: (message) =>
-        deps.logger?.warn('ACP agent protocol diagnostic', {
-          scope: 'acp-diagnostic',
-          sessionId,
-          message
-        }),
-      // Protocol loss may leave the process alive; stdout EOF alone does not trigger this.
-      onClose: (error) => input.onConnectionLost(session, error),
-      // Read final diagnostics at process exit, which may follow stdout EOF.
-      onExit: () => input.onExit(session)
-    }
-  )
-  if (!spec.permissionModeConfig) {
-    options.applied.set('permissionMode', launch.fullAccess ? 'full-access' : 'ask')
-  }
-  // From here, cancellation closes this connection even before exit is proven.
-  input.track(connection)
-  connection.subscribe((event: AcpSessionEvent) =>
-    whenLane(() => {
-      if (slot.lane) {
-        if (slot.reattaching) {
-          slot.history?.keep(
-            'session/update',
-            event.kind === 'known' ? event.notification : event.raw
-          )
-        }
-        routeAcpSessionEvent({ lane: slot.lane, options }, event, now(), slot.reattaching)
-        if (
-          event.kind === 'known' &&
-          event.notification.update.sessionUpdate === 'available_commands_update'
-        ) {
-          events?.publish()
-        }
-      }
-      if (
-        isAcpReadySession(session) &&
-        !session.ended &&
-        event.kind === 'known' &&
-        event.notification.update.sessionUpdate === 'config_option_update'
-      ) {
-        deps.onEvent?.({
-          type: 'options-reported',
-          sessionId,
-          fence: acquire.fence,
-          acquisitionGeneration: generation,
-          reportedOptions: options.observedCurrent(spec.permissionModeConfig?.values),
-          catalogListing: { models: options.read().models }
-        })
-      }
-    })
-  )
-  const identity = providerSpawnedProcessIdentity(
-    acquire,
-    `${spec.agent} ACP agent`,
-    deps.readProcessStartTime
-  )
   // Begin the attach window before replaying queued frames.
   const makeLane = (providerSessionId: string, attaching = false): AcpStructuredLane => {
     const lane = new AcpStructuredLane({
@@ -234,6 +133,130 @@ export async function acquireAcpStructuredSession(input: {
     }
     return lane
   }
+  const finalizeInput = (error?: Error): void => {
+    // A received update supplies its provider identity even if the initialization reply lost the race.
+    if (!slot.lane && earlySessionId) {
+      makeLane(earlySessionId)
+    }
+    retireAcpSessionInput(session, slot.lane, now(), error)
+    slot.lane = null
+    slot.history = null
+    early.length = 0
+  }
+  // Keep the last abort check and spawn synchronous when no temp directory is needed.
+  const connect = spec.privateTempDirectory
+    ? await acpPrivateTempConnect(deps, closedBeforeSpawn)
+    : deps.connect
+  const connection = connect(
+    {
+      command: launch.command,
+      args: launch.args,
+      cwd: launch.cwd,
+      env: launch.env,
+      envToDelete: launch.envToDelete
+    },
+    {
+      clientInfo: { name: 'orca', version: '1' },
+      ...(spec.signIn ? { signIn: spec.signIn } : {}),
+      onPermission: (request, context) => {
+        if (!isAcpReadySession(session) || !session.turns?.acceptsRequests) {
+          // No interactive prompt remains during Stop, steering or an agent-initiated turn.
+          return { outcome: { outcome: 'cancelled' } }
+        }
+        // Do not auto-approve questions or permissions enforced by the agent's own mode.
+        const claimed = spec.dialect.request?.('session/request_permission', request)
+        if (launch.fullAccess && !spec.permissionModeConfig && !claimed) {
+          const allow = request.options.find((option) => option.kind === 'allow_once')
+          if (allow) {
+            return { outcome: { outcome: 'selected', optionId: allow.optionId } }
+          }
+        }
+        return prompts
+          .handle('session/request_permission', request, context)
+          .then((reply) => RequestPermissionResponseSchema.parse(reply))
+      },
+      onRequest: (method, params, context) => prompts.handle(method, params, context),
+      onExtensionNotification: (method, params) => {
+        if (
+          typeof params === 'object' &&
+          params !== null &&
+          'sessionId' in params &&
+          typeof params.sessionId === 'string'
+        ) {
+          earlySessionId ??= params.sessionId
+        }
+        whenLane(() => {
+          if (slot.reattaching) {
+            slot.history?.keep(method, params)
+          }
+          slot.lane?.apply(
+            slot.lane.translator.notification(
+              method,
+              slot.reattaching ? asReattachHistory(params) : params,
+              now()
+            )
+          )
+        })
+      },
+      onDiagnostic: (message) =>
+        deps.logger?.warn('ACP agent protocol diagnostic', {
+          scope: 'acp-diagnostic',
+          sessionId,
+          message
+        }),
+      // Protocol loss may leave the process alive; stdout EOF alone does not trigger this.
+      onClose: (error) => input.onConnectionLost(session, error),
+      onInputComplete: finalizeInput,
+      // Read final diagnostics at process exit, which may follow stdout EOF.
+      onExit: (_error, context) =>
+        observeAcpChildExit(current, now(), context.inputDone, input.onExit, input.onConnectionLost)
+    }
+  )
+  if (!spec.permissionModeConfig) {
+    options.applied.set('permissionMode', launch.fullAccess ? 'full-access' : 'ask')
+  }
+  connection.subscribe((event) => {
+    earlySessionId ??= event.kind === 'known' ? event.notification.sessionId : event.sessionId
+    whenLane(() => {
+      if (slot.lane) {
+        if (slot.reattaching) {
+          slot.history?.keep(
+            'session/update',
+            event.kind === 'known' ? event.notification : event.raw
+          )
+        }
+        routeAcpSessionEvent({ lane: slot.lane, options }, event, now(), slot.reattaching)
+        if (
+          event.kind === 'known' &&
+          event.notification.update.sessionUpdate === 'available_commands_update'
+        ) {
+          events?.publish()
+        }
+      }
+      if (
+        isAcpReadySession(session) &&
+        !session.ended &&
+        event.kind === 'known' &&
+        event.notification.update.sessionUpdate === 'config_option_update'
+      ) {
+        deps.onEvent?.({
+          type: 'options-reported',
+          sessionId,
+          fence: acquire.fence,
+          acquisitionGeneration: generation,
+          reportedOptions: options.observedCurrent(spec.permissionModeConfig?.values),
+          catalogListing: { models: options.read().models }
+        })
+      }
+    })
+  })
+  // Install every receive route before cancellation can synchronously end stdin.
+  input.track(connection)
+  const identity = providerSpawnedProcessIdentity(
+    acquire,
+    `${spec.agent} ACP agent`,
+    deps.readProcessStartTime
+  )
   await connection.spawned
   const pid = connection.pid
   if (pid === undefined) {
@@ -254,7 +277,6 @@ export async function acquireAcpStructuredSession(input: {
     turns: null,
     options,
     prompts,
-    childStops: undefined,
     closeRequested: false,
     journalClosed: null,
     ended: false,
@@ -285,16 +307,9 @@ export async function acquireAcpStructuredSession(input: {
         },
         onSettled: input.onSettled,
         onSessionLost: (error) => input.onConnectionLost(child, error)
-      }),
-    dispose: () => {
-      slot.lane?.dispose()
-      early.length = 0
-    }
+      })
   }
   session = child
   assertAcpStartingSession(child, input.abandoned)
-  return {
-    acquisition: { process, acquisitionGeneration: generation },
-    session: child
-  }
+  return { acquisition: { process, acquisitionGeneration: generation }, session: child }
 }

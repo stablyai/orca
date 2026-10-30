@@ -96,6 +96,10 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   }
 
   private deliver(attempt: ClaudeAcquisitionAttempt, sessionId: string, event: () => void): void {
+    if (!attempt.published && attempt.cancelled) {
+      event()
+      return
+    }
     if (!attempt.published) {
       attempt.buffered.push(event)
       return

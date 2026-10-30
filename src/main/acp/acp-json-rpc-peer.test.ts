@@ -26,7 +26,7 @@ afterEach(() => {
 })
 
 describe('ACP JSON-RPC peer', () => {
-  it('drains only notifications across stdin end while calls and incoming hooks are closed', async () => {
+  it('retains already sent responses across terminal input drain while new actions and hooks reject', async () => {
     const entered = deferred<AbortSignal>()
     const answer = deferred<string>()
     const onRequest = vi.fn<NonNullable<AcpPeerHandlers['onRequest']>>(
@@ -38,26 +38,25 @@ describe('ACP JSON-RPC peer', () => {
     const onNotification = vi.fn()
     const onClose = vi.fn()
     const { peer, agent } = fixture({ onRequest, onNotification, onClose })
-    const rejected = expect(peer.request('pending', {})).rejects.toBeInstanceOf(
-      AcpConnectionClosedError
-    )
+    const received = peer.request('pending', {})
     void agent.request('before-close', '_question', {})
     const signal = await entered.promise
     agent.stdout.write('{"jsonrpc":"2.0","method":"final-outcome",')
     peer.drainNotifications()
     expect(peer.closed).toBe(true)
     expect(signal.aborted).toBe(true)
-    await rejected
     await expect(peer.notify('session/cancel', {})).rejects.toBeInstanceOf(AcpConnectionClosedError)
     await expect(peer.request('new', {})).rejects.toBeInstanceOf(AcpConnectionClosedError)
     agent.stdin.end()
     agent.stdout.write('"params":{"status":"cancelled"}}\n')
     agent.send({ jsonrpc: '2.0', id: 'after-close', method: '_question', params: {} })
+    agent.send({ jsonrpc: '2.0', id: 1, result: 'received reply' })
+    await expect(received).resolves.toBe('received reply')
     answer.resolve('too late')
     await tick()
     expect(onNotification).toHaveBeenCalledExactlyOnceWith('final-outcome', { status: 'cancelled' })
     expect(onRequest).toHaveBeenCalledOnce()
-    expect(onClose).toHaveBeenCalledOnce()
+    expect(onClose).not.toHaveBeenCalled()
     peer.close()
     agent.notify('final-outcome', { status: 'cancelled' })
     expect(onNotification).toHaveBeenCalledOnce()
@@ -383,3 +382,55 @@ describe('ACP JSON-RPC peer', () => {
     input.destroy()
   })
 })
+
+it.each([true, false])(
+  'accepts a complete final envelope only at natural EOF (natural=%s)',
+  async (natural) => {
+    const seen = vi.fn()
+    const other = vi.fn()
+    const { peer, agent } = fixture(
+      { onNotification: seen, onOtherLine: other },
+      { closeOnInputEnd: false }
+    )
+    agent.stdout.write('{"jsonrpc":"2.0","method":"final","params":{"body":"whole"}}')
+    if (natural) {
+      agent.stdout.end()
+      await tick()
+    } else {
+      vi.useFakeTimers()
+      peer.drainNotifications()
+      const done = peer.finishInput()
+      await vi.advanceTimersByTimeAsync(1_000)
+      await done
+    }
+    expect(seen.mock.calls).toEqual(natural ? [['final', { body: 'whole' }]] : [])
+    expect(other.mock.calls).toEqual(
+      natural ? [] : [['{"jsonrpc":"2.0","method":"final","params":{"body":"whole"}}']]
+    )
+    peer.close()
+    expect(seen).toHaveBeenCalledTimes(natural ? 1 : 0)
+  }
+)
+
+it.each(['close', 'source-error'] as const)(
+  'transfers resident stdout before %s retires inbound dispatch',
+  async (ending) => {
+    const order: string[] = []
+    const { peer, agent } = fixture(
+      {
+        onNotification: (method) => order.push(method),
+        onClose: (error) => order.push(error.message)
+      },
+      { closeOnInputEnd: false }
+    )
+    agent.stdout.pause()
+    agent.notify('complete-result', { text: 'whole output' })
+    expect(agent.stdout.readableLength).toBeGreaterThan(0)
+    const failure = new Error('actual source failure')
+    void (ending === 'source-error' ? agent.stdout.emit('error', failure) : peer.close(failure))
+    expect(order).toEqual(['complete-result', failure.message])
+    void (ending === 'source-error'
+      ? await expect(peer.finishInput()).rejects.toThrow(failure.message)
+      : await expect(peer.finishInput()).resolves.toBeUndefined())
+  }
+)

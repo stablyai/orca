@@ -20,6 +20,7 @@ import { workspacePackageManifests } from './workspace-source-exports.mjs'
 // lockfile-only/ignore-scripts checks resolution without node_modules or native builds; patch application is tested separately below.
 const PROJECT_DIR = resolve(import.meta.dirname, '../..')
 const WINDOWS_PROCESS_TREE_PATCH = '@vscode__windows-process-tree@0.8.0.patch'
+const CLAUDE_SDK_PATCH = '@anthropic-ai__claude-agent-sdk@0.3.284.patch'
 
 // Use pnpm-cli-invocation’s Windows shim resolver; omit shell because runProcessSync rejects it and handles interpreter routing itself.
 function resolvePnpmInvocation() {
@@ -76,25 +77,30 @@ describe('patched dependencies', () => {
     // Allow the full 300s spawn budget beyond Vitest’s 30s case default.
   }, 300_000)
 
-  // lockfile-only never applies patches; install one real dependency and check its marker to cover application without a full install.
-  it('materializes the patched command-line reader on a real install', () => {
+  // Lockfile-only never applies patches; materialize the native reader and SDK in one minimal install.
+  it('materializes the patched command-line reader and SDK runtime/declarations on a real install', () => {
     const pnpm = resolvePnpmInvocation()
     expect(pnpm, 'pnpm must be installed; it is the only thing that can check this').not.toBeNull()
 
     const scratch = mkdtempSync(join(tmpdir(), 'orca-patch-apply-'))
     try {
       mkdirSync(join(scratch, 'config', 'patches'), { recursive: true })
-      copyFileSync(
-        join(PROJECT_DIR, 'config', 'patches', WINDOWS_PROCESS_TREE_PATCH),
-        join(scratch, 'config', 'patches', WINDOWS_PROCESS_TREE_PATCH)
-      )
+      for (const patch of [WINDOWS_PROCESS_TREE_PATCH, CLAUDE_SDK_PATCH]) {
+        copyFileSync(
+          join(PROJECT_DIR, 'config', 'patches', patch),
+          join(scratch, 'config', 'patches', patch)
+        )
+      }
       writeFileSync(
         join(scratch, 'package.json'),
         `${JSON.stringify(
           {
             name: 'orca-patch-apply-probe',
             version: '1.0.0',
-            dependencies: { '@vscode/windows-process-tree': '0.8.0' }
+            dependencies: {
+              '@vscode/windows-process-tree': '0.8.0',
+              '@anthropic-ai/claude-agent-sdk': '0.3.284'
+            }
           },
           null,
           2
@@ -104,7 +110,8 @@ describe('patched dependencies', () => {
         join(scratch, 'pnpm-workspace.yaml'),
         'packages: []\n' +
           'patchedDependencies:\n' +
-          `  '@vscode/windows-process-tree@0.8.0': config/patches/${WINDOWS_PROCESS_TREE_PATCH}\n`
+          `  '@vscode/windows-process-tree@0.8.0': config/patches/${WINDOWS_PROCESS_TREE_PATCH}\n` +
+          `  '@anthropic-ai/claude-agent-sdk@0.3.284': config/patches/${CLAUDE_SDK_PATCH}\n`
       )
 
       const result = runProcessSync({
@@ -129,6 +136,12 @@ describe('patched dependencies', () => {
       expect(materialized).toContain('kProcessCommandLineInformation')
       // Require upstream reader removal, not merely a supplementary patched reader.
       expect(materialized).not.toContain('ReadProcessMemory')
+      const sdk = join(scratch, 'node_modules', '@anthropic-ai', 'claude-agent-sdk')
+      for (const file of ['sdk.mjs', 'sdk.d.ts']) {
+        const materializedSdk = readFileSync(join(sdk, file), 'utf8')
+        expect(materializedSdk).toContain('processReceiveLifecycle')
+        expect(materializedSdk).toContain('receiveCompleted')
+      }
     } finally {
       removeTreeSync(scratch)
     }

@@ -63,7 +63,6 @@ async function liveOwner(
   options: {
     missingTranscript?: boolean
     beforeOpen?: (frame: (message: Record<string, unknown>) => void) => void
-    lifecycleLimit?: number
     resumeLeafUuid?: string | null
     resumesTranscript?: boolean
   } = {}
@@ -86,10 +85,7 @@ async function liveOwner(
   }
   const journal = await journals.open({ identity: identityFor(), stateDirectory: root })
   const deferred = createDeferredStructuredAgentSessionEventSink({
-    ...testEventSinkLogging(),
-    ...(options.lifecycleLimit === undefined
-      ? {}
-      : { watermarks: { maxLifecycleQueuedOperations: options.lifecycleLimit } })
+    ...testEventSinkLogging()
   })
   deferred.bind({ journal, fence: FENCE, publish: () => {} })
   const store = { record: liveRecord() }
@@ -267,20 +263,21 @@ describe('Claude durable resume point at turn end', () => {
     expect(persistedHandles).toEqual([expect.objectContaining({ leafUuid: 'resumed-at' })])
   })
 
-  it('keeps the leaf after refused finals even when every admitted write succeeds', async () => {
+  it('advances the leaf after all received finals land under pressure', async () => {
     const { adapter, store, turn, deferred, journal, persistedHandles } = await liveOwner(
       undefined,
-      { lifecycleLimit: 1 }
+      {}
     )
     deferred.unbind()
     await turn('u1', 'a1')
     deferred.bind({ journal, fence: FENCE, publish: () => {} })
     expect(await deferred.drained()).toEqual({ ok: true })
+    await tick()
     expect(store.record.providerHandleChain.at(-1)?.handle).toMatchObject({
-      resumeCursor: 'resumed-at'
+      resumeCursor: 'a1'
     })
     await adapter.closeAll()
-    expect(persistedHandles).toEqual([expect.objectContaining({ leafUuid: 'resumed-at' })])
+    expect(persistedHandles).toEqual([expect.objectContaining({ leafUuid: 'a1' })])
   })
 
   it('publishes the result while journal coverage is pending, and retains the leaf on failure', async () => {

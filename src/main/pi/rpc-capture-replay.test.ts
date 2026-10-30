@@ -70,8 +70,6 @@ async function replay(
     agent: 'pi',
     generation: 'gen-pi',
     namespace: 'pi-session',
-    pauseReading: vi.fn(),
-    resumeReading: vi.fn(),
     onInputAccepted: accepted,
     onFailed: failed
   })

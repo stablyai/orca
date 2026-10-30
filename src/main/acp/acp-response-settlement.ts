@@ -8,31 +8,44 @@ export function callAcpSession<T>(
   method: string,
   params: unknown,
   schema: z.ZodType<T>,
-  answered: ((signedIn: boolean) => void) | undefined
+  answered: ((signedIn: boolean) => void) | undefined,
+  received?: (response: AcpSessionResponse<T>) => void
 ): Promise<T> {
   return peer.request(method, params, {
     ...acpStepBound(method),
     settle: (response) => {
-      if ('error' in response) {
-        const error = response.error
-        if (error instanceof AcpAgentError && error.code === -32000) {
-          answered?.(false)
-          throw acpAuthRequiredError(error)
+      const normalize = (): T => {
+        if ('error' in response) {
+          const error = response.error
+          if (error instanceof AcpAgentError && error.code === -32000) {
+            answered?.(false)
+            throw acpAuthRequiredError(error)
+          }
+          throw error
         }
+        const parsed = schema.safeParse(response.value)
+        if (!parsed.success) {
+          throw new AcpInvalidResponseError(
+            `Invalid ACP response: ${method}`,
+            response.value,
+            parsed.error.issues
+          )
+        }
+        if (['session/new', 'session/load', 'session/resume'].includes(method)) {
+          answered?.(true)
+        }
+        return parsed.data
+      }
+      let value: T
+      try {
+        value = normalize()
+      } catch (cause) {
+        const error = cause instanceof Error ? cause : new Error(String(cause))
+        received?.({ error })
         throw error
       }
-      const parsed = schema.safeParse(response.value)
-      if (!parsed.success) {
-        throw new AcpInvalidResponseError(
-          `Invalid ACP response: ${method}`,
-          response.value,
-          parsed.error.issues
-        )
-      }
-      if (['session/new', 'session/load', 'session/resume'].includes(method)) {
-        answered?.(true)
-      }
-      return parsed.data
+      received?.({ value })
+      return value
     }
   })
 }
@@ -61,3 +74,5 @@ export function readAcpResponse(
   }
   return response.value
 }
+
+export type AcpSessionResponse<T> = { value: T } | { error: Error }

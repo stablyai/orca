@@ -1,5 +1,11 @@
+import { createProviderSourceCompletion } from '../provider-process/provider-source-completion'
 import type { Readable, Writable } from 'node:stream'
-import { z } from 'zod'
+import {
+  dispatchJsonlRpcRecord,
+  type JsonlRpcRecord,
+  type JsonlRpcPendingRequest
+} from './peer-record-dispatch'
+export { JsonlRpcResponseError, type JsonlRpcRecord } from './peer-record-dispatch'
 import {
   createIncrementalNdjsonFramer,
   encodeNdjson
@@ -13,30 +19,10 @@ import {
 } from './peer-limits'
 import { settleOversizedJsonlRecord, type JsonlRpcRequestOptions } from './peer-oversized-record'
 
-const recordSchema = z.looseObject({ type: z.string() })
-const responseSchema = z.looseObject({
-  type: z.literal('response'),
-  id: z.string().optional(),
-  command: z.string(),
-  success: z.boolean(),
-  data: z.unknown().optional(),
-  error: z.string().optional()
-})
-
-export type JsonlRpcRecord = z.infer<typeof recordSchema>
 export class JsonlRpcStreamClosedError extends Error {
   constructor() {
     super('Agent JSON-lines RPC stream closed')
     this.name = 'JsonlRpcStreamClosedError'
-  }
-}
-export class JsonlRpcResponseError extends Error {
-  constructor(
-    readonly command: string,
-    message: string
-  ) {
-    super(message)
-    this.name = 'JsonlRpcResponseError'
   }
 }
 export type JsonlRpcPeerHandlers = {
@@ -47,24 +33,19 @@ export type JsonlRpcPeerHandlers = {
   onClose?: (error: Error) => void
   onDiagnostic?: (message: string) => void
 }
-type PendingRequest = {
-  command: string
-  resolve: (value: unknown) => void
-  reject: (error: Error) => void
-  timer?: ReturnType<typeof setTimeout>
-}
-
 /** Transport only: a dialect owns turns, dialogs, and session handles. */
 export class JsonlRpcPeer {
   private readonly limits: Required<JsonlRpcPeerOptions>
-  private readonly pending = new Map<string, PendingRequest>()
+  private readonly pending = new Map<string, JsonlRpcPendingRequest>()
   private readonly writer: ProviderStdioWriteQueue
   private readonly framer: ReturnType<typeof createIncrementalNdjsonFramer>
   private nextId = 0
   private nextOptionalId = 0
+  private closing = false
   private terminalError?: Error
   private inputEndError?: Error
   private readingPaused = false
+  private readonly source: ReturnType<typeof createProviderSourceCompletion>
 
   constructor(
     private readonly input: Readable,
@@ -106,11 +87,18 @@ export class JsonlRpcPeer {
         shouldPause: () => this.readingPaused || this.closed
       }
     )
-    input.setEncoding('utf8')
-    input.on('data', this.onData)
-    input.on('end', this.onEnd)
-    input.on('close', this.onEnd)
-    input.on('error', this.onError)
+    this.source = createProviderSourceCompletion(input, {
+      data: this.onData,
+      end: (natural) => {
+        this.framer.finish(natural)
+        this.onEnd()
+      },
+      error: this.onError,
+      draining: () => {
+        this.readingPaused = false
+        this.framer.drain()
+      }
+    })
     output.on('finish', this.onEnd)
     output.on('close', this.onEnd)
     output.on('error', this.onError)
@@ -120,15 +108,26 @@ export class JsonlRpcPeer {
   }
 
   get closed(): boolean {
-    return this.terminalError !== undefined
+    return this.closing || this.terminalError !== undefined
   }
 
   /** A process exit can precede the last bytes already written to stdout. */
-  finishOnInputEnd(error: Error): void {
-    this.inputEndError = error
+  beginInputCompletion(error: Error): void {
+    this.inputEndError ??= error
+    this.output.removeListener('finish', this.onEnd)
+    this.output.removeListener('close', this.onEnd)
+    this.writer.close(error)
+  }
+
+  finishOnInputEnd(error: Error): Promise<void> {
+    this.beginInputCompletion(error)
+    return this.source.finish()
   }
 
   pauseReading(): void {
+    if (this.source.ending) {
+      return
+    }
     this.readingPaused = true
     this.input.pause()
   }
@@ -153,8 +152,10 @@ export class JsonlRpcPeer {
     params: Record<string, unknown> = {},
     options: JsonlRpcRequestOptions = {}
   ): Promise<unknown> {
-    if (this.terminalError) {
-      return Promise.reject(this.terminalError)
+    if (this.closed || this.inputEndError) {
+      return Promise.reject(
+        this.terminalError ?? this.inputEndError ?? new Error('Agent JSON-lines RPC stream closed')
+      )
     }
     if (this.pending.size >= this.limits.maxPendingRequests) {
       return Promise.reject(new Error('JSON-lines RPC pending request capacity exceeded'))
@@ -190,7 +191,9 @@ export class JsonlRpcPeer {
       this.pending.set(id, { command, resolve, reject, timer })
       void this.send({ ...params, type: command, id }, controller.signal).catch(
         (error: unknown) => {
-          this.rejectPending(id, error instanceof Error ? error : new Error(String(error)))
+          if (!this.inputEndError) {
+            this.rejectPending(id, error instanceof Error ? error : new Error(String(error)))
+          }
         }
       )
     })
@@ -198,8 +201,10 @@ export class JsonlRpcPeer {
 
   /** The dialect may track acknowledgements independently of transport correlation. */
   send(record: JsonlRpcRecord, signal?: AbortSignal): Promise<void> {
-    if (this.terminalError) {
-      return Promise.reject(this.terminalError)
+    if (this.closed || this.inputEndError) {
+      return Promise.reject(
+        this.terminalError ?? this.inputEndError ?? new Error('Agent JSON-lines RPC stream closed')
+      )
     }
     try {
       return this.writer.write(encodeNdjson(record, this.limits.maxLineBytes), signal)
@@ -209,14 +214,18 @@ export class JsonlRpcPeer {
   }
 
   close(error: Error = new Error('Agent JSON-lines RPC stream closed')): void {
-    if (this.terminalError) {
+    if (this.closed) {
       return
     }
+    this.source?.dispose()
+    // Transfer the retained complete tail before close observers retire its timeline lane.
+    try {
+      this.framer.drain()
+    } catch (cause) {
+      error = cause instanceof Error ? cause : new Error(String(cause))
+    }
+    this.closing = true
     this.terminalError = error
-    this.input.removeListener('data', this.onData)
-    this.input.removeListener('end', this.onEnd)
-    this.input.removeListener('close', this.onEnd)
-    detachProviderStreamErrorHandler(this.input, this.onError)
     this.output.removeListener('finish', this.onEnd)
     this.output.removeListener('close', this.onEnd)
     detachProviderStreamErrorHandler(this.output, this.onError)
@@ -262,53 +271,15 @@ export class JsonlRpcPeer {
   }
 
   private dispatch(value: unknown): void {
-    if (this.closed) {
+    if (this.terminalError) {
       return
     }
-    const parsed = recordSchema.safeParse(value)
-    if (!parsed.success) {
-      const identified = z.object({ id: z.string() }).safeParse(value)
-      if (identified.success) {
-        this.rejectPending(identified.data.id, new Error('Invalid agent RPC response'))
-      }
-      this.diagnose('Ignored invalid agent RPC record')
-      return
-    }
-    const record = parsed.data
-    if (
-      record.type !== 'response' &&
-      record.type !== 'extension_ui_request' &&
-      typeof record.id === 'string' &&
-      this.pending.has(record.id) &&
-      (Object.hasOwn(record, 'command') || Object.hasOwn(record, 'success'))
-    ) {
-      this.rejectPending(record.id, new Error('Invalid agent RPC response'))
-      return
-    }
-    if (record.type === 'response' && typeof record.id === 'string') {
-      const pending = this.pending.get(record.id)
-      if (!pending) {
-        return
-      }
-      const response = responseSchema.safeParse(record)
-      if (!response.success || response.data.command !== pending.command) {
-        this.rejectPending(record.id, new Error('Invalid agent RPC response'))
-        return
-      }
-      this.pending.delete(record.id)
-      clearTimeout(pending.timer)
-      if (response.data.success) {
-        pending.resolve(response.data.data)
-      } else {
-        pending.reject(
-          new JsonlRpcResponseError(
-            pending.command,
-            response.data.error ?? `Agent rejected ${pending.command}`
-          )
-        )
-      }
-      return
-    }
-    this.handlers.onRecord?.(record)
+    dispatchJsonlRpcRecord(
+      value,
+      this.pending,
+      (id, error) => this.rejectPending(id, error),
+      this.handlers.onRecord,
+      (message) => this.diagnose(message)
+    )
   }
 }

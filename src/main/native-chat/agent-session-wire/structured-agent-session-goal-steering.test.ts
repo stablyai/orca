@@ -8,7 +8,7 @@ import {
   resolvedCodexMessageOptions
 } from '../../codex/codex-structured-message-options'
 import { optionSession } from '../../codex/codex-structured-option-session.test-fixture'
-import { dispatchCodexTurn } from '../../codex/codex-structured-turn-start'
+import { dispatchCodexTurn } from '../../codex/codex-structured-turn-dispatch'
 import {
   createQueuedMessageTestRig,
   eventually,

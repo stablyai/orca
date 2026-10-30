@@ -224,8 +224,8 @@ BEGIN SELECT RAISE(ABORT, 'second step refused'); END`)
     ])
   })
 
-  it('refuses a transition whole, so none of its steps ever lands', async () => {
-    const { journal, deferred, sink, bind } = await rig({ maxQueuedOperations: 1 })
+  it('admits complete transitions after crossing the pacing watermark', async () => {
+    const { journal, deferred, sink, bind } = await rig({ pauseQueuedOperations: 1 })
     const step = (recordId: string) =>
       itemStep(() => ({ identity: identity(recordId), body: tool(recordId, 'running') }))
     const admitted = { lifecycle: false, publish: false, steps: [step('a')] }
@@ -233,14 +233,15 @@ BEGIN SELECT RAISE(ABORT, 'second step refused'); END`)
 
     expect(sink.tryAppendTransition?.(admitted)).toEqual({ accepted: true })
     expect(sink.tryAppendTransition?.(refused)).toEqual({
-      accepted: false,
-      reason: 'backpressure'
+      accepted: true
     })
     bind()
     await deferred.drained()
 
     expect(journal.snapshot().items.map((item) => item.itemId)).toEqual([
-      agentJournalItemKey(identity('a'))
+      agentJournalItemKey(identity('a')),
+      agentJournalItemKey(identity('b')),
+      agentJournalItemKey(identity('c'))
     ])
   })
 

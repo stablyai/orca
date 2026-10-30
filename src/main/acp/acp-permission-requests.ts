@@ -1,3 +1,5 @@
+import { AcpRpcError } from './acp-errors'
+import type { AcpSessionRuntimeOptions } from './acp-session-runtime-options'
 import { z } from 'zod'
 import type { AcpRequestContext } from './acp-json-rpc-peer'
 import {
@@ -141,4 +143,29 @@ export function answerAcpPermission(
         (error) => finish(cancelled, `handler failed: ${String(error)}`)
       )
   })
+}
+
+export function handleAcpClientRequest(
+  method: string,
+  params: unknown,
+  context: AcpRequestContext,
+  options: Pick<AcpSessionRuntimeOptions, 'onRequest' | 'onPermission'>,
+  sessionId: () => string | undefined,
+  diagnose: (message: string) => void
+): unknown {
+  if (method !== 'session/request_permission') {
+    if (!options.onRequest) {
+      throw new AcpRpcError(-32601, `Unknown ACP client method: ${method}`)
+    }
+    return options.onRequest(method, params, context)
+  }
+  const request = readAcpPermissionRequest(params, diagnose)
+  if (!request) {
+    throw new AcpRpcError(-32602, 'Invalid ACP permission request')
+  }
+  // The caller decides whether agent-initiated turns may request permission.
+  if (request.sessionId !== sessionId()) {
+    return { outcome: { outcome: 'cancelled' } }
+  }
+  return answerAcpPermission(request, context, options.onPermission, diagnose)
 }

@@ -90,9 +90,20 @@ export function fakeClaude(providerSession: string) {
         }
       },
       exitVerdict: selfExit?.exitVerdict ?? { root: 'live', tree: 'unverifiable' },
-      close: async () => {
+      closeOutcome: async () => {
         connection.closed = true
-        return selfExit === null || selfExit.exitVerdict.tree === 'exited'
+        return {
+          accepted: selfExit === null || selfExit.exitVerdict.tree === 'exited',
+          physical: connection.exitVerdict,
+          receive: { state: 'complete' }
+        }
+      },
+      close: async () => {
+        const outcome = await connection.closeOutcome()
+        if (outcome.receive.state === 'failed') {
+          throw outcome.receive.error
+        }
+        return outcome.accepted
       }
     }
     connections.push(connection)

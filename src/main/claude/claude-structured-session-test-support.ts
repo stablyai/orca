@@ -1,3 +1,5 @@
+import type { FakeConnection } from './claude-structured-session-test-contract'
+export type { FakeConnection } from './claude-structured-session-test-contract'
 import type {
   AgentJournalMessageItem,
   AgentSessionJournalIdentity
@@ -5,8 +7,6 @@ import type {
 import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session-caller-env'
 import type {
   ClaudeStreamJsonConnection,
-  ClaudeStreamJsonConnectionHandlers,
-  ClaudeStreamJsonLaunch,
   openClaudeStreamJsonConnection
 } from './claude-stream-json-connection'
 import {
@@ -40,16 +40,6 @@ export function identityFor(sessionId = 'session-1'): AgentSessionJournalIdentit
 }
 
 type Route = (params: Record<string, unknown> | undefined) => unknown
-
-export type FakeConnection = Omit<ClaudeStreamJsonConnection, 'closed' | 'exitVerdict'> & {
-  closed: boolean
-  exitVerdict: ClaudeStreamJsonConnection['exitVerdict']
-  launch: ClaudeStreamJsonLaunch
-  handlers: ClaudeStreamJsonConnectionHandlers
-  calls: { subtype: string; params?: Record<string, unknown> }[]
-  sent: Record<string, unknown>[]
-  closeCount: number
-}
 
 export function fakeClaude(
   options: {
@@ -215,6 +205,11 @@ export function fakeClaude(
         }
       },
       exitVerdict: options.unprovenCloseVerdict ?? { root: 'live', tree: 'unverifiable' },
+      closeOutcome: async () => ({
+        accepted: await connection.close(),
+        physical: connection.exitVerdict,
+        receive: { state: 'complete' }
+      }),
       close: async () => {
         connection.closeCount += 1
         connection.closed = true

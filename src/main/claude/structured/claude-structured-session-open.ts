@@ -5,6 +5,7 @@ import type {
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import { readClaudeStructuredSessionSettings } from '../claude-structured-session-acquisition-options'
 import { openClaudeSession, readClaudeStartupFacts } from './claude-structured-session-startup'
+import { bindClaudeJournalReadingControl } from '../claude-structured-session-journal-control'
 import { catchUpClaudeTranscript } from '../claude-transcript-catch-up'
 import type {
   ClaudeSession,
@@ -88,6 +89,17 @@ export async function openClaudeStructuredSession(input: {
       request.signal
     )
     current()
+  }
+  // Initialization needs its control replies and startup proof before source pacing can pause reads.
+  const unbindContext = session.unbindReadingControl
+  const unbindReading = bindClaudeJournalReadingControl(
+    session.events,
+    session.connection,
+    session.translator
+  )
+  session.unbindReadingControl = () => {
+    unbindReading?.()
+    unbindContext?.()
   }
   return { link: session.link, ...result }
 }

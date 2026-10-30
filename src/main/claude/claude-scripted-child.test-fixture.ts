@@ -109,6 +109,11 @@ export const claudeScriptedChild: ScriptedAgentChildFactory = () => {
           handlers.onMessage?.({ ...result('success'), session_id: providerSessionId, uuid: id })
         }
       },
+      closeOutcome: async () => ({
+        accepted: await connection.close(),
+        physical: connection.exitVerdict,
+        receive: { state: 'complete' }
+      }),
       close: async () => {
         if (!connection.closed) {
           connection.closed = true
