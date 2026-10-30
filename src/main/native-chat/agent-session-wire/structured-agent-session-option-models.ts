@@ -13,7 +13,11 @@ export type StructuredAgentSessionOptionProjection = {
 }
 
 export type StructuredAgentSessionLiveOptions = AgentSessionOptionsResult & {
+  /** Child/request-scoped actual or raw future intent; never serialized as a callback. */
+  projectCurrent?: (saved: Readonly<Record<string, string>>) => AgentSessionOptionsResult['current']
   catalogListing?: AgentModelCatalogLiveListing
+  /** The running CLI cannot change effort mid-chat, whatever its catalog lists. */
+  effortFixed?: true
 }
 
 export type StructuredAgentSessionRestingOptions = Pick<
@@ -64,4 +68,16 @@ export function structuredAgentSessionCapabilityView(
       (row) => row.serviceTiers?.map((tier) => tier.value) ?? []
     )
   }
+}
+
+export function confirmedCurrentOptions(
+  current: AgentSessionOptionsResult['current'],
+  reported: AgentSessionOptionsResult['current'],
+  confirmed = reported.confirmed
+): AgentSessionOptionsResult['current']['confirmed'] {
+  return confirmed?.filter((key) =>
+    key === 'model' || key === 'effort' || key === 'fastMode' || key === 'serviceTier'
+      ? current[key] === reported[key]
+      : false
+  )
 }

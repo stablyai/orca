@@ -23,6 +23,9 @@ export type PtyProcessInspectionOptions = {
   ignoreDetached?: boolean
   /** Name-only cadence polls may use cheap captures and omit evidence; evidence consumers must never set this. */
   steadyState?: boolean
+  /** Also reach a session the daemon still runs that no window has reattached since a relaunch.
+   *  WSL move gate only: other callers keep reading such a session as gone. */
+  includeUnattached?: boolean
 }
 
 export async function inspectPtyProviderProcess(
@@ -30,7 +33,8 @@ export async function inspectPtyProviderProcess(
   ptyId: string,
   options?: PtyProcessInspectionOptions
 ): Promise<PtyProcessInspection> {
-  if (provider.hasPty?.(ptyId) === false) {
+  // The daemon's own inspect still refuses a session it no longer runs.
+  if (options?.includeUnattached !== true && provider.hasPty?.(ptyId) === false) {
     throw new Error('terminal_gone')
   }
   const inspectProcess = (provider as CompletionSensitivePtyProvider).inspectProcess

@@ -8,7 +8,7 @@ import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { AgentSessionRewindFork } from '../../shared/agent-session-rewind'
-import { claudeSessionIdForOrcaSession } from '../claude/claude-structured-launch-resolution'
+import { claudeSessionIdForOrcaSession } from '../claude/structured/claude-structured-session-id'
 import { fakeClaude } from '../claude/claude-structured-session-test-support'
 import { claudeAndCodexAgents } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
@@ -120,7 +120,7 @@ beforeEach(async () => {
     resolveWorkspacePath: async (id) => `/repos/${id}`,
     resolveLaunch: createClaudeStructuredLaunchResolver({
       store,
-      resolveCommand: () => '/usr/local/bin/claude',
+      resolveCommand: () => ({ command: '/usr/local/bin/claude', prefixArgs: [] }),
       resolveLaunchArgs: () => [],
       resolveAuthPolicy: () => ({ account: 'system' })
     }),

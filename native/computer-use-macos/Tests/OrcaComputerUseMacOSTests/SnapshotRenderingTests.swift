@@ -32,6 +32,16 @@ final class SnapshotRenderingTests: XCTestCase {
         XCTAssertFalse(SnapshotRenderHeuristics.shouldElide(node))
     }
 
+    func testKeepsMultiLineCustomActionNamesOnTheElementLine() {
+        // Activity Monitor's toolbar buttons expose custom actions named like this.
+        let node = SnapshotRenderNode(role: "AXButton", label: "Stop", rawActions: ["Name:move next\nTarget:0x0\nSelector:(null)"])
+
+        XCTAssertEqual(
+            SnapshotRenderHeuristics.line(index: 4, node: node),
+            "4 button Stop, Secondary Actions: name:move next  target:0x0  selector:(null)"
+        )
+    }
+
     func testRendersMarkdownLinksAndSuppressesTheirChildren() {
         let node = SnapshotRenderNode(role: "AXLink", linkText: "Skip [main]", url: "https://example.com/path")
 

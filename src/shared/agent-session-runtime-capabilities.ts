@@ -48,9 +48,13 @@ export const AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY =
 // Advertise in-place update/edit holds separately from mid-turn queueing: kept/mail cards remain editable while queueing is off. Never fall back to copy/delete.
 export const AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY =
   'agent-session.queued-message-edit.v1' as const
+// Strict update params accept skills only when advertised; omission keeps legacy editing.
+export const AGENT_SESSION_QUEUED_MESSAGE_SKILLS_EDIT_RUNTIME_CAPABILITY =
+  'agent-session.queued-message-skills-edit.v1' as const
+
 export const AGENT_SESSION_QUEUED_MESSAGE_REORDER_RUNTIME_CAPABILITY =
   'agent-session.queued-message-reorder.v1' as const
-// Update params are strict: send images only when advertised; otherwise Save edits text alone.
+// Strict update params accept images only when advertised; otherwise Save edits text alone.
 export const AGENT_SESSION_QUEUED_MESSAGE_IMAGE_EDIT_RUNTIME_CAPABILITY =
   'agent-session.queued-message-image-edit.v1' as const
 // Publish image cards only to capable readers that preserve images on edit; older copy/delete editing would lose them.
@@ -65,6 +69,8 @@ export const CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY =
 // Probe additive conversationOutline before calling; older hosts keep loaded-message rails instead of method_not_found.
 export const AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY =
   'agent-session.conversation-outline.v1' as const
+export const AGENT_SESSION_CONTINUATION_CONTEXT_RUNTIME_CAPABILITY =
+  'agent-session.continuation-context.v1' as const
 // Probe additive item reads before offering full output; older hosts retain only heads.
 export const AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY = 'agent-session.item-detail.v1' as const
 // The RPC is registered unconditionally; per-session rewind support is a separate check.
@@ -110,6 +116,7 @@ export const AGENT_SESSION_RUNTIME_CAPABILITIES = [
   AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_REORDER_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_IMAGE_EDIT_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUEUED_MESSAGE_SKILLS_EDIT_RUNTIME_CAPABILITY,
   AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY,
   AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY,
   ...STRUCTURED_AGENT_SESSION_SURFACE_RUNTIME_CAPABILITIES,
@@ -118,6 +125,7 @@ export const AGENT_SESSION_RUNTIME_CAPABILITIES = [
   AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RECOVERY_CAPABILITY,
   AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CONTINUATION_CONTEXT_RUNTIME_CAPABILITY,
   AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,

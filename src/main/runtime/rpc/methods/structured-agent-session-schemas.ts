@@ -6,6 +6,7 @@ export {
   AvailabilityParams,
   CancelParams,
   ConversationCommandParams,
+  ContinuationContextParams,
   CreateIntentParams,
   CreateParams,
   CreateSupportParams,

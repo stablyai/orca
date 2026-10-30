@@ -1,3 +1,8 @@
+import {
+  transportActionArgumentChoices,
+  demoteActionArgumentChoices,
+  type ActionArgumentChoices
+} from '../../../../shared/source-control-action-argument-choices'
 import { liftActionPermissionArgs } from '../../../../shared/source-control-action-permission-lift'
 import { useEffect, useMemo, useRef, useState, type SetStateAction } from 'react'
 import type {
@@ -116,6 +121,7 @@ export function useSourceControlActionRecipeDraftState({
             {
               ...current.values[actionId],
               agentId: config.actions?.[actionId]?.agentId,
+              argumentChoices: transportActionArgumentChoices(current.values[actionId], value),
               agentArgs: value
             },
             true,
@@ -124,6 +130,7 @@ export function useSourceControlActionRecipeDraftState({
         : {
             ...current.values[actionId],
             agentId: config.actions?.[actionId]?.agentId,
+            argumentChoices: transportActionArgumentChoices(current.values[actionId], value),
             agentArgs: value
           }
       return { ...current, values: { ...current.values, [actionId]: valueDraft } }
@@ -132,7 +139,9 @@ export function useSourceControlActionRecipeDraftState({
 
   const onActionLaunchPreferencesChange = (
     actionId: SourceControlActionId,
-    update: SetStateAction<SourceControlActionLaunchPreferences | undefined>
+    update: SetStateAction<SourceControlActionLaunchPreferences | undefined>,
+    userArgs?: string,
+    argumentChoices?: ActionArgumentChoices | null
   ): void => {
     setActionRecipeDraftState((current) => {
       const latest = current.values[actionId].launchPreferences
@@ -145,8 +154,28 @@ export function useSourceControlActionRecipeDraftState({
         ...current,
         values: {
           ...current.values,
-          [actionId]: { ...current.values[actionId], launchPreferences: next }
+          [actionId]: {
+            ...current.values[actionId],
+            launchPreferences: next,
+            ...(argumentChoices !== undefined
+              ? { argumentChoices: argumentChoices ?? undefined }
+              : {}),
+            ...(userArgs !== undefined ? { agentArgs: userArgs } : {})
+          }
         }
+      }
+    })
+  }
+
+  const retireActionAgentDocument = (actionId: SourceControlActionId, agentId: unknown): void => {
+    setActionRecipeDraftState((current) => {
+      const value = current.values[actionId]
+      if (!value.argumentChoices || value.argumentChoices.syntaxAgent === agentId) {
+        return current
+      }
+      return {
+        ...current,
+        values: { ...current.values, [actionId]: demoteActionArgumentChoices(value) }
       }
     })
   }
@@ -171,7 +200,8 @@ export function useSourceControlActionRecipeDraftState({
           actions: setSourceControlActionDefault(current.actions, actionId, {
             commandInputTemplate: nextValue.commandInputTemplate,
             agentArgs: nextValue.agentArgs,
-            launchPreferences: nextValue.launchPreferences
+            launchPreferences: nextValue.launchPreferences,
+            argumentChoices: nextValue.argumentChoices
           })
         }
       })
@@ -220,6 +250,7 @@ export function useSourceControlActionRecipeDraftState({
     onActionTemplateChange,
     onActionAgentArgsChange,
     onActionLaunchPreferencesChange,
+    retireActionAgentDocument,
     saveActionTemplateDraft,
     discardActionTemplateDraft,
     appendVariable

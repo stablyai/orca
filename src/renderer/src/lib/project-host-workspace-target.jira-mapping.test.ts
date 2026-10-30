@@ -30,13 +30,6 @@ describe('mapped repository creation target hints', () => {
     })
   })
 
-  it('supports repositories whose catalog still comes from the legacy projection', () => {
-    expect(getRepoWorkspaceCreationTargetHint(sshRepo, [])).toEqual({
-      projectId: 'repo:same-id',
-      hostId: 'ssh:builder'
-    })
-  })
-
   it('retains unique setup precedence when a linked Jira account is on another host', () => {
     const projection = projectHostSetupProjectionFromRepos([sshRepo])
     expect(

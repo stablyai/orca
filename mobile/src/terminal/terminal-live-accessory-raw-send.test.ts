@@ -1,3 +1,4 @@
+import { terminalInputSend } from './mobile-terminal-operations'
 import { describe, expect, it, vi } from 'vitest'
 import { sendTerminalLiveAccessoryRawBytes } from './terminal-live-accessory-raw-send'
 import type { RpcClient } from '../transport/rpc-client'
@@ -16,6 +17,7 @@ function captureClient(
 }
 
 const BASE_ARGS = {
+  sendTerminalUserInput: terminalInputSend.request,
   targetHandle: 'terminal-a',
   activeHandle: 'terminal-a',
   activeSessionTabType: 'terminal',

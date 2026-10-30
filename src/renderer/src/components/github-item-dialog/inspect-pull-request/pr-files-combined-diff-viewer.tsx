@@ -29,6 +29,7 @@ import {
   setAllPRFilesCombinedDiffSectionsCollapsed,
   togglePRFilesCombinedDiffSection
 } from './pr-files-combined-diff-load'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 type PRFilesCombinedDiffSectionsProps = PRFilesCombinedDiffViewerProps & {
   signature: string
@@ -271,7 +272,7 @@ function PRFilesCombinedDiffSections({
   )
 
   const openFilesOnGitHub = useCallback(() => {
-    void window.api.shell.openUrl(`${prUrl.replace(/\/$/, '')}/files`)
+    openAppHttpLink(`${prUrl.replace(/\/$/, '')}/files`)
   }, [prUrl])
 
   const handleAddLineComment = useCallback(

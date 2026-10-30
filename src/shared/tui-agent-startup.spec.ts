@@ -163,7 +163,7 @@ describe('tui agent startup plans', () => {
       platform: 'linux'
     })
 
-    expect(plan?.launchCommand).toBe("codex '--version'")
+    expect(plan?.launchCommand).toBe("codex '-c' 'disable_paste_burst=true' '--version'")
   })
 
   it.each([
@@ -238,7 +238,7 @@ describe('tui agent startup plans', () => {
       platform: 'linux'
     })
 
-    expect(plan?.launchCommand).toBe("codex 'fix it'")
+    expect(plan?.launchCommand).toBe("codex '-c' 'disable_paste_burst=true' 'fix it'")
     expect(plan?.startupCommandDelivery).toBe('shell-ready')
   })
 
@@ -253,7 +253,7 @@ describe('tui agent startup plans', () => {
 
     expect(plan).toEqual({
       agent: 'codex',
-      launchCommand: 'codex',
+      launchCommand: "codex '-c' 'disable_paste_burst=true'",
       expectedProcess: 'codex',
       followupPrompt: null,
       launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} }
@@ -440,7 +440,9 @@ describe('tui agent startup plans', () => {
       platform: 'linux'
     })
 
-    expect(plan?.launchCommand).toBe("codex --profile work 'fix it'")
+    expect(plan?.launchCommand).toBe(
+      "codex --profile work '-c' 'disable_paste_burst=true' 'fix it'"
+    )
   })
 
   it('builds Windows resume plans that PowerShell can invoke', () => {
@@ -513,7 +515,9 @@ describe('tui agent startup plans', () => {
       platform: 'linux'
     })
 
-    expect(plan?.launchCommand).toBe("codex --profile work 'resume' 's1'")
+    expect(plan?.launchCommand).toBe(
+      "codex --profile work '-c' 'disable_paste_burst=true' 'resume' 's1'"
+    )
   })
 
   it('uses a captured launch command when building resume plans after overrides change', () => {
@@ -525,7 +529,9 @@ describe('tui agent startup plans', () => {
       platform: 'linux'
     })
 
-    expect(plan?.launchCommand).toBe("codex --profile captured 'resume' 's1'")
+    expect(plan?.launchCommand).toBe(
+      "codex --profile captured '-c' 'disable_paste_burst=true' 'resume' 's1'"
+    )
     expect(plan?.launchConfig).toEqual({
       agentCommand: 'codex --profile captured',
       agentArgs: '',

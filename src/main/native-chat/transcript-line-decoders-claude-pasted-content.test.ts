@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
-import { normalizeNativeChatUserText } from '../../shared/native-chat-image-transcript-markers'
+import { normalizeNativeChatUserText } from '../../shared/native-chat/transcript/native-chat-image-transcript-markers'
 
 const prompt = 'Summarize the failing tests.\n\nThen propose a fix for each one.'
 const wrapped = `\n\n<pasted_content id="7e64">\n${prompt}\n</pasted_content id="7e64">\n`

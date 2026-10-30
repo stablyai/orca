@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs'
 import { EventEmitter } from 'node:events'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -80,6 +80,41 @@ describe('serve update handoff', () => {
     expect(hasServeUpdateSupervisor()).toBe(false)
     expect(requestServeUpdateHandoff('1.0.61')).toBe(false)
   })
+
+  it.runIf(process.platform === 'darwin')(
+    'accepts a handoff path through an alias of the same user-data directory',
+    async () => {
+      const alias = join(root, 'profile-alias')
+      symlinkSync(root, alias, 'dir')
+      process.env[SERVE_UPDATE_HANDOFF_PATH_ENV] = getServeUpdateHandoffPath(alias)
+      const { hasServeUpdateSupervisor, requestServeUpdateHandoff } =
+        await import('./serve-update-handoff')
+
+      expect(hasServeUpdateSupervisor()).toBe(true)
+      expect(requestServeUpdateHandoff('1.0.61')).toBe(true)
+      expect(readState(root)?.phase).toBe('install-requested')
+    }
+  )
+
+  it.runIf(process.platform === 'darwin')(
+    "accepts the service's other casing of the same profile directory (#34382)",
+    async (context) => {
+      const profile = join(root, 'Orca')
+      mkdirSync(profile)
+      // Case-sensitive volumes have no second spelling to accept.
+      if (!existsSync(join(root, 'orca'))) {
+        context.skip()
+      }
+      getCanonicalUserDataPathMock.mockReturnValue(profile)
+      process.env[SERVE_UPDATE_HANDOFF_PATH_ENV] = getServeUpdateHandoffPath(join(root, 'orca'))
+      const { hasServeUpdateSupervisor, requestServeUpdateHandoff } =
+        await import('./serve-update-handoff')
+
+      expect(hasServeUpdateSupervisor()).toBe(true)
+      expect(requestServeUpdateHandoff('1.0.61')).toBe(true)
+      expect(readState(profile)?.phase).toBe('install-requested')
+    }
+  )
 
   it.runIf(process.platform === 'darwin')(
     'quits a supervised serve child when its CLI parent is lost',

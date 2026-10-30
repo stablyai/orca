@@ -22,7 +22,8 @@ describe('getDiscardEntryConfirmationCopy', () => {
     ).toEqual({
       title: 'Delete "new-file.ts"?',
       description: 'This will permanently delete this file. This cannot be undone.',
-      confirmLabel: 'Delete'
+      confirmLabel: 'Delete',
+      deleteAction: true
     })
   })
 
@@ -34,7 +35,8 @@ describe('getDiscardEntryConfirmationCopy', () => {
     ).toEqual({
       title: 'Discard changes to "added.ts"?',
       description: 'This will revert the unstaged changes to this file. This cannot be undone.',
-      confirmLabel: 'Discard'
+      confirmLabel: 'Discard',
+      deleteAction: false
     })
   })
 
@@ -47,7 +49,8 @@ describe('getDiscardEntryConfirmationCopy', () => {
       title: 'Restore "removed.ts"?',
       description:
         'This will restore the last staged version and discard the deletion. This cannot be undone.',
-      confirmLabel: 'Restore'
+      confirmLabel: 'Restore',
+      deleteAction: false
     })
   })
 })
@@ -58,7 +61,8 @@ describe('getDiscardAreaConfirmationCopy', () => {
       title: 'Discard all staged changes?',
       description:
         'This will unstage and revert all staged changes. Staged new files will be deleted. This cannot be undone.',
-      confirmLabel: 'Discard all'
+      confirmLabel: 'Discard all',
+      deleteAction: false
     })
   })
 
@@ -67,7 +71,8 @@ describe('getDiscardAreaConfirmationCopy', () => {
       title: 'Discard all unstaged changes?',
       description:
         'This will revert unstaged changes and permanently delete any untracked files among these 2 files. This cannot be undone.',
-      confirmLabel: 'Discard all'
+      confirmLabel: 'Discard all',
+      deleteAction: false
     })
   })
 })

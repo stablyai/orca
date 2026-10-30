@@ -4,8 +4,15 @@ import {
   type NativeChatBlock,
   type NativeChatMessage
 } from '../../native-chat-types'
-import { extractPendingAsk, parseAskFromStatus, resolveNativeChatAsk } from './native-chat-ask'
-import { nativeChatAskDismissKey } from '../../native-chat-ask-dismiss-key'
+import {
+  readAgentMessageSource,
+  type AgentMessageSource
+} from '../../agent-session/agent-session-message-source'
+import {
+  extractPendingAsk,
+  extractPendingMessageReplyAsk,
+  resolveNativeChatAsk
+} from './native-chat-ask'
 
 function message(id: string, blocks: NativeChatBlock[]): NativeChatMessage {
   return { id, role: 'assistant', blocks, timestamp: 1, source: 'transcript' }
@@ -42,20 +49,6 @@ function toolTurn(id: string): NativeChatMessage {
 const QUESTIONS_INPUT = {
   questions: [{ question: 'Deploy?', options: [{ label: 'Yes' }, { label: 'No' }] }]
 }
-
-describe('nativeChatAskDismissKey', () => {
-  it('uses the full canonical prompt and stays stable across object instances', () => {
-    const first = parseAskFromStatus(JSON.stringify(QUESTIONS_INPUT))
-    const same = parseAskFromStatus(JSON.stringify(QUESTIONS_INPUT))
-    const changed = parseAskFromStatus(
-      JSON.stringify({ questions: [{ question: 'Deploy?', options: [{ label: 'Later' }] }] })
-    )
-
-    expect(nativeChatAskDismissKey(first)).toBe(nativeChatAskDismissKey(same))
-    expect(nativeChatAskDismissKey(first)).not.toBe(nativeChatAskDismissKey(changed))
-    expect(nativeChatAskDismissKey(null)).toBeNull()
-  })
-})
 
 describe('extractPendingAsk', () => {
   it('recognizes an unregistered tool whose input matches the canonical questions shape', () => {
@@ -108,15 +101,6 @@ describe('extractPendingAsk', () => {
     expect(pending).toBeNull()
   })
 
-  it('keeps an ask that is still awaiting its result after an earlier interrupt', () => {
-    const pending = extractPendingAsk([
-      message('m1', [call('Bash', { command: 'sleep 999' })]),
-      interrupted('m2'),
-      message('m3', [call('AskUserQuestion', QUESTIONS_INPUT)])
-    ])
-    expect(pending?.questions[0]?.question).toBe('Deploy?')
-  })
-
   it('drops an ask the user typed past instead of answering', () => {
     // Escaping a selector and sending a prompt can leave the ask without a result.
     const pending = extractPendingAsk([
@@ -137,74 +121,6 @@ describe('extractPendingAsk', () => {
     ])
     expect(pending).toBeNull()
   })
-
-  it('resolves an ask whose result arrives on its own tool-role turn', () => {
-    const pending = extractPendingAsk([
-      message('m1', [call('AskUserQuestion', QUESTIONS_INPUT)]),
-      toolTurn('m2')
-    ])
-    expect(pending).toBeNull()
-  })
-
-  it('ignores malformed question payloads', () => {
-    expect(
-      extractPendingAsk([
-        message('m1', [
-          call('AskUserQuestion', { questions: [] }),
-          call('AskUserQuestion', { questions: [{}] }),
-          call('AskUserQuestion', 'not-an-object')
-        ])
-      ])
-    ).toBeNull()
-  })
-})
-
-describe('parseAskFromStatus', () => {
-  it('preserves OMP checkbox questions from live status and transcript history', () => {
-    const input = {
-      questions: [
-        { id: 'q1', question: 'Pick', multi: true, options: [{ label: 'A' }, { label: 'B' }] }
-      ]
-    }
-    const prompt = parseAskFromStatus(JSON.stringify(input), 'ask')
-    expect(prompt?.questions[0]?.multiSelect).toBe(true)
-    expect(extractPendingAsk([message('m1', [call('ask', input)])])).toEqual(prompt)
-  })
-
-  it('preserves OpenCode question envelope multiple selection on live status and replay', () => {
-    const input = {
-      id: 'question',
-      sessionID: 'session',
-      questions: [
-        {
-          header: 'Choice',
-          question: 'Pick both?',
-          multiple: true,
-          options: [
-            { label: 'One', description: 'first' },
-            { label: 'Two', description: 'second' }
-          ]
-        }
-      ]
-    }
-    const prompt = parseAskFromStatus(JSON.stringify(input), 'AskUserQuestion')
-    expect(prompt?.questions[0]).toMatchObject({ multiSelect: true, header: 'Choice' })
-    expect(extractPendingAsk([message('m1', [call('question', input)])])).toEqual(prompt)
-  })
-  it('accepts the canonical shape from any tool name and rejects broken JSON', () => {
-    expect(
-      parseAskFromStatus(JSON.stringify(QUESTIONS_INPUT), 'SomeNewTool')?.questions
-    ).toHaveLength(1)
-    expect(parseAskFromStatus('{not json', 'AskUserQuestion')).toBeNull()
-    expect(parseAskFromStatus(null)).toBeNull()
-  })
-
-  it('parses string options into labels', () => {
-    const prompt = parseAskFromStatus(
-      JSON.stringify({ questions: [{ question: 'Pick', options: ['a', 'b'] }] })
-    )
-    expect(prompt?.questions[0]?.options.map((o) => o.label)).toEqual(['a', 'b'])
-  })
 })
 
 describe('resolveNativeChatAsk', () => {
@@ -218,13 +134,6 @@ describe('resolveNativeChatAsk', () => {
       resolveNativeChatAsk({ liveAsk: null, messages: transcript, transcriptSettled: true })
     )?.toMatchObject(QUESTIONS_INPUT)
   })
-
-  it('keeps a live ask authoritative while transcript history is unsettled', () => {
-    const liveAsk = { questions: [{ question: 'Live?', options: [], multiSelect: false }] }
-    expect(resolveNativeChatAsk({ liveAsk, messages: transcript, transcriptSettled: false })).toBe(
-      liveAsk
-    )
-  })
 })
 
 describe('async questions', () => {
@@ -232,7 +141,7 @@ describe('async questions', () => {
     type: 'tool-call',
     name: 'request_user_input_async',
     callId,
-    input: JSON.stringify({ questions: [{ title }] })
+    input: JSON.stringify({ questions: [{ title, options: ['Yes', 'No'] }] })
   })
   const userRow = (id: string, flags: Partial<NativeChatMessage> = {}): NativeChatMessage => ({
     ...message(id, [{ type: 'text', text: 'hi' }]),
@@ -250,11 +159,51 @@ describe('async questions', () => {
     ])
   })
 
-  it('stays open until a user message reaches the agent', () => {
+  it.each(['queued', 'unsent', 'stoppedBeforeStart', 'awaitsRetry', 'sentWhileStopping'] as const)(
+    'stays open while a human row is marked %s',
+    (flag) => {
+      const asked = message('a', [asyncCall('call-a', 'A?'), result()])
+      expect(titles([asked, userRow('waiting', { [flag]: true })])).toEqual(['A?'])
+      expect(extractPendingAsk([asked, userRow('sent')])).toBeNull()
+    }
+  )
+
+  it('keeps async controls across agent notices and replay until human input or interruption', () => {
     const asked = message('a', [asyncCall('call-a', 'A?'), result()])
-    expect(titles([asked, userRow('q', { queued: true }), userRow('u', { unsent: true })])).toEqual(
-      ['A?']
-    )
-    expect(extractPendingAsk([asked, userRow('sent')])).toBeNull()
+    const from: AgentMessageSource = {
+      kind: 'agent',
+      senders: [
+        {
+          party: { address: 'term_a', terminalHandle: 'term_a', orcaSessionId: null },
+          name: 'Coder'
+        }
+      ],
+      orchestration: {
+        message: 'mail-notice',
+        mailbox: 'term_b',
+        dispatchId: null,
+        messages: [{ messageId: 'mail-1', runId: 'run-1', from: 'term_a' }]
+      }
+    }
+    for (const source of [
+      from,
+      { ...from, orchestration: null },
+      { ...from, senders: [], orchestration: { message: 'future-notice' } }
+    ]) {
+      const notice = userRow('notice', {
+        from: readAgentMessageSource(source),
+        blocks: [{ type: 'text', text: 'You have 1 orchestration message.' }]
+      })
+      expect(notice.from?.kind).toBe('agent')
+      const history = [asked, notice]
+      for (const extract of [extractPendingAsk, extractPendingMessageReplyAsk]) {
+        const expected = extract([asked])
+        expect(expected?.questions[0]?.options).toEqual([{ label: 'Yes' }, { label: 'No' }])
+        expect(extract(history)).toEqual(expected)
+        expect(extract([...history])).toEqual(expected)
+        expect(extract([...history, userRow('human-answer')])).toBeNull()
+        expect(extract([...history, interrupted('stop')])).toBeNull()
+      }
+    }
   })
 })

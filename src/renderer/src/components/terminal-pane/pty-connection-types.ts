@@ -16,7 +16,7 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session-resume'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
-import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
+import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { PtyPreconnectInputEntry } from './pty-preconnect-input-buffer'
 import type { AgentPaneLaunchRequest } from '../../../../shared/agent-pane-launch-request'
 
@@ -127,6 +127,8 @@ export type PtyConnectionDeps = {
   clearExitedPanePtyLayoutBindingForLeaf?: (leafId: string, exitedPtyId: string) => void
   /** Settles the captured one-shot startup only after this pane owns a concrete PTY. */
   onStartupBound?: () => void
+  /** Re-renders mobile lock overlays for fit/driver state that arrived before this pane bound its PTY. */
+  refreshMobileOverlays?: () => void
   deferPtyInput?: (paneId: number, data: string, forward: (data: string) => void) => void
   /** Record main’s 2031 subscription and current theme for later flip pushes; subscription itself is silent (#9993). */
   recordPaneMode2031Subscription?: (paneId: number, subscribedMode: 'dark' | 'light') => void

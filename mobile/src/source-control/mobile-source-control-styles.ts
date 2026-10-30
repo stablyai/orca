@@ -1,9 +1,10 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet, themedStyles } from '../theme/themed-styles'
 import { diffStyles } from './mobile-source-control-diff-styles'
 import { listStyles } from './mobile-source-control-list-styles'
 
-const baseStyles = StyleSheet.create({
+const baseStyles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -127,6 +128,21 @@ const baseStyles = StyleSheet.create({
     justifyContent: 'center',
     flexShrink: 0
   },
+  completeMergeButton: {
+    minHeight: 32,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.button,
+    backgroundColor: colors.textPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0
+  },
+  completeMergeText: {
+    color: colors.bgBase,
+    fontSize: typography.bodySize,
+    fontWeight: '600'
+  },
   abortPressed: {
     opacity: 0.75
   },
@@ -241,6 +257,6 @@ const baseStyles = StyleSheet.create({
     textAlign: 'center',
     flexShrink: 1
   }
-})
+}))
 
-export const styles = { ...baseStyles, ...listStyles, ...diffStyles }
+export const styles = themedStyles(() => ({ ...baseStyles, ...listStyles, ...diffStyles }))

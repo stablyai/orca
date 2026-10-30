@@ -96,7 +96,8 @@ describe('runCodexAppServerSession stop', () => {
     )
     expect(terminateProviderProcessTree).toHaveBeenCalledExactlyOnceWith(child, {
       site: 'codex-app-server-session',
-      platform: 'win32'
+      platform: 'win32',
+      supervised: false
     })
   })
 
@@ -127,7 +128,8 @@ describe('runCodexAppServerSession stop', () => {
 
     expect(terminateProviderProcessTree).toHaveBeenCalledWith(child, {
       site: 'codex-app-server-session',
-      platform: 'linux'
+      platform: 'linux',
+      supervised: true
     })
     await vi.advanceTimersByTimeAsync(1_000)
     expect(await outcome).toBeInstanceOf(CodexAppServerTimeoutError)
@@ -147,7 +149,8 @@ describe('runCodexAppServerSession stop', () => {
     await vi.advanceTimersByTimeAsync(1)
     expect(terminateProviderProcessTree).toHaveBeenCalledWith(child, {
       site: 'codex-app-server-session',
-      platform: 'win32'
+      platform: 'win32',
+      supervised: false
     })
 
     await vi.advanceTimersByTimeAsync(1_000)

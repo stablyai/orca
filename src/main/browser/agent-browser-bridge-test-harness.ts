@@ -35,11 +35,14 @@ export function mockBrowserManager(
     getBrowserPageLoadError: vi.fn(() => null),
     getBrowserPageCertificateFailure: vi.fn(() => null),
     unregisterGuest: vi.fn(),
+    holdPaintForCapture: () => () => {},
+    holdGuestActive: () => () => {},
     beginAgentCommand: () => ({
       run: (execute: () => Promise<unknown>) => execute(),
       end: () => {}
     }),
     showAgentPointer: async () => {},
+    isAgentUsingPage: () => false,
     ...overrides
   } as unknown as BrowserManager
 }

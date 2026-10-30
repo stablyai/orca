@@ -4,7 +4,12 @@ import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { CLAUDE_CLI_CONVERSATIONS } from '../claude/claude-cli-conversations'
 import { resolveStructuredAgentSessionAdoptionForCreate } from '../runtime/structured-agent-session-create-adoption'
-import { structuredAgentCliSourcePath } from './structured-agent-cli-source'
+import {
+  captureStructuredAgentCliSource,
+  structuredAgentCliSourcePath,
+  structuredAgentCliSourceFromEvidence,
+  type StructuredAgentCliSourceEvidence
+} from './structured-agent-cli-source'
 import { prepareAdoptedTranscript } from './agent-session-wire/structured-agent-session-adopted-import'
 import type { AgentSessionAttachParams } from './agent-session-wire/structured-agent-session-attach'
 import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
@@ -12,6 +17,8 @@ import { prepareLegacyTranscriptImport } from './agent-session-journal/journal-l
 import { prepareCodexAdoption } from './codex-adoption-preparation'
 import { codexAiVaultSessionResumePreparation } from '../codex/codex-ai-vault-session-resume'
 import * as codexHomes from '../codex/codex-home-paths'
+import { adoptedDirectoryProbes } from './agent-session-journal/adopted-directory-probe'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 
 let root: string
 beforeEach(async () => {
@@ -54,6 +61,58 @@ function params(agent: StructuredAgentId, transcriptPath: string): AgentSessionA
     }
   }
 }
+
+it('preserves exact/Codex and the complete Pi two-link and fallback acceptance without the optional probe', async () => {
+  const probe = vi
+    .spyOn(adoptedDirectoryProbes, 'matches')
+    .mockRejectedValue(new Error('probe unavailable'))
+  const transcriptPath = join(root, `${id}.jsonl`)
+  const save = (agent: 'claude' | 'pi', cwd: string, sessionId = id) =>
+    file(
+      transcriptPath,
+      agent === 'pi'
+        ? [
+            { type: 'session', id: sessionId, cwd },
+            { type: 'message', id: 'turn', message: { role: 'user', content: 'hello' } }
+          ]
+        : [
+            {
+              type: 'user',
+              sessionId,
+              cwd,
+              uuid: 'turn',
+              message: { role: 'user', content: 'hello' }
+            }
+          ]
+    )
+  await save('claude', root)
+  expect(await prepareAdoptedTranscript(params('claude', transcriptPath))).toMatchObject({
+    ok: true
+  })
+  const left = join(root, 'left')
+  const right = join(root, 'right')
+  for (const link of [left, right]) {
+    await symlink(root, link, process.platform === 'win32' ? 'junction' : 'dir')
+  }
+  const pi = params('pi', transcriptPath)
+  pi.adopt!.source!.workspaceCwd = left
+  await save('pi', right)
+  expect(await prepareAdoptedTranscript(pi)).toMatchObject({ ok: true })
+  // Both unavailable paths retain samePiDirectory's established normalize fallback.
+  pi.adopt!.source!.workspaceCwd = join(root, 'missing', 'pkg')
+  await save('pi', `${join(root, 'missing')}/./pkg`)
+  expect(await prepareAdoptedTranscript(pi)).toMatchObject({ ok: true })
+  await save('pi', right, 'wrong-header')
+  expect(await prepareAdoptedTranscript(pi)).toMatchObject({ ok: false })
+  await file(transcriptPath, [
+    { type: 'session_meta', payload: { id } },
+    { type: 'response_item', payload: { type: 'message', role: 'user', content: 'hello' } }
+  ])
+  expect(await prepareAdoptedTranscript(params('codex', transcriptPath))).toMatchObject({
+    ok: true
+  })
+  expect(probe).not.toHaveBeenCalled()
+})
 
 it('creates from the host hook path when Claude filename differs, then checks actual recorded cwd', async () => {
   const transcriptPath = await file(join(root, 'projects', 'folder', 'different-uuid.jsonl'), [
@@ -116,11 +175,38 @@ it('creates from the host hook path when Claude filename differs, then checks ac
     selectedAccountHome: { variable: 'CLAUDE_CONFIG_DIR', path: root },
     launchEnv: {},
     workspaceCwd: root,
-    resolveTranscriptPath: sourcePath
+    resolveTranscriptSource: () => ({ kind: 'matched', transcriptPath: sourcePath() })
   })
   expect(adoption.transcriptPath).toBe(transcriptPath)
   expect(admission).toHaveBeenCalledOnce()
   expect(find).not.toHaveBeenCalled()
+  await expect(
+    resolveStructuredAgentSessionAdoptionForCreate({
+      settings: {},
+      agent: 'claude',
+      transcriptImport: importer,
+      providerSessionId: id,
+      selectedAccountHome,
+      launchEnv: {},
+      workspaceCwd: root,
+      resolveTranscriptSource: () =>
+        structuredAgentCliSourceFromEvidence({
+          agent: 'claude',
+          workspaceId: 'folder',
+          resumeFrom: {
+            providerSessionId: id,
+            cliSource: { workspaceId: 'folder', paneKey: 'tab:leaf' }
+          },
+          evidence: captureStructuredAgentCliSource(
+            () => [],
+            { workspaceId: 'folder', paneKey: 'tab:leaf' },
+            () => 'native-local'
+          )
+        })
+    })
+  ).rejects.toMatchObject({ refusal: { details: { reason: 'transcriptUnreadable' } } })
+  expect(find).toHaveBeenCalled()
+  find.mockClear()
   expect(await prepareAdoptedTranscript(params('claude', adoption.transcriptPath))).toMatchObject({
     ok: true
   })
@@ -147,7 +233,7 @@ it('creates from the host hook path when Claude filename differs, then checks ac
       selectedAccountHome: { variable: 'CLAUDE_CONFIG_DIR', path: root },
       launchEnv: {},
       workspaceCwd: root,
-      resolveTranscriptPath: () => escaped
+      resolveTranscriptSource: () => ({ kind: 'matched', transcriptPath: escaped })
     })
   ).rejects.toMatchObject({ refusal: { details: { reason: 'transcriptUnreadable' } } })
   admission.mockRejectedValueOnce(
@@ -162,10 +248,190 @@ it('creates from the host hook path when Claude filename differs, then checks ac
       selectedAccountHome,
       launchEnv: {},
       workspaceCwd: root,
-      resolveTranscriptPath: sourcePath
+      resolveTranscriptSource: () => ({ kind: 'matched', transcriptPath: sourcePath() })
     })
   ).rejects.toMatchObject({ refusal: { details: { reason: 'transcriptUnreadable' } } })
   expect(find).not.toHaveBeenCalled()
+})
+
+it('imports early and late Claude history with an absent locator and captured native source', async () => {
+  const transcriptPath = await file(join(root, 'projects', 'folder', `${id}.jsonl`), [
+    {
+      type: 'user',
+      uuid: 'early',
+      parentUuid: null,
+      isSidechain: false,
+      timestamp: '2026-10-29T18:00:00.000Z',
+      sessionId: id,
+      cwd: root,
+      message: { role: 'user', content: 'early Claude request' }
+    },
+    {
+      type: 'assistant',
+      uuid: 'late',
+      parentUuid: 'early',
+      isSidechain: false,
+      timestamp: '2026-10-29T18:10:00.000Z',
+      sessionId: id,
+      cwd: root,
+      message: { role: 'assistant', content: [{ type: 'text', text: 'late Claude reply' }] }
+    }
+  ])
+  const resumeFrom = {
+    providerSessionId: id,
+    cliSource: { workspaceId: 'folder', paneKey: 'tab:leaf' }
+  }
+  const evidence = captureStructuredAgentCliSource(
+    () => [],
+    resumeFrom.cliSource,
+    () => 'native-local'
+  )
+  const selectedAccountHome = { variable: 'CLAUDE_CONFIG_DIR', path: root }
+  const importer = CLAUDE_CLI_CONVERSATIONS.transcriptImport!
+  vi.spyOn(importer, 'accountHomeCandidates').mockReturnValue([selectedAccountHome])
+  const store = vi.spyOn(importer, 'conversationStore')
+  const find = vi.spyOn(importer, 'findTranscript')
+  const lookup = (captured: StructuredAgentCliSourceEvidence | undefined = evidence) =>
+    resolveStructuredAgentSessionAdoptionForCreate({
+      settings: {},
+      agent: 'claude',
+      transcriptImport: importer,
+      providerSessionId: id,
+      selectedAccountHome,
+      launchEnv: {},
+      workspaceCwd: root,
+      resolveTranscriptSource: () =>
+        structuredAgentCliSourceFromEvidence({
+          agent: 'claude',
+          workspaceId: 'folder',
+          resumeFrom,
+          evidence: captured
+        })
+    })
+  for (const captured of [
+    captureStructuredAgentCliSource(() => []),
+    captureStructuredAgentCliSource(
+      () => [],
+      resumeFrom.cliSource,
+      () => 'unknown'
+    ),
+    captureStructuredAgentCliSource(
+      () => [],
+      resumeFrom.cliSource,
+      () => {
+        throw new Error('route unreadable')
+      }
+    ),
+    captureStructuredAgentCliSource(
+      () => {
+        throw new Error('rows unreadable')
+      },
+      resumeFrom.cliSource,
+      () => 'native-local'
+    ),
+    captureStructuredAgentCliSource(
+      () => [],
+      { ...resumeFrom.cliSource, workspaceId: 'other' },
+      () => 'native-local'
+    )
+  ]) {
+    await expect(lookup(captured)).rejects.toMatchObject({
+      refusal: { details: { reason: 'transcriptUnreadable' } }
+    })
+  }
+  await expect(
+    lookup(
+      captureStructuredAgentCliSource(
+        () => [],
+        resumeFrom.cliSource,
+        () => 'unsupported'
+      )
+    )
+  ).rejects.toMatchObject({ refusal: { details: { reason: 'hostUnsupported' } } })
+  const row: AgentStatusIpcPayload = {
+    paneKey: 'tab:leaf',
+    worktreeId: 'folder',
+    agentType: 'claude',
+    state: 'waiting',
+    prompt: '',
+    connectionId: null,
+    receivedAt: 1,
+    stateStartedAt: 1,
+    providerSession: { key: 'session_id', id, transcriptPath }
+  }
+  for (const change of [
+    { providerSession: undefined },
+    { providerSession: { ...row.providerSession!, id: 'new-run' } },
+    { worktreeId: 'other' },
+    { agentType: 'codex' },
+    { connectionId: 'ssh' },
+    { structuredHost: 'owned' as const }
+  ]) {
+    await expect(
+      lookup(
+        captureStructuredAgentCliSource(
+          () => [{ ...row, ...change }],
+          resumeFrom.cliSource,
+          () => 'native-local'
+        )
+      )
+    ).rejects.toMatchObject({ refusal: { details: { reason: 'transcriptUnreadable' } } })
+  }
+  const resolve = (captured: StructuredAgentCliSourceEvidence, workspaceId = 'folder') =>
+    structuredAgentCliSourceFromEvidence({
+      agent: 'claude',
+      workspaceId,
+      resumeFrom,
+      evidence: captured
+    })
+  expect(() => resolve(evidence, 'other')).toThrow('agent_session_identity_required')
+  const routeFault = () => {
+    throw new Error('unused route failure')
+  }
+  expect(
+    resolve(
+      captureStructuredAgentCliSource(
+        () => [row, { ...row, worktreeId: 'other' }],
+        resumeFrom.cliSource,
+        routeFault
+      )
+    )
+  ).toEqual({ kind: 'matched', transcriptPath })
+  expect(
+    resolve(
+      captureStructuredAgentCliSource(
+        () => [{ ...row, providerSession: { key: 'session_id', id } }],
+        resumeFrom.cliSource,
+        routeFault
+      )
+    )
+  ).toEqual({ kind: 'matched' })
+  expect(find).not.toHaveBeenCalled()
+  const adoption = await lookup()
+  expect(resumeFrom.cliSource).toEqual({ workspaceId: 'folder', paneKey: 'tab:leaf' })
+  expect(adoption).toEqual({ accountHome: selectedAccountHome, transcriptPath })
+  expect(store).toHaveBeenCalledOnce()
+  const prepared = await prepareAdoptedTranscript(params('claude', adoption.transcriptPath))
+  expect(prepared).toMatchObject({ ok: true })
+  if (!prepared.ok) {
+    throw new Error('Claude history was not imported')
+  }
+  expect(prepared.items).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        body: expect.objectContaining({
+          blocks: expect.arrayContaining([
+            expect.objectContaining({ text: 'early Claude request' })
+          ])
+        })
+      }),
+      expect.objectContaining({
+        body: expect.objectContaining({
+          blocks: expect.arrayContaining([expect.objectContaining({ text: 'late Claude reply' })])
+        })
+      })
+    ])
+  )
 })
 
 it('judges the lookup and its re-admission against one store resolved once per account', async () => {
@@ -206,7 +472,10 @@ it.skipIf(process.platform === 'win32')(
         selectedAccountHome: { variable: 'CLAUDE_CONFIG_DIR', path: linked },
         launchEnv: {},
         workspaceCwd: root,
-        resolveTranscriptPath: () => join(linked, 'projects', 'folder', `${id}.jsonl`)
+        resolveTranscriptSource: () => ({
+          kind: 'matched',
+          transcriptPath: join(linked, 'projects', 'folder', `${id}.jsonl`)
+        })
       })
     ).rejects.toMatchObject({ refusal: { details: { reason: 'transcriptNotFound' } } })
   }

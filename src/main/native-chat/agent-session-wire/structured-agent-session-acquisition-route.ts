@@ -1,3 +1,4 @@
+import { AgentSessionAcquisitionRootExitObservedError } from './structured-agent-session-adapter'
 import { stopAgentSessionProviderRoot } from './structured-agent-session-provider-exit-proof'
 import type { StructuredAgentSessionAcquisitionReceipt } from './structured-agent-session-startup-attempt-contract'
 import type { StructuredAgentRegistration } from './structured-agent-registry'
@@ -8,7 +9,7 @@ import type {
 
 export type SessionRoute = {
   registration: StructuredAgentRegistration
-  state: 'acquiring' | 'live' | 'stopped'
+  state: 'acquiring' | 'live' | 'stopped' | 'kill-delivered'
   acquisition?: StructuredAgentSessionAcquisitionReceipt
 }
 
@@ -71,34 +72,25 @@ export async function releaseSessionRoute(
 ): Promise<boolean> {
   const route = routes.get(input.sessionId)
   if (route) {
-    if (route.state === 'stopped') {
-      return true
-    }
-    if (!route.registration.adapter.hasOwnedAcquisition?.(input.sessionId)) {
+    if (
+      route.state !== 'stopped' &&
+      route.state !== 'kill-delivered' &&
+      !route.registration.adapter.hasOwnedAcquisition?.(input.sessionId)
+    ) {
       if (routes.get(input.sessionId) === route) {
         routes.delete(input.sessionId)
       }
       return false
     }
     try {
-      let exitReport: Error | undefined
-      const stopped = await stopAgentSessionProviderRoot(
-        () => route.registration.adapter.releaseAcquisition?.(input) ?? Promise.resolve(false),
-        (error) => {
-          exitReport = error
-        }
+      return await stopSessionRoute(route, () =>
+        route.registration.adapter.releaseAcquisition?.(input)
       )
-      if (stopped && routes.get(input.sessionId) === route) {
-        route.state = 'stopped'
-      }
-      if (exitReport) {
-        throw exitReport
-      }
-      return stopped
     } catch (error) {
       if (
         routes.get(input.sessionId) === route &&
         route.state !== 'stopped' &&
+        route.state !== 'kill-delivered' &&
         !route.registration.adapter.hasOwnedAcquisition?.(input.sessionId)
       ) {
         routes.delete(input.sessionId)
@@ -111,4 +103,34 @@ export async function releaseSessionRoute(
     released = (await candidate.releaseAcquisition?.(input)) === true || released
   }
   return released
+}
+
+/** Retain the terminal writer evidence until the host durably acknowledges release. */
+export async function stopSessionRoute(
+  route: SessionRoute,
+  stop: () => Promise<boolean> | undefined
+): Promise<boolean> {
+  if (route.state === 'kill-delivered') {
+    throw new AgentSessionAcquisitionRootExitObservedError(
+      new Error('provider writer killed'),
+      'kill-delivered'
+    )
+  }
+  if (route.state === 'stopped') {
+    return true
+  }
+  let exitReport: Error | undefined
+  const stopped = await stopAgentSessionProviderRoot(
+    () => stop() ?? Promise.resolve(false),
+    (error) => {
+      exitReport = error
+    }
+  )
+  if (stopped) {
+    route.state = stopped === 'kill-delivered' ? stopped : 'stopped'
+  }
+  if (exitReport) {
+    throw exitReport
+  }
+  return !!stopped
 }

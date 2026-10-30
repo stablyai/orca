@@ -1,3 +1,4 @@
+import { terminalInputSend } from '../terminal/mobile-terminal-operations'
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
@@ -42,6 +43,7 @@ describe('mobile clipboard image followed by typing', () => {
         close: vi.fn()
       }
       const paste = useMobileTerminalPaste({
+        sendTerminalUserInput: terminalInputSend.request,
         agent,
         activeHandle: 'term-1',
         activeHandleRef: { current: 'term-1' },
@@ -94,6 +96,7 @@ describe('mobile clipboard image followed by typing', () => {
       })
       const onSuccess = vi.fn()
       const paste = useMobileTerminalPaste({
+        sendTerminalUserInput: terminalInputSend.request,
         agent: null,
         activeHandle: 'term-1',
         activeHandleRef,
@@ -154,6 +157,7 @@ describe('mobile clipboard text paste', () => {
       close: vi.fn()
     }
     const paste = useMobileTerminalPaste({
+      sendTerminalUserInput: terminalInputSend.request,
       agent: null,
       activeHandle: 'term-1',
       activeHandleRef: { current: 'term-1' },

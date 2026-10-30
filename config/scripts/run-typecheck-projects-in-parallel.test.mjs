@@ -12,12 +12,14 @@ import { tmpdir } from 'node:os'
 import { join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { resolvePinnedBunExecutable } from './pinned-bun-executable.mjs'
 import {
   MOBILE_TYPECHECK_PROJECTS,
   TYPECHECK_PROJECTS,
   admissibleHeapGib,
   planTypecheckBatches,
   resolveProjectCompiler,
+  resolveTypecheckBunExecutable,
   resolveTypecheckCommand,
   parseTypecheckOptions,
   selectTypecheckCompiler,
@@ -213,6 +215,38 @@ describe('local and CI compiler selection', () => {
     expect(() =>
       selectTypecheckCompiler('bun', { root: repoRoot, resolveBunExecutable: () => null })
     ).toThrow('run pnpm install')
+  })
+
+  it('reports a timed-out installed Bun probe without changing optional fallback', () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'orca-bun-probe-')))
+    try {
+      const manifest = join(root, 'node_modules', 'bun')
+      mkdirSync(manifest, { recursive: true })
+      mkdirSync(join(root, 'config'))
+      writeFileSync(join(root, 'package.json'), '{}')
+      writeFileSync(join(root, 'config', '.bun-version'), '1.4.4')
+      writeFileSync(join(manifest, 'package.json'), JSON.stringify({ bin: { bun: 'bin/bun' } }))
+      const execute = () => ({ code: null, signal: 'SIGTERM', stdout: '', timedOut: true })
+      expect(resolvePinnedBunExecutable(root, execute)).toBeNull()
+      expect(() =>
+        selectTypecheckCompiler('bun', {
+          root,
+          resolveBunExecutable: (directory, hint) =>
+            resolveTypecheckBunExecutable(directory, hint, execute)
+        })
+      ).toThrow(/Bun version probe timed out after 2000 ms: .*or pass --compiler=native\./)
+      expect(() => resolveTypecheckBunExecutable(root, null, execute)).toThrow(
+        /Retry when the host is less busy\.$/
+      )
+      expect(
+        resolveTypecheckBunExecutable(root, null, () => ({ code: 0, stdout: '1.4.4\n' }))
+      ).toBe(join(manifest, 'bin/bun'))
+      expect(
+        resolveTypecheckBunExecutable(root, null, () => ({ code: 0, stdout: '1.4.3\n' }))
+      ).toBeNull()
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 
   it('never probes Bun when tsc is requested', () => {

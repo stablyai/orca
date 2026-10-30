@@ -23,6 +23,7 @@
     "start:emulator": "node scripts/start-emulator.mjs"
   },
   "dependencies": {
+    "@formatjs/intl-pluralrules": "6.3.16",
     "@noble/hashes": "1.8.0",
     "@orca/expo-two-way-audio": "file:./packages/expo-two-way-audio",
     "@react-native-async-storage/async-storage": "^2.2.0",
@@ -43,6 +44,7 @@
     "expo-image-picker": "^55.0.24",
     "expo-keep-awake": "~55.0.8",
     "expo-linking": "^55.0.17",
+    "expo-localization": "~55.0.19",
     "expo-modules-core": "~55.0.26",
     "expo-network": "~55.0.18",
     "expo-notifications": "^55.0.27",
@@ -52,6 +54,7 @@
     "expo-status-bar": "^55.0.6",
     "expo-task-manager": "~55.0.20",
     "fflate": "0.8.3",
+    "i18next": "26.5.11",
     "lowlight": "^3.3.0",
     "lucide-react-native": "^1.14.0",
     "markdown-it": "^14.3.2",

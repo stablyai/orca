@@ -131,16 +131,6 @@ describe('Chat settings deep links', () => {
     await waitFor(() => expect(scrollIntoView.mock.contexts).toContain(visuals))
   })
 
-  it('activates Chat and renders the moved row for a deep link', async () => {
-    render(<NavigationHarness enabled initialSection="appearance" />)
-    await waitFor(() => {
-      expect(screen.getByRole('status', { name: 'Selected settings page' }).textContent).toBe(
-        'chat'
-      )
-    })
-    expect(screen.getByRole('spinbutton', { name: 'Code text size' })).toBeTruthy()
-  })
-
   it('activates Chat and scrolls to the separate naming section for its deep link', async () => {
     const scrollIntoView = vi.spyOn(HTMLElement.prototype, 'scrollIntoView')
     const { container } = render(

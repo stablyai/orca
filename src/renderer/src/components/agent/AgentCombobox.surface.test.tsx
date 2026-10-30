@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ReactElement } from 'react'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
@@ -32,7 +32,7 @@ const CHAT_ROWS: NewTabAgentMenuRow[] = [
   { kind: 'chat', agent: 'claude' },
   { kind: 'chat', agent: 'codex' },
   { kind: 'chat-unavailable', agent: 'grok', reason: 'subfolder' },
-  { kind: 'cli', agent: 'gemini' },
+  { kind: 'cli', agent: 'gemini', chat: true },
   { kind: 'cli', agent: 'grok' }
 ]
 
@@ -89,6 +89,7 @@ describe('AgentCombobox surface rows', () => {
 
     fireEvent.click(screen.getByRole('combobox'))
     expect(option('Gemini').textContent).toBe('Gemini (CLI)')
+    expect(within(option('Gemini')).queryByRole('button')).toBeNull()
     expect(option('Grok').getAttribute('aria-disabled')).toBe('true')
     expect(option('Grok').textContent).toContain('No chat in a subfolder')
     fireEvent.click(option('Codex'))
@@ -126,6 +127,10 @@ describe('AgentCombobox surface rows', () => {
     fireEvent.pointerMove(option('Claude'))
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(onPick).toHaveBeenLastCalledWith('claude', 'chat')
+
+    fireEvent.click(screen.getByRole('combobox'))
+    fireEvent.click(option('Gemini'))
+    expect(onPick).toHaveBeenLastCalledWith('gemini', 'terminal')
   })
 
   it('shows a terminal pick as the CLI and keeps its button lit on reopen', () => {

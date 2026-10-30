@@ -1,4 +1,5 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
+import { translate } from '../i18n/mobile-i18n'
 import {
   BottomDrawer,
   View,
@@ -32,7 +33,10 @@ export function renderMobileTasksItemDetailDrawer(model: ConnectionPresentationM
               <Pressable
                 style={styles.iconButton}
                 disabled={detailLoading}
-                accessibilityLabel="Refresh details"
+                accessibilityLabel={translate(
+                  'tasks.itemDetailDrawer.refreshDetails',
+                  'Refresh details'
+                )}
                 onPress={() => setDetailRefreshSeq((current) => current + 1)}
               >
                 <RefreshCw

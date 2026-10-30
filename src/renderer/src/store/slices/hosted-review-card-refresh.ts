@@ -32,6 +32,8 @@ export function refreshHostedReviewCard(
     repoId: args.repoId,
     ...(args.admissionTier ? { admissionTier: args.admissionTier } : {}),
     repoOwnerExecutionHostId: args.repoOwnerExecutionHostId,
+    // Every caller follows a user act (Refresh, or a review created, linked or edited), so it may start a stopped WSL distro (E9).
+    wakeWslDistro: true,
     linkedGitHubPR: args.linkedGitHubPR ?? null,
     ...(fallbackGitHubPR !== null ? { fallbackGitHubPR } : {}),
     linkedGitLabMR: args.linkedGitLabMR ?? null,

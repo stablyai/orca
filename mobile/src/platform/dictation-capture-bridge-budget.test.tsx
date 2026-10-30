@@ -21,7 +21,10 @@ import {
   type BridgePortPair
 } from '../mobile-web-shell/bridge/bridge-port-pair-test-harness'
 import { MobileDictationPendingAudioBudget } from '../hooks/mobile-dictation-pending-audio-budget'
-import { enqueueMobileDictationAudioChunk } from '../hooks/mobile-dictation-audio-chunk'
+import {
+  enqueueMobileDictationAudioChunk,
+  MobileDictationTranscriptSoFar
+} from '../hooks/mobile-dictation-audio-chunk'
 import { createNativeAudioCapture, type NativeAudioEngine } from './native-audio'
 import { createPageDictationCapture } from './dictation-capture.web'
 import {
@@ -98,7 +101,8 @@ async function runDictation(
     enqueueMobileDictationAudioChunk(pair.client, 'dictation-1', chunk, {
       pendingChunks,
       pendingAudioBudget,
-      shouldReleaseBudget: () => true,
+      isActive: () => true,
+      transcriptSoFar: new MobileDictationTranscriptSoFar(),
       failActiveDictation: (_id, error) => {
         refusals.push(error instanceof Error ? error.message : String(error))
       }

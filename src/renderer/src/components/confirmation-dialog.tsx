@@ -219,22 +219,24 @@ export function ConfirmationDialogProvider({
               Icon && '-mx-6 -mb-6 rounded-b-lg border-t border-border bg-muted/30 px-6 py-4'
             )}
           >
-            <Button
-              type="button"
-              variant={displayedRequest?.options.cancelVariant ?? 'outline'}
-              size={buttonSize}
-              onKeyDown={ignoreRepeatedKey}
-              onClick={(event) => {
-                if (!isFreshClick(event)) {
-                  return
-                }
-                activeRequestRef.current?.options.onCancelClicked?.()
-                settleActiveRequest(false)
-              }}
-            >
-              {displayedRequest?.options.cancelLabel ??
-                translate('auto.components.confirmation.dialog.56f5c60e0c', 'Cancel')}
-            </Button>
+            {displayedRequest?.options.acknowledgeOnly ? null : (
+              <Button
+                type="button"
+                variant={displayedRequest?.options.cancelVariant ?? 'outline'}
+                size={buttonSize}
+                onKeyDown={ignoreRepeatedKey}
+                onClick={(event) => {
+                  if (!isFreshClick(event)) {
+                    return
+                  }
+                  activeRequestRef.current?.options.onCancelClicked?.()
+                  settleActiveRequest(false)
+                }}
+              >
+                {displayedRequest?.options.cancelLabel ??
+                  translate('auto.components.confirmation.dialog.56f5c60e0c', 'Cancel')}
+              </Button>
+            )}
             <Button
               ref={confirmButtonRef}
               type="button"

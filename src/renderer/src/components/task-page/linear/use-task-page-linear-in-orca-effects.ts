@@ -1,3 +1,4 @@
+import { taskProviderErrorText } from '@/lib/task-provider-error-copy'
 import type { TaskPageLinearListEffectsModel } from './use-task-page-linear-list-effects'
 import { useEffect } from 'react'
 import {
@@ -110,7 +111,11 @@ export function useTaskPageLinearInOrcaEffects(model: TaskPageLinearListEffectsM
         ) {
           return
         }
-        setLinearError(err instanceof Error ? err.message : 'Failed to load Linear issues.')
+        setLinearError(
+          err instanceof Error
+            ? taskProviderErrorText(err.message)
+            : taskProviderErrorText('Failed to load Linear issues.')
+        )
         setLinearLoading(false)
       })
     return () => {

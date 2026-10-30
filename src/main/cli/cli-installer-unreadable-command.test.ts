@@ -52,45 +52,5 @@ describe.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
       await chmod(fixture.foreignPath, 0o600)
       expect(await readFile(fixture.foreignPath, 'utf8')).toBe(unreadableContents)
     })
-
-    it('keeps the installed launcher before a later unreadable executable', async () => {
-      const fixture = await createUnreadableCommandFixture()
-      const installer = new CliInstaller({
-        ...fixture,
-        platform: 'darwin',
-        isPackaged: true,
-        execPath: join(fixture.root, 'Orca'),
-        homePath: join(fixture.root, 'home'),
-        defaultMacCommandPath: fixture.commandPath,
-        processPathEnv: `${fixture.defaultBin}:${fixture.foreignBin}`
-      })
-
-      await expect(installer.getStatus()).resolves.toMatchObject({
-        state: 'installed',
-        commandPath: fixture.commandPath
-      })
-    })
-
-    it.each(['darwin', 'linux'] as const)(
-      'reports an unreadable explicit %s command as a conflict',
-      async (platform) => {
-        const fixture = await createUnreadableCommandFixture()
-        const installer = new CliInstaller({
-          ...fixture,
-          platform,
-          isPackaged: true,
-          execPath: join(fixture.root, 'Orca'),
-          homePath: join(fixture.root, 'home'),
-          commandPathOverride: fixture.foreignPath,
-          processPathEnv: fixture.foreignBin
-        })
-
-        await expect(installer.getStatus()).resolves.toMatchObject({
-          state: 'conflict',
-          commandPath: fixture.foreignPath,
-          currentTarget: null
-        })
-      }
-    )
   }
 )

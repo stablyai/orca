@@ -269,16 +269,22 @@ function declarationOf(parsed, name) {
   return found
 }
 
+// Unwrap StyleSheet.create({...}) and themedStyleSheet(() => ({...})) to the object they build.
 function styleObjectOf(initializer) {
-  if (initializer === null) {
+  if (initializer === null || initializer === undefined) {
     return null
   }
   if (ts.isObjectLiteralExpression(initializer)) {
     return initializer
   }
+  if (ts.isParenthesizedExpression(initializer)) {
+    return styleObjectOf(initializer.expression)
+  }
+  if (ts.isArrowFunction(initializer) && !ts.isBlock(initializer.body)) {
+    return styleObjectOf(initializer.body)
+  }
   if (ts.isCallExpression(initializer) && initializer.arguments.length > 0) {
-    const first = initializer.arguments[0]
-    return ts.isObjectLiteralExpression(first) ? first : null
+    return styleObjectOf(initializer.arguments[0])
   }
   return null
 }
@@ -327,10 +333,13 @@ function resolveStyleKey(mobileDir, file, exportName, key, seen = new Set()) {
 
 // Numeric literals at/above floor are valid without seam binding; forcing larger fields onto seam could shrink them.
 // Do not evaluate expressions: theme arithmetic can drift and census must not become second renderer.
-function isLiteralAtOrAboveFloor(mobileDir, initializer) {
+// A same-module const naming a literal (the composer's text size) is still a literal.
+function isLiteralAtOrAboveFloor(mobileDir, parsed, initializer) {
+  const value = ts.isIdentifier(initializer) ? declarationOf(parsed, initializer.text) : initializer
   return (
-    ts.isNumericLiteral(initializer) &&
-    Number(initializer.text) >= textInputFontSizeFloor(mobileDir)
+    value !== null &&
+    ts.isNumericLiteral(value) &&
+    Number(value.text) >= textInputFontSizeFloor(mobileDir)
   )
 }
 
@@ -343,7 +352,7 @@ function fontSizeIn(mobileDir, parsed, file, object) {
         line: parsed.getLineAndCharacterOfPosition(entry.getStart(parsed)).line + 1,
         onSeam:
           isSeamBinding(mobileDir, parsed, file, entry.initializer) ||
-          isLiteralAtOrAboveFloor(mobileDir, entry.initializer)
+          isLiteralAtOrAboveFloor(mobileDir, parsed, entry.initializer)
       }
     }
   }

@@ -14,18 +14,18 @@ import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import { reviseAgentSessionProviderResumePoint } from '../runtime/agent-session/ownership/agent-session-provider-handle-transition'
-import {
-  ClaudeStructuredSessionAdapter,
-  type ClaudeStructuredSessionAdapterDeps,
-  type ClaudeStructuredSessionEvent
-} from './claude-structured-session-adapter'
+import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
+import type {
+  ClaudeStructuredSessionAdapterDeps,
+  ClaudeStructuredSessionEvent
+} from './structured/claude-structured-session-state'
 import {
   fakeClaude,
   identityFor,
   PROVIDER_SESSION_ID,
-  claudeStartupSettled,
   tick
 } from './claude-structured-session-test-support'
+import { claudeStartupSettled } from './claude-structured-startup-settled-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const FENCE = 7
@@ -105,6 +105,7 @@ async function liveOwner(
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: options.resumeLeafUuid === undefined ? 'resumed-at' : options.resumeLeafUuid,
       resumesTranscript: options.resumesTranscript ?? true,
+      cliFlag: async () => 'supported' as const,
       continuesChain: true
     }),
     onEvent: (event) => events.push(event),
@@ -330,7 +331,7 @@ describe('Claude durable resume point at turn end', () => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only getRecord from its store.
       store: { getRecord: () => store.record } as unknown as AgentSessionRecordStore,
       resolveWorkspacePath: async (id) => `/repos/${id}`,
-      resolveCommand: () => '/usr/local/bin/claude',
+      resolveCommand: () => ({ command: '/usr/local/bin/claude', prefixArgs: [] }),
       resolveAuthPolicy: () => ({ account: 'system' })
     })
     const launch = await resolve({

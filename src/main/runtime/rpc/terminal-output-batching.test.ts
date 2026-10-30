@@ -349,6 +349,7 @@ describe('terminal output batching', () => {
         { text: 'ls\r', enter: false, interrupt: false },
         {
           inputKind: 'driving',
+          inputSource: 'mobile',
           reserveWrite: expect.any(Function),
           afterWrite: expect.any(Function)
         }

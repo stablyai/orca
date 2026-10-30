@@ -4,7 +4,7 @@ import type {
   StructuredAgentSessionCommandRun
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { dispatchClaudeTurn } from './claude-structured-dispatch'
-import type { ClaudeSession } from './claude-structured-session-state'
+import type { ClaudeSession } from './structured/claude-structured-session-state'
 
 /** Open the command turn before sending; its result settles the waiter and closes that turn. */
 export async function dispatchClaudeCommand(

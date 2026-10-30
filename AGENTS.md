@@ -1,9 +1,13 @@
 # Useful Commands
 
-- **Before handoff**: `pnpm check:changed --maxWorkers=2` (format, lint, typecheck, affected tests, ratchets; cached when nothing changed)
+- **After making code changes, before handoff**: run `pnpm check:changed --maxWorkers=2` (format, lint, typecheck, affected tests, ratchets; cached when nothing changed). Read-only reviews and security scans do not require tests unless needed to validate a specific finding.
 - **Typecheck**: `pnpm tc` (or `tc:node` / `tc:cli` / `tc:web`)
 - **Test**: `pnpm test [path/to/file.test.ts]`; affected only: `pnpm test:changed [path] --maxWorkers=2` ([details](.github/CONTRIBUTING.md#targeting-local-tests))
 - **Lint**: `oxlint`; format: `pnpm format`
+
+# Ensure main is always releasable
+
+Never break main. Use stacks or collapse PRs before merge
 
 # Design System
 
@@ -66,4 +70,4 @@ For a failed GitHub Actions run, inspect the failed jobs and retry with `gh run 
 
 # Tests
 
-Avoid adding low-value tests. These might be fine for development but offer low value when checked in. [Anti-patterns](./docs/agents-md-refs/test-antipatterns.md)
+Avoid adding low-value tests. These might be fine for development but offer negative value when checked in. [Anti-patterns](./docs/agents-md-refs/test-antipatterns.md)

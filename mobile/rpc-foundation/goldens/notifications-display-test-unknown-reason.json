@@ -42,6 +42,24 @@
         "variant": "push-test-result"
       }
     },
+    "170e48b3b256": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "Pressable": 2,
+        "Text": 5,
+        "View": 3
+      },
+      "labels": ["Send test notification"],
+      "text": [
+        "Having trouble receiving alerts?",
+        "Test push delivery, or a local notification when push is unavailable.",
+        "Send test notification",
+        "Send test notification",
+        "Troubleshooting"
+      ]
+    },
     "67d697ba09ce": {
       "name": "notifications.testPush#1",
       "ordinal": 1,
@@ -78,7 +96,7 @@
         }
       }
     },
-    "6967f95147f9": {
+    "6a40b555d64d": {
       "crash": {
         "$rpc": "null"
       },
@@ -90,39 +108,13 @@
       "labels": ["Sending…"],
       "text": [
         "Having trouble receiving alerts?",
-        "Send a test through Orca’s push service.",
+        "Test push delivery, or a local notification when push is unavailable.",
         "Send test notification",
         "Sending…",
         "Troubleshooting"
       ]
     },
-    "d86c08a509c4": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "Pressable": 2,
-        "Text": 5,
-        "View": 3
-      },
-      "labels": ["Send test notification"],
-      "text": [
-        "Having trouble receiving alerts?",
-        "Send a test through Orca’s push service.",
-        "Send test notification",
-        "Send test notification",
-        "Troubleshooting"
-      ]
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "f3e2e816b496": {
+    "b590df6ffade": {
       "crash": {
         "$rpc": "null"
       },
@@ -134,12 +126,20 @@
       "labels": ["Send test notification"],
       "text": [
         "Having trouble receiving alerts?",
-        "Send a test through Orca’s push service.",
+        "Test push delivery, or a local notification when push is unavailable.",
         "Send test notification",
         "Send test notification",
         "Troubleshooting",
         "Could not send through Orca’s push service. Try again."
       ]
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
     },
     "f68b017d64bd": {
       "name": "notifications.testPush#1",
@@ -158,7 +158,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d86c08a509c4",
+          "state": "170e48b3b256",
           "effects": []
         }
       },
@@ -171,7 +171,7 @@
             "mount": "eb79a9b3682a",
             "press": "eb79a9b3682a"
           },
-          "state": "6967f95147f9",
+          "state": "6a40b555d64d",
           "effects": []
         }
       },
@@ -184,7 +184,7 @@
             "mount": "eb79a9b3682a",
             "press": "eb79a9b3682a"
           },
-          "state": "f3e2e816b496",
+          "state": "b590df6ffade",
           "effects": ["14bb4c669631"]
         }
       }

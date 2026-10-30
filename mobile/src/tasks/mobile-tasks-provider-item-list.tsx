@@ -1,4 +1,5 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
+import { translate } from '../i18n/mobile-i18n'
 import {
   View,
   ActivityIndicator,
@@ -16,7 +17,8 @@ import {
   getHostedReviewSignalTone,
   getHostedReviewLabel,
   getHostedChecksLabel,
-  getHostedMergeLabel
+  getHostedMergeLabel,
+  type MobileColorScheme
 } from './mobile-tasks-dependencies'
 import { styles, getPrSignalToneStyle } from './mobile-tasks-legacy-styles'
 import {
@@ -29,7 +31,10 @@ import {
   getGitHubMergeLabel
 } from './mobile-tasks-legacy-foundation'
 
-export function renderMobileTasksProviderItemList(model: ConnectionPresentationModel) {
+export function renderMobileTasksProviderItemList(
+  model: ConnectionPresentationModel,
+  colorScheme: MobileColorScheme
+) {
   const {
     displayedEntries,
     emptyLabel,
@@ -64,6 +69,7 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
   ) : (
     <FlatList
       data={displayedEntries}
+      extraData={colorScheme}
       keyExtractor={(entry) => entry.key}
       ItemSeparatorComponent={({ leadingItem, trailingItem }) =>
         leadingItem?.type === 'section' || trailingItem?.type === 'section' ? null : (
@@ -78,7 +84,7 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
           <View style={styles.paginationFooter}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Previous page"
+              accessibilityLabel={translate('tasks.providerItemList.previousPage', 'Previous page')}
               accessibilityState={{
                 disabled: githubCurrentPage === 0 || githubPaginationLoading
               }}
@@ -96,8 +102,14 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
               accessibilityRole="button"
               accessibilityLabel={
                 githubCountedTotalPages === null
-                  ? `Select page, Page ${githubCurrentPage + 1}`
-                  : `Select page, Page ${githubCurrentPage + 1} of ${githubTotalPages}`
+                  ? translate('tasks.providerItemList.selectPage', 'Select page, Page {{page}}', {
+                      page: githubCurrentPage + 1
+                    })
+                  : translate(
+                      'tasks.providerItemList.selectPageOfTotal',
+                      'Select page, Page {{page}} of {{total}}',
+                      { page: githubCurrentPage + 1, total: githubTotalPages }
+                    )
               }
               accessibilityState={{ disabled: githubPaginationLoading }}
               style={styles.paginationLabelButton}
@@ -111,13 +123,18 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
             >
               <Text style={styles.paginationLabel}>
                 {githubCountedTotalPages === null
-                  ? `Page ${githubCurrentPage + 1}`
-                  : `Page ${githubCurrentPage + 1} of ${githubTotalPages}`}
+                  ? translate('tasks.providerItemList.page', 'Page {{page}}', {
+                      page: githubCurrentPage + 1
+                    })
+                  : translate('tasks.providerItemList.pageOfTotal', 'Page {{page}} of {{total}}', {
+                      page: githubCurrentPage + 1,
+                      total: githubTotalPages
+                    })}
               </Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Next page"
+              accessibilityLabel={translate('tasks.providerItemList.nextPage', 'Next page')}
               accessibilityState={{
                 disabled:
                   (!githubCanLoadUncountedNextPage && githubCurrentPage >= githubTotalPages - 1) ||
@@ -161,6 +178,11 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
         const isGitLabMr = item.provider === 'gitlab' && item.source.type === 'mr'
         const githubPrDelta = isGitHubPr ? formatGitHubPRDelta(item.source) : null
         const branchSummary = hostedBranchSummary(item)
+        const mergeLabel = isGitHubPr
+          ? getGitHubMergeLabel(item.source)
+          : isGitLabMr
+            ? getHostedMergeLabel(item.source)
+            : null
         return (
           <Pressable
             style={({ pressed }) => [styles.taskRow, pressed && styles.taskRowPressed]}
@@ -200,7 +222,9 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
                     {branchSummary.head}
                   </Text>
                   <Text style={styles.branchMetaBase} numberOfLines={1}>
-                    into {branchSummary.base}
+                    {translate('tasks.providerItemList.intoBranch', 'into {{base}}', {
+                      base: branchSummary.base
+                    })}
                   </Text>
                 </View>
               ) : null}
@@ -237,7 +261,7 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
                       {getHostedChecksLabel(item.source)}
                     </Text>
                   </View>
-                  {isGitHubPr || isGitLabMr ? (
+                  {mergeLabel ? (
                     <View
                       style={[
                         styles.prSignalChip,
@@ -245,9 +269,7 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
                       ]}
                     >
                       <Text style={styles.prSignalText} numberOfLines={1}>
-                        {isGitHubPr
-                          ? getGitHubMergeLabel(item.source)
-                          : getHostedMergeLabel(item.source)}
+                        {mergeLabel}
                       </Text>
                     </View>
                   ) : null}

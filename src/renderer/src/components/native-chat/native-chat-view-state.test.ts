@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import type { NativeChatMessage, NativeChatSession } from '../../../../shared/native-chat-types'
 import { selectNativeChatViewState, structuredChatHistoryPhase } from './native-chat-view-state'
+import { mergeNativeChatLiveSession } from '../../../../shared/native-chat/native-chat-live-status'
+import { shouldShowNativeChatWorking } from '../../../../shared/native-chat/native-chat-working-suppression'
 
 const message: NativeChatMessage = {
   id: 'a',
@@ -21,6 +23,28 @@ function session(overrides: Partial<NativeChatSession>): NativeChatSession {
 }
 
 describe('selectNativeChatViewState', () => {
+  // Session ids can arrive before transcript flush; live work must still retain Stop and its activity indicator.
+  it('keeps the Stop affordance for a working known session mid-flush', () => {
+    const live = mergeNativeChatLiveSession({
+      messages: [{ ...message, id: 'u-1', role: 'user' }],
+      sessionId: 'sess',
+      agent: 'claude',
+      hookState: 'working',
+      loading: true
+    })
+    const viewState = selectNativeChatViewState(live)
+    const isConversation = viewState.kind === 'ready'
+
+    expect(viewState).toEqual({ kind: 'ready', isWorking: true })
+    expect(
+      shouldShowNativeChatWorking({
+        isConversation,
+        working: live.status === 'working',
+        interrupted: false
+      })
+    ).toBe(true)
+  })
+
   it('keeps rendering messages while the session reports loading', () => {
     expect(selectNativeChatViewState(session({ status: 'loading' }))).toEqual({
       kind: 'ready',

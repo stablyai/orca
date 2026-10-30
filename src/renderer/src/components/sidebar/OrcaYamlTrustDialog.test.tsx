@@ -40,11 +40,6 @@ vi.mock('@/components/ui/button', () => ({
   )
 }))
 
-// Use English fallbacks so this JSX-whitespace regression is independent of locale loading.
-vi.mock('@/i18n/i18n', () => ({
-  translate: (_key: string, fallback: string) => fallback
-}))
-
 function decodeHtml(html: string): string {
   return html
     .replace(/&#x27;/g, "'")

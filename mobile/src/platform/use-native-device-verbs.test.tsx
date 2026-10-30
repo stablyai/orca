@@ -1,10 +1,18 @@
-import type { ReactElement } from 'react'
+import { StrictMode, type ReactElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+type PickerResult = { canceled: boolean; assets?: { uri: string; mimeType: string }[] }
+
 const device = vi.hoisted(() => ({
   clipboard: { getStringAsync: vi.fn(() => Promise.resolve('on the pasteboard')) },
-  picker: { launchImageLibraryAsync: vi.fn(() => Promise.resolve({ canceled: true })) },
+  picker: {
+    launchImageLibraryAsync: vi.fn((): Promise<PickerResult> =>
+      Promise.resolve({ canceled: true })
+    ),
+    getDocumentAsync: vi.fn((): Promise<PickerResult> => Promise.resolve({ canceled: true }))
+  },
+  files: new Map<string, Uint8Array>(),
   deleted: new Array<string>(),
   wakeTags: new Array<string>()
 }))
@@ -15,7 +23,7 @@ vi.mock('expo-clipboard', () => ({
   getImageAsync: () => Promise.resolve(null)
 }))
 vi.mock('expo-document-picker', () => ({
-  getDocumentAsync: () => Promise.resolve({ canceled: true })
+  getDocumentAsync: device.picker.getDocumentAsync
 }))
 vi.mock('@orca/expo-two-way-audio', () => ({
   addExpoTwoWayAudioEventListener: () => ({ remove: () => {} }),
@@ -41,14 +49,17 @@ vi.mock('expo-image-picker', () => ({
 vi.mock('expo-file-system', () => ({
   File: class {
     readonly uri: string
-    readonly size = 0
     constructor(...parts: string[]) {
       this.uri = parts.join('/')
+    }
+    get size(): number {
+      return device.files.get(this.uri)?.byteLength ?? 0
     }
     create(): void {}
     write(): void {}
     delete(): void {
       device.deleted.push(this.uri)
+      device.files.delete(this.uri)
     }
     open(): { offset: number | null; readBytes: () => Uint8Array; close: () => void } {
       return { offset: 0, readBytes: () => new Uint8Array(), close: () => {} }
@@ -61,15 +72,30 @@ import { useNativeDeviceVerbs } from './use-native-device-verbs'
 
 type Serve = ReturnType<typeof useNativeDeviceVerbs>
 
-function mount(sessionId: string | null): { serve: Serve; unmount: () => void } {
+function mount(
+  sessionId: string | null,
+  strict = false
+): {
+  serve: Serve
+  replace: (sessionId: string) => void
+  unmount: () => void
+} {
   const held: { serve: Serve | null } = { serve: null }
   function Probe({ session }: { session: string | null }): ReactElement | null {
     held.serve = useNativeDeviceVerbs(session)
     return null
   }
+  const render = (session: string | null): ReactElement =>
+    strict ? (
+      <StrictMode>
+        <Probe session={session} />
+      </StrictMode>
+    ) : (
+      <Probe session={session} />
+    )
   let tree: ReturnType<typeof create> | null = null
   act(() => {
-    tree = create(<Probe session={sessionId} />)
+    tree = create(render(sessionId))
   })
   const serve: Serve = (verb, params) => {
     if (held.serve === null) {
@@ -79,6 +105,11 @@ function mount(sessionId: string | null): { serve: Serve; unmount: () => void } 
   }
   return {
     serve,
+    replace: (sessionId) => {
+      act(() => {
+        tree?.update(render(sessionId))
+      })
+    },
     unmount: () => {
       act(() => {
         tree?.unmount()
@@ -112,6 +143,67 @@ describe('the device handler the shell hands its host', () => {
     })
     unmount()
   })
+})
+
+describe('a picker completing after its page session ends', () => {
+  beforeEach(() => {
+    device.files.clear()
+    device.deleted.length = 0
+  })
+
+  const cases = (['unmount', 'replace'] as const).flatMap((ending) =>
+    (['library', 'files'] as const).flatMap((source) =>
+      [false, true].map((strict) => ({ ending, source, strict }))
+    )
+  )
+  it.each(cases)(
+    'discards late $source files after $ending and preserves a successor, StrictMode=$strict',
+    async ({ ending, source, strict }) => {
+      let answer: (result: PickerResult) => void = () => {
+        throw new Error('the picker has not opened')
+      }
+      const pending = new Promise<PickerResult>((resolve) => {
+        answer = resolve
+      })
+      const picker =
+        source === 'library'
+          ? device.picker.launchImageLibraryAsync
+          : device.picker.getDocumentAsync
+      picker.mockReturnValueOnce(pending)
+      const first = mount('session-a', strict)
+      const picked = first.serve('native.media.pick', { source, multiple: true })
+      expect(picker).toHaveBeenCalled()
+      if (ending === 'unmount') {
+        first.unmount()
+      } else {
+        first.replace('session-b')
+      }
+      const successor = ending === 'unmount' ? mount('session-b', strict) : first
+      const liveUri = 'file:///cache/successor.png'
+      device.files.set(liveUri, new Uint8Array(4096))
+      picker.mockResolvedValueOnce({
+        canceled: false,
+        assets: [{ uri: liveUri, mimeType: 'image/png' }]
+      })
+      const live = await successor.serve('native.media.pick', { source, multiple: false })
+      expect(live).toMatchObject({ items: [{ byteLength: 4096 }] })
+      const lateUris = ['file:///cache/late-1.png', 'file:///cache/late-2.png']
+      for (const uri of lateUris) {
+        device.files.set(uri, new Uint8Array(1024 * 1024))
+      }
+      answer({
+        canceled: false,
+        assets: lateUris.map((uri) => ({ uri, mimeType: 'image/png' }))
+      })
+      await expect(picked).resolves.toEqual({ items: [] })
+      expect(device.deleted).toEqual(lateUris)
+      expect([...device.files.keys()]).toEqual([liveUri])
+      expect(device.files.get(liveUri)?.byteLength).toBe(4096)
+      successor.unmount()
+      expect(device.deleted).toEqual([...lateUris, liveUri])
+      expect(device.files.size).toBe(0)
+    }
+  )
 })
 
 describe('the screen a page session leaves behind', () => {

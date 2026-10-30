@@ -1,7 +1,10 @@
 import { vi, type Mock } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { activeProviderContext } from '../../../shared/agent-session-provider-context'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import {
+  claudeProviderHandle,
+  codexProviderHandle
+} from '../../../shared/agent-session-provider-handle-encoding'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
@@ -13,6 +16,7 @@ import {
 } from './structured-agent-session-host-test-data'
 
 export type QueuedRigProviderOptions = {
+  agent?: 'claude'
   rewind?: NonNullable<StructuredAgentSessionAdapter['rewind']>
   recoverRewind?: NonNullable<StructuredAgentSessionAdapter['recoverRewind']>
   /** Resume the saved thread on later children after close/death. */
@@ -94,7 +98,10 @@ export function createQueuedRigProvider(
         acquisitionGeneration: 'generation-1',
         link: {
           linkId: `link-${fence}`,
-          handle: codexProviderHandle(thread),
+          handle:
+            options.agent === 'claude'
+              ? claudeProviderHandle(thread, null)
+              : codexProviderHandle(thread),
           origin: resumes ? ('resumed' as const) : ('created' as const),
           mintedAtFence: fence,
           observedAt: NOW

@@ -123,4 +123,29 @@ describe('durable orcad migration catalog import', () => {
     })
     expect(flush).toHaveBeenCalledTimes(2)
   })
+
+  it('flushes before answering committed by reference, and says so', async () => {
+    const reference = { migrationId: 'move-1', manifestSha256: 'a'.repeat(64) }
+    const committed = { ...reference, state: 'committed' as const, aborted: false }
+    const flush = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('disk full'))
+      .mockResolvedValueOnce(undefined)
+    const args = {
+      store: {
+        abortStagedOrcadMigrationCatalogByReference: vi.fn().mockReturnValue(committed),
+        flushPendingOrThrowAsync: flush
+      },
+      reference
+    }
+
+    // A committed answer whose flush failed must not reach a caller that would act on it.
+    await expect(abortStagedOrcadMigrationCatalogByReferenceDurably(args)).rejects.toThrow(
+      'disk full'
+    )
+    await expect(abortStagedOrcadMigrationCatalogByReferenceDurably(args)).resolves.toEqual({
+      ...committed,
+      durableCommitted: true
+    })
+  })
 })

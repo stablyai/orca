@@ -5,7 +5,11 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
 import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
-import { structuredAgentSupportsLaunch } from './structured-agent-launch-support'
+import {
+  structuredAgentSupportsLaunch,
+  structuredAgentHostLaunchSources,
+  resolveHostStructuredAgentLaunchEnvironment
+} from './structured-agent-launch-support'
 import { createStructuredAgentEnvironmentResolvers } from './structured-agent-shell-environment'
 import type * as LoginShellModule from '../startup/login-shell-environment'
 import type * as VersionProbeModule from '../agent-cli-version-probe'
@@ -188,4 +192,29 @@ describe('structuredAgentSupportsLaunch', () => {
       expect(asked.map(({ program }) => program)).toEqual([launch.command, launch.command])
     }
   )
+})
+
+it('uses the same configured launch profile for a checking session as the ordinary host launch', async () => {
+  const configured = {
+    ...settings,
+    agentPermissionDefault: 'own' as const,
+    agentDefaultEnv: { goose: { GOOSE_MODE: 'manual', CATALOG_OWNER: 'configured' } }
+  }
+  const controller = new AbortController()
+  try {
+    const ordinary = await resolveHostStructuredAgentLaunchEnvironment('goose', configured)
+    const checking = await structuredAgentHostLaunchSources(
+      'goose',
+      {
+        requireStore: () => ({ getSettings: () => configured }),
+        resolveStructuredAgentAccountHome: async () => ({ variable: 'HOME', path: '/fixture-home' })
+      },
+      controller.signal
+    )
+    expect(checking.env).toEqual(ordinary)
+    expect(checking.env).toMatchObject({ GOOSE_MODE: 'manual', CATALOG_OWNER: 'configured' })
+    expect(checking.commandSettings).toBe(configured)
+  } finally {
+    controller.abort()
+  }
 })

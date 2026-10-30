@@ -26,6 +26,9 @@ import {
   AgentPermissionMenu,
   type AgentPermissionChoiceRow
 } from './AgentPermissionChoiceControls'
+import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
+import type { AgentOpensAs } from './native-chat-provider-choice'
+import { AgentOpensAsControl } from './AgentChatChoiceControls'
 
 type AgentAvailability = 'enabled' | 'disabled'
 
@@ -95,6 +98,10 @@ export type AgentCatalogRowProps = {
   /** The text a terminal launch gets, when it differs from the editable Arguments. */
   launchArgs?: string
   environmentEditor?: React.ReactNode
+  /** Whether new sessions open as a chat or the CLI; absent where this computer offers no choice. */
+  opensAs?: AgentOpensAs
+  /** The downloaded chat program's install and sign-in, shown in the row's details. */
+  chatRuntime?: React.ReactNode
 }
 
 export function AgentCatalogRow({
@@ -121,7 +128,9 @@ export function AgentCatalogRow({
   environmentEditor,
   permission,
   permissionChoice,
-  launchArgs = argsOverride
+  launchArgs = argsOverride,
+  opensAs,
+  chatRuntime
 }: AgentCatalogRowProps): React.JSX.Element {
   const envSummary = environmentNames?.join(' ') ?? stringifyAgentDefaultEnvDraft(envOverride)
   const defaultEnvSummary = stringifyAgentDefaultEnvDraft(defaultEnv)
@@ -146,10 +155,14 @@ export function AgentCatalogRow({
       )?.focus()
     })
   }
-  const expandable = isDetected || permission !== undefined || permissionChoice !== undefined
+  const expandable =
+    isDetected ||
+    permission !== undefined ||
+    permissionChoice !== undefined ||
+    chatRuntime !== undefined
 
   return (
-    <div className={cn('py-3', !isDetected && 'opacity-70')}>
+    <div className={cn('py-3', !isDetected && !opensAs?.cliMissing && 'opacity-70')}>
       <div className="flex flex-wrap items-start gap-3">
         <div className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border/50 bg-background/50">
           <AgentIcon agent={agentId} size={16} />
@@ -177,7 +190,7 @@ export function AgentCatalogRow({
           </div>
         </div>
 
-        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+        <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1.5">
           {permissionChoice?.source === 'agent' && (
             <div className="mr-3 flex h-7 items-center">
               <button
@@ -200,12 +213,13 @@ export function AgentCatalogRow({
               />
             </div>
           )}
-          <div className="grid grid-cols-[max-content_6.5rem_1.75rem_1.75rem] items-center gap-1.5">
-            <AgentAvailabilityControl
-              label={label}
-              isEnabled={isEnabled}
-              onSetEnabled={onSetEnabled}
-            />
+          {opensAs && <AgentOpensAsControl label={label} opensAs={opensAs} />}
+          <AgentAvailabilityControl
+            label={label}
+            isEnabled={isEnabled}
+            onSetEnabled={onSetEnabled}
+          />
+          <div className="grid grid-cols-[minmax(6.5rem,max-content)_1.75rem_1.75rem] items-center gap-1.5">
             <div className="flex justify-start">
               {isDetected && isEnabled && (
                 <Button
@@ -213,6 +227,7 @@ export function AgentCatalogRow({
                   variant={isDefault ? 'secondary' : 'ghost'}
                   size="xs"
                   onClick={onSetDefault}
+                  aria-pressed={isDefault}
                   title={
                     isDefault
                       ? translate('settings.agents.clearDefault', 'Clear default agent')
@@ -223,16 +238,15 @@ export function AgentCatalogRow({
                   }
                   className="h-7 w-full justify-center gap-1 text-xs"
                 >
-                  {isDefault && <Check className="size-3" />}
-                  {isDefault
-                    ? translate('auto.components.settings.AgentsPane.24e032fa34', 'Default')
-                    : translate('auto.components.settings.AgentsPane.959b67385b', 'Set default')}
+                  <Check className={cn('size-3', !isDefault && 'invisible')} />
+                  {translate('auto.components.settings.AgentsPane.24e032fa34', 'Default')}
                 </Button>
               )}
             </div>
             <a
               href={homepageUrl}
               target="_blank"
+              onClick={openAppHttpLinkFromAnchor}
               rel="noopener noreferrer"
               title={
                 isDetected
@@ -272,6 +286,7 @@ export function AgentCatalogRow({
 
       {expandable && cmdOpen && (
         <div className="mt-3 space-y-3 pl-10">
+          {chatRuntime}
           {permissionChoice && (
             <div ref={permissionRef}>
               <AgentPermissionMenu agentId={agentId} label={label} permission={permissionChoice} />
@@ -298,17 +313,20 @@ export function AgentCatalogRow({
                   defaultArgs={defaultArgs}
                   argsOverride={argsOverride}
                   onSaveArgs={onSaveArgs}
-                  permissionChip={
+                  choiceChips={
                     permissionChoice?.flag && !permissionChoice.argsSetPermission
-                      ? {
-                          label,
-                          flag: permissionChoice.flag,
-                          removeRecipe: (text) => {
-                            const lifted = liftAgentPermissionArgs(agentId, text)
-                            return lifted.choice !== null ? lifted.args : null
-                          },
-                          onRemove: () => permissionChoice.onSelect('own')
-                        }
+                      ? [
+                          {
+                            key: 'permissionMode',
+                            label,
+                            flag: permissionChoice.flag,
+                            onRemove: (text) => {
+                              const lifted = liftAgentPermissionArgs(agentId, text)
+                              permissionChoice.onSelect('own')
+                              return lifted.choice !== null ? lifted.args : text
+                            }
+                          }
+                        ]
                       : undefined
                   }
                   note={

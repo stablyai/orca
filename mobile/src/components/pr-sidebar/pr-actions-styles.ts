@@ -1,7 +1,8 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet } from '../../theme/themed-styles'
 
-export const prActionsStyles = StyleSheet.create({
+export const prActionsStyles = themedStyleSheet(() => ({
   actionsBlock: {
     gap: spacing.sm
   },
@@ -112,4 +113,4 @@ export const prActionsStyles = StyleSheet.create({
     fontSize: typography.metaSize,
     lineHeight: 18
   }
-})
+}))

@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -7,7 +7,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   changedFileScope,
   countFindings,
-  listChangedFiles
+  listChangedFiles,
+  main
 } from './check-flaky-test-pattern-ratchet.mjs'
 
 describe('countFindings', () => {
@@ -43,22 +44,50 @@ describe('changedFileScope', () => {
 
 describe('listChangedFiles', () => {
   let fixture
+  const git = (...args) =>
+    execFileSync(
+      'git',
+      [
+        '-c',
+        'user.name=t',
+        '-c',
+        'user.email=t@example.com',
+        '-c',
+        'commit.gpgsign=false',
+        ...args
+      ],
+      { cwd: fixture, encoding: 'utf8' }
+    ).trim()
   afterEach(() => {
     vi.unstubAllEnvs()
+    vi.restoreAllMocks()
     rmSync(fixture, { recursive: true, force: true })
+  })
+
+  it('enforces findings in tracked files whose names Git quotes', () => {
+    fixture = mkdtempSync(join(tmpdir(), 'flaky-ratchet-path-'))
+    git('init', '-q')
+    git('config', 'core.quotePath', 'true')
+    git('commit', '--allow-empty', '-qm', 'base')
+    vi.stubEnv('ORCA_CODE_QUALITY_BASE', git('rev-parse', 'HEAD'))
+    vi.stubEnv('ORCA_FLAKY_TEST_RATCHET_ALL', '')
+    const file = '測試.test.ts'
+    writeFileSync(join(fixture, file), 'Date.now()\n')
+    git('add', '--', file)
+    mkdirSync(join(fixture, 'config'))
+    writeFileSync(join(fixture, 'config/flaky-test-pattern-baseline.txt'), '')
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    expect(main(fixture, undefined, [{ file, ruleId: 'test-no-wall-clock' }])).toBe(1)
+    expect(error.mock.calls.join('\n')).toContain(file)
   })
 
   it('scopes to the base check:changed forwards instead of a stale origin/main', () => {
     fixture = mkdtempSync(join(tmpdir(), 'flaky-ratchet-base-'))
-    const git = (...args) =>
-      execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], {
-        cwd: fixture,
-        encoding: 'utf8'
-      }).trim()
     const commit = (file) => {
       writeFileSync(join(fixture, file), file)
       git('add', file)
-      git('-c', 'commit.gpgsign=false', 'commit', '-qm', file)
+      git('commit', '-qm', file)
       return git('rev-parse', 'HEAD')
     }
     git('init', '-q')

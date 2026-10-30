@@ -26,7 +26,12 @@ import { buildImageDataUri } from '../../../../shared/image-data-uri'
 const FALLBACK_IMAGE_MIME_TYPE = 'image/png'
 
 type ImageViewerProps = {
-  content: string
+  /** Base64 bytes, for git blobs, diffs and the web client. */
+  content?: string
+  /** An orca-media URL the image or PDF is read from by range; wins over `content`. */
+  src?: string
+  /** The file's size when `src` hides the bytes. */
+  byteSize?: number
   filePath: string
   mimeType?: string
   layout?: 'fill' | 'intrinsic'
@@ -37,7 +42,9 @@ type ImageViewerProps = {
 }
 
 export default function ImageViewer({
-  content,
+  content = '',
+  src,
+  byteSize,
   filePath,
   mimeType = FALLBACK_IMAGE_MIME_TYPE,
   layout = 'fill',
@@ -57,7 +64,13 @@ export default function ImageViewer({
 
   const filename = useMemo(() => filePath.split(/[/\\]/).pop() || filePath, [filePath])
   const cleanedContent = useMemo(() => content.replace(/\s/g, ''), [content])
-  const imageStateKey = `${filePath}\n${mimeType}\n${cleanedContent}`
+  // A remint changes only the URL's revision; keep zoom unless the grant or the file's size changed.
+  const srcIdentity = src ? src.split('?')[0] : undefined
+  const imageStateKey = useMemo(
+    () =>
+      `${filePath}\n${mimeType}\n${srcIdentity !== undefined ? `${srcIdentity}\n${byteSize ?? ''}` : cleanedContent}`,
+    [filePath, mimeType, srcIdentity, byteSize, cleanedContent]
+  )
   const [lastImageStateKey, setLastImageStateKey] = useState(imageStateKey)
   if (lastImageStateKey !== imageStateKey) {
     setLastImageStateKey(imageStateKey)
@@ -68,14 +81,18 @@ export default function ImageViewer({
   const isPdf = mimeType === 'application/pdf'
   const isIntrinsicLayout = layout === 'intrinsic'
   const previewSrc = useMemo(
-    () => buildImageDataUri(mimeType, cleanedContent),
-    [cleanedContent, mimeType]
+    () =>
+      src && mimeType.startsWith('image/') ? src : buildImageDataUri(mimeType, cleanedContent),
+    [cleanedContent, mimeType, src]
   )
   const imageError =
     (previewSrc === null && cleanedContent.length > 0) ||
     (previewSrc !== null && failedPreviewSrc === previewSrc)
   const estimatedSize = useMemo(() => {
-    const bytes = Math.floor((cleanedContent.length * 3) / 4)
+    if (src && byteSize === undefined) {
+      return ''
+    }
+    const bytes = byteSize ?? Math.floor((cleanedContent.length * 3) / 4)
     if (bytes < 1024) {
       return `${bytes} B`
     }
@@ -83,7 +100,7 @@ export default function ImageViewer({
       return `${(bytes / 1024).toFixed(1)} KB`
     }
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  }, [cleanedContent])
+  }, [byteSize, cleanedContent, src])
   const inlineZoomPercent = Math.round(inlineZoom * 100)
   const inlineImageLayoutSize = useMemo(
     () =>
@@ -248,6 +265,8 @@ export default function ImageViewer({
     return (
       <PdfViewer
         content={cleanedContent}
+        src={src}
+        byteSize={byteSize}
         filePath={filePath}
         preferenceKey={preferenceKey}
         scrollCacheKey={scrollCacheKey}

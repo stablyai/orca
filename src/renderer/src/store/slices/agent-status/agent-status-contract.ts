@@ -160,3 +160,11 @@ export type AgentStatusBatchTransaction = {
   apply: (update: AgentStatusBatchUpdate) => boolean
   afterCommit: (effect: () => void) => void
 }
+
+/** Ephemeral accepted live-row mutations; missing references describe creation/deletion. */
+export type AgentStatusChange = {
+  paneKey: string
+  previous: AgentStatusEntry | undefined
+  current: AgentStatusEntry | undefined
+}
+export type AgentStatusChangeListener = (changes: readonly AgentStatusChange[]) => void

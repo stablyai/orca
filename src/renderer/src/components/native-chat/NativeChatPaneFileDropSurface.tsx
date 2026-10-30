@@ -1,4 +1,12 @@
-import { createContext, useContext, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
 import { Paperclip } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { toast } from 'sonner'
@@ -6,16 +14,20 @@ import { createOsFileDropSequence, useOsFileDropOwner } from '@/hooks/use-os-fil
 import { getNativeFileDropRejectionMessage } from '@/lib/native-file-drop-rejection-message'
 import {
   makeNativeChatPaneFileDropHandlers,
-  type NativeChatPaneDropClaim
+  type NativeChatPaneDropClaim,
+  type CapturedNativeChatDrop
 } from './native-chat-pane-file-drop'
 
 /** Read the mounted composer’s claim at event time so guard changes apply to the current drag. */
 export type NativeChatPaneDropRegistration = {
   getClaim: () => NativeChatPaneDropClaim
   destinationKey: string
+  focusScopeKey?: string
 }
 
-type RegisterPaneDropClaim = (registration: NativeChatPaneDropRegistration) => () => void
+type RegisterPaneDropClaim = ((registration: NativeChatPaneDropRegistration) => () => void) & {
+  clearHover?: () => void
+}
 
 const NativeChatPaneFileDropContext = createContext<RegisterPaneDropClaim | null>(null)
 
@@ -26,13 +38,18 @@ export function useNativeChatPaneFileDropClaim(claim: NativeChatPaneDropClaim): 
   useLayoutEffect(() => {
     claimRef.current = claim
   })
-  const { destinationKey, disabled } = claim
+  useLayoutEffect(() => {
+    if (claim.disabled) {
+      register?.clearHover?.()
+    }
+  }, [claim.disabled, register])
+  const { destinationKey, focusScopeKey } = claim
   const registration = useMemo<NativeChatPaneDropRegistration>(
-    () => ({ getClaim: () => claimRef.current, destinationKey }),
-    [destinationKey]
+    () => ({ getClaim: () => claimRef.current, destinationKey, focusScopeKey }),
+    [destinationKey, focusScopeKey]
   )
   // A guard transition ends the current hover before the next paint.
-  useLayoutEffect(() => register?.(registration), [disabled, register, registration])
+  useLayoutEffect(() => register?.(registration), [register, registration])
 }
 
 export function NativeChatPaneFileDropSurface({
@@ -42,17 +59,42 @@ export function NativeChatPaneFileDropSurface({
   className: string
   children: React.ReactNode
 }): React.JSX.Element {
-  const [registration, setRegistration] = useState<NativeChatPaneDropRegistration | null>(null)
+  const [registrations, setRegistrations] = useState<NativeChatPaneDropRegistration[]>([])
+  const [activeScope, setActiveScope] = useState<string | null>(null)
+  const registration =
+    registrations.find((entry) => entry.focusScopeKey === activeScope) ??
+    registrations.find((entry) => !entry.focusScopeKey?.startsWith('queued-edit:')) ??
+    registrations[0] ??
+    null
+  const claimForTarget = useCallback(
+    (target: EventTarget | null): NativeChatPaneDropClaim | null => {
+      const scope =
+        target instanceof Element
+          ? target.closest<HTMLElement>('[data-native-chat-composer-scope]')?.dataset
+              .nativeChatComposerScope
+          : undefined
+      return (
+        (scope
+          ? registrations.find((entry) => entry.focusScopeKey === scope)
+          : registration
+        )?.getClaim() ?? null
+      )
+    },
+    [registration, registrations]
+  )
   const [isDragActive, setIsDragActive] = useState(false)
   const ownerRef = useRef<HTMLElement | null>(null)
   const [sequence] = useState(createOsFileDropSequence)
-  const attachOwner = useOsFileDropOwner(ownerRef, {
+  const attachOwner = useOsFileDropOwner<CapturedNativeChatDrop | undefined>(ownerRef, {
     consumer: (destination) => destination?.preparationConsumer ?? 'agent',
     // A paired server's chat uploads the bytes; any other owner refuses with a notice.
     acceptsBrowserFiles: true,
     sequence,
-    canAccept: () => Boolean(registration && !registration.getClaim().disabled),
-    captureDestination: () => registration?.getClaim().captureExternalDrop(),
+    canAccept: (event) => {
+      const claim = claimForTarget(event.target)
+      return Boolean(claim && !claim.disabled)
+    },
+    captureDestination: (event) => claimForTarget(event.target)?.captureExternalDrop(),
     onDrop: async (prepared, { destination }) => {
       setIsDragActive(false)
       for (const failure of prepared.failures) {
@@ -63,22 +105,26 @@ export function NativeChatPaneFileDropSurface({
     }
   })
   const register = useMemo<RegisterPaneDropClaim>(
-    () => (next) => {
-      setRegistration(next)
-      return () => {
-        setRegistration((current) => (current === next ? null : current))
-        setIsDragActive(false)
-      }
-    },
+    () =>
+      Object.assign(
+        (next: NativeChatPaneDropRegistration) => {
+          setRegistrations((current) => [...current, next])
+          return () => {
+            setRegistrations((current) => current.filter((entry) => entry !== next))
+            setIsDragActive(false)
+          }
+        },
+        { clearHover: () => setIsDragActive(false) }
+      ),
     []
   )
   const handlers = useMemo(
     () =>
       makeNativeChatPaneFileDropHandlers({
-        getClaim: () => registration?.getClaim() ?? null,
+        getClaim: (event) => claimForTarget(event.target ?? null),
         setDragActive: setIsDragActive
       }),
-    [registration]
+    [claimForTarget]
   )
   // End hover even when the gesture finishes outside this pane.
   useLayoutEffect(() => {
@@ -96,7 +142,26 @@ export function NativeChatPaneFileDropSurface({
 
   return (
     <NativeChatPaneFileDropContext.Provider value={register}>
-      <div className={className} ref={attachOwner} {...handlers}>
+      <div
+        className={className}
+        ref={attachOwner}
+        {...handlers}
+        onFocusCapture={(event) => {
+          const field = event.target.closest<HTMLElement>('[data-native-chat-composer-scope]')
+          if (field) {
+            setActiveScope(field.dataset.nativeChatComposerScope ?? null)
+          }
+        }}
+        onPointerDownCapture={(event) => {
+          const field =
+            event.target instanceof Element
+              ? event.target.closest<HTMLElement>('[data-native-chat-composer-scope]')
+              : null
+          if (field) {
+            setActiveScope(field.dataset.nativeChatComposerScope ?? null)
+          }
+        }}
+      >
         {children}
         {isDragActive ? <NativeChatPaneFileDropOverlay /> : null}
       </div>

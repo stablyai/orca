@@ -215,7 +215,7 @@ export function formatComputerAction(
   const inspectTail = unverified
     ? 'Inspect with the command above or use the --json result before assuming it worked.'
     : 'Use the --json result or rerun state before choosing the next element index.'
-  return `${formatActionVerb(verb)} ${outcome}${path}${verification}; ${result.snapshot.elementCount} visible elements in current window.${screenshotFailure} Use \`${followUpCommand}\` to inspect. ${inspectTail}`
+  return `${formatActionVerb(verb)} ${outcome}${path}${verification}; ${result.snapshot.elementCount} visible elements in current window.${screenshotFailure} Use \`${followUpCommand}\` to inspect. ${inspectTail}${result.snapshot.treeText ? `\n\n${result.snapshot.treeText}` : ''}`
 }
 
 function formatComputerFollowUpCommand(

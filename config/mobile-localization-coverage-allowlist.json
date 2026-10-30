@@ -1,0 +1,639 @@
+[
+  {
+    "filePath": "mobile/app/mobile-onboarding.tsx",
+    "kind": "jsx-text",
+    "text": "Orca",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/browser/MobileBrowserKeyRow.tsx",
+    "kind": "jsx-expression",
+    "text": "Esc",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/browser/MobileBrowserPointerModifiers.tsx",
+    "kind": "object-property:label",
+    "text": "Alt",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/browser/MobileBrowserPointerModifiers.tsx",
+    "kind": "object-property:label",
+    "text": "Cmd",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/browser/MobileBrowserPointerModifiers.tsx",
+    "kind": "object-property:label",
+    "text": "Ctrl",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/browser/MobileBrowserPointerModifiers.tsx",
+    "kind": "object-property:label",
+    "text": "Shift",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "kind": "object-property:message",
+    "text": "Claude limits use the wrong provider identity",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "kind": "object-property:message",
+    "text": "Codex limits use the wrong provider identity",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "kind": "object-property:message",
+    "text": "Host Codex accounts cannot name a WSL distro",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "kind": "object-property:message",
+    "text": "Host rate-limit targets cannot name a WSL distro",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "kind": "object-property:message",
+    "text": "Inactive Claude limits use the wrong provider identity",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "kind": "object-property:message",
+    "text": "Inactive Codex limits use the wrong provider identity",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "kind": "object-property:message",
+    "text": "WSL Codex accounts require an exact distro",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "kind": "object-property:message",
+    "text": "WSL rate-limit targets require an exact distro",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/components/codex-reset-credit-reply-schema.ts",
+    "kind": "object-property:message",
+    "text": "Host reset scopes cannot name a WSL distro",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/components/codex-reset-credit-reply-schema.ts",
+    "kind": "object-property:message",
+    "text": "WSL reset scopes require an exact distro",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/components/CustomKeyModal.tsx",
+    "kind": "object-property:label",
+    "text": "Alt",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/components/CustomKeyModal.tsx",
+    "kind": "object-property:label",
+    "text": "Ctrl",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/components/CustomKeyModal.tsx",
+    "kind": "object-property:label",
+    "text": "Shift",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/components/mobile-markdown-blocks.tsx",
+    "kind": "jsx-expression",
+    "text": "[x]",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/components/MobileRichMarkdownEditor.tsx",
+    "kind": "jsx-attribute:placeholder",
+    "text": "https://",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/components/NewWorkspaceSetupScriptField.tsx",
+    "kind": "jsx-expression",
+    "text": "ORCA.YAML",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/components/pr-sidebar/MermaidDiagram.tsx",
+    "kind": "jsx-text",
+    "text": "mermaid",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/diagnostics/connection-diagnostics-submission.ts",
+    "kind": "object-property:error",
+    "text": "status",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/diagnostics/native-render-log.ts",
+    "kind": "object-property:message",
+    "text": "Native screen failed to render",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/files/mobile-file-preview-route.ts",
+    "kind": "object-property:message",
+    "text": "Unable to load preview",
+    "dynamic": false,
+    "count": 3
+  },
+  {
+    "filePath": "mobile/src/home/MobileHomeTopBar.tsx",
+    "kind": "jsx-text",
+    "text": "Orca",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/mobile-web-shell/shell-bridge-log-lines.ts",
+    "kind": "object-property:message",
+    "text": "Web shell bridge:",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/mobile-web-shell/shell-bridge-log-lines.ts",
+    "kind": "object-property:message",
+    "text": "Web shell: page frame with no bridge host",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/onboarding/NotificationOnboardingPreview.tsx",
+    "kind": "jsx-text",
+    "text": "Orca",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/session/github-pr-entity-reply-schema.ts",
+    "kind": "object-property:message",
+    "text": "review has no login",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/session/github-pr-read-reply-schema.ts",
+    "kind": "object-property:message",
+    "text": "found outcome has no readable pr",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/session/github-pr-read-reply-schema.ts",
+    "kind": "object-property:message",
+    "text": "pull request has no number or state",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/session/MobileSessionSheets.tsx",
+    "kind": "jsx-attribute:placeholder",
+    "text": "https://example.com",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/session/native-chat/composer/MobileNativeChatComposerMic.tsx",
+    "kind": "jsx-attribute:accessibilityLabel",
+    "text": "Dictate",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/session/native-chat/composer/MobileNativeChatComposerMic.tsx",
+    "kind": "jsx-attribute:accessibilityLabel",
+    "text": "Starting dictation",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/session/native-chat/composer/MobileNativeChatComposerMic.tsx",
+    "kind": "jsx-attribute:accessibilityLabel",
+    "text": "Stop dictation",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/session/native-chat/composer/MobileNativeChatComposerMic.tsx",
+    "kind": "jsx-attribute:accessibilityLabel",
+    "text": "Transcribing dictation",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/session/QuickCommandEditorForm.tsx",
+    "kind": "jsx-attribute:placeholder",
+    "text": "npm run dev",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/session/use-mobile-pr-actions.ts",
+    "kind": "object-property:error",
+    "text": "Not connected",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/settings/about-screen.tsx",
+    "kind": "jsx-text",
+    "text": "@orca_build",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/settings/about-screen.tsx",
+    "kind": "jsx-text",
+    "text": "onOrca.dev",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/settings/about-screen.tsx",
+    "kind": "jsx-text",
+    "text": "Orca",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/settings/about-screen.tsx",
+    "kind": "jsx-text",
+    "text": "stablyai/orca",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileBranchDiffPreviewDrawer.tsx",
+    "kind": "jsx-expression",
+    "text": "..HEAD",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/tasks/mobile-smart-source-modes.ts",
+    "kind": "object-property:label",
+    "text": "GitHub",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/tasks/mobile-smart-source-modes.ts",
+    "kind": "object-property:label",
+    "text": "GitLab",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/tasks/mobile-smart-source-modes.ts",
+    "kind": "object-property:label",
+    "text": "Jira",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/tasks/mobile-smart-source-modes.ts",
+    "kind": "object-property:label",
+    "text": "Linear",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/tasks/mobile-tasks-create-drawers.tsx",
+    "kind": "jsx-attribute:placeholder",
+    "text": "lin_api_...",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/tasks/mobile-tasks-options.tsx",
+    "kind": "object-property:label",
+    "text": "GitHub",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/tasks/mobile-tasks-options.tsx",
+    "kind": "object-property:label",
+    "text": "GitLab",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/tasks/mobile-tasks-options.tsx",
+    "kind": "object-property:label",
+    "text": "Jira",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/tasks/mobile-tasks-options.tsx",
+    "kind": "object-property:label",
+    "text": "Linear",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/tasks/mobile-tasks-workspace-trust-drawers.tsx",
+    "kind": "jsx-attribute:placeholder",
+    "text": "src/renderer packages/ui",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "kind": "object-property:accessibilityLabel",
+    "text": "Backspace",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "kind": "object-property:accessibilityLabel",
+    "text": "Enter",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "kind": "object-property:accessibilityLabel",
+    "text": "Escape",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "kind": "object-property:accessibilityLabel",
+    "text": "Shift Tab",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "kind": "object-property:accessibilityLabel",
+    "text": "Space",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "kind": "object-property:accessibilityLabel",
+    "text": "Tab",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "kind": "object-property:label",
+    "text": "Ctrl+A",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "kind": "object-property:label",
+    "text": "Ctrl+C",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "kind": "object-property:label",
+    "text": "Ctrl+D",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "kind": "object-property:label",
+    "text": "Ctrl+E",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "kind": "object-property:label",
+    "text": "Ctrl+L",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "kind": "object-property:label",
+    "text": "Ctrl+R",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "kind": "object-property:label",
+    "text": "Ctrl+U",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "kind": "object-property:label",
+    "text": "Ctrl+W",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "kind": "object-property:label",
+    "text": "Ctrl+Z",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "kind": "object-property:label",
+    "text": "Del",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "kind": "object-property:label",
+    "text": "Enter",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "kind": "object-property:label",
+    "text": "Esc",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "kind": "object-property:label",
+    "text": "Shift+Tab",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "kind": "object-property:label",
+    "text": "Space",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "kind": "object-property:label",
+    "text": "Tab",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/transport/host-entry-opener.ts",
+    "kind": "object-property:message",
+    "text": "Host client open failed",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/transport/host-entry-opener.ts",
+    "kind": "object-property:message",
+    "text": "Host client recovered",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/transport/mobile-relay-host-overlay.ts",
+    "kind": "object-property:message",
+    "text": "Expected exactly one endpoint for configured relay metadata",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/transport/mobile-relay-host-overlay.ts",
+    "kind": "object-property:message",
+    "text": "Relay host identity mismatch",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/transport/mobile-relay-host-overlay.ts",
+    "kind": "object-property:message",
+    "text": "Relay identity and endpoint must coexist",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/transport/mobile-relay-recovery-log.ts",
+    "kind": "object-property:message",
+    "text": "Relay:",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/transport/mobile-relay-rpc-session.ts",
+    "kind": "object-property:message",
+    "text": "Relay health check failed",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/transport/mobile-web-bundle-reply-schemas.ts",
+    "kind": "object-property:message",
+    "text": "assets sum to more than the contract total",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/transport/mobile-web-bundle-reply-schemas.ts",
+    "kind": "object-property:message",
+    "text": "buildId must be the content hash of the asset list",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/transport/persisted-connection-log-store.ts",
+    "kind": "object-property:message",
+    "text": "Mobile client session started",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/transport/rpc-operation-reply.ts",
+    "kind": "object-property:message",
+    "text": "not a non-null object",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/transport/rpc-operation-reply.ts",
+    "kind": "object-property:message",
+    "text": "reply opened no stream",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/transport/rpc-operation-result-reader.ts",
+    "kind": "object-property:message",
+    "text": "further issues omitted",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/transport/socket-deadline-suspension.ts",
+    "kind": "object-property:title",
+    "text": "Handshake timeout",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/transport/socket-deadline-suspension.ts",
+    "kind": "object-property:title",
+    "text": "WebSocket connect timeout",
+    "dynamic": false,
+    "count": 1
+  }
+]

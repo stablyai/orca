@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import { Pressable } from 'react-native'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { styles } from './mobile-session-styles'
 
 type HeaderIconProps = {
@@ -24,6 +25,7 @@ export function MobileSessionHeaderIconButton({
   icon: Icon,
   onPress
 }: MobileSessionHeaderIconButtonProps) {
+  useMobileColorScheme()
   return (
     <Pressable
       style={({ pressed }) => [

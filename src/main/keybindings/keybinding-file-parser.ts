@@ -4,12 +4,17 @@ import {
   findKeybindingConflicts,
   getKeybindingDefinition,
   isKeybindingActionId,
+  keybindingFileDiagnostic,
+  keybindingValidationFailure,
+  KEYBINDING_REASON_COPY,
   normalizeKeybindingArrayForAction,
   normalizeKeybindingListForAction,
   type KeybindingActionId,
   type KeybindingFileDiagnostic,
   type KeybindingOverrides,
-  type KeybindingPlatform
+  type KeybindingPlatform,
+  type KeybindingReasonCode,
+  type KeybindingValidationResult
 } from '../../shared/keybindings'
 
 export type JsonObject = Record<string, unknown>
@@ -38,6 +43,7 @@ export function readJsonDocument(path: string): {
   exists: boolean
   document: JsonObject | null
   error?: string
+  errorCode?: KeybindingReasonCode
 } {
   if (!existsSync(path)) {
     return { exists: false, document: createEmptyDocument() }
@@ -45,7 +51,12 @@ export function readJsonDocument(path: string): {
   try {
     const parsed = JSON.parse(readFileSync(path, 'utf8')) as unknown
     if (!isJsonObject(parsed)) {
-      return { exists: true, document: null, error: 'Keybindings file must contain a JSON object.' }
+      return {
+        exists: true,
+        document: null,
+        error: KEYBINDING_REASON_COPY.fileNotObject,
+        errorCode: 'fileNotObject'
+      }
     }
     return { exists: true, document: parsed }
   } catch (error) {
@@ -78,7 +89,7 @@ export function writeJsonDocument(path: string, document: JsonObject): void {
 function normalizeBindingValue(
   actionId: KeybindingActionId,
   value: unknown
-): { ok: true; value: string[] } | { ok: false; error: string } {
+): { ok: true; value: string[] } | Extract<KeybindingValidationResult, { ok: false }> {
   if (value === null || value === false) {
     return { ok: true, value: [] }
   }
@@ -92,7 +103,7 @@ function normalizeBindingValue(
   }
   if (Array.isArray(value)) {
     if (!value.every((item) => typeof item === 'string')) {
-      return { ok: false, error: 'Use a string, string array, null, or false.' }
+      return keybindingValidationFailure('invalidBindingValue')
     }
     const normalized = normalizeKeybindingArrayForAction(actionId, value)
     return Array.isArray(normalized)
@@ -101,7 +112,7 @@ function normalizeBindingValue(
         ? { ok: true, value: [normalized.value] }
         : normalized
   }
-  return { ok: false, error: 'Use a string, string array, null, or false.' }
+  return keybindingValidationFailure('invalidBindingValue')
 }
 
 export function normalizeWriteBindingValue(
@@ -131,11 +142,9 @@ export function parseBindingSection(
     return {}
   }
   if (!isJsonObject(value)) {
-    diagnostics.push({
-      severity: 'error',
-      section,
-      message: `${section} must be an object.`
-    })
+    diagnostics.push(
+      keybindingFileDiagnostic({ severity: 'error', section }, 'sectionNotObject', { section })
+    )
     return {}
   }
 
@@ -145,22 +154,23 @@ export function parseBindingSection(
       continue
     }
     if (!isKeybindingActionId(actionId)) {
-      diagnostics.push({
-        severity: 'warning',
-        section,
-        actionId,
-        message: `Unknown keybinding action "${actionId}" was ignored.`
-      })
+      diagnostics.push(
+        keybindingFileDiagnostic({ severity: 'warning', section, actionId }, 'unknownAction', {
+          actionId
+        })
+      )
       continue
     }
     const normalized = normalizeBindingValue(actionId, rawBinding)
     if (!normalized.ok) {
-      diagnostics.push({
-        severity: 'error',
-        section,
-        actionId,
-        message: `Shortcut for "${actionId}" was ignored: ${normalized.error}`
-      })
+      diagnostics.push(
+        keybindingFileDiagnostic(
+          { severity: 'error', section, actionId },
+          'shortcutIgnored',
+          { actionId, reason: normalized.error },
+          normalized.errorCode
+        )
+      )
       continue
     }
     overrides[actionId] = normalized.value
@@ -177,22 +187,22 @@ export function parsePlatformOverrides(
     return {}
   }
   if (!isJsonObject(rawPlatforms)) {
-    diagnostics.push({
-      severity: 'error',
-      section: 'platforms',
-      message: 'platforms must be an object with darwin, linux, or win32 sections.'
-    })
+    diagnostics.push(
+      keybindingFileDiagnostic({ severity: 'error', section: 'platforms' }, 'platformsNotObject')
+    )
     return {}
   }
 
   const result: Partial<Record<KeybindingPlatform, KeybindingOverrides>> = {}
   for (const [platform, value] of Object.entries(rawPlatforms)) {
     if (!PLATFORM_KEYS.includes(platform as KeybindingPlatform)) {
-      diagnostics.push({
-        severity: 'warning',
-        section: `platforms.${platform}`,
-        message: `Unknown platform "${platform}" was ignored.`
-      })
+      diagnostics.push(
+        keybindingFileDiagnostic(
+          { severity: 'warning', section: `platforms.${platform}` },
+          'unknownPlatform',
+          { platform }
+        )
+      )
       continue
     }
     result[platform as KeybindingPlatform] = parseBindingSection(
@@ -231,12 +241,17 @@ export function removeConflictingOverrides(
       delete next[actionId]
     }
 
-    diagnostics.push({
-      severity: 'error',
-      message: `Conflicting custom shortcuts were ignored: ${Array.from(conflictingOverrides)
-        .map((actionId) => getKeybindingDefinition(actionId)?.title ?? actionId)
-        .join(', ')}.`
-    })
+    diagnostics.push(
+      keybindingFileDiagnostic(
+        { severity: 'error', actionIds: Array.from(conflictingOverrides) },
+        'conflictingOverrides',
+        {
+          actions: Array.from(conflictingOverrides)
+            .map((actionId) => getKeybindingDefinition(actionId)?.title ?? actionId)
+            .join(', ')
+        }
+      )
+    )
   }
   return next
 }

@@ -48,6 +48,7 @@ export type StructuredAgentSessionMutationContext = {
   startFlights: Pick<StructuredAgentSessionStartFlights, 'get'>
   startupAttempts: Pick<StructuredAgentSessionStartupAttempts, 'readiness'>
   deliveryOrder: StructuredAgentSessionDeliveryOrder
+  trackProviderOperation?: <T>(operation: Promise<T>) => Promise<T>
   /** Join without starting a child, inside existing serialization. */
   joinChildClose: (sessionId: string) => Promise<AgentSessionMutationSessionPreparation>
   wakeDelivery: (sessionId: string) => void

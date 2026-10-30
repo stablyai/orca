@@ -28,6 +28,7 @@ export function agentHookRuntimeDeps(
     readObservedAgentStatusPaneIdentity: (paneKey) => observedPaneIdentities.read(paneKey),
     // Structured chats publish here directly because they have no hooks.
     structuredAgentStatusSink: {
+      withSavedStatusGroup: (visit) => server.withSavedStructuredStatusGroup(visit),
       publish: (summary, subject) => server.ingestStructuredStatus(summary, subject),
       forget: (subject) => server.dropStructuredStatus(subject),
       publishChildWork: (subject, evidence, provider) =>

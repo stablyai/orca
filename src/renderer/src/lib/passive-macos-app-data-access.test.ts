@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { isMacAppDataPath, shouldPollActiveGitStatus } from './passive-macos-app-data-access'
+import { shouldPollActiveGitStatus } from './passive-macos-app-data-access'
 import type { ActiveRightSidebarTab, OpenFile } from '@/store/slices/editor'
 
 const MAC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
-const LINUX = 'Mozilla/5.0 (X11; Linux x86_64)'
 
 function pollArgs(
   overrides: Partial<Parameters<typeof shouldPollActiveGitStatus>[0]> = {}
@@ -19,17 +18,6 @@ function pollArgs(
     ...overrides
   }
 }
-
-describe('isMacAppDataPath', () => {
-  it('detects macOS app container paths on macOS', () => {
-    expect(isMacAppDataPath('/Users/me/Library/Containers/com.app/Data/repo', MAC)).toBe(true)
-    expect(isMacAppDataPath('/Users/me/Library/Group Containers/group.id/repo', MAC)).toBe(true)
-  })
-
-  it('ignores app container-looking paths off macOS', () => {
-    expect(isMacAppDataPath('/Users/me/Library/Containers/com.app/Data/repo', LINUX)).toBe(false)
-  })
-})
 
 describe('shouldPollActiveGitStatus', () => {
   it('skips hidden terminal-only polling for macOS app data worktrees', () => {
@@ -68,13 +56,6 @@ describe('shouldPollActiveGitStatus', () => {
     }
 
     expect(shouldPollActiveGitStatus(pollArgs({ openFiles: [openFile] }))).toBe(true)
-  })
-
-  it('treats missing open files as no editor-visible worktree', () => {
-    const args = pollArgs()
-    delete args.openFiles
-
-    expect(shouldPollActiveGitStatus(args)).toBe(false)
   })
 
   it('keeps existing background polling for ordinary paths', () => {

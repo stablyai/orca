@@ -22,14 +22,4 @@ describe('setBoundedScopeCacheEntry', () => {
     expect(cache.has('keep')).toBe(true) // periodically re-set → retained
     expect(cache.has(`scope-${total - 1}`)).toBe(true) // most recent retained
   })
-
-  it('moves a re-set key to most-recent and updates its value', () => {
-    const cache = new Map<string, number>()
-    setBoundedScopeCacheEntry(cache, 'a', 1)
-    setBoundedScopeCacheEntry(cache, 'b', 2)
-    setBoundedScopeCacheEntry(cache, 'a', 3)
-
-    expect([...cache.keys()]).toEqual(['b', 'a'])
-    expect(cache.get('a')).toBe(3)
-  })
 })

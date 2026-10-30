@@ -1,3 +1,4 @@
+import { agentEntrySessionStartedAt } from '../../../../../shared/agent-session-start-time'
 import type { AppState } from '../../types'
 import type {
   AgentStatusEntry,
@@ -148,7 +149,7 @@ export function getRetainedFallbackTab(entry: AgentStatusEntry, worktreeId: stri
     customTitle: null,
     color: null,
     sortOrder: 0,
-    createdAt: entry.stateStartedAt
+    createdAt: agentEntrySessionStartedAt(entry)
   }
 }
 
@@ -165,7 +166,7 @@ export function retainedAgentEntryFromLive(
     worktreeId,
     tab,
     agentType,
-    startedAt: entry.stateHistory[0]?.startedAt ?? entry.stateStartedAt
+    startedAt: agentEntrySessionStartedAt(entry)
   }
 }
 

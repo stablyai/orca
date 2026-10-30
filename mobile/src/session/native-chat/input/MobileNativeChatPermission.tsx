@@ -5,6 +5,9 @@ import { approvalBlockedPathToShow } from '../../../../../src/shared/agent-sessi
 import { MobileNativeChatCardHeaderAction } from '../../MobileNativeChatCardHeaderAction'
 import { MobileMarkdown } from '../../../components/MobileMarkdown'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet } from '../../../theme/themed-styles'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import {
   isNewerApprovalSubject,
   isPlanApprovalSubject
@@ -23,6 +26,7 @@ function MobileNativeChatPermissionImpl({
   // Collapse writes nothing to the agent.
   onCollapse?: () => void
 }): React.JSX.Element {
+  useMobileColorScheme()
   const [submitting, setSubmitting] = useState(false)
   const submittingRef = useRef(false)
   // Unknown newer-host subjects allow only cancellation; preserve their detail for the reader.
@@ -95,6 +99,8 @@ function MobileNativeChatPermissionContext({
   permission: MobileChatPermission
   newerSubject: boolean
 }): React.JSX.Element | null {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const neededPath = approvalBlockedPathToShow(permission)
   if (
     !permission.description &&
@@ -115,13 +121,15 @@ function MobileNativeChatPermissionContext({
       {permission.description ? <Text style={styles.detail}>{permission.description}</Text> : null}
       {permission.decisionReason ? (
         <Text style={styles.detail}>
-          <Text style={styles.contextLabel}>Reason: </Text>
+          <Text style={styles.contextLabel}>{t('chat.permission.reason', 'Reason: ')}</Text>
           {permission.decisionReason}
         </Text>
       ) : null}
       {neededPath ? (
         <Text style={styles.detail}>
-          <Text style={styles.contextLabel}>Needs access to: </Text>
+          <Text style={styles.contextLabel}>
+            {t('chat.permission.needsAccessTo', 'Needs access to: ')}
+          </Text>
           {neededPath}
         </Text>
       ) : null}
@@ -129,7 +137,11 @@ function MobileNativeChatPermissionContext({
         <View>
           <MobileMarkdown content={permission.subject.text} />
           {permission.subject.filePath ? (
-            <Text style={styles.planFile}>Plan file: {permission.subject.filePath}</Text>
+            <Text style={styles.planFile}>
+              {t('chat.permission.planFile', 'Plan file: {{filePath}}', {
+                filePath: permission.subject.filePath
+              })}
+            </Text>
           ) : null}
         </View>
       ) : permission.detail ? (
@@ -137,14 +149,14 @@ function MobileNativeChatPermissionContext({
       ) : null}
       {newerSubject ? (
         <Text testID="native-chat-approval-needs-newer-orca" style={styles.detail}>
-          This request needs a newer version of Orca.
+          {t('chat.permission.newerVersionRequired', 'This request needs a newer version of Orca.')}
         </Text>
       ) : null}
     </ScrollView>
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   card: {
     marginHorizontal: spacing.lg,
     marginVertical: spacing.sm,
@@ -228,4 +240,4 @@ const styles = StyleSheet.create({
   optionTextPrimary: {
     color: colors.onAccent
   }
-})
+}))

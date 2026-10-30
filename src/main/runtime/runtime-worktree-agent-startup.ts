@@ -61,8 +61,10 @@ export async function resolveWorktreeStartupDraftAgent(
   const sshConnectionId = getRepoSshConnectionId(repo)
   try {
     // Sparse launch environments may lack host detection dependencies.
+    // Disabled agents cannot be picked here, so background detection never probes them (#34635).
     detected = await detectAgentsOnHost(
-      sshConnectionId ? { kind: 'ssh', connectionId: sshConnectionId } : { kind: 'local' }
+      sshConnectionId ? { kind: 'ssh', connectionId: sshConnectionId } : { kind: 'local' },
+      { disabledTuiAgents: settings.disabledTuiAgents }
     )
   } catch {
     detected = []

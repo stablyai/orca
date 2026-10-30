@@ -52,6 +52,36 @@ export function createGitCommonWatchReconciliation({
     }
   }
 
+  const handleEvents = (events: WorktreeBasePollEvent[]): void => {
+    const rootDeleted = events.some(
+      (event) => event.type === 'delete' && event.path === worktreesDir
+    )
+    // Ordinary child creates repeat native events; delayed root loss may conservatively rearm a fresh stream.
+    const rootRecreated = events.some(
+      (event) => event.type === 'create' && event.path === worktreesDir
+    )
+    const coarseRootReplacement =
+      rootRecreated &&
+      events.some(
+        (event) =>
+          event.type === 'create' &&
+          event.path !== worktreesDir &&
+          dirname(event.path) === worktreesDir
+      )
+    if (rootDeleted || coarseRootReplacement) {
+      onRootReplacement()
+    }
+    onEvents(
+      coarseRootReplacement
+        ? events.map((event) =>
+            event.type === 'update' && event.path === worktreesDir
+              ? { ...event, type: 'create' }
+              : event
+          )
+        : events
+    )
+  }
+
   return {
     ensureStarted: () => {
       if (subscription || !canStart()) {
@@ -59,45 +89,29 @@ export function createGitCommonWatchReconciliation({
       }
       return starting.run(async () => {
         const startGeneration = generation
+        const shouldKeepBaseline = (): boolean => startGeneration === generation && shouldKeep()
         const reconciliation = await startGitCommonPolling(
           commonDirPath,
-          (events) => {
-            const rootWasReplaced =
-              events.some((event) => event.type === 'delete' && event.path === worktreesDir) &&
-              events.some((event) => event.type === 'create' && event.path === worktreesDir)
-            // Delayed reconciliation repeats native creates; only recreated roots justify replacing the healthy stream.
-            const rootRecreated = events.some(
-              (event) => event.type === 'create' && event.path === worktreesDir
-            )
-            const coarseRootReplacement =
-              rootRecreated &&
-              events.some(
-                (event) =>
-                  event.type === 'create' &&
-                  event.path !== worktreesDir &&
-                  dirname(event.path) === worktreesDir
-              )
-            if (rootWasReplaced || coarseRootReplacement) {
-              onRootReplacement()
-            }
-            onEvents(
-              coarseRootReplacement
-                ? events.map((event) =>
-                    event.type === 'update' && event.path === worktreesDir
-                      ? { ...event, type: 'create' }
-                      : event
-                  )
-                : events
-            )
-          },
+          handleEvents,
           pollIntervalMs * NARROW_WATCH_RECONCILIATION_TICKS,
           pollVisibility,
           undefined,
           false,
           () => [],
-          { reconciliationFullScanEveryTicks: RECONCILIATION_FULL_SCAN_EVERY_TICKS }
+          {
+            reconciliationFullScanEveryTicks: RECONCILIATION_FULL_SCAN_EVERY_TICKS,
+            onRootMissing: (initial) => {
+              if (shouldKeepBaseline()) {
+                if (initial) {
+                  handleEvents([{ type: 'delete', path: worktreesDir }])
+                } else {
+                  onRootReplacement()
+                }
+              }
+            }
+          }
         )
-        if (startGeneration !== generation || !shouldKeep()) {
+        if (!shouldKeepBaseline()) {
           await reconciliation.unsubscribe()
         } else {
           subscription = reconciliation

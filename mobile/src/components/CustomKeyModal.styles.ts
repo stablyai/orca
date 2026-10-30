@@ -1,8 +1,8 @@
 import { StyleSheet } from 'react-native'
-import { colors, spacing, radii, typography } from '../theme/mobile-theme'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
+import { colors, getMobileColorScheme, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const customKeyModalStyles = StyleSheet.create({
+export const customKeyModalStyles = themedStyleSheet(() => ({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -166,7 +166,7 @@ export const customKeyModalStyles = StyleSheet.create({
     fontFamily: typography.monoFamily
   },
   chipGlyphSelected: {
-    color: 'rgba(10,10,10,0.5)'
+    color: getMobileColorScheme() === 'dark' ? 'rgba(10,10,10,0.5)' : 'rgba(255,255,255,0.5)'
   },
   moreLink: {
     paddingVertical: spacing.sm,
@@ -236,17 +236,6 @@ export const customKeyModalStyles = StyleSheet.create({
     fontWeight: '500',
     color: colors.textSecondary
   },
-  fieldInput: {
-    backgroundColor: colors.bgBase,
-    color: colors.textPrimary,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    fontFamily: typography.monoFamily,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
   switchRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -275,4 +264,4 @@ export const customKeyModalStyles = StyleSheet.create({
   saveButtonTextDisabled: {
     color: colors.textMuted
   }
-})
+}))

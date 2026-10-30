@@ -181,15 +181,12 @@ function preferencesForWorkspace(state: AppState, workspace: ProspectiveWorkspac
   return { desktop, owner }
 }
 
-/** The last menu answer; cold shortcuts preserve their synchronous desktop fallback. */
-export function readAgentLaunchPreferencesForWorktree(
+/** The last owner answer; cold launches preserve their synchronous desktop fallback. */
+export function readAgentLaunchPreferencesForWorkspace(
   state: AppState,
-  worktreeId: string
+  workspace: ProspectiveWorkspace
 ): AgentLaunchPreferences {
-  const { desktop, owner } = preferencesForWorkspace(state, {
-    kind: workspaceKindForWorktreeId(worktreeId),
-    worktreeId
-  })
+  const { desktop, owner } = preferencesForWorkspace(state, workspace)
   const snapshot = owner
     ? cachedSnapshot(
         owner.environmentId,
@@ -197,6 +194,16 @@ export function readAgentLaunchPreferencesForWorktree(
       )
     : null
   return snapshot && snapshot !== 'desktop' ? snapshot : desktop
+}
+
+export function readAgentLaunchPreferencesForWorktree(
+  state: AppState,
+  worktreeId: string
+): AgentLaunchPreferences {
+  return readAgentLaunchPreferencesForWorkspace(state, {
+    kind: workspaceKindForWorktreeId(worktreeId),
+    worktreeId
+  })
 }
 
 export async function ensureAgentLaunchPreferences(

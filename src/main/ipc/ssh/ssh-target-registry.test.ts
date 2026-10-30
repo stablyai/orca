@@ -141,7 +141,7 @@ describe('SSH IPC handlers', () => {
     const imported: SshTarget[] = [
       { id: 'ssh-imp', label: 'staging', host: 'staging.com', port: 22, username: '' }
     ]
-    mockSshStore.importFromSshConfig.mockReturnValue(imported)
+    mockSshStore.importFromSshConfig.mockResolvedValue({ targets: imported, repoReadoptions: [] })
 
     const result = await handlers.get('ssh:importConfig')!(null, {})
     expect(result).toEqual({ targets: imported, repoReadoptions: [] })
@@ -156,7 +156,8 @@ describe('SSH IPC handlers', () => {
 
     expect(mockSshStore.listTargets).toHaveBeenCalled()
     expect(mockListConfigHosts).toHaveBeenCalledWith(mockSshStore.listTargets(), 'oth', [], {
-      refresh: false
+      refresh: false,
+      routeDuplicateAliases: new Set()
     })
     expect(result).toMatchObject({ hosts: [], hasMore: false })
   })
@@ -167,7 +168,23 @@ describe('SSH IPC handlers', () => {
 
     await handlers.get('ssh:listConfigHosts')!(null, { query: '', refresh: true })
 
-    expect(mockListConfigHosts).toHaveBeenCalledWith([], '', [], { refresh: true })
+    expect(mockListConfigHosts).toHaveBeenCalledWith([], '', [], {
+      refresh: true,
+      routeDuplicateAliases: new Set()
+    })
+  })
+
+  it("ssh:listConfigHosts flags the latest route snapshot's duplicates without waiting, and refreshes it when asked", async () => {
+    mockSshStore.currentSshRouteSnapshot.mockReturnValue({
+      duplicateOf: new Map([['aimp', 'AI Box']])
+    })
+
+    await handlers.get('ssh:listConfigHosts')!(null, { query: 'a' })
+    expect(mockSshStore.refreshSshRouteSnapshot).not.toHaveBeenCalled()
+    await handlers.get('ssh:listConfigHosts')!(null, { query: '', refresh: true })
+
+    expect(mockListConfigHosts.mock.lastCall?.[3].routeDuplicateAliases).toEqual(new Set(['aimp']))
+    expect(mockSshStore.refreshSshRouteSnapshot).toHaveBeenCalledOnce()
   })
 
   it('ssh:resolveConfigHost resolves only the selected alias', async () => {

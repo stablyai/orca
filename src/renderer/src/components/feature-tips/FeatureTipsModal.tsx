@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type JSX } from 'react'
 import { toast } from 'sonner'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
-import { isInNativeChatUpgradeTipAudience } from '../../../../shared/native-chat-upgrade-tip-audience'
+import { isInNativeChatUpgradeTipAudience } from '../../../../shared/native-chat/native-chat-upgrade-tip-audience'
 import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,

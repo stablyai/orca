@@ -118,7 +118,8 @@ describe('resolveAutomationRunTarget owner projection', () => {
 
     expect(resolveAutomationRunTarget(store, automation)).toEqual({
       ok: false,
-      error: 'This automation has no host to run on.'
+      error: 'This automation has no host to run on.',
+      errorCode: 'noRunnableHost'
     })
   })
 

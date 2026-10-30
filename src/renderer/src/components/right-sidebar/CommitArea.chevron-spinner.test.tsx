@@ -4,7 +4,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { CommitArea } from './source-control/commit/commit-area'
 import { resolvePrimaryAction, type PrimaryActionInputs } from './source-control-primary-action'
 import { resolveDropdownItems } from './source-control-dropdown-items'
-import type { DropdownActionKind } from './source-control-dropdown-item-types'
+import type { DropdownActionKind } from '../../../../shared/source-control-dropdown-item-types'
 
 function buildInputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActionInputs {
   return {

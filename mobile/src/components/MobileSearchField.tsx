@@ -1,16 +1,17 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import {
   InteractionManager,
-  Platform,
   Pressable,
-  StyleSheet,
-  TextInput,
   View,
+  type TextInput,
   type TextInputProps
 } from 'react-native'
 import { Search, X } from 'lucide-react-native'
-import { colors, radii, spacing } from '../theme/mobile-theme'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { colors, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { TextField } from './composer-input/TextField'
 
 // Delay focus until opening chrome settles; native autoFocus alone often shows caret without iOS/Android keyboard.
 const SEARCH_AUTO_FOCUS_DELAY_MS = 120
@@ -33,14 +34,13 @@ type MobileSearchFieldProps = {
   accessibilityLabel?: string
 }
 
-// Raised search field stays visibly tappable above list/panel canvas.
 export function MobileSearchField({
   value,
   onChangeText,
   placeholder,
   onClear,
   showClear,
-  clearAccessibilityLabel = 'Clear search',
+  clearAccessibilityLabel,
   autoFocus = false,
   focusKey,
   returnKeyType = 'search',
@@ -49,8 +49,9 @@ export function MobileSearchField({
   editable = true,
   accessibilityLabel
 }: MobileSearchFieldProps) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   const inputRef = useRef<TextInput>(null)
-  const [focused, setFocused] = useState(false)
   const clearVisible = showClear ?? value.length > 0
 
   useEffect(() => {
@@ -87,89 +88,49 @@ export function MobileSearchField({
   }
 
   return (
-    <View style={[styles.shell, focused && styles.shellFocused, !editable && styles.shellDisabled]}>
-      <Search
-        size={15}
-        color={focused ? colors.textPrimary : colors.textSecondary}
-        strokeWidth={2.2}
-      />
-      <TextInput
-        ref={inputRef}
-        style={styles.input}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        // textSecondary keeps hint readable on bgRaised; textMuted looked empty.
-        placeholderTextColor={colors.textSecondary}
-        autoCapitalize="none"
-        autoCorrect={false}
-        // Still request native auto-focus; the delayed ref focus is the reliable path.
-        autoFocus={autoFocus}
-        showSoftInputOnFocus
-        editable={editable}
-        returnKeyType={returnKeyType}
-        onSubmitEditing={onSubmitEditing}
-        onFocus={() => setFocused(true)}
-        onBlur={(event) => {
-          setFocused(false)
-          onBlur?.(event)
-        }}
-        clearButtonMode="never"
-        accessibilityLabel={accessibilityLabel ?? placeholder}
-        selectionColor={colors.accentBlue}
-      />
-      {clearVisible ? (
-        <Pressable
-          onPress={handleClear}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={clearAccessibilityLabel}
-          style={({ pressed }) => [styles.clearButton, pressed && styles.clearButtonPressed]}
-        >
-          {/* Use chip and large hit target: bare 14px X looked decorative and was hard to tap. */}
-          <View style={styles.clearChip}>
-            <X size={12} color={colors.surfaceBright} strokeWidth={2.6} />
-          </View>
-        </Pressable>
-      ) : null}
-    </View>
+    <TextField
+      inputRef={inputRef}
+      leading={<Search size={16} color={colors.textMuted} />}
+      trailing={
+        clearVisible ? (
+          <Pressable
+            onPress={handleClear}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={
+              clearAccessibilityLabel ?? t('components.searchField.clearSearch', 'Clear search')
+            }
+            style={({ pressed }) => [styles.clearButton, pressed && styles.clearButtonPressed]}
+          >
+            {/* Use chip and large hit target: bare 14px X looked decorative and was hard to tap. */}
+            <View style={styles.clearChip}>
+              <X size={12} color={colors.surfaceBright} strokeWidth={2.6} />
+            </View>
+          </Pressable>
+        ) : undefined
+      }
+      value={value}
+      onChangeText={onChangeText}
+      placeholder={placeholder}
+      autoCapitalize="none"
+      autoCorrect={false}
+      // Still request native auto-focus; the delayed ref focus is the reliable path.
+      autoFocus={autoFocus}
+      showSoftInputOnFocus
+      editable={editable}
+      returnKeyType={returnKeyType}
+      onSubmitEditing={onSubmitEditing}
+      onBlur={onBlur}
+      clearButtonMode="never"
+      accessibilityLabel={accessibilityLabel ?? placeholder}
+    />
   )
 }
 
-const styles = StyleSheet.create({
-  shell: {
-    minHeight: 42,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    // Keep search visually distinct from surrounding panels.
-    backgroundColor: colors.bgRaised,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.input,
-    paddingLeft: spacing.md,
-    paddingRight: spacing.xs,
-    paddingVertical: Platform.OS === 'ios' ? spacing.sm : spacing.xs + 2
-  },
-  shellFocused: {
-    // Monochrome focus cue reserves blue for state/selection; textMuted remains visible on bgRaised.
-    borderColor: colors.textMuted
-  },
-  shellDisabled: {
-    opacity: 0.55
-  },
-  input: {
-    flex: 1,
-    minWidth: 0,
-    padding: 0,
-    margin: 0,
-    color: colors.textPrimary,
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    // Remove Android TextInput vertical padding to align icon/clear chip.
-    includeFontPadding: false,
-    textAlignVertical: 'center'
-  },
+const styles = themedStyleSheet(() => ({
   clearButton: {
+    // Pull the 36pt target into the field's end padding so the chip sits near the edge.
+    marginRight: -spacing.sm,
     minWidth: 36,
     minHeight: 36,
     alignItems: 'center',
@@ -184,7 +145,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    // textMuted makes solid clear chip on bgRaised; borderSubtle looked decorative.
+    // A solid textMuted chip reads as a control; borderSubtle looked decorative.
     backgroundColor: colors.textMuted
   }
-})
+}))

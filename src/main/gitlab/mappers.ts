@@ -76,6 +76,8 @@ type GitLabMRRaw = {
   description?: string | null
   target_branch?: string
   author?: { username?: string | null; avatar_url?: string | null } | null
+  head_pipeline?: { status?: string } | null
+  pipeline?: { status?: string } | null
 }
 
 export function mapMRInfo(data: GitLabMRRaw, pipelineStatus: CheckStatus): MRInfo {
@@ -86,7 +88,7 @@ export function mapMRInfo(data: GitLabMRRaw, pipelineStatus: CheckStatus): MRInf
     title: data.title,
     state: mapMRState(data.state, data.draft, data.title),
     url: data.web_url ?? data.url ?? '',
-    pipelineStatus,
+    pipelineStatus: settleManualPipelineStatus(data, pipelineStatus),
     updatedAt: data.updated_at ?? data.updatedAt ?? '',
     mergeable,
     ...(mergeStateStatus ? { mergeStateStatus } : {}),
@@ -97,6 +99,16 @@ export function mapMRInfo(data: GitLabMRRaw, pipelineStatus: CheckStatus): MRInf
     ...(data.author?.username ? { author: data.author.username } : {}),
     ...(data.author?.avatar_url ? { authorAvatarUrl: data.author.avatar_url } : {})
   }
+}
+
+// A mergeable manual pipeline has no automatic work outstanding, but its manual stage has not passed.
+function settleManualPipelineStatus(data: GitLabMRRaw, pipelineStatus: CheckStatus): CheckStatus {
+  const raw = (data.head_pipeline ?? data.pipeline)?.status?.toLowerCase()
+  return raw === 'manual' &&
+    data.detailed_merge_status === 'mergeable' &&
+    data.has_conflicts !== true
+    ? 'neutral'
+    : pipelineStatus
 }
 
 function deriveMergeable(data: GitLabMRRaw): MRInfo['mergeable'] {

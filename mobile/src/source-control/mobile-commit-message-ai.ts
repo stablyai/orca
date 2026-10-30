@@ -1,3 +1,4 @@
+import { translate } from '../i18n/mobile-i18n'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
 import {
   gitCancelGenerateCommitMessageRun,
@@ -21,7 +22,13 @@ export async function requestMobileCommitMessage(
   } catch (error) {
     return {
       success: false,
-      error: refusedRpcMessageOrFallback(error, 'Failed to generate commit message')
+      error: refusedRpcMessageOrFallback(
+        error,
+        translate(
+          'sourceControl.commitMessageAi.generateFailed',
+          'Failed to generate commit message'
+        )
+      )
     }
   }
 }

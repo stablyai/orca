@@ -1,3 +1,4 @@
+import { terminalInputSend } from '../terminal/mobile-terminal-operations'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
@@ -46,6 +47,7 @@ function setup() {
   const showToast = vi.fn()
   let beforeSend = (): boolean => true
   const options: Parameters<typeof useMobileTerminalPaste>[0] = {
+    sendTerminalUserInput: terminalInputSend.request,
     agent: null,
     activeHandle: 'term-1',
     activeHandleRef,

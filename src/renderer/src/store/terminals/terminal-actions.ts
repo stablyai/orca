@@ -10,7 +10,7 @@ import type {
   SleepingAgentSessionRecord
 } from '../../../../shared/agent-session-resume'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
-import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
+import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { AgentStartedTelemetry } from '../../lib/worktree-startup-payload'
 import type { AiVaultSessionTitle } from '../../../../shared/ai-vault-session-title'
 import type {

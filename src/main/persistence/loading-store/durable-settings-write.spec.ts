@@ -1,10 +1,59 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { expect, it, vi } from 'vitest'
+import { agentModelCatalogStore } from '../../native-chat/agent-model-catalog/agent-model-catalog-store'
+import { createAgentModelCatalogService } from '../../native-chat/agent-model-catalog/agent-model-catalog-service'
+import { agentSessionRecordFixture } from '../../native-chat/agent-session-record-test-fixture'
 import {
   createWorkerMaintenanceFixture,
   maintenanceBarrier
 } from './profile-state-maintenance-fixture'
 
 export function registerDurableSettingsWriteTests(): void {
+  it('revokes reports captured under a transient command when the durable write rolls back', async () => {
+    const { store, authority } = await createWorkerMaintenanceFixture()
+    const record = agentSessionRecordFixture({
+      sessionId: 'session-settings-rollback',
+      provider: 'grok',
+      accountHome: { variable: 'GROK_HOME', path: '/settings-rollback/grok' }
+    })
+    const catalog = createAgentModelCatalogService({
+      store: agentModelCatalogStore,
+      getConversation: () => {
+        const held = record
+        return held ? agentSessionConversationView(held) : undefined
+      },
+      getRecord: () => record,
+      drivesRecord: () => true,
+      resolveAccountHome: async () => record.accountHome,
+      probes: {}
+    })
+    const started = maintenanceBarrier()
+    const release = maintenanceBarrier()
+    vi.spyOn(authority, 'writeSerializedDomains').mockImplementationOnce(async () => {
+      started.resolve()
+      await release.promise
+      throw new Error('Disk full')
+    })
+    const original = catalog.captureSource(record)
+    const previous = store.getSettings().agentCmdOverrides
+    try {
+      const pending = store.updateSettingsAndFlush({ agentCmdOverrides: { grok: 'grok-other' } })
+      const rejected = expect(pending).rejects.toThrow('Disk full')
+      await started.promise
+      expect(original()).toBe(false)
+      const transient = catalog.captureSource(record)
+      expect(transient()).toBe(true)
+      release.resolve()
+      await rejected
+      expect(store.getSettings().agentCmdOverrides).toEqual(previous)
+      expect(transient()).toBe(false)
+      expect(catalog.captureSource(record)()).toBe(true)
+    } finally {
+      release.resolve()
+      catalog.stop()
+    }
+  })
+
   it('waits for the SQLite write before returning or publishing the preference', async () => {
     const { store, authority, readState } = await createWorkerMaintenanceFixture()
     const started = maintenanceBarrier()

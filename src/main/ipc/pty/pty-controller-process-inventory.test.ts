@@ -1,4 +1,4 @@
-import { openCodeHookServiceModuleMock } from '../pty-ipc-mock-registry'
+import { openCodeHookServiceModuleMock } from './pty-ipc-mock-registry'
 import { describe, expect, it, vi } from 'vitest'
 
 const { handleMock, onMock, removeHandlerMock, removeAllListenersMock } = vi.hoisted(() => ({

@@ -7,6 +7,7 @@ import {
   structuredSessionBackgroundTasksView,
   type StructuredSessionBackgroundTasksView
 } from '../../../src/shared/structured-session-background-tasks-view'
+import { structuredSessionForegroundCommands } from '../../../src/shared/structured-session-foreground-commands'
 import type { StructuredAgentSessionMutationResult } from './mobile-structured-agent-session-rpc'
 import type { MobileStructuredAgentMutate } from './use-mobile-structured-agent-mutation'
 
@@ -31,9 +32,15 @@ export function useMobileStructuredBackgroundTasks(args: {
   mutate: MobileStructuredAgentMutate
 }): MobileStructuredBackgroundTasks {
   const { connected, mutate, sessionKey, state, turnId } = args
+  const { backgroundTasks, items, latestTurn } = state
   const view = useMemo(
-    () => structuredSessionBackgroundTasksView(state.backgroundTasks, turnId),
-    [state.backgroundTasks, turnId]
+    () =>
+      structuredSessionBackgroundTasksView(
+        backgroundTasks,
+        turnId,
+        structuredSessionForegroundCommands(backgroundTasks, { items, latestTurn })
+      ),
+    [backgroundTasks, items, latestTurn, turnId]
   )
   // Keep the roster through stream failure without claiming its tasks still run.
   const streamLive = connected && state.status === 'ready'

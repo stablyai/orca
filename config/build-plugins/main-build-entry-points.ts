@@ -8,8 +8,12 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   // Why: sandboxed webview preloads cannot load Rollup helper chunks.
   'browser-window-close-preload': resolve('src/preload/browser-window-close.ts'),
   'doc-preview-link-preload': resolve('src/preload/doc-preview-link.ts'),
+  'browser-extension-preload': resolve('src/preload/browser-extension-preload.ts'),
+  'browser-extension-native-host-supervisor-entry': resolve(
+    'src/main/browser/extensions/browser-extension-native-host-supervisor-entry.ts'
+  ),
   'daemon-entry': resolve('src/main/daemon/daemon-entry.ts'),
-  'plugin-host-entry': resolve('src/main/plugins/plugin-host-entry.ts'),
+  'plugin-host-entry': resolve('src/main/plugins/workers/plugin-host-entry.ts'),
   'computer-sidecar': resolve('src/main/computer/computer-sidecar.ts'),
   'stt-worker': resolve('src/main/speech/stt-worker.ts'),
   'warp-theme-parser-worker': resolve('src/main/warp-themes/warp-theme-parser-worker.ts'),
@@ -22,6 +26,9 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   ),
   // libuv spawns inline; run port probes on a worker to keep the UI loop free.
   'port-scan-command-worker-entry': resolve('src/main/ports/port-scan-command-worker-entry.ts'),
+  'command-path-directory-worker-entry': resolve(
+    'src/main/ipc/command-path-directory-worker-entry.ts'
+  ),
   // Focus-triggered usage probes must not block UI on cold CreateProcessW (#27362).
   'worker-thread-child-process-entry': resolve(
     'src/main/worker-thread-child-process/worker-thread-child-process-entry.ts'

@@ -32,7 +32,7 @@
 }
 
 /* Why: the TOC header uses the same 40px chrome row; swap its border for an inset shadow so both dividers align. */
-.rich-markdown-editor-layout:has(.markdown-toc-panel) .markdown-toc-header {
+.rich-markdown-editor-layout .markdown-toc-header {
   border-bottom: none;
   box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--border) 72%, transparent);
 }
@@ -1297,19 +1297,12 @@
   opacity: 1;
 }
 
-.rich-markdown-slash-menu {
-  position: absolute;
-  z-index: 30;
+.rich-markdown-slash-menu[data-slot='popover-content'] {
   display: flex;
-  width: min(300px, calc(100% - 24px));
-  max-height: min(440px, calc(100vh - 120px));
+  width: min(300px, calc(100vw - 16px));
+  max-height: min(440px, var(--radix-popover-content-available-height));
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
-  border-radius: 6px;
-  background: var(--popover);
-  color: var(--popover-foreground);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
 }
 
 .rich-markdown-slash-search {
@@ -1339,6 +1332,7 @@
 }
 
 .rich-markdown-slash-results {
+  position: relative;
   min-height: 0;
   overflow-y: auto;
 }
@@ -1388,17 +1382,6 @@
   color: var(--muted-foreground);
 }
 
-.rich-markdown-emoji-menu {
-  position: absolute;
-  z-index: 31;
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
-  border-radius: 6px;
-  background: var(--popover);
-  color: var(--popover-foreground);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
-}
-
 .rich-markdown-emoji-menu .EmojiPickerReact {
   --epr-bg-color: var(--popover);
   --epr-category-label-bg-color: var(--popover);
@@ -1410,19 +1393,13 @@
   font-family: Geist, sans-serif;
 }
 
-.rich-markdown-doc-link-menu {
-  position: absolute;
-  z-index: 30;
+.rich-markdown-doc-link-menu[data-slot='popover-content'] {
+  position: relative;
   display: flex;
-  width: min(360px, calc(100% - 24px));
-  max-height: 320px;
+  width: min(360px, calc(100vw - 16px));
+  max-height: min(320px, var(--radix-popover-content-available-height));
   flex-direction: column;
   overflow-y: auto;
-  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--background) 92%, transparent);
-  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(16px);
 }
 
 .rich-markdown-doc-link-item {

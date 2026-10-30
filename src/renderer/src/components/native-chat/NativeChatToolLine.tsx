@@ -1,13 +1,12 @@
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
+import { useMemo } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { agentJournalToolCallLifecycle } from '../../../../shared/agent-journal-tool-call-lifecycle'
 import { translate } from '@/i18n/i18n'
 import {
   isToolCallBlock,
   isToolResultBlock,
   type NativeChatBlock,
-  type NativeChatToolCallBlock,
   type NativeChatToolResultBlock
 } from '../../../../shared/native-chat-types'
 import {
@@ -19,7 +18,10 @@ import { NativeChatToolIcon } from './NativeChatToolIcon'
 import { NativeChatToolFileTarget } from './NativeChatToolFileTarget'
 import { NativeChatDiffView } from './NativeChatDiffView'
 import { NativeChatHighlightedCode } from './NativeChatHighlightedCode'
-import { nativeChatToolLineLabel } from './native-chat-tool-line-label'
+import { nativeChatToolRowVerb } from './native-chat-tool-line-label'
+import { NATIVE_CHAT_TOOL_ACTIVITY_COPY } from '../../../../shared/native-chat/tools/native-chat-tool-activity'
+import { nativeChatToolLineView } from '../../../../shared/native-chat/tools/native-chat-tool-line-view'
+import type { NativeChatWebSearchResult } from '../../../../shared/native-chat/tools/native-chat-tool-identity'
 import {
   diffFromText,
   diffFromToolCall
@@ -28,7 +30,6 @@ import { NativeChatExpandable } from './NativeChatExpandable'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
 import { NativeChatToolOutput } from './NativeChatToolOutput'
 
-const NO_SEARCH_RESULTS: NonNullable<NativeChatToolCallBlock['webSearchResults']> = []
 const TARGET_CLASS =
   'min-w-0 truncate text-chat-foreground transition-colors group-hover/tool-line:text-chat-foreground-strong'
 
@@ -45,7 +46,7 @@ function ToolLineDetail({
   body: NativeChatToolResultBlock | undefined
   fullCommand: string | null
   commandLanguage: string | null
-  results: NonNullable<NativeChatToolCallBlock['webSearchResults']>
+  results: NativeChatWebSearchResult[]
   onLinkClick?: CommentMarkdownLinkClickHandler
 }): React.JSX.Element {
   const diff = isToolCallBlock(block)
@@ -92,32 +93,28 @@ export function NativeChatToolLine({
 }): React.JSX.Element | null {
   const { open: expanded, setOpen: setExpanded } = useNativeChatDisclosure(disclosureKey, false)
 
-  let name: string
-  let resultPreview = ''
+  const view = useMemo(
+    () =>
+      isToolCallBlock(block) || isToolResultBlock(block)
+        ? nativeChatToolLineView(block, result)
+        : null,
+    [block, result]
+  )
   const isCall = isToolCallBlock(block)
-  const label = isCall ? nativeChatToolLineLabel(block, result) : null
-  // A call opens to its output; its arguments are the row's own words, bar a shortened command.
-  const fullCommand = label?.commandDetail ?? null
-
-  if (isCall) {
-    name = block.name
-  } else if (isToolResultBlock(block)) {
-    name = translate('components.native-chat.tool.result', 'Result')
-    resultPreview = block.output.split('\n')[0]?.slice(0, 80) ?? ''
-  } else {
+  if (!view) {
     return null
   }
-  const body = isCall ? result : block
-
-  // A call the reader stopped was cut short, not failed.
-  const lifecycle = isCall ? agentJournalToolCallLifecycle(block) : null
-  const failed = lifecycle === 'failed' || (lifecycle !== 'interrupted' && result?.isError === true)
+  const name = isCall
+    ? block.name
+    : translate('components.native-chat.tool.result', NATIVE_CHAT_TOOL_ACTIVITY_COPY.result)
+  const { label: sharedLabel, body, resultPreview, failed, results, hasDetail } = view
+  const label = sharedLabel && {
+    ...sharedLabel,
+    verb: sharedLabel.verb === null ? null : nativeChatToolRowVerb(sharedLabel.verb)
+  }
+  // A call opens to its output; its arguments are the row's own words, bar a shortened command.
+  const fullCommand = label?.commandDetail ?? null
   const commandAlone = label?.command === true && label.verb !== null && label.target.length > 0
-  const results = (isCall ? block.webSearchResults : undefined) ?? NO_SEARCH_RESULTS
-  // An edit that has not landed has no output yet, but the change it proposes is worth opening.
-  const proposesChange = () => isCall && diffFromToolCall(block.name, block.input) !== null
-  const hasDetail =
-    body !== undefined || fullCommand !== null || results.length > 0 || proposesChange()
 
   return (
     <div>

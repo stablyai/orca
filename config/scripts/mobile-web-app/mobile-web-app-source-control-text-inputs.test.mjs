@@ -8,7 +8,6 @@ import { describe, expect, it } from 'vitest'
 import { mobileWebAppRouteClosure } from '../build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import {
-  TEXT_INPUT_FONT_SIZE_SEAM,
   textInputFontSizeFloor,
   textInputFontSizeOffenders,
   unresolvedTextInputStyles
@@ -19,6 +18,8 @@ const describeClosure = mobileWebAppDependenciesPresent() ? describe : describe.
 
 const HUB = 'app/h/[hostId]/source-control/[worktreeId].tsx'
 const REVIEW = 'app/h/[hostId]/review/[worktreeId].tsx'
+// The pages' inputs take their size from the chat composer's shared styles.
+const COMPOSER_INPUT_STYLES = 'src/components/composer-input/composer-input-styles.ts'
 
 const SEAM_SOURCE = {
   'src/platform/text-input-font-size.ts': 'export const TEXT_INPUT_FONT_SIZE = 14'
@@ -61,6 +62,27 @@ describe('the size a text input declares, as the census reads it', () => {
       expect(
         textInputFontSizeOffenders(root, { local: ['src/ui/Field.tsx', 'src/ui/field-styles.ts'] })
       ).toEqual(['src/ui/field-styles.ts:3'])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('reads a themed stylesheet the way it reads StyleSheet.create', () => {
+    const root = plant({
+      'src/ui/Field.tsx': [
+        "import { styles } from './field-styles'",
+        'export const Field = () => <TextInput style={styles.input} />'
+      ].join('\n'),
+      'src/ui/field-styles.ts': [
+        'export const styles = themedStyleSheet(() => ({',
+        '  input: { fontSize: 14 }',
+        '}))'
+      ].join('\n')
+    })
+    try {
+      const closure = { local: ['src/ui/Field.tsx', 'src/ui/field-styles.ts'] }
+      expect(textInputFontSizeOffenders(root, closure)).toEqual(['src/ui/field-styles.ts:2'])
+      expect(unresolvedTextInputStyles(root, closure)).toEqual([])
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
@@ -178,6 +200,26 @@ describe('the size a text input declares, as the census reads it', () => {
       }
       expect(textInputFontSizeOffenders(root, closure)).toEqual(['src/ui/Mixed.tsx:3'])
       expect(unresolvedTextInputStyles(root, closure)).toEqual([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('reads a same-module constant bound to a literal as that literal', () => {
+    const root = plant({
+      'src/ui/Field.tsx': [
+        "import { styles } from './field-styles'",
+        'export const Field = () => <TextInput style={styles.input} />'
+      ].join('\n'),
+      'src/ui/field-styles.ts': [
+        'const TEXT_SIZE = 16',
+        'export const styles = { input: { fontSize: TEXT_SIZE } }'
+      ].join('\n')
+    })
+    try {
+      expect(
+        textInputFontSizeOffenders(root, { local: ['src/ui/Field.tsx', 'src/ui/field-styles.ts'] })
+      ).toEqual([])
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
@@ -397,11 +439,14 @@ describeClosure(
       }
     )
 
-    it.each([HUB, REVIEW])('carries the seam, so the rule is not vacuous: %s', async (route) => {
-      // Require reachable inputs so empty closure cannot pass floor census.
-      const closure = await mobileWebAppRouteClosure(route)
-      expect(closure.local).toContain(TEXT_INPUT_FONT_SIZE_SEAM)
-    })
+    it.each([HUB, REVIEW])(
+      'carries the composer inputs, so the rule is not vacuous: %s',
+      async (route) => {
+        // Require reachable inputs so empty closure cannot pass floor census.
+        const closure = await mobileWebAppRouteClosure(route)
+        expect(closure.local).toContain(COMPOSER_INPUT_STYLES)
+      }
+    )
   },
   240_000
 )

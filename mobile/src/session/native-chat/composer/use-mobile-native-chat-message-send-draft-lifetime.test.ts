@@ -25,7 +25,7 @@ vi.mock('../mobile-native-chat-send', () => ({
 }))
 
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
-import { useMobileNativeChatMessageSend } from '../../use-mobile-native-chat-message-send'
+import { useMobileNativeChatMessageSend } from '../transcript/use-mobile-native-chat-message-send'
 import {
   resetMobileNativeChatDraftStoreForTests,
   useMobileNativeChatDraft

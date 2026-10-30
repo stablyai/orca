@@ -1,4 +1,3 @@
-import type { ProjectCatalogReadState } from '@/store/project-host-setup-selector'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
@@ -7,7 +6,7 @@ import {
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
 import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
-import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
+import { resolveHostAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { isWslUncPath } from '../../../shared/wsl-paths'
 import type { AppState } from '@/store/types'
 import { getConnectionIdFromState } from './connection-owner-resolution'
@@ -20,7 +19,13 @@ import {
 
 /** Withhold unreported execution OS; quoting with client/endpoint guesses would target the wrong shell and must stop launch. */
 export type ExecutionHostPlatformFact =
-  | { kind: 'known'; platform: NodeJS.Platform; hostKind: ParsedExecutionHost['kind'] }
+  | {
+      kind: 'known'
+      platform: NodeJS.Platform
+      hostKind: ParsedExecutionHost['kind']
+      /** A paired server's own Windows terminal shell, when it reported one. */
+      terminalWindowsShell?: string | null
+    }
   | { kind: 'withheld'; reason: string }
 
 type HostFactsState = Pick<
@@ -36,11 +41,11 @@ type WorktreeHostFactsState = HostFactsState &
     | 'detectedWorktreesByRepo'
     | 'folderWorkspaces'
     | 'projectGroups'
+    | 'projects'
     | 'repos'
     | 'settings'
     | 'worktreesByRepo'
-  > &
-  ProjectCatalogReadState
+  >
 
 const SSH_PLATFORM_WITHHELD =
   'The SSH host has not reported its operating system yet. Connect to it and try again.'
@@ -110,7 +115,12 @@ function resolveHostPlatform(
     hostPlatform === 'win32' && args.workspacePath && isWslUncPath(args.workspacePath)
       ? 'linux'
       : hostPlatform
-  return { kind: 'known', platform, hostKind: 'runtime' }
+  return {
+    kind: 'known',
+    platform,
+    hostKind: 'runtime',
+    ...(status?.terminalWindowsShell ? { terminalWindowsShell: status.terminalWindowsShell } : {})
+  }
 }
 
 /** Read the repo owner’s execution platform; workspacePath refines it for host-local namespaces such as WSL, defaulting to repo path. */
@@ -195,16 +205,17 @@ export function requireExecutionHostPlatform(fact: ExecutionHostPlatformFact): N
   return fact.platform
 }
 
-/** `terminalWindowsShell` describes this client's shell, so it only shapes local launches. */
+/** `terminalWindowsShell` is this client's setting, so a remote host uses only the shell it reported. */
 export function resolveExecutionHostAgentStartupShell(
   fact: ExecutionHostPlatformFact,
   terminalWindowsShell: string | null | undefined
 ): AgentStartupShell | undefined {
   return fact.kind === 'known'
-    ? resolveLocalWindowsAgentStartupShell({
+    ? resolveHostAgentStartupShell({
         platform: fact.platform,
         isRemote: fact.hostKind !== 'local',
-        terminalWindowsShell
+        hostTerminalWindowsShell:
+          fact.hostKind === 'local' ? terminalWindowsShell : fact.terminalWindowsShell
       })
     : undefined
 }

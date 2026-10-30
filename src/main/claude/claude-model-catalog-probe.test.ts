@@ -27,7 +27,7 @@ const HOME = (path: string): { variable: string; path: string } => ({
 })
 
 function probeDeps(command = `"${process.execPath}"`): {
-  resolveCommand: () => string
+  resolveCommand: () => { command: string; prefixArgs: string[] }
   resolveEnv: () => Record<string, string>
   resolveInheritedEnv: () => Promise<Record<string, string>>
   resolveAuthPolicy: () => typeof AUTH_POLICY
@@ -62,7 +62,7 @@ const LISTED = `${JSON.stringify({
 })}\n`
 
 describe('claude model catalog probe', () => {
-  it.each([`"${process.execPath}"`, ''])(
+  it.each([`"${process.execPath}"`, '', `"${process.execPath}" run -- claude`])(
     'lists with the session executable and env for Command %j',
     async (command) => {
       const deps = probeDeps(command)
@@ -92,7 +92,12 @@ describe('claude model catalog probe', () => {
       const [launch, options] = calls[0]!
       expect(launch).toEqual({
         command: invocation.command,
-        args: [...CLAUDE_MODEL_LIST_ARGS, '--setting-sources', 'user,project,local'],
+        args: [
+          ...invocation.prefixArgs,
+          ...CLAUDE_MODEL_LIST_ARGS,
+          '--setting-sources',
+          'user,project,local'
+        ],
         cwd: process.cwd(),
         stdin: expect.stringContaining(CLAUDE_MODEL_LIST_STDIN)
       })
@@ -159,7 +164,7 @@ describe('claude model catalog probe', () => {
     await expect(probe(HOME('/homes/a'))).rejects.toThrow(/listed no models/)
   })
 
-  it.each(['npx claude', 'claude --verbose', '/missing/claude', './claude'])(
+  it.each(['launcher $SECRET claude', 'FOO=1 claude', '/missing/claude', './claude'])(
     'lists nothing, and never probes the stock CLI, for Command %s',
     async (command) => {
       const runListing = vi.fn()
@@ -196,7 +201,7 @@ process.stdin.on('end', () => setTimeout(() => {
         chmodSync(standIn, 0o755)
         const probe = createClaudeModelCatalogProbe({
           ...probeDeps(),
-          resolveCommand: () => standIn,
+          resolveCommand: () => ({ command: standIn, prefixArgs: [] }),
           resolveInheritedEnv: async () => ({ PATH: process.env.PATH ?? '', HOME: folder })
         })
 
@@ -244,7 +249,7 @@ describe('Claude catalog availability', () => {
       const missing = join(folder, 'claude with spaces', 'claude')
       const probe = createClaudeModelCatalogProbe({
         ...probeDeps(),
-        resolveCommand: () => missing
+        resolveCommand: () => ({ command: missing, prefixArgs: [] })
       })
       await expect(probe(HOME('/homes/a'))).rejects.toMatchObject({
         unavailable: { reason: 'cliMissing' }

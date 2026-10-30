@@ -5,7 +5,7 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { RpcClient } from '../transport/rpc-client'
 import { MobileNativeChatItemSourceContext } from './mobile-native-chat-item-read'
 import { useMobileNativeChatFullMessage } from './MobileNativeChatFullContent'
-import { MobileNativeChatUserMessageFold } from './MobileNativeChatUserMessageFold'
+import { MobileNativeChatUserMessageFold } from './native-chat/transcript/MobileNativeChatUserMessageFold'
 import { stubRpcClient } from '../transport/rpc-client-test-stub'
 
 vi.mock('react-native', () => ({

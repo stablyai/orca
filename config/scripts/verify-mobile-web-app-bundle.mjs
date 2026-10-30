@@ -21,9 +21,14 @@ const manifestContract = join(
 )
 
 // Derive asset ceiling as chunks+images+document so chunk overflow reports splitting cause before generic count; flat ceiling drifts as routes grow.
-export function mobileWebAppBundleMaxAssets(routeCount, imageCount) {
-  return mobileWebAppBundleMaxChunks(routeCount) + imageCount + 1
+export function mobileWebAppBundleMaxAssets(routeCount, imageCount, catalogChunkCount = 0) {
+  return mobileWebAppBundleMaxChunks(routeCount) + catalogChunkCount + imageCount + 1
 }
+
+// UI-language catalogs have their own allowance, like the font: one chunk per non-English locale,
+// fetched only for the active language, never before the first route. Code keeps the 9 MiB fence.
+export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_CHUNKS = 10
+export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES = 3 * 1024 * 1024
 
 // Keep total app byte budget below phone’s per-asset contract ceiling to fail at build; splitting alone cannot shrink code size.
 export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 9 * 1024 * 1024
@@ -62,21 +67,21 @@ export function mobileWebAppBundleBudgetBytes(manifest) {
 // Re-measure table when routes change; it is envelope’s only input, and pins must fail rather than permit arbitrary ceiling bumps.
 export const MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP = [
   ['./_layout.tsx', 3],
-  ['./h/[hostId]/[...page].tsx', 6],
-  ['./h/[hostId]/accounts.tsx', 10],
-  ['./h/[hostId]/agent-history/[worktreeId].tsx', 15],
-  ['./h/[hostId]/edit.tsx', 20],
-  ['./h/[hostId]/files/[worktreeId].tsx', 24],
-  ['./h/[hostId]/files/preview/[worktreeId].tsx', 31],
-  ['./h/[hostId]/history/[worktreeId].tsx', 34],
+  ['./h/[hostId]/[...page].tsx', 7],
+  ['./h/[hostId]/accounts.tsx', 11],
+  ['./h/[hostId]/agent-history/[worktreeId].tsx', 16],
+  ['./h/[hostId]/edit.tsx', 21],
+  ['./h/[hostId]/files/[worktreeId].tsx', 25],
+  ['./h/[hostId]/files/preview/[worktreeId].tsx', 32],
+  ['./h/[hostId]/history/[worktreeId].tsx', 35],
   ['./h/[hostId]/index.tsx', 42],
-  ['./h/[hostId]/new-workspace.tsx', 49],
-  ['./h/[hostId]/pr/[worktreeId].tsx', 50],
-  ['./h/[hostId]/review/[worktreeId].tsx', 57],
-  ['./h/[hostId]/session/[worktreeId].tsx', 69],
-  ['./h/[hostId]/source-control/[worktreeId].tsx', 73],
-  ['./h/[hostId]/tasks.tsx', 87],
-  ['./h/_layout.tsx', 91]
+  ['./h/[hostId]/new-workspace.tsx', 51],
+  ['./h/[hostId]/pr/[worktreeId].tsx', 52],
+  ['./h/[hostId]/review/[worktreeId].tsx', 60],
+  ['./h/[hostId]/session/[worktreeId].tsx', 72],
+  ['./h/[hostId]/source-control/[worktreeId].tsx', 77],
+  ['./h/[hostId]/tasks.tsx', 91],
+  ['./h/_layout.tsx', 95]
 ]
 
 const sweptScripts = MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.map(([, scripts]) => scripts)
@@ -138,8 +143,13 @@ export async function readMobileWebBundleMaxAssets() {
 }
 
 // Reject derived asset allowance beyond phone’s map limit: shells reject whole oversized manifest, not just extras; re-sweep shared routes to tighten envelope.
-export function assertAssetCeilingFitsShell(routeCount, imageCount, shellMaxAssets) {
-  const ceiling = mobileWebAppBundleMaxAssets(routeCount, imageCount)
+export function assertAssetCeilingFitsShell(
+  routeCount,
+  imageCount,
+  shellMaxAssets,
+  catalogChunkCount = 0
+) {
+  const ceiling = mobileWebAppBundleMaxAssets(routeCount, imageCount, catalogChunkCount)
   if (ceiling > shellMaxAssets) {
     fail(
       `the ceiling derived for ${String(routeCount)} route(s) and ${String(imageCount)} image(s) ` +
@@ -166,14 +176,6 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
 
   const manifest = assertMobileWebBundleBuilt(bundleDir)
 
-  const budgetBytes = mobileWebAppBundleBudgetBytes(manifest)
-  if (budgetBytes > MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES) {
-    fail(
-      `bundle excluding the approved font is ${String(budgetBytes)} bytes, over the Phase C budget of ` +
-        `${String(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)}`
-    )
-  }
-
   const first = await buildIntoScratch()
   const second = await buildIntoScratch()
   if (first.manifest.buildId !== second.manifest.buildId) {
@@ -184,11 +186,29 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
       `${bundleDir} is stale: it carries buildId ${manifest.buildId}, a fresh build produces ${first.manifest.buildId}`
     )
   }
+  if (
+    first.catalogChunkCount > MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_CHUNKS ||
+    first.catalogBytes > MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES
+  ) {
+    fail(
+      `${String(first.catalogChunkCount)} locale catalog chunk(s) of ${String(first.catalogBytes)} bytes exceed ` +
+        `the catalog allowance of ${String(MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_CHUNKS)} chunks and ` +
+        `${String(MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES)} bytes`
+    )
+  }
+  const budgetBytes = mobileWebAppBundleBudgetBytes(manifest) - first.catalogBytes
+  if (budgetBytes > MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES) {
+    fail(
+      `bundle excluding the approved font and locale catalogs is ${String(budgetBytes)} bytes, over the Phase C budget of ` +
+        `${String(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)}`
+    )
+  }
   // Read chunk/entry bounds and image count from fresh verified build: they are not manifest fields, while buildId binds on-disk bytes.
   const maxAssets = assertAssetCeilingFitsShell(
     first.routeKeys.length,
     first.imageCount,
-    await readMobileWebBundleMaxAssets()
+    await readMobileWebBundleMaxAssets(),
+    first.catalogChunkCount
   )
   if (manifest.assets.length > maxAssets) {
     fail(
@@ -210,7 +230,7 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
         `budget of ${String(MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES)}`
     )
   }
-  return manifest
+  return { ...manifest, catalogBytes: first.catalogBytes }
 }
 
 if (isDirectInvocation(import.meta.url, process.argv[1])) {
@@ -219,7 +239,8 @@ if (isDirectInvocation(import.meta.url, process.argv[1])) {
     console.log(
       `[verify-mobile-web-app-bundle] OK — ${String(manifest.assets.length)} asset(s), ` +
         `${String(manifest.totalBytes)} total bytes, ` +
-        `${String(mobileWebAppBundleBudgetBytes(manifest))}/${String(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)} bytes excluding the approved font, ` +
+        `${String(mobileWebAppBundleBudgetBytes(manifest) - manifest.catalogBytes)}/${String(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)} bytes excluding the approved font, ` +
+        `${String(manifest.catalogBytes)}/${String(MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES)} bytes of language catalogs, ` +
         `reproducible buildId ${manifest.buildId}`
     )
   } catch (error) {

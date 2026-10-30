@@ -1,4 +1,4 @@
-import { resolveMobileNativeChatRowProps } from './use-mobile-native-chat-row-props'
+import { resolveMobileNativeChatRowProps } from './native-chat/transcript/use-mobile-native-chat-row-props'
 import { createElement, type ReactElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, expect, vi } from 'vitest'
@@ -36,6 +36,11 @@ export type Overrides = {
   agentWorking?: boolean
   canStop?: boolean
   ask?: Parameters<typeof MobileNativeChatView>[0]['ask']
+  askRequiresTerminal?: boolean
+  collapsedPrompt?: Parameters<typeof MobileNativeChatView>[0]['collapsedPrompt']
+  micActive?: boolean
+  micProcessing?: boolean
+  composerTray?: Parameters<typeof MobileNativeChatView>[0]['composerTray']
   question?: Parameters<typeof MobileNativeChatView>[0]['question']
   permission?: Parameters<typeof MobileNativeChatView>[0]['permission']
   sendSurfaceId?: string

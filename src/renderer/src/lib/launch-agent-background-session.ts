@@ -74,7 +74,8 @@ export async function launchAgentBackgroundSession(
     isRemote,
     // The window quotes by its Settings shell, which its pane's spawn also reads.
     shell: undefined,
-    extraAgentArgs: args.extraAgentArgs
+    extraAgentArgs: args.extraAgentArgs,
+    suppressStartupUpdatePrompt: true
   })
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0

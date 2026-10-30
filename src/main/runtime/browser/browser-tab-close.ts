@@ -4,8 +4,7 @@ import {
   retireRuntimeBrowserClientPage
 } from './browser-client-page-close'
 import { BrowserError } from '../../browser/browser-error'
-import { randomUUID } from 'node:crypto'
-import { ipcMain } from 'electron'
+import { closeBrowserTabInRenderer } from './browser-tab-renderer-close'
 import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from './browser-command-targets'
 
@@ -23,7 +22,7 @@ export class RuntimeBrowserTabClose {
       | 'retireRuntimeOwnedBrowserSessionTab'
       | 'notifyHeadlessBrowserSessionTabsChanged'
       | 'getAgentBrowserBridge'
-      | 'resolveWorktreeSelector'
+      | 'resolveWorkspaceSelector'
       | 'getAvailableAuthoritativeWindow'
       | 'getOffscreenBrowserBackend'
       | 'getAuthoritativeWindow'
@@ -53,7 +52,7 @@ export class RuntimeBrowserTabClose {
         namedPageId &&
         params.worktree &&
         this.targets.retireGhostBrowserSessionRow(
-          (await this.host.resolveWorktreeSelector(params.worktree)).id,
+          (await this.host.resolveWorkspaceSelector(params.worktree)).id,
           namedPageId
         )
       ) {
@@ -63,7 +62,7 @@ export class RuntimeBrowserTabClose {
     }
     const worktreeId = explicitPage
       ? params.worktree
-        ? (await this.host.resolveWorktreeSelector(params.worktree)).id
+        ? (await this.host.resolveWorkspaceSelector(params.worktree)).id
         : undefined
       : await this.targets.resolveBrowserWorktreeId(params.worktree)
 
@@ -126,36 +125,7 @@ export class RuntimeBrowserTabClose {
     }
 
     const win = authoritativeWindow ?? this.host.getAuthoritativeWindow()
-    const requestId = randomUUID()
-    await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        ipcMain.removeListener('browser:tabCloseReply', handler)
-        reject(new Error('Tab close timed out'))
-      }, 10_000)
-
-      const handler = (
-        _event: Electron.IpcMainEvent,
-        reply: { requestId: string; error?: string; code?: 'browser_tab_not_found' }
-      ): void => {
-        if (reply.requestId !== requestId) {
-          return
-        }
-        clearTimeout(timer)
-        ipcMain.removeListener('browser:tabCloseReply', handler)
-        if (reply.error) {
-          reject(
-            reply.code === 'browser_tab_not_found'
-              ? new BrowserError('browser_tab_not_found', reply.error)
-              : new Error(reply.error)
-          )
-        } else {
-          resolve()
-        }
-      }
-      ipcMain.on('browser:tabCloseReply', handler)
-      // Scope renderer close to its owning worktree, not the globally active one.
-      win.webContents.send('browser:requestTabClose', { requestId, tabId, worktreeId })
-    })
+    await closeBrowserTabInRenderer(win, tabId, worktreeId)
 
     return { closed: true }
   }

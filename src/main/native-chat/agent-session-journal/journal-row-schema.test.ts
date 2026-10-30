@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { projectStructuredAgentStartItem } from '../../../shared/structured-agent-start-projection'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION
@@ -505,3 +506,56 @@ it('preserves stored keys and reducer aliases across an item revision and a tomb
   expect(state.items.size).toBe(0)
   expect(state.tombstones.get('canonical')).toBe(9)
 })
+
+const startWorker = {
+  party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
+  name: 'Worker',
+  relation: 'worker'
+}
+it.each([
+  { worker: startWorker, senders: [startWorker] },
+  {
+    worker: { ...startWorker, relation: 'future-relation' },
+    senders: [{ ...startWorker, relation: undefined }]
+  },
+  { worker: { ...startWorker, name: 17 }, senders: [{ ...startWorker, name: null }] },
+  {
+    worker: { ...startWorker, party: { ...startWorker.party, orcaSessionId: 'invalid' } },
+    senders: []
+  },
+  { worker: null, senders: [] },
+  { worker: { futureIdentity: 'new shape' }, senders: [] }
+])('replays open worker metadata without damaging task/core: $worker', ({ worker, senders }) => {
+  const body = { kind: 'agent-start', dispatchId: 'dispatch', task: '  Full task\r\nEND  ', worker }
+  const parsed = parseJournalRow(
+    JSON.stringify({ ...BASE, kind: 'item', itemId: 'start', revision: 1, body })
+  )
+  if (!parsed.ok) {
+    throw new Error('creation fact was refused')
+  }
+  expect(parsed.row).toMatchObject({ body })
+  const state = createJournalReducerState('session-1', BASE.epoch)
+  applyJournalRow(state, parsed.row)
+  const item = state.items.get('start')
+  if (!item) {
+    throw new Error('creation fact was lost during replay')
+  }
+  const message = projectStructuredAgentStartItem(item)
+  expect(message?.blocks).toEqual([{ type: 'text', text: body.task }])
+  expect(message?.from?.senders).toEqual(senders)
+})
+
+it.each([{ dispatchId: '' }, { dispatchId: null }, { task: null }, { task: 17 }])(
+  'rejects damaged creation core while worker metadata stays open: %j',
+  (damage) => {
+    expect(
+      parse({
+        ...BASE,
+        kind: 'item',
+        itemId: 'start',
+        revision: 1,
+        body: { kind: 'agent-start', dispatchId: 'dispatch', task: 'Task', worker: null, ...damage }
+      })
+    ).toBe(false)
+  }
+)

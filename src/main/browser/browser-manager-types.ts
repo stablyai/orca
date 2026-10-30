@@ -119,6 +119,7 @@ export type ActiveDownload = {
   terminalEvent: BrowserDownloadFinishedEvent | null
   startedSent: boolean
   cleanup: (() => void) | null
+  onFinished: ((event: BrowserDownloadFinishedEvent) => void) | null
 }
 
 export function safeOrigin(rawUrl: string): string {

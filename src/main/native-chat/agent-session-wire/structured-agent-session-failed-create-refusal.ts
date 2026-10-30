@@ -26,14 +26,17 @@ import {
 import {
   startupAcquisitionRefusal,
   providerExitObserved,
+  startFailureDiagnosticOf,
   structuredAgentSessionStartFailure
 } from './structured-agent-session-failure-text'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
-import { providerExecutableMissing } from '../../provider-process/provider-executable-missing'
+import {
+  providerExecutableMissing,
+  providerLaunchFolderMissing
+} from '../../provider-process/provider-executable-missing'
 import { argumentProblemOf } from '../structured-agent-arguments-error'
 import { agentCliInstallationProblemOf } from '../agent-cli-installation-error'
 import { agentCliInstallationFacts } from '../../../shared/agent-cli-installation-problem'
-import { providerDiagnosticOf } from '../../../shared/agent-session-failure'
 
 export type FailedAcquisitionWording = {
   record: AgentSessionRecord | null
@@ -51,7 +54,7 @@ function failedAcquisitionWireRefusal(
   const { reason } = structuredAgentSessionStartFailure(
     {
       refusal,
-      diagnostic: providerDiagnosticOf(error),
+      diagnostic: startFailureDiagnosticOf(error),
       argumentProblem: argumentProblemOf(error),
       ...(wording.newSession ? { newSession: true as const } : {})
     },
@@ -78,7 +81,9 @@ export function failedAcquisitionSettlement(
   const exitProof = isAgentSessionPreSpawnError(error)
     ? 'processless'
     : error instanceof AgentSessionAcquisitionRootExitObservedError
-      ? 'root-exit-observed'
+      ? error.deathEvidenceKind === 'kill-delivered'
+        ? 'kill-delivered'
+        : 'root-exit-observed'
       : 'exit-proven'
   const raw = error instanceof Error ? error.message : String(error)
   const details = failedAcquisitionDetails(error)
@@ -127,6 +132,9 @@ function failedAcquisitionDetails(
   }
   if (isExitProvenAcquisitionFailure(error) && providerExecutableMissing(error)) {
     return { reason: 'cliMissing' }
+  }
+  if (isExitProvenAcquisitionFailure(error) && providerLaunchFolderMissing(error)) {
+    return { reason: 'launchFolderMissing' }
   }
   if (isExitProvenAcquisitionFailure(error) && providerExitObserved(error)) {
     return { reason: 'providerStartFailed' }

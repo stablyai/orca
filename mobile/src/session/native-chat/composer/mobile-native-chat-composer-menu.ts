@@ -1,17 +1,29 @@
 import type { AgentSessionConversationCommand } from '../../../../../src/shared/agent-session/agent-session-conversation-command'
 import type { AgentSessionSlashCommand } from '../../../../../src/shared/agent-session-wire'
-import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat-agent-profiles'
+import {
+  getNativeChatAgentProfile,
+  type NativeChatAgentProfile
+} from '../../../../../src/shared/native-chat-agent-profiles'
+import { nativeChatPickerScannedSkills } from '../../../../../src/shared/native-chat-composer-autocomplete'
 import {
   buildNativeChatPickerItems,
-  type NativeChatPickerItem
+  type NativeChatPickerItem,
+  type NativeChatSkillDiscoverySnapshot
 } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
-import { sessionReportedSkills } from '../../../../../src/shared/native-chat/input/native-chat-slash-commands'
+import {
+  nativeChatPickerCommands,
+  nativeChatSessionSkills
+} from '../../../../../src/shared/native-chat-skill-visibility'
+import type {
+  NativeChatSessionSkill,
+  SlashCommandSuggestion
+} from '../../../../../src/shared/native-chat/input/native-chat-slash-commands'
 import { structuredSessionSlashCommands } from '../../../../../src/shared/structured-agent-session-composer'
 import { getMobileNativeChatCommands } from '../mobile-native-chat-send-classification'
 
 // Why: the menu is a plain ScrollView right above a streaming transcript, so it mounts a bounded
 // number of rows; typing narrows the rest.
-const MENU_ROWS_PER_GROUP = 10
+export const MENU_ROWS_PER_GROUP = 10
 
 export type MobileComposerStructuredCatalog = {
   /** What the session reported for its `/` menu; undefined until read or on an older host. */
@@ -19,46 +31,57 @@ export type MobileComposerStructuredCatalog = {
   conversationCommands: readonly AgentSessionConversationCommand[]
 }
 
-type SlashMenuInput = {
-  agent: string | null
-  structured: MobileComposerStructuredCatalog | undefined
-  query: string
+export type MobileComposerCatalog = {
+  profile: NativeChatAgentProfile | null
+  commands: readonly SlashCommandSuggestion[]
+  discovery: NativeChatSkillDiscoverySnapshot
+  /** Undefined keeps the host disk scan, as on desktop. */
+  sessionSkills: readonly NativeChatSessionSkill[] | undefined
 }
 
-// Structured chats use reported commands/skills; terminal-backed chats retain curated commands without skills.
-function slashItems(
-  { agent, structured, query }: SlashMenuInput,
-  limit: number
-): NativeChatPickerItem[] {
+const NO_DISCOVERY: NativeChatSkillDiscoverySnapshot = { status: 'ready', skills: [] }
+
+// Structured chats use reported commands/skills; terminal-backed chats keep curated commands.
+export function mobileComposerCatalog({
+  agent,
+  structured,
+  discovery = NO_DISCOVERY
+}: {
+  agent: string | null
+  structured: MobileComposerStructuredCatalog | undefined
+  discovery?: NativeChatSkillDiscoverySnapshot
+}): MobileComposerCatalog {
   if (!agent) {
-    return []
+    return { profile: null, commands: [], discovery: NO_DISCOVERY, sessionSkills: [] }
   }
   const reported = structured?.reported
   const commands = structured
     ? structuredSessionSlashCommands(agent, structured.conversationCommands, reported)
     : getMobileNativeChatCommands(agent)
-  return buildNativeChatPickerItems(
-    commands,
-    [],
-    query,
-    getNativeChatAgentProfile(agent)?.skillPrefix ?? '/',
-    reported ? sessionReportedSkills(reported) : [],
-    limit
-  )
+  return {
+    profile: getNativeChatAgentProfile(agent),
+    commands: nativeChatPickerCommands(agent, commands, discovery.skills),
+    discovery,
+    sessionSkills: nativeChatSessionSkills(agent, reported)
+  }
 }
 
-export function mobileComposerSlashItems(input: SlashMenuInput): NativeChatPickerItem[] {
-  return slashItems(input, MENU_ROWS_PER_GROUP)
-}
-
-export function mobileComposerSkillTokens(
-  input: Omit<SlashMenuInput, 'query'>
-): ReadonlySet<string> {
+export function mobileComposerSkillTokens(catalog: MobileComposerCatalog): ReadonlySet<string> {
   return new Set(
-    slashItems({ ...input, query: '' }, Infinity).flatMap((item) =>
-      item.kind === 'skill' ? [item.token] : []
-    )
+    buildNativeChatPickerItems(
+      catalog.commands,
+      nativeChatPickerScannedSkills(catalog.profile, catalog.discovery.skills),
+      '',
+      catalog.profile?.skillPrefix ?? '/',
+      catalog.sessionSkills,
+      Infinity
+    ).flatMap((item) => (item.kind === 'skill' ? [item.token] : []))
   )
+}
+
+export function boundedMenuItems(items: readonly NativeChatPickerItem[]): NativeChatPickerItem[] {
+  const counts = { command: 0, skill: 0 }
+  return items.filter((item) => ++counts[item.kind] <= MENU_ROWS_PER_GROUP)
 }
 
 // If narrowing leaves no rows, show all: idle chats may report skills as plain commands.

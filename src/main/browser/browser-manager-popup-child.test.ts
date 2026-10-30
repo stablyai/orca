@@ -112,7 +112,7 @@ describe('browserManager popup child policies', () => {
 
     didCreateWindowHandler?.({ webContents: childGuest })
 
-    expect(childSetBackgroundThrottlingMock).toHaveBeenCalledWith(false)
+    expect(childSetBackgroundThrottlingMock).not.toHaveBeenCalled()
     expect(childSetWindowOpenHandlerMock).toHaveBeenCalledTimes(1)
     expect(childOnMock.mock.calls.filter(([event]) => event === 'did-create-window')).toHaveLength(
       1

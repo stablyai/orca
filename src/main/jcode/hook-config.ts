@@ -1,4 +1,5 @@
 // Reuse byte-preserving TOML scanning; scalar hook commands stay user-owned unless they target Orca.
+import { applyEdits, type Edit } from 'jsonc-parser'
 import {
   createTomlLineScanState,
   getTomlTableHeader,
@@ -8,55 +9,87 @@ import {
 } from '../codex/config-toml-line-scan'
 import { parseTomlKeyPath, parseTomlTableHeaderPath } from '../codex/config-toml-key-path'
 import { createManagedCommandMatcher } from '../agent-hooks/installer-utils'
+import {
+  appendJcodeHookCommand,
+  removeJcodeHookCommand,
+  scanJcodeHookCommandArray
+} from './hook-command-array'
 
-export type JcodeHooksTable = Record<string, string>
+export type JcodeHooksTable = Record<string, string | readonly string[]>
 
-export function parseJcodeHooksTable(content: string): JcodeHooksTable | null {
-  const hooks: JcodeHooksTable = {}
+type JcodeHookAssignment = {
+  key: string
+  dotted: boolean
+  lineStart: number
+  /** Excludes the line terminator. */
+  lineEnd: number
+  valueStart: number
+}
+
+function scanJcodeHookAssignments(content: string): {
+  assignments: JcodeHookAssignment[]
+  /** End of the first [hooks] header line, or -1 when there is none. */
+  hooksHeaderEnd: number
+} {
+  const assignments: JcodeHookAssignment[] = []
+  let hooksHeaderEnd = -1
   let state = createTomlLineScanState()
   let inHooksTable = false
-  let parseError = false
-  for (const line of content.split('\n')) {
-    if (!isTomlStructuralLine(state)) {
-      state = updateTomlLineScanState(state, line)
-      continue
-    }
-    const header = getTomlTableHeader(line)
-    if (header) {
-      inHooksTable = isHooksTableHeader(header)
-      state = updateTomlLineScanState(state, line)
-      continue
-    }
-    if (inHooksTable) {
-      const parsed = parseTomlKeyPath(line)
-      if (parsed && line[parsed.end] === '=') {
-        const value = parseTomlSingleLineStringValue(line, parsed.end + 1)
-        if (value) {
-          hooks[parsed.segments[0]] = value.value
-        } else if (
-          parsed.segments.length === 1 &&
-          line.trim().length > 0 &&
-          !isTomlScalarValue(line, parsed.end + 1)
-        ) {
-          // Fail closed on multiline hook strings; non-string scalars such as pre_tool_timeout_ms are valid config.
-          parseError = true
+  let lineStart = 0
+  for (const rawLine of content.split('\n')) {
+    const line = rawLine.replace(/\r$/, '')
+    if (isTomlStructuralLine(state)) {
+      const header = getTomlTableHeader(line)
+      if (header) {
+        inHooksTable = isHooksTableHeader(header)
+        if (inHooksTable && hooksHeaderEnd === -1) {
+          hooksHeaderEnd = lineStart + line.length
+        }
+      } else if (inHooksTable) {
+        const parsed = parseTomlKeyPath(line)
+        if (parsed && line[parsed.end] === '=') {
+          assignments.push({
+            key: parsed.segments[0],
+            dotted: parsed.segments.length > 1,
+            lineStart,
+            lineEnd: lineStart + line.length,
+            valueStart: lineStart + parsed.end + 1
+          })
         }
       }
     }
     state = updateTomlLineScanState(state, line)
+    lineStart += rawLine.length + 1
   }
-  if (parseError) {
-    return null
+  return { assignments, hooksHeaderEnd }
+}
+
+export function parseJcodeHooksTable(content: string): JcodeHooksTable | null {
+  const hooks: JcodeHooksTable = {}
+  for (const assignment of scanJcodeHookAssignments(content).assignments) {
+    const value = parseTomlSingleLineStringValue(content, assignment.valueStart)
+    const array = value ? null : scanJcodeHookCommandArray(content, assignment.valueStart)
+    if (value) {
+      hooks[assignment.key] = value.value
+    } else if (array) {
+      hooks[assignment.key] = array.elements.map((element) => element.value)
+    } else if (
+      !assignment.dotted &&
+      !isTomlScalarValue(content.slice(assignment.valueStart, assignment.lineEnd))
+    ) {
+      // Fail closed on multiline strings and malformed arrays; numeric settings such as pre_tool_timeout_ms are valid.
+      return null
+    }
   }
   return hooks
 }
 
 // jcode seeds non-command scalars; inline comments must not make them parse errors.
 const TOML_SCALAR_VALUE_RE =
-  /^\s*(?:true|false|[-+]?\d[\d_]*(?:\.[\d_]+)?(?:[eE][-+]?\d+)?)\s*(?:#.*)?\r?$/
+  /^\s*(?:true|false|[-+]?\d[\d_]*(?:\.[\d_]+)?(?:[eE][-+]?\d+)?)\s*(?:#.*)?$/
 
-function isTomlScalarValue(line: string, offset: number): boolean {
-  return TOML_SCALAR_VALUE_RE.test(line.slice(offset))
+function isTomlScalarValue(value: string): boolean {
+  return TOML_SCALAR_VALUE_RE.test(value)
 }
 
 // Reuse quoted/dotted header parsing to avoid appending a duplicate hooks table.
@@ -75,133 +108,118 @@ export type JcodeHooksEdit = {
 }
 
 export function applyJcodeManagedHooks(
-  content: string,
+  source: string,
   events: readonly string[],
   managedCommand: string,
   scriptFileName: string
 ): JcodeHooksEdit {
   const isManaged = createManagedCommandMatcher(scriptFileName)
-  // Strip split CRLF tails before rejoining so repeated edits cannot grow carriage returns.
-  const lines = content.split('\n').map((line) => line.replace(/\r$/, ''))
-  const usesCrlf = content.includes('\r\n')
-  const eol = usesCrlf ? '\r\n' : '\n'
-  let state = createTomlLineScanState()
-  let inHooksTable = false
-  let hooksHeaderIndex = -1
-  const existingKeyIndexes = new Map<string, number>()
-  const staleKeyIndexes = new Map<string, number>()
+  // Keep one Orca element per array so the repair below cannot leave stale duplicates running.
+  const content = removeManagedHookCommands(source, isManaged, true)
+  const managedValue = tomlQuoteString(managedCommand)
+  const eol = content.includes('\r\n') ? '\r\n' : '\n'
+  const { assignments, hooksHeaderEnd } = scanJcodeHookAssignments(content)
+  const edits: Edit[] = []
   const userOwnedEvents: string[] = []
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index] ?? ''
-    if (!isTomlStructuralLine(state)) {
-      state = updateTomlLineScanState(state, line)
+  const missing: string[] = []
+  for (const event of events) {
+    const assignment = assignments.find((entry) => entry.key === event && !entry.dotted)
+    if (!assignment) {
+      missing.push(event)
       continue
     }
-    const header = getTomlTableHeader(line)
-    if (header) {
-      if (inHooksTable) {
-        break
+    const array = scanJcodeHookCommandArray(content, assignment.valueStart)
+    if (array) {
+      // Append after user gates: jcode runs every pre_tool command in order, so Orca observes the final input.
+      if (!array.elements.some((element) => element.value === managedCommand)) {
+        const stale = array.elements.find((element) => isManaged(element.value))
+        edits.push(
+          ...(stale
+            ? [{ offset: stale.start, length: stale.end - stale.start, content: managedValue }]
+            : appendJcodeHookCommand(content, array, managedValue))
+        )
       }
-      if (isHooksTableHeader(header)) {
-        inHooksTable = true
-        hooksHeaderIndex = index
-      }
-      state = updateTomlLineScanState(state, line)
       continue
     }
-    if (inHooksTable) {
-      const parsed = parseTomlKeyPath(line)
-      if (parsed && line[parsed.end] === '=' && parsed.segments.length === 1) {
-        const key = parsed.segments[0]
-        if (events.includes(key)) {
-          // Parse the string so trailing comments cannot confer ownership and escaped Windows paths still match.
-          const value = parseTomlSingleLineStringValue(line, parsed.end + 1)?.value
-          if (!isManaged(value)) {
-            userOwnedEvents.push(key)
-          } else if (value === managedCommand) {
-            existingKeyIndexes.set(key, index)
-          } else {
-            // Repair stale managed paths after copied configs or platform switches.
-            staleKeyIndexes.set(key, index)
+    // Parse the string so trailing comments cannot confer ownership and escaped Windows paths still match.
+    const value = parseTomlSingleLineStringValue(content, assignment.valueStart)?.value
+    if (!isManaged(value)) {
+      userOwnedEvents.push(event)
+    } else if (value !== managedCommand) {
+      // Repair stale managed paths after copied configs or platform switches.
+      edits.push({
+        offset: assignment.lineStart,
+        length: assignment.lineEnd - assignment.lineStart,
+        content: `${event} = ${managedValue}`
+      })
+    }
+  }
+  if (missing.length > 0) {
+    const lines = missing.map((event) => `${event} = ${managedValue}`).join(eol)
+    edits.push(
+      hooksHeaderEnd === -1
+        ? {
+            offset: content.length,
+            length: 0,
+            content: `${content.endsWith('\n') || content.length === 0 ? '' : '\n'}[hooks]${eol}${lines}${eol}`
           }
-        }
-      }
-    }
-    state = updateTomlLineScanState(state, line)
+        : { offset: hooksHeaderEnd, length: 0, content: `${eol}${lines}` }
+    )
   }
-
-  const missing = events.filter(
-    (event) =>
-      !existingKeyIndexes.has(event) &&
-      !staleKeyIndexes.has(event) &&
-      !userOwnedEvents.includes(event)
-  )
-  const insertions: string[] = []
-  for (const event of missing) {
-    insertions.push(`${event} = ${tomlQuoteString(managedCommand)}`)
-  }
-  const repointed = [...lines]
-  for (const [event, index] of staleKeyIndexes) {
-    repointed[index] = `${event} = ${tomlQuoteString(managedCommand)}`
-  }
-  let result = staleKeyIndexes.size > 0 ? repointed.join(eol) : content
-  if (insertions.length > 0) {
-    if (hooksHeaderIndex === -1) {
-      result = `${result.endsWith('\n') || result.length === 0 ? result : `${result}\n`}[hooks]${eol}${insertions.join(eol)}${eol}`
-    } else {
-      const insertionLines = [...repointed]
-      insertionLines.splice(hooksHeaderIndex + 1, 0, ...insertions)
-      result = insertionLines.join(eol)
-    }
-  }
-  return { content: result, userOwnedEvents }
+  return { content: applyEdits(content, edits), userOwnedEvents }
 }
 
 export function removeJcodeManagedHooks(
   content: string,
   scriptFileName: string
 ): { content: string; changed: boolean } {
-  const isManaged = createManagedCommandMatcher(scriptFileName)
-  // Strip CRLF tails before rejoining.
-  const lines = content.split('\n').map((line) => line.replace(/\r$/, ''))
-  const usesCrlf = content.includes('\r\n')
-  const eol = usesCrlf ? '\r\n' : '\n'
-  let state = createTomlLineScanState()
-  let inHooksTable = false
-  let changed = false
-  const kept: string[] = []
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index] ?? ''
-    if (!isTomlStructuralLine(state)) {
-      kept.push(line)
-      state = updateTomlLineScanState(state, line)
+  const result = removeManagedHookCommands(
+    content,
+    createManagedCommandMatcher(scriptFileName),
+    false
+  )
+  return { content: result, changed: result !== content }
+}
+
+function removeManagedHookCommands(
+  content: string,
+  isManaged: (command: string | undefined) => boolean,
+  keepFirst: boolean
+): string {
+  let result = content
+  // Each pass drops at most one element per array so splices never overlap.
+  for (let edits = getRemovalEdits(result, isManaged, keepFirst); edits.length > 0;) {
+    result = applyEdits(result, edits)
+    edits = getRemovalEdits(result, isManaged, keepFirst)
+  }
+  return result
+}
+
+function getRemovalEdits(
+  content: string,
+  isManaged: (command: string | undefined) => boolean,
+  keepFirst: boolean
+): Edit[] {
+  const edits: Edit[] = []
+  // Scan every [hooks] line so removal cannot truncate later user tables.
+  for (const assignment of scanJcodeHookAssignments(content).assignments) {
+    if (assignment.dotted) {
       continue
     }
-    const header = getTomlTableHeader(line)
-    if (header) {
-      // Keep copying after the hooks table so removal cannot truncate later user tables.
-      inHooksTable = isHooksTableHeader(header)
-      kept.push(line)
-      state = updateTomlLineScanState(state, line)
-      continue
+    const array = scanJcodeHookCommandArray(content, assignment.valueStart)
+    const managed = array?.elements.flatMap((element, i) => (isManaged(element.value) ? [i] : []))
+    const index = managed?.[keepFirst ? 1 : 0]
+    if (array && index !== undefined) {
+      edits.push(...removeJcodeHookCommand(content, array, index))
+    } else if (
+      !array &&
+      !keepFirst &&
+      isManaged(parseTomlSingleLineStringValue(content, assignment.valueStart)?.value)
+    ) {
+      const nextLine = content.indexOf('\n', assignment.lineEnd)
+      const end = nextLine === -1 ? content.length : nextLine + 1
+      edits.push({ offset: assignment.lineStart, length: end - assignment.lineStart, content: '' })
     }
-    if (inHooksTable) {
-      const parsed = parseTomlKeyPath(line)
-      const value =
-        parsed && line[parsed.end] === '=' && parsed.segments.length === 1
-          ? parseTomlSingleLineStringValue(line, parsed.end + 1)?.value
-          : undefined
-      if (value !== undefined && isManaged(value)) {
-        changed = true
-        state = updateTomlLineScanState(state, line)
-        continue
-      }
-    }
-    kept.push(line)
-    state = updateTomlLineScanState(state, line)
   }
-  if (!changed) {
-    return { content, changed: false }
-  }
-  return { content: kept.join(eol), changed: true }
+  return edits
 }

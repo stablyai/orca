@@ -1,6 +1,6 @@
-import { EventEmitter } from 'node:events'
 import type { ChildProcess } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createFakeSpawnedChild } from '../../../shared/__fixtures__/fake-spawned-child'
 
 const { spawnMock, processKillMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
@@ -14,14 +14,10 @@ vi.mock('node:child_process', async (importOriginal) => ({
 
 import { ghExecFileAsync } from './gh-exec-file'
 
-function mockChild(pid = 4321): ChildProcess {
-  const child = new EventEmitter() as EventEmitter & Record<string, unknown>
-  child.pid = pid
-  child.kill = vi.fn(() => true)
-  child.stdin = Object.assign(new EventEmitter(), { end: vi.fn() })
-  child.stdout = new EventEmitter()
-  child.stderr = new EventEmitter()
-  return child as unknown as ChildProcess
+function mockChild(pid = 4321) {
+  const child = createFakeSpawnedChild(pid)
+  vi.spyOn(child.stdin, 'end')
+  return child
 }
 
 function settleChild(child: ChildProcess, stdout: string): void {

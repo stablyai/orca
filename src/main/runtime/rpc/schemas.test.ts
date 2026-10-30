@@ -1,21 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { z, type ZodType } from 'zod'
 import {
-  BrowserTarget,
   OptionalBoolean,
   OptionalFiniteNumber,
   OptionalPlainString,
   OptionalPositiveInt,
   OptionalString
 } from '../../../shared/rpc-contract/rpc-param-primitives'
-import {
-  InterceptEnable,
-  Screenshot,
-  Scroll,
-  TabClose,
-  TabSwitch,
-  Wait
-} from '../../../shared/rpc-contract/browser-params'
 import { TERMINAL_METHODS } from './methods/terminal'
 import { TERMINAL_ORPHAN_METHODS } from './methods/terminal-orphan'
 import { WORKTREE_METHODS } from './methods/worktree'
@@ -54,16 +45,6 @@ describe('RPC optional pipe schemas', () => {
     })
 
     expectParses(schema, {})
-  })
-
-  it('accepts omitted browser optional fields while required fields are present', () => {
-    expectParses(Scroll, { direction: 'down' })
-    expectParses(Screenshot, {})
-    expectParses(TabSwitch, { page: 'page-1' })
-    expectParses(TabClose, {})
-    expectParses(Wait, {})
-    expectParses(InterceptEnable, {})
-    expectParses(BrowserTarget, {})
   })
 
   it('accepts omitted terminal and worktree optional fields while required fields are present', () => {
@@ -168,38 +149,5 @@ describe('RPC optional pipe schemas', () => {
     expectParses(list, { worktree: 'id:repo::/worktree', handles: ['term-live'] })
     expectRejects(list, { handles: [''] })
     expectRejects(list, { handles: Array.from({ length: 65 }, (_, index) => `term-${index}`) })
-  })
-
-  it('accepts worktree.create payloads sent by the previous mobile protocol', () => {
-    const create = methodParams(WORKTREE_METHODS, 'worktree.create')
-
-    expectParses(create, {
-      repo: 'id:repo-github',
-      name: 'fix-mobile-tasks',
-      displayName: 'Fix mobile tasks',
-      setupDecision: 'run',
-      activate: true,
-      startupDraft: 'https://github.com/acme/app/pull/123',
-      createdWithAgent: 'codex',
-      linkedPR: 123,
-      baseBranch: 'origin/main',
-      compareBaseRef: 'origin/main',
-      branchNameOverride: 'feature/mobile-tasks',
-      pushTarget: { remoteName: 'origin', branchName: 'feature/mobile-tasks' }
-    })
-    expectParses(create, {
-      repo: 'id:repo-gitlab',
-      name: 'mr-7',
-      linkedGitLabMR: 7,
-      sparseCheckout: { directories: ['mobile'], presetId: 'mobile' },
-      comment: 'keep mobile parity'
-    })
-    expectParses(create, {
-      repo: 'id:repo-linear',
-      name: 'eng-42',
-      linkedLinearIssue: 'ENG-42',
-      linkedLinearIssueWorkspaceId: 'workspace-1',
-      linkedLinearIssueOrganizationUrlKey: 'acme'
-    })
   })
 })

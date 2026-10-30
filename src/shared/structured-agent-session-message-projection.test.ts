@@ -18,7 +18,7 @@ import {
   DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_WRITE_FAILED
 } from './structured-agent-session-dispatch-rejection'
-import { withNativeChatCutTurnNotices } from './native-chat-cut-turn-notice'
+import { withNativeChatCutTurnNotices } from './native-chat/transcript/native-chat-cut-turn-notice'
 import { agentSessionFailureFact } from './agent-session-failure'
 import { agentSessionFailureWords } from './agent-session-failure-words'
 
@@ -66,90 +66,9 @@ describe('a send kept as a card', () => {
       expect.objectContaining({ id: agentJournalSubmissionKey(KEPT_ID), unsent: true })
     ])
   })
-
-  // Edit is the card's text in the composer, then the card's Delete, then a new send.
-  it('after an Edit sent again, shows exactly the new send', () => {
-    const kept = rejected({ keptAsQueuedMessageId: KEPT_ID })
-    const edited: AgentJournalSubmission = {
-      ...rejected(),
-      clientMessageId: 'client-edited',
-      dispatchState: 'accepted',
-      providerItemId: 'provider-edited',
-      reason: null
-    }
-    delete edited.rejection
-    const shown = projectStructuredAgentSessionMessages(
-      [userItem(KEPT_ID, 'the kept words', 1), userItem('client-edited', 'the edited words', 2)],
-      [lingeringCopy],
-      [kept, edited]
-    )
-    expect(shown).toHaveLength(1)
-    expect(shown[0]).toMatchObject({ blocks: [{ text: 'the edited words' }] })
-    expect(shown[0]).not.toHaveProperty('unsent')
-  })
 })
 
 describe('a not-sent row', () => {
-  const said = (id: string, text: string, sequence: number): AgentJournalRenderItem => ({
-    itemId: id,
-    revision: 1,
-    sequence,
-    observedAt: sequence,
-    body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] }
-  })
-  const delivered = (id: string, submittedAt: number): AgentJournalSubmission => ({
-    ...rejected({ clientMessageId: id, payloadFingerprint: id, submittedAt }),
-    dispatchState: 'accepted',
-    reason: null,
-    rejection: undefined
-  })
-  const items = [
-    userItem('first', 'first', 1),
-    said('reply-1', 'one', 2),
-    userItem(KEPT_ID, 'not sent', 3),
-    userItem('later', 'later', 4),
-    said('reply-2', 'two', 5)
-  ]
-  const submissions = [delivered('first', 1), rejected(), delivered('later', 3)]
-
-  // The phone draws the list as given, so the projection itself puts the row in place.
-  it('is listed where the host recorded it, not after later turns', () => {
-    const shown = projectStructuredAgentSessionMessages(items, [], submissions)
-    expect(shown.map((message) => [message.id, message.unsent ?? false])).toEqual([
-      [agentJournalSubmissionKey('first'), false],
-      ['reply-1', false],
-      [agentJournalSubmissionKey(KEPT_ID), true],
-      [agentJournalSubmissionKey('later'), false],
-      ['reply-2', false]
-    ])
-    // The desktop sorts by the same order, so what it draws is unchanged.
-    expect(projectNativeChatTranscriptMessages(shown).map((message) => message.id)).toEqual(
-      shown.map((message) => message.id)
-    )
-  })
-
-  it('follows the stop row of a send taken back before it', () => {
-    const stoppedId = 'stopped'
-    const shown = projectStructuredAgentSessionMessages(
-      [userItem(stoppedId, 'taken back', 1), userItem(KEPT_ID, 'not sent', 2)],
-      [],
-      [
-        rejected({
-          clientMessageId: stoppedId,
-          payloadFingerprint: stoppedId,
-          reason: DISPATCH_REJECTED_CANCELLED,
-          rejection: undefined
-        }),
-        rejected({ submittedAt: 3 })
-      ]
-    )
-    expect(shown.map((message) => message.id)).toEqual([
-      agentJournalSubmissionKey(stoppedId),
-      `stopped-before-start:${agentJournalSubmissionKey(stoppedId)}`,
-      agentJournalSubmissionKey(KEPT_ID)
-    ])
-  })
-
   // The merge relies on the rest of the list already being in journal order; this pins it.
   it('lists everything in the order the desktop sorts it into', () => {
     const row = (

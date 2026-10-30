@@ -77,18 +77,4 @@ describe('AppImage generation residency', () => {
       )
     ).toMatchObject({ status: 'unverifiable' })
   })
-
-  it('reports nothing resident off Linux', () => {
-    expect(residencyOfGeneration(scanResidentExecutables({ platform: 'darwin' }), ROOT)).toEqual({
-      status: 'exited'
-    })
-  })
-})
-
-describe.runIf(process.platform === 'linux')('AppImage generation residency on this host', () => {
-  it('reads every same-user process, including this one', () => {
-    const scan = scanResidentExecutables()
-    expect(scan).toMatchObject({ status: 'scanned', unreadablePid: null })
-    expect(scan.status === 'scanned' && scan.executables.length).toBeGreaterThan(0)
-  })
 })

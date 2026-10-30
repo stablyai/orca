@@ -33,6 +33,7 @@ export type StructuredAgentSessionCreateParams = {
 export type StructuredAgentSessionFirstMessage = {
   clientMessageId: string
   body: z.infer<typeof SendBody>
+  selection?: Readonly<Record<string, string>>
 }
 
 /** Provider-prefixed IDs use underscore-only suffix tokens for embedding in tab IDs/log keys. */

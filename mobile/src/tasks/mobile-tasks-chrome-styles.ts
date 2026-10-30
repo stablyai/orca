@@ -1,6 +1,13 @@
-import { StyleSheet, colors, radii, spacing, typography } from './mobile-tasks-dependencies'
+import {
+  StyleSheet,
+  themedStyleSheet,
+  colors,
+  radii,
+  spacing,
+  typography
+} from './mobile-tasks-dependencies'
 
-export const mobileTasksChromeStyles = StyleSheet.create({
+export const mobileTasksChromeStyles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -223,4 +230,4 @@ export const mobileTasksChromeStyles = StyleSheet.create({
     marginLeft: spacing.lg + 26,
     marginRight: spacing.lg
   }
-})
+}))

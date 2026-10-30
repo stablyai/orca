@@ -113,6 +113,8 @@ export type AgentStatusEntry = {
   terminalTitle?: string
   /** Rolling log of previous states, capped at AGENT_STATE_HISTORY_MAX. */
   stateHistory: AgentStateHistoryEntry[]
+  /** Observed session origin for row ordering; recent history can evict its first state. */
+  firstStateStartedAt?: number
   /** Name of the tool the agent is currently using (e.g. "Edit", "Bash"). */
   toolName?: string
   /** Short preview of the tool input (e.g. file path, command). */

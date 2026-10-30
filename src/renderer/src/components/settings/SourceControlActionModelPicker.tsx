@@ -1,6 +1,11 @@
+import { reconcileAgentChoiceArgs } from '../../../../shared/agent-choice-reconciliation'
+import {
+  normalizeAgentModelOptionChoices,
+  type AgentDedicatedChoices
+} from '../../../../shared/agent-launch-choices'
 import {
   findCatalogModel,
-  getAgentSessionOptionCatalog
+  getAgentSessionOptionLaunchCatalog
 } from '../../../../shared/agent-session-option-catalog'
 import type { SourceControlActionLaunchPreferences } from '../../../../shared/source-control-ai-actions'
 import {
@@ -19,46 +24,39 @@ import { translate } from '@/i18n/i18n'
 
 const AGENT_DEFAULT_VALUE = '__agent_default__'
 
-type SourceControlActionModelPickerProps = {
+export type AgentChoiceControlsProps = {
   agent: TuiAgent | null | undefined
-  value: SourceControlActionLaunchPreferences | undefined
+  value: AgentDedicatedChoices | undefined
   disabled?: boolean
   layout?: 'stacked' | 'contents'
-  onChange: (value: SourceControlActionLaunchPreferences | undefined) => void
+  onChange: (value: AgentDedicatedChoices | undefined) => void
 }
 
-export function SourceControlActionModelPicker({
+export function AgentChoiceControls({
   agent,
   value,
   disabled,
   layout = 'stacked',
   onChange
-}: SourceControlActionModelPickerProps): React.JSX.Element | null {
+}: AgentChoiceControlsProps): React.JSX.Element | null {
   const picksModel = sourceControlActionAgentPicksModel(agent)
   if (!agent || !picksModel) {
     return null
   }
-  const catalog = picksModel ? getAgentSessionOptionCatalog(agent) : null
-  const selected = value?.agentId === agent ? value : undefined
+  const catalog = picksModel ? getAgentSessionOptionLaunchCatalog(agent) : null
+  const selected = value
   // Model and permission mode are saved independently; a model change keeps the mode.
-  const save = (next: Omit<SourceControlActionLaunchPreferences, 'agentId'>): void =>
-    onChange(
-      next.model || next.permissionMode
-        ? {
-            agentId: agent,
-            ...(next.model
-              ? { model: next.model, ...(next.options ? { options: next.options } : {}) }
-              : {}),
-            ...(next.permissionMode ? { permissionMode: next.permissionMode } : {})
-          }
-        : undefined
-    )
-  const { permissionMode } = selected ?? {}
-  const unlistedModel =
-    catalog && selected?.model && !findCatalogModel(catalog, selected.model)
-      ? selected.model
-      : undefined
-  const options = selected?.model ? sourceControlActionOptions(agent, selected.model) : []
+  const save = (next: AgentDedicatedChoices): void =>
+    onChange({
+      ...normalizeAgentModelOptionChoices(next),
+      ...(next.permissionMode ? { permissionMode: next.permissionMode } : {})
+    })
+  const model = catalog && selected?.model ? findCatalogModel(catalog, selected.model) : undefined
+  const unlistedModel = catalog && selected?.model && !model ? selected.model : undefined
+  const options = sourceControlActionOptions(agent, selected?.model ?? '').filter(
+    // CLI carrier mappings remain available to Args badges without advertising a mode control.
+    ({ option }) => Boolean(model) || option.category !== 'mode'
+  )
   const defaultLabel = translate('settings.sourceControl.actionModel.effortDefault', 'Default')
   return (
     <div className={layout === 'contents' ? 'contents' : 'grid min-w-0 grid-cols-1 gap-2'}>
@@ -70,14 +68,23 @@ export function SourceControlActionModelPicker({
             value={selected?.model ?? AGENT_DEFAULT_VALUE}
             disabled={disabled}
             onValueChange={(model) =>
-              save({ ...(model === AGENT_DEFAULT_VALUE ? {} : { model }), permissionMode })
+              onChange(
+                reconcileAgentChoiceArgs({
+                  agent,
+                  choices: selected ?? {},
+                  userArgs: '',
+                  mode: 'choice-edit',
+                  keys: new Set(['model']),
+                  patch: { model: model === AGENT_DEFAULT_VALUE ? null : model }
+                }).choices
+              )
             }
           >
             <SourceControlActionOptionTrigger
               disabled={disabled}
               label={
                 selected?.model
-                  ? (findCatalogModel(catalog, selected.model)?.label ?? selected.model)
+                  ? (model?.label ?? selected.model)
                   : translate('settings.sourceControl.actionModel.agentDefault', 'Agent default')
               }
             />
@@ -97,71 +104,90 @@ export function SourceControlActionModelPicker({
           </Select>
         </SourceControlActionOptionField>
       ) : null}
-      {selected?.model
-        ? options.map(({ option, route }) => {
-            const choices =
-              option.kind.type === 'select'
-                ? option.kind.choices
-                : [
-                    {
-                      value: 'true',
-                      label: translate('settings.sourceControl.actionModel.on', 'On')
-                    },
-                    {
-                      value: 'false',
-                      label: translate('settings.sourceControl.actionModel.off', 'Off')
-                    }
-                  ]
-            const current = selected.options?.[option.id]
-            return (
-              <SourceControlActionOptionField
-                key={option.id}
-                label={option.label}
-                hint={sourceControlActionRouteHint(route)}
-              >
-                <Select
-                  value={current ?? AGENT_DEFAULT_VALUE}
-                  disabled={disabled}
-                  onValueChange={(next) => {
-                    const { [option.id]: _old, ...rest } = selected.options ?? {}
-                    const encoded =
-                      next === AGENT_DEFAULT_VALUE
-                        ? null
-                        : encodeCatalogOptionValue(
-                            option.kind,
-                            option.kind.type === 'boolean' ? next === 'true' : next
-                          )
-                    const values = {
-                      ...rest,
-                      ...(encoded === null ? {} : { [option.id]: encoded })
-                    }
-                    onChange({ ...selected, options: values })
-                  }}
-                >
-                  <SourceControlActionOptionTrigger
-                    disabled={disabled}
-                    label={
-                      current
-                        ? (choices.find((choice) => choice.value === current)?.label ?? current)
-                        : defaultLabel
-                    }
-                  />
-                  <SelectContent>
-                    <SelectItem value={AGENT_DEFAULT_VALUE}>{defaultLabel}</SelectItem>
-                    {choices.map((choice) => (
-                      <SelectItem key={choice.value} value={choice.value}>
-                        {choice.label}
-                      </SelectItem>
-                    ))}
-                    {current && !choices.some((choice) => choice.value === current) ? (
-                      <SelectItem value={current}>{current}</SelectItem>
-                    ) : null}
-                  </SelectContent>
-                </Select>
-              </SourceControlActionOptionField>
-            )
-          })
-        : null}
+      {options.map(({ option, route }) => {
+        const choices =
+          option.kind.type === 'select'
+            ? option.kind.choices
+            : [
+                {
+                  value: 'true',
+                  label: translate('settings.sourceControl.actionModel.on', 'On')
+                },
+                {
+                  value: 'false',
+                  label: translate('settings.sourceControl.actionModel.off', 'Off')
+                }
+              ]
+        const current = selected?.options?.[option.id]
+        return (
+          <SourceControlActionOptionField
+            key={option.id}
+            label={option.label}
+            hint={sourceControlActionRouteHint(route)}
+          >
+            <Select
+              value={current ?? AGENT_DEFAULT_VALUE}
+              disabled={disabled}
+              onValueChange={(next) => {
+                const { [option.id]: _old, ...rest } = selected?.options ?? {}
+                const encoded =
+                  next === AGENT_DEFAULT_VALUE
+                    ? null
+                    : encodeCatalogOptionValue(
+                        option.kind,
+                        option.kind.type === 'boolean' ? next === 'true' : next
+                      )
+                const values = {
+                  ...rest,
+                  ...(encoded === null ? {} : { [option.id]: encoded })
+                }
+                save({ ...selected, options: values })
+              }}
+            >
+              <SourceControlActionOptionTrigger
+                disabled={disabled}
+                label={
+                  current
+                    ? (choices.find((choice) => choice.value === current)?.label ?? current)
+                    : defaultLabel
+                }
+              />
+              <SelectContent>
+                <SelectItem value={AGENT_DEFAULT_VALUE}>{defaultLabel}</SelectItem>
+                {choices.map((choice) => (
+                  <SelectItem key={choice.value} value={choice.value}>
+                    {choice.label}
+                  </SelectItem>
+                ))}
+                {current && !choices.some((choice) => choice.value === current) ? (
+                  <SelectItem value={current}>{current}</SelectItem>
+                ) : null}
+              </SelectContent>
+            </Select>
+          </SourceControlActionOptionField>
+        )
+      })}
     </div>
+  )
+}
+
+export function SourceControlActionModelPicker(
+  props: Omit<AgentChoiceControlsProps, 'value' | 'onChange'> & {
+    value: SourceControlActionLaunchPreferences | undefined
+    onChange: (value: SourceControlActionLaunchPreferences | undefined) => void
+  }
+): React.JSX.Element {
+  return (
+    <AgentChoiceControls
+      {...props}
+      value={props.value?.agentId === props.agent ? props.value : undefined}
+      onChange={(value) =>
+        props.onChange(
+          props.agent && value && Object.keys(value).length
+            ? { agentId: props.agent, ...value }
+            : undefined
+        )
+      }
+    />
   )
 }

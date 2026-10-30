@@ -203,7 +203,8 @@ function QuickTabBody({
   const observation = useAgentMenuObservation(
     cardProps.agentRows?.target ?? null,
     active && Boolean(cardProps.agentRows),
-    cardProps.agentRows?.detectionTarget
+    cardProps.agentRows?.detectionTarget,
+    { wakeOnOpen: true }
   )
   const launchSelection = observation.selectionFor(quickAgent, quickAgentSurface)
   const createDisabled = formDisabled || !launchSelection.ready

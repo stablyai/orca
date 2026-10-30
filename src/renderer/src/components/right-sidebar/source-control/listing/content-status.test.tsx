@@ -13,6 +13,8 @@ function statusProps(): React.ComponentProps<typeof SourceControlContentStatus> 
     isRecoveryBusy: false,
     isAbortingOperation: false,
     onAbortOperation: vi.fn(),
+    isCompletingMerge: false,
+    onCompleteMerge: vi.fn(),
     onResolveWithAi: vi.fn(),
     onReviewConflicts: vi.fn(),
     repositoryHuge: null,

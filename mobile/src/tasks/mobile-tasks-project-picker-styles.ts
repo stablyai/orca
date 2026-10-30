@@ -1,4 +1,5 @@
 import {
+  themedStyleSheet,
   StyleSheet,
   Platform,
   colors,
@@ -6,8 +7,9 @@ import {
   spacing,
   typography
 } from './mobile-tasks-dependencies'
+import { FIELD_MIN_HEIGHT } from '../components/composer-input/composer-input-styles'
 
-export const mobileTasksProjectPickerStyles = StyleSheet.create({
+export const mobileTasksProjectPickerStyles = themedStyleSheet(() => ({
   boardContainer: {
     gap: spacing.md,
     padding: spacing.md
@@ -157,7 +159,7 @@ export const mobileTasksProjectPickerStyles = StyleSheet.create({
     flex: 1
   },
   projectPasteButton: {
-    minHeight: 40,
+    minHeight: FIELD_MIN_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -225,4 +227,4 @@ export const mobileTasksProjectPickerStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center'
   }
-})
+}))

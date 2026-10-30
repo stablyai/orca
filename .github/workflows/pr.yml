@@ -22,8 +22,8 @@ jobs:
   code_paths:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     name: detect changes and check repository guards
-    # Start routing without waiting behind the GitHub-hosted test queue.
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    # Hosted runners start faster than Blacksmith's (~5s vs ~13s) and this sparse checkout fits one vCPU.
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     permissions:
       contents: read
@@ -76,11 +76,13 @@ jobs:
             /config/.bun-version
             /config/scripts/check-readme-local-links.mjs
             /config/scripts/pr-code-change-scope.mjs
+            /config/scripts/pr-shell-contract-prefixes.mjs
             /.oxfmtrc.json
             /config/scripts/pr-package-test-paths.mjs
             /config/scripts/pr-layout-oracle-route.mjs
             /config/scripts/pr-e2e-source-routing.mjs
             /config/scripts/pr-browser-e2e-source-routes.mjs
+            /config/scripts/pr-editor-preview-e2e-source-routes.mjs
             /config/scripts/ci-e2e-job-selection.mjs
             /config/scripts/pr-ready-check-reuse.mjs
           sparse-checkout-cone-mode: false
@@ -101,6 +103,7 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
+          no-cache: true
 
       - name: Check required PR context ownership
         run: bun .github/scripts/check-required-pr-context.mjs
@@ -169,10 +172,9 @@ jobs:
     name: static analysis and typecheck
     needs: [code_paths]
     if: needs.code_paths.outputs.static_analysis == 'true' || needs.code_paths.outputs.typecheck == 'true'
-    # Leave headroom for typechecking and overlapping checks.
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    # Free hosted ARM: no job on the gate's critical path waits for preflight.
+    runs-on: ubuntu-24.04-arm
     outputs:
-      shards: ${{ steps.unit-plan.outputs.shards }}
       managed_hook_node18: ${{ steps.managed_hook_node18.outcome }}
 
     steps:
@@ -220,22 +222,7 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
-
-      # Plan first: its ~10s single-threaded import-graph walk overlaps lint instead of trailing the job.
-      - name: Plan unit selection
-        if: '!cancelled()'
-        id: unit-plan
-        background: true
-        env:
-          PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.typecheck == 'true' }}
-          PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
-          ORCA_UNIT_SELECTION_MODE: ${{ vars.ORCA_UNIT_SELECTION_MODE || 'shadow' }}
-          ORCA_PULL_REQUEST_DRAFT: ${{ github.event.pull_request.draft }}
-          # Five shards use fewer runner minutes; the repository variable can request 2 to 10.
-          ORCA_UNIT_FULL_SHARD_COUNT: ${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '5' }}
-        run: |
-          if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
-          node config/scripts/ci-unit-plan.mjs
+          no-cache: true
 
       # Run gate scripts directly to avoid repeated package-manager startup.
       - name: Check process-host imports
@@ -389,6 +376,10 @@ jobs:
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: node config/scripts/check-reliability-gates.mjs
 
+      - name: Check compiled CSS :has() restyle scope
+        if: needs.code_paths.outputs.static_analysis == 'true'
+        run: node config/scripts/check-has-restyle-scope.mjs
+
       - name: Enforce dead design-system classes
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: node node_modules/oxlint/bin/oxlint --config config/oxlint-dead-classes.json src/renderer
@@ -500,6 +491,14 @@ jobs:
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: bun config/scripts/audit-localization-coverage.mjs --check
 
+      - name: Verify mobile localization
+        if: needs.code_paths.outputs.static_analysis == 'true'
+        run: bun config/scripts/verify-mobile-localization.mjs
+
+      - name: Verify mobile localization coverage
+        if: needs.code_paths.outputs.static_analysis == 'true'
+        run: bun run verify:mobile-localization-coverage
+
       - wait: [localization-catalogs, localization-extraction]
 
       # Keep project declarations in .ts: skipLibCheck silently widened unresolved .d.ts names to any, hiding #1186 IPC breakage. See .github/CONTRIBUTING.md#type-declarations-prefer-ts-over-dts.
@@ -532,16 +531,7 @@ jobs:
 
       - wait: js-plugin-lint
 
-      - wait: unit-plan
-
       - wait: test-file-runners
-
-      - uses: actions/upload-artifact@v7
-        if: needs.code_paths.outputs.typecheck == 'true'
-        with:
-          name: unit-selection-attempt-${{ github.run_attempt }}
-          path: ci-shards/unit-selection.json
-          retention-days: 14
 
       - name: Test Mobile CI tools and runtime routing
         if: needs.code_paths.outputs.mobile_ci_tools == 'true'
@@ -579,7 +569,17 @@ jobs:
       needs.code_paths.result == 'success' &&
       needs.code_paths.outputs.git_compatibility == 'true' &&
       needs.preflight.result == 'success'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    # One free hosted runner per lane: three lanes sharing one 4-vCPU runner pushed real-Git tests past their timeouts.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - git: '2.25.5'
+          - git: '2.38.1'
+            image: alpine/git:edge-2.38.1
+          - git: '2.49.1'
+            image: alpine/git:v2.49.1
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
@@ -590,50 +590,26 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
 
       - uses: ./.github/actions/prepare-git-compatibility
+        if: '!matrix.image'
 
-      - name: Verify Git binary compatibility matrix
+      - name: Verify Git ${{ matrix.git }} compatibility
         env:
           ORCA_BACKGROUND_LAUNCH: '1'
+          ORCA_GIT_COMPAT_VERSION: ${{ matrix.git }}
+          ORCA_GIT_COMPAT_IMAGE: ${{ matrix.image }}
         run: |
-          specs=(
-            "alpine/git:edge-2.38.1|2.38.1"
-            "alpine/git:v2.49.1|2.49.1"
-          )
-          # Pull before tests so a sibling’s timed lane cannot be stalled by the first image download.
-          for spec in "${specs[@]}"; do
-            docker pull --quiet "${spec%%|*}"
-          done
-
-          pids=()
-          (
-            ORCA_GIT_COMPAT_BINARY="$HOME/.cache/orca-git-compat/git-2.25.5/git" \
-              GIT_EXEC_PATH="$HOME/.cache/orca-git-compat/git-2.25.5" \
-              ORCA_GIT_COMPAT_VERSION="2.25.5" \
-              pnpm exec vitest run --config config/vitest.config.ts \
-              src/shared/git-binary-compatibility.test.ts \
-              src/main/git/worktree-safety-real-git.test.ts \
-              src/main/git/worktree-rebase-update-refs-real-git.test.ts
-          ) &
-          pids+=("$!")
-
-          for spec in "${specs[@]}"; do
-            (
-              image="${spec%%|*}"
-              version="${spec#*|}"
-              ORCA_GIT_COMPAT_IMAGE="$image" ORCA_GIT_COMPAT_VERSION="$version" \
-                pnpm exec vitest run --config config/vitest.config.ts \
-                src/shared/git-binary-compatibility.test.ts \
-                src/main/git/worktree-safety-real-git.test.ts \
-                src/main/git/worktree-rebase-update-refs-real-git.test.ts
-            ) &
-            pids+=("$!")
-          done
-
-          status=0
-          for pid in "${pids[@]}"; do
-            wait "$pid" || status=1
-          done
-          exit "$status"
+          if [ -n "$ORCA_GIT_COMPAT_IMAGE" ]; then
+            # Pull outside the timed tests.
+            docker pull --quiet "$ORCA_GIT_COMPAT_IMAGE"
+          else
+            unset ORCA_GIT_COMPAT_IMAGE
+            export ORCA_GIT_COMPAT_BINARY="$HOME/.cache/orca-git-compat/git-$ORCA_GIT_COMPAT_VERSION/git"
+            export GIT_EXEC_PATH="$HOME/.cache/orca-git-compat/git-$ORCA_GIT_COMPAT_VERSION"
+          fi
+          pnpm exec vitest run --config config/vitest.config.ts \
+            src/shared/git-binary-compatibility.test.ts \
+            src/main/git/worktree-safety-real-git.test.ts \
+            src/main/git/worktree-rebase-update-refs-real-git.test.ts
 
   # Run pinned real Codex: thread/read must repair an unindexed rollout’s threads row; stub-only units cannot detect upstream removal of this behavior.
   codex_index_heal_contract:
@@ -645,7 +621,7 @@ jobs:
       needs.code_paths.outputs.codex_index_heal_contract == 'true' &&
       needs.preflight.result == 'success'
     # Why ARM: @openai/codex ships @openai/codex-linux-arm64.
-    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
+    runs-on: ubuntu-24.04-arm
     env:
       CODEX_CLI_VERSION: '0.150.1'
       # Why a second pin: --no-daemon only exists from 0.156, and Orca's codex wrapper relies on it.
@@ -740,7 +716,7 @@ jobs:
       needs.code_paths.outputs.xterm_patch_sync == 'true' &&
       needs.preflight.result == 'success'
     # Use ARM for four-package pristine/patched rebuild byte comparison: output generated on Linux x64 reproduces on darwin-arm64.
-    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
+    runs-on: ubuntu-24.04-arm
 
     steps:
       - name: Checkout
@@ -772,7 +748,7 @@ jobs:
       needs.code_paths.outputs.shell_contracts == 'true' &&
       needs.preflight.result == 'success'
     # Exercise Linux ARM with the standalone aarch64 release and Ubuntu's zsh.
-    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
+    runs-on: ubuntu-24.04-arm
     # Bound stalled prerequisite downloads instead of waiting for GitHub's 6-hour default.
     timeout-minutes: 15
     env:
@@ -867,25 +843,36 @@ jobs:
             src/main/runtime/structured-session-cli-login-shell.live-shell.test.ts \
             src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
             src/shared/fish-query-reply-child-stdin.node-pty.test.ts \
+            src/shared/fish-wsl-cwd-report.node-pty.test.ts \
+            src/main/wsl-sh-cwd-report.node-pty.test.ts \
             src/shared/pty-reply-echo-shapes.node-pty.test.ts \
             src/shared/startup-shell-portability.live-shell.test.ts \
             src/shared/posix-command-path-lookup.test.ts
 
-  # Preflight saves the Node cache and publishes the plan before tests fan out.
+  # Shards wait only for the plan, not preflight, which moves them about two minutes earlier.
+  unit_plan:
+    needs: [code_paths]
+    if: needs.code_paths.outputs.test == 'true'
+    uses: ./.github/workflows/unit-plan.yml
+    with:
+      selection_mode: ${{ vars.ORCA_UNIT_SELECTION_MODE || 'shadow' }}
+
   test:
-    needs: [code_paths, preflight]
-    # Cancellation and failed prerequisites stop the expensive matrix.
+    needs: [code_paths, unit_plan]
     if: >-
       !cancelled() &&
       needs.code_paths.result == 'success' &&
       needs.code_paths.outputs.test == 'true' &&
-      needs.preflight.result == 'success'
+      needs.unit_plan.result == 'success'
     uses: ./.github/workflows/unit-tests.yml
     with:
       node_versions: '["24"]'
-      runner: blacksmith-8vcpu-ubuntu-2404
+      # Free hosted ARM: 12 shards measured 361s median cold vs ~390s for 5 warm Blacksmith 8-vCPU shards.
+      runner: ubuntu-24.04-arm
       phase_diagnostics: true
-      shards: ${{ needs.preflight.outputs.shards }}
+      # Restore main's transform cache; the `ci:cold-unit-cache` label or ORCA_UNIT_MODULE_CACHE=off forces cold.
+      module_cache: ${{ (vars.ORCA_UNIT_MODULE_CACHE == 'off' || contains(github.event.pull_request.labels.*.name, 'ci:cold-unit-cache')) && 'off' || 'warm' }}
+      shards: ${{ needs.unit_plan.outputs.shards }}
       run_shards: ${{ needs.code_paths.outputs.mobile_ci_tools != 'true' }}
       run_relay_integration: ${{ needs.code_paths.outputs.relay_integration != 'false' || needs.code_paths.outputs.orcad_browser == 'true' }}
       browser_contract: ${{ needs.code_paths.outputs.orcad_browser == 'true' }}
@@ -901,7 +888,7 @@ jobs:
     name: mobile web app bundle
     needs: [code_paths]
     if: needs.code_paths.outputs.mobile_web_app == 'true'
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
@@ -969,7 +956,7 @@ jobs:
       needs.code_paths.outputs.cross-version-wire == 'true' &&
       needs.preflight.result == 'success'
     # Why ARM: source-only: tagged checkout plus in-process vitest, no docker or browser.
-    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
+    runs-on: ubuntu-24.04-arm
 
     steps:
       # Fetch tags/full history for newest-release skew; shallow unit shards cannot supply it.
@@ -1012,7 +999,7 @@ jobs:
       needs.code_paths.outputs.managed_hook_node18 == 'true' &&
       needs.preflight.result == 'success'
     # Retain the required check while sharing preflight's checkout and built packages.
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-slim
     timeout-minutes: 5
 
     steps:
@@ -1027,9 +1014,9 @@ jobs:
 
   package:
     name: package
-    needs: [code_paths, preflight]
+    needs: [code_paths]
     if: needs.code_paths.outputs.package == 'true'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     # Let the serial Docker gates reach their own deadlines and report cleanup failures.
     timeout-minutes: 90
 
@@ -1039,11 +1026,18 @@ jobs:
         with:
           persist-credentials: false
 
+      # Electron and builder releases fix what this downloads; the lockfile churns far more often.
+      - name: Resolve electron-builder download versions
+        id: eb-versions
+        shell: bash
+        run: node -p "const d = require('./package.json').devDependencies; 'versions=electron' + d.electron + '-builder' + d['electron-builder']" >> "$GITHUB_OUTPUT"
+
+      # The platform warmup seeds this on main.
       - name: Cache electron-builder downloads
         uses: actions/cache/restore@v5
         with:
           path: ~/.cache/electron-builder
-          key: electron-builder-linux-${{ hashFiles('pnpm-lock.yaml') }}
+          key: electron-builder-linux-${{ steps.eb-versions.outputs.versions }}
           restore-keys: |
             electron-builder-linux-
 
@@ -1092,12 +1086,18 @@ jobs:
           src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts
           src/main/browser/browser-route-webrtc-egress.electron.test.ts
           src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts
+          src/main/browser/cookies/browser-google-cookie-clear.electron.test.ts
           src/main/browser/popup-origin-chrome.electron.test.ts
           src/main/browser/browser-link-materialization.electron.test.ts
           src/main/browser/browser-popup-compatibility.electron.test.ts
           src/main/browser/browser-popup-adapter-compatibility.electron.test.ts
           src/main/browser/browser-popup-native-compatibility.electron.test.ts
           src/main/browser/browser-popup-background-compatibility.electron.test.ts
+          src/main/browser/extensions/browser-extension-api.electron.test.ts
+          src/main/browser/extensions/browser-extension-persistence.electron.test.ts
+          src/main/browser/extensions/browser-extension-lifecycle.electron.test.ts
+          src/main/browser/extensions/browser-extension-toolbar.electron.test.ts
+          src/main/browser/extensions/browser-extension-native-messaging.electron.test.ts
 
       - name: Restore native components
         id: linux-native-restore
@@ -1253,7 +1253,7 @@ jobs:
 
   package_windows:
     name: package (windows)
-    needs: [code_paths, preflight]
+    needs: [code_paths]
     if: needs.code_paths.outputs.package_windows == 'true'
     runs-on: windows-2022
     timeout-minutes: 30
@@ -1264,6 +1264,12 @@ jobs:
         with:
           persist-credentials: false
 
+      # Electron and builder releases fix what this downloads; the lockfile churns far more often.
+      - name: Resolve electron-builder download versions
+        id: eb-versions
+        shell: bash
+        run: node -p "const d = require('./package.json').devDependencies; 'versions=electron' + d.electron + '-builder' + d['electron-builder']" >> "$GITHUB_OUTPUT"
+
       - name: Cache electron-builder downloads
         uses: actions/cache/restore@v5
         with:
@@ -1271,7 +1277,7 @@ jobs:
             ~\AppData\Local\electron\Cache
             ~\AppData\Local\electron-builder\Cache
           # Release builds seed this exact path set; PR-local copies cannot serve other PRs.
-          key: electron-builder-win-${{ hashFiles('pnpm-lock.yaml') }}
+          key: electron-builder-win-${{ steps.eb-versions.outputs.versions }}
           restore-keys: |
             electron-builder-win-
 
@@ -1289,13 +1295,6 @@ jobs:
       # build resolves React Native and Expo from mobile/node_modules.
       - uses: ./.github/actions/install-mobile-dependencies
 
-      - name: Save compiled Node native modules
-        if: steps.deps.outputs.native-cache-hit != 'true'
-        uses: actions/cache/save@v5
-        with:
-          path: ${{ steps.deps.outputs.native-cache-path }}
-          key: ${{ steps.deps.outputs.native-cache-key }}
-
       # vitest runs here directly rather than through `pnpm test`, so the addon
       # assertions only hold once install-node-dependencies has rebuilt natives.
       - name: Test Windows installer process probe
@@ -1309,6 +1308,12 @@ jobs:
           config/scripts/nsis-process-check.test.mjs
           config/scripts/idle-cpu-process-sampling.test.mjs
 
+      - name: Resolve the Windows Rust build scope
+        id: rust-scope
+        shell: bash
+        run: node config/scripts/windows-rust-build-scope.mjs >> "$GITHUB_OUTPUT"
+
+      # Real inputs only: older restores are safe because the build re-checks each exe's fingerprint.
       - name: Cache Windows CLI launcher
         uses: actions/cache@v5
         with:
@@ -1319,7 +1324,9 @@ jobs:
             native/windows-agent-hook/.build
             native/windows-agent-hook/target
             ~/.cargo/registry
-          key: windows-cli-launcher-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('native/windows-cli-launcher/**', 'native/windows-agent-hook/**', 'config/scripts/build-windows-cli-launcher.mjs', 'config/scripts/build-windows-agent-hook.mjs', 'config/scripts/windows-rust-executable-build.mjs', 'resources/build/icon.ico', 'package.json') }}
+          key: windows-cli-launcher-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-scope.outputs.toolchain }}-${{ steps.rust-scope.outputs.app-version }}-${{ hashFiles('native/windows-cli-launcher/src/**', 'native/windows-cli-launcher/build.rs', 'native/windows-cli-launcher/Cargo.toml', 'native/windows-cli-launcher/Cargo.lock', 'native/windows-cli-launcher/app.manifest', 'native/windows-cli-launcher/.cargo/**', 'native/windows-agent-hook/src/**', 'native/windows-agent-hook/build.rs', 'native/windows-agent-hook/Cargo.toml', 'native/windows-agent-hook/Cargo.lock', 'native/windows-agent-hook/app.manifest', 'native/windows-agent-hook/.cargo/**', 'config/scripts/build-windows-cli-launcher.mjs', 'config/scripts/build-windows-agent-hook.mjs', 'config/scripts/windows-rust-executable-build.mjs', 'config/scripts/windows-pe-imports.mjs', 'resources/build/icon.ico') }}
+          restore-keys: |
+            windows-cli-launcher-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-scope.outputs.toolchain }}-
 
       # Require cargo early; otherwise packaged Rust launcher fails deep inside builder native hooks.
       - name: Ensure the Rust toolchain for the Windows CLI launcher
@@ -1337,6 +1344,10 @@ jobs:
 
       - name: Build the Windows CLI launcher
         run: node config/scripts/build-windows-cli-launcher.mjs
+
+      # Install Electron once: otherwise each Electron test's require('electron') extracts it into one dist concurrently (EBUSY, 0xC0000005).
+      - name: Install the Electron binary
+        run: node config/scripts/install-electron-package-binary.mjs
 
       # Files come from WINDOWS_BOUNDARY_TESTS, the same list that decides whether this job runs.
       - name: Test Windows-specific boundaries
@@ -1410,12 +1421,11 @@ jobs:
   # Gate the green layout oracles separately from main’s red broader E2E suite: changed-spec window plus both orcad serve hosts.
   layout_oracle:
     name: layout oracle
-    needs: [code_paths, preflight]
+    needs: [code_paths]
     if: >-
       !cancelled() &&
       needs.code_paths.result == 'success' &&
-      needs.code_paths.outputs.layout_oracle == 'true' &&
-      needs.preflight.result == 'success'
+      needs.code_paths.outputs.layout_oracle == 'true'
     permissions:
       contents: read
     uses: ./.github/workflows/e2e.yml
@@ -1423,6 +1433,8 @@ jobs:
       # Why the merge commit, unlike `e2e`: a gate must test what lands on main, not a stale head.
       ref: ${{ github.sha }}
       test_files: '["tests/e2e/workspace-layout-oracle-headless.spec.ts","tests/e2e/workspace-layout-oracle.spec.ts"]'
+      # Two ~3.6 min halves of the 21 window scenarios keep this gate off the PR's critical path.
+      changed_e2e_test_shards: '["1/2","2/2"]'
       run_changed_e2e: true
       needs_build: true
       artifact_suffix: -layout-oracle
@@ -1455,7 +1467,7 @@ jobs:
       !cancelled() &&
       needs.code_paths.result == 'success' &&
       needs.code_paths.outputs.dependency_isolation == 'true'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
       ORCA_PNPM_FORCE_GLOBAL_VIRTUAL_STORE_IN_CI: '1'
@@ -1522,8 +1534,7 @@ jobs:
       - package_windows
       - layout_oracle
       - dependency_isolation
-    # Report settled results without competing with the GitHub-hosted test queue.
-    runs-on: blacksmith-2vcpu-ubuntu-2204
+    runs-on: ubuntu-slim
     timeout-minutes: 5
 
     steps:

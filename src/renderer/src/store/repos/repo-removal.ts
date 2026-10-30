@@ -285,7 +285,7 @@ export function createRepoRemovalActions(
             // Why: drop removed repos' sparse-preset maps so they don't outlive the repo for the whole session.
             ...omitSparsePresetsForRepos(s, removedRepoIds),
             ...mergeProjectCompatibilityForHostRepoChange({
-              previous: s,
+              previous: { projects: s.projects, projectHostSetups: s.projectHostSetups },
               nextRepos,
               hostId: ownerHostId
             }),

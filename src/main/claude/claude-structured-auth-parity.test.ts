@@ -31,7 +31,7 @@ function resolverFor(options: {
     resolveLaunchArgs: () => [],
     store: { getRecord: () => record(), pinLaunchDirectory: vi.fn() },
     resolveWorkspacePath: async (id) => `/repos/${id}`,
-    resolveCommand: () => '/usr/local/bin/claude',
+    resolveCommand: () => ({ command: '/usr/local/bin/claude', prefixArgs: [] }),
     resolveAuthPolicy: () => ({ account: options.account }),
     ...(options.overlay ? { resolveEnv: () => options.overlay as Record<string, string> } : {})
   })

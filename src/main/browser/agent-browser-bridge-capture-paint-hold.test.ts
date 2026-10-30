@@ -81,11 +81,17 @@ describe('AgentBrowserBridge', () => {
     bridge.setActiveTab(100)
   })
 
-  it('never holds paint for commands that do not capture pixels', async () => {
+  it('holds only the guest, never paint, for commands that do not capture pixels', async () => {
+    const releases: ReturnType<typeof vi.fn>[] = []
+    const holdGuestActive = vi.fn(() => {
+      const release = vi.fn()
+      releases.push(release)
+      return release
+    })
     const holdPaintForCapture = vi.fn(() => () => {})
     const printToPDF = vi.fn(async () => Buffer.from('pdf'))
     const b = new AgentBrowserBridge(
-      mockBrowserManager(undefined, undefined, { holdPaintForCapture })
+      mockBrowserManager(undefined, undefined, { holdGuestActive, holdPaintForCapture })
     )
     b.setActiveTab(100)
     webContentsFromIdMock.mockReturnValue({ ...mockWebContents(100), printToPDF })
@@ -98,6 +104,87 @@ describe('AgentBrowserBridge', () => {
     await expect(b.pdf()).resolves.toEqual({ data: Buffer.from('pdf').toString('base64') })
 
     expect(holdPaintForCapture).not.toHaveBeenCalled()
+    expect(holdGuestActive.mock.calls).toEqual([[100], [100], [100], [100], [100]])
+    expect(releases.map((release) => release.mock.calls.length)).toEqual([1, 1, 1, 1, 1])
+  })
+
+  it('holds only executing commands and resolves a queued command against the replacement guest', async () => {
+    const tabs = new Map([['tab-1', 100]])
+    const holds: number[] = []
+    const released: number[] = []
+    const b = new AgentBrowserBridge(
+      mockBrowserManager(tabs, undefined, {
+        holdGuestActive: (id) => {
+          holds.push(id)
+          return () => released.push(id)
+        }
+      })
+    )
+    const oldGuest = mockWebContents(100)
+    const replacement = mockWebContents(200)
+    let finish = (_value: unknown): void => {}
+    oldGuest.debugger.sendCommand.mockImplementation(
+      () => new Promise((resolve) => (finish = resolve))
+    )
+    replacement.debugger.sendCommand.mockResolvedValue({ result: { value: 'replacement' } })
+    webContentsFromIdMock.mockImplementation((id: number) => (id === 100 ? oldGuest : replacement))
+    b.setActiveTab(100)
+
+    const first = b.evaluate('first', undefined, 'tab-1')
+    const firstResult = expect(first).rejects.toMatchObject({ code: 'browser_tab_changed' })
+    const second = b.evaluate('second', undefined, 'tab-1')
+    const holdsWhileQueued = [...holds]
+    expect(released).toEqual([])
+    tabs.set('tab-1', 200)
+    finish({ result: { value: 'old' } })
+
+    await firstResult
+    await expect(second).resolves.toMatchObject({ result: 'replacement' })
+    expect(holdsWhileQueued).toEqual([100])
+    expect(holds).toEqual([100, 200])
+    expect(released).toEqual([100, 200])
+  })
+
+  it('drops queued commands without acquiring the guest and holds running work until it settles', async () => {
+    const release = vi.fn()
+    const holdGuestActive = vi.fn(() => release)
+    const b = new AgentBrowserBridge(mockBrowserManager(undefined, undefined, { holdGuestActive }))
+    b.setActiveTab(100)
+    const guest = mockWebContents(100)
+    let finish = (_value: unknown): void => {}
+    guest.debugger.sendCommand.mockImplementation(
+      () => new Promise((resolve) => (finish = resolve))
+    )
+    webContentsFromIdMock.mockReturnValue(guest)
+
+    const running = b.evaluate('first')
+    const queued = b.evaluate('second')
+    const queuedResult = expect(queued).rejects.toMatchObject({ code: 'browser_tab_closed' })
+    await b.onPageClosed('tab-1')
+    await queuedResult
+    expect(holdGuestActive.mock.calls).toEqual([[100]])
+    expect(release).not.toHaveBeenCalled()
+
+    finish({ result: { value: 'finished' } })
+    await running
+    expect(release).toHaveBeenCalledTimes(1)
+  })
+
+  it('releases the background hold when session setup fails', async () => {
+    const release = vi.fn()
+    const holdGuestActive = vi.fn(() => release)
+    const b = new AgentBrowserBridge(mockBrowserManager(undefined, undefined, { holdGuestActive }))
+    b.setActiveTab(100)
+    CdpWsProxyMock.mockImplementationOnce(function (this: Record<string, unknown>) {
+      this.start = vi.fn(async () => {
+        throw new Error('cannot start proxy')
+      })
+    })
+    succeedWith(null)
+
+    await expect(b.snapshot()).rejects.toThrow('cannot start proxy')
+    expect(holdGuestActive).toHaveBeenCalledWith(100)
+    expect(release).toHaveBeenCalledTimes(1)
   })
 
   it('captures full-page screenshots directly through CDP using CSS layout bounds', async () => {

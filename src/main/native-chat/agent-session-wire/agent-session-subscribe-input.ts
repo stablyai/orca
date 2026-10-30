@@ -3,6 +3,7 @@ import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-w
 import type { SubscriberFieldState } from './agent-session-subscriber-frame-fields'
 
 export type AgentSessionSubscribeInput = {
+  commandsOnRequest?: boolean
   id: string
   sessionId: string
   emit: (event: AgentSessionSubscribeEvent) => void

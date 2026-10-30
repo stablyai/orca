@@ -39,6 +39,7 @@ function hostController(host: Host, cwd: string, worktreeId: string) {
     kill: () => true,
     getForegroundProcess: async () => null,
     hasPty: (ptyId: string) => host.live.has(ptyId),
+    getPtyAvailability: (ptyId: string) => host.live.has(ptyId),
     listProcesses: async (providerKey?: string) =>
       [...host.live]
         .filter((id) => (id === SSH_PTY) === (providerKey === 'ssh:ssh-target'))
@@ -380,14 +381,14 @@ describe('a terminal registered while a listing is in flight (switch on)', () =>
 })
 
 describe('switch off: a window leaf still vouches for its terminal', () => {
-  it('keeps a windowed pane connected when the inventory stops listing it', async () => {
+  it('keeps the window record but withholds a ready mobile handle when the host loses its PTY', async () => {
     layoutOwner.isMain = false
     const { runtime, host } = savedPaneHost('saved-pty', { windowed: true })
     expect(await rowStatus(runtime, TEST_WORKTREE_ID)).toBe('ready')
 
     host.live.clear()
 
-    expect(await rowStatus(runtime, TEST_WORKTREE_ID)).toBe('ready')
+    expect(await rowStatus(runtime, TEST_WORKTREE_ID)).toBe('pending-handle')
     expect(record(runtime, 'saved-pty')?.connected).toBe(true)
   })
 })

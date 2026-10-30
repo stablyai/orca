@@ -149,17 +149,22 @@ function mergedModels(
     // Coarser probe menus must not discard a chat-confirmed effort unless a newer chat menu does.
     const keepsChatMenu =
       older === live && !offersConfigured(model.efforts) && offersConfigured(olderEfforts)
-    const efforts = model.efforts.length > 0 && !keepsChatMenu ? model.efforts : olderEfforts
+    const { efforts, effortsKnown } =
+      olderModel && model.effortsKnown !== olderModel.effortsKnown
+        ? model.effortsKnown === false
+          ? olderModel
+          : model
+        : model.efforts.length > 0 && !keepsChatMenu
+          ? model
+          : (olderModel ?? model)
     const defaultEffort = [configuredEffort, listed?.defaultEffort, reported?.defaultEffort].find(
       (effort) => effort !== undefined && efforts.some((choice) => choice.value === effort)
     )
-    const { defaultEffort: _own, effortsKnown, ...rest } = model
+    const { defaultEffort: _own, effortsKnown: _known, ...rest } = model
     return {
       ...rest,
       // Efforts stay unknown only when neither listing knows this model's menu.
-      ...(effortsKnown === false && (!olderModel || olderModel.effortsKnown === false)
-        ? { effortsKnown }
-        : {}),
+      ...(effortsKnown === false ? { effortsKnown } : {}),
       // Without discovery/configuration, live flags are the only available default evidence.
       isDefault: configured
         ? model.id === configured.modelId
@@ -203,13 +208,10 @@ export function agentModelCatalogEntry(
 }
 
 export function retainedAgentModelCatalogModels(
-  previous: Pick<AgentModelCatalogEntry, 'models'> | null | undefined,
+  _previous: Pick<AgentModelCatalogEntry, 'models'> | null | undefined,
   listing: AgentModelCatalogLiveListing
 ): AgentSessionModelOption[] {
-  const launchOnly = listing.launchOnlyModelId
-  return launchOnly !== undefined && !previous?.models.some((model) => model.id === launchOnly)
-    ? listing.models.filter((model) => model.id !== launchOnly)
-    : listing.models
+  return listing.models
 }
 
 export function agentModelCatalogEntryWithSuccess(

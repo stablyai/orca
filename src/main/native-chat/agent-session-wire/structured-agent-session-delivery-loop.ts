@@ -5,12 +5,11 @@ import type { StructuredAgentSessionDeliveryLoopDeps } from './structured-agent-
 
 import { beginStructuredAgentSessionInputHandover } from './structured-agent-session-input-handover'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { structuredAgentSessionStartFailure } from './structured-agent-session-failure-text'
 import type { StructuredAgentSessionStartClaim } from './structured-agent-session-agent-start'
 import type { StructuredAgentSessionProviderChildIdentity } from './structured-agent-session-host-types'
 import {
   oldestQueuedSubmission,
-  recordStructuredAgentSessionStartFailure,
+  recordStructuredAgentSessionDeliveryFailure,
   startThatFailedWhileQueued
 } from './structured-agent-session-start-failure-row'
 import type { StructuredAgentSessionPendingHandover } from './structured-agent-session-handover'
@@ -264,7 +263,13 @@ export class StructuredAgentSessionDeliveryLoop {
       }
     }
     if (
-      waitsForCodexTurnOptions(this.deps.record(sessionId), session.journal, next, awaitedChild)
+      waitsForCodexTurnOptions(
+        this.deps.record(sessionId),
+        session.journal,
+        next,
+        awaitedChild,
+        this.deps.adapter
+      )
     ) {
       return this.stop(sessionId)
     }
@@ -286,15 +291,10 @@ export class StructuredAgentSessionDeliveryLoop {
   ): Promise<'continue'> {
     const session = this.deps.sessions.get(sessionId)
     if (session) {
-      await recordStructuredAgentSessionStartFailure(
+      await recordStructuredAgentSessionDeliveryFailure(
         { journal: session.journal, fence: this.deps.conversationFence(sessionId) },
-        {
-          startKey: failure.startKey,
-          ...structuredAgentSessionStartFailure(
-            failure.cause,
-            this.deps.failureTextContext(sessionId)
-          )
-        },
+        failure,
+        this.deps.failureTextContext(sessionId),
         clientMessageId
       )
     }

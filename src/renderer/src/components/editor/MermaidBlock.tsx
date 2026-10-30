@@ -1,7 +1,8 @@
-import React, { useEffect, useId, useRef, useState } from 'react'
+import React, { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { Maximize2 } from 'lucide-react'
 import type mermaidNamespace from 'mermaid'
 import DOMPurify from 'dompurify'
+import { readableMermaidFlowchartSvg } from '../../../../shared/mermaid-flowchart-contrast'
 import { getMermaidConfig } from './mermaid-config'
 import { readMermaidThemeColors } from './mermaid-theme-colors'
 import { translate } from '@/i18n/i18n'
@@ -27,6 +28,7 @@ type MermaidBlockProps = {
   className?: string
   pendingContent?: React.ReactNode
   renderEnabled?: boolean
+  onRenderComplete?: () => void
   onExpand?: (diagram: RenderedMermaidDiagram) => void
 }
 
@@ -51,6 +53,7 @@ export default function MermaidBlock({
   className,
   pendingContent,
   renderEnabled = true,
+  onRenderComplete,
   onExpand
 }: MermaidBlockProps): React.JSX.Element {
   const id = useId().replace(/:/g, '_')
@@ -82,10 +85,13 @@ export default function MermaidBlock({
         const { svg } = await mermaid.render(`mermaid-${id}`, content)
         if (!cancelled) {
           // Sanitize explicitly against XSS even if Mermaid’s internal sanitization changes.
+          const sanitized = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true } })
           setRendered({
             content,
             result: {
-              svg: DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true } }),
+              svg: colors
+                ? readableMermaidFlowchartSvg(sanitized, colors.foreground, colors.background)
+                : sanitized,
               background: colors?.background
             }
           })
@@ -94,7 +100,15 @@ export default function MermaidBlock({
         if (!cancelled) {
           setRendered({
             content,
-            result: { error: err instanceof Error ? err.message : 'Invalid mermaid syntax' }
+            result: {
+              error:
+                err instanceof Error
+                  ? err.message
+                  : translate(
+                      'auto.components.editor.MermaidBlock.invalidSyntax',
+                      'Invalid mermaid syntax'
+                    )
+            }
           })
           // Mermaid leaves an error element in the DOM on failure — clean it up.
           const errorEl = document.getElementById(`d${`mermaid-${id}`}`)
@@ -108,6 +122,12 @@ export default function MermaidBlock({
       cancelled = true
     }
   }, [content, htmlLabels, isDark, id, renderEnabled])
+
+  useLayoutEffect(() => {
+    if (renderEnabled && rendered?.content === content) {
+      onRenderComplete?.()
+    }
+  }, [content, rendered, renderEnabled, onRenderComplete])
 
   if ((!renderEnabled || result === null) && pendingContent !== undefined) {
     return <>{pendingContent}</>

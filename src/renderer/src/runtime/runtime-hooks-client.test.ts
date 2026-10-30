@@ -73,6 +73,18 @@ describe('runtime hooks client', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
+  it('marks a render-driven check as background, so a stopped WSL distro is refused, not booted', async () => {
+    hooksCheck.mockResolvedValue({ hasHooks: false, hooks: null, mayNeedUpdate: false })
+
+    await checkRuntimeHooks('local', 'repo-1', { background: true })
+
+    expect(hooksCheck).toHaveBeenLastCalledWith({
+      repoId: 'repo-1',
+      hostId: 'local',
+      background: true
+    })
+  })
+
   it('routes hook operations through the repo owner runtime environment', async () => {
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-1',
@@ -114,6 +126,24 @@ describe('runtime hooks client', () => {
     expect(hooksInspectSetupScriptImports).not.toHaveBeenCalled()
     expect(hooksReadIssueCommand).not.toHaveBeenCalled()
     expect(hooksWriteIssueCommand).not.toHaveBeenCalled()
+  })
+
+  it('carries the background mark to the owning host, which spares a stopped WSL distro too', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { ok: true },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+
+    await checkRuntimeHooks('runtime:env-1', 'repo-1', { background: true })
+
+    expect(runtimeEnvironmentCall).toHaveBeenLastCalledWith({
+      selector: 'env-1',
+      method: 'repo.hooksCheck',
+      params: { repo: 'repo-1', background: true },
+      timeoutMs: 15_000
+    })
   })
 
   it('forwards an explicit SSH host to local hook IPC', async () => {

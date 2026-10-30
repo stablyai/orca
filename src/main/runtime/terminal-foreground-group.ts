@@ -2,6 +2,7 @@
 
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { runProcess } from '@orca/process-host'
+import { runPsInProcess } from '../../shared/libproc-process-table'
 import { parseShellForegroundRows, type ProcessTableRow } from '../../shared/process-table-snapshot'
 import { psLocaleEnvironment } from '../../shared/ps-locale-environment'
 import { isShellProcess } from '../../shared/shell-process-detection'
@@ -15,13 +16,20 @@ const TTY_CACHE_LIMIT = 256
 
 async function ps(args: readonly string[]): Promise<string | null> {
   try {
-    const result = await runProcess({
-      program: 'ps',
-      args,
-      env: psLocaleEnvironment(),
-      timeoutMs: PS_TIMEOUT_MS,
-      maxOutputBytes: PS_MAX_OUTPUT_BYTES
-    })
+    const env = psLocaleEnvironment()
+    const result =
+      (await runPsInProcess(args, {
+        env,
+        timeoutMs: PS_TIMEOUT_MS,
+        maxOutputBytes: PS_MAX_OUTPUT_BYTES
+      })) ??
+      (await runProcess({
+        program: 'ps',
+        args,
+        env,
+        timeoutMs: PS_TIMEOUT_MS,
+        maxOutputBytes: PS_MAX_OUTPUT_BYTES
+      }))
     return result.code === 0 ? result.stdout : null
   } catch {
     return null

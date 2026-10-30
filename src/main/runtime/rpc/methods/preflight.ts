@@ -4,6 +4,7 @@ import {
   runPreflightCheck
 } from '../../../preflight/agent-detection'
 import {
+  assertAgentDetectionHostRunning,
   detectAgentsOnHost,
   refreshAgentsOnHost
 } from '../../../preflight/workspace-agent-detection'
@@ -27,12 +28,16 @@ export const PREFLIGHT_METHODS = [
     permission: 'workspace',
     params: PreflightProjectAgentDetection,
     // Only the host knows the workspace's actual project runtime, including WSL.
-    handler: async (params, { runtime }) =>
-      params.project
-        ? runtime.detectProjectLaunchContext(params.project.repo)
-        : detectAgentsOnHost(
-            await runtime.resolveAgentDetectionHost(params.worktreeId, params.repoId)
-          )
+    handler: async (params, { runtime }) => {
+      if (params.project) {
+        // Ungated: it serves a workspace create in that project, which boots the distro anyway.
+        return runtime.detectProjectLaunchContext(params.project.repo)
+      }
+      const host = await runtime.resolveAgentDetectionHost(params.worktreeId, params.repoId)
+      // A client's inventory read is background work: it must not start a stopped WSL distro (E9).
+      await assertAgentDetectionHostRunning(host)
+      return detectAgentsOnHost(host)
+    }
   }),
   defineMethod({
     name: 'preflight.detectRemoteAgents',
@@ -51,7 +56,10 @@ export const PREFLIGHT_METHODS = [
     name: 'preflight.refreshAgents',
     permission: 'workspace',
     params: PreflightAgentDetection,
-    handler: async (params, { runtime }) =>
-      refreshAgentsOnHost(await runtime.resolveAgentDetectionHost(params.worktreeId, params.repoId))
+    handler: async (params, { runtime }) => {
+      const host = await runtime.resolveAgentDetectionHost(params.worktreeId, params.repoId)
+      await assertAgentDetectionHostRunning(host)
+      return refreshAgentsOnHost(host)
+    }
   })
 ]

@@ -14,13 +14,13 @@ import {
   isSubagentGroupFallbackText,
   normalizeSubagentState,
   subagentGroupFallbackText
-} from '../../../shared/native-chat-subagent-summary'
+} from '../../../shared/native-chat/transcript/native-chat-subagent-summary'
 import {
   backgroundTaskFallbackText,
   isSettledBackgroundTaskState,
   normalizeBackgroundTaskState
 } from '../../../shared/native-chat/input/native-chat-background-task-row'
-import { subagentFallbackText } from '../../../shared/native-chat-subagent-items'
+import { subagentFallbackText } from '../../../shared/native-chat/transcript/native-chat-subagent-items'
 import {
   isBackgroundTaskBlock,
   isSubagentBlock,

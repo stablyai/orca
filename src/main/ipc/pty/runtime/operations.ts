@@ -227,9 +227,10 @@ export async function resetInputModesFromRuntimeController(
 const settledLocalPtyProviderStartups = new WeakSet<Promise<void>>()
 const watchedLocalPtyProviderStartups = new WeakSet<Promise<void>>()
 
-export function hasPtyFromRuntimeController(
+function readReadyPtyProvider(
   deps: PtyRuntimeControllerDeps,
-  ptyId: string
+  ptyId: string,
+  read: (provider: IPtyProvider) => boolean | null
 ): boolean | null {
   try {
     // A local provider cannot prove remote-host absence.
@@ -248,10 +249,25 @@ export function hasPtyFromRuntimeController(
       }
       return null
     }
-    return getProviderForPty(ptyId).hasPty?.(ptyId) ?? null
+    return read(getProviderForPty(ptyId))
   } catch {
     return null
   }
+}
+
+export function hasPtyFromRuntimeController(deps: PtyRuntimeControllerDeps, ptyId: string) {
+  return readReadyPtyProvider(deps, ptyId, (provider) => provider.hasPty?.(ptyId) ?? null)
+}
+
+export function getPtyAvailabilityFromRuntimeController(
+  deps: PtyRuntimeControllerDeps,
+  ptyId: string
+): boolean | null {
+  return readReadyPtyProvider(
+    deps,
+    ptyId,
+    (provider) => provider.getPtyAvailability?.(ptyId) ?? null
+  )
 }
 
 export function resizePtyFromRuntimeController(ptyId: string, cols: number, rows: number): boolean {

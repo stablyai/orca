@@ -22,14 +22,14 @@ async function fixture() {
 it('previews historical test caches, Electron cleanup, and Vite caches', async () => {
   const options = { ...(await fixture()), testsStopped: true }
   await reclaimWorktreeSpace(options)
-  expect(options.execute).toHaveBeenCalledTimes(6)
+  expect(options.execute).toHaveBeenCalledTimes(7)
   expect(options.execute.mock.calls.flatMap(([spec]) => spec.args)).not.toContain('--apply')
 })
 
 it('forwards apply and repository selection to all cleanup operations', async () => {
   const options = { ...(await fixture()), apply: true, testsStopped: true }
   await reclaimWorktreeSpace(options)
-  expect(options.execute).toHaveBeenCalledTimes(6)
+  expect(options.execute).toHaveBeenCalledTimes(7)
   for (const [spec] of options.execute.mock.calls) {
     expect(spec.args).toContain('--apply')
     expect(spec.args).toContain(options.repoRoot)
@@ -46,7 +46,7 @@ it('forwards apply and repository selection to all cleanup operations', async ()
 it('applies Electron, Vite and generated cleanup while retaining unacknowledged test caches', async () => {
   const options = { ...(await fixture()), apply: true }
   await reclaimWorktreeSpace(options)
-  expect(options.execute).toHaveBeenCalledTimes(5)
+  expect(options.execute).toHaveBeenCalledTimes(6)
   expect(options.execute.mock.calls.flatMap(([spec]) => spec.args).join(' ')).not.toContain(
     'reclaim-release-test-caches'
   )
@@ -61,7 +61,7 @@ it('includes generated cleanup and leaves historical test caches out of automati
     excludeWorktree: '/dev-worktree'
   }
   await reclaimWorktreeSpace(options)
-  expect(options.execute).toHaveBeenCalledTimes(5)
+  expect(options.execute).toHaveBeenCalledTimes(6)
   expect(options.execute.mock.calls.flatMap(([spec]) => spec.args).join(' ')).not.toContain(
     'reclaim-release-test-caches'
   )
@@ -191,7 +191,7 @@ it('rejects competing sweeps and releases the lock after a failed operation', as
   await rejected
   options.execute.mockResolvedValue({ code: 0, timedOut: false })
   await reclaimWorktreeSpace(options)
-  expect(options.execute).toHaveBeenCalledTimes(7)
+  expect(options.execute).toHaveBeenCalledTimes(8)
 })
 
 it('preserves the cleanup failure and reports a concurrent lock release failure separately', async () => {
@@ -218,5 +218,5 @@ it('fails if cleanup succeeds but the repository lock cannot be released', async
   await expect(reclaimWorktreeSpace({ ...options, acquireLock: async () => release })).rejects.toBe(
     failure
   )
-  expect(options.execute).toHaveBeenCalledTimes(6)
+  expect(options.execute).toHaveBeenCalledTimes(7)
 })

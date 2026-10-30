@@ -116,6 +116,15 @@ export const STRUCTURED_CALLS: {
     result: { current: { model: 'gpt-live' } }
   },
   {
+    method: 'agentSession.continuationContext',
+    hostMethod: 'continuationContext',
+    result: {
+      status: 'current',
+      capturedText: 'Saved context',
+      transcriptPath: '/handoff/chat.txt'
+    }
+  },
+  {
     method: 'agentSession.modelCatalog',
     hostMethod: 'modelCatalog',
     result: { origin: 'unknown' }

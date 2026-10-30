@@ -30,9 +30,7 @@ export function seedTerminalRestoreRecordsFromSpawnResult(
   const lastTitle =
     typeof result.lastTitle === 'string' && result.lastTitle.length > 0
       ? result.lastTitle
-      : typeof result.coldRestore?.lastTitle === 'string' && result.coldRestore.lastTitle.length > 0
-        ? result.coldRestore.lastTitle
-        : undefined
+      : undefined
   if (text !== undefined || lastTitle !== undefined) {
     runtime?.seedTerminalRestoreTail?.(result.id, {
       ...(text !== undefined ? { text } : {}),

@@ -4,7 +4,7 @@ import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitRuntimeOptionsKey } from './git-runtime-options-cache-key'
 import { gitDiffReadDedupe } from './git-read-cache-invalidation'
 import { buildDiffResult } from './diff-result'
-import { readGitBlobAtOidPath } from './git-blob-read'
+import { readGitBlobAtOidPath, type GitBlobReadResult } from './git-blob-read'
 
 export async function getCommitDiff(
   worktreePath: string,
@@ -46,7 +46,7 @@ async function loadCommitDiff(
     const [leftBlob, rightBlob] = await Promise.all([
       args.parentOid
         ? readGitBlobAtOidPath(worktreePath, args.parentOid, leftPath, options)
-        : Promise.resolve({ content: '', isBinary: false }),
+        : Promise.resolve<GitBlobReadResult>({ content: '', isBinary: false, exists: false }),
       readGitBlobAtOidPath(worktreePath, args.commitOid, args.filePath, options)
     ])
 
@@ -55,7 +55,8 @@ async function loadCommitDiff(
       rightBlob.content,
       leftBlob.isBinary,
       rightBlob.isBinary,
-      args.filePath
+      args.filePath,
+      leftBlob.tooLarge === true || rightBlob.tooLarge === true
     )
   } catch {
     return {

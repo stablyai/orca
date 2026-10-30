@@ -103,6 +103,48 @@ describe('tui-idle evidence ranking', () => {
     vi.useRealTimers()
   })
 
+  it.each([
+    ['pty', 'claude ~/p/repo', false],
+    ['leaf', 'Fix the codex launcher', false],
+    ['leaf', 'Fix the codex launcher', true]
+  ] as const)(
+    'keeps null-agent %s %s pending through streaming (clockless=%s)',
+    async (kind, title, clockless) => {
+      const record = {
+        lastAgentStatus: 'idle' as const,
+        lastOscTitle: title,
+        lastOutputAt: clockless ? null : Date.now()
+      }
+      const pty = kind === 'pty' ? makeTuiIdlePty(record) : undefined
+      const leaf = kind === 'leaf' ? makeTuiIdleLeaf(record) : undefined
+      const { wait, waiters, polls } = createWait({
+        pty,
+        leaf,
+        agent: null,
+        liveLeaf: leaf ? () => leaf : undefined
+      })
+      const settled = watch(wait.wait(HANDLE, { condition: 'tui-idle', timeoutMs: 60_000 }))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(settled).not.toHaveBeenCalled()
+      expect(waiters.get(HANDLE)?.size).toBe(1)
+      expect(polls.activeTimerCount).toBe(1)
+      if (clockless) {
+        await vi.advanceTimersByTimeAsync(QUIESCENCE_MS + POLL_INTERVAL_MS)
+        expect(settled).not.toHaveBeenCalled()
+      }
+      const live = pty ?? leaf!
+      await advanceWhileStreaming(live, 3)
+      expect(settled).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(QUIESCENCE_MS + POLL_INTERVAL_MS)
+      expect(settled).toHaveBeenCalledExactlyOnceWith({
+        ok: expect.objectContaining({ satisfied: true })
+      })
+      expect(waiters.get(HANDLE)).toBeUndefined()
+      expect(polls.activeTimerCount).toBe(0)
+      expect(vi.getTimerCount()).toBe(0)
+    }
+  )
+
   it('refuses a stored name-only idle while the pane is still streaming', async () => {
     const pty = makeTuiIdlePty({ lastAgentStatus: 'idle', lastOscTitle: NAME_ONLY_TITLE })
     const { wait } = createWait({ pty, agent: 'codex' })

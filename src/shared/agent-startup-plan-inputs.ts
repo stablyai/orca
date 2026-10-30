@@ -1,6 +1,6 @@
 import { readLaunchPermissionChoice } from './tui-agent-permission-choice'
 import type { GlobalSettings } from './global-settings-types'
-import type { SessionOptionValue } from './native-chat-session-options'
+import type { SessionOptionValue } from './native-chat/input/native-chat-session-options'
 import type { TuiAgent } from './tui-agent'
 import {
   agentLaunchPermissionSettings,

@@ -9,7 +9,7 @@ import type {
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
-import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import { acquired, fakeClaude } from './claude-structured-session-test-support'
 
 type Append = {

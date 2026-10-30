@@ -53,7 +53,9 @@ async function relaunchWith(
     filter: (source) => !source.includes('.lock')
   })
   edit(openTestJournalHostDatabase(relaunched).db)
-  const store = await openTestAgentSessionRecordStore(relaunched)
+  const store = await openTestAgentSessionRecordStore(relaunched, {
+    legacySessionTabIds: [SESSION]
+  })
   const host = new StructuredAgentSessionHost({
     agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
@@ -85,7 +87,7 @@ it.each([
     const workspaceId = hostTestState().store.getRecord(SESSION)?.location.workspaceId
     const refusal = { code: 'agent_session_journal_unreadable', details: { reason } }
 
-    await host.restoreReadableSessions([SESSION])
+    await host.seedSessionTabs([SESSION])
 
     expect(host.hasSession(SESSION)).toBe(false)
     expect(host.listSessionTabs()).toEqual([

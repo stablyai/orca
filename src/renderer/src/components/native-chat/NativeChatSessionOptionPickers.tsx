@@ -4,20 +4,22 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import { sortNativeChatSessionOptions } from '../../../../shared/native-chat-session-option-snapshot'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { sortNativeChatSessionOptions } from '../../../../shared/native-chat/input/native-chat-session-option-snapshot'
 import {
   sessionOptionDispatchUnconfirmed,
   type SessionOptionDescriptor,
   type SessionOptionsSurface,
   type SessionOptionValue
-} from '../../../../shared/native-chat-session-options'
+} from '../../../../shared/native-chat/input/native-chat-session-options'
 import {
   nativeChatModelPillLabel,
   nativeChatOptionValuesLabel,
   nativeChatOptionsPillTitle,
   nativeChatSessionOptionActionLabel,
   nativeChatSessionOptionDisabledReason
-} from './native-chat-session-option-labels'
+} from '../../../../shared/native-chat-session-option-labels'
+import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
 import { runSessionOptionSurfaceCall } from './native-chat-session-option-surface-call'
 import { NativeChatModelCombobox } from './NativeChatModelCombobox'
@@ -157,14 +159,14 @@ function SessionOptionPopover(props: {
   }, [open, demandModelCatalog])
   const focusReturn = useNativeChatPickerFocusReturn(props.focusComposer)
   const modelTitle = translate('components.native-chat.composer.model', 'Model')
-  const modelLabel = nativeChatModelPillLabel(model)
+  const modelLabel = nativeChatModelPillLabel(model, say)
   const modelName = pillAccessibleName(modelTitle, modelLabel)
-  const optionsTitle = nativeChatOptionsPillTitle(options)
-  const optionsLabel = nativeChatOptionValuesLabel(options)
-  const modelReason = nativeChatSessionOptionDisabledReason(model.disabledReason)
+  const optionsTitle = nativeChatOptionsPillTitle(options, say)
+  const optionsLabel = nativeChatOptionValuesLabel(options, say)
+  const modelReason = nativeChatSessionOptionDisabledReason(model.disabledReason, say)
   const optionsReason =
     options.length > 0 && options.every((descriptor) => !descriptor.settable)
-      ? nativeChatSessionOptionDisabledReason(options[0]?.disabledReason)
+      ? nativeChatSessionOptionDisabledReason(options[0]?.disabledReason, say)
       : null
 
   // Different descriptors can save together; hold only a repeat of the same pick.
@@ -203,7 +205,7 @@ function SessionOptionPopover(props: {
             ? `${modelName}, ${pillAccessibleName(optionsTitle, optionsLabel)}`
             : modelName
         }
-        disabled={props.isWorking}
+        disabled={props.isWorking && model.transport !== 'agent-session'}
         disabledReason={modelReason ?? optionsReason}
         dispatched={
           sessionOptionDispatchUnconfirmed(model) || options.some(sessionOptionDispatchUnconfirmed)
@@ -273,7 +275,7 @@ function SessionOptionPopover(props: {
               className="w-full justify-start"
               onClick={() => act(model)}
             >
-              {nativeChatSessionOptionActionLabel(model)}
+              {nativeChatSessionOptionActionLabel(model, say)}
             </Button>
           </NativeChatSessionOptionWriteGroup>
         )}
@@ -296,6 +298,7 @@ function NativeChatSessionOptionPickersInner({
   pickerRequest,
   focusComposer
 }: NativeChatSessionOptionPickersProps): React.JSX.Element | null {
+  useUiLanguageRevision()
   const [pending, setPending] = useState<ReadonlyMap<string, PendingPick>>(() => new Map())
   // Consume requests even without a usable picker so composer remounts cannot reopen them.
   useEffect(() => pickerRequest?.consume(), [pickerRequest])

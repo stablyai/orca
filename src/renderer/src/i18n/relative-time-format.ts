@@ -31,3 +31,32 @@ export function formatUiRelativeTimeFromDate(input: string, fallback = 'recently
   }
   return formatUiRelativeTime(date.getTime() - Date.now())
 }
+
+type NarrowTimeUnit = 'second' | 'minute' | 'hour' | 'day'
+
+let narrowRelativeCache: { locale: string; formatter: Intl.RelativeTimeFormat } | null = null
+const narrowDurationCache = new Map<string, Intl.NumberFormat>()
+
+// Compact relative time ("in 5m", "8h ago") in the UI language.
+export function formatUiNarrowRelativeTime(value: number, unit: NarrowTimeUnit): string {
+  const locale = getIntlLocale()
+  if (!narrowRelativeCache || narrowRelativeCache.locale !== locale) {
+    narrowRelativeCache = {
+      locale,
+      formatter: new Intl.RelativeTimeFormat(locale, { numeric: 'always', style: 'narrow' })
+    }
+  }
+  return narrowRelativeCache.formatter.format(value, unit)
+}
+
+// Compact duration ("5m", "3h") in the UI language.
+export function formatUiNarrowDuration(value: number, unit: NarrowTimeUnit): string {
+  const locale = getIntlLocale()
+  const key = `${locale}\0${unit}`
+  let formatter = narrowDurationCache.get(key)
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale, { style: 'unit', unit, unitDisplay: 'narrow' })
+    narrowDurationCache.set(key, formatter)
+  }
+  return formatter.format(value)
+}

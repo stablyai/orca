@@ -55,7 +55,8 @@ export async function materializeClaudeRewindTranscript(
           (entry) => entry.type === 'assistant' || entry.type === 'user'
         )?.uuid
         if (!resumeCursor) {
-          throw new Error('claude rewind fork is missing its resume point')
+          // Metadata alone uses the same fresh launch as a rewind with no parent.
+          return
         }
         const destination = join(dirname(sourcePath), `${key.sessionId}.jsonl`)
         const temporary = durableWriteTempPath(destination)
@@ -72,5 +73,12 @@ export async function materializeClaudeRewindTranscript(
       }
     }
   })
-  return { ...fork, sessionId: result.sessionId, resumeCursor, materialized: true }
+  return resumeCursor
+    ? { ...fork, sessionId: result.sessionId, resumeCursor, materialized: true }
+    : {
+        sessionId: fork.sessionId,
+        sourceSessionId: fork.sourceSessionId,
+        replacesSessionId: fork.replacesSessionId,
+        materialized: true
+      }
 }

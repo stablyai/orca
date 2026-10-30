@@ -3,7 +3,7 @@ import type { AgentJournalItemBody } from '../../shared/agent-session-journal-ty
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import { DISPATCH_REJECTED_CANCELLED } from '../../shared/structured-agent-session-dispatch-rejection'
-import type { ClaudeStructuredSessionAdapterDeps } from './claude-structured-session-state'
+import type { ClaudeStructuredSessionAdapterDeps } from './structured/claude-structured-session-state'
 import {
   PROVIDER_SESSION_ID,
   USER_MESSAGE,

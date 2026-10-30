@@ -4,6 +4,7 @@ import { BackHandler, Platform } from 'react-native'
 // Android intercepts/posts hardware Back; iOS disables swipe-back while claimed so an open sheet cannot lose its screen. No live claim leaves navigation unchanged.
 export function useShellPageBack(args: {
   claimed: boolean
+  isFocused: () => boolean
   // Return false for an undeliverable press so navigation can handle it.
   sendBack: () => boolean
   setOptions: (options: { gestureEnabled: boolean }) => void
@@ -20,8 +21,9 @@ export function useShellPageBack(args: {
     if (!claimed || Platform.OS !== 'android') {
       return
     }
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () =>
-      latest.current.sendBack()
+    const subscription = BackHandler.addEventListener(
+      'hardwareBackPress',
+      () => latest.current.isFocused() && latest.current.sendBack()
     )
     return () => subscription.remove()
   }, [claimed])

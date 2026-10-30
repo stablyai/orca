@@ -38,6 +38,7 @@ export function createHarnessStoreState(
     setUpdateStatus: vi.fn(),
     fetchRepos: vi.fn(),
     fetchWorktrees: vi.fn(),
+    fetchHostWorkspaceStatuses: vi.fn(),
     closeModal: vi.fn(),
     openModal: vi.fn(),
     setActiveRepo: vi.fn(),

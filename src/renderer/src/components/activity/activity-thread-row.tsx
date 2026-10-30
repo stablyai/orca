@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { FilledBellIcon } from '../sidebar/WorktreeCardHelpers'
 import CommentMarkdown from '../sidebar/CommentMarkdown'
 import { EventTime, ThreadAgentStateIndicator } from './activity-thread-controls'
@@ -83,6 +84,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
   showJumpAction?: boolean
   previewSuppressed?: boolean
 }): React.JSX.Element {
+  useUiLanguageRevision()
   const { taskTitle, statusLine, statusKind, needsAttention, workspaceLabel } =
     activityThreadRowCopy(thread)
   const showMarkdownStatus = statusKind === 'message'

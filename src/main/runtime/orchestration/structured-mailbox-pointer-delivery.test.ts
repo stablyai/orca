@@ -23,6 +23,7 @@ const IDENTITY: StructuredWorkerIdentity = {
 
 function harness(options: {
   /** False: the session cannot be read (not attached). */
+  relationReadFails?: boolean
   attached?: boolean
   dispatchState?: 'accepted' | 'rejected' | 'unknown'
   /** The chat was busy: its queue holds the pointer as a card. */
@@ -62,7 +63,14 @@ function harness(options: {
     () => undefined
   )
   const stored = new Map<string, StructuredPointerOperationRow>()
+  const relationRead = vi.fn(() => {
+    if (options.relationReadFails) {
+      throw new Error('lineage unavailable')
+    }
+    return undefined
+  })
   const db = {
+    getRun: relationRead,
     getDispatchContextById: () => ({ run_id: 'run_1' }),
     getOutstandingMailboxDelivery: (handle: string) =>
       ((options.outstandingRunDelivery ?? false) && handle.startsWith('run:')) ||
@@ -104,6 +112,7 @@ function harness(options: {
   })
   return {
     delivery,
+    relationRead,
     markAsDelivered,
     send: sendMock,
     readContext,
@@ -232,19 +241,30 @@ describe('structured mailbox pointer delivery', () => {
     expect(markAsDelivered).toHaveBeenCalledWith(['m1'], 'dispatch:d1')
   })
 
-  it('rechecks a held notice when the answer edge lands during its host call', async () => {
-    const { delivery, send, markAsDelivered, setAwaitingHuman } = harness({})
-    setAwaitingHuman(true)
-    send.mockImplementationOnce(async () => {
-      setAwaitingHuman(false)
-      delivery.onJournalActivity('session-1')
-      return { kind: 'held' }
-    })
-    delivery.deliverForHandle('dispatch:d1')
-    await flush()
-    expect(send).toHaveBeenCalledTimes(2)
-    expect(markAsDelivered).toHaveBeenCalledWith(['m1'], 'dispatch:d1')
-  })
+  it.each([false, true])(
+    'rechecks the original dispatch and direct failed-relation held notice (failure=%s)',
+    async (relationReadFails) => {
+      const { delivery, send, markAsDelivered, setAwaitingHuman, relationRead } = harness({
+        relationReadFails,
+        ...(relationReadFails ? { mailbox: 'term_worker' } : {})
+      })
+      setAwaitingHuman(true)
+      send.mockImplementationOnce(async () => {
+        setAwaitingHuman(false)
+        delivery.onJournalActivity('session-1')
+        return { kind: 'held' }
+      })
+      delivery.deliverForHandle(relationReadFails ? 'term_worker' : 'dispatch:d1')
+      await flush()
+      expect(send).toHaveBeenCalledTimes(2)
+      expect(relationRead).toHaveBeenCalledTimes(relationReadFails ? 2 : 0)
+      expect(send.mock.calls[1][0].body.from?.senders[0].relation).toBeUndefined()
+      expect(markAsDelivered).toHaveBeenCalledWith(
+        ['m1'],
+        relationReadFails ? 'term_worker' : 'dispatch:d1'
+      )
+    }
+  )
 
   it('sends the pointer through the chat, with who it is from, and counts it pointed once queued', async () => {
     const { delivery, send, markAsDelivered, stored } = harness({ queued: true })

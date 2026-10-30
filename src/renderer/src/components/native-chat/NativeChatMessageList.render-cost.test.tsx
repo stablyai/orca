@@ -2,7 +2,8 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, screen } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Why: these fixtures have neither inline visual owners nor sender navigation.
@@ -24,8 +25,8 @@ afterEach(() => {
   expect(unusedChatLeaves.inlineVisual).not.toHaveBeenCalled()
   expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
 })
-import type * as NativeChatWorkRunModule from '../../../../shared/native-chat-work-run'
-import type * as NativeChatProseModule from '../../../../shared/native-chat-prose'
+import type * as NativeChatWorkRunModule from '../../../../shared/native-chat/native-chat-work-run'
+import type * as NativeChatProseModule from '../../../../shared/native-chat/transcript/native-chat-prose'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { projectStructuredAgentSessionMessages } from '../../../../shared/structured-agent-session-message-projection'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
@@ -35,7 +36,7 @@ import { installNativeChatMessageListTestViewport } from './native-chat-message-
 
 // Count markdown derivations: low render counts alone can hide repeated settled-row work.
 const proseCalls = vi.hoisted(() => ({ count: 0 }))
-vi.mock('../../../../shared/native-chat-prose', async (importOriginal) => {
+vi.mock('../../../../shared/native-chat/transcript/native-chat-prose', async (importOriginal) => {
   const actual = await importOriginal<typeof NativeChatProseModule>()
   return {
     ...actual,
@@ -67,7 +68,7 @@ vi.mock(
 
 // Count work-run derivations because rebuilt member arrays can defeat row memoization.
 const entriesCalls = vi.hoisted(() => ({ count: 0 }))
-vi.mock('../../../../shared/native-chat-work-run', async (importOriginal) => {
+vi.mock('../../../../shared/native-chat/native-chat-work-run', async (importOriginal) => {
   const actual = await importOriginal<typeof NativeChatWorkRunModule>()
   return {
     ...actual,

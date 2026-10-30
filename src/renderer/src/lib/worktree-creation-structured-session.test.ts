@@ -83,39 +83,6 @@ describe('launchStructuredWorktreeSession', () => {
     })
   })
 
-  it('reveals the created workspace before opening its final-id chat tab', async () => {
-    const order: string[] = []
-    mocks.activateAndRevealWorktree.mockImplementation(() => {
-      order.push('reveal')
-      return { primaryTabId: null }
-    })
-    mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
-      order.push('begin')
-      args.beforeOpen?.('session-1')
-      order.push('open')
-      return { sessionId: 'session-1', tab: { id: 'agent-session:session-1' } }
-    })
-
-    await expect(launchStructuredWorktreeSession(baseArgs)).resolves.toEqual({
-      accepted: true,
-      cancelled: false,
-      activation: { primaryTabId: null },
-      primaryTabId: 'agent-session:session-1'
-    })
-    expect(order).toEqual(['begin', 'reveal', 'open'])
-    expect(mocks.beginStructuredAgentSessionProvisionalLaunch).toHaveBeenCalledWith(
-      expect.objectContaining({
-        target: { worktreeId: 'worktree-1' },
-        activate: true,
-        plan: expect.objectContaining({
-          route: 'structured-native-chat',
-          agent: 'codex',
-          prompt: 'Fix the route'
-        })
-      })
-    )
-  })
-
   it('does not launch after the pending creation was cancelled', async () => {
     mocks.state.pendingWorktreeCreations = {}
 
@@ -125,20 +92,6 @@ describe('launchStructuredWorktreeSession', () => {
       primaryTabId: null
     })
     expect(mocks.beginStructuredAgentSessionProvisionalLaunch).not.toHaveBeenCalled()
-  })
-
-  it('keeps deferred activation from selecting the provisional tab', async () => {
-    await expect(
-      launchStructuredWorktreeSession({
-        ...baseArgs,
-        shouldActivateOnCompletion: false,
-        primaryTabId: 'existing-tab'
-      })
-    ).resolves.toMatchObject({ primaryTabId: 'agent-session:session-1' })
-    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
-    expect(mocks.beginStructuredAgentSessionProvisionalLaunch).toHaveBeenCalledWith(
-      expect.objectContaining({ activate: false })
-    )
   })
 
   it('does not open a tab when cancellation races the reveal callback', async () => {

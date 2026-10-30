@@ -1,6 +1,6 @@
 import type { CanUseTool, OnUserDialog, PermissionResult } from '@anthropic-ai/claude-agent-sdk'
 import type { ClaudePromptRegistry } from './claude-structured-prompt-replies'
-import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import {
   claudePermissionPresentation,
   claudePermissionSubject

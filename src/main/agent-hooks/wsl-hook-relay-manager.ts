@@ -35,9 +35,11 @@ import {
   resumeWslStoppedRelays
 } from './wsl-hook-relay-state-machine'
 import type { WslRelayDistroState } from './wsl-hook-relay-state'
+import { createWslRelayIdleStopForManager, type WslRelayIdleStop } from './wsl-hook-relay-idle-stop'
 export class WslHookRelayManager {
   private deps: WslHookRelayManagerDeps
   private recovery: WslRelayRecovery
+  private idle: WslRelayIdleStop
   private states = new Map<string, WslRelayDistroState>()
   private stoppedByHooksOff = new Map<string, string | undefined>()
   private defaultDistro: string | null = null
@@ -45,12 +47,12 @@ export class WslHookRelayManager {
   private warnedBundleMissing = false
   constructor(deps: Partial<WslHookRelayManagerDeps> = {}) {
     this.deps = { ...defaultWslHookRelayDeps, ...deps }
+    const owner = { deps: () => this.deps, states: this.states, isDisposed: () => this.disposed }
     this.recovery = createWslRelayRecoveryForManager({
-      deps: () => this.deps,
-      states: this.states,
-      isDisposed: () => this.disposed,
+      ...owner,
       ensure: (...args) => this.ensureForDistro(...args)
     })
+    this.idle = createWslRelayIdleStopForManager({ ...owner, recovery: this.recovery })
   }
   setManagedHookSettingsResolver(resolve: WslHookRelayManagerDeps['managedHookSettings']): void {
     this.deps.managedHookSettings = resolve
@@ -98,6 +100,7 @@ export class WslHookRelayManager {
   /** Nonpermanent disposal allows relays to restart when hooks are re-enabled. */
   disposeAll({ permanent = true }: { permanent?: boolean } = {}): void {
     this.disposed ||= permanent
+    this.idle.dispose(permanent)
     for (const state of this.states.values()) {
       this.recovery.clearTimers(state)
       state.mux?.dispose()
@@ -123,7 +126,13 @@ export class WslHookRelayManager {
     if (!distro || this.disposed) {
       return
     }
+    // Before the state check, so concurrent ensures still join one start. A passive restore's env
+    // prep ensures the relay before its hold (#35813): its wsl.exe must not start the distro (E9).
+    if ((await this.deps.blockedForExec(distro)) || this.disposed) {
+      return
+    }
     const key = wslHookRelayStateKey(distro)
+    this.idle.restoreParked(distro)
     const existing = this.states.get(key)
     if (requestedCodexHomePath) {
       recordManagedWslCodexHome(distro, requestedCodexHomePath)
@@ -228,7 +237,8 @@ export class WslHookRelayManager {
       mux,
       child,
       distro: state.distro,
-      ingest: this.deps.ingest,
+      ingest: this.idle.noteTraffic(state, this.deps.ingest),
+      beginSession: this.deps.beginRelaySession,
       receiveClaudeAgentView: (body) =>
         isWslHookRelayAllowed(this.deps) ? (this.deps.receiveClaudeAgentView?.(body) ?? {}) : {},
       warn: this.deps.warn,
@@ -272,6 +282,7 @@ export class WslHookRelayManager {
     }
     state.phase = 'running'
     state.connectedAt = Date.now()
+    this.idle.update(state)
     this.recovery.scheduleOneShotReinstall(state, REINSTALL_ONE_SHOT_DELAY_MS, () => {
       void maybeRerunWslRelayGuestInstall(this.deps, state)
     })

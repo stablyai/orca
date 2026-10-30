@@ -1,3 +1,11 @@
+import type { AttachFlowInput } from './structured-agent-session-attach-flow'
+import type { AgentSessionCreatePhaseRecorder } from '../../observability/agent-session-instrumentation'
+import type { StructuredAgentSessionAttachLock } from './structured-agent-session-attach-lock'
+// What attaching needs from the host, named explicitly.
+//
+// Passing the host itself would let this quietly grow new dependencies; an explicit context makes
+// each one a deliberate addition and keeps the orchestration testable without constructing a host.
+
 import type {
   AgentSessionTurnActivity,
   AgentSessionWireRefusal
@@ -43,4 +51,24 @@ export type StructuredAgentSessionAttachContext = {
     sessionId: string,
     options?: StructuredAgentSessionConversationOpenOptions
   ) => Promise<StructuredAgentSessionHostSession | null>
+}
+
+export type StructuredAgentSessionAttachOptions = {
+  hostLaunchDirectory?: string
+  /** The saved list a new chat's options are admitted against, for the folder its picker read. */
+  catalogModels?: AttachFlowInput['models']
+  recordPhase?: AgentSessionCreatePhaseRecorder
+  onAcquisitionFailed?: AttachFlowInput['onAcquisitionFailed']
+  /** The queued message a start is for; see `StructuredAgentSessionProviderChild.startedFor`. */
+  startedFor?: string
+  startupOptions?: Readonly<Record<string, string>>
+  /** A close, an admitted Stop or quit aborted this attach: its refusal is that abort's. */
+  onAborted?: () => void
+  /** The startup limit aborted this attach's acquire: it failed, nobody stopped it. */
+  onStartupExpired?: () => void
+  /** An agent start's: its steps run outside the session's serialize and commit under it. */
+  lock?: StructuredAgentSessionAttachLock
+  startupAttemptId?: string
+  /** The attach made its child the session's. */
+  onPublished?: () => void
 }

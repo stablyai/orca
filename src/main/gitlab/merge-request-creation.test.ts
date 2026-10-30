@@ -212,6 +212,7 @@ describe('createGitLabMergeRequest', () => {
       ok: false,
       code: 'already_exists',
       error: 'A merge request already exists for this branch.',
+      reason: 'existing_review',
       existingReview: {
         number: 77,
         url: 'https://gitlab.com/acme/widgets/-/merge_requests/77'
@@ -286,7 +287,7 @@ describe('createGitLabMergeRequest', () => {
         },
         'ssh:ssh-1'
       )
-    ).resolves.toMatchObject({ ok: false, code: 'already_exists' })
+    ).resolves.toMatchObject({ ok: false, code: 'already_exists', reason: 'existing_review' })
 
     const [args, options] = glabExecFileAsyncMock.mock.calls[1]
     expect(args).not.toContain('--hostname')

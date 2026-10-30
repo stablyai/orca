@@ -8,7 +8,7 @@ import { sanitizeTerminalLayoutPaneTitles } from '../../../../shared/terminal-pa
 import { resolveNativeChatLeafTitleAgent } from './native-chat-leaf-title-agent'
 import { useTerminalPaneStoreActions } from './use-terminal-pane-store-actions'
 import { selectUnifiedTerminalTabFields } from './terminal-unified-tab-lookup'
-import { canToggleNativeChat } from '../native-chat/native-chat-availability'
+import { canToggleNativeChat } from '../../../../shared/native-chat-availability'
 import {
   nativeChatLaunchAgentForLeaf,
   resolveNativeChatLeafRoute,

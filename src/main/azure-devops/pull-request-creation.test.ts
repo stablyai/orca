@@ -186,7 +186,8 @@ describe('Azure DevOps pull request creation', () => {
       )
     ).resolves.toMatchObject({
       ok: false,
-      code: 'auth_required'
+      code: 'auth_required',
+      reason: 'auth_required'
     })
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
       cwd: '/repo',

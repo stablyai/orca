@@ -113,7 +113,8 @@ describe('Gitea pull request creation', () => {
       )
     ).resolves.toMatchObject({
       ok: false,
-      code: 'validation'
+      code: 'validation',
+      reason: 'rejected'
     })
   })
 })

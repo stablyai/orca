@@ -4,7 +4,7 @@ import type {
   FeatureInteractionState
 } from '../../../../../shared/feature-interactions'
 import type { FeatureTipId } from '../../../../../shared/feature-tips'
-import type { NativeChatUpgradeTipVariant } from '../../../../../shared/native-chat-upgrade-tip-audience'
+import type { NativeChatUpgradeTipVariant } from '../../../../../shared/native-chat/native-chat-upgrade-tip-audience'
 import type { ContextualTourId } from '../../../../../shared/contextual-tours'
 import type { OrcaHookScriptKind } from '../../../lib/orca-hook-trust'
 import type { SettingsNavigationTarget } from '../../../lib/settings-navigation-types'
@@ -124,6 +124,8 @@ export type UISliceContextual = {
   dismissStatusBarCompactChangeNotice: () => void
   usageEmptyStateDismissed: boolean
   dismissUsageEmptyState: () => void
+  pluginsAlphaNoticeDismissed: boolean
+  dismissPluginsAlphaNotice: () => void
   codexTerminalServerIsolationNoticeSeen: boolean
   markCodexTerminalServerIsolationNoticeSeen: () => void
   codexSharedSettingsNoticeSeen: boolean

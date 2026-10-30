@@ -87,7 +87,12 @@ export function createTabsSessionActions(
         validWorktreeIds.add(folderWorkspaceKey(workspace.id))
       }
       addAdditionalValidWorkspaceKeys(validWorktreeIds, options)
-      const hydrated = buildHydratedTabState(session, validWorktreeIds)
+      const hydrated = buildHydratedTabState(
+        session,
+        validWorktreeIds,
+        undefined,
+        new Set(options?.wslMovedChatWorkspaceKeys)
+      )
       if (!options?.replaceWorkspaceKeys) {
         set(hydrated)
         return

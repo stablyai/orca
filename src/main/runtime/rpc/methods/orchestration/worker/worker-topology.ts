@@ -1,5 +1,5 @@
 import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session-host-authority'
-import { narrowStructuredLaunchSeedOptions } from '../../../../../../shared/native-chat-session-option-defaults'
+import { narrowStructuredLaunchSeedOptions } from '../../../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
@@ -11,6 +11,8 @@ export type WorkerEffect = {
   action?: string
   role?: string
   id?: string
+  /** A created worktree's name, so the coordinator can tell the user where the worker runs. */
+  name?: string
   state?: string
   tabId?: string
   leafId?: string

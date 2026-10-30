@@ -263,3 +263,42 @@ describe('ImageViewer pre-load layout box', () => {
     }
   })
 })
+
+describe('ImageViewer reading its bytes by URL', () => {
+  beforeEach(() => {
+    reactHookRuntime.states = []
+    reactHookRuntime.index = 0
+    vi.clearAllMocks()
+  })
+
+  it('shows an image from its orca-media URL, sized from the grant', async () => {
+    reactHookRuntime.index = 0
+    const module = await import('./ImageViewer')
+    const rendered = expandNode(
+      module.default({
+        src: 'orca-media://file/token?revision=r1',
+        byteSize: 2048,
+        filePath: '/repo/preview.png',
+        mimeType: 'image/png'
+      })
+    )
+    expect(findPreviewImage(rendered).props.src).toBe('orca-media://file/token?revision=r1')
+    expect(JSON.stringify(rendered)).toContain('2.0 KB')
+  })
+
+  it("hands a PDF's URL to PdfViewer instead of base64", async () => {
+    reactHookRuntime.index = 0
+    const module = await import('./ImageViewer')
+    const [pdf] = findElementsByType(
+      expandNode(
+        module.default({
+          src: 'orca-media://file/doc?revision=r1',
+          filePath: '/repo/report.pdf',
+          mimeType: 'application/pdf'
+        })
+      ),
+      'PdfViewer'
+    )
+    expect(pdf?.props).toMatchObject({ src: 'orca-media://file/doc?revision=r1', content: '' })
+  })
+})

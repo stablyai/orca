@@ -34,6 +34,10 @@ import { createForceDeletePreservedBranch } from './worktrees/teardown/force-del
 import { createUpdateWorktreeMeta } from './worktrees/metadata/update-worktree-meta'
 import { createEnsureHostedReviewPushTarget } from './worktrees/metadata/hosted-review-push-target-ensure'
 import { createUpdateWorktreesMeta } from './worktrees/metadata/update-worktrees-meta'
+import {
+  guardUpdateWorktreeMetaHostStatus,
+  guardUpdateWorktreesMetaHostStatus
+} from './worktrees/metadata/foreign-host-status-guard'
 import { createSetWorktreesPinnedAndReveal } from './worktrees/session/worktree-pin-reveal'
 import { createBumpWorktreeActivity } from './worktrees/session/worktree-activity-bump'
 import {
@@ -90,9 +94,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   markWorktreesQueuedForDeletion: createMarkWorktreesQueuedForDeletion(set, get),
   forceDeletePreservedBranch: createForceDeletePreservedBranch(set, get),
   clearWorktreeDeleteState: createClearWorktreeDeleteState(set, get),
-  updateWorktreeMeta: createUpdateWorktreeMeta(set, get),
+  updateWorktreeMeta: guardUpdateWorktreeMetaHostStatus(createUpdateWorktreeMeta(set, get), get),
   ensureHostedReviewPushTarget: createEnsureHostedReviewPushTarget(set, get),
-  updateWorktreesMeta: createUpdateWorktreesMeta(set, get),
+  updateWorktreesMeta: guardUpdateWorktreesMetaHostStatus(createUpdateWorktreesMeta(set, get), get),
   setWorktreesPinnedAndReveal: createSetWorktreesPinnedAndReveal(set, get),
   observeTerminalGitHubPullRequestLink: createObserveTerminalGitHubPullRequestLink(get),
   bumpWorktreeActivity: createBumpWorktreeActivity(set, get),

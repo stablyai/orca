@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 
 vi.mock('electron', () => {
   const paths = new Map<string, string>([['appData', '/tmp/app-data']])
@@ -224,6 +224,10 @@ describe('patchPackagedProcessPath', () => {
 
     setPlatform('win32')
     Object.defineProperty(app, 'isPackaged', { configurable: true, value: true })
+    vi.stubEnv('FNM_DIR', 'C:\\fnm')
+    onTestFinished(() => {
+      vi.unstubAllEnvs()
+    })
     const pathDelimiter = process.platform === 'win32' ? ';' : ':'
     process.env.PATH = `C:\\Windows\\System32${pathDelimiter}C:\\Windows`
 
@@ -233,6 +237,9 @@ describe('patchPackagedProcessPath', () => {
     const userLocalBin = join(homedir(), '.local', 'bin')
     expect(segments).toContain(userLocalBin)
     expect(segments.indexOf(userLocalBin)).toBeLessThan(segments.indexOf('C:\\Windows\\System32'))
+    // #11356: fnm's default Node only backfills; it must not shadow an inherited system Node.
+    const fnmAlias = join('C:\\fnm', 'aliases', 'default')
+    expect(segments.indexOf(fnmAlias)).toBeGreaterThan(segments.indexOf('C:\\Windows'))
   })
 })
 

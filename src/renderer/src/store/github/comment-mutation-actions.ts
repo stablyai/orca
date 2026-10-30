@@ -8,6 +8,7 @@ import { restoreReactionOnSubject, setReactionOnSubject } from '@/lib/pr-comment
 import { prCommentsCacheSuffix, sourceScopedRepoCacheKey } from './cache-identity'
 import { withBoundedCacheEntry } from './cache-policy'
 import { hasUsableCommentPayload, mergePRCommentIntoList } from './pr-comment-cache'
+import { inflightCommentsRequests } from './request-coordination'
 import {
   getGitHubRepoSourceSettings,
   getGitHubSourceTarget,
@@ -102,6 +103,7 @@ export const createCommentMutationActions = (
         })
       }
     })
+    inflightCommentsRequests.get(cacheKey)?.postedComments.push(comment)
     return { ok: true, comment }
   },
 

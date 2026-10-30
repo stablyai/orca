@@ -1,5 +1,9 @@
 import { parseWslUncPath } from '../../shared/wsl-paths'
-import { isWslUserActFor, runAsWslUserAct } from './wsl-user-act-scope'
+import {
+  wslDistroStoppedMessage,
+  wslDistroUnverifiableMessage
+} from '../../shared/wsl-distro-not-running-refusal'
+import { isWslUserActFor, runAsWslUserAct as runScopedWslUserAct } from './wsl-user-act-scope'
 import {
   noteWslDistroWoken,
   noteWslDistrosRunning,
@@ -8,18 +12,28 @@ import {
 } from '../wsl-background-distro-gate'
 
 export { noteWslDistroMayHaveStopped } from '../wsl-background-distro-gate'
-export { runAsWslUserAct } from './wsl-user-act-scope'
 
 // Any 9P touch of `\\wsl.localhost\<distro>` boots a stopped distro, so background reads ask first.
 // Stops are signalled (watcher or relay exit, or a read that saw it), so a running read is trusted
 // this long without one, keeping wsl.exe spawns to about one a minute.
 export const WSL_UNC_RUNNING_LEASE_MS = 60_000
 
+/**
+ * Runs a user act on `distro`. When it settles, even by throwing, background reads stop trusting a
+ * "stopped" read taken before it: the act may have started the distro.
+ */
+export function runAsWslUserAct<T>(distro: string | null, act: () => Promise<T>): Promise<T> {
+  return runScopedWslUserAct(distro, act, { onSettled: noteWslDistroWoken })
+}
+
 export class WslDistroStoppedError extends Error {
   readonly code = 'WSL_DISTRO_STOPPED'
 
-  constructor(readonly distro: string) {
-    super(`WSL distro '${distro}' is not running. Retry, or open a terminal in it, to start it.`)
+  constructor(
+    readonly distro: string,
+    options: { retryStartsIt?: boolean } = {}
+  ) {
+    super(wslDistroStoppedMessage(distro, options.retryStartsIt))
     this.name = 'WslDistroStoppedError'
   }
 }
@@ -28,9 +42,7 @@ export class WslDistroUnverifiableError extends Error {
   readonly code = 'WSL_DISTRO_UNVERIFIABLE'
 
   constructor(readonly distro: string) {
-    super(
-      `WSL didn't answer whether '${distro}' is running, so Orca left it alone. Retry in a moment.`
-    )
+    super(wslDistroUnverifiableMessage(distro))
     this.name = 'WslDistroUnverifiableError'
   }
 }
@@ -51,14 +63,15 @@ export function wslDistroForPath(path: string, wslDistro?: string | null): strin
  */
 export async function blockedWslDistroForPath(
   path: string,
-  wslDistro?: string | null
+  wslDistro?: string | null,
+  options: { leaseMs?: number } = {}
 ): Promise<BlockedWslDistro | null> {
   const distro = wslDistroForPath(path, wslDistro)
   if (!distro || isWslUserActFor(distro)) {
     return null
   }
   const state = await readWslDistroRunningState(distro, {
-    startedAfter: performance.now() - WSL_UNC_RUNNING_LEASE_MS,
+    startedAfter: performance.now() - (options.leaseMs ?? WSL_UNC_RUNNING_LEASE_MS),
     retryUnverifiable: true
   })
   return state === 'running' ? null : { distro, state }
@@ -67,18 +80,19 @@ export async function blockedWslDistroForPath(
 /**
  * Refuses a background touch of a stopped (or unverifiable) distro's UNC path. `wake` is a user act:
  * it may boot the distro, and its success proves the distro runs so work waiting on it resumes.
+ * `wslDistro` covers a host path whose Git or gh runs in that distro.
  */
 export async function guardWslUncPathAccess<T>(
   path: string,
   access: () => Promise<T>,
-  options: { wake?: boolean } = {}
+  options: { wake?: boolean; wslDistro?: string | null } = {}
 ): Promise<T> {
   if (options.wake) {
-    const result = await runAsWslUserAct(wslDistroForPath(path), access)
-    noteWslDistroWokenForPath(path)
+    const result = await runAsWslUserAct(wslDistroForPath(path, options.wslDistro), access)
+    noteWslDistroWokenForPath(path, options.wslDistro)
     return result
   }
-  await assertWslUncPathRunning(path)
+  await assertWslUncPathRunning(path, options.wslDistro)
   return access()
 }
 

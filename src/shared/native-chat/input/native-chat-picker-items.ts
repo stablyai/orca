@@ -1,7 +1,7 @@
 import type { DiscoveredSkill, SkillSourceKind } from '../../skills'
-import { locatedPickerSkill } from '../../native-chat-reported-skill'
+import { locatedPickerSkill, getSafeSkillName, isTokenSafe } from '../native-chat-reported-skill'
 import type { NativeChatSessionSkill, SlashCommandSuggestion } from './native-chat-slash-commands'
-import { isSafeDisplayCharacter, stripUnsafeDisplayCharacters } from '../../skill-display-text'
+import { stripUnsafeDisplayCharacters } from '../../display-text-safety'
 import { compareBaseSensitivityLocaleText } from '../../locale-text-collators'
 
 export type NativeChatPickerItem =
@@ -81,7 +81,8 @@ export function buildNativeChatPickerItems(
   /** Rows kept per group; a caller that needs every skill passes Infinity. */
   limit = PICKER_RESULT_LIMIT,
   /** `$` matches skill names only, so a shell word like `$CODEX_HOME` never hits a description. */
-  trigger: '/' | '$' = '/'
+  trigger: '/' | '$' = '/',
+  commandAvailable?: (name: string) => boolean
 ): NativeChatPickerItem[] {
   // Only shared sigils collide: /review and $review remain separate.
   const sharedSigil = skillSigil === '/'
@@ -90,8 +91,11 @@ export function buildNativeChatPickerItems(
   )
   const mergedSkills = mergeNativeChatSkills(skills, sessionSkills, unclassifiedNames, skillSigil)
   const skillNames = new Set(mergedSkills.map((skill) => skill.name))
-  const orcaNames = new Set(commands.filter((c) => c.orcaOwned).map((command) => command.name))
-  const resolvedCommands = commands.filter(
+  const available = commandAvailable
+    ? commands.filter(({ name }) => commandAvailable(name))
+    : commands
+  const orcaNames = new Set(available.filter((c) => c.orcaOwned).map((command) => command.name))
+  const resolvedCommands = available.filter(
     (command) =>
       command.orcaOwned ||
       !(
@@ -244,8 +248,8 @@ function getMatchRank(
   query: string,
   matchDescriptions: boolean
 ): number | null {
-  const normalizedQuery = query.toLocaleLowerCase()
-  const name = item.name.toLocaleLowerCase()
+  const normalizedQuery = query.toLowerCase()
+  const name = item.name.toLowerCase()
   if (name === normalizedQuery) {
     return 0
   }
@@ -258,7 +262,7 @@ function getMatchRank(
   if (isSubsequence(normalizedQuery, name)) {
     return 3
   }
-  if (matchDescriptions && item.description?.toLocaleLowerCase().includes(normalizedQuery)) {
+  if (matchDescriptions && item.description?.toLowerCase().includes(normalizedQuery)) {
     return 4
   }
   return null
@@ -275,26 +279,6 @@ function isSubsequence(query: string, value: string): boolean {
     }
   }
   return false
-}
-
-// Names are inserted PTY tokens, never visual prefixes. CSS truncates display; reject unsafe lengths without slicing tokens.
-const MAX_TOKEN_SAFE_NAME_LENGTH = 200
-
-function getSafeSkillName(skill: DiscoveredSkill): string | null {
-  if (isTokenSafe(skill.name)) {
-    return skill.name
-  }
-  const directoryName = skill.directoryPath.split(/[\\/]/).findLast(Boolean) ?? ''
-  return isTokenSafe(directoryName) ? directoryName : null
-}
-
-function isTokenSafe(value: string): boolean {
-  return (
-    value.length > 0 &&
-    value.length <= MAX_TOKEN_SAFE_NAME_LENGTH &&
-    !/\s/u.test(value) &&
-    [...value].every(isSafeDisplayCharacter)
-  )
 }
 
 function sanitizePickerText(value: string, maxLength: number): string {

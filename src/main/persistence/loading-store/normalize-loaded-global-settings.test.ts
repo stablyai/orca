@@ -310,3 +310,13 @@ describe('terminal default shell', () => {
     expect(normalizeLegacyProfile({ terminalDefaultShell: '   ' }).terminalDefaultShell).toBe('')
   })
 })
+
+it('loads an existing profile without a terminal policy mirror and preserves its saved preferences', () => {
+  const loaded = normalizeLegacyProfile({
+    terminalFocusFollowsMouse: true,
+    machineName: 'Build server'
+  })
+  expect(loaded.terminalFocusFollowsMouse).toBe(true)
+  expect(loaded.machineName).toBe('Build server')
+  expect(loaded).not.toHaveProperty('maxTerminals')
+})

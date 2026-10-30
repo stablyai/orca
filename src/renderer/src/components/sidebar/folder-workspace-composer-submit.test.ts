@@ -303,7 +303,7 @@ describe('submitFolderWorkspaceCreate', () => {
       createdWithAgent: 'codex'
     })
     const startup = mocks.activateAndRevealFolderWorkspace.mock.calls[0]?.[1]?.startup
-    expect(startup?.command).toBe('codex')
+    expect(startup?.command).toBe("codex '-c' 'disable_paste_burst=true'")
     expect(startup?.command).not.toContain(linkedWorkItem.url)
     expect(startup?.command).not.toContain('Review this before starting')
     expect(mocks.ensureAgentStartupInTerminal).toHaveBeenCalledWith({
@@ -311,7 +311,7 @@ describe('submitFolderWorkspaceCreate', () => {
       primaryTabId: 'tab-1',
       startup: expect.objectContaining({
         agent: 'codex',
-        launchCommand: 'codex',
+        launchCommand: "codex '-c' 'disable_paste_burst=true'",
         followupPrompt: null,
         draftPrompt: `Review this before starting\n\n${linkedWorkItem.url}`
       })

@@ -10,22 +10,18 @@ import { getNodeRuntimeInclude } from './scripts/vitest-node-runtime-files.mjs'
 import { nodeRuntimePool } from './scripts/vitest-node-runtime-pool'
 import { readRunFilters } from './scripts/vitest-run-filters.mjs'
 import { createWorkspaceSourceResolver } from './scripts/workspace-source-exports.mjs'
+import { moduleCacheResolutionKey } from './scripts/vitest-module-cache-resolution-key'
 
 const nodeRuntimeInclude = process.versions.bun
   ? getNodeRuntimeInclude({ filters: readRunFilters() })
   : []
 const balancedShards = process.env.ORCA_BALANCE_UNIT_SHARDS === '1'
+const moduleCachePath = process.env.ORCA_UNIT_MODULE_CACHE_PATH
 const measurementFile = 'src/main/foreign-sqlite-readers/foreign-sqlite-reader-event-loop.test.ts'
 const paletteMeasurementFile =
   'src/renderer/src/lib/palette-match/palette-match-performance.test.ts'
 const measurementFiles = [measurementFile, paletteMeasurementFile]
-const phoneContractModules = [
-  'mobile/src/session/native-chat/mobile-native-chat-stream-frame.ts',
-  'mobile/src/session/mobile-native-chat-render-data.ts'
-].map((file) => normalizePath(resolve(file)))
-const phoneContractPattern = new RegExp(
-  `^(?:${phoneContractModules.map((file) => file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?:\\?.*)?$`
-)
+const phoneContractPattern = /\/mobile\/src\/.*\.(?:ts|tsx)(?:\?.*)?$/
 const transforms = {
   oxc: { exclude: [/\.js$/, phoneContractPattern] },
   plugins: [
@@ -35,7 +31,7 @@ const transforms = {
       enforce: 'pre',
       async transform(source, id) {
         const filename = normalizePath(id.split('?')[0])
-        if (!phoneContractModules.includes(filename)) {
+        if (!phoneContractPattern.test(filename)) {
           return null
         }
         const result = await transformWithOxc(source, filename, { tsconfig: false })
@@ -45,12 +41,13 @@ const transforms = {
         return { code: result.code, map: result.map }
       }
     } satisfies Plugin,
+    ...(moduleCachePath ? [moduleCacheResolutionKey()] : []),
     {
       // Unit tests have no asset server; retain real catalog parsing through fetch(data:).
       name: 'locale-catalog-test-assets',
       enforce: 'pre' as const,
       load(id: string) {
-        if (/\/i18n\/locales\/[a-z]+\.json\?url$/.test(id)) {
+        if (/\/i18n\/locales\/[A-Za-z-]+\.json\?url$/.test(id)) {
           const catalog = readFileSync(id.slice(0, -4)).toString('base64')
           return `export default ${JSON.stringify(`data:application/json;base64,${catalog}`)}`
         }
@@ -83,11 +80,9 @@ const testOptions = {
   environment: 'node',
   clearMocks: false,
   ...(balancedShards ? { silent: 'passed-only' as const } : {}),
-  // Persistent transforms can miss source additions; only explicit cache experiments opt in.
-  fsModuleCache: Boolean(process.env.ORCA_UNIT_MODULE_CACHE_PATH),
-  ...(process.env.ORCA_UNIT_MODULE_CACHE_PATH
-    ? { fsModuleCachePath: process.env.ORCA_UNIT_MODULE_CACHE_PATH }
-    : {}),
+  // Keyed by ci-unit-module-cache.mjs in CI and vitest-local-module-cache.mjs locally.
+  fsModuleCache: Boolean(moduleCachePath),
+  ...(moduleCachePath ? { fsModuleCachePath: moduleCachePath } : {}),
   env: { ORCA_VITEST_RUNTIME: 'node' },
   server: { deps: { inline: ['zod'] } },
   // Node's storage globals and V8 retention checks require the existing child flags.
@@ -159,7 +154,6 @@ export default defineConfig({
   ...transforms,
   test: {
     ...testOptions,
-    experimental: { recordDependencies: !process.env.CI },
     forceRerunTriggers: [
       ...configDefaults.forceRerunTriggers,
       '**/pnpm-lock.yaml',

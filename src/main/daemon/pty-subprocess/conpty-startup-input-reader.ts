@@ -1,9 +1,11 @@
+import type { DaemonPtyPhysicalOwner } from './subprocess-handle'
 import type * as pty from 'node-pty'
-import { killConptyNow, terminatePtyJob } from '../../windows/windows-pty-job'
+import { CONPTY_DA1_RESPONSE } from '../../../shared/conpty-device-attributes'
 
 // Bundled ConPTY queries DA1 (or CPR when inheriting the cursor) right after it starts reading
 // input, and before relaying any client output. A pane without it never reads keyboard input.
-const INPUT_READER_ANNOUNCEMENTS = ['\x1b[c', '\x1b[6n'] as const
+const STARTUP_DA1_QUERY = '\x1b[c'
+const INPUT_READER_ANNOUNCEMENTS = [STARTUP_DA1_QUERY, '\x1b[6n'] as const
 // The pseudo-window thread can report window visibility ahead of the announcement.
 const WINDOW_VISIBILITY_REPORTS = ['\x1b[1t', '\x1b[2t'] as const
 
@@ -17,15 +19,21 @@ export const CONPTY_STARTUP_DECISION_LIMIT_MS = 5_000
 export const CONPTY_NO_INPUT_READER_NOTICE =
   '\r\n\x1b[31m[Orca] Windows could not start keyboard input for this terminal. Close it and open a new one.\x1b[0m\r\n'
 
-export function classifyConptyStartupOutput(output: string): ConptyStartupVerdict {
-  let rest = output
+function announcementOffset(output: string): number {
+  let offset = 0
   for (;;) {
-    const report = WINDOW_VISIBILITY_REPORTS.find((candidate) => rest.startsWith(candidate))
+    const report = WINDOW_VISIBILITY_REPORTS.find((candidate) =>
+      output.startsWith(candidate, offset)
+    )
     if (!report) {
-      break
+      return offset
     }
-    rest = rest.slice(report.length)
+    offset += report.length
   }
+}
+
+export function classifyConptyStartupOutput(output: string): ConptyStartupVerdict {
+  const rest = output.slice(announcementOffset(output))
   if (INPUT_READER_ANNOUNCEMENTS.some((announcement) => rest.startsWith(announcement))) {
     return 'input-reader'
   }
@@ -42,13 +50,21 @@ export type ConptyStartupEvents = {
 export type ConptyStartupWatch = {
   /** Settles on the first output that decides, or on exit before any did. */
   verdict: Promise<ConptyStartupOutcome>
-  /** Hands buffered output and exit to the caller and stops buffering. */
+  /** Hands buffered output to the caller and stops buffering. */
   claim(): ConptyStartupEvents
+  exited: Promise<void>
 }
 
 /** Buffers a fresh ConPTY's output until its owner claims it, so no startup byte is lost. */
-export function watchConptyStartup(proc: pty.IPty): ConptyStartupWatch {
+export function watchConptyStartup(
+  proc: pty.IPty,
+  exitSource: Pick<pty.IPty, 'onExit'> = proc
+): ConptyStartupWatch {
   const events: ConptyStartupEvents = { data: [], exit: null }
+  let ended!: () => void
+  const exited = new Promise<void>((resolve) => {
+    ended = resolve
+  })
   let output = ''
   let settle: (outcome: ConptyStartupOutcome) => void = () => {}
   const verdict = new Promise<ConptyStartupOutcome>((resolve) => {
@@ -64,16 +80,27 @@ export function watchConptyStartup(proc: pty.IPty): ConptyStartupWatch {
     const classified = classifyConptyStartupOutput(output)
     if (classified !== 'pending') {
       decided = true
+      const offset = announcementOffset(output)
+      if (classified === 'input-reader' && output.startsWith(STARTUP_DA1_QUERY, offset)) {
+        // ConPTY 1.23 stalls 3s for this reply; Session drains it before any client could answer.
+        const rest = output.slice(0, offset) + output.slice(offset + STARTUP_DA1_QUERY.length)
+        events.data = rest ? [rest] : []
+        try {
+          proc.write(CONPTY_DA1_RESPONSE)
+        } catch {}
+      }
       settle(classified)
     }
   })
-  const exitSubscription = proc.onExit(({ exitCode, signal }) => {
+  const exitSubscription = exitSource.onExit(({ exitCode, signal }) => {
     events.exit = { exitCode, ...(signal !== undefined ? { signal } : {}) }
+    ended()
     decided = true
     settle('exited')
   })
   return {
     verdict,
+    exited,
     claim: () => {
       dataSubscription.dispose()
       exitSubscription.dispose()
@@ -84,9 +111,14 @@ export function watchConptyStartup(proc: pty.IPty): ConptyStartupWatch {
 
 async function decideConptyStartup(
   proc: pty.IPty,
-  signal: AbortSignal | undefined
-): Promise<{ outcome: ConptyStartupOutcome; claim: () => ConptyStartupEvents }> {
-  const watch = watchConptyStartup(proc)
+  signal: AbortSignal | undefined,
+  physicalOwner: DaemonPtyPhysicalOwner
+): Promise<{
+  outcome: ConptyStartupOutcome
+  claim: () => ConptyStartupEvents
+  exited: Promise<void>
+}> {
+  const watch = watchConptyStartup(proc, physicalOwner)
   let limit: ReturnType<typeof setTimeout> | undefined
   let onAbort = (): void => {}
   try {
@@ -98,10 +130,10 @@ async function decideConptyStartup(
       limit.unref?.()
       void watch.verdict.then(resolve)
     })
-    return { outcome, claim: watch.claim }
+    return { outcome, claim: watch.claim, exited: watch.exited }
   } catch (error) {
     // A canceled spawn must not leave the half-started shell running.
-    discardConpty(proc, watch)
+    discardConpty(physicalOwner, watch)
     throw error
   } finally {
     clearTimeout(limit)
@@ -109,12 +141,12 @@ async function decideConptyStartup(
   }
 }
 
-function discardConpty(proc: pty.IPty, watch: Pick<ConptyStartupWatch, 'claim'>): void {
+function discardConpty(
+  physicalOwner: DaemonPtyPhysicalOwner,
+  watch: Pick<ConptyStartupWatch, 'claim'>
+): void {
   watch.claim()
-  // Handle-based only: a pid may already be recycled if the shell exited during startup.
-  terminatePtyJob(proc)
-  killConptyNow(proc)
-  proc.kill()
+  physicalOwner.forceKill()
 }
 
 // Why process-wide: the announcement is a fact of the bundled ConPTY build. Until one pane shows
@@ -140,50 +172,74 @@ function withNotice(claim: () => ConptyStartupEvents): () => ConptyStartupEvents
 
 // Verify ConPTY input before exposing the pane, so respawning cannot repeat user input.
 export async function spawnConptyWithInputReader(
-  spawn: () => Promise<pty.IPty>,
+  spawn: () => Promise<{ proc: pty.IPty; physicalOwner: DaemonPtyPhysicalOwner }>,
   opts: {
     label: string
     signal?: AbortSignal
     // Only Orca's default interactive argv is safe to respawn; custom argv may repeat a command.
     respawnSafe: boolean
   }
-): Promise<{ proc: pty.IPty; claimStartupEvents: () => ConptyStartupEvents }> {
-  const first = await spawn()
+): Promise<{
+  proc: pty.IPty
+  physicalOwner: DaemonPtyPhysicalOwner
+  claimStartupEvents: () => ConptyStartupEvents
+}> {
+  const firstSpawn = await spawn()
+  const { proc: first, physicalOwner: firstOwner } = firstSpawn
   if (announcementUntrusted) {
-    return { proc: first, claimStartupEvents: () => ({ data: [], exit: null }) }
+    return { ...firstSpawn, claimStartupEvents: () => ({ data: [], exit: null }) }
   }
-  const firstStartup = await decideConptyStartup(first, opts.signal)
+  const firstStartup = await decideConptyStartup(first, opts.signal, firstOwner)
   if (firstStartup.outcome === 'input-reader') {
     announcementObserved = true
   }
   if (firstStartup.outcome !== 'no-input-reader') {
-    return { proc: first, claimStartupEvents: firstStartup.claim }
+    return { ...firstSpawn, claimStartupEvents: firstStartup.claim }
   }
   if (!opts.respawnSafe) {
     console.warn(`[daemon/pty] ConPTY for "${opts.label}" started without an input reader`)
     const claim = firstStartup.claim
-    return { proc: first, claimStartupEvents: announcementObserved ? withNotice(claim) : claim }
+    return { ...firstSpawn, claimStartupEvents: announcementObserved ? withNotice(claim) : claim }
   }
   respawnCount += 1
   console.warn(
     `[daemon/pty] ConPTY for "${opts.label}" started without an input reader; respawning (${respawnCount})`
   )
-  discardConpty(first, firstStartup)
-  const retry = await spawn()
-  const retryStartup = await decideConptyStartup(retry, opts.signal)
+  let limit: ReturnType<typeof setTimeout> | undefined
+  try {
+    firstOwner.forceKill()
+    const exited = await Promise.race([
+      firstOwner.completion.then(() => true),
+      new Promise<false>((resolve) => {
+        limit = setTimeout(() => resolve(false), CONPTY_STARTUP_DECISION_LIMIT_MS)
+        limit.unref?.()
+      })
+    ])
+    if (!exited) {
+      return { ...firstSpawn, claimStartupEvents: withNotice(firstStartup.claim) }
+    }
+    firstStartup.claim()
+  } catch {
+    return { ...firstSpawn, claimStartupEvents: withNotice(firstStartup.claim) }
+  } finally {
+    clearTimeout(limit)
+  }
+  const retrySpawn = await spawn()
+  const { proc: retry, physicalOwner: retryOwner } = retrySpawn
+  const retryStartup = await decideConptyStartup(retry, opts.signal, retryOwner)
   if (retryStartup.outcome === 'input-reader') {
     announcementObserved = true
   }
   if (retryStartup.outcome !== 'no-input-reader') {
-    return { proc: retry, claimStartupEvents: retryStartup.claim }
+    return { ...retrySpawn, claimStartupEvents: retryStartup.claim }
   }
   if (!announcementObserved) {
     // Two misses and no pane ever announced: distrust the check rather than respawn every pane.
     announcementUntrusted = true
     console.warn('[daemon/pty] ConPTY never announced an input reader; disabling the startup check')
-    return { proc: retry, claimStartupEvents: retryStartup.claim }
+    return { ...retrySpawn, claimStartupEvents: retryStartup.claim }
   }
   console.warn(`[daemon/pty] ConPTY for "${opts.label}" again started without an input reader`)
   // After one respawn, show the failure on screen instead of silently ignoring keystrokes.
-  return { proc: retry, claimStartupEvents: withNotice(retryStartup.claim) }
+  return { ...retrySpawn, claimStartupEvents: withNotice(retryStartup.claim) }
 }

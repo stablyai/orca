@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import { mobileStructuredSessionStatusFeed } from './mobile-structured-session-status-feed'
 import { projectRuntimePermission } from '../../../src/shared/structured-agent-session-permission-option'
 import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session/agent-session-conversation-command'
+import { useMobileStructuredSelectionController } from './use-mobile-structured-selection-controller'
 import type {
   AgentSessionOptionsResult,
   AgentSessionModelCatalogResult
@@ -24,6 +25,7 @@ import {
 export function useMobileStructuredOptionState(args: {
   client: RpcClient | null
   optionStamp?: string
+  sendSelection?: boolean
   newLaunch: boolean
   worktree?: string
   coherentCatalog?: boolean
@@ -33,6 +35,7 @@ export function useMobileStructuredOptionState(args: {
   fence: number | null
   optionCatalog: AgentSessionOptionCatalog | null
   sessionId: string | null
+  turnId: string | null
 }) {
   const {
     agent,
@@ -41,8 +44,10 @@ export function useMobileStructuredOptionState(args: {
     fence,
     optionCatalog,
     sessionId,
+    turnId,
     client,
     optionStamp,
+    sendSelection,
     newLaunch,
     worktree,
     coherentCatalog: hostCoherentCatalog = false
@@ -58,6 +63,7 @@ export function useMobileStructuredOptionState(args: {
   const summary = useSyncExternalStore(feed?.subscribe ?? (() => () => {}), () =>
     sessionId ? feed?.getSnapshot().get(sessionId) : undefined
   )
+  const providerStarting = summary?.hostExecutionPhase === 'starting'
   const projectPermission = <T extends { reportedPermissionMode?: string | null }>(state: T): T =>
     projectRuntimePermission(state, summary, fence)
   const coherentCatalog = usesInstalledAgentModelCatalog(agent ?? '', hostCoherentCatalog)
@@ -66,8 +72,18 @@ export function useMobileStructuredOptionState(args: {
   )
   const optionStateRef = useRef(optionState)
   const activeOptionRecordRef = useRef(optionState.record)
-  const pendingOptionRef = useRef<string | null>(null)
-  const optionMutationGeneration = useRef(0)
+  const readEpoch = useRef(0)
+  const readRef = useRef<(() => void) | null>(null)
+  const reread = useCallback(() => {
+    readEpoch.current += 1
+    readRef.current?.()
+  }, [])
+  const { controller, clientGeneration } = useMobileStructuredSelectionController({
+    agent,
+    client,
+    sessionId,
+    onRevalidate: reread
+  })
   const updateOptionState = useCallback(
     (update: (current: StructuredAgentSessionOptionState) => StructuredAgentSessionOptionState) => {
       const next = update(optionStateRef.current)
@@ -85,34 +101,47 @@ export function useMobileStructuredOptionState(args: {
     () => contextRef.current.key === contextKey && contextRef.current.client === client,
     [contextKey, client]
   )
-  const writes = useRef({ count: 0, readback: false })
-  const optionIdentityRef = useRef(`${agent}:${sessionId}`)
+  const optionIdentityRef = useRef({ agent, sessionId, client, controller })
   useEffect(() => {
-    const identity = `${agent}:${sessionId}`
-    const sameSession = optionIdentityRef.current === identity
-    optionIdentityRef.current = identity
+    const previousIdentity = optionIdentityRef.current
+    const sameSession =
+      previousIdentity.agent === agent &&
+      previousIdentity.sessionId === sessionId &&
+      previousIdentity.client === client &&
+      previousIdentity.controller === controller
+    optionIdentityRef.current = { agent, sessionId, client, controller }
     const previous = optionStateRef.current
     const seeded = createStructuredAgentSessionOptionState(agent ?? 'codex', optionCatalog)
     // Retain account answers across fence changes instead of reviving placeholders.
     const kept =
-      sameSession && previous.catalogSource !== 'seed' && previous.catalogSource !== null
+      sameSession &&
+      (previous.optionsAnswerPresent ||
+        (previous.catalogSource !== 'seed' && previous.catalogSource !== null))
         ? {
             ...previous,
-            catalogSource: 'host' as const,
             record: cloneStructuredAgentSessionOptionRecord(previous.record),
             pendingId: null,
-            reportedPermissionMode: undefined
+            reportedPermissionMode: undefined,
+            reportedEffort: undefined
           }
         : seeded
     // Keep the chat’s mode visible through provider restarts.
     const next = sameSession ? { ...kept, permissionMode: previous.permissionMode } : kept
-    writes.current = { count: 0, readback: false }
-    optionMutationGeneration.current += 1
-    pendingOptionRef.current = null
+    readEpoch.current += 1
     optionStateRef.current = next
     activeOptionRecordRef.current = next.record
     setOptionState(next)
-  }, [agent, enabled, fence, optionCatalog, sessionId, contextKey, client])
+  }, [
+    agent,
+    enabled,
+    fence,
+    optionCatalog,
+    sessionId,
+    contextKey,
+    client,
+    clientGeneration,
+    controller
+  ])
 
   const [conversationSupport, setConversationSupport] = useState<{
     sessionId: string
@@ -128,7 +157,6 @@ export function useMobileStructuredOptionState(args: {
   const awaitingOptions =
     conversationSupport?.sessionId === sessionId && conversationSupport.fence !== fence
 
-  const readRef = useRef<(() => void) | null>(null)
   const receiveCatalog = (
     catalog: AgentSessionModelCatalogResult | null,
     _event: 'demand' | 'progress' | 'settled'
@@ -146,7 +174,14 @@ export function useMobileStructuredOptionState(args: {
     }
   }
   useEffect(() => {
-    if (!client || !sessionId || !enabled || !optionCatalog) {
+    // Read each turn and after provider start; before start only a resumed chat has model evidence.
+    if (
+      !client ||
+      !sessionId ||
+      !enabled ||
+      !optionCatalog ||
+      (providerStarting && newLaunch && !sendSelection)
+    ) {
       return
     }
     let stale = false
@@ -156,13 +191,10 @@ export function useMobileStructuredOptionState(args: {
         if (stale || !isCurrentContext()) {
           return
         }
-        if (writes.current.count) {
-          writes.current.readback = true
-          return
-        }
-        writes.current.readback = false
         const record = activeOptionRecordRef.current
-        const readGeneration = optionMutationGeneration.current
+        const epoch = readEpoch.current
+        const generation = client.getGeneration?.()
+        const completed = controller.captureRead()
         const result = await callAgentSession<AgentSessionOptionsResult>(
           client,
           'agentSession.options',
@@ -178,7 +210,7 @@ export function useMobileStructuredOptionState(args: {
           acceptsImages: result.acceptsImages,
           statesPermissionMode: result.current?.permissionMode !== undefined
         })
-        if (optionMutationGeneration.current !== readGeneration) {
+        if (readEpoch.current !== epoch || client.getGeneration?.() !== generation) {
           return
         }
         setConversationSupport({ sessionId, fence, commands: result.conversationCommands ?? [] })
@@ -188,6 +220,7 @@ export function useMobileStructuredOptionState(args: {
             coherentCatalog
           })
         )
+        controller.retire(completed)
       }).catch(() => undefined)
     }
     readRef.current = request
@@ -198,14 +231,19 @@ export function useMobileStructuredOptionState(args: {
     }
   }, [
     client,
+    clientGeneration,
     newLaunch,
     enabled,
     optionCatalog,
     optionStamp,
+    sendSelection,
+    controller,
     isCurrentContext,
     coherentCatalog,
+    providerStarting,
     sessionId,
     fence,
+    turnId,
     updateOptionState
   ])
 
@@ -214,15 +252,14 @@ export function useMobileStructuredOptionState(args: {
     conversationSupport,
     imageSupport,
     awaitingOptions,
-    writes,
-    readRef,
+    controller,
+    reread,
     receiveCatalog,
     isCurrentContext,
     optionState,
     optionStateRef,
     activeOptionRecordRef,
-    pendingOptionRef,
-    optionMutationGeneration,
+    providerStarting,
     updateOptionState
   }
 }

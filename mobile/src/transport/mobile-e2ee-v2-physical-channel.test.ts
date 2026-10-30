@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
+import { setFlagsFromString } from 'node:v8'
+import { runInNewContext } from 'node:vm'
 import {
   encodeMobileE2EEV2Transcript,
   validateMobileE2EEV2Handshake,
@@ -22,6 +24,8 @@ import {
   MobileE2EEV2PhysicalChannel,
   type MobileE2EEV2Socket
 } from './mobile-e2ee-v2-physical-channel'
+import { MobileRelayE2eeLink } from './mobile-relay-e2ee-link'
+import { connectMobileRelayForPairing } from './mobile-relay-physical-client'
 
 const desktop = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(1))
 const client = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(2))
@@ -235,6 +239,38 @@ describe('mobile E2EE v2 physical channel', () => {
     ).toEqual(new Uint8Array([2]))
   })
 
+  it('ignores queued and newly arriving frames after disposal', async () => {
+    let releaseBinary!: (bytes: Uint8Array) => void
+    const pendingBinary = new Promise<Uint8Array>((resolve) => (releaseBinary = resolve))
+    const ctx = setup(async () => pendingBinary)
+    await authenticate(ctx)
+    ctx.events.length = 0
+
+    const binary = serverFrame(new Uint8Array([7]), 'binary', 1n, ctx.schedule)
+    const text = serverFrame(new TextEncoder().encode('retired'), 'text', 2n, ctx.schedule)
+    const first = ctx.channel.handleMessage({ delayedBlob: true })
+    const second = ctx.channel.handleMessage(Buffer.from(text).toString('base64'))
+    await Promise.resolve()
+    ctx.channel.dispose()
+
+    const successor = setup(async () => null)
+    await authenticate(successor)
+    successor.events.length = 0
+    const live = serverFrame(new TextEncoder().encode('successor'), 'text', 1n, successor.schedule)
+    await successor.channel.handleMessage(Buffer.from(live).toString('base64'))
+    expect(successor.events).toEqual(['text:successor'])
+    expect(successor.onError).not.toHaveBeenCalled()
+
+    releaseBinary(binary)
+    await Promise.all([first, second])
+    expect(ctx.events).toEqual([])
+
+    const late = serverFrame(new TextEncoder().encode('late'), 'text', 1n, ctx.schedule)
+    await ctx.channel.handleMessage(Buffer.from(late).toString('base64'))
+    expect(ctx.events).toEqual([])
+    expect(ctx.onError).not.toHaveBeenCalled()
+  })
+
   it('bounds the unified outbound queue and reports a wedged link', async () => {
     const ctx = setup(async () => null)
     await authenticate(ctx)
@@ -254,4 +290,176 @@ describe('mobile E2EE v2 physical channel', () => {
     expect(ctx.sent).toHaveLength(2)
     expect(vi.getTimerCount()).toBe(0)
   })
+})
+
+class RetentionSocket {
+  readonly OPEN = 1
+  readyState = 1
+  bufferedAmount = 0
+  sent: (string | Uint8Array)[] = []
+  onopen: (() => void) | null = null
+  onmessage: ((event: { data: unknown }) => void) | null = null
+  onclose: ((event: { code: number }) => void) | null = null
+  onerror: (() => void) | null = null
+
+  send(frame: string | Uint8Array): void {
+    this.sent.push(frame)
+  }
+
+  close(): void {
+    this.readyState = 3
+  }
+
+  receive(data: unknown): void {
+    this.onmessage?.({ data })
+  }
+}
+
+function nextInboundTurn(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve))
+}
+
+// Why: enabling the flag at runtime lets these retention checks run in every Node pool without --expose-gc.
+setFlagsFromString('--expose-gc')
+const collectGarbage: unknown = runInNewContext('gc')
+
+async function collectInboundPayloads(): Promise<void> {
+  if (typeof collectGarbage !== 'function') {
+    throw new Error('Retention tests require V8 gc')
+  }
+  for (let round = 0; round < 3; round += 1) {
+    await nextInboundTurn()
+    collectGarbage()
+  }
+}
+
+function receiveRetainedPayload(socket: RetentionSocket): WeakRef<Uint8Array> {
+  const payload = new Uint8Array(1024 * 1024)
+  socket.receive(payload)
+  return new WeakRef(payload)
+}
+
+describe('relay inbound payload disposal', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it.each([
+    ['link', 'close'],
+    ['link', 'failure'],
+    ['pairing', 'close'],
+    ['pairing', 'failure']
+  ] as const)(
+    'releases queued %s payloads on %s while conversion is blocked',
+    async (owner, mode) => {
+      const ctx = setup(async () => null)
+      const socket = new RetentionSocket()
+      const relay = {
+        v: 1 as const,
+        directorUrl: 'https://relay.onorca.dev',
+        cellUrl: 'https://relay-c1.onorca.dev',
+        assignmentEpoch: 7,
+        relayHostId: 'AbCdEf0123_-xyZ9',
+        inviteToken: 'abcdefghijklmnopqrstuvwxyzABCDEFGH012345678',
+        inviteExpiresAt: Date.now() + 300_000,
+        e2eeFraming: 2 as const
+      }
+      const createSession = vi
+        .spyOn(MobileE2EEV2ClientSession, 'create')
+        .mockReturnValueOnce(ctx.session)
+      const createSocket = (): WebSocket => {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Both real transports only send/close and assign event handlers on this socket.
+        return socket as unknown as WebSocket
+      }
+      const onAuthenticated = vi.fn()
+      const transport =
+        owner === 'link'
+          ? new MobileRelayE2eeLink({
+              endpoint: relay,
+              credential: relay.inviteToken,
+              expectedCredentialKind: 'invite',
+              deviceToken: 'valid-token',
+              desktopPublicKeyB64: Buffer.from(desktop.publicKey).toString('base64'),
+              onAuthenticated,
+              onText: vi.fn(),
+              onBinary: vi.fn(),
+              onError: vi.fn(),
+              createSocket
+            })
+          : connectMobileRelayForPairing({
+              relay,
+              deviceToken: 'valid-token',
+              desktopPublicKeyB64: Buffer.from(desktop.publicKey).toString('base64'),
+              createSocket
+            })
+      createSession.mockRestore()
+      socket.onopen?.()
+      socket.receive(
+        JSON.stringify({
+          type: 'relay-hello',
+          ok: true,
+          credentialKind: 'invite',
+          leaseExpiresAt: Date.now() + 60_000
+        })
+      )
+      await nextInboundTurn()
+      socket.receive(JSON.stringify(ctx.ready))
+      await nextInboundTurn()
+      const authenticated = serverFrame(
+        new TextEncoder().encode(
+          JSON.stringify({
+            type: 'e2ee_authenticated',
+            v: 2,
+            transcriptHashB64: ctx.session.transcriptHashB64
+          })
+        ),
+        'text',
+        0n,
+        ctx.schedule
+      )
+      socket.receive(Buffer.from(authenticated).toString('base64'))
+      await nextInboundTurn()
+      if (transport instanceof MobileRelayE2eeLink) {
+        expect(onAuthenticated).toHaveBeenCalledOnce()
+      } else {
+        const reply = transport.sendRequest('status.get')
+        await nextInboundTurn()
+        const response = serverFrame(
+          new TextEncoder().encode(
+            JSON.stringify({
+              id: 'relay-pair-1',
+              ok: true,
+              result: { path: 'relay' },
+              _meta: { runtimeId: 'retention' }
+            })
+          ),
+          'text',
+          1n,
+          ctx.schedule
+        )
+        socket.receive(Buffer.from(response).toString('base64'))
+        await expect(reply).resolves.toMatchObject({ ok: true, result: { path: 'relay' } })
+      }
+      let release = (_buffer: ArrayBuffer): void => {}
+      const blocked = new Promise<ArrayBuffer>((resolve) => {
+        release = resolve
+      })
+      socket.receive({ arrayBuffer: () => blocked })
+      await nextInboundTurn()
+      const refs = Array.from({ length: 8 }, () => receiveRetainedPayload(socket))
+      try {
+        await collectInboundPayloads()
+        expect(refs.filter((ref) => ref.deref() !== undefined)).toHaveLength(8)
+        if (mode === 'close') {
+          transport.close()
+        } else {
+          socket.onclose?.({ code: 1006 })
+        }
+        await collectInboundPayloads()
+        expect(refs.filter((ref) => ref.deref() !== undefined)).toHaveLength(0)
+      } finally {
+        release(new ArrayBuffer(0))
+        await nextInboundTurn()
+        transport.close()
+      }
+    }
+  )
 })

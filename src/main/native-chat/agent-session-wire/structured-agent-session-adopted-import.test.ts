@@ -1,5 +1,4 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-
 import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -16,6 +15,7 @@ import { openTestAttachConversation } from './structured-agent-session-attach-te
 import { performAttach, type AttachFlowInput } from './structured-agent-session-attach-flow'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import * as legacyImport from '../agent-session-journal/journal-legacy-import'
+import { writeCodexHistoryFixture } from '../agent-session-journal/codex-history-test-fixture'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
@@ -97,6 +97,11 @@ function attachParams(
     runtimeKind: 'native',
     adopt: {
       providerHandle: codexProviderHandle(THREAD),
+      source: {
+        providerSessionId: THREAD,
+        workspaceCwd: '/workspace',
+        conversationStore: root ?? undefined
+      },
       ...(transcriptPath ? { transcriptPath } : {})
     },
     ...overrides
@@ -296,7 +301,7 @@ describe('adopting a provider conversation on create', () => {
     expect(sessionAdapter.acquire).toHaveBeenCalledTimes(1)
   })
 
-  it.each(['missing', 'oversized', 'empty', 'invalid', 'source-less'] as const)(
+  it.each(['missing', 'oversized', 'empty', 'metadata-only', 'invalid', 'source-less'] as const)(
     'refuses %s source before claiming a conversation',
     async (kind) => {
       root = await mkdtemp(join(tmpdir(), 'orca-adopt-preflight-'))
@@ -304,6 +309,11 @@ describe('adopting a provider conversation on create', () => {
       if (kind === 'oversized') {
         await writeCodexRollout(transcriptPath, 'original turn')
         await appendFile(transcriptPath, 'x'.repeat(16 * 1024 * 1024 + 1))
+      } else if (kind === 'metadata-only') {
+        await writeFile(
+          transcriptPath,
+          `${JSON.stringify({ type: 'session_meta', payload: { id: THREAD, cwd: '/workspace' } })}\n`
+        )
       } else if (kind === 'empty' || kind === 'invalid') {
         await writeFile(transcriptPath, kind === 'empty' ? '' : 'not json\n')
       }
@@ -388,14 +398,23 @@ describe('adopting a provider conversation on create', () => {
 
   it('prepares a valid source once before acquisition and imports those exact items', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-adopt-once-'))
-    const transcriptPath = join(root, 'rollout.jsonl')
-    await writeCodexRollout(transcriptPath, 'prepared before acquiring')
+    const parent = await writeCodexHistoryFixture(root, '01a17c7f-6f58-7a73-b87a-a8702ff2da17', [
+      'sky'
+    ])
+    const { filePath: transcriptPath } = await writeCodexHistoryFixture(
+      root,
+      THREAD,
+      ['prepared before acquiring'],
+      parent.position
+    )
+    await appendFile(transcriptPath, '{"ordinal":')
     const prepare = vi.spyOn(legacyImport, 'prepareLegacyTranscriptImport')
     const sessionAdapter = adapter()
     const acquire = sessionAdapter.acquire
     sessionAdapter.acquire = vi.fn(async (input) => {
       expect(prepare).toHaveBeenCalledTimes(1)
       await rm(transcriptPath)
+      await rm(parent.filePath)
       return acquire(input)
     })
     const result = await attach(transcriptPath, sessionAdapter, async ({ journal }) =>
@@ -406,6 +425,9 @@ describe('adopting a provider conversation on create', () => {
       throw new Error('attach failed')
     }
     expect(JSON.stringify(result.value.page.items)).toContain('prepared before acquiring')
+    expect(JSON.stringify(result.value.page.items)).toContain('sky answer')
+    expect(result.value.page.items).toHaveLength(4)
+    expect(sessionAdapter.dispatch).not.toHaveBeenCalled()
     expect(prepare).toHaveBeenCalledTimes(1)
   })
 })

@@ -4,6 +4,7 @@ import type { ProjectGroup } from '../../../shared/project-group-types'
 import { deriveGlobalWindowsRuntimeDefaultFromLegacySettings } from '../../../shared/project-execution-runtime'
 import { normalizeTaskProviderSettings } from '../../../shared/task-providers'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../shared/auto-rename-branch-from-work-settings'
+import { normalizePluginSystemEnabledDefaultOn } from '../../../shared/plugins/plugin-system-settings'
 import {
   addMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddress,
@@ -35,6 +36,7 @@ export type PreparedLoadedProfileSettings = {
     GlobalSettings,
     'autoRenameBranchFromWork' | 'autoRenameBranchFromWorkDefaultedOn'
   >
+  migratedPluginSystemEnabled: ReturnType<typeof normalizePluginSystemEnabledDefaultOn>
   migratedTerminalCursorStyle: Pick<
     GlobalSettings,
     'terminalCursorStyle' | 'terminalCursorStyleDefaultedToBlock'
@@ -87,6 +89,10 @@ export function prepareLoadedProfileSettings(
   const migratedAutoRenameBranchFromWork = normalizeAutoRenameBranchFromWorkDefaultOn(
     parsed.settings
   )
+  const migratedPluginSystemEnabled = normalizePluginSystemEnabledDefaultOn(parsed.settings)
+  if (parsed.settings?.pluginSystemDefaultedOn !== true) {
+    markNeedsSave()
+  }
   const migratedTerminalCursorStyle = normalizeTerminalCursorStyleDefault(parsed.settings)
   if (
     parsed.settings?.terminalCursorStyle !== migratedTerminalCursorStyle.terminalCursorStyle ||
@@ -258,6 +264,7 @@ export function prepareLoadedProfileSettings(
     migratedPortugueseUiLanguage,
     migratedExperimentalActivity,
     migratedAutoRenameBranchFromWork,
+    migratedPluginSystemEnabled,
     migratedTerminalCursorStyle,
     migratedTerminalLineHeight,
     terminalRightClickToPasteDefaultedForPlatform,

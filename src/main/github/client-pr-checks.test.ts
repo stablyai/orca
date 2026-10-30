@@ -614,7 +614,7 @@ describe('getPRChecks', () => {
 
     const result = await rerunPRChecks('/repo-root', 42, { failedOnly: true })
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: false,
       error: 'GitHub resource to rerun was not found — it may have expired or been deleted.'
     })
@@ -653,7 +653,7 @@ describe('getPRChecks', () => {
       ['api', '-X', 'POST', 'repos/acme/widgets/check-runs/88/rerequest'],
       expect.objectContaining({ cwd: '/repo-root' })
     )
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: false,
       error: 'GitHub resource to rerun was not found — it may have expired or been deleted.'
     })

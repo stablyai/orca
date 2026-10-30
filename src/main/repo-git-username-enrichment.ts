@@ -1,6 +1,7 @@
 import { getRepoExecutionHostId } from '../shared/execution-host'
 import type { Repo } from '../shared/repo-types'
 import { resolveLocalGitUsernameDetailed } from './git/git-username'
+import { blockedWslDistroForPath, wslDistroForPath } from './wsl/wsl-unc-access-gate'
 
 type RepoUsernameStore = {
   getRepos(): Repo[]
@@ -45,6 +46,10 @@ async function enrichRepoGitUsernamesInBackground(
   )
   let changed = false
   for (const repo of candidates) {
+    // E9: git on a stopped distro's repo boots it; leave it unattempted so a later pass retries.
+    if (wslDistroForPath(repo.path) && (await blockedWslDistroForPath(repo.path))) {
+      continue
+    }
     attemptedLocations.add(getRepoLocationKey(repo))
     const { username, authoritative } = await resolveLocalGitUsernameDetailed(repo.path)
     // Preserve cached usernames on failure; authoritative empty results clear stale accounts.

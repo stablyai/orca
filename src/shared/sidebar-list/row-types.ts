@@ -40,6 +40,12 @@ export type GroupHeaderRow = {
   projectGroup?: ProjectGroup | { id: null; name: 'Ungrouped'; tabOrder: number }
   projectGroupDepth?: number
   hostId?: ExecutionHostId
+  /** A project checked out on several hosts: each host's own registration, one header per host section. */
+  hostRepos?: ReadonlyMap<ExecutionHostId, Repo>
+  /** On a host copy: the project's anchor registration, which project order keys on; `repo` is this host's. */
+  anchorRepo?: Repo
+  /** An earlier host section already drew this header; order and drag key on that first copy. */
+  repeated?: true
   hostWorktreeCounts?: ReadonlyMap<ExecutionHostId, number>
   hostWorktreeIds?: ReadonlyMap<ExecutionHostId, readonly string[]>
   worktreeIds?: readonly string[]
@@ -119,3 +125,8 @@ export type Row =
   | NewExternalWorktreesInboxRow
   | PendingCreationRow
   | FolderWorkspaceRow
+
+/** The registration a project header reorders by, or none for a repeated copy. */
+export function getHeaderDragRepo(row: GroupHeaderRow): Repo | undefined {
+  return row.repeated ? undefined : (row.anchorRepo ?? row.repo)
+}

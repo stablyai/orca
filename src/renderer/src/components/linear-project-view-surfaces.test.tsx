@@ -65,7 +65,7 @@ describe('Linear project view surfaces', () => {
         ]}
         hasMore
         count={50}
-        label="projects"
+        kind="projects"
         onLoadMore={onLoadMore}
       />
     )
@@ -105,7 +105,7 @@ describe('Linear project view surfaces', () => {
     expect(onUseProjectIssues).toHaveBeenCalledWith(project)
     expect(onSelectProject).toHaveBeenCalledTimes(1)
 
-    const openButton = container.querySelectorAll('button[aria-label="Open Compiler issues"]')[1]
+    const openButton = container.querySelector('button[aria-label="Open Compiler in Linear"]')
     act(() => openButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
     expect(onOpenProject).toHaveBeenCalledWith(project)
     expect(onSelectProject).toHaveBeenCalledTimes(1)

@@ -11,10 +11,15 @@ import {
   adoptsCliConversations,
   CLI_CONVERSATION_ADOPTING_AGENTS
 } from '../../../../shared/structured-agent-cli-conversation-adoption'
-import { STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import {
+  STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RESUME_LINKED_CWD_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
 import { resolveAiVaultTargetWorkspacePath } from './ai-vault-session-launch-target'
 import {
   resolveAiVaultSessionResumeInChatEligibility,
+  aiVaultSessionResumeInChatWorkspaceMatters,
+  aiVaultSessionCwdMatchesWorkspace,
   type AiVaultResumeInChatEligibility
 } from './ai-vault-session-resume-in-chat'
 import {
@@ -41,6 +46,11 @@ export function resolveAiVaultSessionResumeInChatForWorkspace(args: {
   const targetOwner = targetWorkspaceId
     ? resolveStructuredAgentSessionOwner(state, targetWorkspaceId)
     : null
+  const aliasDependent =
+    args.session.agent !== 'pi' &&
+    aiVaultSessionResumeInChatWorkspaceMatters(args.session.agent) &&
+    !aiVaultSessionCwdMatchesWorkspace(args.session.cwd, targetWorkspacePath)
+  const capabilities = targetOwner ? resolveHostCapabilities(state, targetOwner) : null
   return resolveAiVaultSessionResumeInChatEligibility({
     session: args.session,
     targetWorkspaceId,
@@ -60,9 +70,10 @@ export function resolveAiVaultSessionResumeInChatForWorkspace(args: {
           settings: args.settings
         })
       ) &&
-      resolveHostCapabilities(state, targetOwner)?.includes(
-        STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY
-      ) === true
+      (!aliasDependent ||
+        capabilities?.includes(STRUCTURED_AGENT_SESSION_RESUME_LINKED_CWD_RUNTIME_CAPABILITY) ===
+          true) &&
+      capabilities?.includes(STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY) === true
   })
 }
 

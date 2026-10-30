@@ -185,8 +185,6 @@ export function createBrowserPageStateActions(
         }
         // Keep document URL blank at navigation sink too; committing grants here leaks to persistence, publication and address bar.
         const nextPageUrl = page.docLocation ? ORCA_BROWSER_BLANK_URL : nextUrl
-        // Saved feedback survives navigation; its old document coordinates do not.
-        const shouldInvalidateGeometry = normalizeUrl(page.url) !== nextPageUrl
         const nextPages = (s.browserPagesByWorkspace[workspace.id] ?? []).map((entry) =>
           entry.id === pageId
             ? {
@@ -200,12 +198,6 @@ export function createBrowserPageStateActions(
             : entry
         )
         const nextWorkspace = mirrorWorkspaceFromActivePage(workspace, nextPages)
-        const nextBrowserAnnotationMarkerIdsByPageId = shouldInvalidateGeometry
-          ? { ...s.browserAnnotationMarkerIdsByPageId }
-          : s.browserAnnotationMarkerIdsByPageId
-        if (shouldInvalidateGeometry) {
-          delete nextBrowserAnnotationMarkerIdsByPageId[pageId]
-        }
         return {
           browserPagesByWorkspace: {
             ...s.browserPagesByWorkspace,
@@ -216,10 +208,7 @@ export function createBrowserPageStateActions(
             [workspace.worktreeId]: (s.browserTabsByWorktree[workspace.worktreeId] ?? []).map(
               (tab) => (tab.id === workspace.id ? nextWorkspace : tab)
             )
-          },
-          ...(shouldInvalidateGeometry
-            ? { browserAnnotationMarkerIdsByPageId: nextBrowserAnnotationMarkerIdsByPageId }
-            : {})
+          }
         }
       })
       get().setBrowserPageCertificateFailure(pageId, null)

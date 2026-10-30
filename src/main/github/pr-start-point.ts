@@ -11,6 +11,7 @@ import {
   githubPullRequestHeadLocalRef,
   reviewHeadRemoteRefComponent
 } from '../../shared/review-head-tracking-ref'
+import { reviewStartPointFailure } from '../../shared/review-start-point-failure-copy'
 
 type GitExec = (args: string[]) => Promise<{ stdout: string; stderr: string }>
 
@@ -71,12 +72,12 @@ export async function resolveGitHubPrStartPoint(
       args.issueSourcePreference
     )
     if (!item || item.type !== 'pr') {
-      return { error: `PR #${args.prNumber} not found.` }
+      return reviewStartPointFailure('github.prNotFound', { number: args.prNumber })
     }
     headRefName = (item.branchName ?? '').trim()
     baseRefName = (item.baseRefName ?? '').trim()
     if (!headRefName) {
-      return { error: `PR #${args.prNumber} has no head branch.` }
+      return reviewStartPointFailure('github.prHeadBranchMissing', { number: args.prNumber })
     }
     if (item.isCrossRepository === true) {
       isCrossRepository = true
@@ -142,7 +143,7 @@ export async function resolveGitHubPrStartPoint(
       const localRef = await args.fetchPullRequestHeadRef(remote, args.prNumber)
       const sha = await resolveDurableHeadSha(localRef)
       if (!sha) {
-        return { error: `Could not resolve fork PR #${args.prNumber} head after fetch.` }
+        return reviewStartPointFailure('github.forkHeadUnresolved', { number: args.prNumber })
       }
       return { baseBranch: sha }
     } catch (error) {
@@ -162,9 +163,10 @@ export async function resolveGitHubPrStartPoint(
           return { baseBranch: localSha }
         }
       }
-      return {
-        error: `Failed to fetch ${pullRef}: ${message.split('\n')[0]}`
-      }
+      return reviewStartPointFailure('fetchFailed', {
+        ref: pullRef,
+        detail: message.split('\n')[0]
+      })
     }
   }
 
@@ -208,9 +210,10 @@ export async function resolveGitHubPrStartPoint(
       // Return the actionable pull-head fallback failure instead of the earlier branch miss.
       return result
     }
-    return {
-      error: `Failed to fetch ${remote}/${headRefName}: ${message.split('\n')[0]}`
-    }
+    return reviewStartPointFailure('fetchFailed', {
+      ref: `${remote}/${headRefName}`,
+      detail: message.split('\n')[0]
+    })
   }
 
   const remoteRef = `${remote}/${headRefName}`
@@ -219,10 +222,10 @@ export async function resolveGitHubPrStartPoint(
     const { stdout } = await args.gitExec(['rev-parse', '--verify', remoteRef])
     headSha = stdout.trim()
   } catch {
-    return { error: `Remote ref ${remoteRef} does not exist after fetch.` }
+    return reviewStartPointFailure('remoteRefMissing', { ref: remoteRef })
   }
   if (!headSha) {
-    return { error: `Empty SHA resolving PR #${args.prNumber} head.` }
+    return reviewStartPointFailure('github.headShaEmpty', { number: args.prNumber })
   }
   const compareBaseFetched = await fetchCompareBaseRef()
 

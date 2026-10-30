@@ -11,6 +11,7 @@ import { isRepoSearchQueryTooLarge, searchRepos } from '@/lib/repo-search'
 import { cn } from '@/lib/utils'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import { projectHostCountLabel } from '@/components/project-host-count-label'
 import type { Repo } from '../../../../shared/repo-types'
 import {
   getAutomationProjectGroupForRepo,
@@ -264,7 +265,7 @@ export default function AutomationProjectCombobox({
               const hasHostMenu = hasMultipleHostsInGroup(group.sources)
               const hostLabel = showHostLabels ? getRepoHostLabel?.(selectedSource) : null
               const detail = hasHostMenu
-                ? `${hostLabel?.trim() || getRepoExecutionHostId(selectedSource)} · ${group.sources.length} hosts`
+                ? `${hostLabel?.trim() || getRepoExecutionHostId(selectedSource)} · ${projectHostCountLabel(group.sources.length)}`
                 : getRepoDetail(selectedSource, hostLabel)
               return (
                 <div

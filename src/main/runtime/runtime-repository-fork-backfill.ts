@@ -9,6 +9,7 @@ import { getRepoUpstream } from '../github/client'
 import { detectGitHubAvatarIcon } from '../repo-icon-autodetect'
 import type { RuntimeStore } from './runtime-store-contract'
 import { isWslMoveRepoBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { blockedWslDistroForPath, wslDistroForPath } from '../wsl/wsl-unc-access-gate'
 
 export class RuntimeRepositoryForkBackfill {
   private started = false
@@ -42,6 +43,10 @@ export class RuntimeRepositoryForkBackfill {
           getRepoSshConnectionId(repo) ||
           isWslMoveRepoBlocked(repo)
         ) {
+          continue
+        }
+        // E9: gh/Git on a stopped distro's repo boots it; upstream stays unset for the next pass.
+        if (wslDistroForPath(repo.path) && (await blockedWslDistroForPath(repo.path))) {
           continue
         }
         let upstream: GitHubOwnerRepo | null

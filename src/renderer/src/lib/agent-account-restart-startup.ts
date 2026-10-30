@@ -1,6 +1,9 @@
+import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
 import { useAppStore, type AppState } from '@/store'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import {
+  resolveRuntimeHostReportedPlatform,
+  resolveRuntimeHostTerminalWindowsShell,
   resolveSshHostReportedPlatform,
   resolveAgentResumeLaunchTarget,
   type AgentResumeLaunchTarget
@@ -100,6 +103,7 @@ export function resolveAgentAccountRestartResumeStartup(
       ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
       : {}),
     platform: resumeTarget.platform,
+    agentHostPlatform: resumeTarget.agentHostPlatform,
     shell: resumeTarget.shell,
     // Both restart executors spawn in the tab's start folder.
     launchCwd:
@@ -145,6 +149,7 @@ export function buildCodexAccountRestartStartup(
     agent: 'codex',
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
     platform: target.platform,
+    agentHostPlatform: target.agentHostPlatform,
     shell: resolveStartupShell(target.platform, target.shell)
   })
   if (!command.ok) {
@@ -167,9 +172,11 @@ function resolveAccountRestartLaunchTarget(
   const repo = worktree
     ? state.repos.find((entry) => repoMatchesHostIdentity(entry, worktree.repoId, executionHostId))
     : null
+  // Why: a folder or nested-SSH workspace on a server runs on its SSH target, not the server.
+  const connectionId = repo?.connectionId ?? getConnectionIdFromState(state, args.worktreeId)
   return resolveAgentResumeLaunchTarget({
     projectRuntime,
-    connectionId: repo?.connectionId,
+    connectionId,
     executionHostId,
     worktreePath: worktree?.path,
     terminalWindowsShell: state.settings?.terminalWindowsShell,
@@ -177,7 +184,10 @@ function resolveAccountRestartLaunchTarget(
     remotePlatform: resolveSshHostReportedPlatform(
       state,
       executionHostId,
-      runtimeEnvironmentIdUnlessTwin(state, args.worktreeId)
-    )
+      runtimeEnvironmentIdUnlessTwin(state, args.worktreeId),
+      connectionId
+    ),
+    runtimeHostPlatform: resolveRuntimeHostReportedPlatform(state, executionHostId),
+    runtimeHostTerminalWindowsShell: resolveRuntimeHostTerminalWindowsShell(state, executionHostId)
   })
 }

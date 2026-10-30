@@ -13,6 +13,7 @@ function bypassCoalescing(event: AgentSessionSubscribeEvent): boolean {
     // Deliver queue lists immediately or the queued response removes Sending before its replacement card arrives.
     event.queuedMessages !== undefined ||
     event.currentRequests !== undefined ||
+    event.batch.removedItemIds.length > 0 ||
     event.batch.items.some((item) => item.body.kind !== 'message' || item.body.role !== 'assistant')
   )
 }
@@ -40,6 +41,7 @@ function mergeBatch(
   const working = hostWorkingAfterStructuredAgentSessionBatch(left.working, right)
   return {
     type: 'batch',
+    ...(left.commandsChanged || right.commandsChanged ? { commandsChanged: true as const } : {}),
     ...(right.commands !== undefined || left.commands !== undefined
       ? { commands: right.commands !== undefined ? right.commands : left.commands }
       : {}),
@@ -47,7 +49,7 @@ function mergeBatch(
     batch: {
       cursor: right.batch.cursor,
       items: [...items.values()],
-      removedItemIds: [...new Set([...left.batch.removedItemIds, ...right.batch.removedItemIds])],
+      removedItemIds: [],
       submissions: [...submissions.values()]
     },
     ...(right.fence !== undefined || left.fence !== undefined

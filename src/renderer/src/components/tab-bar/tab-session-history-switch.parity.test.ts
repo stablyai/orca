@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { makeTabSessionHistoryRow as row } from './tab-session-history-test-fixture'
 import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
@@ -8,20 +9,25 @@ import { makeRepo, makeWorktree } from '../worktree-jump-palette-test-fixtures'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import {
+  STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RESUME_LINKED_CWD_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
 import { resolveAiVaultSessionRowChatActions } from '../right-sidebar/ai-vault-session-chat-action'
 import { useAiVaultPanelSessionResume } from '../right-sidebar/use-ai-vault-panel-session-resume'
+import { resolveAiVaultPanelSessionListRequest } from '../right-sidebar/ai-vault-panel-session-list-request'
 import {
   resolveTabSessionSwitch,
+  lookupTabSessionHistoryRow,
   type TabSessionHistorySubject
 } from './tab-session-history-switch'
+
+const { readLocalCapabilities } = vi.hoisted(() => ({ readLocalCapabilities: vi.fn() }))
 
 // Stage host IPC capabilities only; run the shared panel/tab composition for real.
 vi.mock('@/runtime/local-runtime-capabilities', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  readLocalRuntimeCapabilitiesOrUnknown: () => [
-    STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY
-  ]
+  readLocalRuntimeCapabilitiesOrUnknown: readLocalCapabilities
 }))
 vi.mock('@/lib/agent-session-launch-plan', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -30,32 +36,6 @@ vi.mock('@/lib/agent-session-launch-plan', async (importOriginal) => ({
 
 const WORKTREE_ID = 'repo-1::/repo/wt'
 const SIBLING_ID = 'repo-1::/repo/sibling'
-
-function row(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
-  return {
-    id: 'row-1',
-    executionHostId: 'local',
-    agent: 'claude',
-    sessionId: 'claude-session-1',
-    title: 'Fix the build',
-    cwd: '/repo/wt',
-    branch: 'main',
-    model: null,
-    filePath: '/home/.claude/projects/repo/claude-session-1.jsonl',
-    codexHome: null,
-    createdAt: null,
-    updatedAt: null,
-    modifiedAt: '2026-10-08T00:00:00.000Z',
-    messageCount: 2,
-    totalTokens: 10,
-    previewMessages: [{ role: 'user', text: 'Fix the build', timestamp: null }],
-    queuedMessageCount: 0,
-    subagentTranscriptCount: 0,
-    resumeCommand: 'claude --resume claude-session-1',
-    subagent: null,
-    ...overrides
-  }
-}
 
 function makeState(): AppState {
   useAppStore.setState(useAppStore.getInitialState(), true)
@@ -86,19 +66,25 @@ function panelTargets(state: AppState, session: AiVaultSession) {
       settings: state.settings
     })
   )
-  return resolveAiVaultSessionRowChatActions({
-    session,
-    originalPaneTarget: null,
-    structuredSessionOpen: false,
-    resumeState: result.current.getSessionResumeState(session),
-    resumeInChat: result.current.getSessionResumeInChat(session),
-    searchHit: undefined
-  })
+  return {
+    worktreeInfo: result.current.getSessionWorktreeInfo(session),
+    ...resolveAiVaultSessionRowChatActions({
+      session,
+      originalPaneTarget: null,
+      structuredSessionOpen: false,
+      resumeState: result.current.getSessionResumeState(session),
+      resumeInChat: result.current.getSessionResumeInChat(session),
+      searchHit: undefined
+    })
+  }
 }
 
 const request = { scopePaths: [], executionHostScope: 'local', sessionLimit: 250 } as const
 
 beforeEach(() => {
+  readLocalCapabilities.mockReturnValue([
+    STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY
+  ])
   makeState()
 })
 
@@ -180,40 +166,61 @@ describe('the tab menu offers exactly what the Session History row offers', () =
     expect(resolveTabSessionSwitch(state, emptyChat, subject)).toBeNull()
   })
 
-  it("Switch to Chat in the conversation's own folder workspace", () => {
-    useAppStore.setState({
-      folderWorkspaces: [
-        {
-          id: 'folder-1',
-          projectGroupId: 'group-1',
-          name: 'Notes',
-          folderPath: '/work/notes',
-          executionHostId: 'local',
-          linkedTask: null,
-          comment: '',
-          isArchived: false,
-          isUnread: false,
-          isPinned: false,
-          sortOrder: 0,
-          lastActivityAt: 1,
-          createdAt: 1,
-          updatedAt: 1
-        }
-      ]
-    })
-    const state = useAppStore.getState()
-    const session = row({ cwd: '/work/notes' })
-    const panel = panelTargets(state, session)
-
-    expect(panel.resumeInNewChatWorkspaceId).toBe(folderWorkspaceKey('folder-1'))
-    expect(
-      resolveTabSessionSwitch(state, session, {
+  it.each([true, false])(
+    'symlinked folder panel/tab parity with linked-cwd support=%s and another workspace active',
+    async (linkedCwd) => {
+      readLocalCapabilities.mockReturnValue([
+        STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
+        ...(linkedCwd ? [STRUCTURED_AGENT_SESSION_RESUME_LINKED_CWD_RUNTIME_CAPABILITY] : [])
+      ])
+      useAppStore.setState({
+        folderWorkspaces: [
+          {
+            id: 'folder-1',
+            projectGroupId: 'group-1',
+            name: 'Notes',
+            folderPath: '/var/notes',
+            executionHostId: 'local',
+            linkedTask: null,
+            comment: '',
+            isArchived: false,
+            isUnread: false,
+            isPinned: false,
+            sortOrder: 0,
+            lastActivityAt: 1,
+            createdAt: 1,
+            updatedAt: 1
+          }
+        ]
+      })
+      const state = useAppStore.getState()
+      const session = row({ cwd: '/private/var/notes', cwdAliases: ['/var/notes'] })
+      const panel = panelTargets(state, session)
+      const subject: TabSessionHistorySubject = {
         kind: 'cli',
         agent: 'claude',
         providerSessionId: session.sessionId,
-        workspaceId: WORKTREE_ID,
-        request
+        workspaceId: folderWorkspaceKey('folder-1'),
+        request: resolveAiVaultPanelSessionListRequest(state, folderWorkspaceKey('folder-1'))
+      }
+      const list = vi.fn(async () => ({ sessions: [session], issues: [], scannedAt: '' }))
+      const found = await lookupTabSessionHistoryRow(subject, list, {
+        requestToken: 'symlink',
+        isCancelled: () => false
       })
-    ).toEqual({ action: 'resume-in-new-chat', worktreeId: folderWorkspaceKey('folder-1') })
-  })
+      expect(list).toHaveBeenCalledWith(expect.objectContaining({ scopePaths: ['/var/notes'] }))
+      expect(found).toBe(session)
+
+      expect(list).toHaveBeenCalledTimes(1)
+      expect(panel.worktreeInfo?.worktreeId).toBe(folderWorkspaceKey('folder-1'))
+      expect(panel.resumeInNewChatWorkspaceId).toBe(
+        linkedCwd ? folderWorkspaceKey('folder-1') : null
+      )
+      expect(found && resolveTabSessionSwitch(state, found, subject)).toEqual(
+        linkedCwd
+          ? { action: 'resume-in-new-chat', worktreeId: folderWorkspaceKey('folder-1') }
+          : null
+      )
+    }
+  )
 })

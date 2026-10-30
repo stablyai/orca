@@ -15,6 +15,7 @@ import { structuredAgentSessionPayloadFingerprint } from './structured-agent-ses
 export type StructuredAgentSessionSendControl = {
   delivery?: 'queue-if-active'
   options?: Readonly<Record<string, string>>
+  selection?: Readonly<Record<string, string>>
   usageLimitContinuationOfTurnItemId?: string
 }
 
@@ -29,6 +30,7 @@ export function agentSessionSendControlFields(
   return {
     ...(send.delivery ? { delivery: send.delivery } : {}),
     ...(send.options ? { options: send.options } : {}),
+    ...(send.selection !== undefined ? { selection: send.selection } : {}),
     ...(send.usageLimitContinuationOfTurnItemId
       ? { usageLimitContinuationOfTurnItemId: send.usageLimitContinuationOfTurnItemId }
       : {})
@@ -117,11 +119,12 @@ export function structuredAgentSessionSendBody(
 
 export function pickedSkillsInText(
   text: string,
-  skills: readonly AgentJournalSkillRef[]
+  skills: readonly AgentJournalSkillRef[],
+  sigils: readonly ('$' | '/')[] = ['$']
 ): AgentJournalSkillRef[] {
   const seen = new Set<string>()
   return skills.filter((skill) => {
-    if (seen.has(skill.path) || !textNamesSkill(text, skill.name)) {
+    if (seen.has(skill.path) || !sigils.some((sigil) => textNamesSkill(text, skill.name, sigil))) {
       return false
     }
     seen.add(skill.path)
@@ -129,11 +132,14 @@ export function pickedSkillsInText(
   })
 }
 
-function textNamesSkill(text: string, name: string): boolean {
-  const token = `$${name}`
+function textNamesSkill(text: string, name: string, sigil: '$' | '/'): boolean {
+  const token = `${sigil}${name}`
   for (let at = text.indexOf(token); at !== -1; at = text.indexOf(token, at + 1)) {
     // Match Codex mention boundaries: $review, ends at review.
-    if (!/[\w:-]/u.test(text.charAt(at + token.length))) {
+    if (
+      (sigil !== '/' || at === 0 || /\s/u.test(text.charAt(at - 1))) &&
+      !/[\w:-]/u.test(text.charAt(at + token.length))
+    ) {
       return true
     }
   }

@@ -444,9 +444,13 @@ describe('getPRForBranch', () => {
 
     const pr = await getPRForBranch('/repo-root', 'feature/test', 99)
 
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['api', 'repos/acme/widgets/pulls/99'], {
-      cwd: '/repo-root'
-    })
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      ['api', 'repos/acme/widgets/pulls/99', '--include'],
+      {
+        cwd: '/repo-root'
+      }
+    )
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
     expect(pr).toBeNull()
   })
@@ -477,9 +481,13 @@ describe('getPRForBranch', () => {
 
     const pr = await getPRForBranch('/repo-root', 'feature/test', 99)
 
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['api', 'repos/acme/widgets/pulls/99'], {
-      cwd: '/repo-root'
-    })
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      ['api', 'repos/acme/widgets/pulls/99', '--include'],
+      {
+        cwd: '/repo-root'
+      }
+    )
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
     expect(pr).toBeNull()
   })
@@ -505,9 +513,13 @@ describe('getPRForBranch', () => {
       ],
       { cwd: '/repo-root' }
     )
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['api', 'repos/acme/widgets/pulls/99'], {
-      cwd: '/repo-root'
-    })
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      ['api', 'repos/acme/widgets/pulls/99', '--include'],
+      {
+        cwd: '/repo-root'
+      }
+    )
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
     expect(pr).toBeNull()
   })
@@ -662,9 +674,13 @@ describe('getPRForBranch', () => {
       ],
       { cwd: '/repo-root' }
     )
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['api', 'repos/acme/widgets/pulls/99'], {
-      cwd: '/repo-root'
-    })
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      ['api', 'repos/acme/widgets/pulls/99', '--include'],
+      {
+        cwd: '/repo-root'
+      }
+    )
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
     expect(pr).toMatchObject({
       number: 99,

@@ -181,6 +181,15 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings([])
   },
   {
+    id: 'view.plugins',
+    title: 'Open Plugins',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'plugins', 'extensions', 'marketplace'],
+    // Why: mirrors VS Code's Extensions view chord.
+    defaultBindings: platformBindings(['Mod+Shift+X'])
+  },
+  {
     id: 'sidebar.left.toggle',
     title: 'Toggle Sidebar',
     group: 'Global',

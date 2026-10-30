@@ -10,8 +10,10 @@ const {
   detectInstalledAgentsWithShellPathHydrationMock,
   detectRemoteWindowsTerminalCapabilitiesMock,
   refreshShellPathAndDetectAgentsMock,
-  runPreflightCheckMock
+  runPreflightCheckMock,
+  assertWslDistroRunningForExecMock
 } = vi.hoisted(() => ({
+  assertWslDistroRunningForExecMock: vi.fn(async (_distro?: string | null) => {}),
   detectInstalledAgentsWithShellPathHydrationMock: vi.fn(),
   detectRemoteWindowsTerminalCapabilitiesMock: vi.fn(),
   refreshShellPathAndDetectAgentsMock: vi.fn(),
@@ -23,6 +25,11 @@ vi.mock('../../../preflight/agent-detection', () => ({
   detectRemoteWindowsTerminalCapabilities: detectRemoteWindowsTerminalCapabilitiesMock,
   refreshShellPathAndDetectAgents: refreshShellPathAndDetectAgentsMock,
   runPreflightCheck: runPreflightCheckMock
+}))
+
+// The running gate is real on Windows CI; each case states whether the distro runs.
+vi.mock('../../../wsl/wsl-background-exec-gate', () => ({
+  assertWslDistroRunningForExec: assertWslDistroRunningForExecMock
 }))
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
@@ -70,7 +77,10 @@ describe('preflight RPC methods', () => {
     // An older client sends no workspace and keeps the host-default probe.
     expect(resolveAgentDetectionHost).toHaveBeenNthCalledWith(1, undefined, undefined)
     expect(resolveAgentDetectionHost).toHaveBeenNthCalledWith(2, undefined, undefined)
-    expect(detectInstalledAgentsWithShellPathHydrationMock).toHaveBeenCalledWith(undefined)
+    expect(detectInstalledAgentsWithShellPathHydrationMock).toHaveBeenCalledWith(
+      undefined,
+      undefined
+    )
     expect(refreshShellPathAndDetectAgentsMock).toHaveBeenCalledWith(undefined)
     expect(detected).toMatchObject({ ok: true, result: ['codex'] })
     expect(refreshed).toMatchObject({
@@ -112,10 +122,51 @@ describe('preflight RPC methods', () => {
       makeRequest('preflight.detectAgents', { worktreeId: 'repo-ssh::/srv/w' })
     )
 
-    expect(detectInstalledAgentsWithShellPathHydrationMock).toHaveBeenCalledWith({ projectRuntime })
+    expect(detectInstalledAgentsWithShellPathHydrationMock).toHaveBeenCalledWith(
+      { projectRuntime },
+      undefined
+    )
     expect(wsl).toMatchObject({ ok: true, result: ['codex'] })
     expect(detectInstalledAgentsWithShellPathHydrationMock).toHaveBeenCalledTimes(1)
     expect(ssh).toMatchObject({ ok: false, error: { message: SSH_HOST_NOT_SERVED_MESSAGE } })
+  })
+
+  it("refuses a paired client's detection in a stopped WSL distro without probing it (E9)", async () => {
+    const projectRuntime = {
+      status: 'resolved',
+      runtime: {
+        kind: 'wsl',
+        hostPlatform: 'wsl',
+        projectId: 'p1',
+        distro: 'Ubuntu',
+        reason: 'project-override',
+        cacheKey: 'p1:wsl:Ubuntu'
+      }
+    } as const
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    assertWslDistroRunningForExecMock.mockRejectedValueOnce(
+      new Error("WSL distro 'Ubuntu' is not running.")
+    )
+    detectInstalledAgentsWithShellPathHydrationMock.mockClear()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these methods read only resolveAgentDetectionHost and getRuntimeId from the runtime.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      resolveAgentDetectionHost: () => ({ kind: 'local', context: { projectRuntime } }) as const
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: PREFLIGHT_METHODS })
+    try {
+      const response = await dispatcher.dispatch(
+        makeRequest('preflight.detectAgents', {
+          worktreeId: 'repo-1::\\\\wsl.localhost\\Ubuntu\\w'
+        })
+      )
+      expect(response).toMatchObject({ ok: false })
+      expect(assertWslDistroRunningForExecMock).toHaveBeenLastCalledWith('Ubuntu')
+      expect(detectInstalledAgentsWithShellPathHydrationMock).not.toHaveBeenCalled()
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
   })
 
   it('forwards a repo target before workspace creation and rejects malformed ids', async () => {

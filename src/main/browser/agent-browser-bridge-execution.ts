@@ -10,7 +10,11 @@ import {
   pageUnavailableMessageForSession
 } from './agent-browser-bridge-process'
 import { translateResult } from './agent-browser-bridge-result'
-import { AGENT_BROWSER_BATCH_ARGS, agentBrowserBatchInput } from './agent-browser-batch-command'
+import {
+  AGENT_BROWSER_BATCH_ARGS,
+  agentBrowserBatchInput,
+  agentBrowserResultMintsRefs
+} from './agent-browser-batch-command'
 import { AgentBrowserBridgeTabs } from './agent-browser-bridge-tabs'
 import { assertRemoteCliBrowserAccess } from '../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
@@ -112,6 +116,13 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
         translated.error.code,
         session.webContentsId
       )
+    }
+
+    if (agentBrowserResultMintsRefs(translated.result)) {
+      const browserPageId = this.resolveTabIdSafe(session.webContentsId)
+      if (browserPageId) {
+        this.recordRefPage(browserPageId)
+      }
     }
 
     if (needsInit) {

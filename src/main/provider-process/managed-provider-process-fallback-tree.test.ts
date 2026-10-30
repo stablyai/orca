@@ -57,7 +57,11 @@ describe('fallback teardown never claims descendants it did not observe', () => 
       os.taskkill.mockResolvedValueOnce(taskkill)
       const closing = rootOnly('win32').close()
       await vi.advanceTimersByTimeAsync(1_500)
-      await expect(closing).resolves.toEqual({ root: 'exited', tree })
+      await expect(closing).resolves.toEqual({
+        root: 'exited',
+        tree,
+        ...(taskkill ? { killDelivered: true } : {})
+      })
       expect(os.taskkill).toHaveBeenCalledOnce()
     }
   )

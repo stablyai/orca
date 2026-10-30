@@ -15,8 +15,7 @@ type LaneState = Pick<
   | 'activeRepoId'
   | 'activeWorktreeId'
   | 'folderWorkspaces'
-  | 'endpointProjects'
-  | 'endpointProjectHostSetups'
+  | 'projects'
   | 'repos'
   | 'runtimeEnvironments'
   | 'settings'
@@ -58,21 +57,7 @@ function laneState(args?: {
       terminalWindowsWslDistro: args?.terminalWindowsWslDistro ?? null
     },
     repos: [{ id: 'repo1', path: 'C:\\code\\app' }],
-    endpointProjectHostSetups: [
-      {
-        id: 'repo1',
-        projectId: 'proj1',
-        repoId: 'repo1',
-        hostId: 'local',
-        path: 'C:/code/app',
-        displayName: 'app',
-        setupMethod: 'legacy-repo',
-        setupState: 'ready',
-        createdAt: 0,
-        updatedAt: 0
-      }
-    ],
-    endpointProjects: args?.projectWslDistro
+    projects: args?.projectWslDistro
       ? [
           {
             id: 'proj1',

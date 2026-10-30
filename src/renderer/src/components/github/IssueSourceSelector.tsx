@@ -4,7 +4,8 @@ import type { IssueSourcePreference } from '../../../../shared/repo-types'
 import { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { Trans } from 'react-i18next'
+import { i18n, translate } from '@/i18n/i18n'
 
 export type IssueSourceSelectorProps = {
   /** Unset preferences behave as auto; untouched repos omit the stored key. */
@@ -126,8 +127,20 @@ export default function IssueSourceSelector({
     <Tooltip>
       <TooltipTrigger asChild>{group}</TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={4} className="max-w-[260px]">
-        {translate('auto.components.github.IssueSourceSelector.d6aeb2012b', 'Showing issues from')}{' '}
-        <span className="font-mono">{effective === 'upstream' ? upstreamSlug : originSlug}</span>
+        <Trans
+          i18n={i18n}
+          defaults={translate(
+            'auto.components.github.IssueSourceSelector.showingIssuesFromRepo',
+            'Showing issues from <repo/>'
+          )}
+          components={{
+            repo: (
+              <span className="font-mono">
+                {effective === 'upstream' ? upstreamSlug : originSlug}
+              </span>
+            )
+          }}
+        />
       </TooltipContent>
     </Tooltip>
   )

@@ -148,7 +148,8 @@ vi.mock('electron', () => ({
   app: {
     getPath: getPathMock,
     once: vi.fn()
-  }
+  },
+  webContents: { fromId: () => undefined }
 }))
 
 vi.mock('../../shared/runtime-environment-store', () => ({
@@ -255,6 +256,8 @@ vi.mock('../workspace-ports', () => ({
   registerWorkspacePortHandlers: registerWorkspacePortHandlersMock
 }))
 
+vi.mock('../link-preview', () => ({ registerLinkPreviewHandlers: vi.fn() }))
+
 vi.mock('../localhost-worktree-labels', () => ({
   registerLocalhostWorktreeLabelHandlers: registerLocalhostWorktreeLabelHandlersMock
 }))
@@ -323,6 +326,14 @@ vi.mock('../wsl-host-handlers', () => ({
 
 vi.mock('../wsl-move-handlers', () => ({
   registerWslMoveHandlers: vi.fn()
+}))
+
+vi.mock('../wsl-move-orchestrator-wiring', () => ({
+  registerWslMoveOrchestrator: vi.fn()
+}))
+
+vi.mock('../wsl-drive-project-handlers', () => ({
+  registerWslDriveProjectHandlers: vi.fn()
 }))
 
 vi.mock('../ephemeral-vm', () => ({
@@ -627,7 +638,7 @@ describe('registerCoreHandlers', () => {
     })
     expect(registerEmulatorFrameStreamHandlersMock).toHaveBeenCalled()
     expect(registerEmulatorVideoStreamHandlersMock).toHaveBeenCalled()
-    expect(registerFilesystemHandlersMock).toHaveBeenCalledWith(store)
+    expect(registerFilesystemHandlersMock).toHaveBeenCalledWith(store, undefined)
     expect(registerRuntimeHandlersMock).toHaveBeenCalledWith(runtime)
     expect(registerRuntimeEnvironmentHandlersMock).toHaveBeenCalledWith(store)
     expect(registerEphemeralVmHandlersMock).toHaveBeenCalledWith(store, undefined)

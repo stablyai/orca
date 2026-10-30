@@ -202,6 +202,23 @@ describe('AgentBrowserBridge', () => {
     await expect(bridge.snapshot()).rejects.toThrow('Command failed')
   })
 
+  it('drops the daemon lifecycle agent-browser adds to every result', async () => {
+    // Real agent-browser 0.39.4 batch reply.
+    const reply =
+      '[{"command":["click","@e2"],"error":null,"result":{"clicked":"@e2","lifecycle":{"effectiveLaunch":{"browserLaunched":true,"engine":"chrome","launchHash":520248349195465926},"launched":false,"relaunchedBrowser":false,"restartedBackground":false,"restoreStatus":"not_configured","reused":true,"saveStatus":"not_attempted"}},"success":true}]'
+    answerAgentBrowserCommands(execFileMock, stdinWrites, (_command, cb) => cb(null, reply, ''))
+    await expect(bridge.click('@e2')).resolves.toEqual({ clicked: '@e2' })
+  })
+
+  // agent-browser 0.39.2+ wording when it cannot re-resolve a ref by role and name.
+  it.each([
+    'Stale ref for role=button name=Approve cannot be recovered: several elements now match. Run snapshot again and use a fresh ref.',
+    'Could not locate element with role=link name=Back to basic'
+  ])('reports a ref whose element is gone as stale: %s', async (message) => {
+    failWith(message)
+    await expect(bridge.click('@e2')).rejects.toMatchObject({ code: 'browser_stale_ref' })
+  })
+
   it('returns browser_error with truncated output for malformed JSON', async () => {
     execFileMock.mockImplementation(
       (_bin: string, _args: string[], _opts: unknown, cb: ExecFileCallback) => {

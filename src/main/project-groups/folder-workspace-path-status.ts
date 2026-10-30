@@ -8,6 +8,7 @@ import { getProjectGroupSubtreeIds } from '../../shared/project-groups'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
+import { blockedWslDistroForPath } from '../wsl/wsl-unc-access-gate'
 
 type FolderWorkspacePathStatusStore = {
   getRepos: () => Repo[]
@@ -111,6 +112,11 @@ async function statFolderPath(
     return { path, exists: false, reason: 'unavailable' }
   }
 
+  // A stat of a stopped distro's \\wsl.localhost folder boots it (E9): unknown, never missing.
+  // A user act on the distro (runAsWslUserAct) passes and may start it.
+  if (await blockedWslDistroForPath(path)) {
+    return { path, exists: false, reason: 'unavailable' }
+  }
   try {
     const stats = await statLocalPath(path)
     return stats.isDirectory()

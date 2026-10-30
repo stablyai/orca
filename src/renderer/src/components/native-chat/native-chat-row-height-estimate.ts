@@ -5,7 +5,7 @@ import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-c
 import {
   NATIVE_CHAT_USER_MESSAGE_FOLDED_PX,
   nativeChatUserMessageFolds
-} from '../../../../shared/native-chat-user-message-fold'
+} from '../../../../shared/native-chat/transcript/native-chat-user-message-fold'
 
 export type NativeChatRowContentMetrics = {
   role: NativeChatMessage['role']

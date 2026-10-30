@@ -17,6 +17,7 @@ import type { AgentSessionStoreState } from './agent-session-store-state'
 export type AgentSessionAcquisitionExitProof =
   | 'exit-proven'
   | 'root-exit-observed'
+  | 'kill-delivered'
   | 'processless'
   | 'unproven'
 
@@ -95,7 +96,7 @@ export function settleFailedAgentSessionPostAcquisitionAttachment(
           lastRenewedAt: args.now,
           handoffOperationId: null,
           deathEvidence: {
-            kind: 'exit-observed',
+            kind: args.exitProof === 'kill-delivered' ? 'kill-delivered' : 'exit-observed',
             detail:
               args.exitProof === 'root-exit-observed'
                 ? 'the provider process exited; its descendants were not proven gone'
@@ -159,6 +160,13 @@ function acquisitionDeathEvidence(
   const proof = { observedAt, ownerFence }
   if (exitProof === 'processless') {
     return { kind: 'pid-absent', detail: 'reservation failed before spawn', ...proof }
+  }
+  if (exitProof === 'kill-delivered') {
+    return {
+      kind: 'kill-delivered',
+      detail: 'termination reached the conversation writer',
+      ...proof
+    }
   }
   if (exitProof === 'root-exit-observed') {
     return {

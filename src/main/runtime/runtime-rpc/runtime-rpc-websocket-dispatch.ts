@@ -254,6 +254,23 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
               }
             : undefined,
         mobileRelayHosts: this.mobileRelayHostCatalog ?? undefined,
+        // Only an authenticated desktop socket can say which installation it is.
+        peerDesktops:
+          device.scope === 'runtime' && authenticatedSocket
+            ? {
+                list: (clientInstanceId) =>
+                  this.declaredDesktopClients.peers(
+                    { connectionId: authenticatedSocket.connectionId, clientInstanceId },
+                    (deviceId) => this.deviceRegistry?.getDevice(deviceId) ?? null
+                  ),
+                declare: (clientInstanceId) =>
+                  this.declaredDesktopClients.declare(
+                    authenticatedSocket.connectionId,
+                    device.deviceId,
+                    clientInstanceId
+                  )
+              }
+            : undefined,
         delegatedMobileDevices:
           device.scope === 'runtime'
             ? { sync: (phones) => this.syncDelegatedMobileDevices(device.deviceId, phones) }

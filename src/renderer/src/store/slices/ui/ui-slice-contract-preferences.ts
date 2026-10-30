@@ -94,10 +94,16 @@ export type UISlicePreferences = {
   _worktreeCardModeDefaulted: boolean
   setWorktreeCardMode: (mode: WorktreeCardMode) => void
   setWorktreeCardProperties: (properties: readonly WorktreeCardProperty[]) => void
+  showAgentModels: boolean
+  setShowAgentModels: (show: boolean) => void
   agentActivityDisplayMode: AgentActivityDisplayMode
   setAgentActivityDisplayMode: (mode: AgentActivityDisplayMode) => void
   workspaceStatuses: WorkspaceStatusDefinition[]
   setWorkspaceStatuses: (statuses: WorkspaceStatusDefinition[]) => void
+  /** Each paired runtime host's own columns, keyed by environment id; never persisted locally. */
+  hostWorkspaceStatuses: Readonly<Record<string, readonly WorkspaceStatusDefinition[]>>
+  fetchHostWorkspaceStatuses: (environmentId: string) => Promise<void>
+  clearHostWorkspaceStatuses: (environmentIds: readonly string[]) => void
   workspaceBoardOpacity: number
   setWorkspaceBoardOpacity: (opacity: number) => void
   workspaceBoardColumnWidth: number

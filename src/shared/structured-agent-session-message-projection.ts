@@ -12,7 +12,7 @@ import {
   keepStoppedSendsInSendOrder,
   placeStoppedSends,
   withStopRowsAfterStoppedSends
-} from './native-chat-stopped-before-start'
+} from './native-chat/native-chat-stopped-before-start'
 import { compareNativeChatTranscriptMessages } from './native-chat-transcript-projection'
 import type { NativeChatMessage } from './native-chat-types'
 import { dispatchWasWithdrawn } from './structured-agent-session-dispatch-rejection'

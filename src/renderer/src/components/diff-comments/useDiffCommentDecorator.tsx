@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { createRoot, type Root } from 'react-dom/client'
 import { getCommentBodyLayoutLineCount } from '@/lib/comment-body-line-count'
+import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import {
   installDiffCommentAddButtonOverlay,
@@ -60,7 +61,10 @@ export function useDiffCommentDecorator({
   worktreeId,
   comments,
   commentableLineNumbers,
-  addButtonLabel = 'Add note for the AI',
+  addButtonLabel = translate(
+    'auto.components.diff.comments.DiffCommentPopover.f6c449191e',
+    'Add note for the AI'
+  ),
   pendingCommentTarget = null,
   addNoteShortcutEnabled = false,
   onCreateComment,

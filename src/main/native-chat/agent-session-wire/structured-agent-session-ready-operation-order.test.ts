@@ -225,10 +225,11 @@ it.each(['append', 'wait'] as const)(
     }
     const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
     const append = vi.spyOn(journal, 'appendItem')
-    const withdraw = vi.spyOn(journal, 'appendTombstone')
+    const withdraw = vi.spyOn(journal, 'withdrawGoalObjective')
+    const original = journal.appendClaimingAttachments.bind(journal)
+    const appendGoal = vi.spyOn(journal, 'appendClaimingAttachments')
     if (phase === 'append') {
-      const original = journal.appendItem.bind(journal)
-      append.mockImplementationOnce(async (...args) => {
+      appendGoal.mockImplementationOnce(async (...args) => {
         await held.promise
         return original(...args)
       })
@@ -241,7 +242,7 @@ it.each(['append', 'wait'] as const)(
     })
     const result = goal.catch((error: unknown) => error)
     await (phase === 'append'
-      ? vi.waitFor(() => expect(append).toHaveBeenCalledOnce())
+      ? vi.waitFor(() => expect(appendGoal).toHaveBeenCalledOnce())
       : host.collaboratorsForTests().serialize(SESSION, async () => {}))
     const stopEnvelope = envelope('agentSession.cancel', {})
     const stopped = host.cancel(CALLER, { envelope: stopEnvelope })

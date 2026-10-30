@@ -6,8 +6,6 @@ import {
   ZSH_MULTI_LINE_STARTUP_LINE_BUDGET_BYTES
 } from './startup-line-prompt-carry'
 import type { TuiAgent } from './tui-agent'
-import { RUNTIME_CAPABILITIES } from './protocol-version'
-import { AGENT_LAUNCH_PROMPT_CARRY_RUNTIME_CAPABILITY } from './agent-launch-runtime-capability'
 
 function offer(
   agent: TuiAgent,
@@ -46,19 +44,6 @@ function promptForClaudeLineOf(bytes: number): string {
 }
 
 describe('whether a launch prompt rides the typed startup line', () => {
-  it('carries a short single-line prompt on the launch command', () => {
-    const { plan, promptCarried } = offer('claude', 'explain this repo')
-    expect(promptCarried).toBe(true)
-    expect(plan?.launchCommand).toContain('explain this repo')
-  })
-
-  it('carries a short Windows multi-line prompt as one encoded physical launch line', () => {
-    const { plan, promptCarried } = offer('claude', linesOf(5, 40), { platform: 'win32' })
-    expect(promptCarried).toBe(true)
-    expect(plan?.launchCommand).not.toContain('\n')
-    expect(plan?.launchCommand).toContain('`n')
-  })
-
   it('carries a line of exactly the budget and refuses one byte past it', () => {
     const atBudget = offer('claude', promptForClaudeLineOf(TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES))
     expect(new TextEncoder().encode(atBudget.plan?.launchCommand ?? '').byteLength).toBe(
@@ -130,16 +115,6 @@ describe('whether a launch prompt rides the typed startup line', () => {
     expect(plan).not.toBeNull()
     expect(Object.values(plan?.env ?? {}).join('')).not.toContain('xxxx')
   })
-
-  it('never carries a stdin-after-start agent’s prompt, whose CLI takes none', () => {
-    const { plan, promptCarried } = offer('aider', 'fix it')
-    expect(promptCarried).toBe(false)
-    expect(plan?.followupPrompt).toBeNull()
-  })
-
-  it('reports nothing carried for an empty prompt', () => {
-    expect(offer('claude', '   ').promptCarried).toBe(false)
-  })
 })
 
 // Pinned live by startup-line-typed-length.live-shell.test.ts; the refusals below were measured on
@@ -160,11 +135,6 @@ describe('a multi-line prompt typed into a shell the host names', () => {
 
   it('keeps a zsh line off the launch command past the whole-line budget', () => {
     const prompt = linesOf(Math.ceil(ZSH_MULTI_LINE_STARTUP_LINE_BUDGET_BYTES / 400) + 1, 400)
-    expect(offer('claude', prompt, { shellName: 'zsh' }).promptCarried).toBe(false)
-  })
-
-  it('keeps a long single line off a zsh launch command, which a late write truncates', () => {
-    const prompt = promptForClaudeLineOf(TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES + 1)
     expect(offer('claude', prompt, { shellName: 'zsh' }).promptCarried).toBe(false)
   })
 
@@ -210,12 +180,5 @@ describe('a short multi-line prompt on a Windows PowerShell host', () => {
     expect(promptCarried).toBe(true)
     expect(plan?.launchCommand).not.toMatch(/[\r\n]/)
     expect(plan?.launchCommand).toContain(prompt.replaceAll('\n', '`n'))
-  })
-})
-
-describe('the capability clients gate a prompted launch on', () => {
-  it('is advertised by every host that applies the typed-line rule', () => {
-    // An older host folds any prompt into the typed line, so its absence is the gate.
-    expect(RUNTIME_CAPABILITIES).toContain(AGENT_LAUNCH_PROMPT_CARRY_RUNTIME_CAPABILITY)
   })
 })

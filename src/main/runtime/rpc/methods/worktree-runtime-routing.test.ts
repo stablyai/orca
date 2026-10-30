@@ -1,7 +1,7 @@
 import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
-import type { RpcRequest } from '../core'
+import type { RpcRequest, RpcResponse } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { WORKTREE_METHODS } from './worktree'
 import {
@@ -305,15 +305,16 @@ describe('worktree.rm waits for the delete only for clients that can show it', (
 
   async function dispatchRm(
     runtime: OrcaRuntimeService,
-    clientCapabilities: readonly RuntimeCapability[] | undefined
-  ): Promise<void> {
+    clientCapabilities: readonly RuntimeCapability[] | undefined,
+    params: Record<string, unknown> = {}
+  ): Promise<RpcResponse> {
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
-    await dispatcher.dispatch(
+    return dispatcher.dispatch(
       {
         id: 'req-1',
         authToken: 'tok',
         method: 'worktree.rm',
-        params: { worktree: 'id:wt-1', hostId: 'local' }
+        params: { worktree: 'id:wt-1', hostId: 'local', ...params }
       },
       { clientCapabilities }
     )
@@ -344,6 +345,33 @@ describe('worktree.rm waits for the delete only for clients that can show it', (
       expect.not.objectContaining({ waitForBackgroundRemoval: true })
     )
   })
+
+  it('waits for a caller that asks for the outcome, such as the CLI (#35135)', async () => {
+    const runtime = makeRuntime()
+    vi.mocked(runtime.removeManagedWorktree).mockRejectedValue(
+      new Error('working trees containing submodules cannot be moved or removed')
+    )
+
+    const response = await dispatchRm(runtime, undefined, { waitForBackgroundRemoval: true })
+
+    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith(
+      'id:wt-1',
+      expect.objectContaining({ waitForBackgroundRemoval: true })
+    )
+    expect(response).toMatchObject({
+      ok: false,
+      error: { message: expect.stringContaining('containing submodules') }
+    })
+  })
+
+  it('does not call an accepted, still-running delete removed', async () => {
+    const runtime = makeRuntime()
+    vi.mocked(runtime.removeManagedWorktree).mockResolvedValue({ removing: true })
+
+    const response = await dispatchRm(runtime, [])
+
+    expect(response).toMatchObject({ ok: true, result: { removed: false, removing: true } })
+  })
 })
 
 describe('worktree.rm host qualification', () => {
@@ -373,6 +401,7 @@ describe('worktree.rm host qualification', () => {
     runHooks: false,
     allowUnverifiedPtyStop: false,
     allowFailedArchiveHook: false,
+    waitForBackgroundRemoval: false,
     ...(hostId ? { hostId } : {})
   })
 
@@ -580,6 +609,7 @@ describe('worktree.rm waivers travel on their own fields', () => {
     runHooks: false,
     allowUnverifiedPtyStop: false,
     allowFailedArchiveHook: false,
+    waitForBackgroundRemoval: false,
     hostId: 'local',
     ...overrides
   })

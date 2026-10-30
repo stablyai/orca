@@ -161,6 +161,23 @@ describe('setupGuestShortcutForwarding', () => {
     guestOffMock = vi.fn()
   })
 
+  it.each([undefined, { 'view.plugins': ['Mod+Shift+X'] }])(
+    'leaves the Plugins shortcut and repeats to the guest with keybindings %j',
+    (keybindings) => {
+      setupGuestShortcutForwarding({
+        browserTabId,
+        guest: makeGuest(),
+        resolveRenderer: () => makeRenderer(),
+        getKeybindings: () => keybindings
+      })
+
+      const input = { key: 'X', code: 'KeyX', shift: true }
+      expect(triggerBeforeInput(input)).not.toHaveBeenCalled()
+      expect(triggerBeforeInput({ ...input, isAutoRepeat: true })).not.toHaveBeenCalled()
+      expect(rendererSendMock).not.toHaveBeenCalled()
+    }
+  )
+
   it('commits Ctrl+Tab switching from focused guest pages on generic release events', () => {
     setupGuestShortcutForwarding({
       browserTabId,

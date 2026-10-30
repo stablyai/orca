@@ -5,7 +5,7 @@ import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { buildFakeAgentCommandOverride } from './helpers/fake-agent-command-override'
 import { SUPPORTED, createChatOnHost, test } from './helpers/structured-claude-stub'
 import { resolveCliCommand } from '../../src/shared/node-cli-command-resolution'
-import { claudeSessionIdForOrcaSession } from '../../src/main/claude/claude-structured-session-id'
+import { claudeSessionIdForOrcaSession } from '../../src/main/claude/structured/claude-structured-session-id'
 
 type ChatTab = { id: string; entityId: string }
 

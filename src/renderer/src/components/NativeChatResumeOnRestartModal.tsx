@@ -337,7 +337,7 @@ export function NativeChatResumeOccurrenceModal({
                   <span className="block text-xs text-muted-foreground">
                     {translate(
                       'auto.components.NativeChatResumeOnRestartModal.dontAskAgainHint',
-                      'You can turn this off in Settings → Experimental → Chat UI.'
+                      'You can turn this off in Settings → Chat → Behavior.'
                     )}
                   </span>
                 </span>
@@ -386,16 +386,11 @@ export function NativeChatResumeOccurrenceModal({
                       'auto.components.NativeChatResumeOnRestartModal.resuming',
                       'Resuming…'
                     )
-                  : chosen.length === 1
-                    ? translate(
-                        'auto.components.NativeChatResumeOnRestartModal.resumeSelectedOne',
-                        'Resume 1 chat'
-                      )
-                    : translate(
-                        'auto.components.NativeChatResumeOnRestartModal.resumeSelected',
-                        'Resume {{value0}} chats',
-                        { value0: chosen.length }
-                      )}
+                  : translate(
+                      'auto.components.NativeChatResumeOnRestartModal.resumeChats',
+                      'Resume {{count}} chats',
+                      { count: chosen.length, defaultValue_one: 'Resume {{count}} chat' }
+                    )}
               </Button>
             </>
           )}

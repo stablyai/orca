@@ -95,21 +95,26 @@ async function readIssueWithSignal(
 
 export async function getIssueByUuidForAgent(
   id: string,
-  workspaceId?: string | null
+  workspaceId?: string | null,
+  signal?: AbortSignal
 ): Promise<LinearIssueWriteRecord | null> {
-  const entry = getClients(workspaceId)[0]
+  const entry = getClients(workspaceId, signal)[0]
   if (!entry) {
     return null
   }
 
-  return runLinearLookup(entry, async () => {
-    const result = await entry.client.client.rawRequest<
-      LinearIssueByUuidResponse,
-      LinearRawVariables
-    >(ISSUE_BY_UUID_QUERY, { id })
-    const issue = result.data?.issue ?? null
-    return issue ? mapRawIssueWriteRecord(issue) : null
-  })
+  return runLinearLookup(
+    entry,
+    async () => {
+      const result = await entry.client.client.rawRequest<
+        LinearIssueByUuidResponse,
+        LinearRawVariables
+      >(ISSUE_BY_UUID_QUERY, { id })
+      const issue = result.data?.issue ?? null
+      return issue ? mapRawIssueWriteRecord(issue) : null
+    },
+    signal
+  )
 }
 
 export async function getCommentByUuidForAgent(
@@ -139,29 +144,35 @@ export async function getCommentByUuidForAgent(
 
 export async function getAttachmentByUuidForAgent(
   id: string,
-  workspaceId?: string | null
+  workspaceId?: string | null,
+  signal?: AbortSignal
 ): Promise<LinearAttachmentWriteRecord | null> {
-  const entry = getClients(workspaceId)[0]
+  const entry = getClients(workspaceId, signal)[0]
   if (!entry) {
     return null
   }
 
-  return runLinearLookup(entry, async () => {
-    const result = await entry.client.client.rawRequest<
-      LinearAttachmentByUuidResponse,
-      LinearRawVariables
-    >(ATTACHMENT_BY_UUID_QUERY, { id })
-    const attachment = result.data?.attachment
-    return attachment ? mapRawAttachmentWriteRecord(attachment) : null
-  })
+  return runLinearLookup(
+    entry,
+    async () => {
+      const result = await entry.client.client.rawRequest<
+        LinearAttachmentByUuidResponse,
+        LinearRawVariables
+      >(ATTACHMENT_BY_UUID_QUERY, { id })
+      const attachment = result.data?.attachment
+      return attachment ? mapRawAttachmentWriteRecord(attachment) : null
+    },
+    signal
+  )
 }
 
 export async function getIssueCommentThreadRoot(
   issueId: string,
   commentId: string,
-  workspaceId?: string | null
+  workspaceId?: string | null,
+  signal?: AbortSignal
 ): Promise<{ id: string; parentId: string | null } | null> {
-  const comment = await getCommentByUuidForAgent(commentId, workspaceId)
+  const comment = await getCommentByUuidForAgent(commentId, workspaceId, signal)
   if (!comment || comment.issue.id !== issueId) {
     return null
   }

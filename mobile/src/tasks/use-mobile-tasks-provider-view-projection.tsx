@@ -1,11 +1,13 @@
 import type { PickerProjectionModel } from './use-mobile-tasks-picker-projection'
 import { JIRA_FILTER_LABELS } from './mobile-jira-issue-filters'
 import { jiraSiteLabel } from './jira-mobile-connection'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
   type PickerOption,
   githubProjectKey,
   useCallback,
-  useMemo
+  useMemo,
+  useMobileColorScheme
 } from './mobile-tasks-dependencies'
 import {
   GITLAB_FILTER_OPTIONS,
@@ -22,6 +24,8 @@ import {
 } from './mobile-tasks-legacy-foundation'
 
 export function useMobileTasksProviderViewProjection(model: PickerProjectionModel) {
+  const t = useMobileTranslation()
+  const colorScheme = useMobileColorScheme()
   const {
     activeGitHubProject,
     defaultGitHubPreset,
@@ -58,53 +62,70 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     () =>
       githubPresetOptions.map((option) =>
         option.value === defaultGitHubPreset
-          ? { ...option, subtitle: option.subtitle ? `${option.subtitle} · Default` : 'Default' }
+          ? {
+              ...option,
+              subtitle: option.subtitle
+                ? t('tasks.providerViewProjection.defaultSubtitle', '{{subtitle}} · Default', {
+                    subtitle: option.subtitle
+                  })
+                : t('tasks.providerViewProjection.default', 'Default')
+            }
           : option
       ),
-    [defaultGitHubPreset, githubPresetOptions]
+    [defaultGitHubPreset, githubPresetOptions, t]
   )
   const githubPresetLabel =
-    githubPresetOptions.find((preset) => preset.value === githubPreset)?.label ?? 'Open'
+    githubPresetOptions.find((preset) => preset.value === githubPreset)?.label ??
+    t('tasks.providerViewProjection.openState', 'Open')
   const gitlabFilterLabel =
-    GITLAB_FILTER_OPTIONS.find((filter) => filter.value === gitlabFilter)?.label ?? 'Open'
+    GITLAB_FILTER_OPTIONS.find((filter) => filter.value === gitlabFilter)?.label ??
+    t('tasks.providerViewProjection.openState', 'Open')
   const jiraFilterLabel = JIRA_FILTER_LABELS[jiraFilter]
   const jiraSelectedSite =
     jiraConnection.selection && jiraConnection.selection !== 'all'
       ? (jiraConnection.sites.find((site) => site.id === jiraConnection.selection) ?? null)
       : null
-  const jiraSiteChipLabel = jiraSelectedSite ? jiraSiteLabel(jiraSelectedSite) : 'All sites'
+  const jiraSiteChipLabel = jiraSelectedSite
+    ? jiraSiteLabel(jiraSelectedSite)
+    : t('tasks.providerViewProjection.allSites', 'All sites')
   const linearFilterLabel =
-    LINEAR_FILTER_OPTIONS.find((filter) => filter.value === linearFilter)?.label ?? 'All'
+    LINEAR_FILTER_OPTIONS.find((filter) => filter.value === linearFilter)?.label ??
+    t('tasks.providerViewProjection.all', 'All')
   const linearViewLabel =
-    LINEAR_VIEW_OPTIONS.find((option) => option.value === linearViewMode)?.label ?? 'List'
+    LINEAR_VIEW_OPTIONS.find((option) => option.value === linearViewMode)?.label ??
+    t('tasks.providerViewProjection.list', 'List')
   const linearGroupLabel =
-    LINEAR_GROUP_OPTIONS.find((option) => option.value === linearGroupBy)?.label ?? 'No grouping'
+    LINEAR_GROUP_OPTIONS.find((option) => option.value === linearGroupBy)?.label ??
+    t('tasks.providerViewProjection.noGrouping', 'No grouping')
   const linearOrderLabel =
-    LINEAR_ORDER_OPTIONS.find((option) => option.value === linearOrderBy)?.label ?? 'Priority'
+    LINEAR_ORDER_OPTIONS.find((option) => option.value === linearOrderBy)?.label ??
+    t('tasks.providerViewProjection.priority', 'Priority')
   const linearWorkspaceLabel =
     selectedLinearWorkspaceId === 'all'
-      ? 'All workspaces'
+      ? t('tasks.providerViewProjection.allWorkspaces', 'All workspaces')
       : (linearWorkspaces.find((workspace) => workspace.id === selectedLinearWorkspaceId)
           ?.organizationName ??
         linearWorkspaces.find((workspace) => workspace.id === selectedLinearWorkspaceId)
           ?.displayName ??
-        'Workspace')
+        t('tasks.providerViewProjection.workspace', 'Workspace'))
   const linearWorkspaceOptions = useMemo<PickerOption<string>[]>(
     () => [
-      { value: 'all', label: 'All workspaces' },
+      { value: 'all', label: t('tasks.providerViewProjection.allWorkspaces', 'All workspaces') },
       ...linearWorkspaces.map((workspace) => ({
         value: workspace.id,
         label: workspace.organizationName ?? workspace.displayName ?? workspace.id
       }))
     ],
-    [linearWorkspaces]
+    [linearWorkspaces, t]
   )
+  const count = selectedLinearTeamIds.size
   const linearTeamLabel =
-    selectedLinearTeamIds.size === 0 || selectedLinearTeamIds.size === linearTeams.length
-      ? 'All teams'
-      : selectedLinearTeamIds.size === 1
-        ? (linearTeams.find((team) => selectedLinearTeamIds.has(team.id))?.name ?? '1 team')
-        : `${selectedLinearTeamIds.size} teams`
+    count === 0 || count === linearTeams.length
+      ? t('tasks.providerViewProjection.allTeams', 'All teams')
+      : count === 1
+        ? (linearTeams.find((team) => selectedLinearTeamIds.has(team.id))?.name ??
+          t('tasks.providerViewProjection.teams_one', '{{count}} team', { count }))
+        : t('tasks.providerViewProjection.teams_other', '{{count}} teams', { count })
   const effectiveLinearDisplayProperties = useMemo(() => {
     const next = new Set(linearDisplayProperties)
     if (linearGroupBy === 'status') {
@@ -145,7 +166,7 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
   )
   const linearIssueSections = useMemo(
     () => groupSortedLinearIssues(linearIssuesForView, linearGroupBy),
-    [linearGroupBy, linearIssuesForView]
+    [colorScheme, linearGroupBy, linearIssuesForView, t]
   )
   // Preserve FlatList data identity across unrelated renders.
   const linearListEntries = useMemo<LinearListEntry[]>(
@@ -166,15 +187,19 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
       linearGroupBy === 'none'
         ? groupSortedLinearIssues(linearIssuesForView, 'status')
         : linearIssueSections,
-    [linearGroupBy, linearIssueSections, linearIssuesForView]
+    [linearGroupBy, linearIssueSections, linearIssuesForView, t]
   )
   const githubModeLabel =
-    githubMode === 'project' ? 'Projects' : githubKind === 'prs' ? 'PRs' : 'Issues'
+    githubMode === 'project'
+      ? t('tasks.providerViewProjection.projects', 'Projects')
+      : githubKind === 'prs'
+        ? t('tasks.providerViewProjection.pullRequests', 'PRs')
+        : t('tasks.providerViewProjection.issues', 'Issues')
   const activeProjectLabel = githubProjectTable
     ? githubProjectTable.project.title
     : activeGitHubProject
       ? `${activeGitHubProject.owner} #${activeGitHubProject.number}`
-      : 'Choose project'
+      : t('tasks.providerViewProjection.chooseProject', 'Choose project')
   const selectedGitHubProjectViewUrl = githubProjectTable
     ? `${githubProjectTable.project.url}/views/${githubProjectTable.selectedView.number}`
     : null

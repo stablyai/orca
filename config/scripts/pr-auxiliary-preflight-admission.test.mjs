@@ -68,9 +68,11 @@ describe.each(routes)('%s preflight admission', (jobName, changedFile) => {
   const job = workflow.jobs[jobName === 'orcad_browser' ? 'test' : jobName]
   const condition =
     jobName === 'orcad_browser' ? `(${job.if}) && (${chrome.if}) && (${browser.if})` : job.if
+  // Unit shards wait for their plan rather than preflight.
+  const gate = jobName === 'orcad_browser' ? 'unit_plan' : 'preflight'
 
-  it('waits for the detector and physical preflight job', () => {
-    expect(job.needs).toEqual(['code_paths', 'preflight'])
+  it('waits for the detector and its prerequisite job', () => {
+    expect(job.needs).toEqual(['code_paths', gate])
     expect(job.if).toContain('!cancelled()')
     expect(job['continue-on-error']).toBeUndefined()
   })
@@ -105,7 +107,7 @@ describe.each(routes)('%s preflight admission', (jobName, changedFile) => {
             [jobName]: scenario.selected === undefined ? 'true' : (scenario.selected ?? undefined)
           }
         },
-        preflight: {
+        [gate]: {
           result: scenario.preflight === undefined ? 'success' : (scenario.preflight ?? undefined)
         }
       }
@@ -142,7 +144,7 @@ describe.each(routes)('%s preflight admission', (jobName, changedFile) => {
         cancelled: () => false,
         success: () => true,
         inputs: {},
-        needs: { code_paths: { result: 'success', outputs }, preflight: { result: 'success' } }
+        needs: { code_paths: { result: 'success', outputs }, [gate]: { result: 'success' } }
       }
       if (jobName === 'orcad_browser') {
         context.inputs.browser_contract = evaluate(job.with.browser_contract, context)
@@ -385,9 +387,11 @@ function createMobileCiScopeRepository(
     'config/scripts/pr-code-change-scope.mjs',
     'config/scripts/pr-package-test-paths.mjs',
     'config/scripts/pr-layout-oracle-route.mjs',
+    'config/scripts/pr-shell-contract-prefixes.mjs',
     'config/scripts/git-pull-request-diff-base.mjs',
     'config/scripts/pr-e2e-source-routing.mjs',
     'config/scripts/pr-browser-e2e-source-routes.mjs',
+    'config/scripts/pr-editor-preview-e2e-source-routes.mjs',
     'config/scripts/ci-e2e-job-selection.mjs'
   ]) {
     mkdirSync(dirname(join(directory, file)), { recursive: true })

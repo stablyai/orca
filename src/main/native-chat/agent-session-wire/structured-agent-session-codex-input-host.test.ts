@@ -1,3 +1,4 @@
+import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import './structured-agent-session-codex-input-admission.spec'
 import {
   continuingStructuredAgentSessionInput,
@@ -413,35 +414,37 @@ it.each([
     const stoppedIds = Array.from({ length: population }, (_, index) =>
       index === 0 ? 'stopped-words' : `stopped-words-${index}`
     )
-    for (const [index, stopped] of stoppedIds.entries()) {
-      await journal.appendSubmission({
-        clientMessageId: stopped,
-        payloadFingerprint: 'stopped',
-        body: hostTestMessage(index === 0 ? 'words that were not delivered' : stopped),
-        fence: 1,
-        source: { kind: 'user' },
-        origin: 'client',
-        handoverRecorded: true
-      })
-      if (index > 0) {
+    await host.collaboratorsForTests().serialize(SESSION, async () => {
+      for (const [index, stopped] of stoppedIds.entries()) {
+        await journal.appendSubmission({
+          clientMessageId: stopped,
+          payloadFingerprint: 'stopped',
+          body: hostTestMessage(index === 0 ? 'words that were not delivered' : stopped),
+          fence: 1,
+          source: { kind: 'user' },
+          origin: 'client',
+          handoverRecorded: true
+        })
+        if (index > 0) {
+          await journal.resolveDispatch({
+            clientMessageId: stopped,
+            state: 'pending',
+            fence: 1,
+            turnScope: { kind: 'thread' },
+            carries: [stoppedIds[index - 1]!]
+          })
+        }
         await journal.resolveDispatch({
           clientMessageId: stopped,
-          state: 'pending',
+          state: 'rejected',
           fence: 1,
-          turnScope: { kind: 'thread' },
-          carries: [stoppedIds[index - 1]!]
+          ...agentSessionFailureWords(
+            agentSessionFailureFact('cancelled', { neverReachedAgent: true }),
+            { surface: 'rejection' }
+          )
         })
       }
-      await journal.resolveDispatch({
-        clientMessageId: stopped,
-        state: 'rejected',
-        fence: 1,
-        ...agentSessionFailureWords(
-          agentSessionFailureFact('cancelled', { neverReachedAgent: true }),
-          { surface: 'rejection' }
-        )
-      })
-    }
+    })
     const stopped = stoppedIds[0]!
     const refusal = Promise.withResolvers<unknown>()
     codex.routes['turn/steer'] = () => refusal.promise
@@ -459,7 +462,11 @@ it.each([
         void waiting.catch(() => {})
       }
       await vi.waitFor(() =>
-        expect(codex.connections[0]?.calls.some((r) => r.method === 'turn/steer')).toBe(true)
+        expect(
+          codex.connections[0]?.calls.some(
+            (r) => r.method === 'turn/steer' && r.params?.clientUserMessageId === id
+          )
+        ).toBe(true)
       )
       if (mode !== 'auto-before') {
         await pick(mode === 'empty' ? 'ask' : mode)
@@ -753,7 +760,7 @@ async function assertInputRecoveredAfterSnapshot(id: string): Promise<void> {
     probeOwner: async () => ({ outcome: 'pid-absent' })
   })
   try {
-    await restarted.restoreReadableSessions()
+    await openTestChats(restarted)
     const recovered = await restarted.journalSnapshot(SESSION)
     const reopened = restarted.collaboratorsForTests().sessions.get(SESSION)!.journal
     expect(reopened).not.toBe(journal)

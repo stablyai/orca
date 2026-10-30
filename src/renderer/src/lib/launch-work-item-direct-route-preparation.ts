@@ -1,6 +1,6 @@
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AppState } from '@/store/types'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
 import type { RepoHostFields } from '@/lib/agent-detection-target-inventory'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import {
@@ -94,9 +94,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
   sessionOptionsYieldToAgentArgs?: true
   repoConnectionId: string | null
   repoHost: RepoHostFields & { path: string }
-  detectedAgentsPromise: Promise<string[]> | null
   latestStore: AppState
-  settings: AppState['settings']
   draftContent: string
   promptDelivery: 'draft' | 'submit-after-ready'
   launchPlatform?: NodeJS.Platform
@@ -107,17 +105,17 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
   requestId: AgentLaunchRequestId
   preflightPlan?: AgentSessionLaunchPlan
 }): Promise<DirectWorkItemAgentLaunchPreparation> {
-  const launchConnectionId = getConnectionId(args.worktreeId) ?? args.repoConnectionId
   const agentSelection = await resolveDirectWorkItemAgent({
     agentOverride: args.agentOverride,
     agentLaunchPreferences: args.agentLaunchPreferences,
     worktreeId: args.worktreeId,
     repoHost: args.repoHost,
-    launchConnectionId,
-    repoConnectionId: args.repoConnectionId,
-    detectedAgentsPromise: args.detectedAgentsPromise,
     latestStore: args.latestStore
   })
+  const latestStore = agentSelection.store
+  const launchConnectionId =
+    getConnectionIdFromState(latestStore, args.worktreeId) ?? args.repoConnectionId
+  const hostArgs = { ...args, latestStore }
   if (agentSelection.unavailable) {
     return {
       launchConnectionId,
@@ -134,7 +132,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
   const effectiveAgent = agentSelection.agent
   if (effectiveAgent) {
     // Persist the choice so ownership and removal safety see the selected agent.
-    void args.latestStore
+    void latestStore
       .updateWorktreeMeta(args.worktreeId, { createdWithAgent: effectiveAgent })
       .catch(() => {
         // Non-critical: activation still has the explicit startup below.
@@ -150,9 +148,9 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
   const plan =
     effectiveAgent === null
       ? null
-      : args.preflightPlan
+      : args.preflightPlan?.agent === effectiveAgent
         ? adoptAgentSessionLaunchVerdict({ ...args.preflightPlan, worktreeId: args.worktreeId })
-        : args.planLaunch(args.latestStore, {
+        : args.planLaunch(latestStore, {
             requestId: args.requestId,
             agent: effectiveAgent,
             workspace: { kind: 'git-worktree', worktreeId: args.worktreeId, repoId: args.repoId },
@@ -172,9 +170,9 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
         sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
         draftContent: args.draftContent,
         promptDelivery: args.promptDelivery,
-        settings: args.settings,
-        launchHost: resolveDirectWorkItemLaunchHost(args),
-        terminalWindowsShell: resolveDirectWorkItemTabShell(args),
+        settings: latestStore.settings,
+        launchHost: resolveDirectWorkItemLaunchHost(hostArgs),
+        terminalWindowsShell: resolveDirectWorkItemTabShell(hostArgs),
         launchConnectionId
       })
 

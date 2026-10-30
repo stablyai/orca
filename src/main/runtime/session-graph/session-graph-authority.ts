@@ -9,6 +9,12 @@ import {
   getFolderWorkspacePathStatus,
   inferFolderWorkspacePathConnection
 } from '../../project-groups/folder-workspace-path-status'
+import {
+  blockedWslDistroForPath,
+  runAsWslUserAct,
+  wslDistroForPath
+} from '../../wsl/wsl-unc-access-gate'
+import { wslDistroHoldMessage } from '../../../shared/wsl-distro-stopped-hold'
 import type { TerminalWorkspaceLaunchScope } from '../runtime-legacy-worker-terminal-recovery-types'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
@@ -117,8 +123,10 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     return connection.kind === 'ssh' ? connection.connectionId : null
   }
 
+  /** `wslUserAct`: the user's start, so its folder check may start a stopped WSL distro (E9). */
   protected async resolveFolderWorkspaceLaunchScope(
-    selector: string
+    selector: string,
+    options: { wslUserAct?: boolean } = {}
   ): Promise<(TerminalWorkspaceLaunchScope & { folderWorkspace: FolderWorkspace }) | null> {
     const workspace = this.resolveFolderWorkspaceSelector(selector)
     if (!workspace) {
@@ -127,11 +135,24 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
-    const status = await getFolderWorkspacePathStatus(this.store, {
-      scope: 'folder-workspace',
-      folderWorkspaceId: workspace.id
-    })
-    assertFolderWorkspacePathUsable(status)
+    const store = this.store
+    const readStatus = () =>
+      getFolderWorkspacePathStatus(store, {
+        scope: 'folder-workspace',
+        folderWorkspaceId: workspace.id
+      })
+    if (options.wslUserAct) {
+      assertFolderWorkspacePathUsable(
+        await runAsWslUserAct(wslDistroForPath(workspace.folderPath), readStatus)
+      )
+    } else {
+      // Background work holds with Start (a pane's card, an automation's hold), never "unavailable".
+      const blocked = await blockedWslDistroForPath(workspace.folderPath)
+      if (blocked) {
+        throw new Error(wslDistroHoldMessage(blocked.distro, blocked.state))
+      }
+      assertFolderWorkspacePathUsable(await readStatus())
+    }
     return {
       id: folderWorkspaceKey(workspace.id),
       path: workspace.folderPath,
@@ -156,18 +177,25 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     return workspace
   }
 
-  protected async resolveEmulatorWorkspaceId(selector: string): Promise<string> {
-    const folderWorkspace = this.resolveFolderWorkspaceSelector(selector)
+  /** Folder workspaces first, then Git worktrees; project-group folders have no repo row (STA-12562). Launching needs the folder on disk; teardown must not. */
+  protected async resolveWorkspaceSelector(
+    selector: string,
+    options: { requireUsableFolderPath?: boolean } = {}
+  ): Promise<ResolvedWorktree> {
+    const folderWorkspace = options.requireUsableFolderPath
+      ? (await this.resolveFolderWorkspaceLaunchScope(selector))?.folderWorkspace
+      : this.resolveFolderWorkspaceSelector(selector)
     return folderWorkspace
-      ? folderWorkspaceKey(folderWorkspace.id)
-      : (await this.resolveWorktreeSelector(selector)).id
+      ? this.folderWorkspaceToResolvedWorktree(folderWorkspace)
+      : this.resolveGitWorktreeSelector(selector)
   }
 
-  protected async resolveBrowserWorkspace(selector: string): Promise<ResolvedWorktree> {
-    const folderScope = await this.resolveFolderWorkspaceLaunchScope(selector)
-    return folderScope?.folderWorkspace
-      ? this.folderWorkspaceToResolvedWorktree(folderScope.folderWorkspace)
-      : this.resolveWorktreeSelector(selector)
+  protected async resolveEmulatorWorkspaceId(selector: string): Promise<string> {
+    return (await this.resolveWorkspaceSelector(selector)).id
+  }
+
+  protected resolveBrowserWorkspace(selector: string): Promise<ResolvedWorktree> {
+    return this.resolveWorkspaceSelector(selector, { requireUsableFolderPath: true })
   }
 
   /** Reconcile client-hosted pages per paired device; one attached client cannot account for another's pages. */

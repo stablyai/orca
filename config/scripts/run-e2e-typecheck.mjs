@@ -1,9 +1,9 @@
 import { availableParallelism } from 'node:os'
 import { runProcessSync } from '@orca/process-host'
-import { resolvePinnedBunExecutable } from './pinned-bun-executable.mjs'
 import { describeProcessFailure } from './process-failure-message.mjs'
 import { isDirectInvocation } from './script-entry-detection.mjs'
 import {
+  resolveTypecheckBunExecutable,
   resolveTypecheckCommand,
   selectTypecheckCompiler
 } from './run-typecheck-projects-in-parallel.mjs'
@@ -14,7 +14,7 @@ export function runE2eTypecheck({
   root = process.cwd(),
   compiler = 'bun',
   execute = runProcessSync,
-  resolveBunExecutable = (directory) => resolvePinnedBunExecutable(directory, runProcessSync)
+  resolveBunExecutable = resolveTypecheckBunExecutable
 } = {}) {
   const selection = selectTypecheckCompiler(compiler, { root, resolveBunExecutable })
   const command = resolveTypecheckCommand(CONFIG, {

@@ -53,6 +53,18 @@ describe('runtime visible catalog', () => {
     expect(runtimeHiddenRepos(null).size).toBe(0)
   })
 
+  it('hides a moved local row by host while the WSL host row with the same id stays listed', () => {
+    const local = repo('moved')
+    const onHost: Repo = { ...repo('moved'), executionHostId: 'runtime:wsl-ubuntu' }
+    visibleRepos.mockImplementation((store) => store.getRepos().filter((r) => r !== local))
+    const hidden = runtimeHiddenRepos(storeWith([local, onHost], true))
+    expect(hidden.size).toBe(1)
+    expect(hidden.hasRepo(local)).toBe(true)
+    expect(hidden.hasRepo(onHost)).toBe(false)
+    expect(hidden.hasWorktree({ repoId: 'moved', hostId: 'local' })).toBe(true)
+    expect(hidden.hasWorktree({ repoId: 'moved', hostId: 'runtime:wsl-ubuntu' })).toBe(false)
+  })
+
   it('names a host known only through hidden rows, but never this machine', () => {
     visibleRepos.mockImplementation((store) =>
       store.getRepos().filter((r) => r.id !== 'retained' && r.id !== 'moved-local')

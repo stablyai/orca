@@ -309,7 +309,7 @@ describe('runHook', () => {
     }
   })
 
-  it('writes Windows-path setup runners through WSL git when the project runtime targets WSL', async () => {
+  it('writes Windows-path setup runners for a project whose runtime targets WSL', async () => {
     gitExecFileSyncMock.mockReset()
     gitExecFileSyncMock.mockReturnValue('/mnt/c/Users/jinwo/git/orca/.git/orca/setup-runner.sh\n')
 
@@ -338,9 +338,10 @@ describe('runHook', () => {
 
       expect(gitExecFileSyncMock).toHaveBeenCalledWith(
         ['rev-parse', '--git-path', 'orca/setup-runner.sh'],
+        // The lookup is synchronous, so it runs host Git (as on main) rather than a blocking wsl.exe.
         {
           cwd: 'C:\\Users\\jinwo\\git\\orca-feature',
-          wslDistro: 'Ubuntu'
+          hostGit: true
         }
       )
       expect(result.runnerScriptPath).toContain('setup-runner.sh')

@@ -77,8 +77,7 @@ function setupMount() {
       contentRef: { current: 'A (stale cache)' },
       lastSyncedContentRef: { current: 'A (stale cache)' },
       contentSyncModeRef: { current: 'undoable' },
-      isApplyingProgrammaticContentRef: { current: false },
-      isApplyingLargePasteRef: { current: false }
+      isApplyingProgrammaticContentRef: { current: false }
     },
     decorations: {
       markdownDocLinkDecorationsRef: { current: null },
@@ -94,11 +93,13 @@ function setupMount() {
     gutterMenu: {
       setGutterMenuOpen: vi.fn(),
       setGutterMenuPoint: vi.fn(),
-      setGutterMenuLine: vi.fn()
+      setGutterMenuLine: vi.fn(),
+      setGutterMenuSelection: vi.fn()
     }
   }
   const modelText = { value: 'B' }
   const model = {
+    uri: { toString: () => 'file:///repo/file.ts' },
     getValue: () => modelText.value,
     getEOL: () => '\n',
     pushEditOperations: vi.fn(),

@@ -1,11 +1,11 @@
-import { colors } from '../../theme/mobile-theme'
+import { colors, getMobileColorScheme } from '../../theme/mobile-theme'
 import { TEXT_INPUT_FONT_SIZE } from '../../platform/text-input-font-size'
 
 // Read theme at build time; native embeds sheet, page scopes it to editor host.
 // Bind size to text-input seam: native body size, web>=16px floor prevents iOS focus zoom that keyboard seam mistakes for no keyboard; one binding keeps both hosts aligned.
 export function richMarkdownEditorStyle(): string {
   return `    :root {
-      color-scheme: dark;
+      color-scheme: ${getMobileColorScheme()};
       --background: ${colors.bgBase};
       --editor-surface: ${colors.bgBase};
       --foreground: ${colors.textPrimary};
@@ -63,7 +63,7 @@ export function richMarkdownEditorStyle(): string {
     ul { list-style: disc; }
     ol { list-style: decimal; }
     li { margin: 0.15em 0; }
-    li > p { margin: 0; }
+    li > p, ul[data-type="taskList"] > li > div > p { margin: 0; }
     ul[data-type="taskList"] {
       padding-left: 0;
       list-style: none;

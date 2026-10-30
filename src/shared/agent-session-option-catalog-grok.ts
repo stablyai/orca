@@ -3,7 +3,7 @@ import type {
   CatalogModel,
   CatalogOption
 } from './agent-session-option-catalog-types'
-import { removeAgentArgOption } from './agent-session-option-agent-args'
+import { agentChoiceCliApply } from './agent-choice-cli-apply'
 import { parseGrokModelList } from './grok-model-list-probe'
 
 // Omit none (untranslated), minimal and max (never advertised by a grok menu) from the canonical effort ladder.
@@ -29,10 +29,17 @@ function grokEffort(ceiling: 'high' | 'xhigh'): CatalogOption {
       defaultValue: 'high'
     },
     apply: {
-      launchArgs: (value) => ['--reasoning-effort', String(value)],
-      // Why: grok reads both spellings.
-      removeAgentArgs: (tokens) =>
-        removeAgentArgOption('grok', tokens, ['--effort', '--reasoning-effort']),
+      ...agentChoiceCliApply(
+        'grok',
+        [
+          {
+            kind: 'value',
+            names: ['--effort', '--reasoning-effort'],
+            lift: 'separate-and-long-equals'
+          }
+        ],
+        '--reasoning-effort'
+      ),
       midSession: { kind: 'command', build: (value) => `/effort ${String(value)}` }
     }
   }
@@ -67,8 +74,11 @@ export const GROK_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     }
   ],
   modelApply: {
-    launchArgs: (value) => ['-m', String(value)],
-    removeAgentArgs: (tokens) => removeAgentArgOption('grok', tokens, ['-m', '--model']),
+    ...agentChoiceCliApply(
+      'grok',
+      [{ kind: 'value', names: ['-m', '--model'], lift: 'separate-and-long-equals' }],
+      '-m'
+    ),
     // agent-picker replaces the list and never persists a model, preventing -m emission.
     midSession: { kind: 'command', build: (value) => `/model ${String(value)}` }
   },

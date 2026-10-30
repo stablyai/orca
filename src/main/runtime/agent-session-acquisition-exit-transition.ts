@@ -13,7 +13,8 @@ export function recordAgentSessionAcquisitionExit(
   record: AgentSessionRecord,
   receipt: StructuredAgentSessionAcquisitionReceipt,
   expectedFence: number,
-  now: number
+  now: number,
+  deathEvidenceKind: 'exit-observed' | 'kill-delivered' = 'exit-observed'
 ): AgentSessionRecord {
   assertFence(record.lease, expectedFence)
   const lease = record.lease
@@ -46,7 +47,7 @@ export function recordAgentSessionAcquisitionExit(
     handoffOperationId: null,
     lastRenewedAt: now,
     deathEvidence: {
-      kind: 'exit-observed',
+      kind: deathEvidenceKind,
       detail: 'the failed acquisition provider root exited',
       ownerFence: receipt.fence,
       observedAt: now

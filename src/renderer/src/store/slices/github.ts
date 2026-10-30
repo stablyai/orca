@@ -35,6 +35,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (
   issueCache: {},
   checksCache: {},
   commentsCache: {},
+  reviewThreadResolutionsInFlight: {},
   prRefreshSequences: {},
   prRefreshStates: {},
   prVisibleRefreshGeneration: 0,

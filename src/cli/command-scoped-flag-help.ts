@@ -11,6 +11,10 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     url: '--url <url>            Full review or issue URL; pass all URLs positionally or all as repeated --url',
     key: '--key <key>            Opaque key from reference list; repeat for several'
   },
+  'computer get-app-state': {
+    query:
+      '--query <text>        Show only elements whose line contains this text, with their ancestors'
+  },
   'reference find': {
     query: '--query <url-or-key>   Full URL or native issue key such as STA-1234',
     repo: '--repo <selector>      Filter by workspace repository membership',
@@ -18,6 +22,7 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     limit: '--limit <n>            Maximum matching workspaces (default 50)'
   },
   'worktree create': {
+    branch: '--branch <name>        Git branch name to use instead of the prefixed default',
     reference:
       '--reference <url-or-jira-key> Attach an issue/review URL or Jira key; repeat for several',
     'reference-site': '--reference-site <id> Jira site for bare keys; see orca jira connection',

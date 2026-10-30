@@ -41,7 +41,7 @@ const TERMINAL: AgentLaunchModeReceipt = {
   reason: 'user_default',
   detail: 'Started a terminal agent worker, the default for new agent tabs in your settings.'
 }
-const COORDINATOR = { id: 'wt_coord', repoId: 'repo_1' }
+const CREATION_TARGET = { repoSelector: 'repo_1', parentWorktreeId: 'wt_coord' }
 const EXISTING = { id: 'wt_existing', repoId: 'repo_1' }
 
 function fakes() {
@@ -91,7 +91,7 @@ function place(
       ...(args.terminal ? { terminal: args.terminal } : {})
     }),
     requestedWorktree: args.existing ? 'id:wt_existing' : 'new-child',
-    creationWorktree: args.existing ? undefined : COORDINATOR,
+    creationTarget: args.existing ? undefined : CREATION_TARGET,
     resolvedWorktree: args.existing ? EXISTING : undefined,
     mode: args.mode,
     agent: args.terminal ? undefined : 'claude',

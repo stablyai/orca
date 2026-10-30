@@ -54,6 +54,7 @@ vi.mock('./cdp-bridge', () => ({
 
 import { AgentBrowserBridge } from './agent-browser-bridge'
 import {
+  createSucceedWith,
   mockBrowserManager,
   mockWebContents,
   overrideBridgeWebContentsLookup,
@@ -197,5 +198,34 @@ describe('AgentBrowserBridge', () => {
     expect(mouseCalls).toHaveLength(2)
     expect(mouseCalls[0]?.[1]).toMatchObject({ type: 'mousePressed', x: 12, y: 34, modifiers: 4 })
     expect(mouseCalls[1]?.[1]).toMatchObject({ type: 'mouseReleased', x: 12, y: 34, modifiers: 4 })
+  })
+
+  function touchEmulationCalls(wc: ReturnType<typeof mockWebContents>): unknown[] {
+    return wc.debugger.sendCommand.mock.calls
+      .filter((call) => call[0] === 'Emulation.setTouchEmulationEnabled')
+      .map((call) => call[1])
+  }
+
+  it('turns on touch for a mobile device, which agent-browser leaves off', async () => {
+    const wc = mockWebContents(100)
+    webContentsFromIdMock.mockReturnValue(wc)
+    createSucceedWith(execFileMock, stdinWrites)({ device: 'iPhone 15', width: 393, mobile: true })
+
+    await bridge.setDevice('iPhone 15', undefined, 'tab-1')
+
+    expect(touchEmulationCalls(wc)).toEqual([{ enabled: true, maxTouchPoints: 5 }])
+  })
+
+  it('matches touch to the mobile flag of a viewport', async () => {
+    const wc = mockWebContents(100)
+    webContentsFromIdMock.mockReturnValue(wc)
+
+    await bridge.setViewport(390, 844, 3, true, undefined, 'tab-1')
+    await bridge.setViewport(1280, 800, 1, false, undefined, 'tab-1')
+
+    expect(touchEmulationCalls(wc)).toEqual([
+      { enabled: true, maxTouchPoints: 5 },
+      { enabled: false }
+    ])
   })
 })

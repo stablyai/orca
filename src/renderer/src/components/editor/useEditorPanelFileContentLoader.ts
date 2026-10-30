@@ -20,7 +20,10 @@ import {
   type InFlightContentRead
 } from './editor-panel-content-types'
 import type { EditorPanelContentLoadOptions } from './useEditorPanelExternalContentEvents'
-import { migrateRestoredEditorFileOwner } from './migrate-restored-editor-file-owner'
+import {
+  migrateRestoredEditorFileOwner,
+  restoredOwnerMigrationErrorMessage
+} from './migrate-restored-editor-file-owner'
 import { findRestoredEditorWorkspaceRuntimeOwner } from './restored-editor-workspace-runtime-owner'
 import type { RuntimeWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import { editorTabFileAccess, isClientLocalReadOnlyTab } from '@/lib/local-file-access'
@@ -28,8 +31,10 @@ import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-wor
 import { grantRestoredHostFile } from './restored-host-file-grant'
 import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/runtime-environment-revision'
 import { chatScratchFileAddress } from '@/runtime/runtime-chat-scratch-file-address'
+import type { RuntimeFileReadArgs } from '@/runtime/runtime-file-client-types'
 import { stampCleanTabDiskBaseline } from './editor-clean-tab-disk-baseline'
 import { applyEditorFileLoadFailure } from './editor-deleted-file-reload'
+import { translate } from '@/i18n/i18n'
 
 const inFlightFileReads = new Map<string, InFlightContentRead<FileContent>>()
 
@@ -107,11 +112,10 @@ export function useEditorPanelFileContentLoader({
         ): Promise<void> => {
           const migration = await migrateRestoredEditorFileOwner(id, route, runtimeEnvironmentId)
           if (!migration.ok) {
-            throw new Error(
-              migration.reason === 'collision'
-                ? 'The sibling file is already open; close one tab before restoring it.'
-                : 'The sibling file owner changed while the tab was restoring.'
-            )
+            throw new Error(restoredOwnerMigrationErrorMessage(migration.reason))
+          }
+          if (fileReadGenerationRef.current[id] !== generation) {
+            return
           }
           fileReadGenerationRef.current[id] = ++fileReadGenerationCounterRef.current
           setFileContents((prev) => {
@@ -214,25 +218,23 @@ export function useEditorPanelFileContentLoader({
           // Forced reloads must bypass reads started before the external change.
           inFlightFileReads.delete(key)
         }
+        const readArgs: RuntimeFileReadArgs = {
+          target: readTarget,
+          filePath,
+          relativePath: readRelativePath,
+          worktreeId: readWorktreeId,
+          connectionId: readConnectionId,
+          expectedExternalSshTargetId: restoredOpenFile?.externalSshTargetId,
+          includeLocalLogMetadata: isLiveTailLogTab,
+          access,
+          terminalArtifactGrantId: readGrantId,
+          expectedEnvironmentPairingRevision: readGrantPairing,
+          pageOversizedBinary: true,
+          ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
+        }
         let pending = inFlightFileReads.get(key)
         if (!pending) {
-          const promise = readEditorCsvFileContent(
-            {
-              target: readTarget,
-              filePath,
-              relativePath: readRelativePath,
-              worktreeId: readWorktreeId,
-              connectionId: readConnectionId,
-              expectedExternalSshTargetId: restoredOpenFile?.externalSshTargetId,
-              includeLocalLogMetadata: isLiveTailLogTab,
-              access,
-              terminalArtifactGrantId: readGrantId,
-              expectedEnvironmentPairingRevision: readGrantPairing,
-              pageOversizedBinary: true,
-              ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
-            },
-            allowPagedPreview
-          )
+          const promise = readEditorCsvFileContent(readArgs, allowPagedPreview)
           pending = { externalEventGeneration: options?.externalEventGeneration, promise }
           inFlightFileReads.set(key, pending)
           queueMicrotask(() => {
@@ -247,14 +249,20 @@ export function useEditorPanelFileContentLoader({
         }
         if (result.csvPreview && useAppStore.getState().editorDrafts[id] !== undefined) {
           throw new Error(
-            'CSV grew too large for editing. Your draft has been kept; reopen the file to preview it.'
+            translate(
+              'auto.components.editor.EditorPanel.csvGrewTooLarge',
+              'CSV grew too large for editing. Your draft has been kept; reopen the file to preview it.'
+            )
           )
         }
         if (result.csvPreview || restoredOpenFile?.csvPreviewOnly) {
           useAppStore.getState().setCsvPreviewOnly(id, Boolean(result.csvPreview))
         }
         delete fileLoadRetryAttemptsRef.current[id]
-        setFileContents((prev) => ({ ...prev, [id]: result }))
+        // Why: a bytes custom editor pages a binary file on the same route; a grant has no ranged reads.
+        const byteSource = result.isBinary && !readArgs.terminalArtifactGrantId ? readArgs : null
+        const loaded = byteSource ? { ...result, byteSource } : result
+        setFileContents((prev) => ({ ...prev, [id]: loaded }))
         stampCleanTabDiskBaseline(id, result)
       } catch (err) {
         if (fileReadGenerationRef.current[id] !== generation) {

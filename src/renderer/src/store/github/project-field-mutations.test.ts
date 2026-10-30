@@ -6,6 +6,8 @@ import {
 } from '../slices/github-slice-test-harness'
 import { projectViewCacheKey } from './cache-identity'
 import type { GitHubProjectTable } from '../../../../shared/github/project-types'
+import { projectRelationsTableFixture } from '../../../../shared/github/project-relations.test-fixture'
+import { projectRelationCellText } from '../../components/github-project/ProjectCell.test-fixture'
 import type { GitHubProjectMutationResult } from '../../../../shared/github/project-result-types'
 
 const key = projectViewCacheKey('user', 'owner', 1, 'view')
@@ -109,6 +111,16 @@ beforeEach(() => {
 describe('project field writes', () => {
   it('keeps rapid moves optimistic and sends update then clear in order', async () => {
     const store = setup()
+    const table = fixture()
+    table.rows[0].content = projectRelationsTableFixture().rows[0].content
+    store.setState({ projectViewCache: { [key]: { data: table, fetchedAt: 1 } } })
+    const visibleRelations = () => {
+      const row = store.getState().projectViewCache[key]?.data?.rows[0]
+      if (!row) {
+        throw new Error('Expected cached row')
+      }
+      return projectRelationCellText(row)
+    }
     const first = deferred()
     mockApi.gh.updateProjectItemField.mockReturnValueOnce(first.promise)
     mockApi.gh.clearProjectItemField.mockResolvedValueOnce({ ok: true })
@@ -116,14 +128,17 @@ describe('project field writes', () => {
       .getState()
       .updateProjectFieldValue(key, 'row', 'status', { kind: 'single-select', optionId: 'done' })
     expect(field(store)).toMatchObject({ optionId: 'done', name: 'Done', color: 'PURPLE' })
+    expect(visibleRelations()).toEqual(['#12 +2 more', '1/2 (50%)'])
     const clear = store.getState().clearProjectFieldValue(key, 'row', 'status')
     expect(field(store)).toBeUndefined()
+    expect(visibleRelations()).toEqual(['#12 +2 more', '1/2 (50%)'])
     await vi.waitFor(() => expect(mockApi.gh.updateProjectItemField).toHaveBeenCalledTimes(1))
     expect(mockApi.gh.clearProjectItemField).not.toHaveBeenCalled()
     first.resolve({ ok: true })
     await Promise.all([update, clear])
     expect(mockApi.gh.clearProjectItemField).toHaveBeenCalledTimes(1)
     expect(field(store)).toBeUndefined()
+    expect(visibleRelations()).toEqual(['#12 +2 more', '1/2 (50%)'])
   })
 
   it.each([true, false])(

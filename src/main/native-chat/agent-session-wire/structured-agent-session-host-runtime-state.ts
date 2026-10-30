@@ -1,3 +1,4 @@
+import { createRestartReconciler } from './structured-agent-session-restart-reconcile'
 import { StructuredAgentSessionDeliveryOrder } from './structured-agent-session-delivery-order'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
@@ -27,6 +28,7 @@ export class StructuredAgentSessionHostRuntimeState {
   readonly deliveryOrder = new StructuredAgentSessionDeliveryOrder()
   readonly acquireAborts = new StructuredAgentSessionAcquireAborts()
   readonly startFlights = new StructuredAgentSessionStartFlights()
+  readonly reconcileLeases: ReturnType<typeof createRestartReconciler>
   readonly startupAttempts: StructuredAgentSessionStartupAttempts
   private readonly leaseRenewer: StructuredAgentSessionLeaseRenewer
   private readonly onEventSinkFailure?: (sessionId: string, error: unknown) => void
@@ -58,6 +60,12 @@ export class StructuredAgentSessionHostRuntimeState {
       now: () => deps.now?.() ?? Date.now(),
       // Ownership errors remain transient/visible; only sink I/O failure may force provider shutdown.
       logger: deps.logger
+    })
+    this.reconcileLeases = createRestartReconciler({
+      store: deps.store,
+      probe: (record) => this.probeRecord(record),
+      ...(deps.probeOwners ? { probeMany: deps.probeOwners } : {}),
+      now: () => this.deps.now?.() ?? Date.now()
     })
   }
 

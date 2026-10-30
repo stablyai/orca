@@ -15,7 +15,7 @@ import {
 } from './claude-stream-json-connection'
 import { openAgentSessionJournal } from '../native-chat/agent-session-journal/journal-store-factory'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { claudeAuthDiagnostic } from './claude-structured-init-proof'
+import { claudeAuthDiagnostic } from './structured/claude-structured-init-proof'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './claude-structured-launch-resolution'
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'

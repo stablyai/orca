@@ -5,6 +5,11 @@ import { isStructuredAgentSessionComposerCommand } from '../../../src/shared/str
 import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 import type { MobileNativeChatSendOrigin } from './native-chat/mobile-native-chat-pending-echo'
 import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
+import type { AgentJournalSkillRef } from '../../../src/shared/agent-session-journal-types'
+import {
+  readMobileNativeChatPickedSkills,
+  restoreMobileNativeChatPickedSkills
+} from './native-chat/composer/mobile-native-chat-draft-store'
 
 export function useMobileStructuredNativeChatSendBridge(args: {
   agent: StructuredAgentId | undefined
@@ -13,7 +18,8 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     text: string,
     images?: string[],
     deadline?: number,
-    attachments?: readonly StructuredMobileSendAttachment[]
+    attachments?: readonly StructuredMobileSendAttachment[],
+    skills?: readonly AgentJournalSkillRef[]
   ) => Promise<MobileNativeChatSendOutcome>
   captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
@@ -50,18 +56,13 @@ export function useMobileStructuredNativeChatSendBridge(args: {
         return 'rejected'
       }
       const isHostCommand = isStructuredAgentSessionComposerCommand(text, agent, sessionCommands)
+      const skills = readMobileNativeChatPickedSkills(origin.draftKey)
       clearDraftForSend(origin, text)
-      const outcome =
-        attachments !== undefined
-          ? await sendStructured(text, images, deadline, attachments)
-          : deadline !== undefined
-            ? await sendStructured(text, images, deadline)
-            : images !== undefined
-              ? await sendStructured(text, images)
-              : await sendStructured(text)
+      const outcome = await sendStructured(text, images, deadline, attachments, skills)
       // Accepted messages remain host-owned; restore commands whose reply was lost.
       if (outcome === 'rejected' || (outcome === 'unknown' && isHostCommand)) {
         restoreRejectedDraft(origin, text)
+        restoreMobileNativeChatPickedSkills(origin.draftDestination, skills)
       }
       return outcome
     },

@@ -190,7 +190,11 @@ export function useRichMarkdownReviewRailController({
     [editorRef, markdownSourceLineOffsetRef, pulseRichMarkdownSourceRange, scrollContainerRef]
   )
 
-  useEffect(() => requestSyncNotePositions(), [content, markdownComments, requestSyncNotePositions])
+  // Replace a queued frame so it measures with the current comments and offset.
+  useEffect(() => {
+    requestSyncNotePositions()
+    return cancelNotePositionFrame
+  }, [cancelNotePositionFrame, content, markdownComments, requestSyncNotePositions])
 
   useEffect(() => {
     if (!reviewRailVisible) {

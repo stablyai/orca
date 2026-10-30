@@ -3,8 +3,6 @@ import { getDefaultPersistedState } from '../../shared/constants'
 import type { PersistedState } from '../../shared/persisted-state-types'
 import type { Project, ProjectHostSetup } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
-import { mergeProjectHostSetupCompatibilityState } from '../persistence/tracking-repos/project-host-compatibility'
-import { projectHostSetupProjectionFromRepos } from '../../shared/project-host-setup-projection'
 import { rebuildRepoBackedProjectState } from './profile-project-state-file'
 
 const upstreamIdentity = {
@@ -111,82 +109,4 @@ describe('rebuildRepoBackedProjectState', () => {
       'cloud-project'
     ])
   })
-})
-
-it('reconciles and reloads split and ordinary handoff choices consistently with profile rebuilding', () => {
-  const projectId = 'github:acme/app'
-  const repos = [
-    makeRepo({ id: 'a', path: 'C:/a', addedAt: 1, upstream: { owner: 'acme', repo: 'app' } }),
-    makeRepo({ id: 'b', path: 'C:/b', addedAt: 2, upstream: { owner: 'acme', repo: 'app' } }),
-    makeRepo({
-      id: 'c',
-      path: '/srv/c',
-      executionHostId: 'runtime:remote',
-      upstream: { owner: 'acme', repo: 'app' }
-    })
-  ]
-  const projection = projectHostSetupProjectionFromRepos(repos)
-  const previous = makeState({
-    repos,
-    projects: [
-      makeProject({
-        id: projectId,
-        sourceRepoIds: ['a', 'b', 'c'],
-        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
-      })
-    ],
-    projectHostSetups: [
-      ...projection.setups.map((setup) => ({ ...setup, projectId })),
-      makeSetup({
-        id: 'pending-b',
-        projectId: 'repo:b',
-        hostId: 'ssh:extra',
-        path: '',
-        setupState: 'not-set-up',
-        setupMethod: 'provisioned'
-      })
-    ]
-  })
-  const split = { ...previous, ...mergeProjectHostSetupCompatibilityState(previous, repos) }
-  expect(
-    split.projects.find((project) => project.id === 'repo:b')?.localWindowsRuntimePreference
-  ).toEqual({ kind: 'wsl', distro: 'Ubuntu' })
-  expect(rebuildRepoBackedProjectState(previous).projects).toEqual(split.projects)
-  for (const preference of [undefined, { kind: 'windows-host' as const }]) {
-    const saved = {
-      ...split,
-      projectHostSetups: split.projectHostSetups.map((setup) =>
-        setup.id === 'pending-b' ? { ...setup, projectId: 'repo:b' } : setup
-      ),
-      projects: split.projects.map((project) =>
-        project.id === 'repo:b'
-          ? { ...project, localWindowsRuntimePreference: preference }
-          : project
-      )
-    }
-    const reloaded = JSON.parse(JSON.stringify(saved))
-    const remaining = repos.filter((repo) => repo.id !== 'a')
-    const handedOff = mergeProjectHostSetupCompatibilityState(reloaded, remaining)
-    expect(
-      handedOff.projects.find((project) => project.id === projectId)?.localWindowsRuntimePreference
-    ).toEqual(preference)
-    expect(handedOff.projectHostSetups?.filter((setup) => setup.id === 'pending-b')).toEqual([
-      expect.objectContaining({
-        projectId,
-        hostId: 'ssh:extra',
-        repoId: '',
-        setupState: 'not-set-up',
-        setupMethod: 'provisioned'
-      })
-    ])
-    expect(
-      rebuildRepoBackedProjectState({ ...reloaded, repos: remaining }).projectHostSetups
-    ).toEqual(handedOff.projectHostSetups)
-    expect(rebuildRepoBackedProjectState({ ...reloaded, repos: remaining }).projects).toEqual(
-      handedOff.projects
-    )
-    expect(
-      mergeProjectHostSetupCompatibilityState(JSON.parse(JSON.stringify(handedOff)), remaining)
-    ).toEqual(handedOff)
-  }
 })

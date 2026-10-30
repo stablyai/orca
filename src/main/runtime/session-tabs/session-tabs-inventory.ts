@@ -195,7 +195,7 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
       this.restoreLivePairedRendererSessionOwnedMobileTerminals(resolvedId)
       return this.getMobileSessionTabsForWorktree(resolvedId, clientNavigationId, options)
     }
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    const worktree = await this.resolveWorkspaceSelector(worktreeSelector)
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktree.id, {
       allowAttachedWindow: true,
       onlyRuntimeOwnedTerminals: true

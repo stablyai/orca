@@ -275,7 +275,7 @@ describe('gitlab client — MR operations', () => {
 
       await expect(
         updateMR('/repo', 12, { readyForReview: true }, 'upstream', 'conn-1')
-      ).resolves.toEqual({ ok: false, error: 'Title is required' })
+      ).resolves.toMatchObject({ ok: false, error: 'Title is required' })
 
       expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(1)
     })
@@ -312,7 +312,7 @@ describe('gitlab client — MR operations', () => {
     })
 
     it('rejects an empty discussion id without calling glab', async () => {
-      await expect(resolveMRDiscussion('/repo', 12, '  ', true)).resolves.toEqual({
+      await expect(resolveMRDiscussion('/repo', 12, '  ', true)).resolves.toMatchObject({
         ok: false,
         error: 'Discussion id is required'
       })
@@ -513,6 +513,24 @@ describe('gitlab client — MR operations', () => {
       const [args, options] = glabExecFileAsyncMock.mock.calls[0]
       expect(args).toEqual(['mr', 'merge', '6', '-R', 'g/p', '--yes'])
       expect(options.env).toBeUndefined()
+    })
+  })
+
+  describe('glab state-change refusals', () => {
+    const projectRef = { host: 'gitlab.com', path: 'g/p' }
+    const mutations = { close: closeMR, reopen: reopenMR }
+
+    it.each([
+      ['close', 'this merge request has been closed', true],
+      ['reopen', 'this merge request is already open.', true],
+      ['close', 'this merge request has already been merged', false],
+      ['reopen', 'this merge request has already been merged', false]
+    ] as const)('%s refused with "%s" reports ok=%s', async (action, message, ok) => {
+      glabExecFileAsyncMock.mockRejectedValueOnce(new Error(message))
+
+      await expect(mutations[action]('/repo', 6, undefined, null, projectRef)).resolves.toEqual(
+        ok ? { ok: true } : { ok: false, error: message }
+      )
     })
   })
 })

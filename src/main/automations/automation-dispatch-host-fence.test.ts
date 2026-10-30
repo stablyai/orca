@@ -272,14 +272,19 @@ describe('scheduled dispatch fenced on the host the record captured', () => {
     reRegisterTarget(store)
     const second = resolveAutomationRunTarget(store, automation)
 
-    expect(first).toEqual({ ok: false, error: REPLACED })
+    expect(first).toEqual({ ok: false, error: REPLACED, errorCode: 'targetReplaced' })
     expect(second).toEqual(first)
     expect(resolveAutomationRunTarget(store, other)).toEqual({
       ok: false,
-      error: 'Project is not set up on the selected automation host anymore.'
+      error: 'Project is not set up on the selected automation host anymore.',
+      errorCode: 'projectSetupMissing'
     })
     store.removeSshTarget(TARGET_ID)
-    expect(resolveAutomationRunTarget(store, automation)).toEqual({ ok: false, error: MISSING })
+    expect(resolveAutomationRunTarget(store, automation)).toEqual({
+      ok: false,
+      error: MISSING,
+      errorCode: 'targetMissing'
+    })
   })
 
   it('folds repeated refusals into a single record', async () => {

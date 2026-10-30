@@ -9,16 +9,23 @@ import { structuredAgentSessionOptionOverridesRefusal } from './structured-agent
 /** Capture send-specific choices or saved defaults once under the acceptance lane. */
 export function captureStructuredExecutionOptions(
   ctx: Pick<AgentSessionTurnContext, 'agents' | 'agent' | 'persistedOptions'>,
-  supplied?: Readonly<Record<string, string>>
+  supplied?: Readonly<Record<string, string>>,
+  selection?: Readonly<Record<string, string>>
 ): { options: AgentSessionExecutionOptions } | { refusal: AgentSessionWireRefusal } {
   const saved = ctx.persistedOptions ?? {}
-  const candidate = {
-    ...(saved.model ? { model: saved.model } : {}),
-    ...(saved.effort ? { effort: saved.effort } : {}),
-    ...(saved.personality ? { personality: saved.personality } : {}),
-    ...(saved.fastMode ? { fastMode: saved.fastMode } : {}),
-    ...(saved.serviceTier ? { serviceTier: saved.serviceTier } : {}),
-    ...supplied
+  const candidate: Record<string, string> =
+    selection === undefined
+      ? { ...saved, ...supplied }
+      : {
+          ...(saved.personality ? { personality: saved.personality } : {}),
+          ...selection
+        }
+  // A missing Fast pick has a definite baseline on hosts that offer it.
+  if (
+    candidate.fastMode === undefined &&
+    ctx.agents.definition(ctx.agent)?.restingOptions.acceptsKey('fastMode')
+  ) {
+    candidate.fastMode = 'false'
   }
   const options = readAgentSessionExecutionOptions(candidate)
   if (!options) {
@@ -38,4 +45,13 @@ export function captureStructuredExecutionOptions(
     )
   )
   return refusal ? { refusal } : { options }
+}
+
+/** The model and effort the chat was created with, which its opening message runs on as a send's
+ *  carried ones do. */
+export function openingMessageOptions(options: Readonly<Record<string, string>> | undefined): {
+  options?: AgentSessionExecutionOptions
+} {
+  const { model, effort } = options ?? {}
+  return model ? { options: { model, ...(effort ? { effort } : {}) } } : {}
 }

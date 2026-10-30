@@ -47,7 +47,8 @@ import {
 
 vi.mock('../codex-cli/command', async (importOriginal) => ({
   ...(await importOriginal<typeof CodexCommand>()),
-  resolveCodexCommand: () => process.env.ORCA_CODEX_HOOK_CONTRACT_BINARY ?? 'codex'
+  resolveCodexCommand: () => process.env.ORCA_CODEX_HOOK_CONTRACT_BINARY ?? 'codex',
+  resolveCodexCommandForSpawn: async () => process.env.ORCA_CODEX_HOOK_CONTRACT_BINARY ?? 'codex'
 }))
 vi.mock('electron', () => ({
   app: {

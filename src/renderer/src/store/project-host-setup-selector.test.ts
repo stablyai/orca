@@ -22,11 +22,9 @@ function countCollectionReads<T>(items: readonly T[]): {
         counters[property] += 1
         return array[property].bind(array)
       }
-      if (property === Symbol.iterator || property === 'entries') {
+      if (property === Symbol.iterator) {
         counters.iterator += 1
-        return property === 'entries'
-          ? array.entries.bind(array)
-          : array[Symbol.iterator].bind(array)
+        return array[Symbol.iterator].bind(array)
       }
       if (property === 'length') {
         counters.length += 1
@@ -85,14 +83,14 @@ describe('project host setup selector', () => {
     const countedSetups = countCollectionReads(setups)
     const state = {
       repos: countedRepos.value,
-      endpointProjects: countedProjects.value,
-      endpointProjectHostSetups: countedSetups.value
+      projects: countedProjects.value,
+      projectHostSetups: countedSetups.value
     }
 
     const first = getProjectHostSetupProjectionFromState(state)
     expect(countedRepos.counters.map).toBeGreaterThan(0)
     expect(countedRepos.counters.iterator).toBeGreaterThan(0)
-    expect(countedProjects.counters.map).toBeGreaterThan(0)
+    expect(countedProjects.counters.flatMap).toBeGreaterThan(0)
     expect(countedSetups.counters.map).toBeGreaterThan(0)
     countedRepos.counters.map = 0
     countedRepos.counters.flatMap = 0
@@ -123,15 +121,15 @@ describe('project host setup selector', () => {
     const setups = [makeSetup(repo.id, 'repo:repo-1')]
     const first = getProjectHostSetupProjectionFromState({
       repos,
-      endpointProjects: projects,
-      endpointProjectHostSetups: setups
+      projects,
+      projectHostSetups: setups
     })
     const replacementSetups = [...setups]
 
     const next = getProjectHostSetupProjectionFromState({
       repos,
-      endpointProjects: projects,
-      endpointProjectHostSetups: replacementSetups
+      projects,
+      projectHostSetups: replacementSetups
     })
 
     expect(next).not.toBe(first)
@@ -144,17 +142,13 @@ describe('project host setup selector', () => {
     const repos = [repo]
     const projects = [makeProject('repo:repo-1', repo.id)]
     const setups = [makeSetup(repo.id, 'repo:repo-1')]
-    getProjectHostSetupProjectionFromState({
-      repos,
-      endpointProjects: projects,
-      endpointProjectHostSetups: setups
-    })
+    getProjectHostSetupProjectionFromState({ repos, projects, projectHostSetups: setups })
 
     const replacementRepos = [makeRepo('repo-2')]
     const next = getProjectHostSetupProjectionFromState({
       repos: replacementRepos,
-      endpointProjects: projects,
-      endpointProjectHostSetups: setups
+      projects,
+      projectHostSetups: setups
     })
 
     expect(next.projects.map((project) => project.id)).toContain('repo:repo-2')

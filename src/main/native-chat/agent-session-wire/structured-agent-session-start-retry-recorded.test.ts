@@ -10,6 +10,7 @@ import { createCodexAppServerRecordDispatcher } from '../../codex/codex-app-serv
 import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-server-request-error'
 import { JsonlRpcPeer, JsonlRpcResponseError } from '../../jsonl-rpc/peer'
 import { withProviderRequestTimeout } from '../../provider-process/provider-request-timeout'
+import { withProviderSpawnAbsence } from '../../provider-process/provider-executable-missing'
 import {
   AgentSessionAcquisitionExitProvenError,
   AgentSessionAcquisitionExitUnprovenError,
@@ -184,5 +185,11 @@ describe('recorded command rejection wrappers at the startup classifier', () => 
     expect(
       retryableStructuredAgentSessionAcquisition(new AgentSessionAcquisitionExitProvenError(error))
     ).toBe(false)
+  })
+
+  it('keeps a working folder deleted under the chat final, even with its exit observed', () => {
+    expectFinalWithExitEvidence(
+      withProviderSpawnAbsence(new Error('claude exited (code 127)'), 'launchFolder')
+    )
   })
 })

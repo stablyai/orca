@@ -7,7 +7,6 @@ import { getDefaultSettings } from '../../../shared/constants'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
 import type { RuntimeEnvironmentStatus } from '@/store/slices/runtime-status-types'
-import type { Project, ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import { resetWindowsTerminalCapabilitiesForTests } from '@/lib/windows-terminal-capabilities'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
@@ -21,8 +20,6 @@ const testState = vi.hoisted(() => ({
 type MockedSettingsNavState = {
   settings: GlobalSettings | null
   repos: Repo[]
-  endpointProjects: Project[]
-  endpointProjectHostSetups: ProjectHostSetup[]
   runtimeEnvironments: typeof testState.runtimeEnvironments
   runtimeStatusByEnvironmentId: Map<string, RuntimeEnvironmentStatus>
 }
@@ -32,8 +29,6 @@ vi.mock('@/store', () => ({
     selector({
       settings: testState.settings,
       repos: [],
-      endpointProjects: [],
-      endpointProjectHostSetups: [],
       runtimeEnvironments: testState.runtimeEnvironments,
       runtimeStatusByEnvironmentId: new Map()
     })

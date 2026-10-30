@@ -17,6 +17,7 @@ import { MobileSearchField } from '../components/MobileSearchField'
 import { NewWorkspaceFab, FAB_SIZE } from '../components/NewWorkspaceFab'
 import { WorktreeListRow } from '../components/WorktreeListRow'
 import { colors, spacing } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { getWorktreeRowIdentity } from '../worktree/worktree-host-row-identity'
 import {
   HostWorkspaceListReopen,
@@ -31,8 +32,11 @@ import { HostPendingCreationRow } from './host-pending-creation-row'
 import { useSlowPendingKeys } from './use-slow-pending-keys'
 import { projectGroupHeaderIndent } from '../worktree/project-group-indent'
 import type { HostScreenController } from './use-host-screen-controller'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export function HostWorkspaceList({ controller }: { controller: HostScreenController }) {
+  const t = useMobileTranslation()
+  const colorScheme = useMobileColorScheme()
   const {
     actions,
     activeWorktreeScroll,
@@ -122,11 +126,14 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
           <MobileSearchField
             value={state.search}
             onChangeText={state.setSearch}
-            placeholder="Search workspaces…"
+            placeholder={t('hostScreen.hostWorkspaceList.searchPlaceholder', 'Search workspaces…')}
             autoFocus
             // Remount the focus effect per open so rapid search toggles reopen the keyboard.
             focusKey={state.showSearch}
-            accessibilityLabel="Search workspaces"
+            accessibilityLabel={t(
+              'hostScreen.hostWorkspaceList.searchWorkspaces',
+              'Search workspaces'
+            )}
           />
         </View>
       )}
@@ -154,6 +161,7 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
         <SectionList
           ref={activeWorktreeScroll.sectionListRef}
           sections={sections}
+          extraData={colorScheme}
           keyExtractor={(w) => w.sectionListKey ?? getWorktreeRowIdentity(w)}
           stickySectionHeadersEnabled={false}
           // Why: keep the search IME up while tapping clear.
@@ -176,7 +184,8 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
             if (!section.title) {
               return pendingCreations ? <>{pendingCreations}</> : null
             }
-            const isCollapsed = controller.collapsedGroups.has(section.key)
+            const collapseKey = section.collapseKey ?? section.key
+            const isCollapsed = controller.collapsedGroups.has(collapseKey)
             const count =
               section.count ?? rawSections.find((s) => s.key === section.key)?.data.length ?? 0
             const repoSectionLook =
@@ -197,7 +206,7 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
                         }
                       : null
                   ]}
-                  onPress={() => settings.toggleCollapsed(section.key)}
+                  onPress={() => settings.toggleCollapsed(collapseKey)}
                 >
                   {isCollapsed ? (
                     <ChevronRight size={12} color={colors.textMuted} style={styles.sectionIcon} />
@@ -220,7 +229,7 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
                   ) : null}
                   <Text style={styles.sectionTitle}>{section.title}</Text>
                   <Text style={styles.sectionCount}>{count}</Text>
-                  {pendingCollapseKeys.has(section.key) && (
+                  {pendingCollapseKeys.has(collapseKey) && (
                     <ActivityIndicator
                       size="small"
                       color={colors.textMuted}
@@ -276,5 +285,6 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
 }
 
 function ListSeparator() {
+  useMobileColorScheme()
   return <View style={styles.separator} />
 }

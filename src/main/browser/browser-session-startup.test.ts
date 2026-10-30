@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 function installRegistryMock(): {
@@ -89,6 +90,11 @@ describe('initializeBrowserSessionsForApp', () => {
     expect(configurePairedRuntimeBrowserClientHostsForOrcaProfileMock).toHaveBeenCalledWith({
       orcaProfileId: 'local-work'
     })
+    const { getBrowserExtensionProfileDataDirectory } =
+      await import('./extensions/browser-extension-profile-data-directory')
+    expect(getBrowserExtensionProfileDataDirectory()).toBe(
+      join('/profiles/local-work', 'browser-extensions')
+    )
     expect(configureForOrcaProfileMock.mock.invocationCallOrder[0]).toBeLessThan(
       applyPendingCookieImportMock.mock.invocationCallOrder[0]
     )

@@ -40,11 +40,12 @@ describe('the effort menu of a model whose configured effort one listing lacks',
   })
 })
 
-const unknownChat = (at: number): AgentModelCatalogListing => ({
-  ...listing('live-session', at, []),
-  models: [
-    { id: 'openai/gpt-6', label: 'GPT-6', isDefault: false, efforts: [], effortsKnown: false }
-  ]
+const unknownChat = (
+  at: number,
+  efforts: ReturnType<typeof menu> = []
+): AgentModelCatalogListing => ({
+  ...listing('live-session', at, efforts),
+  models: [{ id: 'openai/gpt-6', label: 'GPT-6', isDefault: false, efforts, effortsKnown: false }]
 })
 
 describe('a model whose newer chat listing does not know its efforts', () => {
@@ -54,11 +55,31 @@ describe('a model whose newer chat listing does not know its efforts', () => {
     expect(merged).not.toHaveProperty('effortsKnown')
   })
 
-  it('keeps an older listing’s explicit empty menu', () => {
-    expect(model(listing('probe', 1, []), unknownChat(2))).not.toHaveProperty('effortsKnown')
-  })
-
   it('stays unknown when no listing knows its menu', () => {
     expect(model(unknownChat(1), unknownChat(2))).toMatchObject({ effortsKnown: false })
+  })
+
+  it('prefers known probe evidence over an older unknown chat offering the configured effort', () => {
+    const merged = model(
+      listing('probe', 2, menu('low', 'high')),
+      unknownChat(1, menu('off', 'auto', 'xhigh'))
+    )
+    expect(merged?.efforts).toEqual(menu('low', 'high'))
+    expect(merged).not.toHaveProperty('effortsKnown')
+    expect(merged).not.toHaveProperty('defaultEffort')
+  })
+
+  it('keeps native suggestions unknown without a known model menu', () => {
+    const older = unknownChat(1, menu('low', 'high'))
+    const newer = unknownChat(2, menu('off', 'auto'))
+    for (const discovered of [null, { ...older, origin: 'probe' as const }]) {
+      const merged = agentModelCatalogEntry('omp', 'fp', discovered, newer, null)?.models[0]
+      expect(merged).toMatchObject({ efforts: menu('off', 'auto'), effortsKnown: false })
+      expect(merged).not.toHaveProperty('defaultEffort')
+    }
+    expect(model({ ...older, origin: 'probe' }, unknownChat(2))).toMatchObject({
+      efforts: menu('low', 'high'),
+      effortsKnown: false
+    })
   })
 })

@@ -14,7 +14,9 @@ export function dispatchTaskSource(args: {
   const { dispatch } = args
   return {
     kind: 'agent',
-    senders: args.from ? [agentMessageSender(args.from, args.db, args.senderName)] : [],
+    senders: args.from
+      ? [{ ...agentMessageSender(args.from, args.db, args.senderName), relation: 'coordinator' }]
+      : [],
     orchestration: {
       message: 'task',
       runId: dispatch.run_id,

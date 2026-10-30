@@ -8,7 +8,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { hasExpandedCommitFailureDetails, summarizeCommitFailure } from './commit-failure-summary'
-import { isCommitMessageFieldDisabled } from '../../source-control-commit-eligibility'
+import { isCommitMessageFieldDisabled } from '../../../../../../shared/source-control-commit-eligibility'
 import { CommitActionMenu } from './commit-action-menu'
 import type { CommitAreaProps } from './commit-area-types'
 import { CommitMessageComposer } from './commit-message-composer'

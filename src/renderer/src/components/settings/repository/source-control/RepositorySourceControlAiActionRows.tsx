@@ -1,4 +1,8 @@
 import type { RepositorySourceControlAiActionRowsProps } from './repository-source-control-ai-action-rows-props'
+import {
+  sourceControlActionSelectedPreferences,
+  sourceControlActionExecutionArgs
+} from '../../../../../../shared/source-control-action-launch-preferences'
 import { useAppStore } from '@/store/index'
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import { sourceControlRepoAgentRows } from '@/lib/source-control-agent-picker'
@@ -22,7 +26,7 @@ import {
 } from '../../../../../../shared/source-control-ai-actions'
 import { Input } from '../../../ui/input'
 import { Label } from '../../../ui/label'
-import { Button } from '../../../ui/button'
+import { RepositorySourceControlAiActionSaveControls } from '../../RepositorySourceControlAiActionSaveControls'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { SourceControlActionVariableChips } from '../../../source-control/SourceControlActionVariableChips'
@@ -126,7 +130,9 @@ export function RepositorySourceControlAiActionRows({
         const agentArgsPlaceholder =
           hasOverride && agentArgsValue
             ? ''
-            : inheritedAgentArgs ||
+            : (pickerAgent
+                ? sourceControlActionExecutionArgs(recipe, pickerAgent)
+                : inheritedAgentArgs) ||
               (isLaunchAction
                 ? ''
                 : getSourceControlAgentArgsPlaceholder(
@@ -163,13 +169,7 @@ export function RepositorySourceControlAiActionRows({
                   <span>
                     {commandTemplateStateLabel({ hasOverride, inheritedTemplate, actionId })}
                   </span>
-                  <span>
-                    {agentArgsStateLabel({
-                      hasOverride: override?.agentArgs !== undefined,
-                      inheritedAgentArgs,
-                      repoAgentArgs: agentArgsValue
-                    })}
-                  </span>
+                  <span>{agentArgsStateLabel({ recipe, agent: pickerAgent, override })}</span>
                 </div>
               </div>
               <Select
@@ -195,7 +195,7 @@ export function RepositorySourceControlAiActionRows({
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid items-start gap-3 sm:grid-cols-[180px_1fr]">
+            <div className="grid min-w-0 grid-cols-1 items-start gap-3">
               <div className="space-y-2">
                 <Label className="text-[11px] text-muted-foreground">
                   {translate(
@@ -258,6 +258,8 @@ export function RepositorySourceControlAiActionRows({
                 ) : agentSupportText ? (
                   <p className="text-[11px] text-muted-foreground">{agentSupportText}</p>
                 ) : null}
+              </div>
+              <div className="flex min-w-0 flex-wrap items-start gap-3">
                 {isLaunchAction ? (
                   <SourceControlActionArguments
                     showArguments={shouldShowSourceControlActionArguments({
@@ -268,13 +270,24 @@ export function RepositorySourceControlAiActionRows({
                     })}
                     agent={pickerAgent}
                     value={override?.agentArgs}
-                    preferences={recipe.launchPreferences}
+                    placeholder={
+                      override?.agentArgs === undefined ? agentArgsPlaceholder : undefined
+                    }
+                    preferences={
+                      pickerAgent
+                        ? sourceControlActionSelectedPreferences(recipe, pickerAgent)
+                        : undefined
+                    }
+                    argumentChoices={override?.argumentChoices}
+                    authoredAgent={override?.agentId}
+                    modelSelectionBase="inherit"
+                    authoredPreferences={override?.launchPreferences ?? null}
                     disabled={!hasOverride || actual.status === 'pending' || isSavingAction}
                     onArgsChange={(value, commit) =>
                       onActionAgentArgsChange(actionId, value, commit)
                     }
-                    onPreferencesChange={(value) =>
-                      onActionLaunchPreferencesChange(actionId, value)
+                    onPreferencesChange={(value, userArgs, nodes) =>
+                      onActionLaunchPreferencesChange(actionId, value, userArgs, nodes)
                     }
                   />
                 ) : (
@@ -316,52 +329,12 @@ export function RepositorySourceControlAiActionRows({
               </div>
             </div>
             {hasOverride ? (
-              <div className="mt-3 flex items-center justify-between gap-3">
-                <p className="text-[11px] text-muted-foreground">
-                  {actionDirty
-                    ? translate(
-                        'auto.components.settings.SourceControlAiActionRecipeDefaults.817128d94e',
-                        'Unsaved changes'
-                      )
-                    : translate(
-                        'auto.components.settings.SourceControlAiActionRecipeDefaults.9d3cc627f8',
-                        'Saved'
-                      )}
-                </p>
-                <div className="flex items-center gap-2">
-                  {actionDirty ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="xs"
-                      onClick={() => onActionDiscard(actionId)}
-                      disabled={isSavingAction}
-                    >
-                      {translate(
-                        'auto.components.settings.SourceControlAiActionRecipeDefaults.b3914ecbbc',
-                        'Discard'
-                      )}
-                    </Button>
-                  ) : null}
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="xs"
-                    onClick={() => onActionSave(actionId)}
-                    disabled={!actionDirty || isSavingAction}
-                  >
-                    {isSavingAction
-                      ? translate(
-                          'auto.components.settings.SourceControlAiActionRecipeDefaults.4f549a5fa8',
-                          'Saving...'
-                        )
-                      : translate(
-                          'auto.components.settings.SourceControlAiActionRecipeDefaults.d18d665e12',
-                          'Save'
-                        )}
-                  </Button>
-                </div>
-              </div>
+              <RepositorySourceControlAiActionSaveControls
+                actionDirty={actionDirty}
+                isSavingAction={isSavingAction}
+                onDiscard={() => onActionDiscard(actionId)}
+                onSave={() => onActionSave(actionId)}
+              />
             ) : null}
           </div>
         )

@@ -13,6 +13,10 @@ import { projectJournalBatch } from '../native-chat/agent-session-wire/agent-ses
 import { replacePage, mergeItems } from '../../shared/structured-agent-session-history-state'
 import { AgentJournalRenderItemSchema } from '../../shared/agent-session-journal-schemas'
 import { projectStructuredItemToNativeChat } from '../../shared/structured-agent-session-projection'
+import { agentSessionSendBodyFingerprint } from '../../shared/structured-agent-session-send-mutation'
+import { dispatchClaudeTurn } from './claude-structured-dispatch'
+import { claudePromptUuidForSubmission } from './structured/claude-structured-session-id'
+import { childExited, sessionFor, userMessage } from './claude-structured-dispatch-test-support'
 import {
   SESSION,
   SID,
@@ -27,6 +31,83 @@ import {
 } from './claude-transcript-catch-up-test-support'
 
 describe('Claude chat catch-up', () => {
+  it.each([false, true])(
+    'recognizes an unacknowledged local prompt; equal external input: %s',
+    async (outside) => {
+      const c = await chat()
+      await c.live()
+      const body = userMessage([{ type: 'text', text: 'same prompt' }])
+      const clientMessageId = 'unacknowledged'
+      await c.journal.appendSubmission({
+        clientMessageId,
+        body,
+        fence: 1,
+        payloadFingerprint: agentSessionSendBodyFingerprint(SESSION, body)
+      })
+      const send = vi.fn().mockResolvedValue(undefined)
+      const session = sessionFor(send)
+      session.providerSessionId = SID
+      await dispatchClaudeTurn(session, { sessionId: SESSION, clientMessageId, body })
+      const uuid = String(send.mock.calls[0]![0].uuid)
+      childExited(session)
+      await c.journal.resolveDispatch({
+        clientMessageId,
+        fence: 1,
+        state: 'unknown',
+        reason: 'provider_closed_before_acknowledgement'
+      })
+      const before = c.journal.snapshot()
+      await c.journal.close()
+      const reopened = await c.replay()
+      c.deferred.bind({ journal: reopened, fence: 1, publish: () => {} })
+      const queued = {
+        ...attachment('queued', 'a1'),
+        attachment: {
+          type: 'queued_command',
+          source_uuid: uuid,
+          commandMode: 'prompt',
+          origin: { kind: 'human' },
+          humanTurn: true,
+          prompt: 'same prompt'
+        }
+      }
+      await c.write([
+        ...chatTurn,
+        outside ? queued : prompt(uuid, 'a1', 'same prompt', 3),
+        reply(
+          'recovered',
+          outside ? 'queued' : uuid,
+          'msg_recovered',
+          { type: 'text', text: 'reply' },
+          4
+        ),
+        ...(outside ? [prompt('external', 'recovered', 'same prompt', 5)] : [])
+      ])
+      expect(await c.open('a1')).toBe(true)
+      const after = reopened.snapshot()
+      expect(
+        after.items
+          .filter((item) => item.body.kind !== 'turn')
+          .map((item) => (item.body.kind === 'message' ? item.body.role : item.body.kind))
+      ).toEqual(['user', 'assistant', 'user', 'status', 'assistant', ...(outside ? ['user'] : [])])
+      expect(after.submissions).toEqual(before.submissions)
+      expect(reopened.receiptFor(clientMessageId)).toBeNull()
+      const key = agentJournalItemKey({ provider: 'claude', sessionId: SID, uuid })
+      expect(reopened.canonicalItemId(key)).toBe(key)
+      expect(
+        structuredRewindCut(reopened, {
+          itemId: agentJournalItemKey({ provider: 'orca', clientMessageId }),
+          provider: 'claude',
+          nativeId: SID
+        })
+      ).toBeNull()
+      expect(await c.open('a1')).toBe(true)
+      expect(reopened.snapshot()).toEqual(after)
+      expect((await c.replay()).snapshot()).toEqual(after)
+      expect(c.warn).not.toHaveBeenCalled()
+    }
+  )
+
   it.each(['a1', 'missing-parent'])(
     'keeps an unresolved queued prompt visible without inventing a turn after %s',
     async (parent) => {
@@ -326,10 +407,23 @@ describe('Claude chat catch-up', () => {
     const c = await chat('-old-work', '/new-work')
     await c.write([...chatTurn, ...outsideTurn])
     const lookup = Promise.withResolvers<string | null>()
+    const lookupStarted = Promise.withResolvers<void>()
     const resolve = vi
       .spyOn(sessionFileResolver, 'resolveSessionFilePath')
-      .mockReturnValueOnce(lookup.promise)
-    expect(await c.open('a1', { timeoutMs: 5 })).toBe(false)
+      .mockImplementationOnce(() => {
+        lookupStarted.resolve()
+        return lookup.promise
+      })
+    // Fire the deadline only once the lookup is in flight; a real 5 ms timer raced slow runners.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    try {
+      const opened = c.open('a1', { timeoutMs: 5 })
+      await lookupStarted.promise
+      vi.advanceTimersByTime(5)
+      expect(await opened).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
     expect(resolve.mock.calls[0]?.[3]?.aborted).toBe(true)
     lookup.resolve(null)
     await new Promise<void>((done) => setImmediate(done))
@@ -383,9 +477,9 @@ describe('Claude chat catch-up', () => {
     expect(c.warn).not.toHaveBeenCalled()
   })
 
-  // P known prompts and J reduced items grow independently; this ceiling retains the P×J cost.
+  // P saved aliases plus P unacknowledged queued prompts: two J-item indexes, not P×J scans.
   it.each([10, 100].flatMap((prompts) => [1_000, 10_000].map((items) => ({ prompts, items }))))(
-    'bounds retained-leaf work for $prompts known prompts and $items journal items',
+    'bounds retained-leaf work for $prompts aliases and local misses over $items journal items',
     async ({ prompts, items }) => {
       const c = await chat()
       await c.live()
@@ -421,11 +515,25 @@ describe('Claude chat catch-up', () => {
         fence: 1,
         mutations: Array.from({ length: items - c.journal.snapshot().items.length }, (_, n) => ({
           kind: 'item' as const,
-          identity: { provider: 'claude' as const, sessionId: SID, uuid: `padding${n}` },
-          body: { kind: 'message' as const, role: 'assistant' as const, blocks: [] },
+          identity: { provider: 'orca' as const, clientMessageId: `padding${n}` },
+          body: { kind: 'message' as const, role: 'user' as const, blocks: [] },
           turnScope: { kind: 'thread' as const }
         }))
       })
+      for (let n = 0; n < prompts; n++) {
+        const key = agentJournalItemKey({ provider: 'orca', clientMessageId: `padding${n}` })
+        await c.write([
+          {
+            ...attachment(`queued${n}`, n ? `queued${n - 1}` : `outside-a${prompts - 1}`),
+            attachment: {
+              type: 'queued_command',
+              source_uuid: claudePromptUuidForSubmission(SESSION, key),
+              commandMode: 'prompt',
+              prompt: 'local'
+            }
+          }
+        ])
+      }
       const before = c.journal.snapshot()
       const itemCount = before.items.length
       expect(itemCount).toBe(items)
@@ -461,7 +569,7 @@ describe('Claude chat catch-up', () => {
       expect(c.journal.canonicalItemId(alias)).toBe(canonical)
       expect(committed).not.toHaveBeenCalled()
       expect(c.warn).not.toHaveBeenCalled()
-      expect(associationVisits).toBeLessThanOrEqual(prompts * itemCount)
+      expect(associationVisits).toBeLessThanOrEqual(2 * itemCount)
       expect(viewVisits).toBeLessThanOrEqual(2 * itemCount)
       console.info('retained-leaf operation counts', {
         prompts,

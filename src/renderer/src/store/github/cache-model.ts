@@ -5,6 +5,7 @@ import type { GitHubProjectViewError } from '../../../../shared/github/project-r
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 
 export type WorkItemsCacheSources = {
+  ineligible?: true
   issues: GitHubOwnerRepo | null
   prs: GitHubOwnerRepo | null
   /** Raw origin remote, kept distinct from the effective PR source. */
@@ -31,6 +32,8 @@ export type FetchOptions = {
   requireComplete?: boolean
   allowStaleFallback?: boolean
   sourceContext?: TaskSourceContext | null
+  /** A Tasks Refresh/Retry or a single-repo open: a user act that may start a stopped WSL distro. */
+  wakeWslDistro?: boolean
 }
 
 export type RepoScopedFetchOptions = FetchOptions & { repoId?: string }

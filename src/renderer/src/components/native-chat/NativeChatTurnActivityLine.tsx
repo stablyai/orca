@@ -2,8 +2,8 @@ import { useId } from 'react'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { translate } from '@/i18n/i18n'
-import type { NativeChatLiveLine } from '../../../../shared/native-chat-live-line'
-import { nativeChatReasoningDisclosureKey } from '../../../../shared/native-chat-reasoning-row'
+import type { NativeChatLiveLine } from '../../../../shared/native-chat/transcript/native-chat-live-line'
+import { nativeChatReasoningDisclosureKey } from '../../../../shared/native-chat/transcript/native-chat-reasoning-row'
 import {
   describeNativeChatActiveTurnLabel,
   type NativeChatActiveTurnLabel

@@ -1,7 +1,4 @@
-import {
-  QueuedMessageImageCount,
-  queuedMessageImageCount
-} from './NativeChatQueuedMessageImageCount'
+import { QueuedMessageImageCount } from './NativeChatQueuedMessageImageCount'
 import type { QueuedMessageDragPresentation } from './NativeChatQueuedMessageRows'
 import { useId, useState } from 'react'
 import {
@@ -25,27 +22,26 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { translate } from '@/i18n/i18n'
-import { structuredAgentSessionAttemptFailureParts } from '../../../../shared/structured-agent-session-rejection-words'
-import { classifyDispatchRejection } from '../../../../shared/structured-agent-session-dispatch-rejection'
-import { readWholeAgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../../shared/agent-session-wire'
 import { isMacPlatform } from './native-chat-shortcut'
 import {
+  queuedMessageCardLine,
+  queuedMessageCardNeedsAttention,
   queuedMessageCardSteers,
+  queuedMessageReturnedNotice,
   type QueuedMessageCard
-} from './structured-agent-session-queued-cards'
+} from '../../../../shared/structured-agent-session-queued-cards'
 import { NativeChatAgentMessageSenders } from './NativeChatAgentMessageSenders'
 import { NativeChatPendingIcon } from './NativeChatPendingIcon'
 import type { QueuedMessagesPendingAction } from './use-structured-agent-session-queued-messages'
 import { useNativeChatClippedLine } from './use-native-chat-clipped-line'
-import { agentSessionFailureStatedByStartRow } from './structured-agent-session-delivery-notices'
 import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
-import { agentSessionWriteNotDoneParts } from '../../../../shared/agent-session-refusal-notice'
-import { NativeChatQueuedMessageEditor } from './NativeChatQueuedMessageEditor'
-import type { QueuedEditAttachTarget } from './use-native-chat-queued-edit-image-intake'
+import { NativeChatQueuedMessageComposer } from './NativeChatQueuedMessageComposer'
+import type { QueuedEditAttachTarget } from './NativeChatQueuedMessageComposer'
 import type { QueuedMessageInlineEditor } from './use-structured-agent-session-queued-edit'
-import { nativeChatImageLabel } from './native-chat-image-label'
+import { nativeChatImageLabelCopy } from './native-chat-image-label'
+import { NATIVE_CHAT_UNKERNED_CSS, nativeChatTextHasUnkernedRun } from './native-chat-unkerned-runs'
 
 /** The visible caption under the text; the default waiting hold needs none. */
 export function queuedMessageCardCaption(
@@ -55,29 +51,13 @@ export function queuedMessageCardCaption(
 ): string | null {
   switch (card.hold) {
     case 'returned': {
-      // Read exactly as a rejected submission: the typed fact decides, the reason is the fallback.
-      const reason = card.returnedReason ?? null
-      if (agentSessionFailureStatedByStartRow(card.returnedRejection, statedFailures)) {
-        return agentSessionWriteNoticeText(agentSessionWriteNotDoneParts('send'))
-      }
-      // A Stop-withdrawn draft was not a send failure; describe its withdrawal.
-      if (
-        classifyDispatchRejection({ reason, rejection: card.returnedRejection }).category ===
-        'withdrawn'
-      ) {
-        return translate(
-          'components.native-chat.queuedMessages.withdrawnHold',
-          'Stopped before it was sent'
-        )
-      }
-      return agentSessionWriteNoticeText(
-        structuredAgentSessionAttemptFailureParts(
-          { kind: 'rejected', reason },
-          // The card's own Send is the retry, so the words leave out sending again.
-          { agentName, retryControl: true },
-          readWholeAgentSessionFailureFact(card.returnedRejection)
-        )
-      )
+      const notice = queuedMessageReturnedNotice(card, agentName, statedFailures)
+      return notice === 'withdrawn'
+        ? translate(
+            'components.native-chat.queuedMessages.withdrawnHold',
+            'Stopped before it was sent'
+          )
+        : agentSessionWriteNoticeText(notice)
     }
     case 'paused':
       // Localize known pause markers; unknown newer-host markers fall back to a plain pause.
@@ -106,17 +86,6 @@ export function queuedMessageCardCaption(
       // Plainly queued; a paused queue's header row carries the why.
       return null
   }
-}
-
-/** The card's line: its text, or for a card of images alone, the image's name or their count. */
-function queuedMessageCardLine(card: QueuedMessageCard): string {
-  const images = card.images ?? []
-  if (card.text.trim() || images.length === 0) {
-    return card.text
-  }
-  return images.length === 1
-    ? nativeChatImageLabel(images[0])
-    : queuedMessageImageCount(images.length)
 }
 
 /** Steer's or Send's label and tooltip (`queuedMessageCardSteers`). */
@@ -186,9 +155,9 @@ export function NativeChatQueuedMessageCard({
   onTurnOffQueueing?: () => void
 }): React.JSX.Element {
   const caption = queuedMessageCardCaption(card, agentName, statedFailures)
-  const line = queuedMessageCardLine(card)
+  const line = queuedMessageCardLine(card, nativeChatImageLabelCopy())
   const returned = card.state === 'returned'
-  const attention = returned || card.pausedReason === QUEUED_MESSAGE_PAUSED_SEND_FAILED
+  const attention = queuedMessageCardNeedsAttention(card)
   const sendNow = queuedMessageCardSendNow(card)
   const busy = pending !== null
   const isMac = isMacPlatform()
@@ -203,7 +172,7 @@ export function NativeChatQueuedMessageCard({
     return (
       // The editor fills the row, so a drop anywhere on the card reaches it.
       <li data-queued-message-id={card.messageId} data-queued-message-state={card.state}>
-        <NativeChatQueuedMessageEditor
+        <NativeChatQueuedMessageComposer
           editor={editor}
           attachTo={editAttachTo}
           sender={sender}
@@ -376,6 +345,7 @@ export function NativeChatQueuedMessageCard({
         <p
           id={textId}
           className="scrollbar-sleek mt-1 max-h-60 overflow-y-auto whitespace-pre-wrap break-words pl-5.5 text-sm"
+          style={nativeChatTextHasUnkernedRun(line) ? NATIVE_CHAT_UNKERNED_CSS : undefined}
         >
           {line}
         </p>

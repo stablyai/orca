@@ -1,4 +1,3 @@
-import { getProjectHostSetupProjectionFromState } from '@/store/project-host-setup-selector'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
@@ -51,6 +50,7 @@ import {
 import { useAiVaultPanelHandle, type AiVaultPanelProps } from './ai-vault-panel-handle'
 import { aiVaultSearchHitHostLabels } from './ai-vault-search-hit-hosts'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
 
 export default function AiVaultPanel({
   ref,
@@ -64,15 +64,14 @@ export default function AiVaultPanel({
   const {
     workspaceId: activeWorktreeId,
     worktree: activeWorktree,
-    repo: activeRepo,
-    legacyProjectKey
+    repo: activeRepo
   } = useAiVaultPanelWorkspace(workspace)
   const repos = useRepos()
   const allWorktrees = useAllWorktrees()
   const projectHostSetupProjection = useProjectHostSetupProjection()
   const resumeTargetState = useAppStore(
     useShallow((state) => ({
-      projectHostSetupProjection: getProjectHostSetupProjectionFromState(state),
+      projects: state.projects,
       settings: state.settings,
       folderWorkspaces: selectFolderWorkspaces(state),
       projectGroups: state.projectGroups,
@@ -156,18 +155,11 @@ export default function AiVaultPanel({
       aiVaultSearchScopeIdentity({
         scope,
         activeWorktreeId: activeWorktree?.id,
-        activeProjectKey: legacyProjectKey
+        activeProjectKey
       }),
-    [legacyProjectKey, activeWorktree?.id, scope]
+    [activeProjectKey, activeWorktree?.id, scope]
   )
-  const search = useAiVaultPanelSearch(
-    query,
-    agents,
-    searchWithin,
-    executionHostScope,
-    searchSort,
-    activeProjectKey ?? undefined
-  )
+  const search = useAiVaultPanelSearch(query, agents, searchWithin, executionHostScope, searchSort)
   const { searching, searchHits } = search
   const searchSessions = useMemo(
     () => withAiVaultHistoryPreviews(search.sessions, history),
@@ -189,10 +181,9 @@ export default function AiVaultPanel({
         repos,
         worktrees: allWorktrees,
         projectHostSetupProjection,
-        settings: settings ?? undefined,
         sessions
       }),
-    [allWorktrees, projectHostSetupProjection, repos, sessions, settings]
+    [allWorktrees, projectHostSetupProjection, repos, sessions]
   )
   const effectiveActiveWorktreeId = activeWorktreeId ?? activeWorktree?.id ?? null
   const {
@@ -372,7 +363,7 @@ export default function AiVaultPanel({
             }
             onCopyPath={(session) =>
               void copyText(
-                session.filePath,
+                formatClipboardFilePath(session.filePath, session.executionHostId),
                 translate('auto.components.right.sidebar.AiVaultPanel.logPath', 'Log path')
               )
             }

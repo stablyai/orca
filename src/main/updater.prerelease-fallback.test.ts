@@ -105,6 +105,7 @@ describe('updater', () => {
       expect(statuses).toContainEqual({
         state: 'error',
         message: "Couldn't reach the update server. Try again in a few minutes.",
+        messageCode: 'updateServerUnreachable',
         userInitiated: true
       })
     })
@@ -196,6 +197,7 @@ describe('updater', () => {
       expect(statuses).toContainEqual({
         state: 'error',
         message: "Couldn't reach the update server. Try again in a few minutes.",
+        messageCode: 'updateServerUnreachable',
         userInitiated: true
       })
     })
@@ -347,6 +349,7 @@ describe('updater', () => {
       expect(statuses.at(-1)).toEqual({
         state: 'error',
         message: "Couldn't reach the update server. Try again in a few minutes.",
+        messageCode: 'updateServerUnreachable',
         userInitiated: true
       })
     })
@@ -447,6 +450,7 @@ describe('updater', () => {
       expect(statuses).toContainEqual({
         state: 'error',
         message: "Couldn't reach the update server. Try again in a few minutes.",
+        messageCode: 'updateServerUnreachable',
         userInitiated: true
       })
     })
@@ -661,6 +665,7 @@ describe('updater', () => {
       expect(statuses).toContainEqual({
         state: 'error',
         message: "Couldn't reach the update server. Try again in a few minutes.",
+        messageCode: 'updateServerUnreachable',
         userInitiated: true
       })
     })

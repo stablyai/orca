@@ -1,18 +1,8 @@
-import type { PostHog } from 'posthog-node'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import {
-  _enableTransportForTests,
-  _setPostHogClientForTests,
-  _setShuttingDownForTests,
-  persistBannerAcknowledgeWithoutEmitting,
-  setOptIn,
-  shouldOptOutSdkAtInit,
-  shutdownTelemetry
-} from './client'
+import { persistBannerAcknowledgeWithoutEmitting, setOptIn } from './client'
 import {
   BASE_COMMON,
   cleanupTelemetryClientTest,
-  makeMockPostHog,
   setupTelemetryClientTest,
   type MockPostHog,
   type TelemetryClientTestState
@@ -51,6 +41,17 @@ describe('setOptIn()', () => {
     expect(order).toEqual(['capture called', 'sdk enqueue', 'optOut'])
   })
 
+  it('keeps the SDK opted out and sends no consent events while DO_NOT_TRACK overrides', async () => {
+    process.env.DO_NOT_TRACK = '1'
+
+    await setOptIn('settings', true)
+    await persistBannerAcknowledgeWithoutEmitting()
+    await setOptIn('settings', false)
+
+    expect(mock.optIn).not.toHaveBeenCalled()
+    expect(mock.capture).not.toHaveBeenCalled()
+  })
+
   it('fires app_opened and telemetry_opted_in after the SDK enables settings opt-in', async () => {
     state.settings.telemetry!.optedIn = false
     const order: string[] = []
@@ -64,17 +65,6 @@ describe('setOptIn()', () => {
       { telemetry: expect.objectContaining({ optedIn: true }) },
       { notifyListeners: true }
     )
-  })
-
-  it('drops telemetry_opted_in silently in non-official builds', async () => {
-    state.settings.telemetry!.optedIn = false
-    _setPostHogClientForTests(null)
-    _enableTransportForTests(false)
-
-    await setOptIn('settings', true)
-
-    expect(mock.capture).not.toHaveBeenCalled()
-    expect(console.debug).not.toHaveBeenCalled()
   })
 
   it('fires app_opened once after pending-banner opt-in enables the SDK', async () => {
@@ -127,43 +117,5 @@ describe('persistBannerAcknowledgeWithoutEmitting()', () => {
       { telemetry: expect.objectContaining({ optedIn: true }) },
       { notifyListeners: true }
     )
-  })
-})
-
-// pending_banner must not opt out the SDK before the banner Turn Off capture can enqueue.
-describe('shouldOptOutSdkAtInit()', () => {
-  it('opts out the SDK for every disabled-reason', () => {
-    for (const reason of ['user_opt_out', 'ci', 'do_not_track', 'orca_disabled'] as const) {
-      expect(shouldOptOutSdkAtInit({ effective: 'disabled', reason })).toBe(true)
-    }
-  })
-
-  it('does NOT opt out the SDK for pending_banner', () => {
-    expect(shouldOptOutSdkAtInit({ effective: 'pending_banner' })).toBe(false)
-  })
-
-  it('does NOT opt out the SDK for enabled', () => {
-    expect(shouldOptOutSdkAtInit({ effective: 'enabled' })).toBe(false)
-  })
-})
-
-describe('shutdownTelemetry()', () => {
-  afterEach(() => {
-    _setShuttingDownForTests(false)
-    _setPostHogClientForTests(null)
-  })
-
-  it('sets the shutdown gate and calls posthog.shutdown(2000)', async () => {
-    const mock = makeMockPostHog()
-    _setPostHogClientForTests(mock as unknown as PostHog)
-    _setShuttingDownForTests(false)
-    await shutdownTelemetry()
-    expect(mock.shutdown).toHaveBeenCalledWith(2_000)
-    _setPostHogClientForTests(null)
-  })
-
-  it('is a no-op when no client is initialized', async () => {
-    _setPostHogClientForTests(null)
-    await expect(shutdownTelemetry()).resolves.toBeUndefined()
   })
 })

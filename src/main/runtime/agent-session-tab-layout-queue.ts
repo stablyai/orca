@@ -8,7 +8,11 @@ import {
   type ChatTabLayoutCommand
 } from './agent-session/agent-session-tab-layout'
 
-export type QueuedChatTabChange = { worktreeId: string; change: ChatTabChange }
+export type QueuedChatTabChange = {
+  worktreeId: string
+  change: ChatTabChange
+  eligible?: () => boolean
+}
 
 /** Serialize changes against the current layout so close follows open; log refusals and continue. */
 export function createChatTabLayoutQueue(deps: {
@@ -43,6 +47,9 @@ export function createChatTabLayoutQueue(deps: {
       }
       for (const queued of changes) {
         try {
+          if (queued.eligible && !queued.eligible()) {
+            continue
+          }
           const command = commandNow(queued)
           const reply = command ? await deps.apply(command) : null
           if (command && reply && !reply.ok) {

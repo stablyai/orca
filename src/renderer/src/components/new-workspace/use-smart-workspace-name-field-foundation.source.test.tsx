@@ -5,15 +5,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import { normalizeTaskSourceContext } from '../../../../shared/task-source-context'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { NormalizedWorkItemSourceSearchProps } from './smart-workspace-name-field-model'
 import { useWorkItemSourceSearch } from './use-work-item-source-search'
 import { referenceLinearIssue } from '../sidebar/workspace-reference-fixtures.test-support'
 import { useWorkItemSourceFoundation } from './use-work-item-source-foundation'
 import { useSmartWorkspaceSecondarySearches } from './use-smart-workspace-secondary-searches'
+import { useSmartWorkspaceGitlabSearch } from './use-smart-workspace-gitlab-search'
+import { useWorkItemSourcePresentation } from './use-work-item-source-presentation'
 
 const mocks = vi.hoisted(() => ({
   readStatus: vi.fn(),
+  listGitlabWorkItems: vi.fn(),
   readJiraSource: vi.fn(() => ({ intent: false })),
   state: {
     addRepo: vi.fn(),
@@ -31,6 +35,10 @@ const mocks = vi.hoisted(() => ({
   }
 }))
 vi.mock('@/runtime/runtime-linear-client', () => ({ linearStatus: mocks.readStatus }))
+vi.mock('@/lib/gitlab-work-item-source-lookup', () => ({
+  listGitLabWorkItemsForSource: mocks.listGitlabWorkItems,
+  lookupGitLabWorkItemByPathForSource: vi.fn()
+}))
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: typeof mocks.state) => unknown) => selector(mocks.state)
 }))
@@ -149,6 +157,73 @@ describe('smart workspace explicit source connection', () => {
     expect(mocks.readStatus).toHaveBeenCalledWith(source)
     expect(mocks.state.checkLinearConnection).not.toHaveBeenCalled()
     expect(mocks.state.linearStatus.connected).toBe(false)
+  })
+
+  it('shows GitLab workspace search rows without fetching an advertised probe page', async () => {
+    const repo: Repo = {
+      id: 'server-repo',
+      path: '/srv/app',
+      displayName: 'app',
+      badgeColor: '',
+      addedAt: 0,
+      executionHostId: 'runtime:remote'
+    }
+    const items: GitLabWorkItem[] = Array.from({ length: 12 }, (_, index) => ({
+      id: `mr-${index + 1}`,
+      type: 'mr',
+      number: index + 1,
+      title: `Merge request ${index + 1}`,
+      state: 'opened',
+      url: `https://gitlab.com/group/app/-/merge_requests/${index + 1}`,
+      labels: [],
+      updatedAt: '2026-10-01T00:00:00Z',
+      author: null,
+      repoId: repo.id
+    }))
+    mocks.listGitlabWorkItems.mockResolvedValue({
+      items,
+      page: 1,
+      perPage: 12,
+      totalCount: 0,
+      totalPages: 2
+    })
+    const fieldProps = {
+      ...props(),
+      repos: [repo],
+      repoId: repo.id,
+      repoBackedSourcesDisabled: false,
+      value: 'launch'
+    }
+    const { result } = renderHook(() => {
+      const foundation = useWorkItemSourceFoundation(fieldProps)
+      useSmartWorkspaceGitlabSearch({
+        foundation,
+        sourceQueryWithinLimit: true,
+        shouldQueryGitlab: true
+      })
+      return useWorkItemSourcePresentation(foundation)
+    })
+
+    await waitFor(() => expect(result.current.searchResultRows).toHaveLength(items.length))
+    expect(result.current.searchResultRows).toEqual(
+      items.map((item) => ({
+        kind: 'gitlab',
+        value: `gitlab-${repo.id}-mr-${item.number}`,
+        item
+      }))
+    )
+    expect(result.current.loading).toBe(false)
+    expect(mocks.listGitlabWorkItems).toHaveBeenCalledTimes(1)
+    expect(mocks.listGitlabWorkItems).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoPath: repo.path,
+        repoId: repo.id,
+        state: 'opened',
+        page: 1,
+        perPage: 12,
+        query: 'launch'
+      })
+    )
   })
 
   it('hides disconnected saved-host Linear even when the focused runtime is connected', async () => {

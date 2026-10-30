@@ -1,8 +1,10 @@
 import React from 'react'
+import { AlertTriangle } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { GitConflictOperation } from '../../../../../../shared/git-status-types'
 import { ConflictSummaryCard, OperationBanner } from './conflict-status-cards'
 import { EmptyState } from './empty-state'
+import { StatusRetryButton } from './status-retry-button'
 import { TooManyChangesBanner } from './too-many-changes-banner'
 
 export function SourceControlContentStatus({
@@ -12,9 +14,12 @@ export function SourceControlContentStatus({
   isRecoveryBusy,
   isAbortingOperation,
   onAbortOperation,
+  isCompletingMerge,
+  onCompleteMerge,
   onResolveWithAi,
   onReviewConflicts,
   repositoryHuge,
+  statusReadError,
   worktreeId,
   onRetryStatus,
   onStageAllChanges,
@@ -33,9 +38,12 @@ export function SourceControlContentStatus({
   isRecoveryBusy: boolean
   isAbortingOperation: boolean
   onAbortOperation: (operation: GitConflictOperation) => void
+  isCompletingMerge: boolean
+  onCompleteMerge: () => void
   onResolveWithAi: () => void
   onReviewConflicts: () => void
   repositoryHuge: { limit: number } | null | undefined
+  statusReadError?: string
   worktreeId: string
   onRetryStatus: (signal: AbortSignal) => Promise<void>
   onStageAllChanges: () => Promise<void>
@@ -71,6 +79,8 @@ export function SourceControlContentStatus({
             isRecoveryBusy={isRecoveryBusy}
             isAbortingOperation={isAbortingOperation}
             onAbortOperation={onAbortOperation}
+            isCompletingMerge={isCompletingMerge}
+            onCompleteMerge={onCompleteMerge}
             sourceControlAiActionsVisible={sourceControlAiActionsVisible}
             onResolveWithAI={onResolveWithAi}
           />
@@ -86,6 +96,27 @@ export function SourceControlContentStatus({
             onStageAll={onStageAllChanges}
             isStageAllDisabled={isExecutingBulk}
           />
+        </div>
+      )}
+      {statusReadError !== undefined && (
+        <div className="px-3 pb-2">
+          <div className="flex flex-col gap-1 rounded-md border border-status-warning-border bg-status-warning-background px-3 py-2">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-px size-4 shrink-0 text-status-warning" />
+              <span className="min-w-0 flex-1 text-xs text-foreground">
+                {translate(
+                  'auto.components.right.sidebar.SourceControl.statusReadFailed',
+                  'Git could not read this workspace. Changes shown may be out of date.'
+                )}
+              </span>
+            </div>
+            <pre className="scrollbar-sleek max-h-24 overflow-auto font-mono text-xs break-words whitespace-pre-wrap text-muted-foreground">
+              {statusReadError}
+            </pre>
+            <div className="flex justify-end">
+              <StatusRetryButton key={worktreeId} onRetry={onRetryStatus} />
+            </div>
+          </div>
         </div>
       )}
       {showGenericEmptyState && !normalizedFilter ? (

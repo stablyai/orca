@@ -59,6 +59,22 @@ describe('probeWorkspacePortPage', () => {
     ).resolves.toMatchObject({ kind: 'page', title: 'Sign in', faviconDataUrl: null })
   })
 
+  it.each([
+    ['unclosed links', `<title>ok</title>${'<link '.repeat(32_000)}`, 'ok'],
+    ['unclosed titles', '<title>'.repeat(27_000), null]
+  ])('parses a page of %s without stalling the event loop', async (_name, page, title) => {
+    const port = await serve((_request, response) => {
+      response.writeHead(200, { 'content-type': 'text/html' }).end(page)
+    })
+
+    const startedAt = performance.now()
+    await expect(
+      probeWorkspacePortPage({ host: 'localhost', port, protocol: 'http' })
+    ).resolves.toEqual({ kind: 'page', title, faviconDataUrl: null })
+    // Rescanning the body from each unclosed opener took seconds on this ~190 KB page.
+    expect(performance.now() - startedAt).toBeLessThan(500)
+  })
+
   it('leaves out APIs and error pages', async () => {
     const api = await serve((_request, response) => {
       response.writeHead(200, { 'content-type': 'application/json' }).end('{"ok":true}')

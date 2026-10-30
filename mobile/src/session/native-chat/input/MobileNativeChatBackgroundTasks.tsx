@@ -18,7 +18,8 @@ import {
 } from 'lucide-react-native'
 import type { AgentChildRowModel } from '../../../../../src/shared/agent-child-row-model'
 import type { AgentSessionBackgroundTask } from '../../../../../src/shared/agent-session-background-task-wire'
-import { sayBackgroundTaskEnglish as say } from '../../../../../src/shared/background-task-copy'
+import { sayMobileBackgroundTask as say } from '../../mobile-background-task-copy'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import {
   backgroundTasksHeaderContent,
   backgroundTasksHeaderText,
@@ -35,6 +36,8 @@ import {
 import { AGENT_WORKING_COLOR, AgentStateDot } from '../../../components/AgentStateDot'
 import { useNow } from '../../../hooks/use-now'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet } from '../../../theme/themed-styles'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import type { MobileStructuredBackgroundTasks } from '../../use-mobile-structured-background-tasks'
 import {
   useMobileBackgroundTaskStops,
@@ -45,6 +48,7 @@ import { mobileAgentChildRowName, mobileAgentChildRowText } from '../../mobile-a
 type TaskKind = AgentSessionBackgroundTask['kind']
 
 function KindIcon({ kind, size }: { kind: TaskKind; size: number }): React.JSX.Element {
+  useMobileColorScheme()
   const props = { size, color: kindIconColor(kind), strokeWidth: 2 }
   switch (kind) {
     case 'agent':
@@ -83,6 +87,7 @@ function TaskRow({
   stopping: Stopping
   onStop: (taskId: string) => void
 }): React.JSX.Element {
+  useMobileColorScheme()
   const { lead, trail } = mobileAgentChildRowText(row, now)
   const meta = backgroundTaskRowMeta(row, hostNow)
   const stopId = backgroundTaskRowStopId(row, supportsTaskStop)
@@ -146,6 +151,8 @@ function MobileNativeChatBackgroundTasksImpl({
 }: {
   tasks: MobileStructuredBackgroundTasks
 }): React.JSX.Element | null {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const { view, rowContext } = tasks
   const [expanded, setExpanded] = useState(false)
   // Seed from usable window width to avoid changing form after first layout.
@@ -158,7 +165,7 @@ function MobileNativeChatBackgroundTasksImpl({
       view.children !== undefined
         ? buildBackgroundTaskGroupsFromViews(view.children, rowContext)
         : buildBackgroundTaskGroups(view.tasks, view.settledTasks, say),
-    [view.children, view.tasks, view.settledTasks, rowContext]
+    [view.children, view.tasks, view.settledTasks, rowContext, t]
   )
   const now = useNow(1_000, view.show && backgroundTasksStripTicks(groups, expanded))
   if (!view.show) {
@@ -264,7 +271,7 @@ export const MobileNativeChatBackgroundTasks = memo(MobileNativeChatBackgroundTa
 // hitSlop requests 44pt hit rects; compact native parent bounds still limit their reach.
 const MIN_TOUCH_TARGET = 44
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   list: {
     marginHorizontal: spacing.lg,
     marginVertical: spacing.xs
@@ -392,4 +399,4 @@ const styles = StyleSheet.create({
   disabled: {
     opacity: 0.5
   }
-})
+}))

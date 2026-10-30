@@ -1,3 +1,10 @@
+import type { AgentJournalCursor, AgentJournalItemIdentity } from './agent-session-journal-identity'
+export type {
+  AgentJournalCursor,
+  AgentJournalItemIdentity,
+  AgentSessionJournalIdentity,
+  AgentSessionJournalProviderHandle
+} from './agent-session-journal-identity'
 import type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
 export type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
 import type { AgentSessionProviderContextBoundary } from './agent-session-provider-context'
@@ -11,9 +18,11 @@ import type { AgentSessionQuestionAnswer } from './agent-session-question-answer
 import type { AgentJournalTurnOutcome } from './agent-turn-outcome'
 import type { NativeChatToolMetadata } from './native-chat/tools/native-chat-tool-identity'
 import type { AgentSessionContextUsage } from './agent-session-context-usage'
-import type { AgentSessionProviderHandle } from './agent-session-provider-handle'
 import type { NativeChatBlock, NativeChatRole } from './native-chat-types'
-import type { AgentMessageSource } from './agent-session/agent-session-message-source'
+import type {
+  AgentMessageSender,
+  AgentMessageSource
+} from './agent-session/agent-session-message-source'
 import type { AgentSessionExecutionOptions } from './agent-session-execution-options'
 
 export { type AgentType }
@@ -31,43 +40,6 @@ export function journalRowSchemaVersion(bodies: readonly { kind: string }[]): nu
     ? AGENT_SESSION_JOURNAL_TURN_ITEM_SCHEMA_VERSION
     : AGENT_SESSION_JOURNAL_PRE_TURN_SCHEMA_VERSION
 }
-
-/** Epoch-qualified position in one journal. `sequence` 0 means "before the first row". */
-export type AgentJournalCursor = {
-  epoch: string
-  sequence: number
-}
-
-/** Persisted/wire handles must retain their shape; attach omits opaque. Derived via agentSessionJournalProviderHandle; opaque covers other transports or pending proof. */
-export type AgentSessionJournalProviderHandle =
-  | { kind: 'codex'; threadId: string }
-  | { kind: 'claude'; sessionId: string; leafUuid: string | null }
-  | { kind: 'opaque'; agent: AgentType; value: string }
-
-/** The narrow slice of the durable session record the journal needs. The full
- *  record (owner, lease, account home) belongs to the session store. */
-export type AgentSessionJournalIdentity = {
-  /** Orca agent-session id — the journal's primary key. */
-  sessionId: string
-  /** Execution-host workspace key. Identical for a worktree, a folder
-   *  workspace, a WSL distro, and an SSH host; never a path. */
-  workspaceId: string
-  /** Execution host that owns the process, so a client restart adjudicates nothing. */
-  hostId: string
-  agent: AgentType
-  /** The record's proved handle; null before the provider has proved one. */
-  providerHandle: AgentSessionProviderHandle | null
-}
-
-// Codex renumbers items on resume, so persisted item IDs are not identity; Claude preserves UUIDs on fork.
-
-export type AgentJournalItemIdentity =
-  | { provider: 'codex'; threadId: string; turnId: string; ordinal: number }
-  | { provider: 'claude'; sessionId: string; uuid: string }
-  /** A submission Orca minted before any provider echo existed. */
-  | { provider: 'orca'; clientMessageId: string }
-  /** Bridge-era transcript record with no provider-stable identity. */
-  | { provider: 'legacy'; agent: AgentType; sessionId: string; recordId: string }
 
 // ─── Bounded payloads ───────────────────────────────────────────────────────
 
@@ -348,7 +320,16 @@ export type AgentJournalStatusItem =
  *  absent whenever nothing told the host one. */
 export type AgentJournalTurnItem = { kind: 'turn' } & AgentJournalTurnLifecycle
 
+/** Display-only creation fact; survives removal of the orchestration Task and Dispatch. */
+export type AgentJournalAgentStartItem = {
+  kind: 'agent-start'
+  dispatchId: string
+  worker: AgentMessageSender
+  task: string
+}
+
 export type AgentJournalItemBody =
+  | AgentJournalAgentStartItem
   | AgentJournalMessageItem
   | AgentJournalToolCallItem
   | AgentJournalDiffItem

@@ -62,6 +62,11 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
     ) {
       this.activeWebContentsPerWorktree.set(owningWorktreeId, newWebContentsId)
     }
+    for (const [key, heldWebContentsId] of this.heldPersonSelections) {
+      if (heldWebContentsId === oldWebContentsId) {
+        this.heldPersonSelections.set(key, newWebContentsId)
+      }
+    }
     this.options.onTabsChanged?.(owningWorktreeId ?? undefined)
   }
   protected async ensureSession(

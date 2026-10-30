@@ -129,6 +129,11 @@
                 "name": "@linear/sdk",
                 "allowTypeImports": true,
                 "message": "Value-importing @linear/sdk hoists its ~2.6MB CJS bundle into the eager top-level require block and defeats the lazy loader. Use `import type` plus loadLinearSdk() from src/main/linear/linear-sdk.ts."
+              },
+              {
+                "name": "ssh2",
+                "allowTypeImports": true,
+                "message": "Value-importing ssh2 hoists it into the eager main-process require block and blocks startup (#35731). Use `import type` plus loadSsh2() from src/main/ssh/ssh2-module-load.ts."
               }
             ],
             "patterns": [
@@ -153,14 +158,6 @@
           {
             "property": "randomUUID",
             "message": "crypto.randomUUID is missing in non-secure contexts (Remote Web over plain HTTP), which white-screens the app. Use createBrowserUuid() from '@/lib/browser-uuid'."
-          },
-          {
-            "property": "endpointProjects",
-            "message": "Read canonical affiliation through project-host-setup-selector; endpoint facts are reserved for ingestion and concrete operation adapters."
-          },
-          {
-            "property": "endpointProjectHostSetups",
-            "message": "Read canonical affiliation through project-host-setup-selector; endpoint facts are reserved for ingestion and concrete operation adapters."
           }
         ]
       }
@@ -214,39 +211,6 @@
       ],
       "rules": {
         "max-lines": ["error", { "max": 800, "skipBlankLines": true, "skipComments": true }]
-      }
-    },
-    {
-      "files": [
-        "src/renderer/src/store/project-host-setup-selector.ts",
-        "src/renderer/src/store/project-search-catalog.ts",
-        "src/renderer/src/store/repos/repo-catalog-identity.ts",
-        "src/renderer/src/store/repos/repo-catalog-actions.ts",
-        "src/renderer/src/store/repos/runtime-repo-catalog-actions.ts",
-        "src/renderer/src/store/repos/all-host-repo-catalog-actions.ts",
-        "src/renderer/src/store/repos/repo-add-actions.ts",
-        "src/renderer/src/store/repos/repo-update.ts",
-        "src/renderer/src/store/repos/repo-removal.ts",
-        "src/renderer/src/store/projects/project-host-setup-actions.ts",
-        "src/renderer/src/store/projects/project-update.ts",
-        "src/renderer/src/store/project-groups/project-group-mutations.ts",
-        "src/renderer/src/store/slices/worktrees/teardown/purge-stale-runtime-host-state.ts",
-        "src/renderer/src/store/slices/worktrees/teardown/orphaned-runtime-ssh-project-purge.ts",
-        "src/renderer/src/app-shell/use-runtime-graph-sync.ts",
-        "src/renderer/src/**/*.test.{ts,tsx}",
-        "src/renderer/src/**/*.spec.{ts,tsx}",
-        "src/renderer/src/**/*-test-*.ts",
-        "src/renderer/src/**/*.test-fixture.ts",
-        "src/renderer/src/components/automations/automations-page-runtime-fixtures.ts"
-      ],
-      "rules": {
-        "no-restricted-properties": [
-          "error",
-          {
-            "property": "randomUUID",
-            "message": "crypto.randomUUID is missing in non-secure contexts (Remote Web over plain HTTP), which white-screens the app. Use createBrowserUuid() from '@/lib/browser-uuid'."
-          }
-        ]
       }
     }
   ],

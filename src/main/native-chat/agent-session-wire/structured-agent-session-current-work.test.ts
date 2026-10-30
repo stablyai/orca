@@ -4,7 +4,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
-import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
+import type {
+  AgentSessionStatusEvent,
+  AgentSessionStatusSummary
+} from '../../../shared/agent-session-wire'
+import type { AgentSessionStatusSnapshot } from '../../../shared/agent-session-status-snapshot-fold'
 import {
   isActionableStructuredAgentSessionPrompt,
   runningStructuredAgentSessionTurnId
@@ -34,6 +38,12 @@ import {
   turnState
 } from './structured-agent-session-leftover-settlement.test-fixture'
 
+// Mobile has its own typecheck project; run its real consumer across the shared wire boundary.
+const phoneFeedPath = '../../../../mobile/src/session/mobile-structured-session-status-feed'
+const phoneClientPath = '../../../../mobile/src/transport/rpc-client-test-stub'
+const { mobileStructuredSessionStatusFeed } = await import(phoneFeedPath)
+const { stubRpcClient } = await import(phoneClientPath)
+
 let rig: QueuedMessageTestRig | undefined
 
 afterEach(async () => {
@@ -53,6 +63,23 @@ const FOLDER: AgentSessionExecutionLocation = {
 function watch(current: QueuedMessageTestRig) {
   let chat: StructuredAgentSessionState = EMPTY_STRUCTURED_AGENT_SESSION
   let listed: AgentSessionStatusSummary | undefined
+  const phone: {
+    subscribe: (listener: () => void) => () => void
+    getSnapshot: () => AgentSessionStatusSnapshot
+  } = mobileStructuredSessionStatusFeed(
+    stubRpcClient({
+      subscribe: (
+        _method: string,
+        _params: unknown,
+        emit: (event: AgentSessionStatusEvent) => void
+      ) =>
+        current.host.subscribeStatus({
+          id: 'phone-1',
+          emit: (event) => emit(structuredClone(event))
+        })
+    })
+  )
+  phone.subscribe(() => {})
   current.host.subscribe({
     id: 'chat-1',
     sessionId: SESSION,
@@ -73,6 +100,7 @@ function watch(current: QueuedMessageTestRig) {
   return {
     chat: () => chat,
     listed: () => listed,
+    phone: () => phone.getSnapshot().get(SESSION),
     answerable: () =>
       chat.items.some(
         (item) =>
@@ -119,6 +147,7 @@ describe("a dead generation's leftovers, its settlement refused and its lease re
     expect(work.working()).toBe(false)
     expect(work.actionablePromptIds()).toEqual([])
     expect(view.listed()?.status).not.toBe('working')
+    expect(view.phone()?.status).toBe(view.listed()?.status)
     expect(current.host.readStatusSummary(SESSION)?.status).not.toBe('working')
     const page = await hydration(current)
     expect(page.latestTurn?.turn.state).toBe('interrupted')
@@ -162,17 +191,20 @@ describe('a close Orca asked for, its settlement refused', () => {
       sessionId: SESSION,
       cause: 'requested-close',
       reason: 'closed by Orca',
+      deathEvidenceKind: 'kill-delivered',
       fence: child.fence,
       acquisitionGeneration: child.generation
     })
     await current.host.collaboratorsForTests().serialize(SESSION, async () => {})
 
+    expect(current.store.getRecord(SESSION)?.lease.deathEvidence?.kind).toBe('kill-delivered')
     expect(currentJournal(current).cursor().sequence).toBe(before)
     expect(turnState(current)).toBe('running')
     await vi.waitFor(() => expect(view.answerable()).toBe(false))
     expect(view.chat().working).toBe(false)
     expect(runningStructuredAgentSessionTurnId(view.chat())).toBeNull()
     expect(view.listed()?.status).not.toBe('working')
+    expect(view.phone()?.status).toBe(view.listed()?.status)
   })
 })
 
@@ -230,6 +262,7 @@ describe('a live owner', () => {
 
     const work = currentWork(current)
     expect(work.liveFence).toBe(current.store.getRecord(SESSION)?.lease.runtimeFence)
+    expect(view.phone()?.status).toBe('attention')
     expect(work.activeTurnId()).toBe('unfinished')
     expect(work.actionablePromptIds()).toEqual([APPROVAL_ID])
     const page = await hydration(current)

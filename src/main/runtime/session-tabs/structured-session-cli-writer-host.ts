@@ -24,8 +24,29 @@ import {
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../../shared/structured-agent-cli-conversation-adoption'
 import { recordConversationKey } from '../../native-chat/structured-conversation-key'
+import type { StructuredAgentCliSourceRoute } from '../../native-chat/structured-agent-cli-source'
 
 export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends OrcaRuntimeWithGetWorktreePs {
+  getStructuredAgentCliSourceRoute(source: {
+    workspaceId: string
+    paneKey: string
+  }): StructuredAgentCliSourceRoute {
+    const pty = this.getPtyRecordForPaneKey(source.paneKey)
+    if (!pty) {
+      return 'unknown'
+    }
+    const pane = this.resolveTerminalPane(source.paneKey, source.workspaceId)
+    if (pane.ptyId !== pty.ptyId || pty.worktreeId !== source.workspaceId) {
+      return 'unknown'
+    }
+    return pty.connectionId ||
+      pty.isWsl ||
+      pty.wslDistro ||
+      pane.executionHostId !== LOCAL_EXECUTION_HOST_ID
+      ? 'unsupported'
+      : 'native-local'
+  }
+
   rememberSavedTerminalLaunchResult(ptyId: string, result: TerminalLaunchResult): void {
     const pty = this.ptysById.get(ptyId)
     if (pty && result.savedResumeDecision) {

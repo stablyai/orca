@@ -165,9 +165,11 @@ it('overlaps both typechecks with tests and collects their failures before the s
   const test = steps.findIndex((step) => step.name === 'Test')
   const summary = steps.findIndex((step) => step.name === 'Summarize RPC recording changes')
   const waits = steps.filter((step) => step.wait !== undefined)
-  expect(waits).toHaveLength(1)
-  const [wait] = waits
-  expect(wait.wait).toEqual(['production-types', 'test-types', 'ruby-tools'])
+  expect(waits.map((step) => step.wait)).toEqual([
+    'ruby-setup',
+    ['production-types', 'test-types', 'ruby-tools']
+  ])
+  const wait = waits.at(-1)
   expect(wait.if).toBeUndefined()
   expect(steps.indexOf(wait)).toBeGreaterThan(test)
   expect(steps.indexOf(wait)).toBeLessThan(summary)
@@ -180,10 +182,14 @@ it('overlaps both typechecks with tests and collects their failures before the s
     expect(steps.indexOf(step)).toBeLessThan(test)
     expect(step.run).toMatch(/^node /)
   }
+  const setup = steps.find((step) => step.id === 'ruby-setup')
+  expect(setup.uses).toBe('ruby/setup-ruby@v1')
+  expect(steps.indexOf(setup)).toBeLessThan(install)
   const ruby = steps.find((step) => step.id === 'ruby-tools')
-  expect(ruby.uses).toBe('ruby/setup-ruby@v1')
-  expect(ruby.background).toBe(true)
-  expect(ruby.if).toBe("steps.ruby-scope.outputs.should_run != 'false'")
-  expect(ruby['continue-on-error']).toBeUndefined()
-  expect(steps.indexOf(ruby)).toBeLessThan(install)
+  expect(steps.indexOf(ruby)).toBeLessThan(test)
+  for (const step of [setup, ruby]) {
+    expect(step.background).toBe(true)
+    expect(step.if).toBe("steps.ruby-scope.outputs.should_run != 'false'")
+    expect(step['continue-on-error']).toBeUndefined()
+  }
 })

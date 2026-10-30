@@ -3,6 +3,7 @@ import { useMobileQueuedMessageComposerActions } from './use-mobile-queued-messa
 // The host owns queued drafts; render its published cards even when it cannot queue new sends.
 
 import { useCallback, useMemo } from 'react'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -10,19 +11,17 @@ import type {
 import { agentSessionVisibleFailureFacts } from '../../../src/shared/agent-session-visible-failures'
 import { mapSettledWithConcurrency } from '../../../src/shared/map-with-concurrency'
 import type {
+  AgentSessionQueuedMessage,
   AgentSessionQueuedMessageDeleteResult,
   AgentSessionQueuedMessagesResumeResult,
+  AgentSessionQueuePause,
   AgentSessionSendResult
 } from '../../../src/shared/agent-session-wire'
+import { queuedMessagesQueuePause } from '../../../src/shared/structured-agent-session-queued-cards'
 import {
-  mobileQueueHasResumableCard,
   mobileQueuedMessageCards,
   type MobileQueuedMessageCard
 } from './mobile-structured-queued-message-cards'
-import type {
-  MobileQueuedMessageFeed,
-  MobileQueuePause
-} from './mobile-structured-queued-message-feed'
 import type { MobileStructuredAgentMutate } from './use-mobile-structured-agent-mutation'
 import type { RpcClient } from '../transport/rpc-client'
 import {
@@ -43,7 +42,7 @@ export type MobileStructuredQueuedMessageControls = {
   edit?: MobileQueuedMessageEdit
   editor?: MobileQueuedMessageInlineEditor
   move?: (move: DragReorderMove) => Promise<boolean>
-  pause: MobileQueuePause
+  pause: AgentSessionQueuePause | null
   resume: () => Promise<boolean>
   sessionKey: string
 }
@@ -55,19 +54,24 @@ export function useMobileStructuredQueuedMessageControls(args: {
   chatActive: boolean
   enabled: boolean
   editCapable: boolean | null
+  imagesCapable?: boolean
+  skillsCapable?: boolean
+  composerScopeKey?: string | null
   reorderCapable?: boolean
   agentName?: string
   journalItems?: readonly AgentJournalRenderItem[]
-  queuedMessages: MobileQueuedMessageFeed
-  queuePause: MobileQueuePause
+  queuedMessages: readonly AgentSessionQueuedMessage[] | null
+  queuePause: AgentSessionQueuePause | null
   submissions: readonly AgentJournalSubmission[]
   agentWorking?: boolean
   mutate: MobileStructuredAgentMutate
   // Without a live composer or a successful copy, Edit must refuse.
   appendComposerText: ((text: string) => boolean) | undefined
+  onQueuedEditNotice?: (message: string) => void
   onSendError: (message: string) => void
   onActionResolved?: () => void
 }): MobileStructuredQueuedMessageControls {
+  const t = useMobileTranslation()
   const {
     appendComposerText,
     mutate,
@@ -89,12 +93,22 @@ export function useMobileStructuredQueuedMessageControls(args: {
     () =>
       mobileQueuedMessageCards(orderedMessages, submissions, {
         agentWorking,
+        queuePaused: queuePause !== null,
         agentName: args.agentName,
         statedFailures: queuedMessages?.some((draft) => draft.state === 'returned')
           ? agentSessionVisibleFailureFacts(args.journalItems ?? [])
           : []
       }),
-    [agentWorking, args.agentName, args.journalItems, orderedMessages, queuedMessages, submissions]
+    [
+      agentWorking,
+      args.agentName,
+      args.journalItems,
+      orderedMessages,
+      queuePause,
+      queuedMessages,
+      submissions,
+      t
+    ]
   )
   const { begin: beginInlineEdit, editor } = useMobileStructuredQueuedEdit({
     ...args,
@@ -226,7 +240,7 @@ export function useMobileStructuredQueuedMessageControls(args: {
       ),
     [mutate, resolved]
   )
-  const pause = mobileQueueHasResumableCard(cards) ? queuePause : null
+  const pause = queuedMessagesQueuePause(cards, queuePause)
   return {
     cards,
     send,

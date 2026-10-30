@@ -17,7 +17,7 @@ export type AgentBackgroundSessionTestState = {
     activeRuntimeEnvironmentId: string | null
     terminalMainSideEffectAuthority: boolean | undefined
   }
-  endpointProjects: {
+  projects: {
     id: string
     localWindowsRuntimePreference:
       | { kind: 'inherit-global' }
@@ -69,20 +69,22 @@ export function createAgentBackgroundSessionTestState(mocks: {
   setTabLayout: TestMock
   registerAgentLaunchConfig: TestMock
 }): AgentBackgroundSessionTestState {
-  const endpointProjects: AgentBackgroundSessionTestState['endpointProjects'] = [
-    { id: 'repo-1', localWindowsRuntimePreference: { kind: 'inherit-global' } }
-  ]
-  const state = {
+  const state: AgentBackgroundSessionTestState = {
     activeRepoId: 'repo-1',
     activeWorktreeId: 'wt-1',
     lastTerminalInputAtByPaneKey: {},
     settings: {
       agentCmdOverrides: {},
-      activeRuntimeEnvironmentId: null as string | null,
-      terminalMainSideEffectAuthority: undefined as boolean | undefined
+      activeRuntimeEnvironmentId: null,
+      terminalMainSideEffectAuthority: undefined
     },
-    endpointProjects,
-    repos: [{ id: 'repo-1', connectionId: null as string | null, path: '/repo' }],
+    projects: [
+      {
+        id: 'repo-1',
+        localWindowsRuntimePreference: { kind: 'inherit-global' }
+      }
+    ],
+    repos: [{ id: 'repo-1', connectionId: null, path: '/repo' }],
     worktreesByRepo: {
       'repo-1': [
         {
@@ -94,16 +96,13 @@ export function createAgentBackgroundSessionTestState(mocks: {
         }
       ]
     },
-    folderWorkspaces: [] as AgentBackgroundSessionTestState['folderWorkspaces'],
-    projectGroups: [] as AgentBackgroundSessionTestState['projectGroups'],
-    tabsByWorktree: { 'wt-1': [] as { id: string; title: string }[] },
-    terminalLayoutsByTabId: {} as Record<
-      string,
-      { ptyIdsByLeafId?: Record<string, string | undefined> }
-    >,
-    ptyIdsByTabId: {} as Record<string, string[]>,
+    folderWorkspaces: [],
+    projectGroups: [],
+    tabsByWorktree: { 'wt-1': [] },
+    terminalLayoutsByTabId: {},
+    ptyIdsByTabId: {},
     sshConnectionStates: new Map<string, { status: string }>(),
-    transientClearedAgentStatusConnectionIds: {} as Record<string, true>,
+    transientClearedAgentStatusConnectionIds: {},
     allWorktrees: () => state.worktreesByRepo['repo-1'],
     getKnownWorktreeById: (worktreeId: string) =>
       state.worktreesByRepo['repo-1']?.find((worktree) => worktree.id === worktreeId),
@@ -130,9 +129,7 @@ export function resetAgentBackgroundSessionTestState(state: AgentBackgroundSessi
     activeRuntimeEnvironmentId: null,
     terminalMainSideEffectAuthority: undefined
   }
-  state.endpointProjects = [
-    { id: 'repo-1', localWindowsRuntimePreference: { kind: 'inherit-global' } }
-  ]
+  state.projects = [{ id: 'repo-1', localWindowsRuntimePreference: { kind: 'inherit-global' } }]
   state.repos = [{ id: 'repo-1', connectionId: null, path: '/repo' }]
   state.folderWorkspaces = []
   state.projectGroups = []

@@ -4,8 +4,8 @@ import { claimBackgroundTaskTwins } from './native-chat/input/native-chat-backgr
 import {
   isSubagentGroupFallbackText,
   subagentGroupFallbackText
-} from './native-chat-subagent-summary'
-import { subagentFallbackText } from './native-chat-subagent-items'
+} from './native-chat/transcript/native-chat-subagent-summary'
+import { subagentFallbackText } from './native-chat/transcript/native-chat-subagent-items'
 import type { NativeChatMessage } from './native-chat-types'
 
 export function formatWorkerTranscriptMessage(message: NativeChatMessage): string {

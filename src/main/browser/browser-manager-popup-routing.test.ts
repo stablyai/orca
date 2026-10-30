@@ -17,7 +17,7 @@ const browserMocks = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({
   app: {
-    prependOnceListener: vi.fn(),
+    prependListener: vi.fn(),
     off: vi.fn(),
     getPath: browserMocks.appGetPathMock
   },
@@ -652,7 +652,7 @@ describe('browserManager', () => {
     expect(returned).toBe(popupContents)
     // Custom-created children skip did-create-window, so attach their guest policies directly.
     expect(popupContents.setWindowOpenHandler).toHaveBeenCalledTimes(1)
-    expect(popupContents.setBackgroundThrottling).toHaveBeenCalledWith(false)
+    expect(popupContents.setBackgroundThrottling).not.toHaveBeenCalled()
     expect(popupContents.on.mock.calls.some(([event]) => event === 'dom-ready')).toBe(false)
     expect(rendererSendMock).toHaveBeenCalledWith('browser:popup', {
       browserPageId: 'browser-1',

@@ -117,7 +117,8 @@ export const createWorkItemFetchActions = (
       const weakerThanRequested =
         (options?.force && !existing.force) ||
         (options?.noCache && !existing.noCache) ||
-        (options?.requireComplete && !existing.requireComplete)
+        (options?.requireComplete && !existing.requireComplete) ||
+        (options?.wakeWslDistro && !existing.wakeWslDistro)
       if (!weakerThanRequested) {
         return existing.promise
       }
@@ -136,7 +137,8 @@ export const createWorkItemFetchActions = (
         const envelope = await listGitHubWorkItemsForRepo(requestContext, {
           limit,
           query: query || undefined,
-          ...(options?.noCache ? { noCache: true } : {})
+          ...(options?.noCache ? { noCache: true } : {}),
+          ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
         })
         // Why: stamp repoId at the fetch boundary so downstream consumers can rely on it — main doesn't know Orca's Repo.id.
         const repoHostId = getGitHubWorkItemRowHostId(
@@ -245,7 +247,8 @@ export const createWorkItemFetchActions = (
       requestId,
       force: Boolean(options?.force),
       noCache: Boolean(options?.noCache),
-      requireComplete: Boolean(options?.requireComplete)
+      requireComplete: Boolean(options?.requireComplete),
+      wakeWslDistro: Boolean(options?.wakeWslDistro)
     })
     return request
   }

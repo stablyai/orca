@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { normalizeExecutionHostId } from '../../shared/execution-host'
+import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { OrcaRuntimeService } from './orca-runtime'
 import { withChatTabChanges } from './agent-session/agent-session-tab-layout'
@@ -48,9 +49,17 @@ function runtimeStore(state: { session: WorkspaceSessionState }) {
 
 const settled = chatTabCommandsSettled
 
-function useChatHost(fake: Record<string, unknown>): void {
+function useChatHost(fake: Partial<StructuredAgentSessionHost>): void {
+  const index = () =>
+    typeof fake.getPersistedVisibleSessionTabIndex === 'function'
+      ? fake.getPersistedVisibleSessionTabIndex()
+      : { present: false, sessionIds: [] }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each test supplies every host member its path reads.
-  setStructuredAgentSessionHost(fake as never)
+  setStructuredAgentSessionHost({
+    deps: { store: { getConversation: () => null, isSessionUnreadable: () => false } },
+    isSessionTabVisible: (id: string) => index().sessionIds.includes(id),
+    ...fake
+  } as never)
 }
 
 function chat(sessionId: string) {
@@ -239,7 +248,7 @@ describe('a chat tab on a host with no window', () => {
     useChatHost({
       reconcileRestartLeases: async () => undefined,
       getPersistedVisibleSessionTabIndex: () => ({ present: true, sessionIds: ['chat-1'] }),
-      restoreReadableSessions: async () => undefined,
+      seedSessionTabs: async () => undefined,
       listSessionTabs: () => [{ sessionId: 'chat-1', workspaceId: WT, agent: 'codex' }]
     })
 

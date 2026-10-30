@@ -4,11 +4,11 @@ import {
   applyNativeChatSessionOptionPicks,
   resolveStructuredLaunchSeedOptions,
   updateNativeChatSessionOptionDefaults
-} from './native-chat-session-option-defaults'
+} from './native-chat/input/native-chat-session-option-defaults'
 import type {
   PersistedNativeChatSessionOptions,
   SessionOptionValue
-} from './native-chat-session-options'
+} from './native-chat/input/native-chat-session-options'
 import {
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState,

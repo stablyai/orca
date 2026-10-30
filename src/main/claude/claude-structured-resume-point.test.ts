@@ -5,16 +5,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import type { ClaudeStructuredSessionEvent } from './claude-structured-session-adapter'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import {
   adapterFor,
   fakeClaude,
   identityFor,
   PROVIDER_SESSION_ID,
   recordingJournalSink,
-  tick,
-  claudeOpened
+  tick
 } from './claude-structured-session-test-support'
+import { claudeOpened } from './claude-structured-startup-settled-test-support'
 
 const journals = createTrackedJournalOpener()
 const cleanups: (() => Promise<void>)[] = []

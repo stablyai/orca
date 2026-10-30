@@ -2,6 +2,7 @@ import { posix as pathPosix } from 'node:path'
 import { parseWslUncPath, toLinuxPath, toWindowsWslUncPath } from '../../shared/wsl-paths'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { getDefaultWslDistro, getWslHome } from '../wsl'
+import { getCachedWslHome } from '../wsl-home-cache'
 import { isWslDistroRunning } from '../wsl-background-distro-gate'
 import {
   getSystemCodexHomePath,
@@ -186,7 +187,10 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     await Promise.all(drains)
   }
 
-  protected getWslSystemCodexHomePath(target: CodexAccountSelectionTarget): string | null {
+  protected getWslSystemCodexHomePath(
+    target: CodexAccountSelectionTarget,
+    { probeHome = true }: { probeHome?: boolean } = {}
+  ): string | null {
     if (process.platform !== 'win32') {
       return null
     }
@@ -194,7 +198,8 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     if (!distro) {
       return null
     }
-    const home = getWslHome(distro)
+    // Null (unknown home) means the guest's own ~/.codex, which is the system default anyway.
+    const home = probeHome ? getWslHome(distro) : (getCachedWslHome(distro) ?? null)
     if (home && /^[A-Za-z]:[\\/]/.test(home)) {
       const linuxHome = toLinuxPath(home).trim()
       return linuxHome.startsWith('/')

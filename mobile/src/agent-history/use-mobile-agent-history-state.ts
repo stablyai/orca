@@ -29,6 +29,7 @@ import {
 } from './mobile-agent-history-operations'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
 import { MOBILE_AI_VAULT_CAPABILITY } from './agent-history-capability'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export { MOBILE_AI_VAULT_CAPABILITY }
 
@@ -61,6 +62,7 @@ export type MobileAgentHistoryStateParams = {
 }
 
 export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams) {
+  const t = useMobileTranslation()
   const { hostId, worktreeId, worktrees, worktreesLoaded } = params
   const { client, state: connState } = useWorkspaceClient(hostId)
   const forceReconnect = useForceReconnect()
@@ -145,10 +147,9 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
       if (!client || connState !== 'connected') {
         if (isCurrent()) {
           setHostStatusProbe(null)
+          const message = t('agentHistory.useAgentHistoryState.waitingForHost', 'Waiting for host…')
           // Keep stale rows visible during reconnect reloads instead of replacing them with full-screen error, matching host list.
-          setScreenState((prev) =>
-            prev.kind === 'ready' ? prev : { kind: 'error', message: 'Waiting for host…' }
-          )
+          setScreenState((prev) => (prev.kind === 'ready' ? prev : { kind: 'error', message }))
         }
         return
       }
@@ -163,7 +164,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
         }
         const status = interpretOrThrowRefusalMessage(
           () => agentHistoryHostStatusRead.interpret(statusReply),
-          'Unable to reach host'
+          t('agentHistory.useAgentHistoryState.hostUnreachable', 'Unable to reach host')
         )
         setHostStatusProbe({ hostId, client, generation: clientGeneration, result: status })
         if (!status.capabilities?.includes(MOBILE_AI_VAULT_CAPABILITY)) {
@@ -192,7 +193,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
         }
         const result = interpretOrThrowRefusalMessage(
           () => agentHistorySessionScan.interpret(reply),
-          'Unable to load agent sessions'
+          t('agentHistory.useAgentHistoryState.loadFailed', 'Unable to load agent sessions')
         )
         setScreenState({
           kind: 'ready',
@@ -207,7 +208,10 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
         if (!isCurrent()) {
           return
         }
-        const message = err instanceof Error ? err.message : 'Unable to load agent sessions'
+        const message =
+          err instanceof Error
+            ? err.message
+            : t('agentHistory.useAgentHistoryState.loadFailed', 'Unable to load agent sessions')
         setHostStatusProbe(null)
         setScreenState({ kind: 'error', message })
       } finally {
@@ -219,7 +223,17 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
         }
       }
     },
-    [activeWorktree, client, clientGeneration, connState, feed, hostId, worktrees, worktreesLoaded]
+    [
+      activeWorktree,
+      client,
+      clientGeneration,
+      connState,
+      feed,
+      hostId,
+      worktrees,
+      worktreesLoaded,
+      t
+    ]
   )
 
   // Initial/reconnect/scope loads reuse host’s 15s cache; only explicit refresh bypasses it.

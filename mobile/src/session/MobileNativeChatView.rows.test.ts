@@ -25,8 +25,12 @@ vi.mock('lucide-react-native', () => ({
   ChevronsUpDown: 'ChevronsUpDown',
   Square: 'Square'
 }))
-vi.mock('./MobileNativeChatMessage', () => ({ MobileNativeChatMessage: 'ChatMessage' }))
-vi.mock('./MobileNativeChatLiveLine', () => ({ MobileNativeChatLiveLine: 'LiveStatus' }))
+vi.mock('./native-chat/transcript/MobileNativeChatMessage', () => ({
+  MobileNativeChatMessage: 'ChatMessage'
+}))
+vi.mock('./native-chat/transcript/MobileNativeChatLiveLine', () => ({
+  MobileNativeChatLiveLine: 'LiveStatus'
+}))
 vi.mock('./native-chat/input/MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
 vi.mock('./native-chat/input/MobileNativeChatPermission', () => ({
   MobileNativeChatPermission: 'ChatPermission'
@@ -70,3 +74,7 @@ describe('MobileNativeChatView: rows and the streaming bubble', () => {
     expect(renderedRow('pending-1').props).not.toHaveProperty('queued')
   })
 })
+
+vi.mock('./MobileQueuedMessageComposer', () => ({
+  MobileQueuedMessageComposer: 'QueuedMessageComposer'
+}))

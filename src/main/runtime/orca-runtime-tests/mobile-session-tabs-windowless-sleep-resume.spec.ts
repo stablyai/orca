@@ -1,3 +1,11 @@
+import { spawnWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
+import type { SpawnRequestFacts } from '../../../shared/host-spawn-admission'
+import {
+  createSpawnAdmissionState,
+  DEFAULT_SPAWN_ADMISSION_LIMITS,
+  decideSpawnAdmission,
+  resolveSpawnCharge
+} from '../../../shared/host-spawn-admission'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService, electronMocks } from '../orca-runtime-test-mocks.spec'
@@ -283,6 +291,88 @@ describe('opening a workspace-slept running agent on a host with no window', () 
 
   describe("the window's open of a slept pane (worktrees:resumeSleptPane)", () => {
     const pane = { worktreeId: TEST_WORKTREE_ID, tabId: 'host-tab', leafId: HEADLESS_LEAF_ID }
+
+    it('keeps the original provider and current retry intent through a refused main start', async () => {
+      const fixture = makeWorkingSleepStore()
+      const { runtime, spawn, opened } = openPane(fixture.runtimeStore, 'openable', {
+        withWindow: true,
+        tap: false
+      })
+      await opened
+      const limits = DEFAULT_SPAWN_ADMISSION_LIMITS
+      const state = createSpawnAdmissionState(limits, 0)
+      state.liveAutomatic = limits.maxLiveAutomatic
+      spawn.mockImplementation(async (...args: unknown[]) => {
+        const request = args[0]
+        if (typeof request !== 'object' || request === null || !('spawnIntent' in request)) {
+          throw new Error('missing intent')
+        }
+        const declaredIntent = request.spawnIntent
+        if (declaredIntent !== 'user-resume' && declaredIntent !== 'automatic-restore') {
+          throw new Error('wrong intent')
+        }
+        const release = await runtime.acquireWorktreeTerminalSpawn(
+          spawnWorktreeTarget(TEST_WORKTREE_ID, null),
+          {
+            refuseSleptWorktree:
+              'refuseSleptWorktree' in request && request.refuseSleptWorktree === true
+          }
+        )
+        try {
+          const facts = {
+            clientId: 'resume-test',
+            declaredIntent,
+            hasAgentSessionClaim: false,
+            hasHistorySeed: false,
+            deadlineAt: 1000
+          } satisfies SpawnRequestFacts
+          const decision = decideSpawnAdmission({
+            state,
+            facts,
+            charge: resolveSpawnCharge(state, facts, limits, 0),
+            pressure: 'ok',
+            mode: { kind: 'normal' },
+            limits,
+            now: 0
+          })
+          if (spawn.mock.calls.length === 1 || decision.kind === 'defer') {
+            throw new Error('terminal_spawn_deferred:live_cap')
+          }
+          return { id: 'persisted-pty' }
+        } finally {
+          release()
+        }
+      })
+      await runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
+      await expect(runtime.resumeSleptPane(pane)).rejects.toThrow(
+        'terminal_spawn_deferred:live_cap'
+      )
+      expect(spawn).toHaveBeenLastCalledWith(
+        expect.objectContaining({ spawnIntent: 'user-resume' })
+      )
+      await expect(runtime.resumeSleptPane(pane, true)).rejects.toThrow(
+        'terminal_spawn_deferred:live_cap'
+      )
+      expect(spawn).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          spawnIntent: 'automatic-restore',
+          refuseSleptWorktree: true
+        })
+      )
+      await runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
+      await expect(runtime.resumeSleptPane(pane, true)).rejects.toThrow(
+        'worktree_terminals_sleeping'
+      )
+      expect(spawn).toHaveBeenCalledTimes(3)
+      await expect(runtime.resumeSleptPane(pane, false)).resolves.toBe(true)
+      for (let call = 0; call < 4; call += 1) {
+        expect(spawnedCommand(spawn, call)).toContain('provider-session-1')
+        expect(spawnedCommand(spawn, call)).not.toContain('--dangerously-skip-permissions')
+      }
+      expect(spawn).toHaveBeenLastCalledWith(
+        expect.objectContaining({ spawnIntent: 'user-resume' })
+      )
+    })
 
     it('resumes once; a second open after it finished attaches to the same terminal', async () => {
       const fixture = makeWorkingSleepStore()

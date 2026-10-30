@@ -1,3 +1,5 @@
+import { sourceControlActionRecipeEntry } from '../../../../shared/source-control-action-selection'
+import type { SourceControlActionRecipe } from '../../../../shared/source-control-ai-actions'
 import React, { type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
@@ -47,7 +49,9 @@ vi.mock('../source-control/SourceControlActionVariableChips', () => ({
 }))
 
 function renderForm(
-  overrides: Partial<React.ComponentProps<typeof SourceControlAgentActionDialogForm>> = {}
+  overrides: Partial<
+    Omit<React.ComponentProps<typeof SourceControlAgentActionDialogForm>, 'recipe'>
+  > & { recipe?: SourceControlActionRecipe } = {}
 ): string {
   return renderToStaticMarkup(
     React.createElement(SourceControlAgentActionDialogForm, {
@@ -66,11 +70,6 @@ function renderForm(
       statusCopy: null,
       agentArgs: '',
       agentArgsApply: true,
-      recipe: {
-        agentId: overrides.selectedAgent ?? 'codex',
-        commandInputTemplate: overrides.commandTemplate ?? '{basePrompt}',
-        ...(overrides.agentArgs !== undefined ? { agentArgs: overrides.agentArgs } : {})
-      },
       commandTemplate: '{basePrompt}',
       savedCommandInputTemplate: '{basePrompt}',
       saveLaunchRecipe: true,
@@ -93,7 +92,14 @@ function renderForm(
       onSaveAgentDefaultChange: () => {},
       onCancel: () => {},
       onStart: () => {},
-      ...overrides
+      ...overrides,
+      recipe: sourceControlActionRecipeEntry(
+        overrides.recipe ?? {
+          agentId: overrides.selectedAgent ?? 'codex',
+          commandInputTemplate: overrides.commandTemplate ?? '{basePrompt}',
+          ...(overrides.agentArgs !== undefined ? { agentArgs: overrides.agentArgs } : {})
+        }
+      )
     })
   )
 }
@@ -143,10 +149,34 @@ describe('SourceControlAgentActionDialogForm', () => {
     )
     expect(
       renderForm({
-        recipe: { ...recipe, launchPreferences: { agentId: 'codex', model: 'saved' } },
+        recipe: {
+          ...recipe,
+          launchPreferences: {
+            agentId: 'claude',
+            permissionMode: 'ask',
+            modelSelection: {
+              base: 'inherit',
+              model: { agentId: 'codex', value: 'saved' }
+            }
+          }
+        },
         agentArgsApply: false
       })
     ).toContain('Model from Settings: saved')
+    expect(
+      renderForm({
+        recipe: {
+          agentId: 'codex',
+          launchPreferences: {
+            agentId: 'codex',
+            modelSelection: {
+              base: 'default',
+              options: { effort: { agentId: 'codex', value: 'high' } }
+            }
+          }
+        }
+      })
+    ).toContain('Model from Settings: High')
     expect(
       renderForm({
         selectedAgent: 'antigravity',

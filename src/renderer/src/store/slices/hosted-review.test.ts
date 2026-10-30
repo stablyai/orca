@@ -605,6 +605,8 @@ describe('hosted review slice', () => {
     expect(fetchHostedReviewForBranch).toHaveBeenCalledWith('/repo', 'feature/test', {
       force: true,
       repoId: 'repo-id',
+      // A card refresh follows a user act, so it may start a stopped WSL distro.
+      wakeWslDistro: true,
       linkedGitHubPR: null,
       linkedGitLabMR: 33,
       linkedBitbucketPR: null,

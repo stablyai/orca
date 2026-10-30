@@ -266,10 +266,15 @@ export function getWorktreeExecutionHostId(
   defaultHostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID
 ): ExecutionHostId {
   // Snapshots can identify a more precise owner than the repo; share precedence across sidebar decisions.
-  return (
-    worktree.hostId ??
-    (repo?.connectionId || repo?.executionHostId ? getRepoExecutionHostId(repo) : defaultHostId)
-  )
+  return worktree.hostId ?? getRepoExecutionHostIdOrDefault(repo, defaultHostId)
+}
+
+/** A repo's explicit execution owner; repos without one belong to the focused/default host. */
+export function getRepoExecutionHostIdOrDefault(
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined,
+  defaultHostId: ExecutionHostId
+): ExecutionHostId {
+  return repo?.connectionId || repo?.executionHostId ? getRepoExecutionHostId(repo) : defaultHostId
 }
 
 export function getSettingsFocusedExecutionHostId(

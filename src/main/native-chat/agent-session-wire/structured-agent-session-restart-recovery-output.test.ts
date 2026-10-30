@@ -1,3 +1,4 @@
+import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import { StructuredAgentRegistry } from './structured-agent-registry'
 import { acpLaunchSpecFor } from '../../acp/acp-launch-specs'
 import { acpStructuredAgentDefinition } from '../../acp/acp-structured-agent-definitions'
@@ -186,7 +187,7 @@ describe.each([
       const completedAt = bufferedOutput ? CONNECTION_CLOSED_AT : LAST_CHUNK_AT
       expect(journal.lastProviderActivityAt(1)).toBe(completedAt)
       await restartAfterCrash()
-      await rig.host.restoreReadableSessions()
+      await openTestChats(rig.host)
       const snapshot = await rig.host.journalSnapshot(SESSION)
       const background = snapshot.items.find(
         (item) =>
@@ -204,7 +205,7 @@ describe.each([
         rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal.lastProviderActivityAt(1)
       ).toBe(completedAt)
       await restartAfterCrash()
-      await rig.host.restoreReadableSessions()
+      await openTestChats(rig.host)
       expect((await rig.host.journalSnapshot(SESSION)).items).toEqual(snapshot.items)
     }
   )

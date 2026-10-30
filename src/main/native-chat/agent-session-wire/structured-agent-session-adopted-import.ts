@@ -11,15 +11,36 @@ import {
   importLegacyTranscriptIntoJournal,
   prepareLegacyTranscriptImport
 } from '../agent-session-journal/journal-legacy-import'
+import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
+import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
+
+export async function prepareCreateTranscript(
+  context: StructuredAgentSessionAttachContext,
+  params: AgentSessionAttachParams
+) {
+  const acquisition = context.runtimeState.acquireAborts.begin(params.envelope.sessionId)
+  try {
+    return await prepareAdoptedTranscript(params, acquisition.signal)
+  } finally {
+    acquisition.end()
+  }
+}
 
 export async function prepareAdoptedTranscript(
-  params: AgentSessionAttachParams
+  params: AgentSessionAttachParams,
+  signal?: AbortSignal
 ): Promise<
   | { ok: true; items: JournalReplacementItem[] | null }
   | { ok: false; refusal: AgentSessionWireRefusal }
 > {
+  if (!params.adopt) {
+    return { ok: true, items: null }
+  }
   try {
-    return { ok: true, items: await readAdoptedTranscript(params) }
+    throwIfSignalAborted(signal)
+    const items = await readAdoptedTranscript(params, signal)
+    throwIfSignalAborted(signal)
+    return { ok: true, items }
   } catch (error) {
     return {
       ok: false,
@@ -36,7 +57,8 @@ export async function prepareAdoptedTranscript(
 
 // Validate before a new record can claim the provider conversation.
 async function readAdoptedTranscript(
-  params: AgentSessionAttachParams
+  params: AgentSessionAttachParams,
+  signal?: AbortSignal
 ): Promise<JournalReplacementItem[] | null> {
   const adopt = params.adopt
   if (!adopt) {
@@ -50,7 +72,7 @@ async function readAdoptedTranscript(
   const prepared = await prepareLegacyTranscriptImport({
     agent: params.agent,
     sessionId: adopt.providerHandle.nativeId,
-    options: { filePath: adopt.transcriptPath, source: adopt.source }
+    options: { filePath: adopt.transcriptPath, source: adopt.source, signal }
   })
   if (!prepared.ok) {
     throw new Error(prepared.error)

@@ -13,7 +13,6 @@ import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { runWorktreeDeleteWithToast } from './delete-worktree-flow'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
 import type { SshWorkspaceForgetResolution } from './ssh-workspace-forget-resolution'
@@ -53,7 +52,7 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
     // Retain removed-host labels for ghost workspaces before falling back to raw IDs.
     return s.sshTargetLabels.get(targetId) ?? s.removedSshTargetLabels.get(targetId) ?? targetId
   })
-  const [busy, setBusy] = useState<null | 'reconnect' | 'forget'>(null)
+  const [busy, setBusy] = useState(false)
   const mountedRef = useMountedRef()
   const unsavedTargets = useMemo(
     () =>
@@ -72,7 +71,6 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
     return null
   }
   const { worktreeId, displayName, resolution } = modalData
-  const canReconnect = resolution.kind === 'disconnected'
   // This workspace’s named SSH target is the host confirmed for removal.
   const removalTarget: WorktreeRemovalTarget = {
     id: worktreeId,
@@ -95,70 +93,15 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
   const refuseReplacedSelection = (): void => {
     showWorkspaceListChangedToast()
     if (mountedRef.current) {
-      setBusy(null)
+      setBusy(false)
     }
     closeModal()
   }
 
   const done = (): void => {
     if (mountedRef.current) {
-      setBusy(null)
+      setBusy(false)
       closeModal()
-    }
-  }
-
-  const handleReconnectAndDelete = async (): Promise<void> => {
-    if (resolution.kind !== 'disconnected') {
-      return
-    }
-    if (!isSelectedWorkspaceCurrent()) {
-      refuseReplacedSelection()
-      return
-    }
-    const confirmedDiscards = confirmUnsavedDiscard(useAppStore.getState, unsavedTargets)
-    setBusy('reconnect')
-    try {
-      await window.api.ssh.connect({ targetId: resolution.targetId })
-    } catch (err) {
-      if (mountedRef.current) {
-        setBusy(null)
-      }
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : translate(
-              'auto.components.sidebar.ForgetSshWorkspaceDialog.reconnectFailed',
-              'Reconnection failed'
-            )
-      )
-      return
-    }
-    if (!isSelectedWorkspaceCurrent()) {
-      refuseReplacedSelection()
-      return
-    }
-    // Close before the delete toast to avoid overlapping confirmations.
-    closeModal()
-    void runWorktreeDeleteWithToast(removalTarget, displayName, {
-      confirmedDiscards,
-      assertBeforeDispatch: () => {
-        if (!isSelectedWorkspaceCurrent()) {
-          throw new Error(
-            translate(
-              'auto.components.sidebar.delete.worktree.flow.workspaceListChanged',
-              'Workspace list changed'
-            )
-          )
-        }
-      }
-    }).then((deleted) => {
-      // Why: the refusal's error state is keyed by id and host, which the replacement row shares.
-      if (!deleted && !isSelectedWorkspaceCurrent() && removalTarget.executionHostId) {
-        useAppStore.getState().clearWorktreeDeleteState(worktreeId, removalTarget.executionHostId)
-      }
-    })
-    if (mountedRef.current) {
-      setBusy(null)
     }
   }
 
@@ -169,7 +112,7 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
       return
     }
     const confirmedDiscards = confirmUnsavedDiscard(useAppStore.getState, unsavedTargets)
-    setBusy('forget')
+    setBusy(true)
     try {
       const result = await useAppStore
         .getState()
@@ -177,7 +120,7 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
       if (!result.ok) {
         toast.error(result.error)
         if (mountedRef.current) {
-          setBusy(null)
+          setBusy(false)
         }
         return
       }
@@ -185,16 +128,10 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
       if (mountedRef.current) {
-        setBusy(null)
+        setBusy(false)
       }
     }
   }
-
-  const forgetDescription = translate(
-    'auto.components.sidebar.ForgetSshWorkspaceDialog.forgetBody',
-    'Removes this workspace from Orca only. Files, the Git worktree, and branches on {{host}} are left untouched.',
-    { host: hostLabel }
-  )
 
   return (
     <Dialog open onOpenChange={(open) => (!open ? closeModal() : undefined)}>
@@ -203,18 +140,17 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
           <DialogTitle className="flex items-center gap-2 text-sm font-semibold">
             <ServerOff className="size-4 text-muted-foreground" />
             {translate(
-              'auto.components.sidebar.ForgetSshWorkspaceDialog.title',
-              'Delete “{{name}}”?',
-              {
-                name: displayName
-              }
+              'auto.components.sidebar.ForgetSshWorkspaceDialog.removeTitle',
+              'Remove “{{name}}” from Orca?',
+              { name: displayName }
             )}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {canReconnect
+            {resolution.kind === 'saved'
               ? translate(
-                  'auto.components.sidebar.ForgetSshWorkspaceDialog.disconnectedBody',
-                  'The SSH host for this workspace is not connected. Reconnect to delete it on the remote too, or remove it from Orca only.'
+                  'auto.components.sidebar.ForgetSshWorkspaceDialog.savedHostBody',
+                  'This workspace’s project isn’t served by Orca’s server on {{host}}, so Orca can’t delete it there. You can remove it from Orca; files, the Git worktree, and branches on {{host}} are left untouched.',
+                  { host: hostLabel }
                 )
               : translate(
                   'auto.components.sidebar.ForgetSshWorkspaceDialog.ghostBody',
@@ -231,40 +167,17 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
 
         <RemovalUnsavedFilesNotice targets={unsavedTargets} enabled />
 
-        {/* Ghost-host copy already promises files survive; repeat only on the reconnect path. */}
-        {canReconnect ? (
-          <p className="text-[11px] leading-snug text-muted-foreground">{forgetDescription}</p>
-        ) : null}
-
         <DialogFooter className="gap-2 sm:gap-2">
-          <Button variant="outline" size="sm" onClick={() => closeModal()} disabled={busy != null}>
+          <Button variant="outline" size="sm" onClick={() => closeModal()} disabled={busy}>
             {translate('auto.components.sidebar.ForgetSshWorkspaceDialog.cancel', 'Cancel')}
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void handleForget()}
-            disabled={busy != null}
-          >
-            {busy === 'forget' ? <Loader2 className="size-3.5 animate-spin" /> : null}
+          <Button size="sm" onClick={() => void handleForget()} disabled={busy}>
+            {busy ? <Loader2 className="size-3.5 animate-spin" /> : null}
             {translate(
               'auto.components.sidebar.ForgetSshWorkspaceDialog.forget',
               'Remove from Orca'
             )}
           </Button>
-          {canReconnect ? (
-            <Button
-              size="sm"
-              onClick={() => void handleReconnectAndDelete()}
-              disabled={busy != null}
-            >
-              {busy === 'reconnect' ? <Loader2 className="size-3.5 animate-spin" /> : null}
-              {translate(
-                'auto.components.sidebar.ForgetSshWorkspaceDialog.reconnectAndDelete',
-                'Reconnect & Delete'
-              )}
-            </Button>
-          ) : null}
         </DialogFooter>
       </DialogContent>
     </Dialog>

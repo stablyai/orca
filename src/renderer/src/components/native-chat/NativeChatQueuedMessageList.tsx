@@ -18,8 +18,8 @@ import { NativeChatPendingIcon } from './NativeChatPendingIcon'
 import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import { NATIVE_CHAT_ROOT_SELECTOR } from '@/lib/native-chat-paste-request'
 import { focusNativeChatPromptCard } from './use-native-chat-prompt-card-focus'
-import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../../shared/agent-session-wire'
-import type { QueuedEditAttachTarget } from './use-native-chat-queued-edit-image-intake'
+import { queuedMessageCardNeedsAttention } from '../../../../shared/structured-agent-session-queued-cards'
+import type { QueuedEditAttachTarget } from './NativeChatQueuedMessageComposer'
 
 /** Keep host-held drafts outside the transcript until consumed; keep the live region mounted for the first card. */
 export function NativeChatQueuedMessageList({
@@ -54,12 +54,7 @@ export function NativeChatQueuedMessageList({
     setExpanded(true)
   }
   const newest = cards.at(-1)
-  const attentionCard = !expanded
-    ? cards.find(
-        (card) =>
-          card.state === 'returned' || card.pausedReason === QUEUED_MESSAGE_PAUSED_SEND_FAILED
-      )
-    : undefined
+  const attentionCard = !expanded ? cards.find(queuedMessageCardNeedsAttention) : undefined
   const attentionCaption = attentionCard
     ? queuedMessageCardCaption(attentionCard, agentName, statedFailures)
     : null
@@ -133,7 +128,7 @@ export function NativeChatQueuedMessageList({
               // Bound queue height to preserve transcript/composer space; allow extra room for edit thumbnails.
               className={cn(
                 'scrollbar-sleek divide-y divide-border overflow-y-auto',
-                controller.editor?.images?.chips.length ? 'max-h-72' : 'max-h-40'
+                controller.editor ? 'max-h-72' : 'max-h-40'
               )}
             >
               <NativeChatQueuedMessageRows

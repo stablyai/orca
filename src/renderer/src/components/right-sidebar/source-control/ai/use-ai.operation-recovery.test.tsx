@@ -1,3 +1,4 @@
+import { sourceControlActionRecipeEntry } from '../../../../../../shared/source-control-action-selection'
 import { runtimeStatusEntry } from '@/runtime/server-layout-frames.test-fixture'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
@@ -284,11 +285,12 @@ describe('AI operation recovery composer', () => {
           sourceRepoConnectionId: null,
           actionId: 'fixCommitFailure',
           basePrompt: 'fix',
-          getLaunchActionRecipe: () => ({
-            agentId: null,
-            agentArgs: '--model chosen',
-            commandInputTemplate: 'Recovery: {basePrompt}'
-          }),
+          getLaunchActionRecipe: () =>
+            sourceControlActionRecipeEntry({
+              agentId: null,
+              agentArgs: '--model chosen',
+              commandInputTemplate: 'Recovery: {basePrompt}'
+            }),
           getStoreState: useAppStore.getState,
           copy: getDefaultSourceControlRecoveryLaunchCopy('commit')
         })

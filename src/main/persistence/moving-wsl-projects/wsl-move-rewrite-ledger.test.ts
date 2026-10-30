@@ -24,6 +24,22 @@ const committed = (rewrittenStores: string[]) =>
   cutover('move-1', 'destination-committed', { rewrittenStores })
 
 describe('WSL move rewrite ledger', () => {
+  it('lets the seeded host workspaces only grow, and only while the desktop rewrites', () => {
+    const seeded = (ids: string[] | undefined) =>
+      cutover('move-1', 'destination-committed', { seededHostWorkspaceIds: ids })
+    seedWslMoveCutover(userDataPath, committed([]))
+    writeWslMoveCutover(userDataPath, seeded(['w1']))
+    writeWslMoveCutover(userDataPath, seeded(['w1', 'w2']))
+
+    expect(() => writeWslMoveCutover(userDataPath, seeded(['w2']))).toThrow(
+      'wsl_move_ledger_changed'
+    )
+    expect(() => writeWslMoveCutover(userDataPath, seeded(undefined))).toThrow(
+      'wsl_move_ledger_changed'
+    )
+    expect(listWslMoveCutovers(userDataPath)[0]?.seededHostWorkspaceIds).toEqual(['w1', 'w2'])
+  })
+
   it('grows append-only while the desktop rewrites', () => {
     seedWslMoveCutover(userDataPath, committed([]))
     writeWslMoveCutover(userDataPath, committed(['a']))
@@ -75,6 +91,7 @@ describe('WSL move rewrite ledger', () => {
   })
 
   it('refuses client-rewritten while the store registry is incomplete', () => {
+    setWslMoveDesktopRewriteRegistryCompleteForTests(false)
     seedWslMoveCutover(userDataPath, committed([]))
     expect(() => writeWslMoveCutover(userDataPath, cutover('move-1', 'client-rewritten'))).toThrow(
       'wsl_move_rewrite_incomplete'

@@ -33,9 +33,6 @@ let mockInlineAgentRows: DashboardAgentRowData[] = []
 
 vi.mock('@/store', () => {
   const getState = () => ({
-    repos: [makeRepo()],
-    endpointProjects: [],
-    endpointProjectHostSetups: [],
     browserTabsByWorktree: {},
     agentActivityDisplayMode,
     createBrowserTab: vi.fn(),

@@ -8,6 +8,7 @@ import {
 } from './agent-browser-bridge-mouse'
 import { acquireElectronDebugger } from './electron-debugger-lease'
 import { sendGuestCdpCommand } from './guest-cdp-command'
+import { touchEmulationParams } from './guest-touch-emulation'
 import { assertRemoteCliBrowserAccess } from '../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import { AgentBrowserBridgePointerCommands } from './agent-browser-bridge-pointer-commands'
 import { agentBrowserSetMediaArguments } from './agent-browser-set-media-arguments'
@@ -111,8 +112,21 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
   }
 
   async setDevice(name: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return await this.execAgentBrowser(sessionName, ['set', 'device', name])
+    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName, target) => {
+      const result = await this.execAgentBrowser(sessionName, ['set', 'device', name])
+      const wc = this.requireTargetWebContents(target)
+      // agent-browser sets only metrics and user agent; without touch the page still reports pointer: fine.
+      const mobile =
+        typeof result === 'object' &&
+        result !== null &&
+        'mobile' in result &&
+        result.mobile === true
+      await sendGuestCdpCommand(
+        wc,
+        'Emulation.setTouchEmulationEnabled',
+        touchEmulationParams(mobile)
+      )
+      return result
     })
   }
 

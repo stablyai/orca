@@ -192,9 +192,9 @@ describe('E2EEChannel', () => {
       expect(ctx.onReady).not.toHaveBeenCalled()
     })
 
-    it('rejects malformed JSON', () => {
+    it.each(['not json', 'null'])('rejects invalid handshake JSON: %s', (raw) => {
       const ctx = setup()
-      ctx.channel.handleRawMessage('not json')
+      ctx.channel.handleRawMessage(raw)
 
       expect(ctx.onError).toHaveBeenCalledWith(4001, 'Invalid handshake message')
     })

@@ -1,6 +1,8 @@
 import { Keyboard, Pressable, StyleSheet } from 'react-native'
 import { ChevronDown, X } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export function MobileNativeChatCardHeaderAction<Prompt>({
   prompt,
@@ -13,13 +15,19 @@ export function MobileNativeChatCardHeaderAction<Prompt>({
   onCollapse?: () => void
   disabled?: boolean
 }): React.JSX.Element | null {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   if (!onCancel && !onCollapse) {
     return null
   }
   const Icon = onCancel ? X : ChevronDown
   return (
     <Pressable
-      accessibilityLabel={onCancel ? 'Cancel' : 'Collapse'}
+      accessibilityLabel={
+        onCancel
+          ? t('common.cancel', 'Cancel')
+          : t('session.nativeChatCardHeaderAction.collapse', 'Collapse')
+      }
       accessibilityState={onCancel ? undefined : { expanded: true }}
       hitSlop={8}
       style={styles.action}

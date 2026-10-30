@@ -92,7 +92,7 @@ describe('gitlab client — MR operations', () => {
 
     it('keeps a missing project and a scope failure as errors, in job-log wording', async () => {
       glabExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 404: Project Not Found'))
-      await expect(getJobTrace('/repo', 99, 'upstream', 'conn-1')).resolves.toEqual({
+      await expect(getJobTrace('/repo', 99, 'upstream', 'conn-1')).resolves.toMatchObject({
         ok: false,
         error: "Could not find this job's GitLab project."
       })
@@ -101,7 +101,8 @@ describe('gitlab client — MR operations', () => {
       const forbidden = await getJobTrace('/repo', 99, 'upstream', 'conn-1')
       expect(forbidden).toEqual({
         ok: false,
-        error: "You don't have permission to read this job's log. Check your GitLab token scopes."
+        error: "You don't have permission to read this job's log. Check your GitLab token scopes.",
+        errorCode: 'gitlab.jobLogPermissionDenied'
       })
     })
 

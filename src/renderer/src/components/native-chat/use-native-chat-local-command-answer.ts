@@ -1,14 +1,14 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { getNativeChatCommandReply } from '../../../../shared/native-chat-agent-profiles'
-import { deriveNativeChatContextUsage } from '../../../../shared/native-chat-context-usage'
+import { deriveNativeChatContextUsage } from '../../../../shared/native-chat/native-chat-context-usage'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { ompModelSelector } from '../../../../shared/omp-model-list-probe'
 import {
   formatNativeChatContextUsageAnswer,
   formatNativeChatContextUsageUnreported
 } from './native-chat-context-usage-answer'
-import type { NativeChatPtySessionOptionsSurface } from './native-chat-pty-session-options'
+import type { NativeChatPtySessionOptionsSurface } from '../../../../shared/native-chat-pty-session-options'
 
 export type NativeChatModelContextWindow = (modelId: string) => number | null
 

@@ -53,7 +53,7 @@ function compareIdentifiers(left: string, right: string): number {
   if (rightNumeric) {
     return 1
   }
-  return left.localeCompare(right)
+  return left.localeCompare(right, 'en')
 }
 
 /** Returns negative if left < right, 0 if equal, positive if left > right. */

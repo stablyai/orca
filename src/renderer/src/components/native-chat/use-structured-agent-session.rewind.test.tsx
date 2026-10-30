@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
 import { AGENT_SESSION_REWIND_RECOVERY_CAPABILITY as RECOVERY } from '../../../../shared/protocol-version'
@@ -80,6 +80,30 @@ import {
   nativeChatRewindReasonCopy,
   nativeChatRewindReturnedUnknownCopy
 } from './native-chat-rewind-copy'
+
+import { useAppStore } from '@/store'
+import { forgetStructuredSessionSelection } from '@/lib/structured-agent-session-selection-controller'
+
+beforeEach(() => {
+  useAppStore.getState().setRuntimeEnvironments([
+    {
+      id: 'ssh-host',
+      name: 'Original host',
+      createdAt: 1,
+      updatedAt: 1,
+      pairingRevision: 1,
+      lastUsedAt: null,
+      runtimeId: null,
+      endpoints: [],
+      preferredEndpointId: 'original'
+    }
+  ])
+})
+afterEach(() => {
+  cleanup()
+  forgetStructuredSessionSelection('session-1')
+  useAppStore.getState().setRuntimeEnvironments([])
+})
 
 const LOCAL_TARGET = { kind: 'local' } as const
 
@@ -390,7 +414,12 @@ describe('offering rewind only where the next send settles an in-doubt one', () 
     mocks.remoteCapabilities = new Set()
     const view = render(remote)
     await waitFor(() =>
-      expect(mocks.call).toHaveBeenCalledWith(remote, 'agentSession.options', expect.anything())
+      expect(mocks.call).toHaveBeenCalledWith(
+        remote,
+        'agentSession.options',
+        { sessionId: 'session-1' },
+        { expectedEnvironmentPairingRevision: 1 }
+      )
     )
     await act(async () => {})
     expect(view.result.current.rewind.surface).toBeUndefined()

@@ -22,9 +22,39 @@ import {
   spendsSharedGitHubComQuota
 } from '../../rate-limit'
 import { sameOwnerRepo } from './../github-exec-scope'
-import { resolvePrWorkItemSource } from './work-item-list-request'
+import { buildWorkItemListRequest, resolvePrWorkItemSource } from './work-item-list-request'
 import { buildSearchQueryString, defaultOpenWorkItemQuery } from './work-item-search-query'
 import { searchWorkItemCount, usesGraphqlWorkItemSearch } from './work-item-search-page'
+
+function canGroupSearchText(text: string): boolean {
+  let depth = 0
+  let quoted = false
+  let escaped = false
+  for (const char of text) {
+    if (quoted) {
+      if (escaped) {
+        escaped = false
+      } else if (char === '\\') {
+        escaped = true
+      } else if (char === '"') {
+        quoted = false
+      }
+    } else if (char === '"') {
+      quoted = true
+    } else if (char === '\\') {
+      return false
+    } else if (char === '(') {
+      depth += 1
+    } else if (char === ')') {
+      depth -= 1
+      if (depth < 0) {
+        return false
+      }
+    }
+  }
+  return depth === 0 && !quoted
+}
+
 export async function countWorkItemsForQuery(
   repoPath: string,
   ownerRepo: OwnerRepo,
@@ -40,6 +70,16 @@ export async function countWorkItemsForQuery(
   if (usesGraphqlWorkItemSearch(ownerRepo, ghOptions)) {
     ghOptions.env = { ...process.env }
     try {
+      if (query.scope === 'pr' && canGroupSearchText(query.freeText)) {
+        const request = buildWorkItemListRequest({
+          kind: 'pr',
+          ownerRepo,
+          query,
+          limit: 1,
+          page: 1
+        })
+        return await searchWorkItemCount(request.search, ghOptions, 'ISSUE_ADVANCED')
+      }
       return await searchWorkItemCount(searchQ, ghOptions)
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {

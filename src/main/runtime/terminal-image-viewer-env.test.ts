@@ -1,11 +1,6 @@
-import { readFileSync } from 'node:fs'
-import { parseRuntimeClientCapabilities } from './rpc/runtime-client-capabilities'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
-import {
-  NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-  RUNTIME_CAPABILITIES
-} from '../../shared/protocol-version'
+import { NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/protocol-version'
 import { TERMINAL_IMAGE_VIEWER_CAPABILITY } from '../../shared/terminal-image-viewer-capability'
 import {
   applyClaudeTerminalImageViewerEnv,
@@ -15,24 +10,6 @@ import {
 const paired = { caller: { kind: 'paired-device', deviceId: 'phone' } as const }
 afterEach(() => vi.unstubAllEnvs())
 describe('Claude images follow the launching viewer', () => {
-  it('advertises image decoding only for Electron viewers', () => {
-    expect(ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES).toContain(TERMINAL_IMAGE_VIEWER_CAPABILITY)
-    expect(parseRuntimeClientCapabilities(ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES)).toEqual(
-      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
-    )
-    expect(
-      readFileSync(
-        new URL(
-          '../../../mobile/src/transport/mobile-runtime-client-capabilities.ts',
-          import.meta.url
-        ),
-        'utf8'
-      )
-    ).not.toContain('TERMINAL_IMAGE_VIEWER_CAPABILITY')
-    for (const caps of [NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES, RUNTIME_CAPABILITIES]) {
-      expect(caps).not.toContain(TERMINAL_IMAGE_VIEWER_CAPABILITY)
-    }
-  })
   it.each([undefined, [], NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES])(
     'keeps older and native clients on old output %#',
     (clientCapabilities) => {

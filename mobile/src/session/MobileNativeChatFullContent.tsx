@@ -1,20 +1,21 @@
-import { useContext, useEffect, useState } from 'react'
+import { useContext, useEffect, useMemo, useState } from 'react'
 import { Pressable, Text, View, type TextStyle } from 'react-native'
+import { truncateToolDetail } from '../../../src/shared/native-chat/tools/native-chat-tool-summary'
 import {
-  truncateToolDetail,
-  MAX_TOOL_DETAIL_LENGTH
-} from '../../../src/shared/native-chat/tools/native-chat-tool-summary'
+  isNativeChatToolOutputClipped,
+  nativeChatToolFullPayload,
+  nativeChatToolOutputPartialSizes
+} from '../../../src/shared/native-chat/tools/native-chat-tool-output'
 import type {
   NativeChatMessage,
   NativeChatToolResultBlock
 } from '../../../src/shared/native-chat-types'
-import type {
-  AgentJournalBoundedPayload,
-  AgentJournalItemBody
-} from '../../../src/shared/agent-session-journal-types'
+import type { AgentJournalBoundedPayload } from '../../../src/shared/agent-session-journal-types'
 import { INLINE_TEXT_SELECTION } from '../components/inline-text-selection'
-import { styles } from './mobile-native-chat-message-styles'
-import { toolStyles } from './mobile-native-chat-tool-styles'
+import { styles } from './native-chat/transcript/mobile-native-chat-message-styles'
+import { toolStyles } from './native-chat/transcript/mobile-native-chat-tool-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
 import {
   MobileNativeChatItemSourceContext,
@@ -27,13 +28,16 @@ type Load = 'idle' | 'loading' | 'failed'
 
 function ShowFull({
   label,
+  failedLabel,
   load,
   onPress
 }: {
   label: string
+  failedLabel: string
   load: Load
   onPress: () => void
 }): React.JSX.Element {
+  useMobileColorScheme()
   return (
     <Pressable
       style={styles.showFull}
@@ -42,18 +46,9 @@ function ShowFull({
       hitSlop={8}
       accessibilityRole="button"
     >
-      <Text style={styles.showFullText}>
-        {load === 'failed' ? `${label} — couldn't load, tap to retry` : label}
-      </Text>
+      <Text style={styles.showFullText}>{load === 'failed' ? failedLabel : label}</Text>
     </Pressable>
   )
-}
-
-function outputOf(body: AgentJournalItemBody | null): AgentJournalBoundedPayload | null {
-  if (body?.kind === 'tool-call') {
-    return body.output ?? null
-  }
-  return body?.kind === 'diff' ? body.patch : null
 }
 
 export function MobileNativeChatToolOutput({
@@ -67,6 +62,8 @@ export function MobileNativeChatToolOutput({
   rootIdentity: string
   positionKey: string
 }): React.JSX.Element {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const source = useContext(MobileNativeChatItemSourceContext)
   const { output, isError, fullOutputItemId } = body
   const client = source?.client,
@@ -91,9 +88,8 @@ export function MobileNativeChatToolOutput({
       ? detail
       : null
   const full = current?.full
-  const clipped =
-    !full &&
-    (fullOutputItemId !== undefined || (!expanded && output.length > MAX_TOOL_DETAIL_LENGTH))
+  const clipped = isNativeChatToolOutputClipped(body, { expanded, fullLoaded: Boolean(full) })
+  const partial = useMemo(() => (full ? nativeChatToolOutputPartialSizes(full) : null), [full])
   const showFull = (): void => {
     if (fullOutputItemId === undefined || source === null) {
       setExpanded(true)
@@ -109,7 +105,11 @@ export function MobileNativeChatToolOutput({
     }
     readMobileNativeChatItem(source, fullOutputItemId)
       .then((item) =>
-        finish(item?.itemId === fullOutputItemId ? (outputOf(item.body) ?? undefined) : undefined)
+        finish(
+          item?.itemId === fullOutputItemId
+            ? (nativeChatToolFullPayload(item.body) ?? undefined)
+            : undefined
+        )
       )
       .catch(() => finish())
   }
@@ -129,13 +129,24 @@ export function MobileNativeChatToolOutput({
           {full ? full.head : expanded ? output : truncateToolDetail(output)}
         </Text>
       </MobileNativeChatOwnedScrollView>
-      {full?.truncated ? (
+      {partial ? (
         <Text style={styles.showFullText}>
-          Showing {new TextEncoder().encode(full.head).length} of {full.byteLength} bytes.
+          {t('session.nativeChatFullContent.partialOutput', 'Showing {{shown}} of {{total}}.', {
+            shown: partial.shown,
+            total: partial.total
+          })}
         </Text>
       ) : null}
       {clipped ? (
-        <ShowFull label="Show full output" load={current?.load ?? 'idle'} onPress={showFull} />
+        <ShowFull
+          label={t('session.nativeChatFullContent.showFullOutput', 'Show full output')}
+          failedLabel={t(
+            'session.nativeChatFullContent.loadOutputFailed',
+            "Show full output — couldn't load, tap to retry"
+          )}
+          load={current?.load ?? 'idle'}
+          onPress={showFull}
+        />
       ) : null}
     </View>
   )
@@ -146,6 +157,8 @@ export function useMobileNativeChatFullMessage(message: NativeChatMessage): {
   showFull: React.JSX.Element | null
   recovery: { load: Load; onPress: () => void } | null
 } {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const source = useContext(MobileNativeChatItemSourceContext)
   const detail = source?.messageDetail
   const client = source?.client,
@@ -180,9 +193,19 @@ export function useMobileNativeChatFullMessage(message: NativeChatMessage): {
     recovery: state === 'available' ? { load, onPress: showFull } : null,
     showFull:
       state === 'partial' ? (
-        <Text style={styles.showFullText}>Showing part of this message.</Text>
+        <Text style={styles.showFullText}>
+          {t('session.nativeChatFullContent.partialMessage', 'Showing part of this message.')}
+        </Text>
       ) : state === 'available' ? (
-        <ShowFull label="Show full message" load={load} onPress={showFull} />
+        <ShowFull
+          label={t('session.nativeChatFullContent.showFullMessage', 'Show full message')}
+          failedLabel={t(
+            'session.nativeChatFullContent.loadMessageFailed',
+            "Show full message — couldn't load, tap to retry"
+          )}
+          load={load}
+          onPress={showFull}
+        />
       ) : null
   }
 }

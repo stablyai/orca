@@ -5,6 +5,7 @@ import { assertCsvTableEditBytes } from './csv-table-edit-budget'
 import { editCsvTextCells } from './csv-text-cell-edits'
 import { csvRecordTokens } from './csv-source-record'
 import { serializeCsvRecord } from './csv-serialization'
+import { CsvPreviewError } from './csv-preview-error'
 
 export type CsvTextDocument = {
   source: string
@@ -61,7 +62,7 @@ export function parseCsvTextDocument(source: string, delimiter: string): CsvText
 
 function checkedIndex(index: number, count: number, inserting = false): void {
   if (!Number.isInteger(index) || index < 0 || index >= count + (inserting ? 1 : 0)) {
-    throw new Error('The selected CSV row or column no longer exists.')
+    throw new CsvPreviewError('cell-missing')
   }
 }
 
@@ -78,7 +79,7 @@ export function mutateCsvTextDocument(
   if (mutation.kind === 'insert-rows') {
     checkedIndex(mutation.at, rows.length, true)
     if (mutation.rows.some((row) => row.length > CSV_MAX_COLUMNS)) {
-      throw new Error('CSV exceeds the 4,096 column limit.')
+      throw new CsvPreviewError('column-limit')
     }
     rows = [...rows.slice(0, mutation.at), ...mutation.rows, ...rows.slice(mutation.at)]
     sourceRows = [
@@ -97,7 +98,7 @@ export function mutateCsvTextDocument(
     if (mutation.kind === 'insert-column') {
       checkedIndex(mutation.at, columns.length, true)
       if (columns.length >= CSV_MAX_COLUMNS) {
-        throw new Error('CSV exceeds the 4,096 column limit.')
+        throw new CsvPreviewError('column-limit')
       }
       columns.splice(mutation.at, 0, -1)
     } else if (mutation.kind === 'delete-columns') {
@@ -189,7 +190,7 @@ export function mutateCsvTextDocument(
         measureUtf8ByteLength(result.slice(start, contentEnd), { stopAfterBytes: CSV_RECORD_BYTES })
           .exceededLimit
       ) {
-        throw new Error('CSV record exceeds the 1 MB limit.')
+        throw new CsvPreviewError('record-limit')
       }
     }
   })

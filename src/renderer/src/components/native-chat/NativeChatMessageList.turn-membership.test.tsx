@@ -2,7 +2,8 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, render, screen, fireEvent } from '@testing-library/react'
+import { cleanup, screen, fireEvent } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 

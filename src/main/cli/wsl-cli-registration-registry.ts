@@ -270,3 +270,18 @@ export function recordWslCliRegistrationRemoved(
     { distro, inspected: true, managed: false, reconciled: null }
   ])
 }
+
+/** A deleted distro has nothing left to inspect or reconcile, so every entry for it goes. */
+export function forgetWslCliRegistration(userDataPath: string, distro: string): Promise<void> {
+  const key = normalizeWslDistroKey(distro)
+  return updateState(userDataPath, (state) => {
+    const { [key]: _inspected, ...inspectionTimes } = state.inspectionTimes
+    const { [key]: _reconciled, ...reconciliations } = state.reconciliations
+    return {
+      ...state,
+      registeredDistros: removeDistro(state.registeredDistros, distro),
+      inspectionTimes,
+      reconciliations
+    }
+  })
+}

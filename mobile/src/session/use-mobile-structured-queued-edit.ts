@@ -1,238 +1,303 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type {
-  AgentSessionQueuedMessage,
-  AgentSessionQueuedMessageUpdateResult
-} from '../../../src/shared/agent-session-wire'
+import type { QueuedEditLeaseLoss } from '../../../src/shared/queued-message-edit-lease'
+import { createMobileQueuedEdit } from './mobile-queued-message-edit-open'
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
+import type { AgentSessionQueuedMessageUpdateResult } from '../../../src/shared/agent-session-wire'
 import { agentSessionSendBodyFingerprint } from '../../../src/shared/structured-agent-session-send-mutation'
+import { queuedMessageWithEdit } from '../../../src/shared/queued-message-edit'
 import {
-  queuedMessageEditableText,
-  queuedMessageWithEdit
-} from '../../../src/shared/queued-message-edit'
-import type { RpcClient } from '../transport/rpc-client'
+  mobileQueuedEditValueKey,
+  snapshotMobileQueuedEditInputs
+} from './mobile-queued-message-edit-value'
+import { settleMobileQueuedEdit } from './mobile-queued-message-edit-outcome'
+import { queuedEditPublicationKey } from '../../../src/shared/queued-message-edit-publication'
+import { startMobileQueuedEditLease } from './mobile-queued-message-edit-lease'
 import {
-  startMobileQueuedEditLease,
-  type MobileQueuedEditLease
-} from './mobile-queued-message-edit-lease'
-import type { MobileStructuredAgentMutate } from './use-mobile-structured-agent-mutation'
-import type { MobileQueuedMessageCard } from './mobile-structured-queued-message-cards'
+  useMobileNativeChatDraftInputs,
+  readMobileNativeChatDraftInputs,
+  mobileNativeChatDraftDestination
+} from './native-chat/composer/mobile-native-chat-draft-inputs'
+import {
+  closeMobileQueuedEditDraft,
+  mobileQueuedEditSaving,
+  insertMobileQueuedEditDictation,
+  serializeMobileQueuedEdit,
+  mobileQueuedEditSaveHeld,
+  removeMobileQueuedEditImage,
+  type MobileQueuedEditDraft as Edit,
+  type MobileStructuredQueuedEditArgs,
+  type MobileQueuedMessageInlineEditor
+} from './mobile-queued-message-edit-draft'
+export type { MobileQueuedMessageInlineEditor } from './mobile-queued-message-edit-draft'
 
-export type MobileQueuedMessageInlineEditor = {
-  messageId: string
-  text: string
-  saving: boolean
-  canSave: boolean
-  change: (text: string) => void
-  save: () => Promise<boolean>
-  cancel: () => void
-}
-
-type Edit = {
-  scope: string
-  messageId: string
-  body: AgentSessionQueuedMessage['body']
-  text: string
-  fingerprint: string
-  saving: boolean
-  lease: MobileQueuedEditLease
-}
-
-export function useMobileStructuredQueuedEdit(args: {
-  sessionKey: string
-  sessionId: string | null
-  client: RpcClient | null
-  chatActive: boolean
-  enabled: boolean
-  messages: readonly AgentSessionQueuedMessage[] | null
-  cards: readonly MobileQueuedMessageCard[]
-  mutate: MobileStructuredAgentMutate
-  appendComposerText: ((text: string) => boolean) | undefined
-  onSendError: (text: string) => void
-  onActionResolved?: () => void
-}) {
-  const { sessionKey, sessionId, client, enabled, mutate, onSendError, onActionResolved } = args
-  const clientRef = useRef({ sessionKey, client })
-  useLayoutEffect(() => {
-    clientRef.current = { sessionKey, client }
-  }, [client, sessionKey])
+export function useMobileStructuredQueuedEdit(args: MobileStructuredQueuedEditArgs) {
+  const { sessionKey, sessionId, client, mutate, onSendError, onActionResolved } = args
   const active = useRef<Edit | null>(null)
-  // A changed reply reopens the editor once the card publishes its newer text.
-  const reopen = useRef<{ scope: string; messageId: string; stale: string } | null>(null)
   const [shown, setShown] = useState<Edit | null>(null)
+  const latest = useRef(args)
+  useLayoutEffect(() => {
+    latest.current = args
+    const edit = active.current
+    if (edit?.scope === args.sessionKey) {
+      edit.published = {
+        messages: args.messages,
+        submissions: args.submissions ?? [],
+        cards: args.cards
+      }
+    }
+  })
+  useMobileNativeChatDraftInputs(shown?.scopeKey ?? null)
   const render = useCallback((edit: Edit | null) => {
     active.current = edit
     setShown(edit ? { ...edit } : null)
   }, [])
-  const close = useCallback(() => {
-    const edit = active.current
-    render(null)
-    edit?.lease.end()
-  }, [render])
-
-  useEffect(() => {
-    return () => {
-      const edit = active.current
-      active.current = null
-      reopen.current = null
-      setShown(null)
-      edit?.lease.end()
-    }
-  }, [sessionKey, args.chatActive])
-
-  const begin = useCallback(
-    async (messageId: string): Promise<boolean> => {
-      reopen.current = null
-      if (active.current || !enabled || !client || !sessionId) {
-        return false
-      }
-      const message = args.messages?.find((entry) => entry.messageId === messageId)
-      const text = message ? queuedMessageEditableText(message.body) : null
-      if (!message || text === null) {
-        return false
-      }
-      const fingerprint = agentSessionSendBodyFingerprint(sessionId, message.body)
-      const edit: Edit = {
-        scope: sessionKey,
-        messageId,
-        body: message.body,
-        text,
-        fingerprint,
-        saving: false,
-        lease: startMobileQueuedEditLease({
-          getClient: () =>
-            clientRef.current.sessionKey === sessionKey ? clientRef.current.client : client,
-          sessionId,
-          messageId,
-          expectedBodyFingerprint: fingerprint
-        })
-      }
-      render(edit)
-      void edit.lease.acquired.then(
-        (answer) => {
-          if (!isOpen(active, edit) || edit.saving) {
-            return
-          }
-          if (answer.status === 'gone') {
-            close()
-          } else if (answer.status === 'changed') {
-            onSendError('This message changed while you were editing.')
-          } else if (answer.status === 'not-editable') {
-            onSendError("This message can't be edited.")
-          }
-        },
-        () => undefined
-      )
-      return true
-    },
-    [args.messages, client, close, enabled, onSendError, render, sessionId, sessionKey]
-  )
-  const change = useCallback(
-    (text: string) => {
-      const edit = active.current
-      if (edit && !edit.saving) {
-        edit.text = text
-        render(edit)
+  const close = useCallback(
+    (edit: Edit, handBack = false) => {
+      closeMobileQueuedEditDraft(edit, handBack, latest.current.onQueuedEditNotice)
+      if (active.current === edit) {
+        render(null)
       }
     },
     [render]
   )
+
+  const receiveLoss = useCallback(
+    (edit: Edit, loss: QueuedEditLeaseLoss, observe: (edit: Edit) => unknown) => {
+      if (edit.closed || edit.lease !== loss.lease) {
+        return
+      }
+      edit.leaseLoss = loss
+      observe(edit)
+    },
+    []
+  )
+  const acquire = useCallback(
+    (edit: Edit, observe: (edit: Edit) => unknown) => {
+      edit.lease.end()
+      edit.leaseLoss = undefined
+      edit.lease = startMobileQueuedEditLease({
+        getClient: () =>
+          latest.current.sessionKey === edit.scope ? latest.current.client : edit.client,
+        sessionId: edit.sessionId,
+        messageId: edit.messageId,
+        expectedBodyFingerprint: edit.fingerprint,
+        onLost: (loss) => receiveLoss(edit, loss, observe)
+      })
+    },
+    [receiveLoss]
+  )
+
+  const settle = useCallback(
+    function settleResult(
+      edit: Edit,
+      attempt = edit.attempt,
+      result?: Awaited<ReturnType<typeof mutate<AgentSessionQueuedMessageUpdateResult>>>
+    ) {
+      if (edit.closed || edit.attempt !== attempt || (!result && mobileQueuedEditSaving(edit))) {
+        return false
+      }
+      const outcome = settleMobileQueuedEdit(edit, attempt, result)
+      if (outcome === 'close') {
+        close(edit, true)
+        if (!edit.pendingClose) {
+          onActionResolved?.()
+        }
+        return true
+      }
+      if (outcome === 'rebase') {
+        acquire(edit, settleResult)
+      } else if (outcome === 'gone' || outcome === 'changed' || edit.pendingClose) {
+        // A restored seed is still intent if an earlier write remains uncertain or a rival changed it.
+        edit.uncertain ||= outcome === 'changed'
+        close(edit, true)
+        return false
+      } else if (outcome === 'refused' && result?.status === 'accepted') {
+        onSendError("This message can't be edited.")
+      }
+      if (active.current === edit) {
+        render(edit)
+      }
+      return false
+    },
+    [acquire, close, onActionResolved, onSendError, render]
+  )
+
+  useEffect(
+    () => () => {
+      const edit = active.current
+      if (!edit) {
+        return
+      }
+      // A submitted snapshot owns its reply even across navigation; no publication duplicates it.
+      if (mobileQueuedEditSaving(edit)) {
+        edit.pendingClose = true
+        active.current = null
+        return
+      }
+      close(edit, true)
+    },
+    [sessionKey, args.chatActive, close]
+  )
+
+  const begin = useCallback(
+    async (messageId: string): Promise<boolean> => {
+      if (active.current) {
+        return false
+      }
+      const edit = createMobileQueuedEdit(
+        { ...latest.current, sessionKey, sessionId, client },
+        messageId,
+        () => (latest.current.sessionKey === sessionKey ? latest.current.client : client),
+        (edit, loss) => receiveLoss(edit, loss, settle)
+      )
+      if (!edit) {
+        return false
+      }
+      render(edit)
+      return true
+    },
+    [client, receiveLoss, render, sessionId, sessionKey, settle]
+  )
+
   const save = useCallback(async (): Promise<boolean> => {
     const edit = active.current
-    if (
-      !edit ||
-      edit.saving ||
-      !sessionId ||
-      !queuedMessageWithEdit(edit.body, { text: edit.text }).ok
-    ) {
+    if (!edit || mobileQueuedEditSaving(edit) || !sessionId) {
       return false
     }
-    if (edit.text === queuedMessageEditableText(edit.body)) {
-      close()
+    if (mobileQueuedEditSaveHeld(edit, args.imagesCapable)) {
+      return false
+    }
+    const fields = serializeMobileQueuedEdit(edit, args.imagesCapable, args.skillsCapable)
+    const desired = queuedMessageWithEdit(edit.body, fields)
+    if (!desired.ok) {
+      return false
+    }
+    if (
+      !edit.uncertain &&
+      !edit.attempt &&
+      mobileQueuedEditValueKey(edit.text, readMobileNativeChatDraftInputs(edit.scopeKey)) ===
+        edit.baseKey
+    ) {
+      close(edit, true)
+      onActionResolved?.()
       return true
     }
-    edit.saving = true
+    const attempt = {
+      phase: 'pending' as const,
+      expected: edit.fingerprint,
+      fingerprint: agentSessionSendBodyFingerprint(sessionId, desired.body),
+      body: desired.body,
+      text: edit.text,
+      inputs: snapshotMobileQueuedEditInputs(readMobileNativeChatDraftInputs(edit.scopeKey)),
+      key: mobileQueuedEditValueKey(edit.text, readMobileNativeChatDraftInputs(edit.scopeKey))
+    }
+    edit.attempt = attempt
     render(edit)
     const result = await mutate<AgentSessionQueuedMessageUpdateResult>(
       'agentSession.queuedMessageUpdate',
       'agentSession.queuedMessageUpdate',
-      { messageId: edit.messageId, expectedBodyFingerprint: edit.fingerprint, text: edit.text },
-      () => isOpen(active, edit)
+      { messageId: edit.messageId, expectedBodyFingerprint: attempt.expected, ...fields },
+      () => !edit.closed && !edit.pendingClose && edit.leaseLoss?.lease !== edit.lease
     )
-    // A reply during a chat switch belongs to the outgoing chat.
-    if (!isOpen(active, edit) || clientRef.current.sessionKey !== edit.scope) {
-      return false
-    }
-    edit.saving = false
-    if (result.status === 'accepted') {
-      if (result.value.status === 'updated' || result.value.status === 'unchanged') {
-        close()
-        onActionResolved?.()
-        return true
-      }
-      if (result.value.status === 'gone') {
-        close()
-        return false
-      }
-      // Preserve local typing in the composer before reopening a concurrently edited card.
-      const typed = edit.text.trim() !== ''
-      if (result.value.status === 'changed' && (!typed || args.appendComposerText?.(edit.text))) {
-        onSendError(
-          typed
-            ? 'This message changed while you were editing. Your edit is in the chat box.'
-            : 'This message changed while you were editing.'
-        )
-        reopen.current = { scope: edit.scope, messageId: edit.messageId, stale: edit.fingerprint }
-        close()
-        return false
-      }
-      onSendError(
-        result.value.status === 'changed'
-          ? 'This message changed while you were editing.'
-          : "This message can't be edited."
-      )
-    }
-    render(edit)
-    return false
-  }, [args.appendComposerText, close, mutate, onActionResolved, onSendError, render, sessionId])
+    return settle(edit, attempt, result)
+  }, [
+    args.imagesCapable,
+    args.skillsCapable,
+    close,
+    mutate,
+    onActionResolved,
+    render,
+    sessionId,
+    settle
+  ])
 
-  useEffect(() => {
+  const publication = useMemo(
+    () =>
+      queuedEditPublicationKey(
+        { messages: args.messages, cards: args.cards, submissions: args.submissions },
+        sessionId ?? '',
+        shown?.messageId
+      ),
+    [args.messages, args.cards, args.submissions, sessionId, shown?.messageId]
+  )
+  const reconcile = useEffectEvent(() => {
     const edit = active.current
-    const listed = (messageId: string): boolean =>
-      args.messages?.some((message) => message.messageId === messageId) === true &&
-      args.cards.some((card) => card.messageId === messageId)
-    if (edit && edit.scope === sessionKey && args.messages !== null && !listed(edit.messageId)) {
-      close()
-    }
-    const pending = reopen.current
-    if (!pending || active.current || args.messages === null || !sessionId) {
+    if (
+      !edit ||
+      mobileQueuedEditSaving(edit) ||
+      edit.scope !== sessionKey ||
+      args.messages === null
+    ) {
       return
     }
-    const message = args.messages.find((entry) => entry.messageId === pending.messageId)
-    if (pending.scope !== sessionKey || !message || !listed(pending.messageId)) {
-      reopen.current = null
-    } else if (agentSessionSendBodyFingerprint(sessionId, message.body) !== pending.stale) {
-      void begin(pending.messageId)
+    const onScreen = args.cards.some(({ messageId }) => messageId === edit.messageId)
+    if (!onScreen && !edit.attempt) {
+      close(edit, true)
+    } else {
+      settle(edit)
     }
-  }, [args.cards, args.messages, begin, close, sessionId, sessionKey, shown])
+  })
+  useEffect(() => {
+    reconcile()
+  }, [publication, sessionKey])
 
+  const editing = active.current
+  const inputDestination = editing ? mobileNativeChatDraftDestination(editing.scopeKey) : null
   const editor: MobileQueuedMessageInlineEditor | undefined =
     shown?.scope === sessionKey
       ? {
           messageId: shown.messageId,
+          scopeKey: shown.scopeKey,
+          client: shown.client,
+          sessionId: shown.sessionId,
+          imagesCapable: args.imagesCapable === true,
           text: shown.text,
-          saving: shown.saving,
-          canSave: queuedMessageWithEdit(shown.body, { text: shown.text }).ok,
-          change,
+          saving: mobileQueuedEditSaving(shown),
+          canSave:
+            !mobileQueuedEditSaveHeld(shown, args.imagesCapable) &&
+            queuedMessageWithEdit(
+              shown.body,
+              serializeMobileQueuedEdit(shown, args.imagesCapable, args.skillsCapable)
+            ).ok,
+          insertDictation: (insert) => {
+            const inserted =
+              editing &&
+              inputDestination &&
+              insertMobileQueuedEditDictation(editing, inputDestination, insert)
+            if (inserted && active.current === editing) {
+              render(editing)
+            }
+            return Boolean(inserted)
+          },
+          change: (text) => {
+            const edit = active.current
+            if (edit && !mobileQueuedEditSaving(edit)) {
+              edit.text = text
+              render(edit)
+            }
+          },
+          removeImage: (id) => {
+            const edit = active.current
+            if (!edit || mobileQueuedEditSaving(edit) || !args.imagesCapable) {
+              return
+            }
+            removeMobileQueuedEditImage(edit, id)
+            render(edit)
+          },
           save,
           cancel: () => {
-            if (!active.current?.saving) {
-              close()
+            if (active.current) {
+              close(active.current)
             }
           }
         }
       : undefined
   return { begin, editor }
-}
-
-function isOpen(active: { current: Edit | null }, edit: Edit): boolean {
-  return active.current === edit
 }

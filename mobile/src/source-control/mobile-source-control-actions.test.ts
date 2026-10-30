@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { MobileGitUpstreamStatus } from './mobile-git-status'
+import type { SourceControlPrimaryActionDecisionInputs } from '../../../src/shared/source-control-primary-action-decision-types'
 import {
   buildMobileSourceControlActions,
   type MobileSourceControlActionArgs
@@ -11,6 +11,7 @@ function noopHandlers(): MobileSourceControlActionArgs['handlers'] {
     commitPush: vi.fn(),
     commitSync: vi.fn(),
     push: vi.fn(),
+    forcePush: vi.fn(),
     pull: vi.fn(),
     sync: vi.fn(),
     fetch: vi.fn(),
@@ -24,14 +25,29 @@ function noopHandlers(): MobileSourceControlActionArgs['handlers'] {
   }
 }
 
+function decision(
+  overrides: Partial<SourceControlPrimaryActionDecisionInputs> = {}
+): SourceControlPrimaryActionDecisionInputs {
+  return {
+    stagedCount: 1,
+    hasUnstagedChanges: false,
+    hasStageableChanges: false,
+    hasPartiallyStagedChanges: false,
+    hasMessage: true,
+    hasUnresolvedConflicts: false,
+    isCommitting: false,
+    isRemoteOperationActive: false,
+    upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
+    ...overrides
+  }
+}
+
 function args(
   overrides: Partial<MobileSourceControlActionArgs> = {}
 ): MobileSourceControlActionArgs {
   return {
-    commitMessage: 'msg',
-    stagedCount: 1,
-    upstream: { hasUpstream: true, ahead: 0, behind: 0 } as MobileGitUpstreamStatus,
-    upstreamKnown: true,
+    decision: decision(),
+    rebaseBaseRef: 'origin/main',
     busyAction: null,
     openingPath: null,
     openingBranchPath: null,
@@ -41,57 +57,66 @@ function args(
   }
 }
 
-function action(actions: ReturnType<typeof buildMobileSourceControlActions>, label: string) {
-  return actions.find((a) => a.label.startsWith(label))
-}
-
 describe('buildMobileSourceControlActions', () => {
-  it('includes the new parity actions', () => {
-    const actions = buildMobileSourceControlActions(args())
-    const labels = actions.map((a) => a.label)
-    expect(labels.some((l) => l.startsWith('Fast-forward'))).toBe(true)
-    expect(labels).toContain('Rebase onto base')
-    expect(labels).toContain('Switch branch')
-    expect(labels).toContain('Commits')
-    expect(labels).toContain('Create PR')
-  })
-
-  it('enables Create PR only when a PR provider is available', () => {
-    expect(
-      action(buildMobileSourceControlActions(args({ prAvailable: true })), 'Create PR')?.disabled
-    ).toBe(false)
-    expect(
-      action(buildMobileSourceControlActions(args({ prAvailable: false })), 'Create PR')?.disabled
-    ).toBe(true)
-  })
-
-  it('disables fast-forward when ahead of upstream (would lose local commits)', () => {
-    const actions = buildMobileSourceControlActions(
-      args({ upstream: { hasUpstream: true, ahead: 2, behind: 3 } as MobileGitUpstreamStatus })
-    )
-    expect(action(actions, 'Fast-forward')?.disabled).toBe(true)
-  })
-
-  it('enables fast-forward when behind and not ahead', () => {
-    const actions = buildMobileSourceControlActions(
-      args({ upstream: { hasUpstream: true, ahead: 0, behind: 3 } as MobileGitUpstreamStatus })
-    )
-    expect(action(actions, 'Fast-forward')?.disabled).toBe(false)
-  })
-
-  it('blocks commit when no staged files', () => {
-    const actions = buildMobileSourceControlActions(args({ stagedCount: 0 }))
-    const commit = action(actions, 'Commit')
-    expect(commit?.disabled).toBe(true)
-    expect(commit?.hint).toBe('Stage at least one file')
-  })
-
-  it('wires handlers to their actions', () => {
+  it('commits and pushes with lease after a rebase rewrote the branch', () => {
     const handlers = noopHandlers()
-    const actions = buildMobileSourceControlActions(args({ handlers }))
-    action(actions, 'Switch branch')?.onPress()
-    action(actions, 'Commits')?.onPress()
-    expect(handlers.checkout).toHaveBeenCalled()
-    expect(handlers.history).toHaveBeenCalled()
+    const actions = buildMobileSourceControlActions(
+      args({
+        decision: decision({
+          upstreamStatus: {
+            hasUpstream: true,
+            ahead: 2,
+            behind: 2,
+            behindCommitsArePatchEquivalent: true
+          }
+        }),
+        handlers
+      })
+    )
+    actions.find((action) => action.label === 'Commit & Force Push')?.onPress()
+    expect(handlers.commitPush).toHaveBeenCalledWith(true)
+  })
+
+  it('keeps the Force Push warning visible while the row is enabled', () => {
+    const actions = buildMobileSourceControlActions(
+      args({ decision: decision({ upstreamStatus: { hasUpstream: true, ahead: 1, behind: 2 } }) })
+    )
+    const forcePush = actions.find((action) => action.label.startsWith('Force Push'))
+    expect(forcePush?.disabled).toBe(false)
+    expect(forcePush?.hint).toBeTruthy()
+  })
+
+  it('blocks force pushes when the review pushes to another remote', () => {
+    const actions = buildMobileSourceControlActions(
+      args({
+        decision: decision({
+          upstreamStatus: {
+            hasUpstream: true,
+            ahead: 2,
+            behind: 2,
+            behindCommitsArePatchEquivalent: true
+          }
+        }),
+        forcePushBlockedReason: 'from desktop'
+      })
+    )
+    for (const label of ['Commit & Force Push', 'Force Push']) {
+      const row = actions.find((action) => action.label.startsWith(label))
+      expect(row).toMatchObject({ disabled: true, hint: 'from desktop' })
+    }
+  })
+
+  it('disables every row while another git action runs', () => {
+    const actions = buildMobileSourceControlActions(args({ busyAction: 'fetch' }))
+    expect(actions.every((action) => action.disabled)).toBe(true)
+  })
+
+  it('explains why a disabled row is disabled', () => {
+    const actions = buildMobileSourceControlActions(
+      args({ decision: decision({ stagedCount: 0 }) })
+    )
+    const commit = actions.find((action) => action.label === 'Commit')
+    expect(commit?.disabled).toBe(true)
+    expect(commit?.hint).toBeTruthy()
   })
 })

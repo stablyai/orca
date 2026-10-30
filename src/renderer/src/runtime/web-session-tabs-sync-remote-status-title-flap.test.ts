@@ -15,7 +15,8 @@ import { createTestStore, makeWorktree, seedStore } from '../store/slices/store-
 import {
   markRendererOwnedAgentStatusWrite,
   registerRendererOwnedAgentStatusPane,
-  resetRendererOwnedAgentStatusPanesForTests
+  resetRendererOwnedAgentStatusPanesForTests,
+  resolveRendererOwnedAgentStatusTiming
 } from '../components/terminal-pane/renderer-owned-agent-status-registry'
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
@@ -105,8 +106,7 @@ function applyHostSnapshot(
   store.setState(patch as Partial<AppState>)
 }
 
-/** Replay paired pty-connection OSC handling with client Date.now(); return ownership release held until dispose. */
-/** Returns the pane's release, as pty-connection holds it for dispose(). */
+/** Replay paired pty-connection OSC handling with client Date.now(); returns the release pty-connection holds for dispose(). */
 function replayClientOscWorking(store: TestStore, clientNow: number): () => void {
   vi.setSystemTime(clientNow)
   // Claim on transport creation, then verify ownership on each byte-derived status.
@@ -118,7 +118,7 @@ function replayClientOscWorking(store: TestStore, clientNow: number): () => void
       MIRROR_PANE_KEY,
       { state: 'working', prompt: CLIENT_PROMPT, agentType: 'claude' },
       'claude',
-      undefined,
+      resolveRendererOwnedAgentStatusTiming(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]),
       { tabId: MIRROR_TAB_ID, worktreeId: WT }
     )
   return release
@@ -430,6 +430,118 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
       const entry = store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]
       expect(entry?.state).toBe('blocked')
       expect(entry?.interactivePrompt).toBe('Allow Bash(rm -rf)?')
+    })
+
+    it('follows behind-clock host continuation and completion after an HTTP approval', () => {
+      const store = seedPairedClientStore()
+      replayClientOscWorking(store, T0 + 500)
+
+      applyHostSnapshot(
+        store,
+        makeHostSnapshot({
+          snapshotVersion: 2,
+          hostNow: T0 - 60_000,
+          includeAgentStatus: true,
+          agentStatusOverrides: {
+            state: 'waiting',
+            interactivePrompt: 'Allow exec_command?'
+          }
+        }),
+        T0 + 1_000
+      )
+      expect(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]).toMatchObject({
+        state: 'waiting',
+        mirroredEvidenceReceivedAt: T0 + 1_000
+      })
+
+      applyHostSnapshot(
+        store,
+        makeHostSnapshot({
+          snapshotVersion: 3,
+          hostNow: T0 - 59_000,
+          includeAgentStatus: true,
+          agentStatusOverrides: { state: 'working' }
+        }),
+        T0 + 2_000
+      )
+      const continued = store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]
+      expect(continued?.state).toBe('working')
+      expect(continued?.interactivePrompt).toBeUndefined()
+
+      applyHostSnapshot(
+        store,
+        makeHostSnapshot({
+          snapshotVersion: 4,
+          hostNow: T0 - 58_000,
+          includeAgentStatus: true
+        }),
+        T0 + 3_000
+      )
+      expect(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]?.state).toBe('done')
+
+      applyHostSnapshot(
+        store,
+        makeHostSnapshot({
+          snapshotVersion: 5,
+          hostNow: T0 - 57_000,
+          includeAgentStatus: false
+        }),
+        T0 + 4_000
+      )
+      expect(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]).toBeUndefined()
+    })
+
+    it('reclaims byte ownership after approval despite an ahead-clock host', () => {
+      const store = seedPairedClientStore()
+      replayClientOscWorking(store, T0 + 500)
+
+      applyHostSnapshot(
+        store,
+        makeHostSnapshot({
+          snapshotVersion: 2,
+          hostNow: T0 + 60_000,
+          includeAgentStatus: true,
+          agentStatusOverrides: {
+            state: 'waiting',
+            interactivePrompt: 'Allow exec_command?'
+          }
+        }),
+        T0 + 1_000
+      )
+      expect(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]?.state).toBe('waiting')
+
+      applyHostSnapshot(
+        store,
+        makeHostSnapshot({
+          snapshotVersion: 3,
+          hostNow: T0 + 61_000,
+          includeAgentStatus: true,
+          agentStatusOverrides: { state: 'working' }
+        }),
+        T0 + 1_250
+      )
+      expect(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]?.state).toBe('working')
+
+      replayClientOscWorking(store, T0 + 1_500)
+      const byteEntry = store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]
+      expect(byteEntry?.state).toBe('working')
+      expect(byteEntry?.mirroredEvidenceReceivedAt).toBeUndefined()
+      expect(byteEntry?.interactivePrompt).toBeUndefined()
+
+      applyHostSnapshot(
+        store,
+        makeHostSnapshot({
+          snapshotVersion: 4,
+          hostNow: T0 + 120_000,
+          includeAgentStatus: true
+        }),
+        T0 + 2_000
+      )
+      expect(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]).toMatchObject({
+        state: 'working',
+        updatedAt: T0 + 1_500,
+        prompt: CLIENT_PROMPT
+      })
     })
 
     it('keeps live client status over a restored, unconfirmed host block', () => {

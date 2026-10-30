@@ -57,6 +57,8 @@ import {
 import { isPortaledRowMenuClick, isRowActivationKey } from '@/lib/list-row-interaction'
 import { AutomationListStatusCell } from './AutomationListStatusCell'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import { wslMovedProjectForAutomation } from '@/store/repos/wsl-moved-projects'
 
 export type AutomationListLocalRowProps = {
   row: AutomationListRow
@@ -100,11 +102,13 @@ function automationUsageText(summary: AutomationUsageSummary | undefined): strin
 
 function usageAmountText(summary: AutomationUsageSummary): string {
   return translate(
-    'auto.components.automations.AutomationsPage.runUsageSummary',
+    'auto.components.automations.AutomationsPage.runUsageSummaryTokens',
     '{{cost}} est. · {{tokens}} tokens',
     {
+      count: summary.totalTokens,
       cost: formatAutomationCost(summary.estimatedCostUsd),
-      tokens: formatAutomationTokens(summary.totalTokens)
+      tokens: formatAutomationTokens(summary.totalTokens),
+      defaultValue_one: '{{cost}} est. · {{tokens}} token'
     }
   )
 }
@@ -157,6 +161,9 @@ export function AutomationListLocalRow({
     ? formatAutomationDateTimeWithRelative(automation.nextRunAt, relativeNow)
     : translate('auto.components.automations.enablement.paused', 'Paused')
   const isSelected = isSelectedLocal && selectedRowKey === row.key
+  const movedToDistro = useAppStore(
+    (state) => wslMovedProjectForAutomation(state.wslMovedProjects, automation)?.distro ?? null
+  )
   const agentLabel = getAgentLabel(automation.agentId)
   const hostId =
     automation.runContext?.hostId ??
@@ -256,7 +263,7 @@ export function AutomationListLocalRow({
             {nextRunLabel}
           </span>
           <AutomationListLastRunCell snapshot={lastRunSnapshot} now={relativeNow} />
-          <AutomationListStatusCell enabled={automation.enabled} />
+          <AutomationListStatusCell enabled={automation.enabled} movedToDistro={movedToDistro} />
           <Tooltip>
             <TooltipTrigger asChild>
               <span

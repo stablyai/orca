@@ -1,6 +1,10 @@
 import type { AgentSessionCancelResult } from '../../../src/shared/agent-session-wire'
 import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
 import { runningStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-live-turn'
+import {
+  joinStructuredAgentSessionStop,
+  structuredAgentSessionStopIsJoinable
+} from '../../../src/shared/structured-agent-session-stop-join'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   requestStructuredAgentSessionMutation,
@@ -47,23 +51,18 @@ export async function requestMobileStructuredAgentSessionCancel(args: {
   // Mint an id for each Stop so the ledger cannot replay an earlier press instead of stopping work.
   const fence = current.fence
   const stop = () => sendStop({ client, sessionId, fence, fields, onSendError })
-  if (args.hostAnswersRepeatedStops === true) {
+  if (
+    args.hostAnswersRepeatedStops === true ||
+    !structuredAgentSessionStopIsJoinable('agentSession.cancel', fields)
+  ) {
     return stop()
   }
   // Legacy hosts need client-side joining until they support quiet repeated Stop.
-  const key = `${sessionId}:agentSession.cancel:${JSON.stringify(fields)}`
-  const joined = inFlight.get(key)
-  if (joined) {
-    return joined
-  }
-  const stopping = stop()
-  inFlight.set(key, stopping)
-  void stopping.finally(() => {
-    if (inFlight.get(key) === stopping) {
-      inFlight.delete(key)
-    }
-  })
-  return stopping
+  return joinStructuredAgentSessionStop(
+    inFlight,
+    `${sessionId}:agentSession.cancel:${JSON.stringify(fields)}`,
+    stop
+  )
 }
 
 async function sendStop(input: {

@@ -30,12 +30,16 @@ export function toAgentLaunchPreferences(
   return Object.keys(preferences).length > 0 ? preferences : undefined
 }
 
-/** Authority v1 cannot carry a composed per-launch permission environment. */
-export function agentPermissionNeedsPreparedCommand(
+/** Older authority compilers lose effort-only choices and cannot carry permission environments. */
+export function agentLaunchNeedsPreparedCommand(
   agent: AgentType,
   applied: Readonly<Record<string, unknown>> | null | undefined
 ): boolean {
   return (
-    Object.hasOwn(YOLO_TUI_AGENT_ENV, agent) && readLaunchPermissionChoice(applied) !== undefined
+    (Object.hasOwn(YOLO_TUI_AGENT_ENV, agent) &&
+      readLaunchPermissionChoice(applied) !== undefined) ||
+    (typeof applied?.effort === 'string' && !!applied.effort.trim() && !applied.model)
   )
 }
+
+export const agentPermissionNeedsPreparedCommand = agentLaunchNeedsPreparedCommand

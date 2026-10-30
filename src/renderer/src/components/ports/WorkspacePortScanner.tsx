@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { getHasAnyWorktreesFromState } from '@/store/selectors'
@@ -114,7 +115,16 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
             return { key, result }
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error)
-            return { key, result: makeUnavailableScan(message || 'Workspace port scan failed.') }
+            return {
+              key,
+              result: makeUnavailableScan(
+                message ||
+                  translate(
+                    'auto.components.right.sidebar.PortsPanel.740aca88ab',
+                    'Workspace port scan failed.'
+                  )
+              )
+            }
           }
         })
       )

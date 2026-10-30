@@ -10,8 +10,12 @@ import {
 import { setNotificationDeliveryPreferences } from '../notifications/push-registration'
 import { useRemotePushCapableHosts } from '../notifications/use-remote-push-capable-hosts'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export function NativeNotificationDeliverySettings({ enabled }: { enabled: boolean }) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const [delivery, setDelivery] = useState(DEFAULT_NOTIFICATION_DELIVERY)
   const [loaded, setLoaded] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -36,9 +40,14 @@ export function NativeNotificationDeliverySettings({ enabled }: { enabled: boole
       if (revision !== refreshRevision.current) {
         return
       }
-      setError('Could not load delivery settings. Reopen this screen to retry.')
+      setError(
+        t(
+          'settings.nativeNotificationDeliverySettings.loadFailed',
+          'Could not load delivery settings. Reopen this screen to retry.'
+        )
+      )
     }
-  }, [])
+  }, [t])
   useFocusEffect(
     useCallback(() => {
       void refresh()
@@ -64,7 +73,12 @@ export function NativeNotificationDeliverySettings({ enabled }: { enabled: boole
       await setNotificationDeliveryPreferences(value)
       setDelivery(value)
     } catch {
-      setError('Could not save delivery settings. Try again.')
+      setError(
+        t(
+          'settings.nativeNotificationDeliverySettings.saveFailed',
+          'Could not save delivery settings. Try again.'
+        )
+      )
     } finally {
       saveInProgress.current = false
       setSaving(false)
@@ -89,7 +103,10 @@ export function NativeNotificationDeliverySettings({ enabled }: { enabled: boole
       )}
       {support.resolved && !support.supported && (
         <Text style={hintStyle}>
-          Pair an updated desktop to receive notifications on this phone.
+          {t(
+            'settings.nativeNotificationDeliverySettings.updateDesktopHint',
+            'Pair an updated desktop to receive notifications on this phone.'
+          )}
         </Text>
       )}
     </>

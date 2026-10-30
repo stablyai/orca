@@ -1,6 +1,6 @@
 import { createElement, type ReactNode } from 'react'
 import { act, create } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const store = vi.hoisted(() => {
   // Annotated rather than asserted: the literal alone narrows `raw` to `null`.
@@ -64,9 +64,12 @@ vi.mock('./BottomDrawer', () => ({ BottomDrawer: hosts.View }))
 
 import { CustomKeyModal } from './CustomKeyModal'
 import { loadCustomKeys, removeCustomKey, saveCustomKeys } from '../terminal/terminal-custom-keys'
-import { readMirroredStorage } from '../storage/mirrored-storage-keys'
+import { readMirroredStorage, retainMirroredStorage } from '../storage/mirrored-storage-keys'
 
 const CUSTOM_KEYS = 'orca:custom-accessory-keys'
+let releaseStorage = () => {}
+
+afterEach(() => releaseStorage())
 
 /** What a later `init` would carry for this key, which is the map and not the store. */
 function mirrored(): string | undefined {
@@ -119,6 +122,7 @@ function addAShortcut(renderer: ReturnType<typeof create>): void {
 }
 
 beforeEach(() => {
+  releaseStorage = retainMirroredStorage([CUSTOM_KEYS])
   store.raw = null
   store.refuse = false
   store.failRead = false
@@ -174,6 +178,7 @@ describe('adding a custom key when the store refuses the write', () => {
     })
     expect(onKeysChanged).toHaveBeenCalledTimes(1)
     expect(onClose).toHaveBeenCalledTimes(1)
+    expect(mirrored()).toBe(store.raw)
   })
 })
 

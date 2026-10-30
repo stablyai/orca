@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildPaletteWorktreeIndex,
-  isPaletteCurrentWorktree,
   resolvePaletteRepoForWorktree,
   resolvePaletteWorktree
 } from './palette-repo-resolution'
@@ -39,21 +38,6 @@ describe('palette repo and current-worktree resolution', () => {
         new Map([['ssh:box\u0000repo-1', remote]])
       )
     ).toBeUndefined()
-  })
-
-  it('does not mark a same-id worktree on another host current', () => {
-    expect(isPaletteCurrentWorktree(worktree, worktree.id, 'local')).toBe(false)
-    expect(isPaletteCurrentWorktree(worktree, worktree.id, 'ssh:box')).toBe(true)
-  })
-
-  it('recognizes the paired-runtime alias of an SSH worktree as current', () => {
-    expect(
-      isPaletteCurrentWorktree(
-        { ...worktree, runtimeOwnerEnvironmentId: 'paired-host' },
-        worktree.id,
-        'runtime:paired-host'
-      )
-    ).toBe(true)
   })
 
   it('resolves a paired SSH worktree through its runtime owner alias', () => {

@@ -35,6 +35,12 @@ except (ImportError, ValueError):
     GdkPixbuf = None
 from gi.repository import Atspi
 
+try:
+    gi.require_version("GdkX11", "3.0")
+    from gi.repository import GdkX11
+except (ImportError, ValueError):
+    GdkX11 = None
+
 MAX_NODES = 1200
 MAX_DEPTH = 64
 TEXT_LIMIT = 500
@@ -182,34 +188,66 @@ def choose_window(app, window_id=None, window_index=None):
 
 
 def restore_window(app, window=None):
-    target = window if window is not None else app
+    target = window if window is not None else choose_window(app)[1]
+    if has_state(target, Atspi.StateType.ACTIVE):
+        return
     component = attempt(target.get_component_iface)
-    if component is not None and attempt(lambda: Atspi.Component.grab_focus(component), False):
+    if component is not None:
+        attempt(lambda: Atspi.Component.grab_focus(component), False)
+    if wait_window_focused(target):
+        return
+    if os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland":
+        return
+    windows = windows_for(app)
+    if len(windows) != 1 or windows[0][1] != target:
         return
     pid = pid_of(app)
-    if not pid or not shutil.which("xdotool"):
+    xdotool = shutil.which("xdotool")
+    if not pid or not xdotool:
         return
-    subprocess.run(
-        ["xdotool", "search", "--pid", str(pid), "windowactivate", "--sync"],
-        check=False,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    try:
+        result = subprocess.run([xdotool, "search", "--pid", str(pid)],
+                                check=False, capture_output=True, text=True, timeout=2)
+        ids = result.stdout.split()
+        if result.returncode != 0 or any(not value.isdigit() or int(value) <= 0 for value in ids):
+            return
+        managed_ids = attempt(lambda: {str(GdkX11.X11Window.get_xid(item))
+                                      for item in Gdk.Screen.get_default().get_window_stack()})
+        if managed_ids is None or any(not value.isdigit() or int(value) <= 0 for value in managed_ids):
+            return
+        ids = [value for value in ids if value in managed_ids]
+        if len(ids) != 1:
+            return
+        subprocess.run([xdotool, "windowactivate", "--sync", ids[0]], check=False,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
+    except (OSError, subprocess.TimeoutExpired):
+        return
+
+
+def wait_window_focused(window):
+    deadline = time.monotonic() + 0.5
+    while time.monotonic() < deadline:
+        if has_state(window, Atspi.StateType.ACTIVE):
+            return True
+        time.sleep(0.05)
+    return has_state(window, Atspi.StateType.ACTIVE)
 
 
 def require_keyboard_focus(window, operation):
     if has_state(window, Atspi.StateType.ACTIVE):
         return
     if operation.get("restoreWindow"):
-        deadline = time.monotonic() + 0.5
-        while time.monotonic() < deadline:
-            if has_state(window, Atspi.StateType.ACTIVE):
-                return
-            time.sleep(0.05)
-        if has_state(window, Atspi.StateType.ACTIVE):
+        if wait_window_focused(window):
             return
         raise RuntimeError("window_not_focused: keyboard input requires the target window to be focused; restoreWindow was requested but the target window is still not focused; bring it forward manually or check desktop permissions")
     raise RuntimeError("window_not_focused: keyboard input requires the target window to be focused; retry with --restore-window")
+
+
+def restore_pointer_window(app, window):
+    restore_window(app, window)
+    if not wait_window_focused(window):
+        raise RuntimeError("window_not_focused: window restoration did not focus the target window; no pointer input was sent")
+    return screen_rect(window)
 
 
 def app_matches(app, query):
@@ -369,6 +407,8 @@ def render_accessibility_tree(root, root_path, compact_browser_tabs=False, geome
     records = []
     lines = []
     truncation = {"truncated": False, "maxNodes": MAX_NODES, "maxDepth": MAX_DEPTH, "maxDepthReached": False}
+    # Tab compaction shrinks records mid-walk, so len(records) would reuse retained indexes.
+    next_index = 0
 
     def text_snippets(node, limit=6, max_depth=3):
         values = []
@@ -419,12 +459,13 @@ def render_accessibility_tree(root, root_path, compact_browser_tabs=False, geome
         return role in {"panel", "filler", "unknown", "section"} and not has_text and not meaningful_actions(item["actions"]) and summary is None and child_count <= 1
 
     def walk(node, depth, path):
+        nonlocal next_index
         if len(records) >= MAX_NODES or depth > MAX_DEPTH:
             truncation["truncated"] = True
             if depth > MAX_DEPTH:
                 truncation["maxDepthReached"] = True
             return
-        item = record(node, len(records), path)
+        item = record(node, next_index, path)
         role_key = (item["controlType"] or "").lower()
         title = item["name"] or item["automationId"] or ""
         suppressed = suppress_children(role_key, title, item["value"], None)
@@ -439,6 +480,7 @@ def render_accessibility_tree(root, root_path, compact_browser_tabs=False, geome
                 walk(child, depth, path + [child_index])
             return
         records.append(item)
+        next_index += 1
         if geometry_nodes is not None:
             geometry_nodes[id(item)] = node
         role_label = item["localizedControlType"] or item["controlType"]
@@ -983,6 +1025,56 @@ def type_text(value):
     Atspi.generate_keyboard_event(0, str(value), Atspi.KeySynthType.STRING)
 
 
+def insert_focused_text(window, value):
+    # Why: EditableText needs no window focus and still works on Wayland, where key synthesis is a no-op.
+    node = first_descendant(window, lambda candidate: has_state(candidate, Atspi.StateType.FOCUSED))
+    if node is None or not has_state(node, Atspi.StateType.EDITABLE):
+        return None
+    editable = attempt(node.get_editable_text_iface)
+    text = text_iface(node)
+    if editable is None or text is None:
+        return None
+    start = end = int(attempt(lambda: Atspi.Text.get_caret_offset(text), -1))
+    selection_count = attempt(lambda: Atspi.Text.get_n_selections(text))
+    if selection_count not in (0, 1):
+        return None
+    if selection_count == 1:
+        selection = attempt(lambda: Atspi.Text.get_selection(text, 0))
+        if selection is None or not 0 <= selection.start_offset < selection.end_offset:
+            return None
+        start, end = selection.start_offset, selection.end_offset
+    if start < 0:
+        return None
+    original_count = attempt(lambda: Atspi.Text.get_character_count(text))
+    if original_count is None or original_count < 0 or end > original_count:
+        return None
+    original = None
+    if end > start:
+        original = attempt(lambda: Atspi.Text.get_text(text, 0, original_count))
+        if original is None or len(original) != original_count:
+            return None
+    inserted_count = original_count + len(value)
+    if (not attempt(lambda: Atspi.EditableText.insert_text(editable, end, value, len(value.encode("utf-8"))), False)
+            or attempt(lambda: Atspi.Text.get_character_count(text)) != inserted_count
+            or attempt(lambda: Atspi.Text.get_text(text, end, end + len(value))) != value):
+        raise RuntimeError("text_insertion_unconfirmed: text insertion did not confirm success; inspect state before retrying")
+    # Why insert before deleting: an unsuccessful insert leaves the selected text intact.
+    if end > start and (not attempt(lambda: Atspi.EditableText.delete_text(editable, start, end), False)
+            or attempt(lambda: Atspi.Text.get_character_count(text)) != inserted_count - (end - start)
+            or attempt(lambda: Atspi.Text.get_text(text, 0, inserted_count - (end - start)))
+            != original[:start] + value + original[end:]):
+        raise RuntimeError("text_replacement_incomplete: text was inserted but selection deletion did not confirm success; inspect state before retrying")
+    caret = start + len(value)
+    if attempt(lambda: Atspi.Text.get_caret_offset(text)) != caret:
+        if (not attempt(lambda: Atspi.Text.set_caret_offset(text, caret), False)
+                or attempt(lambda: Atspi.Text.get_caret_offset(text)) != caret):
+            raise RuntimeError("text_caret_unconfirmed: text was inserted but caret movement did not confirm success; inspect state before retrying")
+    action = {"path": "accessibility", "actionName": "insertText", "fallbackReason": None}
+    if attempt(lambda: Atspi.Text.get_text(text, start, caret)) == value:
+        action["verification"] = {"state": "verified", "property": "focusedText", "expected": value}
+    return action
+
+
 def paste_text(value):
     text = str(value)
     previous = read_clipboard()
@@ -1085,7 +1177,7 @@ def run_operation(operation):
     if operation.get("restoreWindow"):
         restore_window(app, window)
         _, window = choose_window(app, operation.get("windowId"), operation.get("windowIndex"))
-    if tool in {"type_text", "press_key", "hotkey", "paste_text"}:
+    if tool in {"press_key", "hotkey"}:
         require_keyboard_focus(window, operation)
     bounds = screen_rect(window)
     saved = operation.get("element")
@@ -1095,9 +1187,6 @@ def run_operation(operation):
     action = None
 
     if tool == "click":
-        # Why: agents expect a click into a target app to make the next
-        # keyboard action safe, even when the click uses an accessibility path.
-        restore_window(app, window)
         preferred = preferred_action(node)
         click_count = (
             require_positive_integer(operation.get("click_count"), "click_count")
@@ -1107,6 +1196,8 @@ def run_operation(operation):
         has_modifiers = bool(str(operation.get("modifiers") or "").strip())
         handled = not has_modifiers and operation.get("mouse_button", "left") == "left" and click_count <= 1 and perform_action(node, preferred)
         if not handled:
+            # Why: pointer clicks are synthetic global input; AT-SPI actions need no focus.
+            bounds = restore_pointer_window(app, window)
             click_at(
                 *screen_point(bounds, saved, operation.get("x"), operation.get("y"), node),
                 operation.get("mouse_button", "left"),
@@ -1128,21 +1219,25 @@ def run_operation(operation):
     elif tool == "scroll":
         # Why: pointer wheel events should land in the requested app window even
         # when another desktop window is currently foregrounded.
-        restore_window(app, window)
+        bounds = restore_pointer_window(app, window)
         scroll_at(*screen_point(bounds, saved, operation.get("x"), operation.get("y"), node), operation.get("direction"), operation.get("pages"))
         action = {"path": "synthetic", "actionName": "scroll", "fallbackReason": None}
     elif tool == "drag":
         # Why: pointer drags are synthetic global input, so activate the target
         # window before using cached coordinates from its accessibility tree.
-        restore_window(app, window)
+        bounds = restore_pointer_window(app, window)
         drag_between(
             screen_point(bounds, operation.get("fromElement"), operation.get("from_x"), operation.get("from_y"), from_node),
             screen_point(bounds, operation.get("toElement"), operation.get("to_x"), operation.get("to_y"), to_node),
         )
         action = {"path": "synthetic", "actionName": "drag", "fallbackReason": None}
     elif tool == "type_text":
-        type_text(require_non_empty_string(operation.get("text"), "text"))
-        action = {"path": "synthetic", "actionName": "typeText", "fallbackReason": None, "verification": {"state": "unverified", "reason": "synthetic_input"}}
+        text = require_non_empty_string(operation.get("text"), "text")
+        action = insert_focused_text(window, text)
+        if action is None:
+            require_keyboard_focus(window, operation)
+            type_text(text)
+            action = {"path": "synthetic", "actionName": "typeText", "fallbackReason": None, "verification": {"state": "unverified", "reason": "synthetic_input"}}
     elif tool == "press_key":
         press_key(require_non_empty_string(operation.get("key"), "key"))
         action = {"path": "synthetic", "actionName": "pressKey", "fallbackReason": None, "verification": {"state": "unverified", "reason": "synthetic_input"}}
@@ -1150,8 +1245,12 @@ def run_operation(operation):
         hotkey(require_non_empty_string(operation.get("key"), "key"))
         action = {"path": "synthetic", "actionName": "hotkey", "fallbackReason": None, "verification": {"state": "unverified", "reason": "synthetic_input"}}
     elif tool == "paste_text":
-        paste_text(require_non_empty_string(operation.get("text"), "text"))
-        action = {"path": "clipboard", "actionName": "paste", "fallbackReason": None, "verification": {"state": "unverified", "reason": "clipboard_paste"}}
+        text = require_non_empty_string(operation.get("text"), "text")
+        action = insert_focused_text(window, text)
+        if action is None:
+            require_keyboard_focus(window, operation)
+            paste_text(text)
+            action = {"path": "clipboard", "actionName": "paste", "fallbackReason": None, "verification": {"state": "unverified", "reason": "clipboard_paste"}}
     elif tool == "set_value":
         if not set_value(node, operation.get("value", "")):
             raise RuntimeError("element value is not settable")

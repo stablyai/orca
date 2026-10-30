@@ -1,13 +1,17 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
-import type { AgentSessionQueuedMessageMoveResult } from '../../../src/shared/agent-session-wire'
+import type {
+  AgentSessionQueuedMessage,
+  AgentSessionQueuedMessageMoveResult
+} from '../../../src/shared/agent-session-wire'
 import type { DragReorderMove } from '../components/drag-reorder-positions'
-import type { MobileQueuedMessageFeed } from './mobile-structured-queued-message-feed'
 import type { MobileStructuredAgentMutate } from './use-mobile-structured-agent-mutation'
+
+type QueuedMessages = readonly AgentSessionQueuedMessage[] | null | undefined
 
 export function useMobileQueuedMessageComposerActions(args: {
   sessionKey: string
   sessionId: string | null
-  messages: MobileQueuedMessageFeed
+  messages: QueuedMessages
   reorderCapable: boolean
   enabled: boolean
   mutate: MobileStructuredAgentMutate
@@ -23,8 +27,8 @@ export function useMobileQueuedMessageComposerActions(args: {
   }, [sessionKey])
   const [preview, setPreview] = useState<{
     scope: string
-    source: MobileQueuedMessageFeed
-    messages: MobileQueuedMessageFeed
+    source: QueuedMessages
+    messages: QueuedMessages
   } | null>(null)
   const move = useCallback(
     async (move: DragReorderMove): Promise<boolean> => {
@@ -39,10 +43,12 @@ export function useMobileQueuedMessageComposerActions(args: {
         return false
       }
       remaining.splice(at + ('afterId' in move ? 1 : 0), 0, source)
+      // Cards sort by position, so the preview hands the moved order the queue's own positions.
+      const positions = messages.map((message) => message.position).sort((a, b) => a - b)
       setPreview({
         scope: sessionKey,
         source: messages,
-        messages: remaining
+        messages: remaining.map((message, index) => ({ ...message, position: positions[index]! }))
       })
       const result = await mutate<AgentSessionQueuedMessageMoveResult>(
         'agentSession.queuedMessageMove',

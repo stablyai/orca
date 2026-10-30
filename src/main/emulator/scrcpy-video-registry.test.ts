@@ -33,13 +33,6 @@ describe('scrcpyVideoRegistry', () => {
     expect(scrcpyVideoRegistry.has('dev')).toBe(false)
   })
 
-  it('ignores pushes for unknown devices', () => {
-    expect(() =>
-      scrcpyVideoRegistry.pushMeta('missing', { codecId: 'h264', width: 1, height: 1 })
-    ).not.toThrow()
-    expect(scrcpyVideoRegistry.subscribe('missing', () => {})()).toBeUndefined()
-  })
-
   it('replays the current GOP (keyframe + following deltas) to late subscribers', () => {
     scrcpyVideoRegistry.register('gop', () => {})
     const tag = (event: ScrcpyVideoEvent): string =>

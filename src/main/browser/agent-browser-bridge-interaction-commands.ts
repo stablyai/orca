@@ -28,9 +28,14 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserHoverResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return (await this.execAgentBrowser(sessionName, ['hover', element])) as BrowserHoverResult
-    })
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (sessionName) => {
+        return (await this.execAgentBrowser(sessionName, ['hover', element])) as BrowserHoverResult
+      },
+      { elements: [element] }
+    )
   }
 
   async drag(
@@ -39,9 +44,14 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserDragResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return (await this.execAgentBrowser(sessionName, ['drag', from, to])) as BrowserDragResult
-    })
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (sessionName) => {
+        return (await this.execAgentBrowser(sessionName, ['drag', from, to])) as BrowserDragResult
+      },
+      { elements: [from, to] }
+    )
   }
 
   async upload(
@@ -50,13 +60,18 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserUploadResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return (await this.execAgentBrowser(sessionName, [
-        'upload',
-        element,
-        ...filePaths
-      ])) as BrowserUploadResult
-    })
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (sessionName) => {
+        return (await this.execAgentBrowser(sessionName, [
+          'upload',
+          element,
+          ...filePaths
+        ])) as BrowserUploadResult
+      },
+      { elements: [element] }
+    )
   }
 
   async wait(
@@ -64,22 +79,27 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserWaitResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      const { args, conditionTimeoutMs, processTimeoutMs } = agentBrowserWaitArguments(
-        options ?? {}
-      )
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: agent-browser's wait --json answers the BrowserWaitResult shape.
-      return (await this.execAgentBrowser(sessionName, args, {
-        timeoutMs: processTimeoutMs,
-        timeoutError:
-          conditionTimeoutMs === undefined
-            ? undefined
-            : new BrowserError(
-                'browser_timeout',
-                `Timed out waiting for browser condition after ${conditionTimeoutMs}ms.`
-              )
-      })) as BrowserWaitResult
-    })
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (sessionName) => {
+        const { args, conditionTimeoutMs, processTimeoutMs } = agentBrowserWaitArguments(
+          options ?? {}
+        )
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: agent-browser's wait --json answers the BrowserWaitResult shape.
+        return (await this.execAgentBrowser(sessionName, args, {
+          timeoutMs: processTimeoutMs,
+          timeoutError:
+            conditionTimeoutMs === undefined
+              ? undefined
+              : new BrowserError(
+                  'browser_timeout',
+                  `Timed out waiting for browser condition after ${conditionTimeoutMs}ms.`
+                )
+        })) as BrowserWaitResult
+      },
+      { elements: [options?.selector] }
+    )
   }
 
   async check(
@@ -88,10 +108,15 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserCheckResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      const args = checked ? ['check', element] : ['uncheck', element]
-      return (await this.execAgentBrowser(sessionName, args)) as BrowserCheckResult
-    })
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (sessionName) => {
+        const args = checked ? ['check', element] : ['uncheck', element]
+        return (await this.execAgentBrowser(sessionName, args)) as BrowserCheckResult
+      },
+      { elements: [element] }
+    )
   }
 
   async focus(
@@ -99,9 +124,14 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserFocusResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return (await this.execAgentBrowser(sessionName, ['focus', element])) as BrowserFocusResult
-    })
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (sessionName) => {
+        return (await this.execAgentBrowser(sessionName, ['focus', element])) as BrowserFocusResult
+      },
+      { elements: [element] }
+    )
   }
 
   async clear(
@@ -122,7 +152,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
         await this.fillExplicitContentEditable(sessionName, element, '')
         return { cleared: element }
       },
-      { requireScopedTarget: true }
+      { requireScopedTarget: true, elements: [element] }
     )
   }
 
@@ -131,13 +161,18 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserSelectAllResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      await this.execAgentBrowser(sessionName, ['focus', element])
-      return (await this.execAgentBrowser(sessionName, [
-        'press',
-        'Control+a'
-      ])) as BrowserSelectAllResult
-    })
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (sessionName) => {
+        await this.execAgentBrowser(sessionName, ['focus', element])
+        return (await this.execAgentBrowser(sessionName, [
+          'press',
+          'Control+a'
+        ])) as BrowserSelectAllResult
+      },
+      { elements: [element] }
+    )
   }
 
   async keypress(

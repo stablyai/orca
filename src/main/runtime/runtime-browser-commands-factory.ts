@@ -17,6 +17,7 @@ export type RuntimeBrowserCommandsFactory = (
 export type RuntimeBrowserCommandsFactoryOptions = {
   /** The provider creates pages against this runtime's client-host lease registry. */
   clientHosting?: boolean
+  supportsGoogleCookieClear?: () => boolean
   /** Client pages live in this runtime's own registries, so they need no healthy engine. */
   clientHostingWithoutEngine?: boolean
   /** The provider owns browser pages without a renderer window. */
@@ -55,6 +56,13 @@ export function runtimeBrowserCommandsFactorySupportsClientHosting(): boolean {
     return true
   }
   return runtimeBrowserCommandsFactoryIsAvailable() && currentOptions.clientHosting === true
+}
+
+export function runtimeBrowserCommandsFactorySupportsGoogleCookieClear(): boolean {
+  return (
+    runtimeBrowserCommandsFactoryIsAvailable() &&
+    currentOptions.supportsGoogleCookieClear?.() === true
+  )
 }
 
 export type RuntimeBrowserUnavailableCause = {

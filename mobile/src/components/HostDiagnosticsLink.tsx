@@ -1,22 +1,32 @@
 import { ChevronRight } from 'lucide-react-native'
-import { Pressable, StyleSheet, Text } from 'react-native'
+import { Pressable, Text } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export function HostDiagnosticsLink({ onPress }: { onPress: () => void }): React.JSX.Element {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   return (
     <Pressable
       style={styles.link}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel="View network diagnostics"
+      accessibilityLabel={t(
+        'components.hostDiagnosticsLink.viewDiagnostics',
+        'View network diagnostics'
+      )}
     >
-      <Text style={styles.text}>View network diagnostics</Text>
+      <Text style={styles.text}>
+        {t('components.hostDiagnosticsLink.viewDiagnostics', 'View network diagnostics')}
+      </Text>
       <ChevronRight size={16} color={colors.textSecondary} />
     </Pressable>
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   link: {
     marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
@@ -35,4 +45,4 @@ const styles = StyleSheet.create({
     fontSize: typography.metaSize,
     fontWeight: '600'
   }
-})
+}))

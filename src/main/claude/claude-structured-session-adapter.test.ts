@@ -7,10 +7,8 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { ClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV as SPAWN_TOKEN_ENV } from '../../shared/agent-session-caller-env'
-import type {
-  ClaudeStructuredSessionAdapter,
-  ClaudeStructuredSessionEvent
-} from './claude-structured-session-adapter'
+import type { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import {
   acquired,
   adapterFor,
@@ -20,9 +18,9 @@ import {
   PROVIDER_SESSION_ID,
   tick,
   USER_MESSAGE,
-  type FakeConnection,
-  claudeOpened
+  type FakeConnection
 } from './claude-structured-session-test-support'
+import { claudeOpened } from './claude-structured-startup-settled-test-support'
 import { invokeCanUseTool } from './claude-can-use-tool-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { providerRequestTimeoutOf } from '../provider-process/provider-request-timeout'
@@ -185,6 +183,23 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
     await adapter.acquire({ ...start, permissionMode: 'accept-edits' })
     expect(claude.connections[0].launch.options).not.toHaveProperty('effort')
     expect(resolveLaunch.mock.calls[0]?.[0].permissionMode).toBe('accept-edits')
+  })
+
+  it('names a launch that could not be resolved on the host, keeping its error (#34795)', async () => {
+    const claude = fakeClaude()
+    const adapter = adapterFor(claude)
+    vi.spyOn(adapter['deps'], 'resolveLaunch').mockRejectedValueOnce(
+      new Error('selector_not_found')
+    )
+
+    await expect(
+      adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
+    ).rejects.toMatchObject({
+      name: 'AgentSessionPreSpawnError',
+      reason: 'launchPreparationFailed',
+      message: 'selector_not_found'
+    })
+    expect(claude.connections).toHaveLength(0)
   })
 
   it('recovers a cancellable lifecycle when the replay arrives after dispatch returned', async () => {

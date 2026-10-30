@@ -13,6 +13,7 @@ import {
 import { buildWorkspaceKanbanSidebarDropUpdates } from '../../workspace-kanban-sidebar-drop'
 import type { SortBy } from '../../../../../../shared/sidebar-list/smart-sort'
 import { switchSortToManualAfterDrop } from '../../manual-sort-switch-toast'
+import { isWorkspaceStatusAllowedOnHost } from '@/store/host-workspace-status-columns'
 import type { WorktreeReorderArgs, WorktreeStatusDropAtIndexArgs } from './drop-commit-context'
 import type { WorktreeManualOrderCatalog } from '../../worktree-manual-order-catalog'
 import {
@@ -20,6 +21,18 @@ import {
   dropWriteRows,
   type DraggedWorktreeCopies
 } from './dragged-worktree-copies'
+
+/** Drops cards that can't take this status (another paired host's column), so they aren't re-ranked either. */
+function idsAcceptingStatus(
+  rowsFor: ReturnType<typeof dropWriteRows>,
+  worktreeIds: readonly string[],
+  status: WorkspaceStatus
+): readonly string[] {
+  const state = useAppStore.getState()
+  return worktreeIds.filter((worktreeId) =>
+    rowsFor.status(worktreeId).some((row) => isWorkspaceStatusAllowedOnHost(state, row, status))
+  )
+}
 
 // Route every status/rank write through dropWriteRows because IDs repeat across hosts.
 export function useWorktreeStatusMutations(args: {
@@ -68,7 +81,17 @@ export function useWorktreeStatusMutations(args: {
   )
 
   const moveWorktreesToStatusAtIndex = useCallback(
-    (dropArgs: WorktreeStatusDropAtIndexArgs) => {
+    (requestedDrop: WorktreeStatusDropAtIndexArgs) => {
+      const rowsFor = dropWriteRows(useAppStore.getState(), requestedDrop.draggedCopies)
+      const worktreeIds = idsAcceptingStatus(
+        rowsFor,
+        requestedDrop.worktreeIds,
+        requestedDrop.status
+      )
+      if (worktreeIds.length === 0) {
+        return
+      }
+      const dropArgs = { ...requestedDrop, worktreeIds }
       const order = buildManualOrderUpdatesForGroupDrop({
         groups: dropArgs.groups,
         targetGroupKey: getWorkspaceStatusGroupKey(dropArgs.status),
@@ -80,7 +103,7 @@ export function useWorktreeStatusMutations(args: {
       })
       const dragged = new Set(dropArgs.worktreeIds)
       const updates = collectDropWrites({
-        rowsFor: dropWriteRows(useAppStore.getState(), dropArgs.draggedCopies),
+        rowsFor,
         statusIds: dropArgs.worktreeIds,
         status: dropArgs.status,
         workspaceStatuses,
@@ -157,9 +180,15 @@ export function useWorktreeStatusMutations(args: {
 
   const dropWorktreesOnWorkspaceBoard = useCallback(
     (dropArgs: WorktreeStatusDropAtIndexArgs) => {
+      const rowsFor = dropWriteRows(useAppStore.getState(), dropArgs.draggedCopies)
+      const worktreeIds = idsAcceptingStatus(rowsFor, dropArgs.worktreeIds, dropArgs.status)
+      if (worktreeIds.length === 0) {
+        return
+      }
       const result = buildWorkspaceKanbanSidebarDropUpdates({
         ...dropArgs,
-        rowsFor: dropWriteRows(useAppStore.getState(), dropArgs.draggedCopies),
+        worktreeIds,
+        rowsFor,
         workspaceStatuses,
         sortBy,
         now: Date.now(),

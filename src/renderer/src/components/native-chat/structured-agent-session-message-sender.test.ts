@@ -1,3 +1,4 @@
+import { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-send-mutation'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 
@@ -171,8 +172,13 @@ describe('structured agent session message sender', () => {
     ]
   ] as const)('frees the chat for the next send once its send is %s', async (_how, end) => {
     const calls = deferredCalls()
-    const a = send('a')
+    const a = send('/fast', { attachments: [{ path: '/shot.png', previewUri: '/shot.png' }] })
     await flush()
+    expect(mocks.call.mock.calls[0][2]).toMatchObject({
+      body: structuredAgentSessionSendBody('/fast', [
+        { path: '/shot.png', previewUri: '/shot.png' }
+      ])
+    })
     expect(structuredAgentSessionSendOut(SESSION)).toBe(true)
     await end(calls, a.clientMessageId)
     await a.outcome
@@ -425,7 +431,9 @@ describe('structured agent session message sender', () => {
 
   it('never probes a host-recorded unknown, and sends what follows it', async () => {
     const calls = deferredCalls()
-    const a = send('a')
+    const a = send('/permissions', {
+      attachments: [{ path: '/shot.png', previewUri: '/shot.png' }]
+    })
     await flush()
     // The agent died with the message on its way: the host recorded it and can't tell.
     settleStructuredAgentSessionSendsFromJournal(

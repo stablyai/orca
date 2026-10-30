@@ -28,7 +28,8 @@ import type { SettingsNavigationBuildOptions } from './settings-navigation-build
 export function buildCapabilitySettingsSections({
   isLocalWindowsHost,
   isWebClient,
-  isLinearConnected
+  isLinearConnected,
+  nativeChatEnabled
 }: SettingsNavigationBuildOptions): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
   return [
@@ -42,6 +43,7 @@ export function buildCapabilitySettingsSections({
       icon: Bot,
       searchEntries: getAgentsPaneSearchEntries({
         includeAgentAwake: !isWebClient,
+        includeAgentChatChoice: nativeChatEnabled && !isWebClient,
         includeAgentRuntime: isLocalWindowsHost,
         includeAgentWorkspaceTrust: !isWebClient,
         includeCodexTerminalServerIsolation: !isWebClient

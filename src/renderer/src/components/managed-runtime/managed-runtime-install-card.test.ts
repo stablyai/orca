@@ -33,7 +33,7 @@ describe('managedRuntimeInstallCard', () => {
       title: 'Install Fake to start chatting',
       detail:
         "One-time 112 MB download. It's shared by Fake chats on the computer running this chat.",
-      hint: 'Also in Settings › Chat › Providers',
+      hint: 'Also in Settings › Agents',
       action: { kind: 'install', label: 'Install Fake' }
     })
     expect(managedRuntimeInstallCard(idle, 'Fake', 'strip')).toMatchObject({

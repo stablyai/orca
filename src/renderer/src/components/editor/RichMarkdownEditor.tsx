@@ -377,6 +377,8 @@ export default function RichMarkdownEditor({
       onImagePick={handleLocalImagePick}
       onEmojiPick={menu.openEmojiMenu}
       onCloseEmojiMenu={() => menu.setEmojiMenu(null)}
+      onCloseSlashMenu={() => menu.setSlashMenu(null)}
+      onCloseDocLinkMenu={() => menu.setDocLinkMenu(null)}
       onOpenAnnotationPopover={review.openAnnotationPopover}
       onCancelAnnotationPopover={() => {
         review.setAnnotationPopover(null)

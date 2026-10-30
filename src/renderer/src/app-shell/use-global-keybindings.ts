@@ -18,7 +18,7 @@ import {
 import { usePluginCommands } from '@/store/plugin-panels'
 import { useAppStore } from '../store'
 import { keybindingMatchesAction, type KeybindingActionId } from '../../../shared/keybindings'
-import { PLUGIN_COMMAND_ALIAS_ACTION_IDS } from '../../../shared/plugins/plugin-command-actions'
+import { PLUGIN_COMMAND_ALIAS_ACTION_IDS } from '../../../shared/plugins/contributions/plugin-command-actions'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
@@ -47,9 +47,8 @@ export function useGlobalKeybindings(args: {
   const terminalShortcutPolicy = useAppStore((s) => s.settings?.terminalShortcutPolicy)
   const pluginCommands = usePluginCommands()
 
-  const shortcutState: AppShortcutState = {
+  const shortcutState: Omit<AppShortcutState, 'activeWorktreeId'> = {
     activeView: layout.activeView,
-    activeWorktreeId: layout.activeWorktreeId,
     actions,
     creationLayoutActive: layout.creationLayoutActive,
     floatingTerminalEnabled: floatingWorkspace.enabled,
@@ -71,12 +70,17 @@ export function useGlobalKeybindings(args: {
   useEffect(() => {
     const doubleTapDetector = new ModifierDoubleTapDetector()
 
+    // The active worktree is read at dispatch: App deliberately does not re-render on workspace switches.
+    const readShortcutState = (): AppShortcutState => ({
+      ...shortcutStateRef.current,
+      activeWorktreeId: useAppStore.getState().activeWorktreeId
+    })
     const unregisterAppCommandDispatcher = registerAppCommandDispatcher((actionId) =>
-      (createAppCommandHandlers(shortcutStateRef.current).get(actionId) ?? (() => false))()
+      (createAppCommandHandlers(readShortcutState()).get(actionId) ?? (() => false))()
     )
 
     const dispatchShortcutInput = (input: ShortcutDispatchInput): void => {
-      const state = shortcutStateRef.current
+      const state = readShortcutState()
       const {
         activeView,
         activeWorktreeId,
@@ -213,6 +217,9 @@ export function useGlobalKeybindings(args: {
         matchShortcut('sidebar.childWorkspaces.toggle') &&
         handlers.get('sidebar.childWorkspaces.toggle')?.()
       ) {
+        return
+      }
+      if (matchShortcut('view.plugins') && handlers.get('view.plugins')?.()) {
         return
       }
       for (const actionId of PLUGIN_COMMAND_ALIAS_ACTION_IDS) {

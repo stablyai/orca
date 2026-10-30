@@ -1,3 +1,4 @@
+import { taskProviderErrorMessage } from '@/lib/task-provider-error-copy'
 import type { TaskPageLinearProjectCreationModel } from './use-task-page-linear-project-creation'
 import { useCallback } from 'react'
 import { toast } from 'sonner'
@@ -5,6 +6,7 @@ import { translate } from '@/i18n/i18n'
 import { linearCreateIssue, linearGetIssue } from '@/runtime/runtime-linear-issue-mutations'
 import { useAppStore } from '@/store'
 import { defaultScopeSource } from '@/lib/default-creation-host'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 export function useTaskPageLinearIssueCreation(model: TaskPageLinearProjectCreationModel) {
   const {
     settings,
@@ -77,7 +79,7 @@ export function useTaskPageLinearIssueCreation(model: TaskPageLinearProjectCreat
       }
       if (!result.ok) {
         toast.error(
-          result.error ||
+          taskProviderErrorMessage(result) ||
             translate('auto.components.TaskPage.7437e340b4', 'Failed to create issue.')
         )
         return
@@ -90,7 +92,7 @@ export function useTaskPageLinearIssueCreation(model: TaskPageLinearProjectCreat
           action: result.url
             ? {
                 label: translate('auto.components.TaskPage.9c57663908', 'View'),
-                onClick: () => window.open(result.url, '_blank')
+                onClick: () => openAppHttpLink(result.url)
               }
             : undefined
         }

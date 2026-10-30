@@ -42,6 +42,11 @@ export function normalizeBrowserPageZoomLevel(value: unknown): number {
   return BROWSER_PAGE_ZOOM_LEVELS[nearestZoomLevelIndex(value)]
 }
 
+/** Scale Chromium applies to the guest's CSS px at this zoom level, unsnapped: UI zoom can set any level. */
+export function browserPageZoomLevelToFactor(level: number): number {
+  return Number.isFinite(level) ? 1.2 ** level : 1
+}
+
 export function browserPageZoomLevelToPercent(level: number): number {
   return BROWSER_PAGE_ZOOM_PERCENTS[nearestZoomLevelIndex(level)]
 }

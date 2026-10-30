@@ -1,6 +1,7 @@
+import type { AgentSessionStatusSummary } from './agent-session-wire'
 import type { AgentType } from './agent-status-types'
-import type { SessionOptionValue } from './native-chat-session-options'
-import type { TrackedNativeChatSessionOption } from './native-chat-session-option-state'
+import type { SessionOptionValue } from './native-chat/input/native-chat-session-options'
+import type { TrackedNativeChatSessionOption } from './native-chat/input/native-chat-session-option-state'
 
 /** Independent host-held values need no model parent. Mutate the record in place so session identity stays stable across picker fences. */
 export type StructuredAgentSessionOptionRecord = {
@@ -54,14 +55,35 @@ export function structuredAgentSessionOwnValue(
 export function replaceStructuredAgentSessionAnsweredValues(
   record: StructuredAgentSessionOptionRecord,
   answered: Readonly<Partial<Record<(typeof ANSWERED_VALUE_IDS)[number], SessionOptionValue>>>,
-  sourceFor: (id: string) => TrackedNativeChatSessionOption['source']
+  sourceFor: (id: string) => TrackedNativeChatSessionOption['source'],
+  replaceUnknownModel = false
 ): void {
   for (const id of ANSWERED_VALUE_IDS) {
     const value = answered[id]
     if (value !== undefined) {
       record.values[id] = { value, source: sourceFor(id) }
-    } else if (id !== 'model') {
+    } else if (id !== 'model' || replaceUnknownModel) {
       delete record.values[id]
     }
   }
+}
+
+/** The host status's option values as one stamp: another device's pick moves it, so options re-read. */
+export function structuredAgentSessionOptionStamp(
+  summary:
+    | Pick<
+        AgentSessionStatusSummary,
+        'model' | 'permissionMode' | 'effort' | 'fastMode' | 'serviceTier'
+      >
+    | undefined
+): string {
+  return [
+    summary?.model,
+    summary?.permissionMode,
+    summary?.effort,
+    summary?.fastMode,
+    summary?.serviceTier
+  ]
+    .map((value) => value ?? '')
+    .join('|')
 }

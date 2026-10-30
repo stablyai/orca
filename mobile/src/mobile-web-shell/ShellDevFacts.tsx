@@ -1,5 +1,7 @@
-import { StyleSheet, Text, View } from 'react-native'
+import { Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 import { formatMobileWebShellDevFacts, isDevelopmentBuild } from './mobile-web-shell-dev-facts'
 
@@ -10,6 +12,7 @@ export function ShellDevFacts({
   state: Extract<MobileWebShellSessionState, { kind: 'ready' }>
   droppedBinaryFrames: number
 }) {
+  useMobileColorScheme()
   if (!isDevelopmentBuild()) {
     return null
   }
@@ -27,7 +30,7 @@ export function ShellDevFacts({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   devFacts: {
     position: 'absolute',
     left: spacing.sm,
@@ -41,4 +44,4 @@ const styles = StyleSheet.create({
     fontSize: typography.metaSize,
     color: colors.textMuted
   }
-})
+}))

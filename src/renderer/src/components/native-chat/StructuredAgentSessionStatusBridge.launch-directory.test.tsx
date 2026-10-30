@@ -311,7 +311,9 @@ describe('StructuredAgentSessionStatusBridge pinned launch directory', () => {
       )
       expect(statusWork).toEqual({ members: 0, groups: hostCount })
       expect(reads.reduce((sum, read) => sum + read.mock.calls.length, 0)).toBe(perHost)
-      expect(snapshots.reduce((sum, read) => sum + read.mock.calls.length, 0)).toBe(2 * perHost)
+      // One capture read per member; only the changed session reruns owner checks and companions.
+      expect(snapshots.reduce((sum, read) => sum + read.mock.calls.length, 0)).toBe(perHost + 1)
+      expect(owners).toHaveBeenCalledTimes(0)
       expect(commits).toBe(1)
       expect(projects).toHaveBeenCalledOnce()
       expect(mocks.applyStatus).toHaveBeenCalledOnce()

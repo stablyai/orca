@@ -91,6 +91,43 @@ afterEach(() => {
 })
 
 describe('rich Markdown search adversarial interactions', () => {
+  it.each([{ isComposing: true }, { keyCode: 229 }])(
+    'keeps Find open when Escape belongs to the IME (%o)',
+    (init) => {
+      const { hook, input, query } = mountSearch()
+      query('beta')
+      const event = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+        cancelable: true,
+        ...init
+      })
+
+      act(() => input.dispatchEvent(event))
+
+      expect(hook.result.current.searchState.isSearchOpen).toBe(true)
+      expect(hook.result.current.searchState.searchQuery).toBe('beta')
+      expect(document.activeElement).toBe(input)
+      expect(event.defaultPrevented).toBe(false)
+    }
+  )
+
+  it('still closes Find and returns to the editor on plain Escape', () => {
+    const { hook, editor, input } = mountSearch()
+    const event = new KeyboardEvent('keydown', {
+      key: 'Escape',
+      bubbles: true,
+      cancelable: true
+    })
+
+    act(() => input.dispatchEvent(event))
+    act(() => vi.runOnlyPendingTimers())
+
+    expect(hook.result.current.searchState.isSearchOpen).toBe(false)
+    expect(document.activeElement).toBe(editor.view.dom)
+    expect(event.defaultPrevented).toBe(true)
+  })
+
   it('does not revive a delayed search after a document click and another control focus', () => {
     const { editor, hook, otherControl, query, documentCaret, scrollTo } = mountSearch()
     query('beta')

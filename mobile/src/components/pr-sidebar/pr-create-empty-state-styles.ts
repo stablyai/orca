@@ -1,7 +1,8 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet } from '../../theme/themed-styles'
 
-export const prCreateEmptyStateStyles = StyleSheet.create({
+export const prCreateEmptyStateStyles = themedStyleSheet(() => ({
   section: {
     backgroundColor: colors.bgPanel,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -104,4 +105,4 @@ export const prCreateEmptyStateStyles = StyleSheet.create({
     fontSize: typography.metaSize,
     fontWeight: '600'
   }
-})
+}))

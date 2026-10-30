@@ -1,7 +1,8 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet } from '../../theme/themed-styles'
 
-export const prCommentsStyles = StyleSheet.create({
+export const prCommentsStyles = themedStyleSheet(() => ({
   noDescription: {
     color: colors.textSecondary,
     fontSize: typography.metaSize,
@@ -223,4 +224,4 @@ export const prCommentsStyles = StyleSheet.create({
     color: colors.statusRed,
     fontSize: typography.metaSize
   }
-})
+}))

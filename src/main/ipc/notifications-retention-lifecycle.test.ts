@@ -88,7 +88,7 @@ describe('registerNotificationHandlers', () => {
     expect(
       await handler({}, { source: 'agent-task-complete', worktreeId: 'repo::wt1', paneKey })
     ).toEqual({ delivered: true })
-    expect(vi.getTimerCount()).toBe(1)
+    expect(vi.getTimerCount()).toBe(process.platform === 'win32' ? 0 : 1)
 
     getNotificationEventHandler('click')()
 
@@ -221,7 +221,7 @@ describe('registerNotificationHandlers', () => {
 
     const handler = getDispatchHandler()
     expect(await handler({}, { source: 'agent-task-complete' })).toEqual({ delivered: true })
-    expect(vi.getTimerCount()).toBe(1)
+    expect(vi.getTimerCount()).toBe(process.platform === 'win32' ? 0 : 1)
 
     const closeHandler = getNotificationEventHandler('close')
     closeHandler()
@@ -246,7 +246,7 @@ describe('registerNotificationHandlers', () => {
 
       const handler = getDispatchHandler()
       expect(await handler({}, { source: 'agent-task-complete' })).toEqual({ delivered: true })
-      expect(vi.getTimerCount()).toBe(1)
+      expect(vi.getTimerCount()).toBe(process.platform === 'win32' ? 0 : 1)
 
       const failedHandler = getNotificationEventHandler('failed')
       failedHandler({}, 'Application is not code signed')

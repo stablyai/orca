@@ -27,6 +27,9 @@ import { OpenCodeUsageStore } from '../opencode-usage/store'
 import { MuseUsageStore } from '../muse-usage/store'
 import { installRepoMaintenanceIdleGate } from '../repo-maintenance-idle-gate'
 import { mainProcessState as state } from './main-process-state'
+import { runAfterFirstWindowShown } from './first-window-deferral'
+
+const TELEMETRY_CLIENT_START_FALLBACK_MS = 15_000
 
 export function initializeMainProcessObservers(): void {
   const store = state.store
@@ -79,7 +82,10 @@ export function initializeMainProcessObservers(): void {
     uninstallHookStatusRepublish()
   }
   // Initialize before IPC/renderers can track; the telemetry client gates dev/disabled cases itself.
-  initTelemetry(store)
+  // Load the SDK after first paint (#35752); headless serve and GPU failures never show a window.
+  initTelemetry(store, (start) =>
+    runAfterFirstWindowShown(start, TELEMETRY_CLIENT_START_FALLBACK_MS)
+  )
   const profileStateStartup = state.profileStateStartup
   if (profileStateStartup) {
     track('profile_state_authority_selected', {

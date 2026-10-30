@@ -4,6 +4,7 @@ import { orcadAgentBrowserNativeName } from '../../../shared/orcad-agent-browser
 import type { NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
 import { ensureRemoteOrcadNodeRuntime } from './orcad-remote-node-runtime'
 import { recordedRemoteNodeRuntimeProbeCommand } from './orcad-remote-node-runtime-recorded-probe'
+import { cachedOrcadSlotInstalled } from './orcad-remote-install-cached-probe'
 import {
   execCommand,
   isUnconfirmedSshCommandTermination
@@ -34,6 +35,8 @@ export async function installOrcadBundle(
     nodeRuntimeArchive: () => Promise<string>
     /** Offline archive location named when downloads fail. */
     nodeRuntimeOfflineArchivePath?: string
+    /** Per-source connect budget for the host's own download fallback. */
+    nodeRuntimeHostConnectTimeoutSeconds?: number
     /** WSL opt-in: reuse a matching stat signature previously hashed to this pin. */
     recordedNodeRuntimeProbe?: boolean
     signal?: AbortSignal
@@ -41,6 +44,9 @@ export async function installOrcadBundle(
   fullVersion: string,
   remoteDir: string
 ): Promise<void> {
+  if (options.recordedNodeRuntimeProbe && (await cachedOrcadSlotInstalled(options, remoteDir))) {
+    return
+  }
   // Existing slot bytes are unusable without their referenced runtime.
   await ensureRemoteOrcadNodeRuntime({
     conn: options.conn,
@@ -49,6 +55,7 @@ export async function installOrcadBundle(
     target: options.target,
     archivePath: options.nodeRuntimeArchive,
     offlineArchivePath: options.nodeRuntimeOfflineArchivePath,
+    hostConnectTimeoutSeconds: options.nodeRuntimeHostConnectTimeoutSeconds,
     signal: options.signal,
     ...(options.recordedNodeRuntimeProbe
       ? { posixProbeCommand: recordedRemoteNodeRuntimeProbeCommand }

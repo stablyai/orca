@@ -234,10 +234,9 @@ function ActivityThreadHoverCardContent({
           }
           canJumpToWorkspace={canJumpToWorkspace}
         />
-
-        {/* GitHub / GitLab Issue */}
         <WorktreeCardIssueDetailSection
           issue={secondary.hoverIssue}
+          workspaceId={thread.worktree.id}
           onManageLinks={dismissAndRun(foundation.handleManageLinks)}
           issueMenuOpen={detailsHoverControl.issueMenuOpen}
           onIssueMenuOpenChange={detailsHoverControl.handleIssueMenuOpenChange}
@@ -288,6 +287,7 @@ function ActivityThreadHoverCardContent({
                         'View on Linear'
                       )}
                       href={secondary.hoverLinearIssue.url}
+                      workspaceId={thread.worktree.id}
                     >
                       <ExternalLink className="size-3" />
                     </MetadataActionIcon>
@@ -334,6 +334,7 @@ function ActivityThreadHoverCardContent({
                     'View on Jira'
                   )}
                   href={secondary.hoverJiraIssue.url}
+                  workspaceId={thread.worktree.id}
                 >
                   <ExternalLink className="size-3" />
                 </MetadataActionIcon>

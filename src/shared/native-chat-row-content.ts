@@ -6,14 +6,17 @@ import {
   claimBackgroundTaskTwins
 } from './native-chat/input/native-chat-background-task-row'
 import { isWordlessProviderFrameBlock } from './native-chat/native-chat-provider-frame-summary'
-import { isReplacedSubagentGroupTwin, subagentGroupBlocks } from './native-chat-subagent-summary'
+import {
+  isReplacedSubagentGroupTwin,
+  subagentGroupBlocks
+} from './native-chat/transcript/native-chat-subagent-summary'
 import {
   isBackgroundTaskBlock,
   isSubagentGroupBlock,
   type NativeChatBlock
 } from './native-chat-types'
 import { splitNativeChatBlocks } from './native-chat/tools/native-chat-tool-fold'
-import { nativeChatProseToMarkdown } from './native-chat-prose'
+import { nativeChatProseToMarkdown } from './native-chat/transcript/native-chat-prose'
 
 /** Inferred from `derive` so the shape cannot drift from what it returns. */
 export type NativeChatRowContent = ReturnType<typeof derive>

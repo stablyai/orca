@@ -119,9 +119,36 @@ export function parseTypecheckOptions(args) {
   return options
 }
 
+const NATIVE_COMPILER_HINT = 'pass --compiler=native'
+
+const recoveryAdvice = (action, fallbackHint) =>
+  fallbackHint ? `${action}, or ${fallbackHint}.` : `${action}.`
+
+export function resolveTypecheckBunExecutable(root, fallbackHint, execute = runProcessSync) {
+  let timeoutMessage
+  const executable = resolvePinnedBunExecutable(root, (options) => {
+    const result = execute(options)
+    if (result.timedOut) {
+      timeoutMessage = `Bun version probe timed out after ${options.timeoutMs} ms: ${options.program}. ${recoveryAdvice('Retry when the host is less busy', fallbackHint)}`
+    }
+    return result
+  })
+  // Optional Bun callers still fall back; required typechecks must explain a timeout.
+  if (timeoutMessage) {
+    throw new Error(timeoutMessage)
+  }
+  return executable
+}
+
 export function selectTypecheckCompiler(
   compiler,
-  { root, resolveBunExecutable, platform = process.platform, arch = process.arch }
+  {
+    root,
+    resolveBunExecutable,
+    fallbackHint = NATIVE_COMPILER_HINT,
+    platform = process.platform,
+    arch = process.arch
+  }
 ) {
   if (compiler === 'auto') {
     compiler = supportsTsrs(platform, arch) ? 'tsrs' : 'bun'
@@ -132,10 +159,10 @@ export function selectTypecheckCompiler(
   if (compiler === 'native' || compiler === 'tsrs') {
     return { compiler }
   }
-  const bunExecutable = resolveBunExecutable(root)
+  const bunExecutable = resolveBunExecutable(root, fallbackHint)
   if (!bunExecutable) {
     throw new Error(
-      `Bun ${readPinnedBunVersion(root)} from devDependencies is missing; run pnpm install, or pass --compiler=native.`
+      `Bun ${readPinnedBunVersion(root)} from devDependencies is missing; ${recoveryAdvice('run pnpm install', fallbackHint)}`
     )
   }
   return { compiler, bunExecutable }
@@ -283,7 +310,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const options = parseTypecheckOptions(process.argv.slice(2))
   const selection = selectTypecheckCompiler(options.compiler, {
     root: repoRoot,
-    resolveBunExecutable: (root) => resolvePinnedBunExecutable(root, runProcessSync)
+    resolveBunExecutable: resolveTypecheckBunExecutable
   })
   const failures = await runTypecheckProjects({ ...options, ...selection })
   if (failures.length > 0) {

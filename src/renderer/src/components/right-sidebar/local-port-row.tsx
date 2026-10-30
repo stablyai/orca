@@ -75,14 +75,21 @@ export function LocalPortRow({
     [onStop, port]
   )
 
-  const processLabel = port.processName ?? (port.pid ? `PID ${port.pid}` : 'Unknown process')
+  const processLabel =
+    port.processName ??
+    (port.pid
+      ? `PID ${port.pid}`
+      : translate('auto.components.right.sidebar.PortsPanel.unknownProcess', 'Unknown process'))
   const address = addressForPort(port)
   const ownerLabel =
     port.kind === 'workspace'
       ? port.owner.displayName
       : port.kind === 'container'
-        ? 'Container or forwarded service'
-        : 'Unassigned'
+        ? translate(
+            'auto.components.right.sidebar.PortsPanel.containerOrForwardedService',
+            'Container or forwarded service'
+          )
+        : translate('auto.components.right.sidebar.PortsPanel.unassigned', 'Unassigned')
   const openBrowserLabel = translate(
     'auto.components.right.sidebar.PortsPanel.b22b128b2a',
     'Open in Browser'

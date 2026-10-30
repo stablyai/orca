@@ -416,6 +416,30 @@ describe('AgentBrowserBridge', () => {
     expect(execFileMock).not.toHaveBeenCalled()
   })
 
+  it('frees the page queue when callers leave a never-settling evaluation', async () => {
+    const wc = mockWebContents(100)
+    wc.debugger.sendCommand
+      .mockReturnValueOnce(new Promise(() => {}))
+      .mockResolvedValue({ result: { value: 'example.com' } })
+    webContentsFromIdMock.mockReturnValue(wc)
+    const hungCaller = new AbortController()
+    const queuedCaller = new AbortController()
+
+    const hung = bridge.evaluate('new Promise(() => {})', undefined, undefined, hungCaller.signal)
+    const queued = bridge.evaluate('sideEffect()', undefined, undefined, queuedCaller.signal)
+    const next = bridge.evaluate('location.host')
+    queuedCaller.abort()
+    hungCaller.abort()
+
+    await expect(hung).rejects.toThrow()
+    await expect(queued).rejects.toThrow()
+    await expect(next).resolves.toMatchObject({ result: 'example.com' })
+    expect(wc.debugger.sendCommand).not.toHaveBeenCalledWith(
+      'Runtime.evaluate',
+      expect.objectContaining({ expression: 'sideEffect()' })
+    )
+  })
+
   it('fails closed when the registered webContents debugger is stale', async () => {
     const wc = mockWebContents(100)
     wc.debugger.sendCommand.mockRejectedValue(new Error('Debugger is detached'))

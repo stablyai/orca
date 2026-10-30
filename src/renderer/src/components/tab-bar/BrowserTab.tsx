@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { X, ExternalLink, Copy, CopyX, Pin, PinOff, Volume2, VolumeX } from 'lucide-react'
+import { X, Pin, PinOff, Volume2, VolumeX } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,7 +24,7 @@ import {
 } from './drop-indicator'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { translate } from '@/i18n/i18n'
-import { TAB_LABEL_WIDTH_CLASSES, TAB_ROOT_WIDTH_CLASSES } from './tab-width-rules'
+import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
@@ -39,7 +39,7 @@ import { useAppStore } from '@/store'
 
 export function formatBrowserTabUrlLabel(url: string): string {
   if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {
-    return 'New Tab'
+    return translate('auto.components.browser.pane.BrowserPane.366bf5d62c', 'New Tab')
   }
   try {
     const parsed = new URL(url)
@@ -158,7 +158,7 @@ export default function BrowserTab({
       data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
       {...listeners}
-      className={`${TAB_ROOT_WIDTH_CLASSES} group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onPointerDown={(e) => {
         onTabPointerDown(
           e,
@@ -292,8 +292,7 @@ export default function BrowserTab({
           />
           {onDuplicate ? (
             <>
-              <DropdownMenuItem onSelect={onDuplicate}>
-                <Copy className="size-3.5" />
+              <DropdownMenuItem inset onSelect={onDuplicate}>
                 {translate('auto.components.tab.bar.BrowserTab.5d6e89891f', 'Duplicate Tab')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
@@ -306,8 +305,7 @@ export default function BrowserTab({
               : translate('auto.components.tab.bar.BrowserTab.911542656f', 'Pin Tab')}
           </DropdownMenuItem>
           {showAudioControl ? (
-            <DropdownMenuItem onSelect={() => setBrowserTabAudioMuted(tab.id, !audioMuted)}>
-              {audioMuted ? <Volume2 className="size-3.5" /> : <VolumeX className="size-3.5" />}
+            <DropdownMenuItem inset onSelect={() => setBrowserTabAudioMuted(tab.id, !audioMuted)}>
               {toggleAudioMutedLabel}
             </DropdownMenuItem>
           ) : null}
@@ -317,16 +315,15 @@ export default function BrowserTab({
             <X className="size-3.5" />
             {translate('auto.components.tab.bar.BrowserTab.1611a1324b', 'Close')}
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={onCloseOthers} disabled={tabCount <= 1}>
-            <CopyX className="size-3.5" />
+          <DropdownMenuItem inset onSelect={onCloseOthers} disabled={tabCount <= 1}>
             {translate('components.tab.bar.BrowserTab.closeOthers', 'Close Others')}
           </DropdownMenuItem>
           <CloseSplitPaneMenuItem onCloseSplitPane={onCloseSplitPane} />
           <DropdownMenuItem
+            inset
             onSelect={() => void window.api.shell.openUrl(openInBrowserUrl)}
             disabled={!isHttpUrl}
           >
-            <ExternalLink className="size-3.5" />
             {translate('auto.components.tab.bar.BrowserTab.6e0bc8f3a8', 'Open In Browser')}
           </DropdownMenuItem>
         </DropdownMenuContent>

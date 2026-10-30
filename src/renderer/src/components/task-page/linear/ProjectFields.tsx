@@ -1,6 +1,7 @@
 import { ImeInput } from '@/lib/ime-text-field'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { translate } from '@/i18n/i18n'
+import { linearLabelCountLabel, linearMemberCountLabel } from './linear-attribute-count-labels'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { LinearPriorityIcon } from '@/components/linear-priority-icon'
 import { getLinearPriorityLabel } from '@/components/task-page/task-page-localized-options'
@@ -188,14 +189,7 @@ export function TaskPageLinearProjectFields({
               <span>
                 {newLinearProjectMemberIds.length === 0
                   ? translate('auto.components.TaskPage.d6cda23ef1', 'Members')
-                  : translate(
-                      'auto.components.TaskPage.7719d8daa9',
-                      '{{value0}} member{{value1}}',
-                      {
-                        value0: newLinearProjectMemberIds.length,
-                        value1: newLinearProjectMemberIds.length > 1 ? 's' : ''
-                      }
-                    )}
+                  : linearMemberCountLabel(newLinearProjectMemberIds.length)}
               </span>
               <ChevronDown className="size-3 text-muted-foreground/70" />
             </button>
@@ -260,10 +254,7 @@ export function TaskPageLinearProjectFields({
               <span>
                 {newLinearProjectLabelIds.length === 0
                   ? translate('auto.components.TaskPage.d0ca4aa1d0', 'Labels')
-                  : translate('auto.components.TaskPage.eff9800d4b', '{{value0}} label{{value1}}', {
-                      value0: newLinearProjectLabelIds.length,
-                      value1: newLinearProjectLabelIds.length > 1 ? 's' : ''
-                    })}
+                  : linearLabelCountLabel(newLinearProjectLabelIds.length)}
               </span>
               <ChevronDown className="size-3 text-muted-foreground/70" />
             </button>
@@ -369,7 +360,9 @@ export function TaskPageLinearProjectFields({
         />
       </div>
       <p className="text-[10px] text-muted-foreground">
-        {submitShortcutLabel} {translate('auto.components.TaskPage.fc0d8a1fa4', 'to submit.')}
+        {translate('auto.components.TaskPage.shortcutToSubmit', '{{shortcut}} to submit.', {
+          shortcut: submitShortcutLabel
+        })}
       </p>
     </div>
   )

@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
+import { wslHostDistroForTarget } from '@/lib/wsl-host-account-owner'
+import { useAppStore } from '@/store'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { AGENT_SESSION_SEND_USAGE_LIMIT_CONTINUATION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
 import { completeNativeChatStructuredUserAction } from './native-chat-structured-user-action'
@@ -64,6 +66,7 @@ export function useNativeChatInterruptedContinuation(input: {
     latestTransport.current = transport
   }, [transport])
   const hostLabel = useStructuredAgentSessionHostLabel(target)
+  const wslDistro = useAppStore((s) => wslHostDistroForTarget(target, s.runtimeEnvironments))
   const capability = useStructuredAgentSessionHostCapabilityState(
     target,
     AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY
@@ -169,6 +172,7 @@ export function useNativeChatInterruptedContinuation(input: {
     () => ({
       hostLabel,
       remoteHost,
+      wslDistro,
       continueAvailable,
       offeredTurnItemId: offered,
       continueNow,
@@ -179,6 +183,7 @@ export function useNativeChatInterruptedContinuation(input: {
     [
       hostLabel,
       remoteHost,
+      wslDistro,
       continueAvailable,
       offered,
       continueNow,

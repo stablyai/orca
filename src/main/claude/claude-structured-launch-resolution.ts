@@ -1,3 +1,4 @@
+import { assertStructuredAgentResolutionCurrent } from '../native-chat/structured-agent-command-resolution'
 import { activeProviderContext } from '../../shared/agent-session-provider-context'
 import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
@@ -23,7 +24,7 @@ import {
   type ClaudeEnvDeps
 } from './claude-structured-child-env'
 import { claudeStructuredLaunchArgs } from './claude-structured-launch-args'
-import type { ClaudeCliFlagSupport } from './claude-cli-flag-support'
+import type { ClaudeCliFlagCheck, ClaudeCliFlagSupport } from './claude-cli-flag-support'
 import { resolveClaudeLaunchFlags } from './claude-structured-launch-flags'
 import { withNativeChatVisualsEnv } from '../native-chat/native-chat-visuals-delivery'
 import {
@@ -31,13 +32,11 @@ import {
   resolveClaudeStructuredLaunchHome
 } from './claude-structured-launch-home'
 import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
-import { claudeSessionIdForOrcaSession } from './claude-structured-session-id'
+import { claudeSessionIdForOrcaSession } from './structured/claude-structured-session-id'
 import {
   pendingAgentSessionRewindFork,
   type AgentSessionRewindFork
 } from '../../shared/agent-session-rewind'
-
-export { claudeSessionIdForOrcaSession }
 
 export const CLAUDE_DEFAULT_SETTING_SOURCES = ['user', 'project', 'local'] as const
 export const CLAUDE_SESSION_STATE_EVENTS_ENV = 'CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS'
@@ -98,6 +97,7 @@ export function claudeStructuredPermissionOptions(
 export type ClaudeStructuredLaunch = {
   /** Always Orca's resolved user CLI: the SDK's bundled binaries are excluded from the install. */
   pathToClaudeCodeExecutable: string
+  prefixArgs?: readonly string[]
   account?: ClaudeStructuredInvocation['account']
   options: ClaudeStructuredSdkOptions
   cwd: string
@@ -109,6 +109,8 @@ export type ClaudeStructuredLaunch = {
   resumeLeafUuid: string | null
   /** Whether this launch resumes an existing Claude transcript. */
   resumesTranscript: boolean
+  /** Version-gated flag and control support of the CLI this launch runs. */
+  cliFlag: ClaudeCliFlagCheck
   /** Chain identity is independent of whether a transcript exists to resume. */
   continuesChain: boolean
   /** Chain head replaced by this rewind fork. */
@@ -123,7 +125,7 @@ export type ClaudeStructuredLaunchPartDeps = {
   /** Host attachment store outside the workspace, granted to the agent at launch. */
   attachmentDirectory?: string
   /** Omit version-gated flags when support cannot be checked. */
-  cliFlags?: Pick<ClaudeCliFlagSupport, 'supports'>
+  cliFlags?: Pick<ClaudeCliFlagSupport, 'check'>
   /** Whether Claude wrote a transcript for this id; defaults to the transcript resolver. */
   hasTranscript?: (input: {
     providerSessionId: string
@@ -133,6 +135,7 @@ export type ClaudeStructuredLaunchPartDeps = {
 
 export type ClaudeStructuredInvocation = {
   command: string
+  prefixArgs: string[]
   env: Record<string, string>
   account: 'managed' | 'system'
 }
@@ -146,10 +149,15 @@ export async function resolveClaudeStructuredInvocation(
   options?: Parameters<typeof claudeChildEnv>[2]
 ): Promise<ClaudeStructuredInvocation> {
   const sources = resolvedSources ?? (await resolveClaudeChildEnvSources(deps))
+  assertStructuredAgentResolutionCurrent(deps.operation)
+  deps.signal?.throwIfAborted()
   const auth = await deps.resolveAuthPolicy()
+  assertStructuredAgentResolutionCurrent(deps.operation)
+  deps.signal?.throwIfAborted()
   // Preserve proxy credentials alongside ANTHROPIC_BASE_URL for every account.
   return {
     command: sources.command,
+    prefixArgs: sources.prefixArgs,
     env: claudeChildEnv(sources, decorateEnv, options),
     account: auth.account
   }
@@ -193,7 +201,12 @@ export function claudeStructuredLaunchPart(
     }
     const sources = await resolveClaudeChildEnvSources(envDeps)
     // Overlap the version probe with remaining launch preparation.
-    const probeLaunch = { command: sources.command, cwd, env: claudeProbeEnv(sources) }
+    const probeLaunch = {
+      command: sources.command,
+      prefixArgs: sources.prefixArgs,
+      cwd,
+      env: claudeProbeEnv(sources)
+    }
     const launchFlags = resolveClaudeLaunchFlags(
       { ...(deps.cliFlags ? { cliFlags: deps.cliFlags } : {}), prepareVisuals: basis.visuals },
       record.sessionId,
@@ -221,7 +234,7 @@ export function claudeStructuredLaunchPart(
     // Fixed homes can be checked before the final account-routing recheck.
     const resumedWithoutRouter = router ? undefined : await resumes(accountHome.path)
     // Resolve auth after awaited launch preparation; account routing is rechecked below.
-    const { command, env, account } = await resolveClaudeStructuredInvocation(
+    const { command, prefixArgs, env, account } = await resolveClaudeStructuredInvocation(
       envDeps,
       (base) =>
         withNativeChatVisualsEnv(
@@ -250,6 +263,7 @@ export function claudeStructuredLaunchPart(
     return {
       launch: {
         pathToClaudeCodeExecutable: command,
+        prefixArgs,
         account,
         options: {
           ...CLAUDE_STRUCTURED_BASE_OPTIONS,
@@ -271,6 +285,8 @@ export function claudeStructuredLaunchPart(
         providerSessionId,
         resumeLeafUuid: resumesTranscript ? leafUuid : null,
         resumesTranscript,
+        cliFlag: async (flag, ...budget) =>
+          deps.cliFlags ? deps.cliFlags.check(flag, probeLaunch, ...budget) : 'unknown',
         continuesChain,
         ...(fork && head && !continuesChain
           ? { forkedFromKey: agentSessionProviderHandleKey(head) }

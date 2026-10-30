@@ -1,4 +1,5 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
+import { translate } from '../i18n/mobile-i18n'
 import { Pressable, Text, View, Linking, ExternalLink, colors } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
 
@@ -67,7 +68,11 @@ export function renderMobileTasksGitHubViewControls(model: ConnectionPresentatio
                   setShowGitHubIssueSourcePicker(true)
                 }}
               >
-                <Text style={styles.segmentSecondaryText}>Source: {githubIssueSourceLabel}</Text>
+                <Text style={styles.segmentSecondaryText}>
+                  {translate('tasks.githubViewControls.source', 'Source: {{source}}', {
+                    source: githubIssueSourceLabel
+                  })}
+                </Text>
               </Pressable>
             ) : null}
           </>
@@ -110,7 +115,11 @@ export function renderMobileTasksGitHubViewControls(model: ConnectionPresentatio
                   setShowGitHubProjectSortPicker(true)
                 }}
               >
-                <Text style={styles.segmentSecondaryText}>Sort: {githubProjectSortLabel}</Text>
+                <Text style={styles.segmentSecondaryText}>
+                  {translate('tasks.githubViewControls.sort', 'Sort: {{sort}}', {
+                    sort: githubProjectSortLabel
+                  })}
+                </Text>
               </Pressable>
             ) : null}
             {githubProjectAvailableSummaryFields.length > 0 ? (
@@ -124,7 +133,11 @@ export function renderMobileTasksGitHubViewControls(model: ConnectionPresentatio
                   setShowGitHubProjectFieldsPicker(true)
                 }}
               >
-                <Text style={styles.segmentSecondaryText}>Fields: {githubProjectFieldsLabel}</Text>
+                <Text style={styles.segmentSecondaryText}>
+                  {translate('tasks.githubViewControls.fields', 'Fields: {{fields}}', {
+                    fields: githubProjectFieldsLabel
+                  })}
+                </Text>
               </Pressable>
             ) : null}
             {githubProjectTable ? (
@@ -135,7 +148,10 @@ export function renderMobileTasksGitHubViewControls(model: ConnectionPresentatio
             {selectedGitHubProjectViewUrl ? (
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Open view in GitHub"
+                accessibilityLabel={translate(
+                  'tasks.githubViewControls.openView',
+                  'Open view in GitHub'
+                )}
                 style={styles.segmentIconButton}
                 disabled={!taskUiReady}
                 onPress={() => {

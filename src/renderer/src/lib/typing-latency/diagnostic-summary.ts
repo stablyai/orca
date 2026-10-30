@@ -27,8 +27,8 @@ function round(value: number | null): number | null {
   return value == null ? null : Math.round(value * 100) / 100
 }
 
-export function summarizeLatencySamples(values: readonly number[]): LatencyPercentiles {
-  const finite = values.filter((value) => Number.isFinite(value))
+export function summarizeLatencySamples(values: readonly (number | null)[]): LatencyPercentiles {
+  const finite = values.filter((value): value is number => value !== null && Number.isFinite(value))
   const sorted = [...finite].sort((a, b) => a - b)
   return {
     count: sorted.length,

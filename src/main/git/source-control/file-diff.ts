@@ -141,6 +141,7 @@ async function loadDiff(
   let modifiedIsBinary = false
   let modifiedDeleted = false
   let readFailed = false
+  let tooLarge = false
 
   try {
     if (staged) {
@@ -155,6 +156,7 @@ async function loadDiff(
       modifiedIsBinary = rightBlob.isBinary
       modifiedDeleted = !rightBlob.exists && !rightBlob.failed
       readFailed = leftBlob.failed === true || rightBlob.failed === true
+      tooLarge = leftBlob.tooLarge === true || rightBlob.tooLarge === true
     } else {
       // The index-to-HEAD fallback is sequential internally, but independent of the working-tree read.
       // WSL Git can use a Linux cwd while Node needs its Win32 spelling.
@@ -173,6 +175,7 @@ async function loadDiff(
       modifiedIsBinary = workingTreeBlob.isBinary
       modifiedDeleted = !workingTreeBlob.exists
       readFailed = leftBlob.failed === true || workingTreeBlob.failed === true
+      tooLarge = leftBlob.tooLarge === true || workingTreeBlob.tooLarge === true
     }
   } catch {
     readFailed = true
@@ -183,7 +186,8 @@ async function loadDiff(
     modifiedContent,
     originalIsBinary,
     modifiedIsBinary,
-    filePath
+    filePath,
+    tooLarge
   )
   // Mark proven deletions so previewers can distinguish them from failed empty reads.
   if (result.kind === 'binary' && modifiedDeleted) {

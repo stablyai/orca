@@ -24,7 +24,10 @@ const record = (
     ...(overrides.dir ? { launchDirectory: overrides.dir } : {})
   })
 
-function prewarmWith(records: AgentSessionRecord[], resolveCommand = () => '/bin/claude') {
+function prewarmWith(
+  records: AgentSessionRecord[],
+  resolveCommand = () => ({ command: '/bin/claude', prefixArgs: [] })
+) {
   const prewarm = vi.fn()
   const done = prewarmClaudeCliFlags({
     cliFlags: { prewarm },

@@ -254,8 +254,14 @@ describe('AgentBrowserBridge', () => {
   })
 
   it('cancels the command already running when a session is destroyed', async () => {
+    const releasePaint = vi.fn()
+    bridge = new AgentBrowserBridge(
+      mockBrowserManager(undefined, undefined, { holdGuestActive: () => releasePaint })
+    )
+    bridge.setActiveTab(100)
     succeedWith({ snapshot: 'initial' })
     await bridge.snapshot()
+    releasePaint.mockClear()
 
     execFileMock.mockClear()
 
@@ -290,6 +296,7 @@ describe('AgentBrowserBridge', () => {
       message: 'Tab was closed while command was running'
     })
     await destroyPromise
+    expect(releasePaint).toHaveBeenCalledTimes(1)
   })
 
   it('destroys session on process swap and re-inits with --cdp', async () => {

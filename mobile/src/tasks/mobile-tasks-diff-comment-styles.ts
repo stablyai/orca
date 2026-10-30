@@ -1,6 +1,13 @@
-import { StyleSheet, colors, radii, spacing, typography } from './mobile-tasks-dependencies'
+import {
+  StyleSheet,
+  themedStyleSheet,
+  colors,
+  radii,
+  spacing,
+  typography
+} from './mobile-tasks-dependencies'
 
-export const mobileTasksDiffCommentStyles = StyleSheet.create({
+export const mobileTasksDiffCommentStyles = themedStyleSheet(() => ({
   filePreview: {
     gap: spacing.xs,
     marginTop: spacing.xs
@@ -179,4 +186,4 @@ export const mobileTasksDiffCommentStyles = StyleSheet.create({
     paddingHorizontal: spacing.md + 2,
     paddingBottom: spacing.md
   }
-})
+}))

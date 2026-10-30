@@ -9,8 +9,8 @@ const mocks = vi.hoisted(() => ({
   storeState: {
     settings: { activeRuntimeEnvironmentId: null as string | null },
     repos: [] as Repo[],
-    endpointProjects: [],
-    endpointProjectHostSetups: [],
+    projects: [],
+    projectHostSetups: [],
     worktreesByRepo: {} as Record<string, unknown[]>
   },
   createRepo: vi.fn(),
@@ -105,8 +105,8 @@ describe('useCreateRepo default-checkout handoff', () => {
     mocks.stateValues[STATE_ERROR_MESSAGE] = null
     mocks.stateValues[STATE_IS_CREATING] = false
     mocks.storeState.repos = []
-    mocks.storeState.endpointProjects = []
-    mocks.storeState.endpointProjectHostSetups = []
+    mocks.storeState.projects = []
+    mocks.storeState.projectHostSetups = []
     mocks.storeState.worktreesByRepo = {}
     mocks.createRepo.mockReset()
     mocks.storeState.settings.activeRuntimeEnvironmentId = null
@@ -137,10 +137,10 @@ describe('useCreateRepo default-checkout handoff', () => {
     expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
       requireAuthoritative: true
     })
-    expect(mocks.storeState.endpointProjects).toEqual(
+    expect(mocks.storeState.projects).toEqual(
       expect.arrayContaining([expect.objectContaining({ sourceRepoIds: [repo.id] })])
     )
-    expect(mocks.storeState.endpointProjectHostSetups).toEqual(
+    expect(mocks.storeState.projectHostSetups).toEqual(
       expect.arrayContaining([expect.objectContaining({ repoId: repo.id, path: repo.path })])
     )
     expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, undefined)

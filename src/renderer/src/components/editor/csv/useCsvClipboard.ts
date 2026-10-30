@@ -4,6 +4,7 @@ import { copyCsvSelection, pasteCsvSelection } from './csv-cell-clipboard'
 import type { CsvCellSelection } from './csv-cell-selection'
 import type { CsvCellEditSession } from './csv-grid-interaction'
 import type { CsvCellEdit, CsvTextDocument } from './csv-text-document'
+import { CsvPreviewError } from './csv-preview-error'
 
 export function useCsvClipboard({
   document,
@@ -66,7 +67,7 @@ export function useCsvClipboard({
         return
       }
       if (initialRevision !== revision.current) {
-        throw new Error('CSV changed before paste completed. Try again.')
+        throw new CsvPreviewError('paste-conflict')
       }
       pasteText(text)
     } catch (reason) {

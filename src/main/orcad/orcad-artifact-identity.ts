@@ -15,6 +15,17 @@ import { orcadAgentBrowserNativeName } from '../../shared/orcad-agent-browser-na
 
 /** Hash installed bytes in the build's order; a version marker is not proof of delivery. */
 export async function readOrcadArtifactIdentity(directory: string): Promise<string> {
+  const hash = createHash('sha256')
+  for (const filename of await listOrcadArtifactFilenames(directory)) {
+    for await (const chunk of createReadStream(join(directory, filename))) {
+      hash.update(chunk)
+    }
+  }
+  return `${ORCAD_VERSION}+${hash.digest('hex').slice(0, 12)}`
+}
+
+/** The installed files the artifact identity covers, in the build's order. */
+export async function listOrcadArtifactFilenames(directory: string): Promise<string[]> {
   const target = z
     .enum([...SERVER_TARGETS, ...COMPAT_SERVER_TARGETS])
     .parse((await readFile(join(directory, ORCAD_SERVER_TARGET_FILENAME), 'utf8')).trim())
@@ -35,11 +46,5 @@ export async function readOrcadArtifactIdentity(directory: string): Promise<stri
   if (existsSync(join(directory, browser))) {
     filenames.push(browser)
   }
-  const hash = createHash('sha256')
-  for (const filename of filenames) {
-    for await (const chunk of createReadStream(join(directory, filename))) {
-      hash.update(chunk)
-    }
-  }
-  return `${ORCAD_VERSION}+${hash.digest('hex').slice(0, 12)}`
+  return filenames
 }

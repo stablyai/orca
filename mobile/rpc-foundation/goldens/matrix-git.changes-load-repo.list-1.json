@@ -159,6 +159,11 @@
         }
       }
     },
+    "2bf960db8adf": {
+      "name": "git.status#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\",\"includeLineStats\":false}}"
+    },
     "35cc9e325d08": {
       "name": "git.branchCompare#1",
       "ordinal": 11,
@@ -268,62 +273,6 @@
         "startedAt": 0
       }
     },
-    "6a5580a606dc": {
-      "name": "git.status#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "git.status"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "branch": "feature",
-            "entries": [
-              {
-                "added": 4,
-                "area": "unstaged",
-                "path": "src/app.ts",
-                "removed": 1,
-                "status": "modified"
-              },
-              {
-                "area": "staged",
-                "oldPath": "src/older.ts",
-                "path": "src/old.ts",
-                "status": "renamed"
-              }
-            ],
-            "head": "head-oid",
-            "upstreamStatus": {
-              "ahead": 1,
-              "behind": 0,
-              "hasUpstream": true,
-              "upstreamName": "origin/feature"
-            }
-          }
-        }
-      }
-    },
     "6b974d7f9507": {
       "name": "repo.list#1",
       "ordinal": 6,
@@ -403,32 +352,6 @@
         {
           "name": "method",
           "value": "worktree.show"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "72e251ae531b": {
-      "name": "git.status#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "git.status"
         },
         {
           "name": "params",
@@ -618,11 +541,6 @@
         }
       }
     },
-    "973ac78137f2": {
-      "name": "git.status#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
-    },
     "a0e527bdf205": {
       "branchCompareState": {
         "kind": "idle"
@@ -636,10 +554,94 @@
       "ordinal": 8,
       "value": {}
     },
+    "aa8c5813ba8a": {
+      "name": "git.status#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "includeLineStats": false,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "branch": "feature",
+            "entries": [
+              {
+                "added": 4,
+                "area": "unstaged",
+                "path": "src/app.ts",
+                "removed": 1,
+                "status": "modified"
+              },
+              {
+                "area": "staged",
+                "oldPath": "src/older.ts",
+                "path": "src/old.ts",
+                "status": "renamed"
+              }
+            ],
+            "head": "head-oid",
+            "upstreamStatus": {
+              "ahead": 1,
+              "behind": 0,
+              "hasUpstream": true,
+              "upstreamName": "origin/feature"
+            }
+          }
+        }
+      }
+    },
     "ad2a2a1df35b": {
       "name": "worktree.show#1",
       "ordinal": 9,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
+    "ae602a492660": {
+      "name": "git.status#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "includeLineStats": false,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
     },
     "bc1d0b381f25": {
       "name": "repo.list#1",
@@ -772,8 +774,8 @@
       {
         "id": "sc-changes-loaded.prelude:status-pending",
         "observation": {
-          "sender": ["e3973bb12da1", "72e251ae531b"],
-          "payloads": ["f648b042d810", "973ac78137f2"],
+          "sender": ["e3973bb12da1", "ae602a492660"],
+          "payloads": ["f648b042d810", "2bf960db8adf"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -784,8 +786,8 @@
       {
         "id": "sc-changes-loaded.prelude:compare-pending",
         "observation": {
-          "sender": ["e3973bb12da1", "6a5580a606dc", "6d220bb7b42a", "587de4c7f7fc"],
-          "payloads": ["f648b042d810", "973ac78137f2", "ad2a2a1df35b", "c2212473f0c1"],
+          "sender": ["e3973bb12da1", "aa8c5813ba8a", "6d220bb7b42a", "587de4c7f7fc"],
+          "payloads": ["f648b042d810", "2bf960db8adf", "ad2a2a1df35b", "c2212473f0c1"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -798,14 +800,14 @@
         "observation": {
           "sender": [
             "e3973bb12da1",
-            "6a5580a606dc",
+            "aa8c5813ba8a",
             "8c8e528ca222",
             "9536c968b88a",
             "35cc9e325d08"
           ],
           "payloads": [
             "f648b042d810",
-            "973ac78137f2",
+            "2bf960db8adf",
             "ad2a2a1df35b",
             "c2212473f0c1",
             "e2d7409ece1c"
@@ -822,14 +824,14 @@
         "observation": {
           "sender": [
             "e3973bb12da1",
-            "6a5580a606dc",
+            "aa8c5813ba8a",
             "8c8e528ca222",
             "bc1d0b381f25",
             "35cc9e325d08"
           ],
           "payloads": [
             "f648b042d810",
-            "973ac78137f2",
+            "2bf960db8adf",
             "ad2a2a1df35b",
             "c2212473f0c1",
             "e2d7409ece1c"
@@ -846,14 +848,14 @@
         "observation": {
           "sender": [
             "e3973bb12da1",
-            "6a5580a606dc",
+            "aa8c5813ba8a",
             "8c8e528ca222",
             "204b32e0c54e",
             "35cc9e325d08"
           ],
           "payloads": [
             "f648b042d810",
-            "973ac78137f2",
+            "2bf960db8adf",
             "ad2a2a1df35b",
             "c2212473f0c1",
             "e2d7409ece1c"
@@ -870,14 +872,14 @@
         "observation": {
           "sender": [
             "e3973bb12da1",
-            "6a5580a606dc",
+            "aa8c5813ba8a",
             "8c8e528ca222",
             "042d01f3263f",
             "35cc9e325d08"
           ],
           "payloads": [
             "f648b042d810",
-            "973ac78137f2",
+            "2bf960db8adf",
             "ad2a2a1df35b",
             "c2212473f0c1",
             "e2d7409ece1c"
@@ -894,14 +896,14 @@
         "observation": {
           "sender": [
             "e3973bb12da1",
-            "6a5580a606dc",
+            "aa8c5813ba8a",
             "8c8e528ca222",
             "26929519c12a",
             "35cc9e325d08"
           ],
           "payloads": [
             "f648b042d810",
-            "973ac78137f2",
+            "2bf960db8adf",
             "ad2a2a1df35b",
             "c2212473f0c1",
             "e2d7409ece1c"
@@ -918,14 +920,14 @@
         "observation": {
           "sender": [
             "e3973bb12da1",
-            "6a5580a606dc",
+            "aa8c5813ba8a",
             "8c8e528ca222",
             "6b974d7f9507",
             "35cc9e325d08"
           ],
           "payloads": [
             "f648b042d810",
-            "973ac78137f2",
+            "2bf960db8adf",
             "ad2a2a1df35b",
             "c2212473f0c1",
             "e2d7409ece1c"
@@ -942,14 +944,14 @@
         "observation": {
           "sender": [
             "e3973bb12da1",
-            "6a5580a606dc",
+            "aa8c5813ba8a",
             "8c8e528ca222",
             "877dcd616e1f",
             "35cc9e325d08"
           ],
           "payloads": [
             "f648b042d810",
-            "973ac78137f2",
+            "2bf960db8adf",
             "ad2a2a1df35b",
             "c2212473f0c1",
             "e2d7409ece1c"
@@ -966,14 +968,14 @@
         "observation": {
           "sender": [
             "e3973bb12da1",
-            "6a5580a606dc",
+            "aa8c5813ba8a",
             "8c8e528ca222",
             "6b9dc51089ad",
             "35cc9e325d08"
           ],
           "payloads": [
             "f648b042d810",
-            "973ac78137f2",
+            "2bf960db8adf",
             "ad2a2a1df35b",
             "c2212473f0c1",
             "e2d7409ece1c"
@@ -990,14 +992,14 @@
         "observation": {
           "sender": [
             "e3973bb12da1",
-            "6a5580a606dc",
+            "aa8c5813ba8a",
             "8c8e528ca222",
             "c7a8ab38e974",
             "35cc9e325d08"
           ],
           "payloads": [
             "f648b042d810",
-            "973ac78137f2",
+            "2bf960db8adf",
             "ad2a2a1df35b",
             "c2212473f0c1",
             "e2d7409ece1c"
@@ -1014,14 +1016,14 @@
         "observation": {
           "sender": [
             "e3973bb12da1",
-            "6a5580a606dc",
+            "aa8c5813ba8a",
             "8c8e528ca222",
             "84280af3ca36",
             "35cc9e325d08"
           ],
           "payloads": [
             "f648b042d810",
-            "973ac78137f2",
+            "2bf960db8adf",
             "ad2a2a1df35b",
             "c2212473f0c1",
             "e2d7409ece1c"
@@ -1038,14 +1040,14 @@
         "observation": {
           "sender": [
             "e3973bb12da1",
-            "6a5580a606dc",
+            "aa8c5813ba8a",
             "8c8e528ca222",
             "49197a7eac62",
             "35cc9e325d08"
           ],
           "payloads": [
             "f648b042d810",
-            "973ac78137f2",
+            "2bf960db8adf",
             "ad2a2a1df35b",
             "c2212473f0c1",
             "e2d7409ece1c"

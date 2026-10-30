@@ -85,6 +85,7 @@ vi.mock('./rate-limit', () => ({
 }))
 
 import { getWorkItemDetails } from './work-item-details'
+import { getMentionParticipants } from './work-item-participants'
 
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 
@@ -703,8 +704,7 @@ describe('getWorkItemDetails', () => {
     expect(getWorkItemMock).toHaveBeenCalledWith('/repo-root', 42, 'pr', null, {}, 'origin')
   })
 
-  // gh pr view omits avatar_url; Enterprise identities need GraphQL enrichment instead of dotcom fallbacks.
-  it('enriches PR author, reviewer, and assignee avatars from the GraphQL user lookup', async () => {
+  it('reuses participant profiles and enriches only missing or incomplete Enterprise users', async () => {
     getWorkItemMock.mockResolvedValueOnce({
       id: 'pr:1102',
       type: 'pr',
@@ -738,6 +738,24 @@ describe('getWorkItemDetails', () => {
         return { stdout: '[]' }
       }
       const query = args.find((arg) => arg.startsWith('query=')) ?? ''
+      if (query.includes('participants(first: 100)')) {
+        return {
+          stdout: JSON.stringify({
+            data: {
+              repository: {
+                pullRequest: {
+                  participants: {
+                    nodes: [
+                      { login: 'seah', name: null, avatarUrl: avatars.seah },
+                      { login: 'ludi', name: 'Ludi', avatarUrl: '' }
+                    ]
+                  }
+                }
+              }
+            }
+          })
+        }
+      }
       if (query.includes('user(login:')) {
         const data: Record<string, { login: string; name: null; avatarUrl: string }> = {}
         let index = 0
@@ -758,5 +776,40 @@ describe('getWorkItemDetails', () => {
     expect(details?.item.reviewRequests?.[0]?.avatarUrl).toBe(avatars.ludi)
     expect(details?.item.latestReviews?.[0]?.avatarUrl).toBe(avatars.inho)
     expect(details?.item.assignees?.[0]?.avatarUrl).toBe(avatars.seah)
+    const userQuery = ghExecFileAsyncMock.mock.calls
+      .flatMap(([args]) => args)
+      .find((arg: string) => arg.includes('user(login:'))
+    expect(userQuery).not.toContain('user(login: "seah")')
+    expect(userQuery).toContain('user(login: "ludi")')
+    expect(userQuery).toContain('user(login: "inho")')
+    expect(details?.participants).toContainEqual({
+      login: 'ludi',
+      name: 'Ludi',
+      avatarUrl: avatars.ludi
+    })
+  })
+
+  it('skips profile reads when participants already cover visible users regardless of login case', async () => {
+    const participants = [
+      { login: 'alice', name: null, avatarUrl: 'https://ghe.example.com/avatar/1' },
+      { login: 'bob', name: 'Bob', avatarUrl: 'https://ghe.example.com/avatar/2' }
+    ]
+    const result = await getMentionParticipants(
+      '/repo-root',
+      {
+        number: 42,
+        type: 'pr',
+        author: 'Alice',
+        reviewRequests: [{ login: 'BOB', name: null, avatarUrl: '' }],
+        latestReviews: [{ login: 'Bob', state: 'APPROVED', avatarUrl: null }],
+        assignees: [{ login: 'alice', name: null, avatarUrl: '' }]
+      },
+      [],
+      participants,
+      { owner: 'acme', repo: 'widgets', host: 'ghe.example.com' }
+    )
+    expect(result).toEqual(participants)
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(noteRepositoryRateLimitSpendMock).not.toHaveBeenCalled()
   })
 })

@@ -23,6 +23,15 @@ const RESOLUTION = {
 // Typed fixtures ensure the schema audit validates the canonical model.
 const CANONICAL_BODIES: AgentJournalItemBody[] = [
   {
+    kind: 'agent-start',
+    dispatchId: 'dispatch',
+    task: 'Complete task',
+    worker: {
+      party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
+      name: 'Worker'
+    }
+  },
+  {
     kind: 'message',
     role: 'reasoning',
     blocks: [{ type: 'text', text: 'Inspecting the request' }]

@@ -16,6 +16,7 @@ import {
   type LocalGitExecOptions
 } from './gl-utils'
 import { encodedProject } from './project-path-encoding'
+import { isTaskRepositoryIneligible } from '../git/task-repository-eligibility'
 
 function mrListStateFlags(state: MRListState): string[] {
   switch (state) {
@@ -50,6 +51,9 @@ export async function listMergeRequests(
     localGitOptions
   )
   if (!projectRef) {
+    if (await isTaskRepositoryIneligible(repoPath, 'gitlab', connectionId, localGitOptions)) {
+      return { items: [], page, perPage, totalCount: 0, totalPages: 0 }
+    }
     if (connectionId) {
       // Without local cwd, an unresolved SSH project could become an unrelated glab repository.
       return {
@@ -124,15 +128,19 @@ export async function listMergeRequests(
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
     const data = parseGlabJsonList<Parameters<typeof mapMRToWorkItem>[0]>(body)
+    const headerTotalCount = parseGlabPaginationHeader(headers['x-total'], 0)
+    // GitLab omits both totals past 10,000 rows and proxies can strip them; a full page advertises one more probe.
+    const probedTotalPages = data.length < perPage ? page : page + 1
     return {
       items: data.map((d) => mapMRToWorkItem(d, repoId, projectRef)),
       page,
       perPage,
-      totalCount: parseGlabPaginationHeader(headers['x-total'], 0) ?? 0,
-      // Large/all-state listings may omit total-pages; derive it from total count when available.
+      totalCount: headerTotalCount ?? 0,
       totalPages:
         parseGlabPaginationHeader(headers['x-total-pages'], 1) ??
-        Math.max(1, Math.ceil((parseGlabPaginationHeader(headers['x-total'], 0) ?? 0) / perPage))
+        (headerTotalCount === undefined
+          ? probedTotalPages
+          : Math.max(1, Math.ceil(headerTotalCount / perPage)))
     }
   } catch (err) {
     return {

@@ -27,6 +27,7 @@ export async function fetchGitLabMRDetailsForChecks(args: {
   repoId?: string
   iid: number
   repoOwnerExecutionHostId?: string
+  background?: boolean
 }): Promise<GitLabWorkItemDetails | null> {
   return gitLabApiFor(args).workItemDetails({
     repoPath: args.repoPath,
@@ -34,7 +35,8 @@ export async function fetchGitLabMRDetailsForChecks(args: {
     repoOwnerExecutionHostId: args.repoOwnerExecutionHostId,
     iid: args.iid,
     type: 'mr',
-    includeReviewDetails: false
+    includeReviewDetails: false,
+    ...(args.background ? { background: true } : {})
   })
 }
 

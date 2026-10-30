@@ -117,7 +117,7 @@ describe('persistent unit module cache boundary', () => {
   })
 })
 
-it('uses an optional exact restore after install and saves successful scoped producers', () => {
+it('restores the newest same-policy producer and saves only cold main or seeded producers', () => {
   const workflow = parse(readFileSync('.github/workflows/unit-tests.yml', 'utf8'))
   const steps = workflow.jobs.test.steps
   const dependencies = steps.findIndex(
@@ -134,33 +134,30 @@ it('uses an optional exact restore after install and saves successful scoped pro
   expect(prepare).toBeGreaterThan(restore)
   expect(tests).toBeGreaterThan(prepare)
   expect(steps[restore].uses).toBe('actions/cache/restore@v5')
-  expect(steps[restore].with['restore-keys']).toBeUndefined()
+  expect(steps[restore].with['restore-keys']).toBe('${{ steps.module-cache.outputs.key }}-')
   expect(steps[restore]['continue-on-error']).toBe(true)
-  const guard = seal.if
-    .replaceAll('steps.module-cache.outputs.key', 'steps["module-cache"].outputs.key')
-    .replaceAll(
-      'steps.module-cache-restore.outputs.cache-hit',
-      'steps["module-cache-restore"].outputs["cache-hit"]'
-    )
+  const guard = seal.if.replaceAll(
+    'steps.module-cache.outputs.key',
+    'steps["module-cache"].outputs.key'
+  )
   const producer = {
-    event: 'pull_request',
-    ref: 'refs/pull/1/merge',
+    event: 'schedule',
+    ref: 'refs/heads/main',
     success: true,
     key: 'scoped',
-    hit: '',
+    mode: 'cold',
     seed: false
   }
   for (const [name, update, expected] of [
-    ['successful PR cache miss', {}, true],
-    ['successful main producer', { event: 'push', ref: 'refs/heads/main' }, true],
+    ['successful main producer', {}, true],
+    ['PR', { event: 'pull_request', ref: 'refs/pull/1/merge' }, false],
+    ['warm main consumer', { mode: 'warm' }, false],
     [
       'successful manually seeded branch',
       { event: 'workflow_dispatch', ref: 'refs/heads/experiment', seed: true },
       true
     ],
-    ['failed PR', { success: false }, false],
     ['missing identity', { key: '' }, false],
-    ['exact restored hit', { hit: 'true' }, false],
     ['ordinary branch push', { event: 'push', ref: 'refs/heads/experiment' }, false],
     ['unseeded manual branch', { event: 'workflow_dispatch', ref: 'refs/heads/experiment' }, false],
     [
@@ -174,21 +171,20 @@ it('uses an optional exact restore after install and saves successful scoped pro
     const admitted = runInNewContext(guard, {
       github: { event_name: control.event, ref: control.ref },
       steps: {
-        'module-cache': { outputs: { key: control.key } },
-        'module-cache-restore': { outputs: { 'cache-hit': control.hit } }
+        'module-cache': { outputs: { key: control.key } }
       },
-      inputs: { module_cache_seed: control.seed },
+      inputs: { module_cache: control.mode, module_cache_seed: control.seed },
       success: () => control.success
     })
     expect(admitted, name).toBe(expected)
   }
   expect(save.if).toBe("steps.module-cache-seal.outputs.ready == 'true'")
-  expect(save.with.key).toBe(steps[restore].with.key)
+  expect(save.with.key.startsWith(steps[restore].with['restore-keys'])).toBe(true)
   expect(workflow.on.workflow_call.inputs.module_cache.default).toBe('off')
   expect(workflow.on.workflow_call.inputs.run_relay_integration.default).toBe(true)
 })
 
-it('retains four workers on ARM and the four-core Blacksmith unit runner', () => {
+it('retains four workers on ARM and the four-core x64 unit runners', () => {
   const workflow = parse(readFileSync('.github/workflows/unit-tests.yml', 'utf8'))
   const step = workflow.jobs.test.steps.find((step) => step.name === 'Test shard')
   const expression = [...step.run.matchAll(/\$\{\{(.+?)\}\}/g)].find((match) =>
@@ -197,7 +193,8 @@ it('retains four workers on ARM and the four-core Blacksmith unit runner', () =>
   for (const [arch, runner] of [
     ['ARM64', 'ubuntu-24.04-arm'],
     ['ARM64', 'blacksmith-4vcpu-ubuntu-2404-arm'],
-    ['X64', 'blacksmith-4vcpu-ubuntu-2404']
+    ['X64', 'blacksmith-4vcpu-ubuntu-2404'],
+    ['X64', 'ubuntu-24.04']
   ]) {
     expect(runInNewContext(expression, { runner: { arch }, inputs: { runner } })).toBe(
       '--maxWorkers=4'
