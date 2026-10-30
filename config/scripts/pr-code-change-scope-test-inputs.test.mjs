@@ -3,6 +3,7 @@ import { classifyPrJobs, PR_CHECK_JOBS } from './pr-code-change-scope.mjs'
 
 it.each([
   'config/scripts/pr-code-change-scope.test.mjs',
+  'config/scripts/pr-code-change-scope.cloud-owner-leaf.test.mjs',
   'config/scripts/pr-code-change-scope-released-phone.test.mjs',
   'config/scripts/pr-package-test-paths.test.mjs'
 ])('keeps full units and preflight without forcing unrelated lanes for %s', (file) => {
