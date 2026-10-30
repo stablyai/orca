@@ -295,13 +295,19 @@ it.each([
 it('keeps later choices and disabled other-slot colors across terminal, phone and OSC consumers, without chip rollback', async () => {
   const light = terminalTheme('Light', 'light')
   const later = terminalTheme('Later', 'light')
-  const dark = terminalTheme('Dark', 'dark')
+  const dark: PluginTerminalThemeRegistration = {
+    ...terminalTheme('Dark', 'dark'),
+    id: 'plugin:other.theme/dark',
+    pluginKey: 'other.theme'
+  }
   dark.terminal = { background: '#121212', foreground: '#dddddd', red: '#ff2222' }
   state.terminal = [light, later, dark]
   const view = render(<PluginThemeUseNow pluginKey={pluginKey} />)
   await choose('Use for light: Light')
   await choose('Use for light: Later')
+  view.rerender(<PluginThemeUseNow pluginKey={dark.pluginKey} />)
   await choose('Use now: Dark')
+  act(() => load({ ...settings(), disabledPlugins: [dark.pluginKey] }))
   state.terminal = [light, later]
   view.rerender(<PluginThemeUseNow pluginKey={pluginKey} />)
   await choose('Use for light: Light')
