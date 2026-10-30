@@ -42,6 +42,7 @@ beforeEach(async () => {
   ports.keys.clear()
   ports.storage.set('orca:pushServiceNotificationsEnabled', 'true')
   ports.nativeCalls = 0
+  ports.listenerRemovals = 0
   ports.consentCalls = 0
   ports.nativeGets.length = 0
   ports.channelCalls.length = 0
@@ -90,6 +91,7 @@ afterEach(async () => {
       callables: 0
     })
   )
+  await cleanup.run(() => expect(ports.listener).toBeUndefined())
   await cleanup.run(() => vi.restoreAllMocks())
   await cleanup.run(() => vi.unstubAllGlobals())
   await cleanup.run(() => vi.useRealTimers())
@@ -156,6 +158,7 @@ it.each([
     expect(wrappers).toHaveBeenCalledOnce()
     expect(expo).toHaveBeenCalledOnce()
     expect(ports.nativeCalls).toBe(1)
+    expect(ports.listenerRemovals).toBe(R)
     expect(ports.channelCalls).toEqual([])
     expect(ports.keys.size).toBe(0)
     for (const connection of clients) {
