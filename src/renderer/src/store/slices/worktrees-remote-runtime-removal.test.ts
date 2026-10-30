@@ -585,9 +585,7 @@ describe('worktree remote runtime mutations', () => {
     expect(store.getState().worktreesByRepo.repo1).toEqual([wt])
   })
 
-  // Why (#11960): the store is where `force` and the PTY-stop waiver could most
-  // easily be collapsed back into one flag. The ordinary delete confirmation
-  // passes force:true, so that alone must never reach the gate as a waiver.
+  // Ordinary confirmation passes force:true; store must keep it separate from explicit PTY-stop waiver (#11960).
   it('sends force without the PTY-stop waiver unless a caller asks for it', async () => {
     const store = createTestStore()
     const wt = makeWorktree({ id: 'repo1::/w/one', repoId: 'repo1', path: '/w/one' })
@@ -598,8 +596,7 @@ describe('worktree remote runtime mutations', () => {
       expect.objectContaining({ force: true, allowUnverifiedPtyStop: false })
     )
 
-    // Re-seed: the first removal dropped the row, and a second call for a missing
-    // worktree never reaches the API — which would silently re-read the call above.
+    // Reseed a new row so second removal reaches API rather than rereading the first call.
     const retry = makeWorktree({ id: 'repo1::/w/two', repoId: 'repo1', path: '/w/two' })
     store.setState({ worktreesByRepo: { repo1: [retry] } } as Partial<AppState>)
 

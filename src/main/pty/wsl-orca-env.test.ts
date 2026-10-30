@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { isAbsolute } from 'node:path'
 import { getShellReadyWrapperRoot } from '../providers/local-pty-shell-ready-wrapper-root'
 import {
+  SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
 } from '../../shared/setup-agent-sequencing'
 import { addOrcaWslInteropEnv, stampWslOrchestrationCompatibilityHost } from './wsl-orca-env'
-import { CODEX_REMOTE_VIEWER_SSH_CONNECTION } from '../ipc/pty/host-env/codex-terminal-clipboard'
+import { CODEX_REMOTE_VIEWER_SSH_CONNECTION } from '../ipc/pty/host-env/remote-viewer-clipboard-env'
 
 describe('addOrcaWslInteropEnv', () => {
   it.each(['1', '0'])(
@@ -34,11 +35,7 @@ describe('addOrcaWslInteropEnv', () => {
     expect(env.WSLENV).toBe('ORCA_TERMINAL_HANDLE/u:ORCA_SHELL_READY_ROOT/p')
   })
 
-  // Why this is published at all: the wrapper tree is content-addressed, so the
-  // in-guest login script cannot rebuild its path from ORCA_USER_DATA_PATH -- it
-  // cannot derive the hash segment. Without this the guest finds no wrapper and
-  // every WSL pane launches unwrapped: no ready marker, so every startup command
-  // waits out the full readiness timeout.
+  // Guests cannot derive the wrapper content hash from userData; publish the resolved root to avoid unwrapped launches.
   it('publishes the resolved wrapper root path-translated for the guest', () => {
     const env: Record<string, string> = {}
 
@@ -46,14 +43,15 @@ describe('addOrcaWslInteropEnv', () => {
 
     expect(env.ORCA_SHELL_READY_ROOT).toBe(getShellReadyWrapperRoot())
     expect(isAbsolute(env.ORCA_SHELL_READY_ROOT as string)).toBe(true)
-    // /p, not /u: the guest reads a Windows path through /mnt/c.
+    // Translate the host wrapper path for guest access.
     expect(env.WSLENV?.split(':')).toContain('ORCA_SHELL_READY_ROOT/p')
   })
 
-  it('imports setup-gated startup env into WSL without path translation', () => {
+  it('imports setup-gated startup and setup env into WSL without path translation', () => {
     const env: Record<string, string> = {
       [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: 'codex',
-      [SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]: 'while :; do sleep 1; done'
+      [SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]: 'while :; do sleep 1; done',
+      [SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]: '( bash /repo/setup-runner.sh )'
     }
 
     addOrcaWslInteropEnv(env)
@@ -61,7 +59,8 @@ describe('addOrcaWslInteropEnv', () => {
     expect(env.WSLENV?.split(':')).toEqual([
       'ORCA_SHELL_READY_ROOT/p',
       `${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}/u`,
-      `${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}/u`
+      `${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}/u`,
+      `${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}/u`
     ])
   })
 
@@ -87,9 +86,11 @@ describe('addOrcaWslInteropEnv', () => {
       ORCA_OMP_STATUS_EXTENSION: 'C:\\Users\\jin\\.omp\\agent\\extensions\\orca-agent-status.ts',
       ORCA_PRIME_AGENT_STATUS_EXTENSION: 'C:\\stale\\orca-agent-status.ts',
       ORCA_PANE_KEY: 'tab-1:leaf-1',
+      ORCA_AGENT_PANE: 'tab-1:leaf-1',
       ORCA_TAB_ID: 'tab-1',
       ORCA_WORKTREE_ID: 'repo::\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
       ORCA_AGENT_LAUNCH_TOKEN: 'launch-secret',
+      ORCA_AGENT_LAUNCH: 'launch-secret',
       ORCA_OPENCODE_AGENT: 'opencode2',
       ORCA_AGENT_HOOK_PORT: '4567',
       ORCA_AGENT_HOOK_TOKEN: 'token',
@@ -117,9 +118,11 @@ describe('addOrcaWslInteropEnv', () => {
     expect(env.WSLENV).toContain('ORCA_OMP_FRESH_CONFIG/p')
     expect(env.WSLENV).not.toContain('ORCA_PRIME_AGENT_STATUS_EXTENSION')
     expect(env.WSLENV).toContain('ORCA_PANE_KEY/u')
+    expect(env.WSLENV).toContain('ORCA_AGENT_PANE/u')
     expect(env.WSLENV).toContain('ORCA_TAB_ID/u')
     expect(env.WSLENV).toContain('ORCA_WORKTREE_ID/u')
     expect(env.WSLENV).toContain('ORCA_AGENT_LAUNCH_TOKEN/u')
+    expect(env.WSLENV).toContain('ORCA_AGENT_LAUNCH/u')
     expect(env.WSLENV).toContain('ORCA_OPENCODE_AGENT/u')
     expect(env.WSLENV).toContain('ORCA_AGENT_HOOK_PORT/u')
     expect(env.WSLENV).toContain('ORCA_AGENT_HOOK_TOKEN/u')
@@ -191,15 +194,13 @@ describe('addOrcaWslInteropEnv', () => {
 
     addOrcaWslInteropEnv(env)
 
-    // /u (not /p): hooks.ts already converted these to Linux paths before
-    // spawn, so a /p flag would make WSLENV double-translate them.
+    // Already-Linux hook paths must cross untranslated to avoid a second conversion.
     expect(env.WSLENV).toContain('ORCA_ROOT_PATH/u')
     expect(env.WSLENV).toContain('ORCA_WORKTREE_PATH/u')
     expect(env.WSLENV).toContain('CONDUCTOR_ROOT_PATH/u')
     expect(env.WSLENV).toContain('GHOSTX_ROOT_PATH/u')
     expect(env.WSLENV).not.toContain('ORCA_ROOT_PATH/p')
     expect(env.WSLENV).not.toContain('ORCA_WORKTREE_PATH/p')
-    // The value itself must stay the already-Linux path.
     expect(env.ORCA_ROOT_PATH).toBe('/home/jin/repo')
     expect(env.ORCA_WORKTREE_PATH).toBe('/home/jin/repo-worktrees/fix-1')
   })
@@ -244,9 +245,13 @@ describe('addOrcaWslInteropEnv', () => {
 
   // #10861: wsl.exe drops SSH_CONNECTION, so WSL Codex copied only to the Windows clipboard.
   it('crosses the Codex remote-viewer clipboard marker into the guest untranslated (/u)', () => {
-    const env: Record<string, string> = { SSH_CONNECTION: CODEX_REMOTE_VIEWER_SSH_CONNECTION }
+    const env: Record<string, string> = {
+      SSH_CONNECTION: CODEX_REMOTE_VIEWER_SSH_CONNECTION,
+      ORCA_REMOTE_VIEWER_CLIPBOARD: '1'
+    }
     addOrcaWslInteropEnv(env)
     expect(env.WSLENV?.split(':')).toContain('SSH_CONNECTION/u')
+    expect(env.WSLENV?.split(':')).toContain('ORCA_REMOTE_VIEWER_CLIPBOARD/u')
   })
 
   it("leaves the Windows host's own SSH session out of the guest", () => {
@@ -281,9 +286,7 @@ describe('addOrcaWslInteropEnv', () => {
   })
 
   it('never crosses a Windows OpenCode config dir into the guest', () => {
-    // Why: the relay spawn env spreads process.env and the daemon inherits its
-    // own — a /p entry here would deliver C:\... as /mnt/c and in-guest OpenCode
-    // would adopt Orca's Windows overlay as its config root.
+    // Windows overlays can leak through inherited relay/daemon env; never translate them into guest OpenCode config roots.
     const env: Record<string, string> = {
       OPENCODE_CONFIG_DIR: 'C:\\Users\\jin\\AppData\\Roaming\\Orca\\opencode-overlays\\abc',
       ORCA_OPENCODE_CONFIG_DIR: 'C:\\Users\\jin\\AppData\\Roaming\\Orca\\opencode-overlays\\abc'

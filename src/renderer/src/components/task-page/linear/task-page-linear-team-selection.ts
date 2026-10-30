@@ -1,7 +1,6 @@
 import type { LinearTeam } from '../../../../../shared/linear/workspace-types'
 
-// Why: the persisted value is not validated on the way in and a string reached
-// 1.4.207 (0a2b6e7f); anything but a string array reads as sticky-all.
+// Treat malformed persisted selections as sticky-all; unvalidated strings previously crashed array filtering.
 export function storedLinearTeamSelection(value: unknown): string[] | null {
   if (!Array.isArray(value)) {
     return null

@@ -156,9 +156,7 @@ describe('fetchCursorRateLimits', () => {
   })
 
   it('names the account on failures too, so an account switch can clear stale figures', async () => {
-    // Why: the service drops a previous account's numbers only when the fresh
-    // result names an account. A switch whose first refresh fails is exactly when
-    // that matters, so every failure holding a readable session carries it.
+    // Failed refreshes must still name the new account so stale-policy code can discard the previous account's quota.
     const ok = jsonResponse(SUMMARY)
     fetchMock.mockResolvedValueOnce(ok)
     const success = await fetchCursorRateLimits({ authReadResult: session() })

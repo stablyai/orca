@@ -1,3 +1,4 @@
+import { admitStructuredAgentSession } from '@/lib/agent-session/structured-agent-session-busy'
 import { useAppStore } from '@/store'
 import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 import { insertUnifiedTabAfterAnchor } from '@/lib/unified-tab-anchor-insertion'
@@ -18,12 +19,8 @@ import {
   adoptsCliConversations,
   type CliConversationRowAgent
 } from '../../../../shared/structured-agent-cli-conversation-adoption'
-import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import type { Tab } from '../../../../shared/tab-types'
-import { getStructuredAgentSessionLaunchLifecycle } from '@/lib/structured-agent-session-launch-registry'
 import { structuredLaunchConversationOwner } from '@/lib/structured-agent-session-launch-failure'
-import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
-import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
 import type { AiVaultSessionRowChatActions } from './ai-vault-session-chat-action'
 import { resumeAiVaultSessionInNewChat } from './ai-vault-session-resume-in-chat-launch'
 
@@ -38,11 +35,9 @@ export type AiVaultResumeHere = {
   confirm: ConfirmationDialogContextValue
 }
 
-/**
- * A tab is one conversation, so "resume here" opens the picked conversation's own chat right after
- * this one and closes this one once that chat exists; a busy chat asks first. False: the row can't
- * take this chat's place; otherwise the pick settles once its outcome is known.
- */
+type AiVaultReplacement = AiVaultResumeHere & { current: () => boolean }
+
+/** Replace this chat only after the picked chat opens; confirm busy chats first. False means the row cannot replace it. */
 export function resumeAiVaultSessionHere(args: {
   session: AiVaultSession
   here: AiVaultResumeHere
@@ -52,7 +47,9 @@ export function resumeAiVaultSessionHere(args: {
   >
   jump: (session: AiVaultSession) => void
 }): false | Promise<void> {
-  const { session, here, actions } = args
+  const { session, actions } = args
+  let current = (): boolean => true
+  const here = { ...args.here, current: () => current() }
   const structured = session.structuredSession
   if (structured && structured.sessionId === findChatTab(here)?.entityId) {
     here.dismiss()
@@ -81,31 +78,51 @@ export function resumeAiVaultSessionHere(args: {
   } else {
     return false
   }
+  const agent = here.agent
   const chat = findChatTab(here)
-  if (!chat || !isChatBusy(here.workspaceId, chat)) {
+  if (!chat) {
     return replace()
   }
-  // Replacing stops the chat's agent, so a busy one asks first; the picker closes so prompts never stack.
-  here.dismiss()
-  return here
-    .confirm({
+  const confirmReplace = (signal: AbortSignal) =>
+    here.confirm({
       title: translate('components.native-chat.resumeCommand.replaceTitle', 'Replace this chat?'),
       description: translate(
         'components.native-chat.resumeCommand.replaceDescription',
         'Resuming “{{title}}” here will stop what {{agent}} is doing in this chat.',
-        { title: session.title, agent: agentLabel(here.agent) }
+        { title: session.title, agent: agentLabel(agent) }
       ),
       confirmLabel: translate('components.native-chat.resumeCommand.replace', 'Replace'),
       confirmVariant: 'destructive',
       initialFocus: 'confirm',
       compact: true,
-      ignoresOpeningGesture: true
+      ignoresOpeningGesture: true,
+      signal
     })
-    .then((confirmed) => (confirmed ? replace() : requestNativeChatComposerFocus(chat.id)))
+  return admitStructuredAgentSession(
+    here.workspaceId,
+    chat,
+    `replace:${session.id}`,
+    (busy, attempt) => {
+      current = attempt.current
+      const perform = (): Promise<void> | void => (current() ? replace() : undefined)
+      if (!busy) {
+        return perform()
+      }
+      here.dismiss()
+      return confirmReplace(attempt.signal).then((confirmed) => {
+        if (confirmed) {
+          return perform()
+        }
+        if (current()) {
+          requestNativeChatComposerFocus(chat.id)
+        }
+      })
+    }
+  )
 }
 
 function resumeInPlaceOf(
-  here: AiVaultResumeHere,
+  here: AiVaultReplacement,
   session: AiVaultSession,
   rowAgent: CliConversationRowAgent
 ): Promise<void> {
@@ -148,11 +165,14 @@ function resumeInPlaceOf(
             ? activateAiVaultStructuredSession({ structuredSession: owner })
             : revealInPlaceOf(here, owner)
         }
-        if (settlement?.kind === 'structured') {
+        if (
+          settlement?.kind === 'structured' &&
+          openedTabId &&
+          findChatTabWhere(here.workspaceId, (tab) => tab.id === openedTabId)
+        ) {
           closeReplacedChat(here)
         } else if (settlement?.kind === 'failed' && openedTabId) {
-          // A refusal is toasted, so its tab goes and the group falls back to the chat it would
-          // replace. An unknown outcome keeps both: that tab has its own badge and Retry.
+          // Remove toasted refusal tabs; unknown outcomes retain their own badge and Retry alongside the old chat.
           useAppStore.getState().closeUnifiedTab(openedTabId)
         }
         void Promise.resolve(ownerShown).then(resolve, resolve)
@@ -165,11 +185,11 @@ function resumeInPlaceOf(
 
 /** Reopens a closed chat in place of this one, which closes only once the reopened tab exists. */
 function revealInPlaceOf(
-  here: AiVaultResumeHere,
+  here: AiVaultReplacement,
   structured: NonNullable<AiVaultSession['structuredSession']>
 ): Promise<void> {
   return activateAiVaultStructuredSession({ structuredSession: structured }).then(() => {
-    // It also settles true after a reopen it could only report, so only a tab that exists replaces.
+    // Reported reopen success may lack a tab; replace this chat only when the reopened tab exists.
     const reopened = findChatTabWhere(
       here.workspaceId,
       (tab) => tab.entityId === structured.sessionId
@@ -194,32 +214,10 @@ function findChatTab(here: AiVaultResumeHere): Tab | undefined {
   return findChatTabWhere(here.workspaceId, (tab) => tab.id === here.tabId)
 }
 
-function closeReplacedChat(here: AiVaultResumeHere): void {
+function closeReplacedChat(here: AiVaultReplacement): void {
   const tab = findChatTab(here)
-  if (tab) {
+  if (tab && here.current()) {
     // Direct close: the pin prompt belongs to the close commands, and this replacement was chosen.
     useAppStore.getState().closeUnifiedTab(tab.id)
   }
-}
-
-/** Replying or asking (the status store), still starting (its launch, or its host's provider), or
- *  unobservable: a host that can't be seen live may still be running the chat's agent. */
-function isChatBusy(workspaceId: string, tab: Tab): boolean {
-  const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
-  const status = useAppStore.getState().agentStatusByPaneKey[paneKey]?.state
-  if (
-    (status && status !== 'done') ||
-    getStructuredAgentSessionLaunchLifecycle(workspaceId, tab.entityId) === 'pending'
-  ) {
-    return true
-  }
-  const target = structuredAgentSessionTargetForHost(tab.executionHostId)
-  if (!target) {
-    return true
-  }
-  const feed = getStructuredAgentSessionStatusFeed(target)
-  return (
-    feed.getSessionObservation(tab.entityId) !== 'live' ||
-    feed.getSnapshot().get(tab.entityId)?.hostExecutionPhase === 'starting'
-  )
 }

@@ -153,8 +153,7 @@ describe('reminted $$ pane keys on the OMP hook pipeline', () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
     try {
-      // Why: spawn A then spawn B can share one $$ token in env with different tab/leaf.
-      // Overwriting would let leftover remint posts stamp spawn B's pane.
+      // Different spawns can share $$ tokens; stale remints must not overwrite the newer pane owner.
       server.registerPaneKeyAlias(REMINTED, PANE, 'pty-a', 10, { authorityVerified: true })
       server.registerPaneKeyAlias(REMINTED, GOOD_PANE, 'pty-b', 20, { authorityVerified: true })
       const start = await postHookEvent(

@@ -137,8 +137,7 @@ describe('projectSessionTabAgentStatus', () => {
         }
       ]
     }
-    // A paired client that never negotiated the capability: mobile keeps an unrenderable row under
-    // a fallback title, so only a non-mobile old client still loses them.
+    // Older mobile keeps fallback rows; only older non-mobile clients still omit unrenderable agents.
     const oldClient = projectSessionTabAgentStatus(snapshot, 'runtime', [])
     expect(oldClient.tabs.map((tab) => tab.type)).toEqual(['terminal'])
     expect(oldClient.activeTabId).toBe('tab-1::leaf-1')
@@ -208,7 +207,6 @@ describe('projectSessionTabAgentStatus', () => {
     ])
 
     expect(projected.tabs.map((tab) => tab.id)).toEqual(['agent-session:codex'])
-    // A row pruned from `tabs` but left in the layout is its own dead tab.
     expect(projected.tabGroups?.map((group) => group.id)).toEqual(['group-a'])
     expect(projected.tabGroupLayout).toEqual({ type: 'leaf', groupId: 'group-a' })
     expect(projected.activeGroupId).toBe('group-a')
@@ -221,7 +219,6 @@ describe('projectSessionTabAgentStatus', () => {
       STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
     ])
 
-    // The row survives so the chat the desktop shows is not simply absent on the phone.
     expect(projected.tabs.map((tab) => tab.id)).toEqual([
       'agent-session:codex',
       'agent-session:claude'
@@ -230,7 +227,6 @@ describe('projectSessionTabAgentStatus', () => {
       'Codex Chat',
       CLAUDE_STRUCTURED_CHAT_DESKTOP_ONLY_TAB_TITLE
     ])
-    // Nothing is removed, so the layout it belonged to is untouched.
     expect(projected.tabGroups?.map((group) => group.id)).toEqual(['group-a', 'group-b'])
     expect(projected.tabGroupLayout).toEqual(claudeSnapshot.tabGroupLayout)
     expect(projected.activeTabId).toBe('agent-session:codex')
@@ -263,7 +259,7 @@ describe('projectSessionTabAgentStatus', () => {
     )
   })
 
-  // Why: updating cannot reveal a chat the desktop is not serving, so the prompt would lie.
+  // Updating cannot reveal a chat the desktop does not serve; do not promise it as a fix.
   it('never emits an empty structured tab title', () => {
     for (const capabilities of [[], [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]]) {
       const projected = projectSessionTabAgentStatus(claudeSnapshot, 'mobile', capabilities)

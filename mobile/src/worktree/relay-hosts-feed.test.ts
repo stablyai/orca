@@ -38,13 +38,11 @@ describe('the desktop’s server list', () => {
   it('is read once per poll however many readers share it', async () => {
     const session = desktop(() => 'available')
     const feed = relayHostsFeed(session)
-    // The host list reads on its own poll; an open workspace subscribes a second later.
     await feed.read()
     await vi.advanceTimersByTimeAsync(1000)
     const unsubscribe = feed.subscribe(() => {})
     const unsubscribeAgain = feed.subscribe(() => {})
     expect(listCalls(session)).toBe(1)
-    // Its timed read waits out the host list's, then both readers share each one.
     await vi.advanceTimersByTimeAsync(1999)
     expect(listCalls(session)).toBe(1)
     await vi.advanceTimersByTimeAsync(1)
@@ -63,6 +61,10 @@ describe('the desktop’s server list', () => {
     const [first, second] = await Promise.all([feed.read(), feed.read()])
     expect(second).toBe(first)
     expect(listCalls(session)).toBe(1)
+    expect(feed.getSnapshot()).toBe(first)
+    await feed.read()
+    expect(feed.getSnapshot()).toBe(first)
+    expect(listCalls(session)).toBe(2)
   })
 
   it('keeps polling after a read slower than the poll', async () => {
@@ -74,11 +76,9 @@ describe('the desktop’s server list', () => {
     const unsubscribe = relayHostsFeed(session).subscribe(() => {})
     await vi.advanceTimersByTimeAsync(5000)
     expect(listCalls(session)).toBe(1)
-    // The next poll counts from the slow read's finish.
     await vi.advanceTimersByTimeAsync(3000)
     expect(listCalls(session)).toBe(2)
     unsubscribe()
-    // The read in flight finishes without arming a poll nobody reads.
     await vi.advanceTimersByTimeAsync(5000)
     expect(vi.getTimerCount()).toBe(0)
   })

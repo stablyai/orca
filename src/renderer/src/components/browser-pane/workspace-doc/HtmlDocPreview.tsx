@@ -32,6 +32,10 @@ import { buildDocPreviewShareControl } from './doc-preview-artifact-share'
 import { useDocPreviewWebviewHistory } from './doc-preview-webview-history'
 import { useDocPreviewGuestFocus } from './use-doc-preview-guest-focus'
 import { useDocPreviewGuestTools } from './use-doc-preview-guest-tools'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
+import { getOpenFileRevealOwner } from '@/lib/reveal-in-file-manager'
+import { subscribeDocPreviewExternalLinkConfirmation } from './doc-preview-external-link-confirmation'
 
 type PreviewState = 'loading' | 'ready' | 'unavailable'
 
@@ -39,6 +43,7 @@ const MAX_ASSET_FAILURES = 50
 
 export function HtmlDocPreview({
   previewId,
+  browserWorkspaceId,
   filePath,
   relativePath,
   worktreeId,
@@ -49,6 +54,7 @@ export function HtmlDocPreview({
   convertedFrom = null,
   convertedTo = null
 }: HtmlDocPreviewProps): React.JSX.Element {
+  const confirm = useConfirmationDialog()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const reloadRef = useRef<(() => void) | null>(null)
@@ -70,9 +76,7 @@ export function HtmlDocPreview({
 
   const history = useDocPreviewWebviewHistory(webviewRef)
   const { sync: syncHistory, reset: resetHistory } = history
-  // Why wrapped rather than a second control: guest history cannot survive a conversion (the
-  // guest was replaced), so once it runs out Back returns across the conversion — and Forward
-  // re-crosses it — instead of dying.
+  // Guest replacement loses history; exhausted history crosses the document/browser conversion in both directions.
   const historyWithConversionCrossings = useMemo(
     () =>
       convertedFrom || convertedTo
@@ -127,8 +131,6 @@ export function HtmlDocPreview({
     containerRef,
     toolsReady: state === 'ready' && !isUnavailable
   })
-  // Not `document`: shadowing the global inside a component is how a stray DOM call silently
-  // starts reading a plain object.
   const previewDocument = useMemo(
     () => ({ filePath, relativePath, worktreeId, runtimeEnvironmentId, externalSshTargetId }),
     [externalSshTargetId, filePath, relativePath, runtimeEnvironmentId, worktreeId]
@@ -137,6 +139,7 @@ export function HtmlDocPreview({
   useEffect(() => {
     let disposed = false
     let detach: (() => void) | undefined
+    let unsubscribeExternalLinks: (() => void) | undefined
     let loadFailed = false
     const onLoadStarted = (): void => {
       resetBrowserOverlayViewport()
@@ -175,15 +178,13 @@ export function HtmlDocPreview({
         disposed = true
       }
     }
-    // Why: an unreadable document answers with a status the guest renders as text, so the reason
-    // arrives out-of-band. Subscribe before minting so the entry document's failure cannot be missed.
+    // Subscribe before minting: entry failures arrive out-of-band while the guest paints the error body as text.
     let boundGrantId: string | null = null
     const unsubscribeFailure = window.api.docPreview?.onLoadFailure?.((payload) => {
       if (disposed || payload.grantId !== boundGrantId) {
         return
       }
-      // Why first: a refused download is the fences answering for the reader, not the document
-      // failing to load, so it can never take the page away — and it names no file to compare.
+      // A blocked download is a policy response without a file path, not a document-load failure.
       if (payload.reason === 'download-blocked') {
         setDownloadBlocked(true)
         return
@@ -209,6 +210,12 @@ export function HtmlDocPreview({
         if (disposed || !containerRef.current) {
           return
         }
+        unsubscribeExternalLinks = subscribeDocPreviewExternalLinkConfirmation(confirm, {
+          grantId: handle.grantId,
+          owner: handle.location.owner,
+          worktreeId,
+          browserWorkspaceId
+        })
         const attached = attachDocPreviewWebview({
           previewId,
           container: containerRef.current,
@@ -237,8 +244,7 @@ export function HtmlDocPreview({
         detach = attached.detach
         reloadRef.current = attached.reload
         webviewRef.current = attached.webview
-        // Why only now: main binds this grant to the guest on its first commit, so the tools have
-        // nothing to name until the webview exists and is pointed at it.
+        // Main binds the grant on first commit; tools need the attached guest pointed at it.
         setGrant(handle)
       })
       .catch(() => {
@@ -252,9 +258,12 @@ export function HtmlDocPreview({
       reloadRef.current = null
       webviewRef.current = null
       unsubscribeFailure?.()
+      unsubscribeExternalLinks?.()
       detach?.()
     }
   }, [
+    browserWorkspaceId,
+    confirm,
     filePath,
     offerDirectoryAccess,
     previewId,
@@ -274,8 +283,7 @@ export function HtmlDocPreview({
     }
   }, [isActive, previewId])
 
-  // The dropdown's doc-history source: opening a document is a visit, once per document per mount
-  // (a hard reload re-mints the grant but is not a new visit).
+  // Record one visit per document mount; re-minting on hard reload is not a new visit.
   useEffect(() => {
     useAppStore
       .getState()
@@ -290,9 +298,7 @@ export function HtmlDocPreview({
     remintCount
   })
 
-  // Why: a grant is pinned to the owner ids resolved when it was minted, so after a pairing or
-  // SSH reconnect the old one reads nothing and reloading the guest would just refetch the
-  // failure. Drop it and mint against today's ids instead of making the user close the tab.
+  // Reconnect changes the grant’s pinned owner IDs; mint a new grant rather than reloading the same failure.
   const handleHardReload = useCallback(() => {
     releaseDocPreviewGrant(previewId)
     setRemintCount((count) => count + 1)
@@ -317,7 +323,14 @@ export function HtmlDocPreview({
         history={historyWithConversionCrossings}
         onReload={handleReload}
         onHardReload={handleHardReload}
-        onCopyPath={() => void window.api.ui.writeClipboardText(identity.absolutePath)}
+        onCopyPath={() =>
+          void window.api.ui.writeClipboardText(
+            formatClipboardFilePath(
+              identity.absolutePath,
+              getOpenFileRevealOwner(useAppStore.getState(), previewDocument)
+            )
+          )
+        }
         onCopyRelativePath={() => void window.api.ui.writeClipboardText(relativePath)}
         onOpenSource={() => openDocPreviewSource(previewDocument)}
         onOpenExternally={() => openDocPreviewExternally(previewDocument)}

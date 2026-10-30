@@ -16,17 +16,13 @@ export type HeadlessServeX11ReexecOptions = {
   execve: ((file: string, args: string[], env: NodeJS.ProcessEnv) => void) | null
 }
 
-/**
- * A direct `--serve` launch (no CLI to add the switch) that Chromium already put on Wayland is
- * exec'd again with X11 pinned. Exec keeps the pid, so systemd and the AppImage runtime still own
- * it. Returns only when no exec was needed or it failed; serve then continues as before.
- */
+/** Pin direct Wayland serve launches to X11 via exec, preserving PID for systemd/AppImage ownership. Continue in-process if exec is unavailable/fails. */
 export function reexecHeadlessServeOnX11IfNeeded(options: HeadlessServeX11ReexecOptions): void {
   const argv = options.argv ?? process.argv
   if (
     !options.isServeMode ||
     (options.platform ?? process.platform) !== 'linux' ||
-    // Also the loop fence: the exec'd argv carries the switch.
+    // The explicit switch also fences exec recursion.
     hasExplicitOzonePlatform(argv.slice(1)) ||
     !options.execve ||
     readOzonePlatform(options).trim().toLowerCase() !== 'wayland'
@@ -35,7 +31,7 @@ export function reexecHeadlessServeOnX11IfNeeded(options: HeadlessServeX11Reexec
   }
   const execPath = options.execPath ?? process.execPath
   try {
-    // Why first: a switch after a `--` terminator would be read as a positional.
+    // Place before any -- terminator so Chromium reads a switch rather than a positional.
     options.execve(
       execPath,
       [execPath, HEADLESS_SERVE_OZONE_PLATFORM_SWITCH, ...argv.slice(1)],

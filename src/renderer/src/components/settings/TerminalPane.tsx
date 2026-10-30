@@ -1,3 +1,4 @@
+import type { SettingsHostScope } from './settings-host-scope'
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -34,6 +35,7 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 
 type TerminalPaneProps = {
+  hostScope?: SettingsHostScope
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
   scrollbackMode: 'preset' | 'custom'
@@ -53,6 +55,7 @@ type TerminalPaneProps = {
 }
 
 export function TerminalPane({
+  hostScope,
   settings,
   updateSettings,
   scrollbackMode,
@@ -343,6 +346,7 @@ export function TerminalPane({
         matchesSettingsSearch(searchQuery, getTerminalMacYenSearchEntries()))) ? (
       <TerminalAdvancedSection
         key="advanced"
+        hostScope={hostScope}
         settings={settings}
         updateSettings={updateSettings}
         scrollbackMode={scrollbackMode}

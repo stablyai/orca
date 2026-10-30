@@ -44,7 +44,7 @@ function outputText(update: ToolCallUpdate): string | undefined {
   return JSON.stringify(update.rawOutput) ?? ''
 }
 
-/** A whole-file replacement is a linear-time unified patch, even for unrelated large files. */
+// Whole-file replacement avoids expensive diffs for large unrelated files.
 function replacementPatch(path: string, oldText: string, newText: string): string {
   const lines = (text: string, prefix: string): { count: number; text: string } => {
     if (!text) {
@@ -76,21 +76,15 @@ function boundedDiffPatch(path: string, oldText: string, newText: string): strin
 
 type ToolSnapshot = { body: AgentJournalToolCallItem; turn?: string }
 
-/** Holds the snapshots that fill ACP's partial tool updates, settled ones evicted first. Its bound
- *  is the assembler's open budget, which counts each running tool at no fewer bytes, so a running
- *  tool is evicted only after the assembler refused one past that budget, which ends the session.
- *  An update for an evicted settled tool is dropped by the assembler as settled.
- *  A tool's turn is held once: on its snapshot while that lives, then in `turns`. */
+// Evict settled snapshots first to preserve partial-update context for live tools.
 export class AcpToolTimeline {
   private readonly tools = new Map<string, ToolSnapshot>()
   private bytes = 0
-  /** Turns of tools whose snapshot is gone, so a later task or request still lands beside the tool
-   *  that started it. */
+  // Preserve placement after snapshot eviction for later tasks and requests.
   private readonly turns = new BoundedMap<string, string>({
     maxEntries: MAX_PROVIDER_TIMELINE_OPEN_ENTRIES
   })
-  // One latest snapshot per live call; the closing event takes ownership. Bytes are a ledger,
-  // not an RSS ceiling: provider frame limits and the live-entry count bound this finite carry.
+  // Retain full live payloads until close; byte accounting is a ledger, not an RSS ceiling.
   private readonly whole = new BoundedMap<
     string,
     {

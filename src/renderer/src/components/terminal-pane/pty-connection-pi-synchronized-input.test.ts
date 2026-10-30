@@ -19,6 +19,7 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 const {
   resetAndRefreshAllTerminalWebglAtlases,
@@ -85,7 +86,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
   notifyCodexPaneBoundForStaleSweep
 }))
 
-// Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
+// Pass useCallback through because this suite invokes notification hooks without rendering React.
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
   return {
@@ -118,7 +119,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
   )
 }))
 
-// Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
+// Stub eager-buffer lookup to exercise live adoption without the IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
@@ -164,7 +165,6 @@ describe('connectPanePty', () => {
       const pane = createPane(1)
       const synchronizedOutput = { synchronizedOutput: false }
       const renderRows = vi.fn()
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fixture exposes xterm's private render state to observe the DEC 2026 present.
       ;(
         pane.terminal as unknown as {
           _core: {
@@ -185,17 +185,16 @@ describe('connectPanePty', () => {
         }
       }
       pane.terminal.write.mockImplementation((data, callback) => {
-        if (data.includes('\x1b[?2026h')) {
+        if (typeof data === 'string' && data.includes('\x1b[?2026h')) {
           synchronizedOutput.synchronizedOutput = true
         }
-        if (data.includes('\x1b[?2026l')) {
+        if (typeof data === 'string' && data.includes('\x1b[?2026l')) {
           synchronizedOutput.synchronizedOutput = false
         }
         callback?.()
       })
 
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture types intentionally model the production connection boundary.
-      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
       await flushAsyncTicks(6)
 
       vi.useFakeTimers()

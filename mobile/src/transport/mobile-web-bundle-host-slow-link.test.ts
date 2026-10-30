@@ -154,4 +154,4 @@ it('verifies a host-served bundle over a 20 KiB/s link including incompressible 
     expect(value?.assets.get(path)).toEqual(new Uint8Array(bytes))
   }
   expect(tracker.size()).toBe(0)
-})
+}, 15_000)

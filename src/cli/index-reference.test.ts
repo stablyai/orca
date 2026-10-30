@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   callMock,
@@ -42,17 +42,24 @@ vi.mock('child_process', async () => {
 
 import { main } from './index'
 import { buildWorktree, okFixture } from './test-fixtures'
-import {
-  getWorkspaceReferenceIdentity,
-  parseWorkspaceReferenceUrl
-} from '../shared/workspace-reference-identity'
+import { getWorkspaceReferenceIdentity } from '../shared/workspace-reference-identity'
+import type { WorkspaceAttachment } from '../shared/worktree/types'
 import { WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY } from '../shared/workspace-attachment-capabilities'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 
 const PR = 'https://github.com/acme/api/pull/5123'
 const TASK = 'https://linear.app/acme/issue/STA-1234'
-const parsedPR = parseWorkspaceReferenceUrl(PR)
-const parsedTask = parseWorkspaceReferenceUrl(TASK)
+const PR_KEY = '["github","pr","github.com","/acme/api/pull/5123"]'
+const parsedPR: WorkspaceAttachment = { provider: 'github', type: 'pr', number: 5123, url: PR }
+const parsedTask: WorkspaceAttachment = {
+  provider: 'linear',
+  type: 'issue',
+  number: 0,
+  identifier: 'STA-1234',
+  linearIdentifier: 'STA-1234',
+  linearOrganizationUrlKey: 'acme',
+  url: TASK
+}
 
 function listResult(references = [parsedPR], kind: 'worktree' | 'folder' = 'worktree') {
   return {
@@ -94,6 +101,13 @@ function mockCalls(
 }
 
 describe('reference CLI', () => {
+  const priorExitCode = process.exitCode
+  beforeEach(() => {
+    process.exitCode = undefined
+  })
+  afterEach(() => {
+    process.exitCode = priorExitCode
+  })
   useWorktreeAwarenessEnvironment({
     callMock,
     serveOrcaAppMock,
@@ -112,7 +126,14 @@ describe('reference CLI', () => {
       linkedItems: [parsedPR, parsedTask],
       linkedItemsSelectionChanged: false
     })
-    expect(JSON.parse(vi.mocked(console.log).mock.calls[0][0]).result.changes).toHaveLength(2)
+    expect(JSON.parse(vi.mocked(console.log).mock.calls[0][0]).result.changes).toEqual([
+      { key: PR_KEY, operation: 'add', changed: true },
+      {
+        key: '["linear","issue","linear.app","/acme/issue/STA-1234"]',
+        operation: 'add',
+        changed: true
+      }
+    ])
   })
 
   it('validates every URL before any request', async () => {
@@ -125,17 +146,20 @@ describe('reference CLI', () => {
   it('requires the delta capability even if the host supports linked items', async () => {
     mockCalls(listResult(), listResult(), ['worktree.linked-items.v1'])
     await main(['reference', 'add', TASK, '--worktree', 'name:api'], '/tmp/api')
-    expect(callMock).toHaveBeenCalledTimes(1)
+    expect(callMock).toHaveBeenCalledExactlyOnceWith('status.get')
     expect(console.error).toHaveBeenCalledWith(expect.stringContaining('cannot merge'))
   })
 
   it('duplicate adds preserve current metadata and produce a no-op', async () => {
-    mockCalls()
+    mockCalls(listResult([{ ...parsedPR, title: 'Saved title' }]))
     await main(['reference', 'add', PR, PR, '--worktree', 'name:api', '--json'], '/tmp/api')
     expect(callMock.mock.calls.some(([method]) => method === 'worktree.set')).toBe(false)
+    expect(JSON.parse(vi.mocked(console.log).mock.calls[0][0]).result.references[0].title).toBe(
+      'Saved title'
+    )
     expect(JSON.parse(vi.mocked(console.log).mock.calls[0][0]).result.changes).toEqual([
       {
-        key: getWorkspaceReferenceIdentity(parsedPR),
+        key: PR_KEY,
         operation: 'add',
         changed: false,
         reason: 'already_linked'
@@ -145,17 +169,7 @@ describe('reference CLI', () => {
 
   it('removes only requested keys from folders via existing folder storage', async () => {
     mockCalls(listResult([parsedPR, parsedTask], 'folder'), listResult([parsedTask], 'folder'))
-    await main(
-      [
-        'reference',
-        'remove',
-        '--key',
-        getWorkspaceReferenceIdentity(parsedPR),
-        '--worktree',
-        'folder:folder1'
-      ],
-      '/tmp/api'
-    )
+    await main(['reference', 'remove', '--key', PR_KEY, '--worktree', 'folder:folder1'], '/tmp/api')
     expect(callMock).toHaveBeenCalledWith('folderWorkspace.update', {
       folderWorkspaceId: 'folder1',
       updates: {
@@ -167,7 +181,7 @@ describe('reference CLI', () => {
   })
 
   it('removes a URL without touching the same review number in another repository', async () => {
-    const other = parseWorkspaceReferenceUrl('https://github.com/acme/other/pull/5123')
+    const other = { ...parsedPR, url: 'https://github.com/acme/other/pull/5123' }
     mockCalls(listResult([parsedPR, other]), listResult([other]))
     await main(['reference', 'remove', PR, '--worktree', 'name:api'], '/tmp/api')
     expect(callMock).toHaveBeenCalledWith(
@@ -308,13 +322,21 @@ describe('reference CLI', () => {
   })
 
   it.each([
-    ['5123'],
-    ['STA-1234', '--worktree', 'name:api', '--repo', 'id:repo'],
-    ['STA-1234', '--limit', '0']
-  ])('rejects invalid find arguments %j before querying', async (...args) => {
+    { args: ['5123'], message: 'Expected a full reference URL (https://…).' },
+    {
+      args: ['STA-1234', '--worktree', 'name:api', '--repo', 'id:repo'],
+      message: 'Pass --worktree or --repo, not both.'
+    },
+    { args: ['STA-1234', '--limit', '0'], message: 'Invalid positive integer for --limit' }
+  ])('rejects invalid find arguments $args before querying', async ({ args, message }) => {
     mockCalls()
-    await main(['reference', 'find', ...args], '/tmp/api')
+    await main(['reference', 'find', ...args, '--json'], '/tmp/api')
     expect(callMock).not.toHaveBeenCalled()
+    expect(JSON.parse(vi.mocked(console.log).mock.calls[0][0])).toMatchObject({
+      ok: false,
+      error: { code: 'invalid_argument', message }
+    })
+    expect(process.exitCode).toBe(1)
   })
 
   it('seeds repeated references in the create request before setup or agent startup', async () => {
@@ -357,11 +379,17 @@ describe('reference CLI', () => {
           '--reference',
           PR,
           `--${flag}`,
-          '4'
+          '4',
+          '--json'
         ],
         '/tmp/api'
       )
       expect(callMock).not.toHaveBeenCalled()
+      expect(JSON.parse(vi.mocked(console.log).mock.calls[0][0])).toMatchObject({
+        ok: false,
+        error: { code: 'invalid_argument', message: `Cannot combine --reference with --${flag}.` }
+      })
+      expect(process.exitCode).toBe(1)
     }
   )
 
@@ -380,13 +408,16 @@ describe('reference CLI', () => {
       }
       return base?.(method, ...rest)
     })
-    const priorExitCode = process.exitCode
-    await main(argv, '/tmp/api')
-    const printed = vi.mocked(console.error).mock.calls.flat().join('\n')
-    expect(printed).toContain('Update Orca on the execution host')
-    expect(printed).not.toContain('Unknown method')
+    await main([...argv, '--json'], '/tmp/api')
+    expect(JSON.parse(vi.mocked(console.log).mock.calls[0][0])).toMatchObject({
+      ok: false,
+      error: {
+        code: 'incompatible_runtime',
+        message:
+          'This Orca host does not support reference commands yet. Update Orca on the execution host.'
+      }
+    })
     expect(process.exitCode).toBe(1)
-    process.exitCode = priorExitCode
   })
 
   it('validates create flags locally before probing reference capability', async () => {

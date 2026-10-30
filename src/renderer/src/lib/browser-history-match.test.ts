@@ -143,7 +143,6 @@ describe('browser history match', () => {
     const missB = matchBrowserHistory({ prepared, query: 'also-nothing', limit: 3, now: NOW })
 
     expect(missA).toHaveLength(0)
-    // Identity: an empty result must not churn the caller's memos.
     expect(missA).toBe(missB)
     expect(matchBrowserHistory({ prepared, query: '   ', limit: 3, now: NOW })).toBe(missA)
     expect(matchBrowserHistory({ prepared, query: 'git', limit: 0, now: NOW })).toBe(missA)
@@ -229,7 +228,6 @@ describe('rankBrowserTopSites', () => {
       now: NOW
     })
 
-    // github: 2 visits + a fresh-visit bonus beats react's 3 stale visits.
     expect(ranked.map((page) => page.url)).toEqual([
       'https://github.com/acme/orca',
       'https://react.dev/'

@@ -3,16 +3,10 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-// Why: fs.watch reports success and then delivers nothing on hosts where the
-// platform notification path is broken — observed on a macOS 26.3.1 machine
-// where both fs.watch and the native backend stayed silent for in-process
-// writes, with no error on either. Shallow subscriptions have no other way to
-// notice, so metadata would go stale until restart. Parcel already guards its
-// own delivery with a canary; this is the same idea for the Node path.
+// Broken notification backends can accept fs.watch yet stay silent; probe delivery before trusting shallow watches.
 const PROBE_TIMEOUT_MS = 2_000
 
-// Why: a negative is re-measured after this, so one timeout during a noisy
-// moment cannot fail every later shallow subscribe in the process.
+// Retry negative probes so a transient timeout cannot disable all later shallow subscriptions.
 const NEGATIVE_RECHECK_MS = 30_000
 
 let delivered = false
@@ -46,8 +40,7 @@ export async function measureShallowWatchDelivery(timeoutMs = PROBE_TIMEOUT_MS):
     let timer: ReturnType<typeof setTimeout> | undefined
     try {
       watcher.on('error', () => resolve(false))
-      // Deliberately not unref'd: this one-shot must resolve even if the child
-      // has no other pending work at probe time.
+      // Keep the one-shot alive even when no other work remains in the process.
       timer = setTimeout(() => resolve(false), timeoutMs)
       // Two writes: some backends coalesce the creation of the first entry.
       await writeFile(probePath, '1')
@@ -68,9 +61,7 @@ export async function measureShallowWatchDelivery(timeoutMs = PROBE_TIMEOUT_MS):
   }
 }
 
-/** Resolves false when this host accepts fs.watch registrations but never
- *  delivers events, so callers can fall back instead of going silently stale.
- *  A success is kept for the process; a failure is re-measured after a delay. */
+/** Cache successful delivery for this process; retry failures after a delay so silent watchers can fall back. */
 export function detectShallowWatchDelivery(): Promise<boolean> {
   if (delivered) {
     return Promise.resolve(true)

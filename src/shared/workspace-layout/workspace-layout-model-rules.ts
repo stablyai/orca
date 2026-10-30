@@ -1,6 +1,4 @@
-// The structural rules, checked on the model itself: what the Serializer would drop or repair on
-// the way to disk (an ungrouped tab, an empty group, a group tree naming other groups) is a
-// breach here. The disk-format rules (workspace-layout-rules.ts) check what older builds write.
+// Check the model before serialization hides structural breaches such as ungrouped tabs or invalid group trees. Disk rules separately cover older writers.
 
 import type { TabGroupLayoutNode } from '../tab-types'
 import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
@@ -11,7 +9,6 @@ import { checkPaneOwners, paneOwnerGroups } from './workspace-layout-rules'
 import type { PaneOwner, WorkspaceLayoutViolation } from './workspace-layout-rule-types'
 import { emptyLayoutViewRecord } from './workspace-layout-views'
 
-/** Nothing beside the layout: no view selection, facts or pass-through fields. */
 export function emptyLayoutBeside(): Omit<LoadedWorkspaceLayout, 'layout'> {
   return {
     desktopView: emptyLayoutViewRecord(),
@@ -138,10 +135,7 @@ function entities(model: WorkspaceLayoutModel): LayoutEntities {
   }
 }
 
-/**
- * Every structural breach in the runtime's layout models. With `previous`, also flags ids that
- * changed for the same pane, tab or group across the update.
- */
+/** Report structural breaches and, with previous models, ID changes that remount unchanged entities. */
 export function checkWorkspaceLayoutModelRules(
   models: readonly WorkspaceLayoutModel[],
   previous?: readonly WorkspaceLayoutModel[]

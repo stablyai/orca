@@ -49,8 +49,7 @@ describe('restart-survival E2E routing', () => {
     }
   })
 
-  // The pattern is deliberately not "anything under src": routing every PR at a two-Electron spec
-  // is the cost the filter exists to avoid.
+  // Keep restart-survival routing narrow to avoid two-Electron cost on every source change.
   it.each([
     'src/main/git/git-status.ts',
     'src/renderer/src/components/tab-bar/BrowserTab.tsx',
@@ -223,8 +222,7 @@ describe('PR E2E gate contract', () => {
       expect(hasNativeImeSourceChange([file]), file).toBe(true)
     }
 
-    // Why: a real ibus session on a Git or tab-bar edit is the cost the filter exists to avoid,
-    // and a unit test beside the source must not summon a three-and-a-half-minute lane.
+    // Exclude unrelated Git/tab-bar edits and unit tests from costly real-ibus lane.
     for (const file of [
       'src/main/git/git-status.ts',
       'src/renderer/src/components/tab-bar/BrowserTab.tsx',
@@ -269,8 +267,7 @@ describe('PR E2E gate contract', () => {
 
   it('keeps the native IME spec out of the lane that would silently skip it', () => {
     expect(DEDICATED_E2E_SPECS).toContain('tests/e2e/terminal-ibus-hangul-native.spec.ts')
-    // Why it still has to be routed: the dedicated lane is selected by the same route, so the
-    // spec appearing in test_files is how a spec-only edit reaches the real-IME lane at all.
+    // Route native spec itself: its presence in test_files selects dedicated real-IME lane on spec-only changes.
     expect(selectPrE2eSpecs(['src/shared/terminal-unicode-provider.ts'])).toContain(
       'tests/e2e/terminal-ibus-hangul-native.spec.ts'
     )
@@ -283,7 +280,7 @@ describe('Daemon mock modified-only source routing', () => {
   it('omits the real D7 route only for the proven unit-support scope', () => {
     expect(selectPrE2eSpecs([helper])).toContain('tests/e2e/orcad-serve-mode-switch.spec.ts')
     expect(selectPrE2eSpecs([helper], undefined, verified)).toEqual([])
-    const companion = 'src/main/codex/codex-app-server-connection.test.ts'
+    const companion = 'config/scripts/process-host-build-dist.test.mjs'
     expect(selectPrE2eSpecs([helper, companion], undefined, verified)).toEqual(
       selectPrE2eSpecs([companion])
     )

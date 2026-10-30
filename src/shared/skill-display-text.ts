@@ -1,8 +1,4 @@
-// Untrusted skill and plugin names/descriptions are shown in the picker and the
-// Settings skill list. Control, C1, zero-width, and bidi-override codepoints can
-// spoof a row or hide characters, so both the main-process label builder and the
-// renderer picker strip them through this one predicate rather than maintaining
-// divergent copies.
+// Strip spoofing controls/zero-width/bidi codepoints with one predicate so host labels and renderer pickers agree.
 export function isSafeDisplayCharacter(character: string): boolean {
   const code = character.codePointAt(0) ?? 0
   return !(

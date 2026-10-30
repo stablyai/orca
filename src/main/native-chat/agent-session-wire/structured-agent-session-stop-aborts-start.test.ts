@@ -1,13 +1,11 @@
-// A Stop the host admits aborts the start the queue is waiting on as it arrives, for any agent, then
-// captures what is left once on the lane and saves it before acting. The message that start was for
-// is withdrawn with the rest of the queue and never sends; a message sent after the Stop is no part
-// of the aborted start, so it gets a start of its own rather than that start's refusal.
-
 import { afterEach, expect, it, vi } from 'vitest'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import { JournalStopAcceptor } from '../agent-session-journal/journal-stop-acceptance'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import {
   HOST_TEST_SESSION as SESSION,
+  HOST_TEST_THREAD as THREAD,
+  hostTestAttachParams,
   hostTestOperationId
 } from './structured-agent-session-host-test-data'
 import {
@@ -24,7 +22,6 @@ afterEach(() => {
   rig.dispose()
 })
 
-/** A chat whose child is gone, with `during` run once while the next send's start reconciles. */
 async function duringStart(during: () => void): Promise<void> {
   rig = await createQueuedMessageTestRig({ restartable: true })
   await rig.host.close(SESSION, 'evict')
@@ -40,7 +37,6 @@ async function duringStart(during: () => void): Promise<void> {
   }
 }
 
-/** Proves a start the rig's provider holds, until `id` is handed over. */
 async function untilHandedOver(id: string): Promise<void> {
   await eventually(async () => {
     if (rig.host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase === 'starting') {
@@ -55,7 +51,6 @@ it('starts a Codex chat afresh for a message sent right after a Stop reached its
   let second: ReturnType<QueuedMessageTestRig['send']> | undefined
   await duringStart(() => {
     stopping = rig.stop()
-    // Accepted while the aborted start is still unwinding.
     second = rig.send('second')
   })
   const first = rig.send('hello')
@@ -69,8 +64,65 @@ it('starts a Codex chat afresh for a message sent right after a Stop reached its
   expect(rig.dispatch).toHaveBeenCalledTimes(1)
 })
 
-// The round-2 repro: a Stop at a start whose save is slow, while the person picks an option. The
-// Stop never says it stopped an agent that runs on, and the pick never fails with the start's abort.
+it('writes no request for an empty unpublished acquisition', async () => {
+  let stopping: ReturnType<QueuedMessageTestRig['stop']> | undefined
+  await duringStart(() => {
+    stopping = rig.stop()
+  })
+  const fence = rig.store.getRecord(SESSION)!.lease.runtimeFence
+  await expect(rig.host.attach(CALLER, hostTestAttachParams(fence))).rejects.toThrow(
+    "couldn't restart"
+  )
+  await eventually(() => expect(stopping).toBeDefined())
+  await stopping
+  expect(
+    (await rig.host.journalSnapshot(SESSION)).items.filter((item) => item.body.kind === 'status')
+  ).toEqual([])
+})
+
+it('keeps the accepted Stop when dispatch rejects during acceptance, ending a late-opening turn', async () => {
+  rig = await createQueuedMessageTestRig()
+  rig.dispatch.mockImplementationOnce((input) =>
+    waitForPromiseWithSignal(new Promise<never>(() => {}), input.signal)
+  )
+  const sent = rig.send('hello')
+  await sent.result
+  await eventually(() => expect(rig.dispatch).toHaveBeenCalledOnce())
+  const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+  const accept = JournalStopAcceptor.prototype.accept
+  vi.spyOn(JournalStopAcceptor.prototype, 'accept').mockImplementationOnce(async function (
+    this: JournalStopAcceptor,
+    ...args
+  ) {
+    await eventually(() => expect(journal.submissions()[0]?.dispatchState).toBe('rejected'))
+    return accept.apply(this, args)
+  })
+  rig.cancelTurn.mockResolvedValueOnce({ cancelled: false })
+
+  rig.closeSession.mockImplementationOnce(async () => {
+    await journal.appendItem(
+      { provider: 'codex', threadId: THREAD, turnId: 'late-turn', ordinal: 900 },
+      { kind: 'turn', turnId: 'late-turn', state: 'running' },
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    return true
+  })
+
+  expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: true } })
+  await eventually(() =>
+    expect(rig.host.collaboratorsForTests().sessions.get(SESSION)?.child ?? null).toBeNull()
+  )
+  expect(rig.closeSession).toHaveBeenCalledOnce()
+  const snapshot = await rig.host.journalSnapshot(SESSION)
+  expect(snapshot.items.filter((item) => item.body.kind === 'status')).toMatchObject([
+    { body: { text: 'Cancellation requested.' } }
+  ])
+  expect(snapshot.items.find((item) => item.body.kind === 'turn')?.body).toMatchObject({
+    state: 'interrupted',
+    outcome: 'cancellation'
+  })
+})
+
 it('answers truthfully when the save is slow and an option pick waits behind it', async () => {
   let stopping: ReturnType<QueuedMessageTestRig['stop']> | undefined
   const saving = Promise.withResolvers<void>()
@@ -96,19 +148,15 @@ it('answers truthfully when the save is slow and an option pick waits behind it'
   await new Promise((resolve) => setTimeout(resolve, 250))
   saving.resolve()
 
-  // The start ended on the Stop's arrival, so it never landed: what it was for never runs.
   expect(await stopping).toMatchObject({ ok: true, value: { cancelled: true } })
   expect(rig.host.collaboratorsForTests().sessions.get(SESSION)?.child ?? null).toBeNull()
   expect(rig.dispatch).not.toHaveBeenCalled()
   expect(await rig.submission(first.id)).toMatchObject({ rejection: { kind: 'cancelled' } })
-  // With no agent running, the pick is kept for the next start.
   const pick = await picked
   expect(JSON.stringify(pick)).not.toContain('stopped while starting')
   expect(pick).toMatchObject({ ok: true })
 })
 
-// What it withdrew is read as it was captured, on the lane it holds: a throw after the commit
-// cannot turn the withdrawal it saved into "nothing stopped".
 it('answers that it stopped the queued message even when its write throws after the commit', async () => {
   let stopping: ReturnType<QueuedMessageTestRig['stop']> | undefined
   const accept = JournalStopAcceptor.prototype.accept
@@ -129,10 +177,11 @@ it('answers that it stopped the queued message even when its write throws after 
 
   expect(await stopping).toMatchObject({ ok: true, value: { cancelled: true } })
   expect(await rig.submission(first.id)).toMatchObject({ rejection: { kind: 'cancelled' } })
+  expect(
+    (await rig.host.journalSnapshot(SESSION)).items.filter((item) => item.body.kind === 'status')
+  ).toHaveLength(1)
 })
 
-// A Stop before Orca calls the agent, or while the agent still prepares the message (its options,
-// the previous turn opening): the agent never got it, so the card waits again.
 it.each(['before the call', 'while the agent prepares it'] as const)(
   'returns a queued card to waiting when the Stop lands %s',
   async (when) => {

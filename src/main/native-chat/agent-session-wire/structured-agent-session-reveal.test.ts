@@ -1,12 +1,4 @@
-/**
- * Revealing a persisted chat, for both structured providers.
- *
- * The reveal path is the only way an Agent Session History row reaches a chat whose tab this
- * process never published — a chat closed cleanly, or one this process has not opened since
- * launch. It opens the conversation through the host's accessor and starts no agent; what it must
- * get right is which records it accepts and what it answers when the journal cannot be opened.
- */
-
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
@@ -46,14 +38,13 @@ describe('the host answer a client acts on', () => {
   it.each(['claude', 'codex'] as const)(
     "answers a %s chat with the record's own workspace and provider, never a caller's",
     async (provider) => {
-      // The security property: a client sends only a session id, so the tab cannot be aimed at
-      // another workspace by asking for one.
+      // Session ID lookup must not let callers redirect publication to another workspace.
       const stored = record(provider, 'workspace-from-record')
       const open = vi.fn(async () => undefined)
 
       await expect(
         revealStructuredAgentSession(
-          { store: { getRecord: () => stored } },
+          { store: { getConversation: () => agentSessionConversationView(stored) } },
           'session-answered',
           open
         )
@@ -70,7 +61,11 @@ describe('the host answer a client acts on', () => {
   it('refuses a session this host holds no record for, opening nothing', async () => {
     const open = vi.fn(async () => undefined)
     await expect(
-      revealStructuredAgentSession({ store: { getRecord: () => null } }, 'session-absent', open)
+      revealStructuredAgentSession(
+        { store: { getConversation: () => null } },
+        'session-absent',
+        open
+      )
     ).rejects.toThrow('agent_session_identity_required')
     expect(open).not.toHaveBeenCalled()
   })
@@ -81,7 +76,9 @@ describe('the host answer a client acts on', () => {
     await expect(
       revealStructuredAgentSession(
         {
-          store: { getRecord: () => record('codex', 'workspace-1') }
+          store: {
+            getConversation: () => agentSessionConversationView(record('codex', 'workspace-1'))
+          }
         },
         'session-answered',
         open
@@ -91,11 +88,12 @@ describe('the host answer a client acts on', () => {
   })
 
   it('answers not-readable without refusing when the journal could not be opened', async () => {
-    // The tab is still worth publishing: the chat shows the failure and keeps retrying the read.
     await expect(
       revealStructuredAgentSession(
         {
-          store: { getRecord: () => record('codex', 'workspace-1') }
+          store: {
+            getConversation: () => agentSessionConversationView(record('codex', 'workspace-1'))
+          }
         },
         'session-answered',
         async () => {

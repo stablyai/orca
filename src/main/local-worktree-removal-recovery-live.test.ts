@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { afterEach, describe, expect, it } from 'vitest'
-import { recoverLocalWindowsWorktreeRemoval } from './local-worktree-removal-recovery'
+import { recoverPartialLocalWorktreeRemoval } from './local-worktree-removal-recovery'
 
 const tempRoots: string[] = []
 
@@ -70,8 +70,7 @@ describe('local Windows worktree removal recovery (live Git)', () => {
       git(repoPath, ['worktree', 'add', '--quiet', '-b', 'feature/churn', worktreePath])
       const head = git(worktreePath, ['rev-parse', 'HEAD'])
 
-      // Why: a producer racing Git's recursive delete deterministically exposes
-      // the Windows ENOTEMPTY state reported by real workspace deletions.
+      // Race Git’s recursive deletion to reproduce Windows ENOTEMPTY deterministically.
       const churn = spawn(
         process.execPath,
         [
@@ -106,7 +105,7 @@ describe('local Windows worktree removal recovery (live Git)', () => {
 
         await stopProcess(churn)
         await expect(
-          recoverLocalWindowsWorktreeRemoval({
+          recoverPartialLocalWorktreeRemoval({
             error: Object.assign(new Error('git worktree remove failed'), {
               stderr: removal.stderr
             }),

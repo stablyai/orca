@@ -1,9 +1,5 @@
 import type { ApplyLayoutResult, DriverState, PtyLayoutTarget } from '../../orca-runtime-core'
 import { OrcaRuntimeWithGetOrchestrationDispatchAuthority } from './terminal-orchestration-authority'
-import {
-  recentTerminalOutputIncludesPath,
-  recentTerminalPathCandidatesIncludePath
-} from '../../terminal-output-path-candidates'
 import { clampTerminalViewport } from '../../../../shared/terminal-viewport'
 
 export abstract class OrcaRuntimeWithHasRecentTerminalOutputPath extends OrcaRuntimeWithGetOrchestrationDispatchAuthority {
@@ -18,43 +14,6 @@ export abstract class OrcaRuntimeWithHasRecentTerminalOutputPath extends OrcaRun
     isCurrent?: () => boolean
   ): Promise<void>
   protected abstract resolveDesktopRestoreTarget(ptyId: string): { cols: number; rows: number }
-
-  hasRecentTerminalOutputPath(handle: string, pathText: string, absolutePath: string): boolean {
-    // Why: safety net for any query path that never saw a mobile onReady —
-    // lazily backfill so the answer matches pre-gate behavior.
-    if (!this.recentPtyPathCandidateTrackingActive) {
-      this.activateRecentPtyPathCandidateTracking()
-    }
-    const ptyId = this.resolveLeafForHandle(handle)?.ptyId
-    const recentOutput = ptyId ? this.recentPtyOutputById.get(ptyId)?.read() : null
-    if (recentOutput && recentTerminalOutputIncludesPath(recentOutput, pathText, absolutePath)) {
-      return true
-    }
-    const candidates = ptyId ? this.recentPtyPathCandidatesById.get(ptyId) : null
-    if (
-      candidates &&
-      recentTerminalPathCandidatesIncludePath(candidates, pathText, absolutePath)
-    ) {
-      return true
-    }
-    const headlessLines = ptyId
-      ? this.headlessTerminals.get(ptyId)?.emulator.getBufferTailLines(500)
-      : null
-    if (
-      headlessLines &&
-      headlessLines.length > 0 &&
-      recentTerminalOutputIncludesPath(headlessLines.join('\n'), pathText, absolutePath)
-    ) {
-      return true
-    }
-    const pty = ptyId ? this.ptysById.get(ptyId) : null
-    const tailText = pty
-      ? [...pty.tailBuffer, ...(pty.tailPartialLine ? [pty.tailPartialLine] : [])].join('\n')
-      : ''
-    return tailText.length > 0
-      ? recentTerminalOutputIncludesPath(tailText, pathText, absolutePath)
-      : false
-  }
 
   // ─── Mobile Fit Override Management ─────────────────────────
 

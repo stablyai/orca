@@ -7,7 +7,6 @@ function setup() {
   const rows = new Map<string, AgentJournalItemBody>()
   const translator = createClaudeJournalTranslator({
     sink: {
-      // Output also opens its turn; these tests read only the content rows.
       appendItem: (identity, body) => {
         if (body.kind !== 'turn') {
           rows.set(agentJournalItemKey(identity), body)

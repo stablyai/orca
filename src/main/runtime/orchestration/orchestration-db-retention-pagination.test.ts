@@ -6,6 +6,7 @@ import Database from '../../sqlite/sync-database'
 import { OrchestrationDb } from './db'
 import { SCHEMA_VERSION } from './db/contract-constants'
 import { createRootDispatch } from './db/root-dispatch-test-fixture'
+import { DROP_REMOVED_WORK_TRIGGERS_SQL } from './db/reset/removed-orchestration-work-store'
 
 const MUTATION_RECEIPT_MAX_ROWS = 10_000
 
@@ -243,6 +244,7 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
 
     const oldDb = new Database(dbPath)
     oldDb.exec(`
+      ${DROP_REMOVED_WORK_TRIGGERS_SQL}
       DROP INDEX IF EXISTS idx_dispatch_active_assignee_handle;
       DROP INDEX IF EXISTS idx_dispatch_assignee_pane_leaf;
       ALTER TABLE tasks DROP COLUMN created_by_pane_key;

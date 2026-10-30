@@ -1,12 +1,10 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
-// What happens to a chat assignee's Dispatch after the task is handed over, on the
-// coordinator-mail rig: its reports, its liveness, a stop, and the chat being closed.
 
 import { describe, expect, it, vi } from 'vitest'
 import { formatOrcaSessionAddress } from '../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'
 import { idOf } from './rpc/orchestration-session-caller-test-fixture'
-import { closeStructuredAgentSessionChild } from './structured-agent-session-close'
+import { closeStructuredAgentSessionChild } from './agent-session/structured-agent-session-close'
 import type { FakeConnection } from './structured-chat-coordinator-fake-codex-fixture'
 import {
   COORDINATOR,
@@ -205,9 +203,9 @@ describe("a chat assignee's liveness, stop and close", () => {
     const { dispatchId } = await dispatchToChat()
     const cleared = await clearChat(PEER_CHAT)
     expect(cleared).toBe(PEER_CHAT)
-    const getRecord = host.deps.store.getRecord.bind(host.deps.store)
-    vi.spyOn(host.deps.store, 'getRecord').mockImplementation((sessionId) =>
-      sessionId === cleared ? null : getRecord(sessionId)
+    const getConversation = host.deps.store.getConversation.bind(host.deps.store)
+    vi.spyOn(host.deps.store, 'getConversation').mockImplementation((sessionId) =>
+      sessionId === cleared ? null : getConversation(sessionId)
     )
 
     expect(await call('orchestration.workerShow', { dispatch: dispatchId })).toMatchObject({

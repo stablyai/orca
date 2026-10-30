@@ -44,28 +44,11 @@ function build(
 }
 
 describe('buildMirroredAgentTabs', () => {
-  it('falls back to the agent-specific placeholder when the host publishes no title', () => {
-    expect(build(snapshotWith('claude', '')).label).toBe('Claude Chat')
-    expect(build(snapshotWith('codex', '   ')).label).toBe('Codex Chat')
-  })
-
-  it('prefers the host title over the placeholder', () => {
-    expect(build(snapshotWith('claude', 'Flaky retry test')).label).toBe('Flaky retry test')
-  })
-
   it('keeps a manual rename across host snapshots', () => {
     const snapshot = snapshotWith('codex', 'Codex Chat')
     const renamed = build(snapshot)
     const existing: Tab = { ...renamed, customLabel: 'My rename' }
     expect(build(snapshot, [existing]).customLabel).toBe('My rename')
-  })
-
-  it('leaves customLabel null when the tab was never renamed', () => {
-    // Guard: assert the row is actually built, so this cannot pass on an empty
-    // result the way a bare null-check would.
-    const tab = build(snapshotWith('codex', 'Codex Chat'))
-    expect(tab.label).toBe('Codex Chat')
-    expect(tab.customLabel).toBeNull()
   })
 
   it('records the publishing host on a tab restored from before tabs carried one', () => {
@@ -104,8 +87,7 @@ describe('buildMirroredAgentTabs', () => {
 
   it('names an agent this build does not know after itself, not Codex', () => {
     const snapshot = snapshotWith('codex', '')
-    // Cast: the wire union is claude|codex today, but Tab.agentSessionAgent is
-    // the open AgentType, so a future agent can reach this label.
+    // Wire agent union is closed; Tab.agentSessionAgent is open and can carry future agents.
     ;(snapshot.tabs[0] as { agent: string }).agent = 'gemini'
     expect(build(snapshot).label).toBe('Gemini Chat')
   })

@@ -76,6 +76,14 @@ function summarize() {
   const reports = readdirSync(reportDir, { recursive: true })
     .filter((file) => /(?:baseline|shared)-.*\.json$/.test(file))
     .map((file) => JSON.parse(readFileSync(join(reportDir, file), 'utf8')))
+  const baselines = reports.filter((report) => report.mode === 'baseline')
+  assert.equal(reports.length, 8, 'Expected both measurements on all four packaging hosts')
+  assert.equal(baselines.length, 4, 'Expected a baseline on all four packaging hosts')
+  assert.equal(
+    new Set(reports.map((report) => `${report.mode}/${report.platform}/${report.arch}`)).size,
+    reports.length,
+    'Duplicate release JavaScript measurements'
+  )
   const { jobs } = JSON.parse(readFileSync(join(reportDir, 'jobs.json'), 'utf8'))
   const seconds = (step) => (Date.parse(step.completed_at) - Date.parse(step.started_at)) / 1000
   const lines = [
@@ -84,7 +92,7 @@ function summarize() {
   ]
   let savedMs = 0
   let differences = 0
-  for (const baseline of reports.filter((report) => report.mode === 'baseline')) {
+  for (const baseline of baselines) {
     const shared = reports.find(
       (report) =>
         report.mode === 'shared' &&
@@ -112,7 +120,6 @@ function summarize() {
       )
     }
   }
-  assert.equal(reports.length, 8, 'Expected both measurements on all four packaging hosts')
   const producer = jobs.find((job) =>
     job.steps.some((step) => step.name === 'Build and archive release JavaScript')
   )

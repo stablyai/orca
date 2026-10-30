@@ -52,7 +52,6 @@ const REMOTE_WT = 'repo-remote::/srv/app'
 
 function storeState(activeWorktreeId: string) {
   return {
-    // The Active Server is a paired server; neither request below may read it.
     settings: { activeRuntimeEnvironmentId: 'env-remote' },
     activeWorktreeId,
     repos: [
@@ -144,7 +143,6 @@ describe('browser requests from this desktop follow the workspace owner (#22275)
       browserPageId: 'page-asked'
     })
 
-    // The page a paired client asked for, which the new tab opens under.
     expect(mocks.replyTabCreate).toHaveBeenCalledWith({
       requestId: 'r5',
       browserPageId: 'page-asked'

@@ -6,13 +6,9 @@ import type {
 import type { DurableProfileStateMutation } from '../loading-store/store-runtime-state'
 import { withdrawPane, type TerminalTopologyCommitContext } from './terminal-topology-commit'
 
-/** Settled with bindings in the write queue: what keeps a pane whose terminal never started. */
 export type UnstartedPaneKept = 'bound' | 'starting'
 
-/**
- * `withdrawPane` for a pane with no terminal: one that bound since ('bound') or whose start is under
- * way ('starting') stays, and nothing is written.
- */
+/** Recheck inside the write queue; bindings or starts that arrived meanwhile preserve the pane. */
 export function withdrawUnstartedPane(
   hostId: ExecutionHostId,
   pane: CommandOf<'closePane'>,

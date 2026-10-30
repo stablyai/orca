@@ -41,9 +41,7 @@ describe('assertNodePtyPatchApplied', () => {
   })
 
   it('refuses to build when the ldflags half is missing', () => {
-    // The .symver pins alone let gcc's --as-needed drop libutil/libpthread from
-    // DT_NEEDED, which loads on the build host and fails on Ubuntu 20.04 — #9902 again,
-    // this time baked into a shipped prebuilt.
+    // Symbol pins alone let --as-needed drop libutil/libpthread, reproducing target-only #9902.
     expect(() => assertNodePtyPatchApplied(stage("'ldflags': []", PATCHED_PTY_CC))).toThrow(
       /--no-as-needed,-l:libutil\.so\.1/
     )
@@ -83,9 +81,7 @@ describe('slot naming', () => {
   })
 
   it('lets CI force the label so the container decides glibc vs musl', () => {
-    // Detection inside a container that happens to run a differently-linked Node would
-    // file the build under the wrong slot. The forced label must beat detection outright,
-    // so assert against one detection could never produce for this platform/arch.
+    // Forced slot must override container Node linkage detection; choose a label detection cannot produce here.
     expect(slotName(['node', 'x', '--slot=linux-x64-glibc'], 'linux', 'arm64')).toBe(
       'linux-x64-glibc'
     )

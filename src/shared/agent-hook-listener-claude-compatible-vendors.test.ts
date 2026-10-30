@@ -48,8 +48,7 @@ describe('shared agent-hook-listener', () => {
       'production'
     )
 
-    // Why: SessionStart fires when the TUI opens/resumes while still idle.
-    // It must not create a visible "working" row before the user submits a prompt.
+    // Opening/resuming an idle TUI must not invent a working row.
     expect(started).toBeNull()
     expect(compacted?.payload).toMatchObject({ agentType: 'devin', state: 'working' })
     expect(ended?.payload).toMatchObject({ agentType: 'devin', state: 'done' })
@@ -116,8 +115,30 @@ describe('shared agent-hook-listener', () => {
     expect(stopped?.providerSession).toMatchObject({ key: 'session_id', id: 'session_abc' })
   })
 
-  // Why: Kimi shares Claude-compatible compact/harness hooks; cover the same sticky-working
-  // guards so a Kimi-only regression cannot slip past the Claude-only tests (issue #11352).
+  // #31311: a resumed Kimi pane must report its session before any prompt, or quit captures nothing.
+  it('lands a resumed Kimi SessionStart as an idle boundary carrying its session', () => {
+    const sessionStart = (source: string) =>
+      normalizeHookPayload(
+        state,
+        'kimi',
+        {
+          paneKey: PANE_KEY,
+          payload: { hook_event_name: 'SessionStart', session_id: 'session_abc', source }
+        },
+        'production'
+      )
+
+    const resumed = sessionStart('resume')
+    expect(resumed?.payload).toMatchObject({
+      agentType: 'kimi',
+      state: 'done',
+      sessionBoundary: true
+    })
+    expect(resumed?.providerSession).toMatchObject({ key: 'session_id', id: 'session_abc' })
+    expect(sessionStart('startup')).toBeNull()
+  })
+
+  // Kimi compact/harness events need the same sticky-working guards as Claude (#11352).
   it('ignores harness-injected UserPromptSubmit for Kimi', () => {
     normalizeHookPayload(
       state,
@@ -287,8 +308,7 @@ describe('shared agent-hook-listener', () => {
     })
   })
 
-  // Why: Muse emits Claude-compatible hook payloads (captured from muse 1.3.0 hook stdin);
-  // normalize but attribute to Muse, including the Stop `last_assistant_message`.
+  // Muse 1.3.0 emits Claude-shaped hooks including Stop last_assistant_message; retain Muse attribution.
   it('normalizes Muse Claude-compatible lifecycle events as muse status', () => {
     const base = {
       session_id: '01a0caa3-0e77-7d41-bad7-46283a45633d',
@@ -299,7 +319,7 @@ describe('shared agent-hook-listener', () => {
       permission_mode: 'default',
       model_provider: 'meta'
     }
-    // Why: this id is a real capture; keep the lookup off the developer's own Muse sessions.
+    // Keep this captured session ID away from developer Muse transcripts.
     vi.stubEnv('XDG_DATA_HOME', '/tmp/orca-muse-vendors-test-no-data')
     const bash = { command: 'ls -la' }
     const submitted = normalizeAndAccept(state, 'muse', {

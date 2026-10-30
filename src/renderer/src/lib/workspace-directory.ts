@@ -3,8 +3,7 @@ import type { AppState } from '@/store/types'
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
-// Why detected rows are optional: skill discovery does not subscribe to them, so a detected-only
-// workspace has no directory there.
+// Skill discovery omits detected rows, so detected-only workspaces have no directory there.
 export type WorkspaceDirectoryState = Pick<
   AppState,
   'worktreesByRepo' | 'folderWorkspaces' | 'floatingWorkspacePath'

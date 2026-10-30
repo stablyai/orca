@@ -47,9 +47,7 @@ describe('clearTransientTerminalState', () => {
     expect(result.title).toBe('bash')
   })
 
-  // Why: idle agent titles (e.g. "* Claude done") are reset to the fallback
-  // on hydration — the prior-session agent is no longer running, so showing
-  // its last title would be misleading.
+  // Prior-session agents are no longer running after restart; do not restore misleading done/spinner titles.
   it('resets idle agent titles to fallback across hydration', () => {
     const tab = makeTab({ title: '* Claude done', customTitle: null })
     const result = clearTransientTerminalState(tab, 0)

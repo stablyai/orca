@@ -47,10 +47,7 @@ export function handleLocalWatchEvents(
   }
 }
 
-// Why: after a dropped event batch nothing about the prior state can be
-// trusted — widen unconditionally (structural + status + head-identity),
-// bypassing the watcher-error cooldown so a burst of overflows during one
-// bulk op cannot suppress the refresh the fleet actually needs.
+// Overflow proves event loss; refresh structure, status and heads without the transient-error cooldown.
 export function handleWatchOverflow(
   watch: ActiveWatch,
   getActiveWatches: () => Iterable<ActiveWatch>

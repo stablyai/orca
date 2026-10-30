@@ -19,8 +19,7 @@ function makeSummary(
     writable: opts.writable ?? true,
     lastOutputAt: opts.lastOutputAt ?? null,
     preview: opts.preview ?? '',
-    // Why spread and not a default: `agentIdentity` absent is meaningful (unknown), so the
-    // helper must be able to produce a summary that genuinely lacks the field.
+    // Omit unknown identity entirely to exercise hosts that predate the field.
     ...(opts.agentIdentity ? { agentIdentity: opts.agentIdentity } : {})
   }
 }
@@ -110,9 +109,7 @@ describe('resolveGroupAddress', () => {
   })
 
   describe('agent name groups', () => {
-    // Why identity and not title: these groups used to match `@<name>` against the terminal
-    // title, so any pane whose task text mentioned an agent received that agent's messages.
-    // Routing now reads the identity the host resolved from launch/process evidence it owns.
+    // Route by host-proven identity; task titles can mention unrelated agents.
 
     it('routes to every pane the host resolved as that agent', () => {
       const terminals = [
@@ -156,8 +153,7 @@ describe('resolveGroupAddress', () => {
     })
 
     describe('a task title can no longer redirect a message', () => {
-      // The bug. Recorded titles of this exact shape exist: a Grok pane named
-      // "Switch Claude and Codex off the load balancer… - grok" received both @claude and @codex.
+      // Recorded Grok titles mentioning Claude and Codex previously received both groups.
       it('does not route @claude to a Codex pane whose task text names Claude', () => {
         const terminals = [
           makeSummary('sender'),
@@ -194,10 +190,7 @@ describe('resolveGroupAddress', () => {
     })
 
     describe('unknown identity fails closed', () => {
-      // Why: `agentIdentity` is absent when the host predates the field or had no evidence
-      // beyond the title. Delivery is an action, so unknown must not deliver. The sender sees
-      // no recipients, which is visible and recoverable; a message in the wrong agent's prompt
-      // is neither.
+      // Unknown identity must fail closed; missing recipients are recoverable, misdelivered instructions are not.
       it('does not route to a pane with no resolved identity, whatever its title says', () => {
         const terminals = [makeSummary('sender'), makeSummary('unknown', { title: 'Claude Code' })]
         expect(resolveGroupAddress('@claude', 'sender', terminals, noStatus)).toEqual([])

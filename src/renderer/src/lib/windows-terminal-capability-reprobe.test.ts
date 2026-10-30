@@ -152,8 +152,7 @@ describe('windows terminal capability re-probe', () => {
     expect(probe).toHaveBeenCalledTimes(4)
   })
 
-  // Why: each re-arm reschedules the first probe to now+30s, so an un-guarded focus handler
-  // lets a user alt-tabbing right after mount defer the re-check indefinitely.
+  // Guard focus rearming: repeated now+30s resets after mount can defer checks indefinitely under alt-tab.
   it('does not let focus churn right after mount defer the first probe', async () => {
     vi.useFakeTimers()
     const { probe, readCached } = createWatcher()

@@ -3,7 +3,6 @@ import type { SleepingAgentSessionRecord } from './agent-session-resume'
 import { findLegacyNumericSleepingRecord } from './sleeping-record-legacy-pane-key'
 import { worktreeIdsEqual } from './worktree/id'
 
-// An SSH workspace: its records name the remote path, as the desktop window reads them.
 const SSH_WORKSPACE = 'ssh-repo::/home/dev/project'
 
 function record(paneKey: string, id: string, capturedAt = 1): SleepingAgentSessionRecord {

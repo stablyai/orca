@@ -5,6 +5,7 @@ import { resolvePathEnvKey } from '../pty/windows-environment-path'
 import { expandWindowsEnvironmentVariables } from '../../shared/windows-environment-expansion'
 import { resolveSafePtyDefaultCwd } from './pty-default-cwd'
 import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-managed-launch-env'
+import { REMOTE_VIEWER_CLIPBOARD_ENV } from '../../shared/remote-viewer-clipboard-env'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -12,6 +13,8 @@ const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_WORKTREE_ID',
   'ORCA_AGENT_LAUNCH_TOKEN',
   'JCODE_RUNTIME_DIR',
+  // Per-viewer: an Orca started from a remote viewer's pane must not mark its own local panes.
+  REMOTE_VIEWER_CLIPBOARD_ENV,
   // A server's own launch marker; a user's `orcad` in this shell is not client-managed.
   ORCAD_MANAGED_ACTIVATION_ROOT_ENV
 ] as const
@@ -95,8 +98,7 @@ export function resolveForegroundFallbackProcess(
   return shellName ?? processName ?? null
 }
 
-/** Basename of the spawned shell path, parsed for the *target* platform.
- *  Why: POSIX `basename` won't split a Windows `\` path (non-Windows host/CI), so it'd break the foreground comparison. */
+/** Use the target platform: POSIX basename cannot split a Windows backslash path. */
 export function getSpawnedShellName(shellPath: string): string {
   return process.platform === 'win32' ? pathWin32.basename(shellPath) : basename(shellPath)
 }

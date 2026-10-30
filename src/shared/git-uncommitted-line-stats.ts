@@ -8,18 +8,12 @@ import { readNodeFileWithinLimit } from './node-bounded-file-reader'
 
 export type GitLineStats = { added?: number; removed?: number }
 
-// Limits how many untracked files we read at once when counting their lines,
-// so a worktree with thousands of new files cannot exhaust file descriptors.
+// Bound untracked line-count reads to avoid exhausting descriptors in large worktrees.
 const UNTRACKED_READ_CONCURRENCY = 8
-// Keep status polling cheap: large untracked files are commonly generated
-// assets, and reading them every poll can stall the source-control sidebar.
+// Skip large untracked assets so polling cannot stall the sidebar.
 export const MAX_UNTRACKED_LINE_COUNT_BYTES = 2 * 1024 * 1024
-// Why: the cache must hold at least one full status scan's untracked set
-// (capped at DEFAULT_GIT_STATUS_LIMIT entries). A smaller cache is worse than
-// none: a sequential scan over more files than the cap evicts every entry
-// before the next poll revisits it, so every poll re-reads every untracked
-// file's contents (#8013). 2x leaves headroom for a second window polling a
-// different worktree; entries are ~200 bytes, so worst case is a few MB.
+// Hold at least a full capped scan or sequential reads evict everything before the next poll (#8013).
+// 2× leaves headroom for another window/worktree; ~200-byte entries keep memory within a few MB.
 const UNTRACKED_STATS_CACHE_MAX_ENTRIES = 2 * DEFAULT_GIT_STATUS_LIMIT
 const NEWLINE_BYTE = 0x0a
 
@@ -41,9 +35,7 @@ function parseNumstatCount(value: string): number | undefined {
   return Number.isFinite(count) ? count : undefined
 }
 
-// `git diff -M` reports renames in the numstat path column as `old => new` or
-// `dir/{old => new}/file`; normalize to the post-rename path so it keys to the
-// porcelain status entry, which always reports the new path.
+// Normalize -M old => new and dir/{old => new}/file to post-rename paths used by porcelain status.
 function normalizeNumstatPath(rawPath: string): string {
   const decodedPath = decodeGitCQuotedPath(rawPath)
   const braced = /^(.*)\{(.+) => (.+)\}(.*)$/.exec(decodedPath)
@@ -125,9 +117,7 @@ async function countFileAdditions(absolutePath: string): Promise<GitLineStats> {
       cached.mtimeMs === fileStat.mtimeMs &&
       cached.ctimeMs === fileStat.ctimeMs
     ) {
-      // Why: Map eviction below removes the oldest-inserted key; re-inserting
-      // on hit makes that LRU instead of FIFO, so a hot worktree's entries
-      // survive another worktree's scan sharing this cache.
+      // Reinsert hits to make Map order LRU, protecting hot worktrees from other scans.
       untrackedStatsCache.delete(absolutePath)
       untrackedStatsCache.set(absolutePath, cached)
       return cached.stats
@@ -151,8 +141,7 @@ async function countFileAdditions(absolutePath: string): Promise<GitLineStats> {
         newlineCount += 1
       }
     }
-    // A trailing newline marks the final line as complete; without one the last
-    // partial line still counts as an added line (matching git's numstat).
+    // A final partial line still counts as added, matching Git numstat.
     const endsWithNewline = buffer.at(-1) === NEWLINE_BYTE
     return rememberUntrackedStats(absolutePath, fileStat, {
       added: endsWithNewline ? newlineCount : newlineCount + 1
@@ -167,8 +156,7 @@ function rememberUntrackedStats(
   fileStat: { size: number; mtimeMs: number; ctimeMs: number },
   stats: GitLineStats
 ): GitLineStats {
-  // Why: delete-before-set keeps refreshed entries at the recent end of the
-  // Map's insertion order, preserving the LRU eviction contract.
+  // Refresh at the Map’s recent end to preserve LRU eviction.
   untrackedStatsCache.delete(absolutePath)
   untrackedStatsCache.set(absolutePath, {
     size: fileStat.size,
@@ -185,14 +173,13 @@ function rememberUntrackedStats(
   return stats
 }
 
-// Untracked files have no git-tracked baseline, so `git diff` ignores them.
-// We count their contents directly to show an additions magnitude.
 function createGitLineStatsAbortError(): Error {
   const error = new Error('The operation was aborted.')
   error.name = 'AbortError'
   return error
 }
 
+/** Untracked files have no Git baseline; read their contents directly to count additions. */
 export async function collectUntrackedAdditions(
   worktreePath: string,
   untrackedPaths: readonly string[],
@@ -200,9 +187,7 @@ export async function collectUntrackedAdditions(
 ): Promise<Map<string, GitLineStats>> {
   const result = new Map<string, GitLineStats>()
   for (let i = 0; i < untrackedPaths.length; i += UNTRACKED_READ_CONCURRENCY) {
-    // Why: an aborted refresh must reject (not resolve partial counts) so a
-    // cancelled scan cannot look like a completed status result, and so we
-    // stop burning (possibly remote-host) file I/O after cancellation.
+    // Reject aborts instead of returning partial status counts; stop further local/remote I/O.
     if (signal?.aborted) {
       throw createGitLineStatsAbortError()
     }

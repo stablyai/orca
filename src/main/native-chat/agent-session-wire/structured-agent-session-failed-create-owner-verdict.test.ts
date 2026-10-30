@@ -1,5 +1,4 @@
-// A durably failed create tells a client what the host proved about the provider process, so a
-// client can tell "retry under a new operation" (exited) from "the session may exist" (anything else).
+// Durable exit proof distinguishes safe new-operation retry from a possibly existing session.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -29,7 +28,6 @@ import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-
 
 const CALLER = { callerKey: 'client-1' }
 const EXIT_REASON = 'claude stream-json exited (code 1): stderr tail'
-// The refusal says what the chat's start failure says; the error text stays in the log.
 const COULD_NOT_RESTART = "Codex couldn't restart. Send your message to try again."
 const PROVIDER_STOPPED =
   'Codex stopped before it finished starting. Send your message to try again.'
@@ -83,9 +81,8 @@ afterEach(async () => {
 
 describe('failed create owner verdict', () => {
   it.each([
-    // The cleanup's release proves the whole tree gone, which says nothing about why it failed.
+    // Cleanup proves absence, not why startup failed.
     ['a failure the cleanup proved gone', () => new Error(EXIT_REASON), {}, COULD_NOT_RESTART],
-    // Only an exit the adapter saw says the provider stopped.
     [
       'an exit the adapter observed',
       () => withObservedProviderExit(new Error(EXIT_REASON)),
@@ -97,8 +94,7 @@ describe('failed create owner verdict', () => {
     async (_case, failure, situation, message) => {
       acquire.mockRejectedValueOnce(failure())
       const first = hostTestAttachParams(null)
-      // The replay names the same details as the first answer: the ledger kept them beside the code,
-      // and the verdict reaches released clients at the top level exactly as before.
+      // Preserve ledger details and legacy top-level verdicts across replay.
       const refusal = {
         code: 'agent_session_operation_invalid',
         details: { ...situation, ownerVerdict: 'exited' },
@@ -119,7 +115,7 @@ describe('failed create owner verdict', () => {
   )
 
   it.each([
-    // A cleanup that saw the root go may have stopped it itself.
+    // Cleanup may cause the root exit itself.
     ['a root exit the cleanup saw', () => new Error(EXIT_REASON), {}, COULD_NOT_RESTART],
     [
       'a root exit the adapter observed',
@@ -132,8 +128,7 @@ describe('failed create owner verdict', () => {
     async (_case, cause, situation, message) => {
       acquire.mockRejectedValueOnce(new AgentSessionAcquisitionRootExitObservedError(cause()))
       const first = hostTestAttachParams(null)
-      // The replay names the same details as the first answer: the ledger kept them beside the code,
-      // and the verdict reaches released clients at the top level exactly as before.
+      // Preserve ledger details and legacy top-level verdicts across replay.
       const refusal = {
         code: 'agent_session_operation_invalid',
         details: { ...situation, ownerVerdict: 'exited' },
@@ -177,7 +172,7 @@ describe('failed create owner verdict', () => {
       ok: false,
       refusal: { code: 'agent_session_ownership_unknown', ownerVerdict: 'unverifiable' }
     })
-    // Released so the next start can go ahead, but with no death evidence: nothing proved it.
+    // Processless release permits retry without claiming observed death.
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'released',
       deathEvidence: null
@@ -186,7 +181,6 @@ describe('failed create owner verdict', () => {
 
   it('lets the sink a failed create wrote through go, so the next create and shutdown proceed', async () => {
     acquire.mockImplementationOnce(async ({ events }) => {
-      // The child's exit reached the translator before any journal was attached.
       events?.setActivity?.(null)
       throw new Error(EXIT_REASON)
     })

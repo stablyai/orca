@@ -12,9 +12,7 @@ import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up
 import type { Subscriber } from './structured-agent-session-subscribers'
 import { isStructuredAgentSessionStopNote } from './structured-agent-session-command-turn'
 
-/** A stale in-flight history page can land after its note's live correction was out of window.
- *  `work`: the host's current work, which a frame carrying rows restates, as every such frame does
- *  (a client reads a rows frame without it as an older host's). */
+/** Correct notes after stale in-flight pages; restate current work so rows retain modern-host semantics. */
 export function refreshDerivedStopNotes(
   port: Pick<SubscriberDeliveryPort, 'emit' | 'isActive'>,
   subscriber: Subscriber,

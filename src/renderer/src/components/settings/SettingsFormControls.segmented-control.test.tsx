@@ -29,8 +29,7 @@ function renderControl(onChange = vi.fn()): { onChange: ReturnType<typeof vi.fn>
 }
 
 describe('SettingsSegmentedControl unavailable options', () => {
-  // Why: a native disabled button leaves the tab order, so keyboard users can never
-  // focus it to open the tooltip explaining why the option is unavailable.
+  // Native disabled buttons leave tab order and make their explanatory tooltips unreachable.
   it('marks unavailable options aria-disabled so their tooltip stays reachable', async () => {
     renderControl()
 

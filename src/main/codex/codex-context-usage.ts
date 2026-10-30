@@ -1,5 +1,3 @@
-// What a Codex thread reports about its context window, and where that lands in the journal.
-
 import type { AgentSessionContextUsage } from '../../shared/agent-session-context-usage'
 import { parseAgentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import { writeAgentJournalTurnRow } from '../native-chat/agent-session-timeline/agent-journal-turn-row-revision'
@@ -13,9 +11,7 @@ function positiveCount(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
 }
 
-/** Codex's own reading of its context on a `thread/tokenUsage/updated` frame, so a report with no
- *  breakdown; null when it measures nothing. `last.totalTokens` is the size, and the only count
- *  Codex sets when it restates one after a compaction; `total` is the thread's running spend. */
+// last.totalTokens measures context, including after compaction; total is cumulative thread spend.
 export function readCodexContextUsage(
   params: unknown,
   capturedAt: number
@@ -45,8 +41,7 @@ export function readCodexContextUsage(
   }
 }
 
-/** Writes the session's own frame to the open turn's row, else the newest, where the frame Codex
- *  replays on resume belongs. */
+/** Resume can replay usage without an open turn; attach it to the newest row then. */
 export function recordCodexContextUsage(input: {
   sink: StructuredAgentSessionEventSink
   activeTurns: Pick<CodexJournalActiveTurns, 'current' | 'has'>

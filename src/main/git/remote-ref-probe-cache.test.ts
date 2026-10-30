@@ -56,8 +56,7 @@ describe('remote ref probe cache (P1-D)', () => {
     await expect(cache.get('/repo', 'origin')).resolves.toBeNull()
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
 
-    // A remote added after the miss is only visible once the negative expires;
-    // nothing here watches .git/config, and SSH/WSL repos have no file to watch.
+    // Expiring negatives reveal new remotes without filesystem watchers on SSH/WSL.
     gitExecFileAsyncMock.mockResolvedValue({ stdout: 'git@example.com:team/repo.git\n' })
     vi.setSystemTime(1_000_000 + NEGATIVE_ENTRY_TTL_MS + 1)
 
@@ -87,8 +86,7 @@ describe('remote ref probe cache (P1-D)', () => {
     vi.setSystemTime(1_000_000 + PROBE_COALESCE_STALE_MS + 1)
     await expect(cache.get('/repo', 'origin')).resolves.toEqual({ repo: 'team/repo' })
 
-    // The abandoned probe still answers the caller that started it, but the repo
-    // state it read is older than the one already cached — it must not publish.
+    // Abandoned probes still answer their caller but must not overwrite newer cached state.
     stalled.resolve({ stdout: 'git@elsewhere.example:team/repo.git\n' })
     await expect(abandoned).resolves.toBeNull()
 

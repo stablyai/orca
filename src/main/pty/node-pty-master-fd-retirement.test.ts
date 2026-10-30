@@ -1,19 +1,8 @@
 import * as pty from 'node-pty'
 import { describe, expect, it } from 'vitest'
 
-/**
- * node-pty hands the master fd to libuv, which closes it on EIO/EOF, but upstream
- * never invalidated `_fd`, and none of the three fd-addressed surfaces consulted
- * anything: `resize()`, the `process` getter, and `CustomWriteStream`, which holds
- * its own plain-number copy of the fd taken at spawn. Orca's patch retires all
- * three in the same block that gives up the handle
- * (config/patches/node-pty@1.1.0.patch).
- *
- * Scope: this narrows the window, it does not close it. libuv closes the fd
- * synchronously inside `uv_close`, before the JS `'close'` that runs `_close()`,
- * so callers still need their own liveness verdict for that tick — and a relay
- * host installs node-pty from npm, where this patch is not applied at all.
- */
+/** Pin retirement of Terminal and write-stream fds (config/patches/node-pty@1.1.0.patch).
+ * libuv closes before JS close handling, leaving a race that callers must guard; npm-installed relays lack this patch. */
 
 const POSIX_SHELL = '/bin/sh'
 
@@ -33,22 +22,12 @@ function masterFd(term: pty.IPty): number {
 
 type CustomWriteStream = { _fd: number; _writeQueue: unknown[]; write(data: string): void }
 
-/**
- * `Terminal._close()` already shadows `terminal.write` with a no-op, so the stream
- * itself is the surface that still reached the fd: a residual `_writeQueue` and an
- * in-flight `fs.write` both re-enter it after the close.
- */
+/** Terminal.close shadows write(), but pending CustomWriteStream writes retain their own copied fd. */
 function writeStream(term: pty.IPty): CustomWriteStream {
   return (term as unknown as { _writeStream: CustomWriteStream })._writeStream
 }
 
-/**
- * Run `command` to completion and let node-pty finish giving up the master.
- *
- * `destroy: false` exercises only the EIO/EOF read-error path, which reaches
- * `_close()` without ever calling `destroy()` — the path the exit of a shell
- * actually takes, and the one the write stream was previously never told about.
- */
+/** Natural EIO/EOF must retire stream fds without an explicit destroy(). */
 async function retiredPty(
   command = 'exit 0',
   { destroy = true }: { destroy?: boolean } = {}
@@ -64,8 +43,7 @@ async function retiredPty(
   return { term, spawnFd }
 }
 
-// Windows never reaches this code: WindowsTerminal.resize goes through the conpty
-// agent and reads no fd, so the sentinel is written and never consulted there.
+// Windows resize uses the ConPTY agent and never consults a master fd.
 const describeOnPosix = process.platform === 'win32' ? describe.skip : describe
 
 describeOnPosix('node-pty master fd retirement', () => {
@@ -79,18 +57,15 @@ describeOnPosix('node-pty master fd retirement', () => {
   it('answers a resize past retirement without issuing the ioctl', async () => {
     const { term } = await retiredPty()
 
-    // Pre-patch this threw `ioctl(2) failed, EBADF` out of whatever called it.
     expect(() => term.resize(200, 50)).not.toThrow()
-    // Geometry stays at the last size actually applied rather than claiming one
-    // that no descriptor ever received.
+    // Retired resize must not claim unapplied geometry.
     expect([term.cols, term.rows]).toEqual([80, 24])
   }, 15000)
 
   it('retires the write stream fd on _close(), not only on destroy()', async () => {
     const { term } = await retiredPty('exit 0', { destroy: false })
 
-    // The stream copied the fd number at spawn, so `Terminal._fd = -1` alone
-    // leaves it addressing a descriptor the kernel may already have reissued.
+    // Retiring Terminal._fd alone leaves the stream pointing at a reusable descriptor.
     expect(writeStream(term)._fd).toBe(-1)
 
     writeStream(term).write('x')
@@ -104,14 +79,7 @@ describeOnPosix('node-pty master fd retirement', () => {
   }, 15000)
 })
 
-// Linux frees the master synchronously enough that the very next pty is handed the
-// same descriptor number every time, which makes the reuse hazard directly
-// observable rather than a race to reproduce.
-//
-// Which is also the constraint on writing a case here: the kernel hands out the
-// lowest free number, so a case that returns while its live pty is still open
-// leaks that descriptor into the next case's premise as an off-by-one. Await the
-// exit, never a fixed sleep.
+// Linux reuses the lowest free fd; await every fixture exit so leaked descriptors cannot invalidate the next case.
 const describeOnLinux = process.platform === 'linux' ? describe : describe.skip
 
 describeOnLinux('node-pty master fd reuse', () => {
@@ -124,13 +92,10 @@ describeOnLinux('node-pty master fd reuse', () => {
       output += data
     })
     try {
-      // The premise of this test: the kernel really did reissue the number. If it
-      // stops holding, the assertion below would pass for the wrong reason.
+      // Establish actual reuse so the safety assertion cannot pass vacuously.
       expect(masterFd(live)).toBe(spawnFd)
 
-      // Pre-patch this reached TIOCSWINSZ on `live`'s master and silently resized
-      // a terminal it has no relationship to — no error, nothing for a liveness
-      // probe of the retired pid to observe.
+      // Previously resized an unrelated terminal through its recycled fd.
       retired.resize(200, 50)
 
       await new Promise<void>((resolve) => {
@@ -153,16 +118,10 @@ describeOnLinux('node-pty master fd reuse', () => {
     try {
       expect(masterFd(live)).toBe(spawnFd)
 
-      // Pre-patch this fs.write reached `live`'s master, and the line discipline
-      // echoed it straight back: a retired pane's bytes landing in an unrelated
-      // terminal. Nothing has to read them for the leak to be observable.
+      // Previously wrote into the new terminal; line-discipline echo makes the leak observable.
       writeStream(retired).write('leak\r')
 
-      // Await the exit rather than sleeping: a fixed wait leaves this descriptor
-      // open into the next case, whose `expect(masterFd(live)).toBe(spawnFd)`
-      // premise then sees the kernel hand out the lower number this pty was still
-      // holding. That is what broke `node 24 1/8` on Linux, where alone among the
-      // platforms these cases actually run.
+      // Await exit so this fd cannot remain open and shift the next case's reuse premise.
       await new Promise<void>((resolve) => {
         live.onExit(() => resolve())
       })
@@ -175,16 +134,14 @@ describeOnLinux('node-pty master fd reuse', () => {
   it('does not name a live pty foreground process off the retired descriptor', async () => {
     const { term: retired, spawnFd } = await retiredPty()
 
-    // `exec` replaces the shell, so the foreground pgrp's cmdline is distinct
-    // from the file this pty was spawned with.
+    // exec makes the foreground cmdline distinguishable from the original shell.
     const live = spawnPty('exec sleep 5')
     try {
       expect(masterFd(live)).toBe(spawnFd)
-      // Let the shell finish exec'ing, or its own cmdline is still the fallback.
+      // Wait until exec replaces the shell cmdline.
       await new Promise<void>((resolve) => setTimeout(resolve, 300))
 
-      // Pre-patch this read tcgetpgrp off `live`'s master and reported `sleep`,
-      // attributing an unrelated pane's process to a pty that had already exited.
+      // Retired process lookup must not attribute the new terminal's foreground process.
       expect(retired.process).toBe(POSIX_SHELL)
     } finally {
       live.kill()

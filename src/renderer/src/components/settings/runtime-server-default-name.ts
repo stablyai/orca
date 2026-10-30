@@ -1,10 +1,7 @@
 import { parseHostAccessLink } from '../../../../shared/remote-pairing-address'
 import { findCollidingEnvironmentName } from '../../../../shared/runtime-environment-name-collision'
 
-/**
- * The name a server gets when the user leaves Name blank: the link's host, then host:port, then
- * "host (n)" — two servers on one machine (or one Tailscale IP) must not collide.
- */
+/** Choose host, host:port, then numbered suffixes so servers sharing a machine/address still get unique blank-name defaults. */
 export function defaultServerNameForAccessLink(
   accessLink: string,
   existing: readonly { name: string }[] = []

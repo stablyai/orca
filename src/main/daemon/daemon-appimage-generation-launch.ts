@@ -1,12 +1,4 @@
-/**
- * The Linux AppImage terminal daemon on the bundled Node inside an extracted copy of the AppImage
- * (the generation under `~/.cache/orca/appimage`, see appimage-extraction-cache.md). Nothing it
- * runs from lives on a FUSE mount, so no window's exit, logout or FUSE server can take its pages,
- * and the generation's lease and `/proc` residency keep pruners off it while it runs.
- *
- * The desktop never extracts on its own; CLI registration and `orca serve` do. Without a complete
- * copy for this exact release, the launch falls back to the AppImage's own mount and says why.
- */
+// Prefer an extracted generation: FUSE teardown cannot invalidate its mapped daemon pages.
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { relativePathInsideRoot } from '../../shared/cross-platform-path'
@@ -16,14 +8,14 @@ import {
   isAppImageExtractionComplete,
   resolveAppImageExtractedRoot
 } from '../cli/appimage-extracted-root'
-import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
+import { envWithoutAppImageRuntime } from '../pty/appimage-terminal-env'
 import type { DurableDaemonScopeCommand } from './daemon-cgroup-scope'
 
 export type AppImageGenerationDaemonLaunch = {
   generationRoot: string
   nodePath: string
   entryPath: string
-  /** `$APPIMAGE/<entry>`: the identity own-mount daemons record, stable across mounts and copies. */
+  /** Mount-independent identity shared with own-mount daemons. */
   identityPath: string
 }
 
@@ -40,7 +32,7 @@ type ResolveInput = {
   cacheRootPath?: string
 }
 
-/** Null when this is not a validated AppImage, so every other package keeps today's launch. */
+/** Null outside validated AppImages; fallback reasons identify unavailable generation launches. */
 export function resolveAppImageGenerationDaemonLaunch({
   entryPath,
   appVersion,
@@ -71,7 +63,7 @@ export function resolveAppImageGenerationDaemonLaunch({
   if (!existsSync(generationEntryPath)) {
     return { fallback: 'no-daemon-entry' }
   }
-  // Why: the copy is keyed by the file now at $APPIMAGE, which an update may already have replaced.
+  // Updates can replace the file at APPIMAGE before this launch resolves its extracted generation.
   if (readStampedVersion(join(generationEntryPath, '..', '..', 'package.json')) !== appVersion) {
     return { fallback: 'version-mismatch' }
   }
@@ -99,20 +91,13 @@ function readStampedVersion(packageJsonPath: string): string | null {
   }
 }
 
-/** The program/args/env replacing `execPath entry ...scriptArgs` for a generation launch. */
 export function buildAppImageGenerationDaemonCommand(
   launch: AppImageGenerationDaemonLaunch,
   scriptArgs: string[],
   env: NodeJS.ProcessEnv
 ): DurableDaemonScopeCommand {
-  const childEnv: Record<string, string> = {}
-  for (const [key, value] of Object.entries(env)) {
-    if (value !== undefined) {
-      childEnv[key] = value
-    }
-  }
-  // Why: nothing the daemon or its terminals inherit may point back into the window's mount.
-  removeAppImageRuntimeEnv(childEnv)
+  // Do not let the daemon or its terminals inherit paths into the window's FUSE mount.
+  const childEnv = envWithoutAppImageRuntime(env)
   delete childEnv.ELECTRON_RUN_AS_NODE
   return { command: launch.nodePath, args: [launch.entryPath, ...scriptArgs], env: childEnv }
 }

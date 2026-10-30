@@ -18,12 +18,7 @@ type MobileFilePickerDeps = {
   readonly createFile?: MobileImageFileFactory
 }
 
-/**
- * Files of any type from the OS document picker, each read whole.
- *
- * A file over the cap stops the pick with `MobileFileTooLargeError`; the files before it have
- * already been yielded and stay with the caller.
- */
+// An oversized file stops the pick; files already yielded remain with the caller.
 export async function* pickMobileFiles(
   deps?: MobileFilePickerDeps
 ): AsyncGenerator<PickedMobileFile> {

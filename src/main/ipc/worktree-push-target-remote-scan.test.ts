@@ -1,8 +1,3 @@
-// Why: `findRemoteForUrl` used to run `git remote` and then one serial
-// `git remote get-url` per remote. These tests pin both halves of the fix: the
-// subprocess count at 58 remotes, and result-for-result parity with the old scan
-// across the remote shapes a real repo produces.
-
 import { describe, expect, it } from 'vitest'
 import { parseGitHubOwnerRepo } from '../github/gh-utils'
 import { findRemoteForUrl } from './worktree-push-target-setup'
@@ -46,7 +41,7 @@ function makeExec(remotes: readonly RemoteRow[]): CountingExec {
   return Object.assign(exec, { spawns })
 }
 
-/** The pre-fix scan, kept as the oracle the batched form must reproduce exactly. */
+/** Keep the original per-remote scan as the parity oracle for batched discovery. */
 async function findRemoteForUrlPerRemote(
   execGit: GitRemoteExec,
   repoPath: string,

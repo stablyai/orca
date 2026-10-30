@@ -86,6 +86,7 @@ export const glApi = {
       iid: number
       type: 'issue' | 'mr'
       includeReviewDetails?: boolean
+      background?: boolean
     }
   ) => ipcRenderer.invoke('gitlab:workItemDetails', args),
 

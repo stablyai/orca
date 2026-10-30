@@ -83,13 +83,52 @@ export default function ProjectCell({
   }
   if (field.dataType === 'REPOSITORY') {
     return (
-      <span className="truncate text-xs text-muted-foreground">{row.content.repository ?? ''}</span>
+      <span className="min-w-0 self-center truncate text-xs text-muted-foreground">
+        {row.content.repository ?? ''}
+      </span>
     )
   }
   if (field.dataType === 'PARENT_ISSUE') {
     return (
-      <span className="truncate text-xs text-muted-foreground">
+      <span className="min-w-0 self-center truncate text-xs text-muted-foreground">
         {row.content.parentIssue ? `#${row.content.parentIssue.number}` : ''}
+      </span>
+    )
+  }
+  if (field.dataType === 'LINKED_PULL_REQUESTS') {
+    const linked = row.content.linkedPullRequests
+    if (!linked) {
+      return <span className="text-xs text-muted-foreground" />
+    }
+    const labels = linked.pullRequests.map((pr) => `#${pr.number}`)
+    const overflow = linked.totalCount - linked.pullRequests.length
+    // Only the numbers truncate, so "+N more" stays visible in narrow columns.
+    return (
+      <span className="flex min-w-0 items-center gap-1 self-center text-xs text-muted-foreground">
+        <span className="truncate">{labels.join(', ')}</span>
+        {overflow > 0 ? (
+          <>
+            {' '}
+            <span className="shrink-0">
+              {translate(
+                'auto.components.github.project.ProjectCell.linkedPullRequestsOverflow',
+                '+{{count}} more',
+                { count: overflow }
+              )}
+            </span>
+          </>
+        ) : null}
+      </span>
+    )
+  }
+  if (field.dataType === 'SUB_ISSUES_PROGRESS') {
+    const progress = row.content.subIssuesProgress
+    if (!progress || progress.total === 0) {
+      return <span className="text-xs text-muted-foreground" />
+    }
+    return (
+      <span className="min-w-0 self-center truncate text-xs text-muted-foreground">
+        {progress.completed}/{progress.total} ({progress.percentCompleted}%)
       </span>
     )
   }

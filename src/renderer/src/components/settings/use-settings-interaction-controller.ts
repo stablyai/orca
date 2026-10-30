@@ -50,7 +50,7 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
     updateSettingsOrThrow
   } = model
   const contentScrollRef = useRef<HTMLDivElement | null>(null)
-  // Why state as well as the ref: windowed lists need a re-render once the scroller attaches.
+  // Windowed lists need a render when the scroller attaches.
   const [contentScrollElement, setContentScrollElement] = useState<HTMLDivElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const installedFontsLoadedRef = useRef(false)
@@ -67,7 +67,7 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
 
   const hasUnsavedSourceControlAiPromptChanges =
     hasUnsavedCommitPromptChanges || hasUnsavedBranchPromptChanges || hasUnsavedChatPromptChanges
-  // Why: the close guard registers once, so it reads latest dirty state from a ref instead of a lagging closure.
+  // The once-registered close guard reads current dirty state through a ref.
   const hasUnsavedSourceControlAiPromptChangesRef = useRef(hasUnsavedSourceControlAiPromptChanges)
   hasUnsavedSourceControlAiPromptChangesRef.current = hasUnsavedSourceControlAiPromptChanges
 
@@ -104,7 +104,7 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
       if (node) {
         return
       }
-      // Why: clear the transient search filter on close, else the next visit opens with whole sections still hidden.
+      // Clear transient search on close so later visits do not inherit hidden sections.
       setSettingsSearchQuery('')
     },
     [setSettingsSearchQuery]
@@ -116,13 +116,13 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
     if (node !== null) {
       return
     }
-    // Why: cancel pending subsection jumps with the scroll container so a stale deep-link frame can't run after close.
+    // Cancel pending subsection jumps so stale frames cannot run after close.
     cancelPendingSettingsSubsectionScrollFrame(pendingSubsectionScrollFrameRef)
     cancelPendingSettingsDeepLinkTargetWatch(pendingScrollTargetWatchRef)
   }, [])
 
   useEffect(() => {
-    // Why: StrictMode replays mount effects; async font requests should still commit while Settings is mounted.
+    // StrictMode replays mount effects; font requests may still commit while mounted.
     settingsMountedRef.current = true
     return () => {
       settingsMountedRef.current = false
@@ -151,7 +151,7 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
         if (!settingsMountedRef.current) {
           return
         }
-        // Latch after the first successful attempt even when empty, so a font-less system doesn't reissue listFonts() each time.
+        // Latch successful empty results too so font-less systems do not repeatedly list fonts.
         installedFontsLoadedRef.current = true
         if (fonts.length === 0) {
           return
@@ -166,7 +166,7 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
       })
   }, [setFontSuggestions])
 
-  // Pure prompt (no side effects): the close guard must ask without clearing drafts, since a later guard can still cancel the close.
+  // Ask without clearing drafts because a later close guard may still veto.
   const promptDiscardSourceControlAiPromptChanges = useCallback((): Promise<boolean> => {
     return confirm({
       title: translate(

@@ -1,7 +1,5 @@
 import { installRealWorkerThreadChildProcesses } from '../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
-// Manual benchmark: how long removing a large checkout takes, and how slow a store-style write gets
-// meanwhile. Opt in (it builds ~100k files): ORCA_WORKTREE_REMOVAL_BENCH=1 ./node_modules/.bin/vitest \
-//   run --config config/vitest.config.ts src/main/git/worktree-removal-large-tree.bench.test.ts
+// Opt in (~100k files): ORCA_WORKTREE_REMOVAL_BENCH=1 pnpm test src/main/git/worktree-removal-large-tree.bench.test.ts
 import { execFile } from 'node:child_process'
 import { appendFileSync, existsSync, statSync } from 'node:fs'
 import { link, mkdir, mkdtemp, open, readFile, rename, rm, writeFile } from 'node:fs/promises'
@@ -64,8 +62,7 @@ describeBench('worktree removal on a large checkout', () => {
   })
 
   it('reports removal time and store-write latency during the delete', async () => {
-    // Outside hard links drop to one link only once the checkout's copies are gone, wherever the
-    // delete runs, so the window covers the whole delete rather than just the call.
+    // Hard-link counts bound the actual delete window, independently of where the delete runs.
     const sentinelRoot = join(scratchDir, 'sentinels')
     await mkdir(sentinelRoot)
     const sentinels: string[] = []
@@ -78,7 +75,7 @@ describeBench('worktree removal on a large checkout', () => {
     const storePath = join(scratchDir, 'store.json')
     await writeFile(storePath, Buffer.alloc(STORE_FILE_BYTES, 1))
 
-    // Mirrors a persisted-store write: read, write a temp file, fsync it, rename it into place.
+    // Model a persisted-store transaction, including fsync and atomic replacement.
     const storeTransaction = async (): Promise<number> => {
       const startedAt = performance.now()
       const contents = await readFile(storePath)

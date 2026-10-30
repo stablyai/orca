@@ -6,10 +6,6 @@ import type { operationModuleLoader } from '../operation-module-loader'
 const HOST = 'host-1'
 const REPO = 'repo-1'
 
-/**
- * The workspace catalog reads: the Home card's per-host summary, the snapshot client the host
- * screen polls with, and the retired-name registry the create sheet asks for per repo.
- */
 export function worktreeCatalogMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {

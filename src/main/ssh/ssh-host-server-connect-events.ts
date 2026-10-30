@@ -1,7 +1,4 @@
-/**
- * What one connect's server decision did, in raw codes; ssh-host-server-telemetry maps these onto
- * enum-only events. Nothing here carries a message, path or host name.
- */
+/** Carry classified codes only; telemetry maps them to enums without host names, paths or messages. */
 import type {
   OrcadManagedConversionResult,
   OrcadManagedDeployResult
@@ -36,7 +33,6 @@ export type HostServerConnectEvent =
       durationMs: number
     }
 
-/** What a managed host's update on connect did; `connected` when there was nothing to do. */
 export type HostServerUpdateReason =
   | 'connected'
   | 'updated'
@@ -46,7 +42,6 @@ export type HostServerUpdateReason =
   | 'update_rolled_back'
   | 'update_check_failed'
 
-/** How far one decision got, filled in as it runs. */
 export type HostServerDecisionTrace = {
   startedAt: number
   path: 'existing' | 'deploy' | 'convert' | null
@@ -98,7 +93,6 @@ export function decidedEvent(
   }
 }
 
-/** A classified code for a thrown setup failure; null when it carries none. */
 function hostServerFailureCode(error: unknown): string | null {
   const unavailable = classifyOrcadHostUnavailable(error)
   if (unavailable) {
@@ -192,7 +186,6 @@ export function reportHostServerConversion(
     durationMs
   })
   if (failure === 'deferred') {
-    // The conversion's own deploy is what deferred.
     reportHostServerEvent(report, target, {
       kind: 'deploy_failed',
       context: 'conversion',

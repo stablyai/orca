@@ -1,7 +1,6 @@
 export type RasterImageDimensions = { width: number; height: number }
 
-// No scan cap: this is a forward seek over a caller-bounded buffer, so it costs O(1) memory and at
-// most one pass. Capping it only made valid images with large ICC/MPF metadata unreadable.
+// Caller bounds the buffer; one forward pass costs O(1) memory. Extra scan caps made valid ICC/MPF-heavy images unreadable.
 const ICO_MAX_IMAGES = 1_024
 const JPEG_START_OF_FRAME_MARKERS = new Set([
   0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf

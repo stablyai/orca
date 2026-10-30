@@ -9,6 +9,7 @@ import { projectMobileRpcRequestParams } from './mobile-rpc-request-projection'
 import { LogicalClientConnectionPath } from './logical-client-connection-path'
 import type { RelayHostReachability } from './relay-host-reachability'
 import { isRpcDeliveryUnknown, markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
+import { LogicalClientSuspendedError } from './logical-client-suspended-error'
 
 export type MobileConnectionPath = 'lan' | 'tailscale' | 'relay'
 
@@ -43,8 +44,7 @@ export type StableLogicalRpcClient = RpcClient & {
     session: RpcClient,
     path: MobileConnectionPath,
     timeoutMs?: number,
-    // Checked after the replacement authenticates, before the swap — lets a racing
-    // caller withdraw when another path won while this dial was in flight.
+    // Allow a racing caller to withdraw after replacement authentication, before closing the active winner.
     shouldAbort?: () => boolean
   ): Promise<void>
   suspendActiveSession(): void
@@ -56,8 +56,7 @@ export type StableLogicalRpcClient = RpcClient & {
   // Latched when the desktop has repeatedly refused this device's relay credential.
   setPairingRejected(rejected: boolean): void
   isPairingRejected(): boolean
-  // Latched by the relay's own verdict: the cell's close reason outright, or
-  // consecutive identical dial failures naming the desktop's state.
+  // Latch authoritative relay close reasons or repeated identical failures naming the desktop’s state.
   setRelayHostReachability(reachability: RelayHostReachability): void
   getRelayHostReachability(): RelayHostReachability
   // Recovery attempts share this signal so status-only changes rerender.
@@ -89,7 +88,7 @@ export function createStableLogicalRpcClient(
         return Promise.reject(new Error('Client closed'))
       }
       if (suspended) {
-        return Promise.reject(new Error('Client suspended'))
+        return Promise.reject(new LogicalClientSuspendedError())
       }
       const requestGeneration = generation
       const session = activeSession
@@ -103,10 +102,14 @@ export function createStableLogicalRpcClient(
               resolve(response)
             },
             (error: unknown) => {
-              // Why: the retiring physical session settles this, so keep its error as the
-              // cause — it is the only evidence of whether the frame reached the wire.
+              // Keep the physical error as cause: only that layer knows whether the frame reached the wire.
               reject(
-                requestGeneration !== generation ? new LogicalClientCutoverError(error) : error
+                requestGeneration !== generation
+                  ? new LogicalClientCutoverError(error)
+                  : // Suspension retires the session under requests it never sent.
+                    suspended && !isRpcDeliveryUnknown(error)
+                    ? new LogicalClientSuspendedError()
+                    : error
               )
             }
           )
@@ -170,6 +173,11 @@ export function createStableLogicalRpcClient(
         activeSession.notifyForeground(reason)
       }
     },
+    probeLivenessNow: () => {
+      if (!suspended) {
+        activeSession.probeLivenessNow?.()
+      }
+    },
     close() {
       if (closed) {
         return
@@ -181,9 +189,7 @@ export function createStableLogicalRpcClient(
         record.disposePhysical?.()
       }
       subscriptions.clear()
-      // Why: let the physical close settle in-flight requests — it knows which
-      // frames were written and marks those delivery-unknown; a blanket local
-      // reject would erase that distinction.
+      // Let physical close distinguish unwritten requests from delivery-unknown written requests.
       activeSession.close()
       publishState('disconnected')
     },
@@ -199,9 +205,7 @@ export function createStableLogicalRpcClient(
         record.disposePhysical?.()
         record.disposePhysical = null
       }
-      // Why: let the physical close settle in-flight requests — it knows which
-      // frames were written and marks those delivery-unknown (a suspend can cut
-      // over a half-open relay whose sends may already be delivered).
+      // Physical close must preserve delivery uncertainty for requests interrupted by suspension.
       activeSession.close()
       publishState('disconnected')
     },
@@ -211,17 +215,14 @@ export function createStableLogicalRpcClient(
         nextSession.close()
         throw new Error('Client closed')
       }
-      // Why: naming the dial is independent of narrating it. The dominant relay case
-      // (direct dial fails) sits in 'reconnecting' — already amber, so forwarding adds
-      // nothing, but the user still has no idea relay is what's being tried.
+      // Name the pending path even when the old session is already reconnecting and needs no forwarded phase.
       if (suspended || state !== 'connected') {
         connectionPath.setMigration(path)
       }
       const forwarder = forwardMigrationDialState({
         session: nextSession,
         snapshot: () => ({ state, suspended }),
-        // Why: close() during the dial already published 'disconnected'; a late
-        // forwarded phase must not resurrect a closed client's dot.
+        // Ignore late dial phases after close so they cannot revive the disconnected state.
         publish: (next) => {
           if (!closed) {
             publishState(next)
@@ -233,8 +234,7 @@ export function createStableLogicalRpcClient(
         if (closed) {
           throw new Error('Client closed')
         }
-        // Why: cutting over anyway would close a live winner and strand the user
-        // on the slower path (the happy-eyeballs race is first-authenticated-wins).
+        // Respect first-authenticated-wins; a stale replacement must not close a live winner.
         if (shouldAbort?.()) {
           throw new Error('migration superseded')
         }
@@ -243,14 +243,13 @@ export function createStableLogicalRpcClient(
         nextSession.close()
         throw error
       }
-      // Why: unbind before bindActiveState so the replacement has exactly one publisher.
+      // Unbind first so the replacement has exactly one state publisher.
       endDialForwarding(forwarder, false)
       const previous = activeSession
       const previousStateUnsubscribe = activeStateUnsubscribe
       const nextGeneration = generation + 1
 
-      // Why: replay on the authenticated replacement before closing the old
-      // session, but fence callbacks until the generation becomes current.
+      // Replay before closing the old session; fence callbacks until this generation becomes current.
       for (const record of subscriptions.values()) {
         const disposePrevious = record.disposePhysical
         attachSubscription(record, nextSession, nextGeneration)
@@ -272,8 +271,7 @@ export function createStableLogicalRpcClient(
     },
 
     getActivePath: () => activePath,
-    // Why: a previous session that recovers mid-dial makes the pending path a lie —
-    // once we're connected the user is no longer waiting on anything.
+    // Clear pending path when the previous session recovers mid-dial.
     getPendingPath: () => connectionPath.pending(),
     setRecoveryPath: (path, attempt) => connectionPath.setRecovery(path, attempt),
     setRecoveryAttempt: (attempt) => connectionPath.setRecoveryAttempt(attempt),
@@ -293,8 +291,7 @@ export function createStableLogicalRpcClient(
     if (failed) {
       connectionPath.setMigration(null)
     }
-    // Why: only walk back phases we published ourselves — a 'connected' here came from
-    // the still-live previous session and outranks the dead dial.
+    // Undo only forwarded phases; a connected state from the previous session outranks the failed dial.
     if (failed && forwarder.forwarded() && state !== 'connected') {
       publishState('disconnected')
     }

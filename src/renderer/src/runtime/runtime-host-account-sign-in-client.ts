@@ -2,8 +2,11 @@ import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
 } from '../../../shared/managed-account-types'
+import { translate } from '@/i18n/i18n'
 import {
+  HOST_ACCOUNT_SIGN_IN_FAILURE_COPY as FAILURE_EN,
   HOST_ACCOUNT_SIGN_IN_SETTLED_PHASES,
+  type HostAccountSignInFailureCode,
   type HostAccountSignInProvider,
   type HostAccountSignInStatus
 } from '../../../shared/host-account-sign-in-types'
@@ -28,14 +31,7 @@ const CANCELLED_MESSAGE: Record<HostAccountSignInProvider, string> = {
   codex: CODEX_LOGIN_CANCELLED_MESSAGE
 }
 
-/**
- * One server's sign-in for one provider, as this client drives it:
- * `checking` (capability) -> `starting` (start sent) -> `following` (the host's flow) -> settled.
- * A Cancel only sets `cancelRequested`; the run loop delivers it as soon as the host has named its
- * flow, and again after any answer until the host has taken it. Registered before the first await,
- * so no Cancel is lost, and pinned to the pairing it started on: a re-paired id names another
- * machine, which must never get this flow's code.
- */
+/** Per-provider host sign-in: checking → starting → following → settled. Register before await so Cancel persists until host names/acknowledges its flow, retrying after answers. Pin original pairing so another machine never receives the code. */
 type Attempt = {
   owner: EnvironmentTarget
   provider: HostAccountSignInProvider
@@ -160,6 +156,25 @@ async function follow(attempt: Attempt): Promise<HostAccountSignInStatus> {
   }
 }
 
+const FAILURE_COPY: Record<HostAccountSignInFailureCode, () => string> = {
+  ownerSilent: () => translate('accounts.hostSignIn.errors.ownerSilent', FAILURE_EN.ownerSilent),
+  superseded: () => translate('accounts.hostSignIn.errors.superseded', FAILURE_EN.superseded)
+}
+
+function isHostAccountSignInFailureCode(code: unknown): code is HostAccountSignInFailureCode {
+  return typeof code === 'string' && Object.hasOwn(FAILURE_COPY, code)
+}
+
+/** The host's failure in the UI language; the login's own (uncoded) errors stay verbatim. */
+export function hostAccountSignInFailureText(status: HostAccountSignInStatus): string {
+  if (isHostAccountSignInFailureCode(status.errorCode)) {
+    return FAILURE_COPY[status.errorCode]()
+  }
+  return (
+    status.error ?? translate('accounts.hostSignIn.errors.failed', 'Sign-in failed. Try again.')
+  )
+}
+
 function settle(attempt: Attempt): HostAccountSignInStatus {
   const status = attempt.status
   // Why signedIn wins over a cancel: the host already saved the account, so say so.
@@ -169,7 +184,7 @@ function settle(attempt: Attempt): HostAccountSignInStatus {
   if (attempt.cancelRequested || status?.phase === 'cancelled' || !status) {
     throw new Error(CANCELLED_MESSAGE[attempt.provider])
   }
-  throw new Error(status.error ?? 'Sign-in failed. Try again.')
+  throw new Error(hostAccountSignInFailureText(status))
 }
 
 /** Starts a sign-in on `owner`, or joins the one this client already runs there. */
@@ -182,8 +197,7 @@ function runHostAccountSignIn(
   if (running?.done) {
     return running.done
   }
-  // Why one server per provider: Settings shows one Add/Cancel per provider, so Cancel always
-  // has exactly one sign-in it can mean, even after Settings reopens on another server.
+  // One Add/Cancel per provider requires exactly one active server flow, even after Settings switches servers.
   if (runningHostAccountSignInOwner(provider)) {
     return Promise.reject(
       new Error(

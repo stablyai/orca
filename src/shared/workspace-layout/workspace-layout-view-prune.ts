@@ -1,5 +1,4 @@
-// Prune rules for view records (design §1.4): what a save keeps of a record, and what a removed
-// workspace takes with it. Reads never need these; they fall back (workspace-layout-views.ts).
+// Prune view references on save or workspace removal; reads use workspace-layout-views fallbacks.
 
 import {
   getWorktreeIdFromHostIdentity,
@@ -67,11 +66,7 @@ const browserTabIds = (workspace: WorkspaceLayout): string[] =>
 const terminalTabIds = (workspace: WorkspaceLayout): string[] =>
   terminalTabs(workspace).map((tab) => tab.entityId)
 
-/**
- * What a save keeps of a view record, given the model of the same partition: entries naming a
- * group, tab, pane, file or browser tab the model no longer holds are dropped or reset the way
- * today's writer resets them, so the Serializer writes the same disk fields either way.
- */
+/** Drop/reset references to removed entities in held workspaces, matching existing persisted selection fields. */
 export function pruneViewRecord(
   record: LayoutViewRecord,
   layout: WorkspaceLayoutModel
@@ -151,10 +146,7 @@ export function pruneViewRecord(
   return pruned
 }
 
-/**
- * A workspace left the catalog: its selection goes with it, field for field as the Store's owner
- * removal drops it from a stored session today. `workspace` is its layout before the removal.
- */
+/** Remove a departed workspace’s selection using its layout before removal, matching Store ownership cleanup. */
 export function removeWorkspaceFromView(
   record: LayoutViewRecord,
   workspaceKey: string,

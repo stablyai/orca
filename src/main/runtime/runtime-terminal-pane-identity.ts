@@ -21,8 +21,7 @@ export function allocateTerminalPaneIdentity(opts: { tabId?: string; leafId?: st
   return { tabId, leafId, paneKey: makePaneKey(tabId, leafId) }
 }
 
-/** A caller-minted `tabId:leafId` as the pair `createTerminal` adopts; an unparsable key yields
- *  nothing, so the runtime mints its own and the reported `paneKey` shows the caller it lost. */
+/** Adopt valid caller-minted tabId:leafId; otherwise mint locally and report the replacement paneKey. */
 export function paneIdentity(paneKey: string | undefined): { tabId?: string; leafId?: string } {
   const pane = paneKey ? parsePaneKey(paneKey) : null
   return pane ? { tabId: pane.tabId, leafId: pane.leafId } : {}

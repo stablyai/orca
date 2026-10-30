@@ -21,8 +21,12 @@ export type TerminalColorOverrides = {
   brightMagenta?: string
   brightCyan?: string
   brightWhite?: string
-  // Why: xterm.js ITheme does not expose a `bold` key, but Ghostty users
-  // expect the setting to be preserved so a future renderer CSS override
-  // or xterm upgrade can honour it without a migration.
+  // Preserve Ghostty bold for future renderer support; xterm ITheme has no bold key.
   bold?: string
+}
+
+/** A selected plugin terminal theme's palette, saved so every host resolves it. */
+export type TerminalPluginPalette = {
+  id: `plugin:${string}`
+  colors: TerminalColorOverrides
 }

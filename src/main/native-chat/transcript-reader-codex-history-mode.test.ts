@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { extractPendingAsk } from '../../shared/native-chat-ask'
+import { extractPendingAsk } from '../../shared/native-chat/input/native-chat-ask'
 import { decodeCodexTranscriptLine } from './transcript-line-decoders-codex'
 import { readNativeChatTranscript } from './transcript-reader'
 import { readNativeChatTranscriptTail } from './transcript-tail-reader'
@@ -134,6 +134,7 @@ describe('Codex transcript history modes', () => {
         },
         '2026-08-09T10:00:01.000Z'
       ),
+      completedItem({ type: 'ContextCompaction', id: 'compaction-1' }, '2026-08-09T10:00:01.500Z'),
       {
         type: 'response_item',
         payload: {
@@ -173,13 +174,18 @@ describe('Codex transcript history modes', () => {
           ]
         },
         {
+          id: 'compaction-1',
+          role: 'system',
+          timestamp: Date.parse('2026-08-09T10:00:01.500Z'),
+          blocks: [{ type: 'text', text: 'Context compacted', presentation: 'compaction' }]
+        },
+        {
           id: 'assistant-1',
           role: 'assistant',
           blocks: [{ type: 'text', text: 'Visible response' }]
         }
       ]
     })
-    expect('messages' in result && result.messages).toHaveLength(2)
     expect(tail).toMatchObject({ messages: 'messages' in result ? result.messages : [] })
   })
 
@@ -194,6 +200,8 @@ describe('Codex transcript history modes', () => {
         }
       },
       { type: 'event_msg', payload: { type: 'user_message', message: 'Prompt' } },
+      { type: 'compacted', payload: { message: 'summary', replacement_history: [] } },
+      { type: 'event_msg', payload: { type: 'context_compacted' } },
       { type: 'event_msg', payload: { type: 'agent_message', message: 'Response' } },
       {
         type: 'response_item',
@@ -210,6 +218,10 @@ describe('Codex transcript history modes', () => {
     expect(result).toMatchObject({
       messages: [
         { role: 'user', blocks: [{ type: 'text', text: 'Prompt' }] },
+        {
+          role: 'system',
+          blocks: [{ type: 'text', text: 'Context compacted', presentation: 'compaction' }]
+        },
         { role: 'assistant', blocks: [{ type: 'text', text: 'Response' }] }
       ]
     })

@@ -1,6 +1,3 @@
-// A Claude session driven through the real adapter, with its child-work evidence reconciled into
-// a store of its own or ingested by a real hook server.
-
 import { expect } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
@@ -76,10 +73,8 @@ type Delivery = { kind: 'journal' | 'publish' | 'evidence'; detail: string }
 
 export type JournaledItem = Pick<AgentJournalRenderItem, 'itemId' | 'body' | 'sequence' | 'agentId'>
 
-/** The host clock the adapter stamps evidence with; a replay moves it to each frame's time. */
 export const T0 = 1_700_000_000_500
 
-/** A real hook server already holding the session's parent row. */
 export function hostWithParent(): AgentHookServer {
   const host = new AgentHookServer()
   host.ingestStructuredStatus(
@@ -123,6 +118,7 @@ export async function producer(host?: AgentHookServer) {
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: null,
       resumesTranscript: false,
+      cliFlag: async () => 'supported' as const,
       continuesChain: false
     }),
     openConnection: claude.openConnection,
@@ -140,7 +136,6 @@ export async function producer(host?: AgentHookServer) {
       }
     }
   })
-  /** What the adapter journaled, keyed by identity in first-write order, as the journal folds it. */
   const journalItems = new Map<string, JournaledItem>()
   const journal: StructuredAgentSessionEventSink = {
     appendItem: (identity, body, options) => {
@@ -171,7 +166,6 @@ export async function producer(host?: AgentHookServer) {
     claude.connections[0]!.handlers.onMessage?.(message)
     return deliveries.slice(from)
   }
-  /** Captured frames, each at its captured time after `T0`. */
   const replay = (frames: readonly CapturedFrame[]) => {
     for (const { at, frame: captured } of frames) {
       clock = T0 + at
@@ -185,7 +179,6 @@ export async function producer(host?: AgentHookServer) {
   return {
     adapter,
     claude,
-    /** The host clock the replay has reached. */
     now: () => clock,
     store,
     send,

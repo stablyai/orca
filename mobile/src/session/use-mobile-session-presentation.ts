@@ -1,9 +1,14 @@
-import { classifyConnection, verdictDisplayLabel } from '../transport/connection-health'
+import {
+  classifyConnection,
+  isConnectionOutage,
+  verdictDisplayLabel
+} from '../transport/connection-health'
 import { computeActiveTerminalKeyboardLift } from '../terminal/terminal-keyboard-avoidance-lift'
 import { useInitialSessionTerminalAutoCreate } from './use-initial-session-terminal-autocreate'
 import { MOBILE_SESSION_STATUS_LABELS } from './mobile-session-route-helpers'
 import type { MobileSessionBulkCloseModel } from './use-mobile-session-bulk-close'
 import { hostOs } from '../platform/host-os'
+import { useCalmConnectionState } from '../transport/calm-connection-state'
 
 export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel) {
   const {
@@ -34,7 +39,6 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
   const showEmptyState =
     connState === 'connected' && terminalsLoaded && visibleTabs.length === 0 && !activeHandle
 
-  // Why: a newly created workspace can hydrate with zero tabs before its first terminal exists.
   useInitialSessionTerminalAutoCreate({
     client,
     newlyCreatedWorkspace: created === '1',
@@ -49,20 +53,20 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     createTerminal: () => void handleCreateTerminal()
   })
 
-  // Why: reconnect trickles to 90s at its give-up cap; surface tap-to-retry so recovery needn't wait it out (issue #5049).
+  // Offer explicit retry after reconnect backoff reaches 90s so recovery need not wait for the next attempt.
   const connectionVerdict = classifyConnection({
     state: connState,
     reconnectAttempts,
     lastConnectedAt,
     endpoint: hostEndpoint
   })
-  const connectionEscalated =
-    connectionVerdict.kind === 'warning' || connectionVerdict.kind === 'unreachable'
-  // Not on the page: the shell owns the connection and the tap could only do nothing.
+  const connectionEscalated = isConnectionOutage(connectionVerdict)
   const showConnectionRetry = connectionEscalated && forceReconnectHost !== null
 
+  // Delay reconnect header changes so brief self-healing drops cannot flicker the label.
+  const presentedConnState = useCalmConnectionState(connState, lastConnectedAt)
   const terminalSummary =
-    connState === 'connected'
+    presentedConnState === 'connected'
       ? showLoadingState
         ? 'Loading tabs'
         : visibleTabs.length === 1
@@ -72,7 +76,7 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
         ? `${verdictDisplayLabel(connectionVerdict)} — tap to retry`
         : connectionEscalated
           ? verdictDisplayLabel(connectionVerdict)
-          : MOBILE_SESSION_STATUS_LABELS[connState]
+          : MOBILE_SESSION_STATUS_LABELS[presentedConnState]
 
   // Why: iOS keyboard height includes the home-indicator inset; Android IME height does not.
   const keyboardLift =
@@ -91,6 +95,7 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     transform: [{ translateY: -keyboardLift }]
   }
   return {
+    presentedConnState,
     showLoadingState,
     showEmptyState,
     connectionVerdict,

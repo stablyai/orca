@@ -7,29 +7,19 @@ import { killAllProcessesForWorktree, type WorktreeTeardownRuntime } from './wor
 
 const MISSING_WORKTREE_TEARDOWN_CONCURRENCY = 4
 
-// Why: every worktree in one sweep is already known-missing, so they can all be
-// served by a single point-in-time process list. Without this, an agent that
-// deletes N workspaces costs N full host enumerations — O(N) relay round-trips
-// carrying O(N^2) rows, which is minutes of stalled teardown on a remote host.
-//
-// Safe only because this sweep is best-effort. Do NOT reuse this wrapper on a
-// `requirePhysicalStop` path: that re-lists *after* shutdown to prove a PTY
-// exited, and a pre-shutdown snapshot would make the proof read stale rows.
+// Share one snapshot across known-missing workspaces to avoid O(N²) inventory traffic.
+// Best-effort only: requirePhysicalStop needs fresh post-shutdown evidence and must never reuse this cache.
 function withSharedProcessSnapshot(provider: IPtyProvider): IPtyProvider {
   let snapshot: Promise<Awaited<ReturnType<IPtyProvider['listProcesses']>>> | null = null
   return new Proxy(provider, {
     get(target, property) {
       if (property !== 'listProcesses') {
-        // Why: bind other members to `target`, not the proxy. With the proxy as
-        // receiver, a provider whose own method called `this.listProcesses()`
-        // would silently read this sweep's cached snapshot instead of the live
-        // host — the batching must not leak past the calls it was built for.
+        // Bind to the real provider so internal this.listProcesses reads live state, not this sweep's cache.
         // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy get trap default forward.
         const member: unknown = Reflect.get(target, property)
         return typeof member === 'function' ? member.bind(target) : member
       }
       return async (opts?: Parameters<IPtyProvider['listProcesses']>[0]) => {
-        // One snapshot serves every missing workspace in this batch.
         const pending = (snapshot ??= target.listProcesses({
           ...opts,
           worktreeId: undefined,
@@ -38,10 +28,7 @@ function withSharedProcessSnapshot(provider: IPtyProvider): IPtyProvider {
         try {
           return await pending
         } catch {
-          // Why: a shared *rejection* would let one transient relay failure suppress
-          // the provider sweep for every worktree in the batch — the exact leak this
-          // reconciliation exists to prevent. Failures fall back to a per-caller scan,
-          // restoring pre-batching isolation while success still costs one round-trip.
+          // Retry failures per caller so one transient relay error cannot suppress the rest of the sweep.
           if (snapshot === pending) {
             snapshot = null
           }
@@ -52,8 +39,7 @@ function withSharedProcessSnapshot(provider: IPtyProvider): IPtyProvider {
   })
 }
 
-// Why: `repoId::path` ids repeat across hosts, so a sweep driven by one repo's inventory
-// must name its owner or it stops a same-id workspace's terminals on another host.
+// Host-fence path-derived ids so another host's same-id workspace survives.
 function hostFence(
   repo: Repo,
   worktreeId: string
@@ -90,7 +76,6 @@ export async function stopMissingWorktreeTerminals(
     return { stoppedWorktreeIds: [] }
   }
 
-  // Why: this process holds no SSH PTY provider; an SSH repo's sweep goes through the runtime.
   const ownedProvider = getRepoRoutingConnectionId(repo) ? null : deps.getLocalProvider()
   const provider = ownedProvider ? withSharedProcessSnapshot(ownedProvider) : ownedProvider
   if (!provider) {
@@ -122,8 +107,7 @@ export async function stopMissingWorktreeTerminals(
             ...hostFence(repo, worktreeId),
             localProvider: provider,
             onPtyStopped: deps.onPtyStopped,
-            // Why: the shared process snapshot is only valid while nothing needs a
-            // post-shutdown re-list, so this sweep stays explicitly best-effort.
+            // Cached pre-shutdown inventory can support only best-effort teardown.
             requirePhysicalStop: false
           })
           return worktreeId

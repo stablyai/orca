@@ -20,6 +20,7 @@ import {
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
+import type { AgentProviderSessionKey } from '../../src/shared/agent-session-resume'
 
 const PROVIDER_SESSION_ID = 'e2e-live-force-exit-session'
 
@@ -91,9 +92,7 @@ async function forceKillElectronApp(app: ElectronApplication): Promise<void> {
     } else {
       process.kill(proc.pid, 'SIGKILL')
     }
-  } catch {
-    // Already gone.
-  }
+  } catch {}
   await waitForExit(proc)
 }
 
@@ -104,9 +103,7 @@ function killPid(pid: number): void {
       return
     }
     process.kill(pid, 'SIGKILL')
-  } catch {
-    // Already gone.
-  }
+  } catch {}
 }
 
 function stripPersistedPtyOwnership(userDataDir: string): void {
@@ -122,15 +119,12 @@ function stripPersistedPtyOwnership(userDataDir: string): void {
         tab.ptyId = null
       }
     }
-    // Why: this models the updater/crash artifact from #6370: the UI tab and
-    // live resume record survive, but no pane has the old stable leaf key or
-    // daemon session to own resume.
+    // Model crash/update recovery with saved UI/resume state but no old pane/daemon owner (#6370).
     session.terminalLayoutsByTabId = {}
     session.activeWorktreeIdsOnShutdown = []
     for (const record of Object.values(session.sleepingAgentSessionsByPaneKey ?? {})) {
       if (record.providerSession?.id === PROVIDER_SESSION_ID) {
-        // Why: the e2e proof should verify Orca launches the resumed command,
-        // not depend on a developer machine having a real Codex CLI installed.
+        // Echo proves the resume command launched without depending on installed/authenticated Codex.
         record.launchConfig = { agentCommand: 'echo', agentArgs: '', agentEnv: {} }
       }
     }
@@ -191,7 +185,8 @@ async function captureOutputRow(page: Page, expected: string, proofPath: string)
 test.describe.configure({ mode: 'serial' })
 
 for (const agent of ['codex', 'cursor'] as const) {
-  const providerSessionKey = agent === 'cursor' ? 'conversation_id' : 'session_id'
+  const providerSessionKey: AgentProviderSessionKey =
+    agent === 'cursor' ? 'conversation_id' : 'session_id'
   test(`resumes a live ${agent} record after force-exit restart when pane PTY ownership is gone`, async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
   {}, testInfo) => {
     const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
@@ -226,9 +221,7 @@ for (const agent of ['codex', 'cursor'] as const) {
       expect(await firstApp.evaluate(() => process.env.ORCA_DISABLE_CODEX_TRUST_RPC)).toBe('1')
       const worktreeId = await attachRepoAndOpenTerminal(page, repoPath)
       await waitForSessionReady(page)
-      // Why: the session writer persists only once hydrationSucceeded flips (not
-      // just workspaceSessionReady) — see shouldPersistWorkspaceSession — so the
-      // record write below is a silent no-op until hydration completes.
+      // The session writer requires hydrationSucceeded; writing earlier silently loses the fixture.
       await expect
         .poll(() => page.evaluate(() => window.__store?.getState().hydrationSucceeded === true), {
           timeout: 30_000,
@@ -296,11 +289,7 @@ for (const agent of ['codex', 'cursor'] as const) {
       // hydration-gated writer before polling persisted state.
       await page.evaluate(() => window.__store?.getState().captureAllSleepingAgentSessions('quit'))
 
-      // Why: the record reaches disk via the debounced session writer (150ms) plus
-      // the main-process scheduleSave (up to 5s). Under CI event-loop starvation —
-      // the same shard drifts renderer timers ~1s — both stages need headroom, so
-      // poll to 30s (this suite's other readiness budget). On a miss, surface store
-      // vs disk state to separate a lost write from a merely slow flush.
+      // Poll through the 150ms renderer debounce and up-to-5s main save with CI timer headroom; report store/disk state on timeout.
       const persistDeadline = Date.now() + 30_000
       let persisted = false
       while (Date.now() < persistDeadline) {

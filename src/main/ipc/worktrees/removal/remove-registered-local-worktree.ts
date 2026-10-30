@@ -1,18 +1,22 @@
+import { assertRegisteredLocalWorktreePreflight } from './registered-local-worktree-preflight'
 import type { Repo } from '../../../../shared/repo-types'
+import {
+  nativeWindowsMarkerMissing,
+  usesNativeWindowsRemoval
+} from '../../../git/windows-worktree-removal'
+import { pruneGitWorktrees } from '../../../git/worktree-prune-guard'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import type { GitPushTarget, GitWorktreeInfo } from '../../../../shared/worktree/types'
 import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal'
 import type { LocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
 import {
-  assertWorktreeCleanForRemoval,
   listWorktreesStrict as listGitWorktreesStrict,
   removeWorktree
 } from '../../../git/worktree'
-import { gitExecFileAsync } from '../../../git/runner'
 import { getWorktreeSharedLinkPaths } from '../../../git/worktree-shared-directories'
 import { cleanupLocalOrphanedWorktreeDirectory } from '../../../local-orphaned-worktree-cleanup'
-import { recoverLocalWindowsWorktreeRemoval } from '../../../local-worktree-removal-recovery'
+import { recoverPartialLocalWorktreeRemoval } from '../../../local-worktree-removal-recovery'
 import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentation'
 import { assertNestedWorktreeRemovalApproval } from '../../../nested-worktree-removal-plan'
 import { findRegisteredDeletableWorktree } from '../../../worktree-removal-safety'
@@ -24,11 +28,7 @@ import {
 } from '../../worktree-symlinks'
 import { invalidateAuthorizedRootsCacheForRepo } from '../../registered-worktree-roots-scoped-invalidation'
 import { runWorktreeChangeInvalidators } from '../../worktree-change-invalidators'
-import {
-  formatWorktreeRemovalError,
-  isOrphanCompatiblePreflightError,
-  isOrphanedWorktreeError
-} from '../../worktree-logic'
+import { formatWorktreeRemovalError, isOrphanedWorktreeError } from '../../worktree-logic'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import {
@@ -77,52 +77,45 @@ export async function removeRegisteredLocalWorktree(
     assertNestedWorktreeRemovalApproval([refreshedRegisteredWorktree], [args.expectedCheckout])
   }
   try {
-    // Why: an archive hook can race another Git client that locks the row; recheck before linked-path/watcher/terminal teardown.
+    // Archive hooks can race external Git locks; recheck before destructive teardown.
     assertWorktreeUnlockedForRemoval(refreshedRegisteredWorktree)
   } catch (error) {
     throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, args.force ?? false))
   }
 
-  // Why: `orca.yaml` shared directories are symlinked in too, and a
-  // directory-only ignore rule leaves those links untracked, so removal must
-  // tolerate and unlink them exactly like the per-user shared paths.
+  // Repo shared-directory symlinks need the same ignore/unlink policy as user-configured shared paths.
   const linkedPaths = getWorktreeSharedLinkPaths(repo)
   const ignoredLinkedPaths = args.force
     ? []
     : await findExistingWorktreeSymlinkPaths(canonicalWorktreePath, linkedPaths)
-  try {
-    await (hasLocalWorktreeGitOptions
-      ? assertWorktreeCleanForRemoval(canonicalWorktreePath, args.force ?? false, {
-          ...localWorktreeGitOptions,
-          ...(ignoredLinkedPaths.length > 0 ? { ignoredUntrackedPaths: ignoredLinkedPaths } : {})
-        })
-      : ignoredLinkedPaths.length > 0
-        ? assertWorktreeCleanForRemoval(canonicalWorktreePath, args.force ?? false, {
-            ignoredUntrackedPaths: ignoredLinkedPaths
-          })
-        : assertWorktreeCleanForRemoval(canonicalWorktreePath, args.force ?? false))
-  } catch (error) {
-    if (!isOrphanCompatiblePreflightError(error)) {
-      throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, args.force ?? false))
-    }
-    // Why: Git can still classify this as an orphan after preflight; keep strict PTY teardown before any recursive fallback deletion.
-  }
+  const markerMissing = await nativeWindowsMarkerMissing(
+    canonicalWorktreePath,
+    localWorktreeGitOptions
+  )
+  await assertRegisteredLocalWorktreePreflight(
+    repo.path,
+    canonicalWorktreePath,
+    refreshedRegisteredWorktree,
+    args.force ?? false,
+    localWorktreeGitOptions,
+    hasLocalWorktreeGitOptions,
+    ignoredLinkedPaths,
+    markerMissing
+  )
 
   const removalGate = await withWorktreeRemoveStageSpan('watcher_gate', 'local', async () =>
     runtime.acquireFileWatcherRemoval(canonicalWorktreePath)
   )
   let accepted = false
   try {
-    // Why: hold the watcher/terminal gate through Git and any recursive fallback so no late spawn recreates a native handle.
-    // Linked-path deletion is destructive too, so PTYs must release every handle before Windows or WSL filesystem cleanup starts.
+    // Fence watcher/spawn installs through linked-path cleanup, Git removal and recursive fallback; PTYs must release handles first.
     await withWorktreeRemoveStageSpan('pty_sweep', 'local', async () => {
       await stopPtysForDestructiveWorktreeRemoval(runtime, args.worktreeId, {
         allowUnverifiedStop: args.allowUnverifiedPtyStop
       })
     })
 
-    // Why: preflight only ignored these paths, not mutated them; keep watcher installs fenced through Git removal.
-    if (linkedPaths.length > 0) {
+    if (!markerMissing && linkedPaths.length > 0) {
       await removeWorktreeLinkedPaths(canonicalWorktreePath, linkedPaths)
     }
     accepted = true
@@ -162,8 +155,7 @@ export async function removeRegisteredLocalWorktree(
     runtime.publishWorktreeRemovalChange(repoId)
     return result
   }
-  // Why detached: every refusal above already ran, and Git's 20-35 s delete must finish even when the
-  // request that asked for it goes away; other views read the host's `removing` marker meanwhile.
+  // After acceptance, deletion must survive request cancellation; other views observe the host's removing marker.
   void startBackgroundWorktreeRemoval({
     removal: {
       worktreeId: args.worktreeId,
@@ -226,7 +218,7 @@ async function finishLocalWorktreeRemoval({
     try {
       const removeOptions = {
         ...(!deleteBranch ? { deleteBranch } : {}),
-        // Why: reuse the authoritative worktree list already computed here instead of rescanning siblings on the hot delete path.
+        // Reuse the authoritative listing instead of rescanning siblings during deletion.
         knownRemovedWorktree: refreshedRegisteredWorktree,
         ...(hasLocalWorktreeGitOptions ? localWorktreeGitOptions : {}),
         checkoutDeleteSignal
@@ -238,8 +230,11 @@ async function finishLocalWorktreeRemoval({
         refreshedRegisteredWorktree.head
       )
     } catch (error) {
-      // Why: Git for Windows can deregister a clean worktree before its recursive filesystem deletion fails transiently.
-      const recoveredRemovalResult = await recoverLocalWindowsWorktreeRemoval({
+      if (usesNativeWindowsRemoval(canonicalWorktreePath, localWorktreeGitOptions)) {
+        throw error
+      }
+      // Git deregisters even when its recursive filesystem deletion fails partway.
+      const recoveredRemovalResult = await recoverPartialLocalWorktreeRemoval({
         error,
         force: args.force ?? false,
         canonicalWorktreePath,
@@ -247,13 +242,13 @@ async function finishLocalWorktreeRemoval({
         localWorktreeGitOptions,
         registeredWorktree: refreshedRegisteredWorktree,
         deleteBranch,
-        closeWatcher: (worktreePath) => runtime.closeFileWatchersForRemoval(worktreePath)
+        closeWatcher: (worktreePath) => runtime.closeFileWatchersForRemoval(worktreePath),
+        signal: checkoutDeleteSignal
       })
       if (recoveredRemovalResult) {
         removalResult = recoveredRemovalResult
         removalCompleted = true
       } else if (isOrphanedWorktreeError(error)) {
-        // If git no longer tracks this worktree, clean up the directory and metadata
         console.warn(
           `[worktrees] Orphaned worktree detected at ${canonicalWorktreePath}, cleaning up`
         )
@@ -263,11 +258,8 @@ async function finishLocalWorktreeRemoval({
           localWorktreeGitOptions,
           (path) => runtime.closeFileWatchersForRemoval(path)
         )
-        // Why: remove failed so git still tracks it (.git/worktrees/<name>); prune or the stale entry keeps its branch locked.
-        await gitExecFileAsync(['worktree', 'prune'], {
-          cwd: repo.path,
-          ...localWorktreeGitOptions
-        }).catch(() => {})
+        // Failed removal may retain registration and branch locks; prune stale tracking.
+        await pruneGitWorktrees({ cwd: repo.path, ...localWorktreeGitOptions }).catch(() => {})
         await cleanupPushTarget()
         runtime.clearOptimisticReconcileToken(args.worktreeId)
         removeWorktreeMetadataAndTransientState(
@@ -291,7 +283,7 @@ async function finishLocalWorktreeRemoval({
         )
       }
     }
-    // Why: the worktree is unlisted from here on; a scan that began before the removal is overtaken.
+    // Successful unlisting overtakes any scan begun before removal.
     runWorktreeChangeInvalidators(repoId)
     removalCompleted = true
   } finally {

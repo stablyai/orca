@@ -1,7 +1,4 @@
-/**
- * #24932: a host with no window pushes its phones when a hook-reporting terminal agent finishes or
- * needs input; a desktop with a window still pushes its phone once, from the window, as before.
- */
+// #24932: terminal-agent completion/input pushes come from a windowless host, or once from the desktop window.
 import { randomUUID } from 'node:crypto'
 import type { ElectronApplication } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'

@@ -25,6 +25,7 @@ import { filterGitHubProjectPickerProjects } from './github-project-picker-filte
 import { ProjectPickerBrowse } from './ProjectPickerBrowse'
 import { ProjectViewPickStep } from './ProjectPickerPanels'
 import { parseProjectInput } from './project-picker-input'
+import { projectViewErrorMessage } from './project-view-error-copy'
 import {
   getProjectPickerBrowseHost,
   listProjectViewsForRuntime,
@@ -160,7 +161,9 @@ export default function ProjectPicker({
         }
         if (!result.ok) {
           setViewList([])
-          toast.error(result.error.message)
+          toast.error(
+            projectViewErrorMessage(result.error, { host: githubProjectHost(choice.host) })
+          )
           return
         }
         setViewList(result.views)
@@ -190,13 +193,21 @@ export default function ProjectPicker({
 
   const handlePaste = useCallback(async () => {
     if (isGitHubProjectRefInputTooLarge(pasteInput)) {
-      setPasteError(GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR)
+      setPasteError(
+        projectViewErrorMessage({
+          type: 'validation_error',
+          message: GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR,
+          reason: 'input_too_large'
+        })
+      )
       return
     }
     const input = pasteInput.trim()
     const parsed = parseProjectInput(input)
     if (!parsed) {
-      setPasteError('Expected a project URL or owner/number')
+      setPasteError(
+        translate('projectViews.picker.pasteUnparseable', 'Expected a project URL or owner/number')
+      )
       return
     }
     setPasteError(null)
@@ -207,7 +218,7 @@ export default function ProjectPicker({
         return
       }
       if (!result.ok) {
-        setPasteError(result.error.message)
+        setPasteError(projectViewErrorMessage(result.error, { host: parsed.host }))
         return
       }
       setPasteInput('')

@@ -3,8 +3,7 @@ import { executionHostIdForStructuredTarget } from '@/runtime/structured-agent-s
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useAppStore } from '../../store'
 
-/** What Orca calls the chat's host; null for a paired server this client has no name for, whose
- *  raw id is not a name. */
+/** Return the host’s display name, or null for unnamed paired servers; raw IDs are not names. */
 export function useStructuredAgentSessionHostLabel(target: RuntimeClientTarget): string | null {
   return useAppStore((state) => {
     const label = selectExecutionHostDisplayLabel(state, executionHostIdForStructuredTarget(target))

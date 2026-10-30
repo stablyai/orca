@@ -1,5 +1,6 @@
+import { taskProviderFailure } from '../../shared/task-provider-failure'
 import type { LinearClient } from '@linear/sdk'
-import { loadLinearSdk } from './linear-sdk'
+import { createLinearClient, loadLinearSdk } from './linear-sdk'
 import { LEGACY_WORKSPACE_ID } from './linear-credential-paths'
 import {
   clearLegacyViewerOnDisk,
@@ -40,9 +41,7 @@ export type LinearClientForWorkspace = {
 
 export const LINEAR_PUBLIC_FILE_URL_EXPIRY_SECONDS = 60 * 60
 
-// ── Client factory ───────────────────────────────────────────────────
-// Why: issues/teams modules call this for real Linear actions — at that point
-// decrypting the token and surfacing a keychain prompt is expected.
+// User-initiated Linear actions may decrypt credentials and trigger keychain prompts.
 export function getClient(workspaceId?: string | null): LinearClient | null {
   const token = loadToken({
     force: true,
@@ -51,7 +50,7 @@ export function getClient(workspaceId?: string | null): LinearClient | null {
   if (!token) {
     return null
   }
-  return new (loadLinearSdk().LinearClient)({ apiKey: token })
+  return createLinearClient({ apiKey: token })
 }
 
 export function getClients(
@@ -70,11 +69,7 @@ export function getClients(
     try {
       token = loadToken({ force: true, workspaceId: workspace.id })
     } catch (error) {
-      // Why: under an 'all' selection one un-decryptable workspace must not
-      // collapse reads for the healthy ones. loadToken already recorded the
-      // per-workspace credentialError for getStatus to surface, so skip this
-      // workspace like a missing token. A specific-workspace selection still
-      // rethrows so the renderer can surface the decrypt banner promptly.
+      // All-workspace reads skip recorded decrypt failures; explicit selections rethrow for immediate recovery.
       if (isAllSelection && error instanceof CredentialDecryptionError) {
         continue
       }
@@ -85,7 +80,7 @@ export function getClients(
     }
     clients.push({
       workspace,
-      client: new (loadLinearSdk().LinearClient)({ apiKey: token, ...(signal ? { signal } : {}) }),
+      client: createLinearClient({ apiKey: token, ...(signal ? { signal } : {}) }),
       apiKey: token
     })
   }
@@ -96,7 +91,7 @@ export function getPublicFileUrlClient(
   entry: LinearClientForWorkspace,
   signal?: AbortSignal
 ): LinearClient {
-  return new (loadLinearSdk().LinearClient)({
+  return createLinearClient({
     apiKey: entry.apiKey,
     ...(signal ? { signal } : {}),
     headers: {
@@ -105,22 +100,17 @@ export function getPublicFileUrlClient(
   })
 }
 
-// ── Auth error detection ─────────────────────────────────────────────
-// Why: 401 errors must trigger token clearing and a re-auth prompt in the
-// renderer. All other errors are swallowed with console.warn to match GitHub
-// client's graceful degradation.
 export function isAuthError(error: unknown): boolean {
   return error instanceof loadLinearSdk().AuthenticationLinearError
 }
 
-// ── Connect / disconnect / status ────────────────────────────────────
 export async function connect(
   apiKey: string
 ): Promise<
   { ok: true; viewer: LinearViewer; workspace: LinearWorkspace } | { ok: false; error: string }
 > {
   try {
-    const client = new (loadLinearSdk().LinearClient)({ apiKey })
+    const client = createLinearClient({ apiKey })
     const me = await client.viewer
     const org = await me.organization
     const workspace = workspaceFromLinearData(me, org)
@@ -182,8 +172,7 @@ export function getStatus(): LinearConnectionStatus {
   const credentialError = state.workspaces
     .map((workspace) => getCredentialError(workspace.id))
     .find((message) => message !== undefined)
-  // Why any-not-active: sealing is a host-wide property, so a second workspace stored
-  // while the keyring was missing is exposed even when the active one is sealed.
+  // Host-wide protection must report any plaintext workspace, even when the active one is sealed.
   const credentialProtection = state.workspaces.some(
     (workspace) => getWorkspaceTokenProtection(workspace.id) === 'plaintext'
   )
@@ -208,7 +197,7 @@ export async function testConnection(
 > {
   const resolvedWorkspaceId = resolveWorkspaceId(workspaceId)
   if (!resolvedWorkspaceId) {
-    return { ok: false, error: 'No API key stored.' }
+    return taskProviderFailure('linear.noApiKey', 'No API key stored.')
   }
   let token: string | null
   try {
@@ -218,11 +207,11 @@ export async function testConnection(
     return { ok: false, error: message }
   }
   if (!token) {
-    return { ok: false, error: 'No API key stored.' }
+    return taskProviderFailure('linear.noApiKey', 'No API key stored.')
   }
 
   try {
-    const client = new (loadLinearSdk().LinearClient)({ apiKey: token })
+    const client = createLinearClient({ apiKey: token })
     const me = await client.viewer
     const org = await me.organization
     const workspace = workspaceFromLinearData(me, org)
@@ -242,8 +231,7 @@ export async function testConnection(
   }
 }
 
-// Why: called at main-process startup. We warm plaintext metadata only; tokens
-// stay encrypted on disk until a user performs an actual Linear action.
+// Warm metadata at startup without decrypting credentials or triggering keychain prompts.
 export function initLinearToken(): void {
   getWorkspaceFile()
   getLegacyViewer()

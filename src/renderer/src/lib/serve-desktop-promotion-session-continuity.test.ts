@@ -1,18 +1,4 @@
-/**
- * Regression for #8457 / STA-1716 acceptance criterion 6: desktop exit +
- * surviving daemon sessions + headless `serve` holding the single-instance lock
- * + a GUI activation attempt.
- *
- * The incident chain was: Cmd+Q leaves a packaged `orca serve` owning the
- * profile lock, a forced relaunch reaches that headless process, it mounts a
- * desktop renderer, and hydration cold-restores panes whose daemon PTYs are
- * still alive — launching duplicate `codex resume <session>` agents and
- * interrupting the live ones.
- *
- * Both halves are joined here because either alone passes vacuously: promotion
- * is only safe if hydration resumes nothing, and resuming nothing only matters
- * if promotion actually happens.
- */
+/** Cover desktop exit → surviving daemon PTYs → serve-owned profile lock → GUI promotion (#8457/STA-1716). Promotion hydration must not cold-resume live sessions. Join both halves or either promotion/resume assertion passes vacuously. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { App, BrowserWindow } from 'electron'
 import { useAppStore } from '@/store'
@@ -67,11 +53,7 @@ function createFakeWindow(): BrowserWindow {
   } as unknown as BrowserWindow
 }
 
-/**
- * Mirrors only the injection index.ts performs (gate -> focusExistingWindow ->
- * openMainWindow, second-instance -> requestDesktopActivation); every decision
- * under test comes from the production modules.
- */
+/** Wire only index.ts activation injections; production modules make every tested decision. */
 function bootHeadlessServeOwner(): {
   openMainWindowCalls: () => number
   desktopWindowStatus: () => string
@@ -161,17 +143,12 @@ function makeSurvivingAgentRecord(index: number): SleepingAgentSessionRecord {
     state: 'working',
     capturedAt: 1,
     updatedAt: 1,
-    // Why: Cmd+Q captures live agents as quit-origin records — the exact input
-    // the promoted renderer replays.
+    // Cmd+Q captures live sessions as quit-origin records, the promoted renderer’s exact input.
     origin: 'quit'
   }
 }
 
-/**
- * Seeds the store the way a renderer freshly mounted inside the serve process
- * sees it: persisted tabs/layouts with their daemon PTY bindings, and no live
- * PTY map yet unless reattach has already run.
- */
+/** Match promoted-renderer state: persisted layouts/daemon bindings before live PTY hydration, unless reattach has already completed. */
 function hydratePromotedRenderer(options: { reattached: boolean }): SleepingAgentSessionRecord[] {
   const records = AGENT_PANES.map((_, index) => makeSurvivingAgentRecord(index))
   useAppStore.setState(
@@ -239,7 +216,6 @@ describe('#8457 headless serve promotion preserves surviving agent sessions', ()
     expect(serve.desktopWindowStatus()).toBe('openable')
     expect(serve.openMainWindowCalls()).toBe(1)
 
-    // Dock/Finder activation now finds the window and must not build another.
     serve.dockActivate()
     serve.secondInstance(DESKTOP_RELAUNCH_ARGV)
     expect(serve.openMainWindowCalls()).toBe(1)

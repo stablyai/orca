@@ -1,11 +1,4 @@
-// Silent NSIS install / update / uninstall and installed-app discovery.
-//
-// Orca ships a per-user oneClick NSIS installer (electron-builder defaults:
-// oneClick=true, perMachine=false) named orca-windows-setup.exe. One-click
-// silent mode is `<setup.exe> /S`; the app installs under
-// %LOCALAPPDATA%\Programs\<dir> and the exe is Orca.exe. The install dir casing
-// is not guaranteed (observed lowercase "orca" on a dev box), so the exe is
-// located by search, never by a hard-coded path.
+// Drive per-user oneClick NSIS /S install/update/uninstall. Discover Orca.exe under Programs with case tolerance; install directory casing varies.
 
 import { existsSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -24,11 +17,7 @@ function programsRoot() {
   return path.join(localAppData, 'Programs')
 }
 
-/**
- * Resolve a base/update installer to a local .exe path, downloading from a
- * GitHub release tag when requested. Keeps gh usage to a single `release
- * download` call (AGENTS.md rate-limit guidance).
- */
+// Resolve local installer or download its GitHub release with one gh call.
 export function resolveInstaller({ localPath, releaseTag, assetPattern }) {
   if (localPath) {
     if (!existsSync(localPath)) {
@@ -66,16 +55,8 @@ function findSetupExe(dir) {
   return line && existsSync(line) ? line : null
 }
 
-/**
- * Run an NSIS installer in one-click silent mode and wait for the installed exe
- * to appear. Returns { exePath, version }. The installer process returns before
- * copying finishes, so completion is confirmed by polling for the exe.
- *
- * When `installDir` is set (isolated-install mode), `/D=<path>` overrides the
- * install location. `/D` is special in NSIS: it must be the LAST argument and
- * cannot be quoted, so the path must be spaces-free (validated upstream) and is
- * passed as a single unquoted argv entry.
- */
+// Poll installed exe/version because installer exit can precede copy completion.
+// Optional isolated /D=<path> must be the final unquoted argv and spaces-free, validated upstream.
 export function silentInstall(setupExe, { timeoutMs = 180_000, installDir = null } = {}) {
   assertWin32('silentInstall')
   if (!existsSync(setupExe)) {
@@ -92,14 +73,11 @@ export function silentInstall(setupExe, { timeoutMs = 180_000, installDir = null
     throw new Error(`Failed to launch installer ${setupExe}: ${proc.error.message}`)
   }
 
-  // On update runs the old Orca.exe already exists, so wait for the exe whose
-  // version matches this installer — not just any exe the installer hasn't yet
-  // overwritten — to avoid reading the pre-update binary mid-copy.
+  // Wait for matching new version on update; the old exe’s presence does not prove copy completion.
   const targetVersion = getExeVersion(setupExe)
   const exePath = waitForInstalledExe(timeoutMs, installDir, targetVersion)
   if (!exePath && locateInstalledExe(installDir)) {
-    // Version-gated wait failed but SOME exe exists — surface both versions so a
-    // comparison bug reads as itself, not as "installer produced nothing".
+    // Report both versions when a mismatched exe exists, distinguishing comparison failure from missing output.
     const found = locateInstalledExe(installDir)
     throw new Error(
       `Installed ${EXE_NAME} exists at ${found} but its version ` +
@@ -113,14 +91,8 @@ export function silentInstall(setupExe, { timeoutMs = 180_000, installDir = null
   return { exePath, version: getExeVersion(exePath) }
 }
 
-// ProductVersion formats differ between the two artifacts: the NSIS setup exe
-// carries the full semver (e.g. "1.4.129-rc.1") while the installed app exe
-// carries a 4-part numeric version (e.g. "1.4.129.0"). Compare only the numeric
-// major.minor.patch prefix — strict string equality never matches across the
-// two formats and made every install wait time out (runs 28898246592 and
-// 28981670571). Prerelease-only differences within one X.Y.Z are invisible to
-// this check; the harness's real assertions (daemon pid, session survival) do
-// not rely on it.
+// Compare numeric major.minor.patch: setup full semver and installed four-part versions never compare equal as strings (runs 28898246592/28981670571).
+// Prerelease-only changes remain invisible; daemon/session survival assertions do not depend on this gate.
 function normalizeExeVersion(version) {
   const match = /^(\d+)\.(\d+)\.(\d+)/.exec(version ?? '')
   return match ? `${match[1]}.${match[2]}.${match[3]}` : null
@@ -131,8 +103,7 @@ function waitForInstalledExe(timeoutMs, installDir = null, expectedVersion = nul
   const expected = normalizeExeVersion(expectedVersion)
   while (Date.now() < deadline) {
     const exe = locateInstalledExe(installDir)
-    // An unparseable version on either side skips the gate (presence-only wait)
-    // rather than spinning until timeout on a comparison that can never succeed.
+    // Skip unparseable version gates rather than wait forever; retain presence check.
     if (exe && (!expected || normalizeExeVersion(getExeVersion(exe)) === expected)) {
       return exe
     }
@@ -141,11 +112,7 @@ function waitForInstalledExe(timeoutMs, installDir = null, expectedVersion = nul
   return null
 }
 
-/**
- * Locate the installed Orca.exe. In isolated mode (`installDir` set), the exe is
- * at a known fixed path (<installDir>\Orca.exe). Otherwise it is discovered
- * under %LOCALAPPDATA%\Programs (case-tolerant — casing is not guaranteed).
- */
+// Use fixed isolated installDir/Orca.exe or case-tolerant per-user Programs discovery.
 export function locateInstalledExe(installDir = null) {
   if (installDir) {
     const exe = path.join(installDir, EXE_NAME)

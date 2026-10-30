@@ -29,6 +29,7 @@ function openMainWindowForContextMenu() {
     }),
     setZoomLevel: vi.fn(),
     setBackgroundThrottling: vi.fn(),
+    setWebRTCIPHandlingPolicy: vi.fn(),
     invalidate: vi.fn(),
     setWindowOpenHandler: vi.fn(),
     send: vi.fn(),
@@ -36,7 +37,9 @@ function openMainWindowForContextMenu() {
     openDevTools: vi.fn(),
     closeDevTools: vi.fn(),
     replaceMisspelling: vi.fn(),
-    session: { addWordToSpellCheckerDictionary: vi.fn() }
+    session: { addWordToSpellCheckerDictionary: vi.fn() },
+    getURL: vi.fn(() => 'file:///opt/orca/renderer/index.html'),
+    isLoadingMainFrame: vi.fn(() => true)
   }
   const browserWindowInstance = {
     webContents,
@@ -74,6 +77,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn()
@@ -122,6 +126,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -175,6 +180,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -234,6 +240,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -293,6 +300,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -373,6 +381,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -406,8 +415,7 @@ describe('createMainWindow', () => {
 
     const isDarwin = process.platform === 'darwin'
 
-    // Cmd+Shift+B is not in the policy allowlist, so no action resolves and no
-    // preventDefault fires — but the carve-out must not be what lets it through.
+    // Cmd+Shift+B must reach policy rejection, not the carve-out.
     const shiftPreventDefault = vi.fn()
     windowHandlers['before-input-event'](
       { preventDefault: shiftPreventDefault } as never,
@@ -423,9 +431,7 @@ describe('createMainWindow', () => {
     )
     expect(shiftPreventDefault).not.toHaveBeenCalled()
 
-    // Cmd+Alt+B is not a modifier chord in the policy (alt excluded), so the
-    // policy returns null and no preventDefault fires. Assert the carve-out
-    // is not what's short-circuiting this — it requires !alt.
+    // Cmd+Alt+B must reach policy rejection; the carve-out excludes alt.
     const altPreventDefault = vi.fn()
     windowHandlers['before-input-event'](
       { preventDefault: altPreventDefault } as never,
@@ -450,6 +456,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -480,8 +487,7 @@ describe('createMainWindow', () => {
       .mocked(ipcMain.on)
       .mock.calls.find(([channel]) => channel === 'ui:setMarkdownEditorFocused')?.[1]
 
-    // Seed to true with a legitimate payload, then send a non-boolean and
-    // assert the flag returns to false by checking Cmd+B resumes interception.
+    // Seed focus true, reject a non-boolean update, then verify Cmd+B is intercepted again.
     setFocusedListener?.({ sender: webContents } as never, true)
     setFocusedListener?.({ sender: webContents } as never, { malicious: true } as never)
 
@@ -535,7 +541,12 @@ describe('createMainWindow', () => {
         expect.objectContaining({ label: 'Table' })
       ])
     )
-    expect(menuPopupMock).toHaveBeenCalledWith({ window: browserWindowInstance, x: 42, y: 84 })
+    expect(menuPopupMock).toHaveBeenCalledWith({
+      window: browserWindowInstance,
+      x: 42,
+      y: 84,
+      callback: expect.any(Function)
+    })
   })
 
   it('builds the plain edit menu for the one right-click the renderer marks as plain text', () => {
@@ -570,5 +581,57 @@ describe('createMainWindow', () => {
       2,
       expect.arrayContaining([expect.objectContaining({ label: 'Format' })])
     )
+  })
+
+  it('retires the edit menu with its document but not on same-document navigation', () => {
+    const { webContents } = openMainWindowForContextMenu()
+    const emit = (event: string, ...args: unknown[]): void => {
+      for (const [name, handler] of webContents.on.mock.calls) {
+        if (name === event) {
+          handler(...args)
+        }
+      }
+    }
+    const openMenu = () => {
+      const closePopup = vi.fn()
+      buildFromTemplateMock.mockImplementationOnce(() => ({
+        popup: menuPopupMock,
+        closePopup
+      }))
+      emit(
+        'context-menu',
+        {},
+        {
+          x: 1,
+          y: 2,
+          isEditable: true,
+          formControlType: 'input',
+          dictionarySuggestions: [],
+          misspelledWord: ''
+        }
+      )
+      const template = buildFromTemplateMock.mock.calls.at(-1)?.[0]
+      const paste = Array.isArray(template)
+        ? template.find((item) => item.label === 'Paste')
+        : undefined
+      expect(paste?.click).toBeTypeOf('function')
+      return { closePopup, paste }
+    }
+    const nextDocument = 'file:///opt/orca/renderer/index.html?reload'
+
+    const first = openMenu()
+    emit('did-start-navigation', {}, `${nextDocument}#hash`, true, true)
+    expect(first.closePopup).not.toHaveBeenCalled()
+    emit('did-start-navigation', {}, nextDocument, false, true)
+    expect(first.closePopup).toHaveBeenCalledTimes(1)
+
+    // The old document still takes right-clicks until the pending reload commits.
+    const pending = openMenu()
+    emit('did-frame-navigate', {}, nextDocument, 200, 'OK', false)
+    expect(pending.closePopup).not.toHaveBeenCalled()
+    emit('did-frame-navigate', {}, nextDocument, 200, 'OK', true)
+    expect(pending.closePopup).toHaveBeenCalledTimes(1)
+    pending.paste.click()
+    expect(webContents.send).not.toHaveBeenCalledWith('ui:editableContextPaste', expect.anything())
   })
 })

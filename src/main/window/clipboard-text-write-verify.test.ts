@@ -34,7 +34,6 @@ describe('writeClipboardTextAndVerify', () => {
   })
 
   it('accepts multi-line TUI content when read-back is identity-preserving', () => {
-    // Primary real-world path: code/agent output almost always contains newlines.
     const multiLine = 'line1\nline2\n  indented\n'
     clipboardWriteTextMock.mockImplementation((text: string) => {
       clipboardReadTextMock.mockReturnValue(text)
@@ -46,7 +45,6 @@ describe('writeClipboardTextAndVerify', () => {
   })
 
   it('accepts CRLF multi-line content only when read-back matches exactly', () => {
-    // Guard against platforms that normalize line endings between write and read.
     const crlf = 'line1\r\nline2\r\n'
     clipboardWriteTextMock.mockImplementation((text: string) => {
       clipboardReadTextMock.mockReturnValue(text)
@@ -58,7 +56,7 @@ describe('writeClipboardTextAndVerify', () => {
 
   it('rejects when multi-line read-back differs only by line endings', () => {
     clipboardWriteTextMock.mockImplementation(() => {
-      // e.g. write LF, OS returns CRLF — strict verify must fail rather than lie.
+      // Line-ending normalization must fail strict verification rather than claim a lossless paste.
       clipboardReadTextMock.mockReturnValue('line1\r\nline2')
     })
 

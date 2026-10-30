@@ -33,7 +33,6 @@ type BaseRefreshController = Pick<
 
 let remoteFetches: BaseRefreshController | null = null
 
-/** The runtime's controller, so a base refresh queues and dedupes with create and drift fetches. */
 export function setPRConflictSummaryRemoteFetches(controller: BaseRefreshController): void {
   remoteFetches = controller
 }
@@ -52,22 +51,14 @@ export async function getPRConflictSummary(
   headRefOid: string,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PRConflictSummary | undefined> {
-  // Why: the renderer only needs a read-only merge-conflict snapshot. We
-  // derive it from local git state so the PR card can show GitHub-style
-  // detail without spending additional gh API calls on every refresh. We use
-  // GitHub's head OID directly because the registered repo path may not have
-  // a matching local branch name for the PR head. For the base side, prefer a
-  // freshly-fetched remote-tracking ref so Orca matches GitHub's portal,
-  // which compares against the latest base branch tip rather than the PR's
-  // older pinned baseRefOid snapshot.
+  // Use GitHub's head OID when no local branch exists, and refresh the live base to match current mergeability.
   const latestBaseOid = await resolveLatestBaseOidThrottled(
     repoPath,
     baseRefName,
     baseRefOid,
     localGitOptions
   )
-  // Why: the summary is a pure function of the two commit OIDs, so a key hit
-  // can skip the whole merge-base/rev-list/merge-tree subprocess chain.
+  // Immutable commit pairs let cache hits skip the entire Git derivation.
   const runtimeKey = getConflictSummaryGitRuntimeKey(localGitOptions.wslDistro)
   const summaryKey = buildConflictSummaryCacheKey(
     runtimeKey,
@@ -81,9 +72,7 @@ export async function getPRConflictSummary(
     return cached.value
   }
 
-  // Why: different GitHub reads can report different pinned baseRefOid values
-  // while still resolving to the same live base tip; dedupe the expensive
-  // local derivation on the actual summary identity.
+  // Distinct pinned base snapshots can resolve to one live tip; dedupe by the actual commit pair.
   return dedupeSummaryDerivation(summaryKey, () =>
     derivePRConflictSummary(
       repoPath,
@@ -144,8 +133,7 @@ async function resolveLatestBaseOidThrottled(
     return cachedResolution.kind === 'resolved' ? cachedResolution.oid : fallbackBaseOid
   }
   return dedupeBaseOidResolve(baseKey, async () => {
-    // Why re-check inside the dedupe slot: a sibling caller may have finished
-    // resolving between our cache read and this factory starting.
+    // Another caller can resolve the base between the first cache read and this factory.
     const freshResolution = readFreshBaseTipResolution(baseKey)
     if (freshResolution) {
       return freshResolution
@@ -155,9 +143,7 @@ async function resolveLatestBaseOidThrottled(
       storeResolvedBaseTip(baseKey, oid)
       return { kind: 'resolved', oid }
     }
-    // Why cache the unresolved probe, not the caller fallback: the fetch
-    // attempt is branch-wide expensive work, but GitHub's baseRefOid is
-    // PR-specific and must not leak to sibling PRs on the same base branch.
+    // Cache unresolved branch-wide probes, not each PR's distinct fallback base OID.
     rememberUnresolvedBaseTip(baseKey)
     return { kind: 'fallback-unresolved' }
   }).then((resolution) => (resolution.kind === 'resolved' ? resolution.oid : fallbackBaseOid))
@@ -171,9 +157,7 @@ async function resolveLatestBaseOid(
   const remoteName = 'origin'
   const trackingRef = `refs/remotes/${remoteName}/${baseRefName}`
   remoteFetches ??= new RuntimeRemoteFetchController()
-  // Why: fetching the base ref keeps the conflict list aligned with GitHub's
-  // live mergeability view, but the card must still render offline. A failed
-  // or slow fetch falls back to the local ref, then to GitHub's base OID.
+  // Keep cards available offline: failed refreshes fall back to local refs, then GitHub's base OID.
   await remoteFetches.refreshRemoteTrackingBaseForPreview(
     repoPath,
     {
@@ -195,7 +179,7 @@ async function resolveLatestBaseOid(
         return oid
       }
     } catch {
-      // Try the next ref form before falling back to GitHub's baseRefOid.
+      // Continue through ref forms before falling back to GitHub's base OID.
     }
   }
 
@@ -252,7 +236,7 @@ async function loadConflictingFiles(
     headOid,
     baseOid
   ]
-  // Why: only the file list is read; the merged tree it writes would pile up as loose objects.
+  // Quarantine the unused merged tree so preview reads cannot accumulate loose objects.
   const quarantine = createLocalGitObjectQuarantine(repoPath, localGitOptions)
 
   return withLocalGitCapabilityCacheForExecution(
@@ -264,7 +248,7 @@ async function loadConflictingFiles(
             ...gitOptionsForWorktree(repoPath, localGitOptions),
             ...(env ? { env } : {})
           })
-        // Why only once supported: an old Git still gets the folder, and Git < 2.35 can't prune a leftover.
+        // Probe support before creating a quarantine that older Git cannot prune.
         return capabilities.isKnownSupported('merge-tree-write-tree')
           ? quarantine.run(run)
           : run(undefined)
@@ -282,8 +266,7 @@ async function loadConflictingFiles(
                 if (isUnsupportedMergeTreeWriteTreeError(error)) {
                   throw error
                 }
-                // Why: `git merge-tree --write-tree` exits 1 for conflicts but still
-                // writes the useful file list; only option rejection reaches fallback.
+                // Conflicts exit 1 but still provide the file list; option rejection alone triggers fallback.
                 const stdoutFromError = getGitErrorOutput(error, 'stdout')
                 if (stdoutFromError) {
                   return parseMergeTreeNameOnlyOutput(stdoutFromError)
@@ -295,8 +278,7 @@ async function loadConflictingFiles(
             isUnsupportedMergeTreeMergeBaseError
           ),
         async () => {
-          // Why: Git before 2.38 cannot derive a reliable real-merge conflict list;
-          // fail closed without respawning the same rejected command every refresh.
+          // Older Git cannot derive a reliable merge-conflict list; cache the unsupported capability.
           throw new Error('Git merge-tree --write-tree is unavailable on this execution host.')
         },
         isUnsupportedMergeTreeWriteTreeError

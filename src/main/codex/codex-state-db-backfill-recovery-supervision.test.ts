@@ -47,7 +47,7 @@ describe('Codex backfill recovery app-server supervision', () => {
 
   it('runs the POSIX recovery app-server under a session-lifetime supervisor', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
-    // Never signalled: terminate is a stub here, and a handle-less ChildProcess must not be killed.
+    // Stub termination: this handle-less child must never be signalled.
     const child = new ChildProcess()
     const calls: { program: string; args: string[]; options: Record<string, unknown> }[] = []
     const spawnProcess: CodexAppServerSpawn = (program, args, options) => {
@@ -114,10 +114,8 @@ describe.runIf(process.platform !== 'win32')('supervised Codex backfill recovery
     controller.abort()
 
     await expect(recovery).resolves.toEqual({ outcome: 'stopped', spawnCount: 1 })
-    // Its stdin end comes first; the supervisor then SIGTERMs, and SIGKILLs the group after.
     expect(existsSync(rig.signalFile) && readFileSync(rig.signalFile, 'utf8')).toBe('SIGTERM')
     expect(alive(pids.provider)).toBe(false)
-    // A SIGTERM to the root alone left this descendant running for good.
     expect(alive(pids.grandchild)).toBe(false)
   })
 
@@ -143,7 +141,6 @@ describe.runIf(process.platform !== 'win32')('supervised Codex backfill recovery
         PROVIDER_SUPERVISOR_MAX_STOP_MS + 1_000
       )
     ).toBe(true)
-    // A gone owner gets the close its owner makes: the stdin end, its grace, and only then SIGTERM.
     const events = rig.readEvents()
     expect(events['stdin-end']).toBeDefined()
     expect((events.SIGTERM ?? 0) - (events['stdin-end'] ?? 0)).toBeGreaterThanOrEqual(

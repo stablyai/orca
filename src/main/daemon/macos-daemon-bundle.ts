@@ -7,10 +7,9 @@ import { rm } from '../asar-transparent-fs'
 import { ensurePrivateDir } from './daemon-private-file-modes'
 import { inspectMacProcessCodeIdentity } from './daemon-mac-code-identity'
 
-/** Packaged by config/scripts/macos-terminal-host-bundle.cjs; its main executable is plain Node. */
+/** Plain Node helper packaged by config/scripts/macos-terminal-host-bundle.cjs. */
 export const MAC_TERMINAL_HOST_BUNDLE = 'Orca Terminal Host.app'
 export const MAC_TERMINAL_HOST_EXECUTABLE = 'orca-terminal-host'
-/** One published copy per helper build: `terminal-host-<helper CDHash>`. */
 export const MAC_DAEMON_COPY_PREFIX = 'terminal-host-'
 
 export type MacDaemonBundle = {
@@ -19,12 +18,12 @@ export type MacDaemonBundle = {
   entryPath: string
 }
 
-/** Private signed copies the updater never touches. */
+/** Keep signed copies outside paths replaced by the updater. */
 export function getMacDaemonBundleRoot(userDataPath: string): string {
   return join(userDataPath, 'daemon-host', 'macos')
 }
 
-/** Spotlight skips `.noindex` folders, so a copy is never indexed or listed as an app. */
+/** .noindex suppresses Spotlight indexing; direct execution can still register with LaunchServices. */
 export function macDaemonCopyBundlePath(directory: string): string {
   return join(directory, 'app.noindex', MAC_TERMINAL_HOST_BUNDLE)
 }
@@ -50,7 +49,7 @@ function appBundleForMainExecutable(executable: string): string {
   return bundle
 }
 
-/** One `codesign` display line, e.g. `CDHash=` or `designated => `; codesign prints to stderr. */
+// codesign display fields normally arrive on stderr.
 async function readCodesignField(
   args: string[],
   prefix: string,
@@ -72,12 +71,11 @@ async function readCodesignField(
   return line.slice(prefix.length)
 }
 
-/** The copy of the running app's helper for its build, published once and reused after. */
 export async function materializeMacDaemonBundle(
   root: string,
   signal: AbortSignal
 ): Promise<MacDaemonBundle> {
-  // Not process.execPath: after an update that path names the new bundle, not the running one.
+  // After an update, process.execPath may name the new bundle instead of the running one.
   const running = await inspectMacProcessCodeIdentity(process.pid)
   if (!running.executablePath) {
     throw new Error('Could not resolve the running macOS app bundle')
@@ -90,18 +88,18 @@ export async function materializeMacDaemonBundle(
   }
   const name = `${MAC_DAEMON_COPY_PREFIX}${cdhash}`
   const copy = describeCopy(join(root, name))
-  // Only a verified copy is ever renamed into place, so presence alone proves it.
+  // Only verified copies are published, so later launches can reuse them without re-verification.
   if (existsSync(copy.directory)) {
     return copy
   }
   ensurePrivateDir(root)
-  // The pid keeps this process's collection off its own in-flight staging copy.
+  // The PID keeps our collector from deleting an in-progress staging copy.
   const staging = await mkdtemp(join(root, `${name}.staging-${process.pid}-`))
   try {
     const stagedBundle = macDaemonCopyBundlePath(staging)
     await mkdir(dirname(stagedBundle))
     await cloneMacTree(source, stagedBundle, signal)
-    // The copy must satisfy the running app's requirement to inherit Orca's privacy grants.
+    // Matching the running app’s designated requirement preserves its privacy grants.
     const requirement = await readCodesignField(
       ['--display', '-r-', appBundle],
       'designated => ',
@@ -117,7 +115,7 @@ export async function materializeMacDaemonBundle(
       throw new Error("The macOS terminal host copy does not satisfy the app's signature")
     }
     await rename(staging, copy.directory).catch((error: unknown) => {
-      // Losing to a concurrent publisher is fine: its copy passed the same verification.
+      // A competing publisher verified the same helper before publishing.
       if (!existsSync(copy.directory)) {
         throw error
       }

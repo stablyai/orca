@@ -10,7 +10,7 @@ export function supportsTsrs(platform = process.platform, arch = process.arch) {
   )
 }
 
-export function resolveTsrsTypecheckCommand(config, root) {
+export function resolveTsrsLauncher(root) {
   let manifestPath
   try {
     manifestPath = createRequire(join(root, 'package.json')).resolve('tsrs/package.json')
@@ -20,6 +20,11 @@ export function resolveTsrsTypecheckCommand(config, root) {
     })
   }
   const { bin, version } = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  return { launcher: join(dirname(manifestPath), bin.tsrs), version }
+}
+
+export function resolveTsrsTypecheckCommand(config, root) {
+  const { launcher, version } = resolveTsrsLauncher(root)
   const project = relative(root, resolve(root, config))
   const identity = createHash('sha256').update(project).digest('hex').slice(0, 12)
   const cacheDirectory = join(root, '.cache', 'typecheck', 'tsrs', version)
@@ -27,7 +32,7 @@ export function resolveTsrsTypecheckCommand(config, root) {
   return {
     program: process.execPath,
     args: [
-      join(dirname(manifestPath), bin.tsrs),
+      launcher,
       '--noEmit',
       '-p',
       config,

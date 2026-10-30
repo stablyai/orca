@@ -1,4 +1,5 @@
 import { app, dialog, type BrowserWindow, type MessageBoxOptions } from 'electron'
+import { translateMain } from '../i18n/main-i18n'
 import { profileStateWriterFailureOutcome } from '../persistence/profile-state/profile-state-writer-errors'
 import { recordProfileStateWriteFailureReport } from '../persistence/profile-state/profile-state-writer-diagnostics'
 import { isBackgroundLaunch } from '../window/foreground-activation-policy'
@@ -10,13 +11,22 @@ let presenting = false
 export function profileStateWriteFailureDialogOptions(error: Error): MessageBoxOptions {
   return {
     type: 'error',
-    title: 'Saving stopped',
-    message: 'Orca has stopped saving this profile.',
+    title: translateMain('profileState.writeFailure.title', 'Saving stopped'),
+    message: translateMain(
+      'profileState.writeFailure.message',
+      'Orca has stopped saving this profile.'
+    ),
     detail:
       profileStateWriterFailureOutcome(error) === 'indeterminate'
-        ? 'Orca could not confirm whether your most recent change was saved. New changes will not be saved until you restart Orca.'
-        : 'Changes saved before this point are safe. New changes will not be saved until you restart Orca.',
-    buttons: ['OK']
+        ? translateMain(
+            'profileState.writeFailure.indeterminateDetail',
+            'Orca could not confirm whether your most recent change was saved. New changes will not be saved until you restart Orca.'
+          )
+        : translateMain(
+            'profileState.writeFailure.safeDetail',
+            'Changes saved before this point are safe. New changes will not be saved until you restart Orca.'
+          ),
+    buttons: [translateMain('profileState.writeFailure.okButton', 'OK')]
   }
 }
 
@@ -28,7 +38,7 @@ export function reportProfileStateWriteFailure(error: Error): void {
     recordProfileStateWriteFailureReport(error, 'suppressed')
     return
   }
-  // One sheet at a time: concurrent failures would otherwise stack identical alerts.
+  // Coalesce concurrent failures into one sheet.
   if (presenting) {
     recordProfileStateWriteFailureReport(error, 'duplicate')
     return
@@ -43,10 +53,7 @@ export function reportProfileStateWriteFailure(error: Error): void {
     })
 }
 
-/**
- * Parentless message boxes run synchronously on macOS and would stall every
- * background save; wait for a visible main window instead of revealing one.
- */
+/** Parentless macOS dialogs block synchronously; wait for a visible main window without revealing one. */
 async function presentOnMainWindow(error: Error, options: MessageBoxOptions): Promise<void> {
   let deferred = false
   for (;;) {
@@ -78,7 +85,7 @@ async function presentOnMainWindow(error: Error, options: MessageBoxOptions): Pr
 
 function nextBrowserWindow(): Promise<BrowserWindow> {
   return new Promise((resolve) =>
-    // Creation fires before the composition root records mainWindow; check on the next turn.
+    // Window-created precedes startup state assignment; check on the next turn.
     app.once('browser-window-created', (_event, window) => setImmediate(() => resolve(window)))
   )
 }

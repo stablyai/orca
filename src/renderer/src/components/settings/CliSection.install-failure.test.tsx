@@ -103,7 +103,6 @@ describe('CliSection install failure surfacing', () => {
       'Refusing to replace non-Orca command at /usr/local/bin/orca.'
     )
     expect(alert.textContent).toContain('Remove it and register again if it is no longer needed.')
-    // The Electron transport wrapper must not leak into the panel.
     expect(alert.textContent).not.toContain('invoking remote method')
     expect(toasts.success).not.toHaveBeenCalled()
     expect(toasts.error).toHaveBeenCalledTimes(1)

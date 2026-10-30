@@ -86,20 +86,7 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/ter
 }
 
 {
-  /**
-   * Perf regression: setCacheTimerStartedAt and setTabLayout must not publish
-   * state when the write is a no-op.
-   *
-   * Both actions previously spread a fresh object and returned it unconditionally,
-   * so every redundant call produced a new AppState object and woke EVERY zustand
-   * subscriber — which, with per-pane selectors across all mounted panes, is an
-   * O(panes) sweep per write. The cadence is real: parked-terminal-byte-watcher
-   * writes a null cache timer on every agent working/exit/stale-title transition,
-   * and TerminalPane re-persists its layout on pane-title churn.
-   *
-   * These tests count subscriber wakeups on a real store; the pre-fix numbers are
-   * 1_000 (one per call), the post-fix numbers are 0.
-   */
+  /** Cache-timer/title churn repeats equal writes; subscriber-count assertions require no-op timer/layout updates to avoid O(panes) fanout (1,000 before, zero after). */
 
   const REPEATS = 1_000
 
@@ -274,8 +261,7 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/ter
     })
 
     it('does not fire pane-ownership transfers for a bailed-out identical layout', () => {
-      // A duplicate-pty layout normalizes to a transfer; replaying the already-normalized
-      // snapshot must be inert, since normalization then finds nothing to move.
+      // Duplicate-PTY normalization transfers ownership; replaying its normalized result must publish nothing.
       const store = createTestStore()
       const duplicate = makeLayout({
         ptyIdsByLeafId: { 'leaf-a': 'pty-a', 'leaf-b': 'pty-a' }
@@ -358,9 +344,7 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/ter
       expect(store.getState().paneForegroundAgentByPaneKey).toEqual({})
     })
 
-    // Why: the settle publish drops routingConfirmationPending while every other
-    // compared field stays equal, so the equality short-circuit is the only thing
-    // standing between "confirmation ended" and a pane that keeps CSI-u forever.
+    // Confirmation settle can change only routingConfirmationPending; equality must allow clearing it or CSI-u stays enabled.
     it('lands the publish that clears a pending confirmation', () => {
       const store = createTestStore()
       store.getState().setPaneForegroundAgent('tab-1:leaf-1', {
@@ -384,8 +368,7 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/ter
       })
     })
 
-    // Why: a reattach seeds the launch agent; the read confirming the same agent must still land,
-    // or sidebar rows would never treat the pane as process-backed.
+    // Same-agent confirmation must still replace launch-only evidence so sidebar recognizes process-backed identity.
     it('lands a process read that confirms a launch-record agent', () => {
       const store = createTestStore()
       store.getState().setPaneForegroundAgent('tab-1:leaf-1', {

@@ -52,13 +52,7 @@ export function removeHookTrustContent(content: string, keys: readonly string[])
   return updated + content.slice(cursor)
 }
 
-/**
- * Moves each hook's trust block to the hook's new key, body bytes unchanged:
- * only what Codex wrote moves, and no hash is ever computed. Codex hashes a
- * hook's content, not its path or position, so the moved block stays exactly
- * as valid as before; a hook with no block keeps none. If any stored key has
- * an unknown shape, nothing moves and Codex asks the user to review instead.
- */
+/** Move existing approvals without rehashing; unknown stored key shapes prevent all moves. */
 export function moveHookTrustContent(
   existingContent: string,
   moves: readonly { oldKey: string; newKey: string }[]
@@ -95,14 +89,12 @@ export function moveHookTrustContent(
   )
 }
 
-/** Each key's trust tables as they are written, header included. */
 export function readHookTrustBlockTexts(content: string, key: string): string[] {
   return findHookTrustBlockRanges(content, new Set([normalizeCodexHookTrustLookupKey(key)])).map(
     (range) => content.slice(range.start, range.end).trimEnd()
   )
 }
 
-/** Replaces each key's trust tables with the given texts, verbatim; no texts removes the key. */
 export function restoreHookTrustBlockContent(
   content: string,
   restores: readonly { key: string; blocks: readonly string[] }[]
@@ -178,7 +170,7 @@ function formatHookStateTableKey(key: string): string {
   return `"${escapeTomlBasicString(key)}"`
 }
 
-/** Every spelling Orca writes `key` under: both separators for a Windows path, else the key itself. */
+/** Write both separator forms for Windows trust keys. */
 export function getTrustKeyWriteVariants(key: string): string[] {
   const parsed = parseCodexTrustKey(key)
   if (!parsed || !usesWindowsCodexPathSeparators(parsed.sourcePath)) {

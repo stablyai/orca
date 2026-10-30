@@ -1,7 +1,7 @@
-// The published shapes the queued-message hook tests feed the mobile session: host answers,
-// drafts, submissions and stream frames.
-
-import type { AgentJournalSubmission } from '../../../src/shared/agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../src/shared/agent-session-journal-types'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuePause,
@@ -36,7 +36,6 @@ export function ok(result: unknown): RpcResponse {
   return { id: 'request-1', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
 }
 
-/** The fields one recorded request carried, read without asserting their shape. */
 export function fieldsOf(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null
     ? Object.fromEntries(Object.entries(value))
@@ -53,7 +52,6 @@ export function mutationOk(value: unknown) {
   })
 }
 
-/** A settled submission; `queuedMessageId` marks it as that draft's hand-off. */
 export function acceptedSubmission(
   clientMessageId: string,
   queuedMessageId?: string
@@ -88,33 +86,45 @@ export function queuedDraft(
 
 export function snapshotEvent(input?: {
   queuedMessages?: AgentSessionQueuedMessage[] | null
+  items?: AgentJournalRenderItem[]
+  fence?: number
   runningTurn?: boolean
   submissions?: AgentJournalSubmission[]
-}): AgentSessionSubscribeEvent {
+}): Extract<AgentSessionSubscribeEvent, { type: 'snapshot' }> {
+  const items: AgentJournalRenderItem[] =
+    input?.items ??
+    (input?.runningTurn
+      ? [
+          {
+            itemId: 'turn-item-1',
+            revision: 1,
+            body: { kind: 'turn', turnId: 'turn-1', state: 'running' },
+            sequence: 1,
+            observedAt: 1
+          }
+        ]
+      : [])
+  const oldest = items[0]
+  const newest = items.at(-1)
+  const fence = input?.fence ?? 3
   return {
     type: 'snapshot',
     sessionId: SESSION_ID,
-    fence: 3,
+    fence,
     page: {
       sessionId: SESSION_ID,
       epoch: 'epoch-1',
-      fence: 3,
+      fence,
       direction: 'tail',
-      items: input?.runningTurn
-        ? [
-            {
-              itemId: 'turn-item-1',
-              revision: 1,
-              body: { kind: 'turn', turnId: 'turn-1', state: 'running' },
-              sequence: 1,
-              observedAt: 1
-            }
-          ]
-        : [],
+      items,
       removedItemIds: [],
       submissions: input?.submissions ?? [],
-      window: { oldest: null, newest: null, nextCursor: { epoch: 'epoch-1', sequence: 0 } },
-      liveCursor: { epoch: 'epoch-1', sequence: 0 },
+      window: {
+        oldest: oldest ? { epoch: 'epoch-1', sequence: oldest.sequence } : null,
+        newest: newest ? { epoch: 'epoch-1', sequence: newest.sequence } : null,
+        nextCursor: { epoch: 'epoch-1', sequence: oldest?.sequence ?? 0 }
+      },
+      liveCursor: { epoch: 'epoch-1', sequence: newest?.sequence ?? 0 },
       hasOlder: false,
       hasNewer: false
     },

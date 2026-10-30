@@ -40,12 +40,10 @@ export class OrchestrationMailboxDeliveryTarget {
       return null
     }
     if (this.deps.isStructuredSessionOwner(ownerHandle)) {
-      // The structured lane owns this mailbox; nothing here can type into it.
       return null
     }
     if (!this.deps.hasTerminalHandle(ownerHandle)) {
-      // Why logged rather than silent: an unroutable owner is the shape of a lost mailbox, and a
-      // silent null is indistinguishable from "no mail".
+      // Log unresolved owners: silent null looks identical to no mail and hides lost routing.
       console.warn('[orchestration] mailbox owner resolved to an unknown terminal', {
         mailboxHandle: handle,
         ownerHandle

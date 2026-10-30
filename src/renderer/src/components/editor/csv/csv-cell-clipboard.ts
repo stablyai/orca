@@ -10,6 +10,7 @@ import { serializeCsvRecord } from './csv-serialization'
 import { csvSelectionBounds, type CsvCellSelection } from './csv-cell-selection'
 import { csvSourceRow } from './csv-inspection'
 import type { CsvCellEdit } from './csv-text-document'
+import { CsvPreviewError } from './csv-preview-error'
 
 const CLIPBOARD_CELLS = 1024 * 1024
 
@@ -25,12 +26,12 @@ export function copyCsvSelection(
   for (let row = bounds.firstRow; row <= bounds.lastRow; row += 1) {
     const source = rows[csvSourceRow(row, inspectionRows)]
     if (!source) {
-      throw new Error('The selected CSV row no longer exists.')
+      throw new CsvPreviewError('row-missing')
     }
     const values: string[] = []
     for (let column = bounds.firstColumn; column <= bounds.lastColumn; column += 1) {
       if (++cells > CLIPBOARD_CELLS) {
-        throw new Error('Select fewer cells to copy at once.')
+        throw new CsvPreviewError('copy-too-many-cells')
       }
       values.push(source[column] ?? '')
     }
@@ -39,7 +40,7 @@ export function copyCsvSelection(
       measureUtf8ByteLength(record, { stopAfterBytes: CLIPBOARD_TEXT_WRITE_MAX_BYTES }).byteLength +
       (records.length ? 1 : 0)
     if (bytes > CLIPBOARD_TEXT_WRITE_MAX_BYTES) {
-      throw new Error('Selected cells are too large to copy safely.')
+      throw new CsvPreviewError('copy-too-large')
     }
     records.push(record)
   }
@@ -71,10 +72,10 @@ export function pasteCsvSelection(
     : pasted.reduce((maximum, row) => Math.max(maximum, row.length), 0)
   const viewRowCount = inspectionRows ? inspectionRows.length + 1 : rows.length
   if (bounds.firstRow + height > viewRowCount || bounds.firstColumn + width > columnCount) {
-    throw new Error('Paste exceeds the table. Add rows or columns first.')
+    throw new CsvPreviewError('paste-exceeds-table')
   }
   if (height * width > CLIPBOARD_CELLS) {
-    throw new Error('Select fewer cells to paste at once.')
+    throw new CsvPreviewError('paste-too-many-cells')
   }
   const edits: CsvCellEdit[] = []
   for (let row = 0; row < height; row += 1) {

@@ -47,7 +47,6 @@ describe('dedupeWorktreesByPath', () => {
     }
   )
 
-  // An ext4 tail is case-sensitive: folding it merged two real checkouts into one row.
   it.each<NodeJS.Platform>(['darwin', 'linux', 'win32'])(
     'keeps WSL worktrees that differ only in tail case on %s',
     (platform) => {

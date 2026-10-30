@@ -49,7 +49,7 @@ import {
 } from './mobile-tasks-legacy-foundation'
 import { useMobileTasksItemState } from './use-mobile-tasks-item-state'
 import { useMobileJiraConnectionState } from './use-mobile-jira-connection-state'
-import type { JiraIssueFilter } from '../../../src/shared/jira-types'
+import type { JiraIssueFilter } from '../../../src/shared/jira/jira-types'
 
 export function useMobileTasksRouteAndItemState() {
   const { hostId, taskSource } = useLocalSearchParams<{ hostId: string; taskSource?: string }>()
@@ -73,7 +73,7 @@ export function useMobileTasksRouteAndItemState() {
         }
       : null
   )
-  // Why one client: every call naming a server's repo then runs on that server.
+  // One routed client sends each server repo’s calls to its owner.
   const { client, repos, serverRepoList, repoListEnsureLoaded, repoListReload, repoHostLabels } =
     useTaskHostRepos({
       hostId,
@@ -126,8 +126,7 @@ export function useMobileTasksRouteAndItemState() {
   const [linearConnectError, setLinearConnectError] = useState('')
   const [taskSort, setTaskSort] = useState<TaskSort>('updated')
   const [selectedRepoIds, setSelectedRepoIds] = useState<Set<string>>(new Set())
-  // The saved choice narrowed to what is listed now (empty = all). Listing changes never prune the
-  // choice; a user edit rewrites it from what's shown, so it can drop a briefly gone server's ids.
+  // Readers narrow saved ids without pruning; only user edits may drop temporarily absent server repos.
   const effectiveRepoKey = [...reconcileRepoSelection(repos, [...selectedRepoIds])]
     .sort()
     .join('\n')

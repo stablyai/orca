@@ -1,9 +1,7 @@
 import type { ActiveAgentNotesSendResult } from './active-agent-note-send-result'
 import type { StructuredPromptDeliveryResult } from './structured-agent-session-launch-prompt'
 
-/** `delivered`: the notes' text reached the new chat, sent or waiting in its composer, so the notes
- *  let go of it. `failure`: why it did not, for the one report the notes' sender makes; absent
- *  when the chat already shows it (a start that failed, a cancelled launch). */
+/** Delivered releases notes once host/composer owns the text; failure is omitted when the chat already reports startup/cancellation. */
 export type NewAgentPromptOutcome = { delivered: boolean; failure?: ActiveAgentNotesSendResult }
 
 function notesFailure(
@@ -17,8 +15,6 @@ function notesFailure(
     : { status: 'not-writable', code: 'session-send-refused' }
 }
 
-/** Settles once a new agent's prompt reached its host or its composer, or did not: a start that
- *  failed shows its own failure in the new chat. */
 export function newAgentPromptOutcome(args: {
   delivery: Promise<
     Pick<StructuredPromptDeliveryResult, 'delivered'> & Partial<StructuredPromptDeliveryResult>

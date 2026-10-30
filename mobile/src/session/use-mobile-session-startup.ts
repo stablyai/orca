@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { translate } from '../i18n/mobile-i18n'
 import { worktreeActivate } from '../host-screen/host-screen-operations'
 import { headlessActivationNeedsHostRenderer } from '../worktree/worktree-activation-result'
 import { createInitialSessionAutoCreateState } from './use-initial-session-terminal-autocreate'
@@ -45,7 +46,7 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     ensureSessionTabs
   } = scope
   useEffect(() => {
-    // Why: Expo reuses this screen across worktrees; reset route state so it can't open stale UI or reject the next snapshot.
+    // Reset reused-route state so the next workspace cannot inherit stale UI or snapshot gates.
     sessionTabActionSheetRequestSeqRef.current += 1
     sessionTabActionSheetKeyboardHideSubRef.current?.remove()
     sessionTabActionSheetKeyboardHideSubRef.current = null
@@ -100,11 +101,11 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     if (connState !== 'connected') {
       return
     }
-    // Why: keep the current xterm visible while the reconnect snapshot hydrates, not a blank "Loading terminals" surface.
+    // Keep xterm visible while reconnect history hydrates.
     if (initializedHandlesRef.current.size === 0) {
       setTerminalsLoaded(false)
     }
-    // Why: clear the initialized flag so the reconnect scrollback replaces stale content instead of being dropped.
+    // Clear initialization so reconnect scrollback replaces stale content instead of being ignored.
     initializedHandlesRef.current.clear()
     let disposed = false
     const timers: ReturnType<typeof setTimeout>[] = []
@@ -115,9 +116,7 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
       timers.push(setTimeout(fn, ms))
     }
     void (async () => {
-      // Why the reply rather than a verdict: both activations report through here, and only one of
-      // them can fail to get a reply at all. Interpreting inside keeps the absent case spelled
-      // `null` instead of a hand-built refusal that has to stay in step with the operation.
+      // Interpret only actual replies; preserve absent activation replies as null rather than inventing refusals.
       const reportActivationOutcome = (response: RpcResponse | null): void => {
         const activation = response === null ? null : worktreeActivate.interpret(response)
         if (
@@ -125,11 +124,17 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
           activation?.accepted === true &&
           headlessActivationNeedsHostRenderer(activation.value)
         ) {
-          showToast('Open Orca on the host to wake sleeping agents.', 3000)
+          showToast(
+            translate(
+              'session.useStartup.wakeAgents',
+              'Open Orca on the host to wake sleeping agents.'
+            ),
+            3000
+          )
         }
       }
       if (client && created !== '1' && !isFloatingWorkspaceRoute) {
-        // Why: hydrate host-owned tabs without pulling other paired clients (esp. desktop) into this worktree.
+        // Hydrate tabs without navigating other paired clients into this workspace.
         void worktreeActivate
           .request(client, {
             worktree: `id:${worktreeId}`,

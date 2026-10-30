@@ -26,8 +26,6 @@ export type CdpPointerState = {
   lastClick: LastPointerClick | null
 }
 
-// Why: keyed by the WebContents so per-tab pointer state can never leak across tabs and
-// dies with the tab instead of needing teardown hooks.
 const pointerStates = new WeakMap<WebContents, CdpPointerState>()
 
 export function cdpPointerStateFor(webContents: WebContents): CdpPointerState {
@@ -46,8 +44,7 @@ export function cdpPointerStateFor(webContents: WebContents): CdpPointerState {
   return state
 }
 
-// Why: Chromium only fires dblclick when the second press reports clickCount 2, so a
-// repeat at the same spot inside the interval escalates. Cycles 1, 2, 3, 1 like a real mouse.
+// Chromium needs clickCount 2 on the second press to emit dblclick.
 export function trackCdpClickCount(state: CdpPointerState, button: CdpPointerButton): number {
   const now = Date.now()
   const previous = state.lastClick
@@ -62,9 +59,6 @@ export function trackCdpClickCount(state: CdpPointerState, button: CdpPointerBut
   return count
 }
 
-// Why: the helper rejected a non-finite coordinate outright and silently coerced a
-// non-finite wheel delta to 100; CDP would reject with an invalid-params error naming no
-// argument. Reject both here so the caller learns which value was bad.
 export function assertFinitePointerValues(values: Record<string, number>): void {
   for (const [name, value] of Object.entries(values)) {
     if (!Number.isFinite(value)) {
@@ -81,12 +75,10 @@ export function pressCdpPointerButton(state: CdpPointerState, button: CdpPointer
 
 export function releaseCdpPointerButton(state: CdpPointerState, button: CdpPointerButton): void {
   state.buttons &= ~cdpPointerButtonMask(button)
-  // Why: a chorded release leaves the still-held button addressable by a later
-  // unqualified mouseUp instead of falling back to left.
+  // An unqualified mouseUp must still release a held button after a chorded release.
   state.button = cdpPointerButtonFromMask(state.buttons)
 }
 
-// Why: the helper always released left, so a right-button press stayed stuck forever.
 export function resolveCdpPointerReleaseButton(state: CdpPointerState): string | undefined {
   return state.button === 'none' ? undefined : state.button
 }

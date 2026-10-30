@@ -13,12 +13,7 @@ function slugify(value: string): string {
     .replace(/^[-.]+|[-.]+$/g, '')
 }
 
-/**
- * Every multi-skill bundle used to publish as `shared-skills`, so a list of
- * links showed the same name N times. Naming a bundle after its first skill and
- * how many others ride along makes each link identifiable without asking the
- * publisher for a name.
- */
+/** Name bundles after their first skill and remaining count so published links remain distinguishable. */
 export function derivedBundleName(skills: readonly DiscoveredSkill[]): string {
   const first = slugify(skills[0]?.name ?? '')
   if (!first) {

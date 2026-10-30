@@ -22,6 +22,7 @@ import { BrowserCookieImportMachineNotice } from '../BrowserCookieImportMachineN
 import { useAppStore } from '../../store'
 import { BROWSER_FAMILY_LABELS } from '../../../../shared/constants'
 import { translate } from '@/i18n/i18n'
+import { browserCookieImportFailureText } from '@/lib/browser-cookie-import-error-copy'
 
 type DetectedBrowser = {
   family: string
@@ -89,7 +90,7 @@ export function BrowserProfileRow({
         result
       )
     } else {
-      toast.error(result.reason)
+      toast.error(browserCookieImportFailureText(result))
     }
   }
 
@@ -106,7 +107,7 @@ export function BrowserProfileRow({
         result
       )
     } else if (result.reason !== 'canceled') {
-      toast.error(result.reason)
+      toast.error(browserCookieImportFailureText(result))
     }
   }
 
@@ -114,9 +115,7 @@ export function BrowserProfileRow({
     ? `${BROWSER_FAMILY_LABELS[profile.source.browserFamily] ?? profile.source.browserFamily}${profile.source.profileName ? ` (${profile.source.profileName})` : ''}`
     : translate('auto.components.settings.BrowserProfileRow.796d846483', 'No cookies imported')
 
-  // Why: uses div[role=button] instead of <button> to avoid nested <button>
-  // elements — the dropdown trigger and trash actions inside also render as
-  // <button>, which is invalid HTML and causes React hydration warnings.
+  // Use role=button because nested dropdown/trash buttons make a native button invalid and trigger hydration warnings.
   return (
     <div
       role="button"
@@ -149,8 +148,7 @@ export function BrowserProfileRow({
         <DropdownMenu
           onOpenChange={(open) => {
             if (open) {
-              // Why: macOS treats other browsers' profile folders as app
-              // data. Only probe them when the user opens the import menu.
+              // Probe profile folders only when import opens; macOS treats them as protected app data.
               void fetchDetectedBrowsers()
             }
           }}

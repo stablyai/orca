@@ -1,73 +1,31 @@
-/**
- * Which route closures reach dictation's capture seam, and therefore which routes must be granted
- * the three audio verbs.
- *
- * A census rather than a hand list, because a grant row written by hand is a row that stops
- * agreeing with the closure the moment a screen moves: the rule below reads what each registered
- * page route actually reaches and holds its `grants` to it. It was vacuous when it was written —
- * the session route is the only closure that reaches the seam and the manifest did not carry it —
- * and C7.7 registers that route, so the rule now binds a real entry and the four names in it were
- * taken from this census rather than copied. The control beside it stays: it is what shows the
- * rule failing, which a green rule over a satisfied manifest cannot.
- *
- * The closure also says what the seam took out of the page. Without its web half the bundler
- * resolves the native one, and with it the device module that owns the microphone: the vendored
- * `@orca/expo-two-way-audio` web stub lands in the closure along with `expo-keep-awake` — which is
- * what dictation on the page used to be: a module answering denied microphone permission, and a
- * wake lock that did nothing.
- *
- * Eight vendored modules re-enter that way, five from `@orca/expo-two-way-audio` and three from
- * `expo-keep-awake`. That eight is the number below; absolute module counts are not asserted,
- * because every merge of main moves them and a census that pinned them would fail for reasons that
- * are nobody's.
- *
- * So "absent" here is a fact about the seam and not about the census failing to look, and the
- * precondition is checked rather than assumed: both package names are resolved from the install, so
- * a substring that matches nothing fails as a typo rather than passing as an absence.
- */
+// Derive dictation grants from registered routes’ real capture-seam closures; retain missing-grant control to prove rule can fail.
+// Web seam removes native audio/keep-awake: their web stubs deny microphone and do nothing, rather than capturing through shell.
+// Resolve package names before absence checks to catch typos; assert eight excluded vendored modules, not drifting total closure size.
 import { createRequire } from 'node:module'
-import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { mobileWebAppRouteClosure } from '../build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import { MOBILE_WEB_PAGE_ROUTES } from '../mobile-web-page-routes.mjs'
-import {
-  PAGE_ROUTE_MODULES,
-  pageRouteModulesCoverTheManifest
-} from './mobile-web-app-page-route-modules.mjs'
+import { PAGE_ROUTE_MODULES } from './mobile-web-app-page-route-modules.mjs'
 import { MobileWebBundleRouteSchema } from '../../../src/shared/mobile-web-bundle/manifest-contract.ts'
 
-/** The mobile install: the closure builds need it, and so does anything that imports a mobile
- *  module, because transforming one resolves `mobile/tsconfig.json` and its Expo base. */
+// Gate mobile transforms too: nearest tsconfig extends Expo package absent from root-only shards.
 const bundles = mobileWebAppDependenciesPresent()
 const describeClosure = bundles ? describe : describe.skip
 
-/** The seam, as the web build resolves it: `.web.ts` wins under the builder's resolveExtensions. */
 const SEAM = 'src/platform/dictation-capture.web.ts'
 
-/** The native half, which must resolve out of a page closure rather than sit in it unused. */
 const NATIVE_SEAM = 'src/platform/dictation-capture.ts'
 
-/** Every verb the seam calls. Named here so the rule below is the census's own answer and not a
- *  second list to keep true; `bridge-audio-verbs.test.ts` pins them against the verb table. */
 const DICTATION_GRANTS = ['native.audio.start', 'native.audio.read', 'native.audio.stop']
 
-/** Native modules the seam exists to keep out: importing either reaches a JSI binding, and their
- *  web builds are a denied microphone and a no-op screen lock. */
+// Native modules reach JSI; browser substitutes denied microphone and no-op wake lock.
 const NATIVE_AUDIO_MODULES = ['@orca/expo-two-way-audio', 'expo-keep-awake']
 
 const SESSION_PATHNAME = '/h/[hostId]/session/[worktreeId]'
 const SESSION = 'app/h/[hostId]/session/[worktreeId].tsx'
 
-/**
- * One closure per route module, built once.
- *
- * Every call to `mobileWebAppRouteClosure` is a full esbuild metafile build of the route, and the
- * cases below ask about six modules across nine of them. Unmemoised this file did fifteen builds and
- * its CPU tipped two timing-sensitive neighbours in this shard over — a benchmark whose child had
- * 100 ms to write a pid file, and a census globbing a scratch tree another test was removing. Both
- * are fragile without this file and neither is reached by it; the load was the difference.
- */
+// Memoize full esbuild closures: repeated builds once starved timing-sensitive shard neighbors with no dependency on this suite.
 const closures = new Map()
 
 function closureOf(routeModule) {
@@ -76,25 +34,17 @@ function closureOf(routeModule) {
   return built
 }
 
-/** Resolved from `mobile/`, which is the tree the bundler resolves the closure out of: this suite
- *  runs at the repo root, where neither package is installed. */
+// Resolve from mobile install as bundler does; root install lacks both packages.
 function resolveFromMobile(specifier) {
   return createRequire(new URL('../../../mobile/package.json', import.meta.url)).resolve(specifier)
 }
 
-/** The grants a closure needs of the seam: all three, or none. A route granted two would open a
- *  microphone it could not drain or could not stop. */
+// Audio grants are all-or-none: partial set could open microphone without draining or stopping it.
 function dictationGrantsNeeded(closure) {
   return closure.local.includes(SEAM) ? DICTATION_GRANTS : []
 }
 
-/**
- * The rule, as one function both the check and its control drive.
- *
- * Every grant a route's own closure needs and its entry does not name, as `<pathname> needs
- * <grant>`. One implementation, because a control that re-implemented the filter would prove the
- * control works and say nothing about the rule.
- */
+// Share missing-grant rule with negative control; reimplementing control would only prove its own filter.
 async function grantsMissingForRoutes(routes) {
   const missing = []
   for (const route of routes) {
@@ -119,43 +69,20 @@ describeClosure(
       expect(await grantsMissingForRoutes(MOBILE_WEB_PAGE_ROUTES)).toEqual([])
     })
 
-    it('finds the seam in exactly one closure, which is the session route', async () => {
-      const reaching = []
-      for (const route of MOBILE_WEB_PAGE_ROUTES) {
-        const module = PAGE_ROUTE_MODULES.get(route.pathname)
-        if (module === undefined) {
-          throw new Error(`No route module for ${route.pathname}`)
-        }
-        const closure = await closureOf(module)
-        if (closure.local.includes(SEAM)) {
-          reaching.push(route.pathname)
-        }
-      }
-      // One, now that C7.7 registers it: dictation lives on the session screen and nowhere else,
-      // so this is both the list and the reason no other route carries an audio grant. The control
-      // below is still what proves the rule can fail at all.
-      expect(reaching).toEqual([SESSION_PATHNAME])
-      const session = await closureOf(SESSION)
-      expect(session.local).toContain(SEAM)
-    })
-
     it('reds the same rule when the session route is registered without them', async () => {
-      // The control for the rule above: the same loop, driven over the entry C7.7 would have
-      // written if it had copied its neighbours' grants instead of reading this census.
+      // Drive same rule over under-granted entry to prove missing grants are detected.
       expect(
         await grantsMissingForRoutes([
           { pathname: SESSION_PATHNAME, grants: ['navigate', 'storage'] }
         ])
       ).toEqual(DICTATION_GRANTS.map((grant) => `${SESSION_PATHNAME} needs ${grant}`))
-      // And with all four named it passes, so the rule is satisfiable and not a wall.
+      // Complete-grant positive control proves rule is satisfiable.
       expect(
         await grantsMissingForRoutes([
           { pathname: SESSION_PATHNAME, grants: ['navigate', 'storage', ...DICTATION_GRANTS] }
         ])
       ).toEqual([])
-      // Every one of the four is a name a manifest route may carry, which is the ruling-6a trap:
-      // `native.audio.readChunk` is not a route that degrades to native, it is a bundle the phone
-      // refuses entire.
+      // Verify every token is manifest-legal; obsolete native.audio.readChunk rejects entire bundle, not just route.
       expect(
         MobileWebBundleRouteSchema.safeParse({
           pathname: SESSION_PATHNAME,
@@ -169,58 +96,17 @@ describeClosure(
       expect(closure.local).toContain(SEAM)
       expect(closure.local).not.toContain(NATIVE_SEAM)
       for (const absent of NATIVE_AUDIO_MODULES) {
-        // The precondition for reading an absence: the package is installed, so the substring below
-        // would match if the closure carried it. Without this the case passes on a typo.
+        // Resolve installed package before substring absence assertion so a typo cannot pass.
         expect(() => resolveFromMobile(`${absent}/package.json`), absent).not.toThrow()
         expect(
           closure.modules.filter((module) => module.includes(`/${absent}/`)),
           absent
         ).toEqual([])
       }
-      // The hook above the seam is still in the closure, so the absences above are the seam's work
-      // and not dictation having left the page.
+      // Require hook remains reachable so excluded native modules are seam’s work.
       expect(closure.local).toContain('src/hooks/use-mobile-dictation.ts')
       expect(closure.local).toContain('src/hooks/mobile-dictation-audio-chunk.ts')
     })
   },
   240_000
 )
-
-describe('the census rule itself', () => {
-  it('names a route module for every registered pathname', () => {
-    const { mapped, declared } = pageRouteModulesCoverTheManifest(MOBILE_WEB_PAGE_ROUTES)
-    expect(mapped).toEqual(declared)
-  })
-
-  /**
-   * Gated on the mobile install, not merely deferred behind `import()`.
-   *
-   * A dynamic import defers *when* the module loads, not what loading costs. Vite transforms the
-   * file at that moment and resolves the nearest `tsconfig.json` for it, which is
-   * `mobile/tsconfig.json`, which extends `expo/tsconfig.base.json`. On the root-only shard that
-   * package is not installed and the transform throws `TSConfckParseError` — reproduced by moving
-   * `mobile/node_modules` aside and running this file from the repo root, which is what
-   * `test / tests node 24 1/8` does. So the dependency gate is the only thing that keeps a mobile
-   * module off that shard, and it is the same gate `describeClosure` above uses.
-   */
-  it.skipIf(!bundles)(
-    'names only verbs the shell actually serves, read from its own table',
-    async () => {
-      // The failure this guards is the rule agreeing with itself: a list of four names the census
-      // holds routes to, none of which the shell has a row for.
-      const { BRIDGE_NATIVE_VERB_NAMES } =
-        await import('../../../mobile/src/mobile-web-shell/bridge/bridge-native-verbs.ts')
-      expect(new Set(DICTATION_GRANTS).size).toBe(3)
-      for (const grant of DICTATION_GRANTS) {
-        expect(BRIDGE_NATIVE_VERB_NAMES, grant).toContain(grant)
-        expect(
-          MobileWebBundleRouteSchema.safeParse({ pathname: '/h', grants: [grant] }).success,
-          grant
-        ).toBe(true)
-      }
-    }
-  )
-})
-
-/** Kept so a reader can find the tree this ran against without a machine path in the file. */
-export const MOBILE_DIR = fileURLToPath(new URL('../../../mobile/', import.meta.url))

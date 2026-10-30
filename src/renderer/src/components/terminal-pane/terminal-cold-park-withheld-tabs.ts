@@ -1,11 +1,4 @@
-/**
- * Last gate between a cold-park candidate and an unmounted pane.
- *
- * Two reasons withhold a tab, both settling on the safe mounted side: the byte
- * watchers cannot cover it, or a verdict-flip burst pinned it. The pin deadline
- * is returned because it is also the only remaining recheck wakeup once damping
- * has stopped the churn that was waking the parking effect.
- */
+/** Keep panes mounted when watchers cannot cover them or flip damping pins them; return pin expiry because settled damping removes the other wakeups. */
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
   getParkVerdictUnparkPinUntilMs,
@@ -40,8 +33,7 @@ export function withholdUnparkableTerminalTabs(args: {
     if (parkVerdictPinUntilMs !== null) {
       parkVerdictPinUntilMsByTabId.set(terminalTab.id, parkVerdictPinUntilMs)
     }
-    // Why coverage matters: a parked tab the watchers cannot reach goes silent
-    // for bells/titles/completions — the failure that sank the first attempt.
+    // Uncovered parked tabs lose bells/titles/completions.
     if (
       parkVerdictPinUntilMs !== null ||
       !canWatcherCoverParkedTerminalTab(args.worktreeId, terminalTab)

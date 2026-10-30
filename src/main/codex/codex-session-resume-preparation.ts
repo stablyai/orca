@@ -5,15 +5,7 @@ import {
 
 export type VerifiedCodexResumeSource = { homePath: string; transcriptPath: string }
 
-/**
- * The launch decision for an automatic Codex resume: pin the verified origin home, or
- * fall back to a fresh session whose resume argv the PTY layer drops (#10793). The
- * caller supplies `resolveVerifiedResumeHome` because migration, project trust and hook
- * repair only run once provenance is verified — a fresh outcome must skip all of them.
- *
- * The three rescan ranking inputs stay required through this hop (#10801): defaulting or
- * nulling any of them would silently degrade the legacy rescan to pure path order.
- */
+/** Only verified provenance may trigger migration, project trust or hook repair. */
 export async function prepareCodexSessionResume(args: {
   sessionId: string
   transcriptPath: string | undefined

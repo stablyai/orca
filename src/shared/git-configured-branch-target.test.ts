@@ -1,7 +1,4 @@
-// Why: resolving a URL-valued `branch.<name>.remote` (or `remote.pushDefault`) to a
-// remote name used to cost `git remote` plus one serial `git remote get-url` per remote.
-// `hasConfiguredBranchPushTarget` resolves up to two of them, so a 58-remote repo paid
-// up to 118 subprocesses for one question. These tests pin the count and result parity.
+// Pin URL-remote resolution parity and spawn counts: two lookups in a 58-remote repo formerly cost up to 118 subprocesses.
 
 import { describe, expect, it } from 'vitest'
 import {
@@ -100,8 +97,7 @@ describe('hasConfiguredBranchPushTarget', () => {
         [`branch.${BRANCH}.merge`]: 'refs/heads/other'
       }
     })
-    // Unchanged no-match fallback: both remotes stay the raw URL, so they still agree
-    // and the differently named merge branch is still pushable.
+    // Retain raw-URL equality on no match so a differently named merge branch remains pushable.
     await expect(hasConfiguredBranchPushTarget(runGit, BRANCH)).resolves.toBe(true)
   })
 })

@@ -6,8 +6,11 @@ import {
   isNetworkSharePath,
   isWindowsReservedDeviceName
 } from '../../ipc/automatic-load-path-text'
-import { resolveAuthorizedPath, type ResolveAuthorizedPathOptions } from '../../ipc/filesystem-auth'
-import { isENOENT } from '../../ipc/filesystem-path-containment'
+import {
+  resolveAuthorizedPath,
+  type ResolveAuthorizedPathOptions
+} from '../../ipc/filesystem/filesystem-auth'
+import { isENOENT } from '../../ipc/filesystem/filesystem-path-containment'
 import { nativeChatScratchRootFor } from '../../native-chat/native-chat-scratch-folder'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 
@@ -18,7 +21,6 @@ function chatScratchRoot(): string {
   return nativeChatScratchRootFor(getProfileUserDataPath())
 }
 
-/** Runtime file commands' root check: the store's roots plus this host's chat scratch root. */
 export function resolveRuntimeAuthorizedPath(
   targetPath: string,
   store: RuntimeStore,
@@ -49,16 +51,11 @@ export function extraRootsForPersistedOpenFile(filePath: string): readonly strin
   return [resolved]
 }
 
-/** A resolved worktree id that is a selector can only be a scratch folder's: real rows have ids. */
 export function isChatScratchWorktreeId(worktreeId: string): boolean {
   return worktreeId.startsWith(PATH_SELECTOR_PREFIX)
 }
 
-/**
- * The folder a `path:<this host's chat-scratch root>/<32 hex>` selector names, or null. A chat's
- * scratch folder has no workspace row; only this host's own folder answers, never a same-suffix
- * root elsewhere or a symlinked folder.
- */
+/** Only this host's exact scratch-root/32-hex folder may answer; reject lookalike roots and symlinks. */
 export async function resolveChatScratchSelectorFolder(selector: string): Promise<string | null> {
   if (!selector.startsWith(PATH_SELECTOR_PREFIX)) {
     return null

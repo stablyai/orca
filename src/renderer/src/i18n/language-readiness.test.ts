@@ -24,7 +24,7 @@ afterEach(() => vi.useRealTimers())
 describe('client-local startup language', () => {
   it('uses the local native snapshot over Chromium preferences and freezes it for startup', async () => {
     const probe = vi.fn().mockResolvedValue({
-      detectedTag: 'de-DE',
+      detectedTag: 'it-IT',
       status: 'unsupported',
       locale: 'en',
       source: 'native'
@@ -32,7 +32,7 @@ describe('client-local startup language', () => {
     installBridge(probe)
     const { initializeLanguageDetection } = await import('./language-readiness')
     expect(await initializeLanguageDetection()).toMatchObject({
-      detectedTag: 'de-DE',
+      detectedTag: 'it-IT',
       source: 'native'
     })
     await initializeLanguageDetection()

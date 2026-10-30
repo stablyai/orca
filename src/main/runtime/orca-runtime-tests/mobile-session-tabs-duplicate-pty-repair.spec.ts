@@ -11,8 +11,7 @@ import {
 import { planDuplicatePtyPaneRepair } from '../../persistence/terminal-topology/duplicate-pty-pane-repair'
 import type { WorkspaceSessionState } from '../orca-runtime-test-mocks.spec'
 
-// The windowless list reads main's stored session directly, so a terminal stored in two panes
-// of one tab is listed twice until main repairs the stored tree.
+// Windowless listing reads stored layout; duplicate PTY bindings need durable repair to avoid duplicate tabs.
 const duplicate = makeWorkspaceSessionWithHeadlessTerminal({
   terminalLayoutsByTabId: {
     'host-tab': makeHeadlessTerminalLayout({

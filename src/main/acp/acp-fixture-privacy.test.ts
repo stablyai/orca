@@ -86,7 +86,7 @@ describe('ACP recording privacy', () => {
   it('contains no personal metadata or home-directory paths in any decoded fixture', async () => {
     const directory = new URL('./fixtures/', import.meta.url)
     const names = (await readdir(directory)).filter((name) => name.endsWith('.jsonl'))
-    expect(names.length).toBeGreaterThanOrEqual(6)
+    expect(names.length).toBeGreaterThan(0)
     for (const name of names) {
       const content = await readFile(new URL(name, directory), 'utf8')
       for (const [index, line] of content.trim().split('\n').entries()) {

@@ -23,10 +23,7 @@ export function computeWorktreeSidebarHeaderDropPreview<
   rects: readonly TRect[]
   headerCount: number
   getId: (rect: TRect) => string
-  // Measured scroll-content height (same coordinate space as localY and the
-  // virtualizer-derived rect tops). Bounds the interior snap so it cannot
-  // fabricate a slot below the real list end. Optional: geometry-only unit
-  // tests omit it; live drags always pass container.scrollHeight.
+  // Measured scroll-content bottom bounds live snap slots; geometry-only tests may omit it.
   contentBottom?: number
 }): WorktreeSidebarHeaderDropPreview | null {
   if (args.rects.length === 0 || args.headerCount === 0) {
@@ -34,8 +31,7 @@ export function computeWorktreeSidebarHeaderDropPreview<
   }
 
   const localY = args.pointerY - args.containerTop + args.scrollTop
-  // Why: every preview branch, including estimated edge slots, must stay
-  // inside the measured list content rather than fabricate a reorder below it.
+  // Bound every preview branch, including estimated edge slots, by real list content.
   if (args.contentBottom !== undefined && localY > args.contentBottom) {
     return null
   }
@@ -85,10 +81,7 @@ export function computeWorktreeSidebarHeaderDropPreview<
     }
   }
 
-  // localY is in a section body or interior gap, not a header band. Snap to the
-  // nearer boundary slot instead of returning null: this interior dead zone was
-  // accidental scope of 22d5989ed (#6609 only required correct reorder indices),
-  // and vanishing here makes the drop a silent no-op.
+  // Snap interior section/gap drops to the nearest boundary so they cannot silently become no-ops.
   const boundary = pickNearestHeaderBoundarySlot(args.rects, localY)
   if (!boundary) {
     return null

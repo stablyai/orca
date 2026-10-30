@@ -1,8 +1,4 @@
-// Seeded VT stream generator for the serialize round-trip differential fuzz
-// (serialize-grid.differential.fuzz.test.ts). Unlike agent-tui-ansi-fuzz-stream
-// it deliberately covers everything SerializeAddon must carry, including the
-// ops that leave xterm lines longer than the grid: column shrinks in the
-// alternate buffer and in a non-reflowing (pre-21376 ConPTY) normal buffer.
+// Shrinking alternate or pre-21376 ConPTY buffers exercises lines wider than the grid.
 import { mulberry32 } from '../../shared/agent-tui-ansi-fuzz-stream'
 
 export type SerializeFuzzCategory = 'normal' | 'alt' | 'conpty'

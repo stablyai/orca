@@ -17,6 +17,9 @@ import { loadCustomKeys, saveCustomKeys, type CustomKey } from '../terminal/term
 import { DragReorderList } from './DragReorderList'
 import { useSerializedStoredState } from '../storage/use-serialized-stored-state'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
   TERMINAL_ACCESSORY_KEYS,
   type TerminalAccessoryKey
@@ -30,8 +33,7 @@ import {
   type TerminalAccessoryLayout
 } from '../terminal/terminal-accessory-layout'
 
-// Why: DragReorderList absolutely positions rows, so every row in a
-// reorderable section must share one fixed height.
+// Absolutely positioned DragReorderList rows require one fixed height per section.
 const REORDER_ROW_HEIGHT = 56
 
 function ShortcutBarRow({
@@ -43,6 +45,7 @@ function ShortcutBarRow({
   visible: boolean
   onToggle: (visible: boolean) => void
 }): React.JSX.Element {
+  useMobileColorScheme()
   return (
     <View style={styles.reorderRowContent}>
       <View style={styles.keycap}>
@@ -79,6 +82,8 @@ export function TerminalShortcutSettings({
   scrollContentHeight,
   onDragActiveChange
 }: Props): React.JSX.Element {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const {
     value: customKeys,
     setValue: setCustomKeys,
@@ -186,10 +191,14 @@ export function TerminalShortcutSettings({
 
   return (
     <>
-      <Text style={[styles.groupHeading, styles.groupTopGap]}>SHORTCUT BAR</Text>
+      <Text style={[styles.groupHeading, styles.groupTopGap]}>
+        {t('components.terminalShortcutSettings.shortcutBar', 'SHORTCUT BAR')}
+      </Text>
       <Text style={styles.groupDescription}>
-        Toggle keys to show or hide them, and hold the grip to drag a key into the order you want on
-        the terminal shortcut bar.
+        {t(
+          'components.terminalShortcutSettings.shortcutBarDescription',
+          'Toggle keys to show or hide them, and hold the grip to drag a key into the order you want on the terminal shortcut bar.'
+        )}
       </Text>
       <View style={[styles.section, styles.sectionTopGap]}>
         <DragReorderList
@@ -214,20 +223,29 @@ export function TerminalShortcutSettings({
           onPress={resetBuiltInKeys}
         >
           <View style={styles.rowContent}>
-            <Text style={styles.rowLabel}>Reset Defaults</Text>
+            <Text style={styles.rowLabel}>
+              {t('components.terminalShortcutSettings.resetDefaults', 'Reset Defaults')}
+            </Text>
             <Text style={styles.rowSublabel}>
-              Show every built-in shortcut key in the original order
+              {t(
+                'components.terminalShortcutSettings.resetDescription',
+                'Show every built-in shortcut key in the original order'
+              )}
             </Text>
           </View>
         </Pressable>
       </View>
 
-      <Text style={[styles.groupHeading, styles.groupTopGap]}>CUSTOM SHORTCUTS</Text>
+      <Text style={[styles.groupHeading, styles.groupTopGap]}>
+        {t('components.terminalShortcutSettings.customShortcuts', 'CUSTOM SHORTCUTS')}
+      </Text>
       <View style={[styles.section, styles.sectionTopGap]}>
         {customKeys.length === 0 ? (
           <>
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No custom shortcuts defined yet.</Text>
+              <Text style={styles.emptyText}>
+                {t('components.terminalShortcutSettings.empty', 'No custom shortcuts defined yet.')}
+              </Text>
             </View>
             <View style={styles.separator} />
           </>
@@ -260,7 +278,11 @@ export function TerminalShortcutSettings({
                   onPress={() => handleDeleteCustomKey(key)}
                   hitSlop={8}
                   accessibilityRole="button"
-                  accessibilityLabel={`Remove ${key.label}`}
+                  accessibilityLabel={t(
+                    'components.terminalShortcutSettings.removeShortcut',
+                    'Remove {{label}}',
+                    { label: key.label }
+                  )}
                 >
                   <X size={16} color={colors.statusRed} />
                 </Pressable>
@@ -273,8 +295,15 @@ export function TerminalShortcutSettings({
           onPress={() => setShowCustomKeyModal(true)}
         >
           <View style={styles.rowContent}>
-            <Text style={styles.rowLabel}>Add Custom Shortcut…</Text>
-            <Text style={styles.rowSublabel}>Create key combo or text macro</Text>
+            <Text style={styles.rowLabel}>
+              {t('components.terminalShortcutSettings.addShortcut', 'Add Custom Shortcut…')}
+            </Text>
+            <Text style={styles.rowSublabel}>
+              {t(
+                'components.terminalShortcutSettings.addDescription',
+                'Create key combo or text macro'
+              )}
+            </Text>
           </View>
           <ChevronRight size={16} color={colors.textMuted} />
         </Pressable>
@@ -289,7 +318,7 @@ export function TerminalShortcutSettings({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   groupHeading: {
     fontSize: 11,
     fontWeight: '600',
@@ -325,8 +354,7 @@ const styles = StyleSheet.create({
   rowPressed: {
     backgroundColor: colors.bgRaised
   },
-  // Why: rows inside DragReorderList get a fixed height and a trailing grip
-  // handle from the list itself, so content only pads on the left.
+  // Reorder list supplies fixed height/trailing grip; pad content only on left.
   reorderRowContent: {
     flex: 1,
     height: '100%',
@@ -387,4 +415,4 @@ const styles = StyleSheet.create({
   deleteButtonPressed: {
     backgroundColor: 'rgba(239, 68, 68, 0.2)'
   }
-})
+}))

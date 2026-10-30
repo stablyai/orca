@@ -1,7 +1,4 @@
-// A newer build's row kind is never damage: like a newer row version, it fails this build's load as
-// a newer Orca's chat with every row kept, so the newer build still reads the whole chat after an
-// upgrade.
-// A row whose stored sequence and body disagree is damage, which fails the load with every row kept.
+// Unsupported row kinds require a newer reader; sequence mismatches are damage. Neither deletes history.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -61,7 +58,6 @@ export function registerJournalUnknownRowKindTests(): void {
     return journal.snapshot().items.map((entry) => entry.itemId)
   }
 
-  /** What a newer build would write: a kind this build does not know, in the envelope every row keeps. */
   function newerRow(epoch: string, seq: number, extra: Record<string, unknown> = {}) {
     return {
       v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
@@ -79,9 +75,7 @@ export function registerJournalUnknownRowKindTests(): void {
     return journals.open({ identity: IDENTITY, stateDirectory: root })
   }
 
-  /** Closes the chat, applies `edit` to its stored rows as a newer build or a bad write would, and
-   *  reopens it as a restarted host would. */
-  /** Rewrites rows with every journal closed, so the caller's next open replays them. */
+  /** Edit with all handles closed so the next open replays changed rows. */
   async function rewriteClosed(
     edit: (put: (seq: number, json: string) => void) => void = () => {}
   ) {
@@ -112,15 +106,13 @@ export function registerJournalUnknownRowKindTests(): void {
     return stored().map((row) => [row.seq, JSON.parse(row.rowJson).kind])
   }
 
-  /** A journal of its anchor and one item, closed: the next row lands at sequence 3. */
   async function journalWithOneItem(): Promise<string> {
     const first = await open()
     await first.appendItem(item(0), { kind: 'status', text: 'before' }, SCOPE)
     return first.epoch
   }
 
-  /** One valid row of every kind this build writes; a kind added to the union without one here
-   *  fails to compile. */
+  /** Require a fixture for every row kind at compile time. */
   function rowOfEveryKind(): { [Kind in JournalRow['kind']]: Extract<JournalRow, { kind: Kind }> } {
     const base = { v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION, epoch: 'epoch-1', fence: 1, ts: 1 }
     const providerHandle = agentSessionJournalProviderHandle(IDENTITY)
@@ -237,7 +229,6 @@ export function registerJournalUnknownRowKindTests(): void {
       expect(stored()).toEqual(refused)
       expect(stored().find((row) => row.seq === 3)?.rowJson).toBe(newer)
 
-      // Stand-in for the newer build after an upgrade: the same place holds a kind it reads.
       const upgraded = await restartAfter((put) => put(3, known))
       expect(itemIds(upgraded)).toHaveLength(4)
       await upgraded.appendItem(item(4), { kind: 'status', text: 'after' }, SCOPE)

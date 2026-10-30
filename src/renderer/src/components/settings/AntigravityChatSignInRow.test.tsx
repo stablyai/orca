@@ -87,7 +87,6 @@ async function showRow(owner: RuntimeClientTarget) {
       />
     </TooltipProvider>
   )
-  // Sign in stays disabled until the host's snapshot lands.
   await act(async () => undefined)
   return view
 }
@@ -103,7 +102,6 @@ it('opens the link once across status answers and shows signed in', async () => 
   await act(async () => publish(owner, { flowId: 'f', phase: 'waiting', url }))
   await screen.findByText('Finish signing in in your browser.')
   await act(async () => publish(owner, { flowId: 'f', phase: 'waiting', url }))
-  // The browser's sign-in is checked with a session before it counts.
   await act(async () => publish(owner, { flowId: 'f', phase: 'verifying' }))
   await screen.findByText('Finishing sign-in…')
   await act(async () => publish(owner, { flowId: 'f', phase: 'signedIn' }, 'signedIn'))
@@ -135,7 +133,7 @@ it("shows another client's sign-in without letting this one act on it", async ()
   publish(owner, { flowId: 'done', phase: 'cancelled' })
   await showRow(owner)
   await screen.findByText('Sign-in cancelled.')
-  // Once the host answers, its sign-in replaces the settled flow's outcome.
+  // Authoritative host auth replaces settled flow outcomes.
   await act(async () => publish(owner, { flowId: 'done', phase: 'cancelled' }, 'signedOut'))
   await screen.findByText('Not signed in on this computer.')
   await act(async () => publish(owner, { flowId: null, phase: 'waiting' }))

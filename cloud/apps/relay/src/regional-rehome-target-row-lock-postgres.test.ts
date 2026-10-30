@@ -18,8 +18,7 @@ const describePostgres = databaseUrl ? describe : describe.skip
 // Roughly the round trip from an Asia cell to the us-central1 database.
 const STATEMENT_DELAY_MS = 150
 
-// Everything the fleet-wide rehome lock used to hold, per cell, plus the
-// admission and region tables the commit reads.
+// Probe the formerly fleet-locked tables plus admission/region tables read by commit.
 const CELL_TABLES = [
   'relay_cells',
   'relay_cell_runtime',
@@ -177,7 +176,6 @@ describePostgres('PostgreSQL regional rehome target-row lock', () => {
     control.enabled = false
 
     expect(result).toEqual({ outcome: 'committed' })
-    // The transaction really spans many cross-region round trips.
     expect(trips.length).toBeGreaterThanOrEqual(15)
     expect(trips[trips.length - 1]!.sql).toBe('COMMIT')
     for (const trip of trips) {
@@ -186,7 +184,6 @@ describePostgres('PostgreSQL regional rehome target-row lock', () => {
         expect({ sql: trip.sql, key, free }).toEqual({ sql: trip.sql, key, free: true })
       }
     }
-    // Locked at exactly one trip boundary, the one before COMMIT.
     for (const key of TARGET_LOCKED) {
       expect(trips.filter((trip) => !trip.lockable[key]).map((trip) => trip.sql)).toEqual([
         'COMMIT'
@@ -263,8 +260,7 @@ describePostgres('PostgreSQL regional rehome target-row lock', () => {
     await expectNothingCommitted(context)
   })
 
-  // A placement that reserves on the target between the candidate read and the target-row
-  // statement: modelled by raising the target's enforced units right before that statement.
+  // Inject a placement race by raising enforced target units immediately before the final target-row write.
   async function fillTargetBefore(
     context: Awaited<ReturnType<typeof fixture>>,
     freeSeats: number
@@ -339,8 +335,7 @@ describePostgres('PostgreSQL regional rehome target-row lock', () => {
     sequence++
     let now = 1_000_000
     const suffix = String(sequence)
-    // An Asia source correcting to a US target: the direction whose commit
-    // held the whole inventory for ~3.6s in production.
+    // Asia→US formerly held the whole inventory for ~3.6s in production.
     const source = cell(suffix, 'source', 'asia-east2')
     const target = cell(suffix, 'target', 'us-central1')
     const bystander = cell(suffix, 'zbystander', 'asia-east2')

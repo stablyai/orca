@@ -36,6 +36,8 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
       automationId: null,
       rowKey: null,
       ownerKey: null,
+      navigation: null,
+      reloadToken: -1,
       runs: [],
       notice: null
     })

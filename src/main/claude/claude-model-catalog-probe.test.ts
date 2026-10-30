@@ -27,7 +27,7 @@ const HOME = (path: string): { variable: string; path: string } => ({
 })
 
 function probeDeps(command = `"${process.execPath}"`): {
-  resolveCommand: () => string
+  resolveCommand: () => { command: string; prefixArgs: string[] }
   resolveEnv: () => Record<string, string>
   resolveInheritedEnv: () => Promise<Record<string, string>>
   resolveAuthPolicy: () => typeof AUTH_POLICY
@@ -62,7 +62,7 @@ const LISTED = `${JSON.stringify({
 })}\n`
 
 describe('claude model catalog probe', () => {
-  it.each([`"${process.execPath}"`, ''])(
+  it.each([`"${process.execPath}"`, '', `"${process.execPath}" run -- claude`])(
     'lists with the session executable and env for Command %j',
     async (command) => {
       const deps = probeDeps(command)
@@ -81,12 +81,9 @@ describe('claude model catalog probe', () => {
           id: 'sonnet',
           label: 'Sonnet',
           isDefault: false,
-          // The parser's thinking default is not what Claude runs; naming it would label the effort.
           efforts: [{ value: 'low', label: 'Low' }]
         }
       ])
-      // The probe's env is exactly the session launch's resolved env for the same deps, plus the
-      // account pin, and the listing runs the resolved binary, never the bare spec name.
       const invocation = await resolveClaudeStructuredInvocation(deps, (env) => ({
         ...env,
         CLAUDE_CONFIG_DIR: '/homes/account-a'
@@ -95,7 +92,12 @@ describe('claude model catalog probe', () => {
       const [launch, options] = calls[0]!
       expect(launch).toEqual({
         command: invocation.command,
-        args: [...CLAUDE_MODEL_LIST_ARGS, '--setting-sources', 'user,project,local'],
+        args: [
+          ...invocation.prefixArgs,
+          ...CLAUDE_MODEL_LIST_ARGS,
+          '--setting-sources',
+          'user,project,local'
+        ],
         cwd: process.cwd(),
         stdin: expect.stringContaining(CLAUDE_MODEL_LIST_STDIN)
       })
@@ -103,7 +105,6 @@ describe('claude model catalog probe', () => {
     }
   )
 
-  // The rows `claude` 2.1.280 lists: what a chat naming no model runs, and its auto support.
   it('keeps the CLI default and account Fast and per-row auto support', async () => {
     const listing = `${JSON.stringify({
       type: 'control_response',
@@ -150,7 +151,6 @@ describe('claude model catalog probe', () => {
     })
     await probe(HOME(join(homedir(), '.claude')))
     await probe(HOME('/homes/account-a'))
-    // An explicit default would move the CLI off its default Keychain item (claude.ai OAuth).
     expect(envs[0]).not.toHaveProperty('CLAUDE_CONFIG_DIR')
     expect(envs[1]).toMatchObject({ CLAUDE_CONFIG_DIR: '/homes/account-a' })
   })
@@ -164,7 +164,7 @@ describe('claude model catalog probe', () => {
     await expect(probe(HOME('/homes/a'))).rejects.toThrow(/listed no models/)
   })
 
-  it.each(['npx claude', 'claude --verbose', '/missing/claude', './claude'])(
+  it.each(['launcher $SECRET claude', 'FOO=1 claude', '/missing/claude', './claude'])(
     'lists nothing, and never probes the stock CLI, for Command %s',
     async (command) => {
       const runListing = vi.fn()
@@ -183,7 +183,7 @@ describe('claude model catalog probe', () => {
       try {
         const parentFile = join(folder, 'parent-pid')
         const standIn = join(folder, 'claude')
-        // Answers only after the session stdin-end grace, the way a slow `claude -p` does.
+        // Delay beyond the stdin-end grace to verify supervised one-shot lifetime.
         writeFileSync(
           standIn,
           `#!${process.execPath}
@@ -201,7 +201,7 @@ process.stdin.on('end', () => setTimeout(() => {
         chmodSync(standIn, 0o755)
         const probe = createClaudeModelCatalogProbe({
           ...probeDeps(),
-          resolveCommand: () => standIn,
+          resolveCommand: () => ({ command: standIn, prefixArgs: [] }),
           resolveInheritedEnv: async () => ({ PATH: process.env.PATH ?? '', HOME: folder })
         })
 
@@ -209,7 +209,6 @@ process.stdin.on('end', () => setTimeout(() => {
           origin: 'probe',
           models: [{ id: 'sonnet', label: 'Sonnet' }]
         })
-        // The stand-in's parent is the supervisor, never Orca itself.
         expect(Number(readFileSync(parentFile, 'utf8'))).not.toBe(process.pid)
       } finally {
         rmSync(folder, { recursive: true, force: true })
@@ -231,7 +230,6 @@ describe('Claude catalog availability', () => {
     )
   })
 
-  // Claude has no pre-send sign-in verdict: its real start refusal is the only one.
   it.each([false, true])('lists with no sign-in verdict, managed=%s', async (managed) => {
     const runListing = vi.fn(async () => LISTED)
     const probe = createClaudeModelCatalogProbe({
@@ -248,11 +246,10 @@ describe('Claude catalog availability', () => {
   it('says the CLI is missing when the resolved executable is not there', async () => {
     const folder = mkdtempSync(join(tmpdir(), 'orca-claude-missing-'))
     try {
-      // Never created: the real runner's spawn reports ENOENT for this exact path.
       const missing = join(folder, 'claude with spaces', 'claude')
       const probe = createClaudeModelCatalogProbe({
         ...probeDeps(),
-        resolveCommand: () => missing
+        resolveCommand: () => ({ command: missing, prefixArgs: [] })
       })
       await expect(probe(HOME('/homes/a'))).rejects.toMatchObject({
         unavailable: { reason: 'cliMissing' }
@@ -263,7 +260,6 @@ describe('Claude catalog availability', () => {
   })
 })
 
-// Only completed failed exits supply process facts to the shared retry policy.
 it.each([null, 0, 1])('enterprise retry uses the actual exit code %s', async (exitCode) => {
   const stderr = 'You cannot use --strict-mcp-config when an enterprise MCP config is present'
   const runListing = vi.fn(async () => LISTED)

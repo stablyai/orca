@@ -26,7 +26,12 @@ import {
   removeRuntimeOwnedSshTarget
 } from '../ephemeral-vm/runtime-ssh'
 import { getRuntimeRecipeContext } from './ephemeral-vm-recipe-context'
+import {
+  ephemeralVmFailure,
+  ephemeralVmFailureFromError
+} from '../../shared/ephemeral-vm-failure-copy'
 import { invalidateRuntimeEnvironmentTransport } from './runtime-environments/runtime-environments'
+import { retireRemovedRuntimeEnvironment } from './runtime-environments/runtime-environment-removal-cleanup'
 import { attachEphemeralVmRuntimeToWorkspace } from '../ephemeral-vm/runtime-attachment'
 
 export type EphemeralVmCleanupCommandResult = {
@@ -85,7 +90,7 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
             status: 'cleanup_failed',
             cleanupStatus: 'failed',
             cleanupLastAttemptAt: Date.now(),
-            cleanupLastError: error instanceof Error ? error.message : String(error)
+            cleanupLastError: ephemeralVmFailureFromError(error)
           })
           return removeEphemeralVmRuntimeSshTarget({
             userDataPath,
@@ -102,7 +107,14 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
       }
       if (result.ok) {
         try {
-          await releaseEphemeralVmRuntimeEnvironments(userDataPath, runtime)
+          await releaseEphemeralVmRuntimeEnvironments(userDataPath, runtime, (environmentId) => {
+            void retireRemovedRuntimeEnvironment(
+              environmentId,
+              invalidateRuntimeEnvironmentTransport,
+              store,
+              userDataPath
+            )
+          })
         } catch {
           // Cleanup of provider resources matters more than hiding a stale local
           // environment row; users can still remove that manually.
@@ -143,12 +155,10 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
       return updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, {
         status: 'cleanup_failed',
         cleanupStatus: 'failed',
-        cleanupLastError: 'Cleanup was interrupted. Retry cleanup to continue.'
+        cleanupLastError: ephemeralVmFailure('cleanupInterrupted')
       })
     }
   )
-
-  // Sleep suspends a workspace's VM from main, after its chats stop.
 
   ipcMain.handle(
     'ephemeralVm:resumeWorkspace',
@@ -177,7 +187,7 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
         throw new Error(result.error)
       }
       const connection = getEphemeralVmRecipeResultConnection(result.runtime.recipeResult)
-      // Why: an SSH VM's server is reached through its target, so it has no pairing to refresh.
+      // SSH servers use their target and have no pairing to refresh.
       if (!result.skipped && connection.type !== 'ssh' && runtime.runtimeEnvironmentId) {
         const pairingCode = getEphemeralVmRecipeResultPairingCode(result.runtime.recipeResult)
         if (!pairingCode) {

@@ -1,15 +1,10 @@
-// Why: a remote URL can name a forge through an alias host (SSH-over-443, `www.`), and every
-// comparison of a probed remote against a pasted URL must fold those to the same identity.
+// Fold SSH-over-443/www aliases when comparing probed remotes with pasted URLs.
 
 function normalizeRemoteHost(host: string): string {
   return host.trim().toLowerCase()
 }
 
-/**
- * Fold a `www.` prefix. Deliberately NOT part of the forge normalizers: those feed
- * `getProjectIdentityKey`, so folding there would re-key already-persisted projects on upgrade.
- * Only URL-vs-remote comparison may use it.
- */
+/** Fold www only for URL/remote comparison; forge identity normalizers feed persisted project keys and would re-key them on upgrade. */
 export function foldWwwHostAlias(host: string): string {
   return normalizeRemoteHost(host).replace(/^www\./, '')
 }
@@ -26,6 +21,16 @@ export function normalizeGitLabRemoteHost(host: string): string {
   return normalizedHost === 'altssh.gitlab.com' ? 'gitlab.com' : normalizedHost
 }
 
+export function normalizeBitbucketRemoteHost(host: string): string {
+  const normalizedHost = normalizeRemoteHost(host)
+  // Why: Bitbucket Cloud serves SSH for bitbucket.org repos from ssh.bitbucket.org.
+  return normalizedHost === 'ssh.bitbucket.org' ? 'bitbucket.org' : normalizedHost
+}
+
+export function normalizeForgeWebHost(host: string): string {
+  return normalizeBitbucketRemoteHost(normalizeGitLabRemoteHost(normalizeGitHubRemoteHost(host)))
+}
+
 /** Comparison-only host fold: the forge alias plus `www.`, for matching a remote to a pasted URL. */
 export function foldComparableGitHubHost(host: string): string {
   return normalizeGitHubRemoteHost(foldWwwHostAlias(host))
@@ -35,10 +40,7 @@ export function foldComparableGitLabHost(host: string): string {
   return normalizeGitLabRemoteHost(foldWwwHostAlias(host))
 }
 
-/**
- * A host with no dot is an OpenSSH `Host` alias (`git@github-work:owner/repo`) that only
- * ~/.ssh/config can expand; `git remote -v` never resolves it, so it is unknown, not wrong.
- */
+/** Dotless hosts are unresolved OpenSSH Host aliases; remote -v cannot expand ~/.ssh/config, so mismatches remain unknown. */
 export function isUnresolvedSshHostAlias(host: string): boolean {
   return !normalizeRemoteHost(host).includes('.')
 }

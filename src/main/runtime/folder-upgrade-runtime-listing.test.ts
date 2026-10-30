@@ -27,6 +27,13 @@ vi.mock('./repo-worktree-admin-fingerprint', () => ({
 
 import { OrcaRuntimeService } from './orca-runtime'
 import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
+import {
+  partialRuntimeStore,
+  storeRepo,
+  storeWorktreeMeta,
+  type PartialRuntimeStore
+} from './runtime-store-partial-fixture'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 
 const REPO_ID = 'repo-upgraded'
 const FOLDER_PATH = 'D:\\project\\a'
@@ -34,11 +41,15 @@ const GIT_PATH = 'D:/project/a'
 const FOLDER_WORKTREE_ID = `${REPO_ID}::${FOLDER_PATH}`
 
 function makeRuntime(): OrcaRuntimeService {
-  const metaById: Record<string, Record<string, unknown>> = {
-    [FOLDER_WORKTREE_ID]: { displayName: 'Draft', hostId: 'local', instanceId: 'kept' }
+  const metaById: Record<string, WorktreeMeta> = {
+    [FOLDER_WORKTREE_ID]: storeWorktreeMeta({
+      displayName: 'Draft',
+      hostId: 'local',
+      instanceId: 'kept'
+    })
   }
   const repos = [
-    {
+    storeRepo({
       id: REPO_ID,
       path: FOLDER_PATH,
       displayName: 'a',
@@ -46,15 +57,15 @@ function makeRuntime(): OrcaRuntimeService {
       addedAt: 1,
       kind: 'git',
       folderUpgradeGitRootPath: GIT_PATH
-    }
+    })
   ]
-  const store = {
+  const store: PartialRuntimeStore = {
     getRepo: (id: string) => repos.find((repo) => repo.id === id),
     getRepos: () => repos,
     getAllWorktreeMeta: () => metaById,
     getWorktreeMeta: (id: string) => metaById[id],
-    setWorktreeMeta: ({ id }: HostWorktreeTarget, meta: Record<string, unknown>) => {
-      metaById[id] = { ...metaById[id], ...meta }
+    setWorktreeMeta: ({ id }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
+      metaById[id] = { ...storeWorktreeMeta(), ...metaById[id], ...meta }
       return metaById[id]
     },
     removeWorktreeMeta: ({ id }: HostWorktreeTarget) => {
@@ -71,8 +82,7 @@ function makeRuntime(): OrcaRuntimeService {
     }),
     getProjects: () => []
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub carries the repo, meta, lineage and settings reads a worktree listing makes; the rest of Store is unreached.
-  return new OrcaRuntimeService(store as never)
+  return new OrcaRuntimeService(partialRuntimeStore(store))
 }
 
 describe('folder-upgraded checkout in runtime listings', () => {

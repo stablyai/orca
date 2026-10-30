@@ -1,3 +1,5 @@
+import type { BrowserExtensionContextMenuPayload } from './browser-extension-context-menu-types'
+
 export type BrowserPermissionDeniedEvent = {
   browserPageId: string
   /** Electron permission string (e.g. "media", "notifications"). */
@@ -68,6 +70,8 @@ export type BrowserContextMenuRequestedEvent = {
   } | null
   /** Null unless the click landed on an image. `url` is the raw src, which may be data: or blob:. */
   image: { url: string; canCopy: boolean } | null
+  /** Browser-extension items for this right-click (local extension profiles only). */
+  extensionMenu?: BrowserExtensionContextMenuPayload
 }
 
 export type ContextMenuSpelling = {
@@ -78,4 +82,12 @@ export type ContextMenuSpelling = {
 
 export type BrowserContextMenuDismissedEvent = {
   browserPageId: string
+}
+
+export type BrowserTargetUrlChangedEvent = {
+  browserPageId: string
+  /** Link under the pointer or keyboard focus; empty when it leaves the link. */
+  url: string
+  screenX: number
+  screenY: number
 }

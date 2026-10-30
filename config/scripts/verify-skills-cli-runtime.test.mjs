@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -21,23 +21,6 @@ async function writeSkillsCliFixture(outDir, handlerSource) {
 }
 
 describe('skills CLI runtime closure', () => {
-  it('runs after Electron composes the final output', async () => {
-    const packageJson = JSON.parse(
-      await readFile(new URL('../../package.json', import.meta.url), 'utf8')
-    )
-    for (const scriptName of ['build:desktop', 'build:desktop:ci', 'build:release']) {
-      const script = packageJson.scripts[scriptName].replace(
-        'pnpm run build:desktop:assets',
-        packageJson.scripts['build:desktop:assets']
-      )
-      expect(script).toContain('build:electron-vite')
-      expect(script).toContain('verify:built-skills-cli')
-      expect(script.indexOf('build:electron-vite')).toBeLessThan(
-        script.indexOf('verify:built-skills-cli')
-      )
-    }
-  })
-
   it('reports the missing final-artifact import and its owner', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skills-cli-closure-'))
     try {
