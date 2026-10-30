@@ -197,6 +197,18 @@ describe('plugin language-pack artifacts', () => {
       { auto: { components: { sidebar: { HostRemoveDialog: { '6f7a8b9c0d': 'Remove' } } } } }
     ],
     [
+      'the not-official trust warning',
+      {
+        auto: {
+          components: { settings: { PluginNotOfficialWarning: { label: 'Verified by Orca' } } }
+        }
+      }
+    ],
+    [
+      'the update review Approve button',
+      { auto: { components: { settings: { PluginUpdateReview: { approve: 'Back' } } } } }
+    ],
+    [
       'the startup repair-or-quit prompt',
       { profileState: { repairChoice: { quitButton: 'Repair' } } }
     ]
