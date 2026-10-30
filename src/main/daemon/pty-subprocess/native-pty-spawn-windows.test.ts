@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 
 const nodePty = vi.hoisted(() => ({ spawn: vi.fn() }))
 vi.mock('node-pty', () => nodePty)
@@ -17,6 +19,8 @@ import { IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS } from '../immediate-kill-reply
 import { createDaemonPtySubprocessHandle } from './subprocess-handle'
 import { spawnNativeDaemonPty } from './native-pty-spawn'
 import { Session } from '../session'
+import { readTerminalStartFailure } from '../../../shared/terminal-start-failure'
+import { mapRuntimeError } from '../../runtime/rpc/errors'
 import {
   _resetConptyStartupTrustForTest,
   CONPTY_NO_INPUT_READER_NOTICE,
@@ -113,6 +117,78 @@ describe('Windows shell fallback over node-pty ConPTY', () => {
     Object.defineProperty(process, 'platform', platform)
     vi.useRealTimers()
     vi.restoreAllMocks()
+  })
+
+  it('classifies installed-DLL-format-derived bytes through fresh rejection and the RPC envelope', async () => {
+    // Expanded installed DLL format strings with max 128/PID 4242; not a console-exhaustion capture.
+    const bytes = readFileSync(
+      new URL('../__fixtures__/git-bash-installed-dll-format-capacity.bin', import.meta.url)
+    )
+    expect(bytes.length).toBe(166)
+    expect(createHash('sha256').update(bytes).digest('hex')).toBe(
+      '7a0b4edc10fbd6c3cc4186031ed67d640db5a357b934daafa12c99663b59e17b'
+    )
+    let proc: ReturnType<typeof fakePane> | undefined
+    nodePty.spawn.mockImplementationOnce(() => {
+      proc = fakePane(4242, [bytes.toString('utf8')], 256)
+      return proc
+    })
+    const host = new TerminalHost({
+      spawnSubprocess: async (options) => {
+        const spawned = await spawnNativeDaemonPty({
+          ...args,
+          shellPath: 'C:\\Program Files\\Git\\usr\\bin\\bash.exe',
+          shellArgs: [],
+          primaryArgsRespawnSafe: false
+        })
+        await spawned.physicalOwner?.completion
+        expect(spawned.physicalOwner?.exitCode()).toBe(256)
+        return createDaemonPtySubprocessHandle({
+          ...spawned,
+          env: {},
+          sessionId: options.sessionId,
+          startupCommandDeliveredInShellArgs: false,
+          startupAgentRecognition: null,
+          startupEvents: spawned.claimStartupEvents?.()
+        })
+      }
+    })
+    try {
+      const error: unknown = await host
+        .createOrAttach({
+          sessionId: 'dll-format-capacity',
+          cols: 80,
+          rows: 24,
+          streamClient: { onData() {}, onExit() {} }
+        })
+        .then(
+          () => null,
+          (rejection: unknown) => rejection
+        )
+      expect(error).toBeInstanceOf(Error)
+      expect(readTerminalStartFailure(error)).toEqual({
+        incarnationId: expect.any(String),
+        cause: {
+          kind: 'exited',
+          exitCode: 256,
+          initialOutputDiagnostic: 'git-bash-console-capacity'
+        }
+      })
+      expect(mapRuntimeError('dll-format', { runtimeId: 'runtime' }, error)).toEqual({
+        id: 'dll-format',
+        ok: false,
+        _meta: { runtimeId: 'runtime' },
+        error: {
+          code: 'agent_session_exited_during_start',
+          message: expect.stringContaining('Close some Git Bash terminals')
+        }
+      })
+      expect(host.listSessions()).toEqual([])
+      expect(nodePty.spawn).toHaveBeenCalledOnce()
+      expect(proc?.kill).not.toHaveBeenCalled()
+    } finally {
+      await host.dispose()
+    }
   })
 
   it.each([
