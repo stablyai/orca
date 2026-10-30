@@ -9,6 +9,7 @@ import type {
 } from '../../../shared/azure-devops/boards-types'
 import {
   AzureDevOpsBoard,
+  BOARD_CARD_ESTIMATED_HEIGHT_PX,
   BOARD_CARD_STACK_MIN_ROWS,
   type AzureDevOpsBoardProps
 } from '@/components/task-page/azure-devops/Board'
@@ -19,7 +20,8 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-const BOARD_CARD_HEIGHT_PX = 196
+// Cards stub out at the estimate, so the spacer must reserve the whole stack whatever the estimate is.
+const BOARD_CARD_HEIGHT_PX = BOARD_CARD_ESTIMATED_HEIGHT_PX
 const BOARD_VIEWPORT_HEIGHT_PX = 600
 
 /** happy-dom has no layout, and a zero-height scroller windows every stack down to nothing. */

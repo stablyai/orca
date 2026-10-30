@@ -23,9 +23,10 @@ import { AzureDevOpsBoardCard } from './BoardCard'
 import { AzureDevOpsBoardNotices } from './BoardNotices'
 import { VirtualizedList } from '@/components/virtualized-list'
 
-/** Azure DevOps cards measure 164–233px tall; windowing starts once a stack is a few viewports deep. */
+/** Windowing starts once a stack is a few viewports deep. */
 export const BOARD_CARD_STACK_MIN_ROWS = 16
-const BOARD_CARD_ESTIMATED_HEIGHT_PX = 196
+/** Mean of our own cards (128–180px measured, incl. the 6px gap); the mean keeps the scrollbar closest before rows are measured. */
+export const BOARD_CARD_ESTIMATED_HEIGHT_PX = 150
 
 export type AzureDevOpsBoardProps = {
   layout: BoardLayout
