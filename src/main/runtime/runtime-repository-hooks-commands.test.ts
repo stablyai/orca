@@ -80,9 +80,14 @@ describe('repo.hooks archive trust', () => {
     })
   })
 
-  it('needs no trust for a local-only archive script', async () => {
+  it('needs no trust for a local-only archive script or a folder, whose removal runs no hook', async () => {
     await expect(
       hooksFor({ mode: 'auto', scripts: { setup: '', archive: 'echo mine' } })
+    ).resolves.toMatchObject({ archiveTrust: null })
+    await expect(
+      new RuntimeRepositoryHooksCommands({
+        resolveRepo: async () => ({ ...localRepo, kind: 'folder' })
+      }).getRepoHooks('repo-1')
     ).resolves.toMatchObject({ archiveTrust: null })
   })
 })
