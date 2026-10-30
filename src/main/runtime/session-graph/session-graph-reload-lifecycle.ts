@@ -57,7 +57,7 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
 
   async hasTerminalsForWorktree(worktreeSelector: string): Promise<boolean> {
     const graphEpoch = this.captureReadyGraphEpoch()
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    const worktree = await this.resolveWorkspaceSelector(worktreeSelector)
     this.assertStableReadyGraph(graphEpoch)
     for (const leaf of this.leaves.values()) {
       if (leaf.worktreeId === worktree.id && leaf.ptyId) {
@@ -100,7 +100,7 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
   }
 
   protected beginGraphReload(windowId: number): number {
-    // Why: the rebuilt graph decides whether an incarnation survived; do not stale proven process identities before that comparison.
+    // Compare incarnations against the rebuilt graph before staling proven process identities.
     this.rendererGraphEpoch += 1
     this.graphStatus = 'reloading'
     const revision = this.graphReloadLifecycle.begin(windowId)
@@ -123,9 +123,7 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
     }
     this.handles.clear()
     this.handleByLeafKey.clear()
-    // Why: handleByPtyId (pre-allocated CLI handles) survives reloads so CLI agents keep control; adoptPreAllocatedHandle re-links on the new graph.
-    // Incarnation-scoped waiters survive a renderer reload; the rebuilt graph
-    // may re-adopt the same PTY and resolve them without a false stale error.
+    // Preserve CLI handles and incarnation waiters across reload; graph adoption may rejoin the same PTY.
     this.refreshWritableFlags()
     return revision
   }
@@ -201,17 +199,17 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
       return
     }
     this.graphReloadLifecycle.settleActive('cancelled')
-    // Why: a closed window never republishes, so a serve host must take its graph back (#27292).
-    // Switch point: main holds every pane it owns, so it takes the graph back from a closed window.
+    // Closed windows never republish; serve/main-owned layouts must reclaim the graph (#27292).
     if (ORCA_LAYOUT_OWNER_IS_MAIN || this.servesHeadlessGraph) {
       this.headlessGraphFallbackAvailable = true
     }
     if (this.shouldRestoreHeadlessGraph(windowId)) {
       this.pendingHeadlessPromotionWindowId = null
       this.restoreHeadlessGraphAuthority()
+      this.republishBrowserSessionTabs()
       return
     }
-    // Why: once the authoritative renderer graph disappears, fail closed for live-terminal ops instead of guessing from old state.
+    // Without an authoritative graph, live-terminal operations must fail closed.
     if (this.graphStatus !== 'unavailable') {
       this.rendererGraphEpoch += 1
     }
@@ -230,8 +228,18 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
     this.handles.clear()
     this.handleByLeafKey.clear()
     this.clearPtyIncarnationHandles()
-    // Why: pre-allocated CLI handles must survive graph unavailability so they can be re-adopted on reconnect.
+    // Keep pre-allocated CLI handles for reconnect adoption.
     this.rejectAllWaiters('terminal_handle_stale')
+    this.republishBrowserSessionTabs()
+  }
+
+  // Renderer browser rows are listed only while their window exists; a version bump lets every client apply the drop.
+  private republishBrowserSessionTabs(): void {
+    for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
+      if (snapshot.tabs.some((tab) => tab.type === 'browser')) {
+        this.republishMobileSessionTabsSnapshot(worktreeId)
+      }
+    }
   }
 
   protected handleGraphReloadTimeout(windowId: number): void {

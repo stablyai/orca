@@ -2,7 +2,7 @@ import { BoundedMap } from '../../shared/bounded-map'
 import {
   backgroundTaskJournalBody,
   isSettledBackgroundTaskState
-} from '../../shared/native-chat-background-task-row'
+} from '../../shared/native-chat/input/native-chat-background-task-row'
 import type { NativeChatBackgroundTaskBlock } from '../../shared/native-chat-types'
 import type {
   ProviderTimelineEvent,

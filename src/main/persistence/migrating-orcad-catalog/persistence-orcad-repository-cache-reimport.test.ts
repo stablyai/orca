@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { githubAvatarIcon } from '../../../shared/repo-icon'
 import { manifest, REPOSITORY } from './persistence-orcad-migration-catalog-fixture'
-import { closeTestStores, createStore, testState } from '../../persistence-test-harness'
+import { closeTestStores, createStore, testState } from '../persistence-test-harness'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
@@ -32,7 +32,7 @@ afterEach(async () => {
 
 describe('reimporting a repository after the destination resolves its Git identity', () => {
   it.each([null, remoteIdentity])(
-    'keeps the destination cache after restart (%j)',
+    'keeps the destination cache after reopening the store (%j)',
     async (identity) => {
       const store = createStore()
       commit(store, manifest())

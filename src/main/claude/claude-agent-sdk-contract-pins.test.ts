@@ -1,3 +1,4 @@
+import { createClaudeCodeProcessSpawn } from './claude-agent-sdk-process-spawn'
 import { createClaudeStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -13,7 +14,7 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import type { AgentChatPermissionMode } from '../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { claudeQuerySettingsReader } from './claude-agent-sdk-control-requests'
 
@@ -124,7 +125,7 @@ function recordingSpawner(spawns: SpawnSeen[]) {
   }
 }
 
-function resolvedLaunch(permissionMode: AgentChatPermissionMode, launchArgs: string[] = []) {
+function resolvedLaunch(permissionMode: AgentChatPermissionChoice, launchArgs: string[] = []) {
   const record = {
     sessionId: 'contract-pin-session',
     provider: 'claude',
@@ -142,7 +143,7 @@ function resolvedLaunch(permissionMode: AgentChatPermissionMode, launchArgs: str
     resolveLaunchArgs: () => launchArgs,
     store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
     resolveWorkspacePath: async () => '/repos/workspace-1',
-    resolveCommand: () => FAKE_CLI,
+    resolveCommand: () => ({ command: FAKE_CLI, prefixArgs: [] }),
     resolveAuthPolicy: () => ({ account: 'managed' })
   })({
     identity: {
@@ -316,6 +317,26 @@ describe('Claude Agent SDK contract pins', () => {
     expect(replayArgs.filter((arg) => arg === '--replay-user-messages')).toHaveLength(1)
   })
 
+  it('leaves own-settings permission resolution to the CLI in the real SDK child argv', async () => {
+    const scenario = scriptScenario([{ awaitUserMessage: true }, { emit: RESULT_FRAME }])
+    const spawns: SpawnSeen[] = []
+    const launch = await resolvedLaunch('own')
+    await drainQuery({
+      ...launch.options,
+      pathToClaudeCodeExecutable: FAKE_CLI,
+      cwd: scenario.cwd,
+      env: scenarioEnv(scenario),
+      canUseTool: async () => ({ behavior: 'deny', message: 'unused' }),
+      spawnClaudeCodeProcess: recordingSpawner(spawns)
+    })
+
+    expect(spawns).toHaveLength(1)
+    const argv = normalizeArgv(spawns[0]!.args)
+    expect(argv).not.toContain('--permission-mode')
+    expect(argv).not.toContain('--dangerously-skip-permissions')
+    expect(launch.options.permissionMode).toBeUndefined()
+  })
+
   it('produces a matching CLI flag for every pre-SDK argv entry', async () => {
     const scenario = scriptScenario([{ awaitUserMessage: true }, { emit: RESULT_FRAME }])
     const spawns: SpawnSeen[] = []
@@ -480,3 +501,29 @@ describe('Claude Agent SDK contract pins', () => {
     )
   })
 })
+
+it.each(['/installed/launcher', '/installed/launcher.mjs'])(
+  'inserts the prefix at the real SDK spawn boundary for %s',
+  async (program) => {
+    let seen: { program: string; args?: readonly string[] } | undefined
+    const spawner = createClaudeCodeProcessSpawn(
+      (spec) => {
+        seen = spec
+        throw new Error('captured launcher contract')
+      },
+      'win32',
+      { pathToClaudeCodeExecutable: program, prefixArgs: ['run', '--', 'claude'] }
+    )
+    await expect(
+      drainQuery({ pathToClaudeCodeExecutable: program, spawnClaudeCodeProcess: spawner.spawn })
+    ).rejects.toThrow('captured launcher contract')
+    const prefixAt = program.endsWith('.mjs') ? 1 : 0
+    expect(seen?.args?.slice(prefixAt, prefixAt + 3)).toEqual(['run', '--', 'claude'])
+    if (prefixAt) {
+      expect(seen?.args?.[0]).toBe(program)
+    } else {
+      expect(seen?.program).toBe(program)
+    }
+    expect(seen?.args?.slice(prefixAt + 3)).toContain('--output-format')
+  }
+)

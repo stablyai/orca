@@ -172,7 +172,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
     params: InboxParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
-      // Why: stale/unknown handles return empty rather than error — historical rows survive handle deletion (design doc §3.3).
+      // Return empty for stale/unknown handles because historical mail outlives handle deletion (design doc §3.3).
       const messages = params.terminal
         ? db.getAllMessagesForHandle(
             resolveOrchestrationParty(params.terminal, db).address,
@@ -253,7 +253,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
               callerEvidence: orchestrationCompatibilityEvidence,
               callerSession: orchestrationCaller
             })
-      // Why: listTasksWithDispatch adds assignee_handle + dispatch_id (NULL for non-dispatched), so legacy-shape consumers are unaffected.
+      // Add nullable assignee_handle/dispatch_id without changing legacy non-dispatched rows.
       const joined = db.listTasksWithDispatch({
         status: params.status as TaskStatus,
         ready: params.ready,

@@ -13,7 +13,6 @@ vi.mock('./terminal-foreground-group', async (importOriginal) => ({
   readTerminalProcessRows: vi.fn(async () => paneTerminal.rows)
 }))
 
-/** A live observation naming `claude` in the terminal's foreground group. */
 function claudeInGroup(capturedAgeMs: number): RemoteForegroundEvidence {
   return {
     verdict: 'live',
@@ -33,7 +32,6 @@ function claudeInGroup(capturedAgeMs: number): RemoteForegroundEvidence {
   }
 }
 
-/** The relay names the `sh` that leads the group, as it does behind a wrapper. */
 function controllerAnswering(inspect: () => Promise<RemoteForegroundEvidence>) {
   return {
     getForegroundProcess: async () => 'sh',
@@ -57,8 +55,7 @@ describe('the relay’s foreground group as proof of a launched agent', () => {
     vi.useRealTimers()
   })
 
-  // On a loaded host the whole-machine capture can take seconds; it still describes the moment
-  // after the read was asked for.
+  // Capture start time matters; a slow ps result can still describe evidence requested by this read.
   it('counts a capture begun after the read was asked for, however long `ps` took', async () => {
     const controller = controllerAnswering(async () => {
       vi.advanceTimersByTime(1_800)
@@ -79,8 +76,7 @@ describe('the relay’s foreground group as proof of a launched agent', () => {
   })
 })
 
-// Why: this read gates every guarded paste, so it answers from the pane's own terminal and never
-// waits on a whole-machine capture, which took seconds a read on a loaded host.
+// Guarded pastes must use terminal-local probes instead of slow whole-machine scans.
 describe('a local pane’s foreground read', () => {
   it('answers from the pane’s own terminal while every whole-machine read is still pending', async () => {
     paneTerminal.rows = [

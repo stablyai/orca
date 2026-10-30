@@ -238,7 +238,8 @@ describe('resolveProjectRef', () => {
       ok: false,
       error: {
         type: 'validation_error',
-        message: GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR
+        message: GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR,
+        reason: 'input_too_large'
       }
     })
     await expect(resolveProjectRef({ input })).resolves.not.toMatchObject({

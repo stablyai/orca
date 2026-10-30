@@ -52,7 +52,7 @@ export type BundledSkillObserved =
       /** Whole-tree identity for edited/foreign content; released copies omit it. */
       treeDigest?: string
     }
-  /** Any other entry: a file, socket or device. */
+  /** Includes sockets and devices. */
   | { kind: 'file'; mtimeMs: number | null; treeDigest?: string }
   | { kind: 'unreadable' }
 
@@ -68,12 +68,10 @@ export type BundledSkillOp = {
   kind: BundledSkillOpKind
   path: string
   role: 'shared' | 'agent'
-  /** Agents that read this folder. */
   agents: readonly SkillInstallProviderId[]
   observed: BundledSkillObserved
   /** What `write`/`update`/`copy`/`replace`/`link` put at `path`. */
   content?: 'files' | 'link'
-  /** The folder a `link` points at. */
   linkTarget?: string
   /** The interrupted swap's old copy a `restore` moves back. */
   restoreFrom?: { path: string; observed: BundledSkillObserved }
@@ -106,9 +104,7 @@ export type BundledSkillOpOutcome = {
   path: string
   kind: BundledSkillOpKind
   status: BundledSkillOpStatus
-  /** Why a `leave` left the path alone. */
   reason?: BundledSkillLeaveReason
-  /** Error code for `failed`. */
   error?: string
   /** Where Replace or a non-released old copy was moved. */
   backupPath?: string
@@ -128,17 +124,10 @@ export type BundledSkillInstallResult = {
 
 const BundledSkillForceSchema = z.array(z.string().min(1).max(4096)).max(256)
 
-/**
- * What the app asks a host to plan: its own global homes, Orca's installed skills only.
- * Frozen with `skills.bundled-orca.v1`: the schema is strict, so an older host rejects any
- * new field; a field needs a new capability.
- */
+/** Frozen strict skills.bundled-orca.v1 request for the host’s own global homes; adding fields requires a new capability because older hosts reject them. */
 export const BundledSkillPlanRequestSchema = z.strictObject({
   force: BundledSkillForceSchema.optional(),
-  /**
-   * Install these bundled skills for the host's agents, like `orca skills install <names>`.
-   * Absent: update only what is already installed. The host rejects a name it does not ship.
-   */
+  /** Install named host-shipped skills; absent means update installed skills only. Reject names the host does not ship. */
   names: z
     .array(z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/u))
     .min(1)

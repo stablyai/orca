@@ -22,6 +22,7 @@ vi.mock('@/store', () => ({
       sshConnectionStates: new Map(),
       sshStateByEnvironment: new Map(),
       runtimeStatusByEnvironmentId: new Map(),
+      agentStatusByPaneKey: {},
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
       openFiles: [],
       browserTabsByWorktree: {},

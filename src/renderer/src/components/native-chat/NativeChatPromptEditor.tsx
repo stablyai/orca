@@ -12,6 +12,7 @@ import {
 import { closeHistory } from '@tiptap/pm/history'
 import { Slice } from '@tiptap/pm/model'
 import {
+  memo,
   useImperativeHandle,
   useLayoutEffect,
   useMemo,
@@ -19,6 +20,7 @@ import {
   type HTMLAttributes,
   type RefObject
 } from 'react'
+import { shallow } from 'zustand/shallow'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -35,6 +37,8 @@ import {
 } from './native-chat-prompt-document'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { NativeChatImageRowProvider } from './NativeChatImageReferencePill'
+import { mountedEditorView } from './native-chat-mounted-editor-view'
+import { NativeChatUnkernedRunDecorations } from './native-chat-unkerned-run-decorations'
 
 type Props = Omit<HTMLAttributes<HTMLDivElement>, 'onChange' | 'onSelect'> & {
   scopeKey?: string
@@ -50,7 +54,14 @@ type Props = Omit<HTMLAttributes<HTMLDivElement>, 'onChange' | 'onSelect'> & {
 
 const NO_IMAGES: readonly string[] = []
 
-export function NativeChatPromptEditor({
+// `initialValue` only seeds the editor at mount; keep the other props referentially stable or this memo stops helping.
+export const NativeChatPromptEditor = memo(
+  NativePromptEditor,
+  ({ initialValue: _previous, ...previous }, { initialValue: _next, ...next }) =>
+    shallow(previous, next)
+)
+
+function NativePromptEditor({
   scopeKey,
   imageRow = NO_IMAGES,
   inputRef,
@@ -89,6 +100,7 @@ export function NativeChatPromptEditor({
         NativeChatSkill,
         NativeChatFileReference,
         NativeChatImageReference,
+        NativeChatUnkernedRunDecorations,
         // A disabled box still says why it is disabled, as the plain text box's placeholder does.
         Placeholder.configure({
           placeholder: () => placeholderRef.current,
@@ -134,9 +146,7 @@ export function NativeChatPromptEditor({
         const pastedTextFiles = transaction.docChanged
           ? historyPaths(current.state.doc, transaction.docs)
           : undefined
-        // Why: a value set from the store with no change of this window behind it (another
-        // window's draft, a late load) is already saved; saving it back would make it one. A
-        // value this window just set keeps its document, skill chips included.
+        // Remote/late draft adoption is already saved; only this window’s edits should persist their document and skill chips.
         if (
           scopeKey &&
           transaction.docChanged &&
@@ -246,14 +256,16 @@ export function NativeChatPromptEditor({
               return promptTextOffset(editor.state.doc, editor.state.selection.to)
             },
             focus: () => {
-              // Why: a blurred editor never writes its caret to the page, so focusing the element
-              // alone would bring back the stale one and undo a caret moved by an insertion.
-              editor.view.focus()
-              if (!editor.isEditable) {
-                editor.view.dom.focus()
+              // A focus request can arrive before the view mounts (a chat opened while its
+              // workspace switches in); tiptap throws then, so wait for the next reveal instead.
+              const view = mountedEditorView(editor)
+              // Focus the editor view so an inserted caret replaces the stale DOM selection.
+              view?.focus()
+              if (view && !editor.isEditable) {
+                view.dom.focus()
               }
             },
-            contains: (node) => editor.view.dom.contains(node),
+            contains: (node) => mountedEditorView(editor)?.dom.contains(node) === true,
             isCaretOnVisualEdge: (edge) => {
               const { selection, doc } = editor.state
               if (!selection.empty) {

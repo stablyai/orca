@@ -33,7 +33,8 @@ const PRESETS: readonly AgentTrustPreset[] = [
   'cursor',
   'copilot',
   'qoder',
-  'antigravity'
+  'antigravity',
+  'kimi'
 ]
 const INHERITING_PRESETS: readonly AgentTrustPreset[] = ['claude', 'copilot', 'qoder']
 const EXACT_OR_SELF_LIMITING_PRESETS: readonly AgentTrustPreset[] = [
@@ -103,7 +104,7 @@ describe('applyWorkspaceTrustOnThisHost', () => {
     ]
   ]
   describe.each(tooBroad)('for %s', (_label, arrange) => {
-    it.each(INHERITING_PRESETS)('writes no %s trust', async (preset) => {
+    it.each([...INHERITING_PRESETS, 'kimi'] as const)('writes no %s trust', async (preset) => {
       const { workspace, homes } = arrange()
       await applyWorkspaceTrustOnThisHost(
         preset,

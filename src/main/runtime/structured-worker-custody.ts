@@ -1,17 +1,7 @@
-/**
- * Whether orchestration still holds a structured worker, the one answer every reader derives from.
- *
- * Custody is the orchestration's own worker-terminal state, the list state `worker-list` shows
- * coordinators, never whether the worker's process runs: a worker at rest is still held, and mail
- * starts it. Routing, group addressing and `worker-show` ask whether it is addressable; the idle
- * sweep asks whether it still owes work.
- *
- * Two policy decisions live here and nowhere else: only `released` ends addressability (a release
- * pending or in doubt still routes, as for a terminal worker), and a settled worker awaiting its
- * coordinator's decision (`reclaimable`) owes no work, so it may rest.
- */
+/** Custody uses worker-terminal state rather than process liveness: mail can start an agent at rest.
+ * Only released ends addressability; pending/unknown releases still route. Reclaimable workers owe no work and may rest. */
 
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { buildOrchestrationTaskDisplayMetadata } from '../../shared/orchestration-task-display'
 import { isOrcaSessionId } from '../../shared/orca-session-address'
 import { canonicalOrcaSessionId } from './orchestration/canonical-orca-session-id'
@@ -29,13 +19,7 @@ import {
   structuredWorkerRecordIsCurrent
 } from './structured-worker-identity'
 
-/**
- * Whether this runtime still owns the session running the worker: routing, addressing and
- * authority ask this, never whether its process runs. Takes the resolved running session, so the
- * session a worker was minted under cannot be judged in its place. Null when the host is not
- * installed, because reading the record store would install it — not being able to look is not an
- * answer.
- */
+/** Judge ownership on the resolved successor session; absent host returns null because reading storage would install it. */
 export function structuredWorkerOwned(running: RunningStructuredSession): boolean | null {
   const host = getStructuredAgentSessionHost()
   if (!host) {
@@ -43,7 +27,7 @@ export function structuredWorkerOwned(running: RunningStructuredSession): boolea
   }
   return structuredWorkerRecordIsCurrent(
     running.record,
-    running.record.lease.claimStatus === 'released' &&
+    running.record.ownerObservation.claimStatus === 'released' &&
       structuredSessionTabListed(host, running.sessionId)
   )
 }
@@ -54,6 +38,9 @@ export function structuredSessionTabRetired(
   sessionId: string
 ): boolean {
   try {
+    if (typeof host.deps?.store?.isSessionTabRetired === 'function') {
+      return host.deps.store.isSessionTabRetired(sessionId)
+    }
     const index = host.getPersistedVisibleSessionTabIndex?.()
     return index?.present === true && !index.sessionIds.includes(sessionId)
   } catch {
@@ -88,11 +75,7 @@ function ownerState(
   )
 }
 
-/**
- * The user still owns the chat and orchestration has not released the worker, as with a terminal
- * worker whose terminal closed. Null when ownership cannot be read. A released worker's chat stays
- * the user's; nothing routes to it.
- */
+/** Route while the user owns the chat and orchestration has not released it; unreadable ownership returns null. Release never closes the user's chat. */
 export function structuredWorkerAddressable(
   db: OrchestrationDb | null | undefined,
   running: RunningStructuredSession,
@@ -113,17 +96,10 @@ export function structuredWorkerAddressable(
   return owned && custody !== 'released'
 }
 
-/**
- * Work orchestration still owes on this worker, read per sweep tick: any unsettled dispatch
- * addressed to its incarnation, on a process this host owns a terminal for. That covers its own
- * worker-start dispatch (whose context stays open while the worker is active, a stop in doubt
- * included, because a supervised worker's context settles only with it) and any task later
- * dispatched to it. A `reclaimable` worker's dispatch has settled, so it owes nothing. A `/clear`
- * successor owes what its lineage root, the session the worker was minted under, owes.
- */
+/** Any pending/dispatched task on this worker incarnation keeps it working, including supervised stops in doubt and later tasks. Clear successors inherit root obligations; reclaimable workers may rest. */
 export function structuredWorkerOwesWork(
   db: OrchestrationDb | null,
-  record: AgentSessionRecord
+  record: Pick<AgentSessionConversationView, 'sessionId' | 'location'>
 ): boolean {
   const incarnation = db && ownedWorkerIncarnation(db, record)
   return (
@@ -141,7 +117,7 @@ export function structuredWorkerOwesWork(
 /** The first task this worker still owes, which names its chat. */
 export function structuredWorkerOpenTaskTitle(
   db: OrchestrationDb | null,
-  record: AgentSessionRecord
+  record: Pick<AgentSessionConversationView, 'sessionId' | 'location'>
 ): { title: string } | null {
   const incarnation = db && ownedWorkerIncarnation(db, record)
   if (!db || !incarnation) {
@@ -170,7 +146,10 @@ export function structuredWorkerOpenTaskTitle(
     : null
 }
 
-function ownedWorkerIncarnation(db: OrchestrationDb, record: AgentSessionRecord): string | null {
+function ownedWorkerIncarnation(
+  db: OrchestrationDb,
+  record: Pick<AgentSessionConversationView, 'sessionId' | 'location'>
+): string | null {
   const hostScope = structuredWorkerHostScope(record.location)
   if (!hostScope) {
     return null

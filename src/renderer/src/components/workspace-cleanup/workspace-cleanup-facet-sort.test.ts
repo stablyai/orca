@@ -126,7 +126,6 @@ describe('tie-breaks', () => {
         candidate: { lastActivityAt: FACET_NOW - 2 * DAY }
       })
     ]
-    // Same size on both sides, so only the tie-break chain can order them.
     expect(names(rows, 'size', 'desc')).toEqual(['alpha', 'zeta'])
   })
 

@@ -11,10 +11,7 @@ import { openExternalLink } from '../platform/external-link'
 import { useHostClient } from '../transport/host-client-hooks'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
 
-/**
- * The host screen's Create Workspace drawer, alone on a transparent page. Closing it leaves the
- * screen that opened it; creating opens the new workspace's session in its place.
- */
+// Use a transparent drawer page; close returns to its opener and creation replaces it with the new workspace session.
 export function NewWorkspacePageScreen() {
   const params = useLocalSearchParams<{ hostId?: string | string[] }>()
   const hostId = firstParam(params.hostId)

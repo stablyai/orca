@@ -1,21 +1,7 @@
 import type { IDisposable } from '@xterm/xterm'
 import { isHangulJamoKeyText } from './hangul-jamo-key'
 
-// Why: iPadOS composes Hangul from a hardware keyboard with no composition
-// events at all (#13345). Each jamo arrives as a plain keydown while the IME
-// rewrites the syllable in place in the helper textarea —
-// `deleteContentBackward` then a replacing `insertText`. xterm consumes the
-// keydown, so the raw compatibility jamo reaches the PTY and the composed
-// syllable is dropped: `한글` arrives as `ㅎㅏㄴㄱㅡㄹ`.
-//
-// The keydown is handed to the system by `shouldBypassXtermForIosTextEdit`, and
-// the syllable it builds is held here until the IME proves it is final —
-// nothing is ever sent and then retracted, so raw-mode TUIs never see DEL bytes
-// they would have to interpret as "erase one cell".
-//
-// Everything is driven from `input`. iPadOS delivers it later than a macrotask,
-// so any timer-based read of the field loses the race and concludes, wrongly,
-// that nothing was composed.
+// iPad hardware Hangul rewrites textarea without composition events; hold syllables until final so xterm cannot send raw jamo or require DEL retractions. Drive from input because device writes arrive after macrotasks (#13345).
 
 type OpenPreedit = {
   /** Field text preceding the syllable; everything after it is uncommitted. */
@@ -38,10 +24,7 @@ export type TerminalIosHangulPreedit = IDisposable & {
 
 export type TerminalIosHangulPreeditOptions = {
   terminalElement: HTMLElement | null | undefined
-  /** Whether a composition session is under way, which bars a hold from opening
-   *  over it — Chinese pinyin on the same device does run one, and xterm's
-   *  CompositionHelper already commits it. Must be derived and expiring, not
-   *  latched: a session that never ends would otherwise disable the pane. */
+  /** Derive expiring session state: other scripts already use xterm composition, and a missing end must not latch input disabled. */
   isCompositionActive: () => boolean
   /** Screen reader mode writes the textarea itself, so a field diff would not
    *  be the IME's alone. */
@@ -83,29 +66,12 @@ type FieldEdit = {
   text: string
 }
 
-/**
- * Why NFC: a decomposed field grows `ᄒ` -> `하` -> `한` by appending, and an
- * append is exactly what the diff reads as the previous syllable settling — so
- * an NFD source would put one bare jamo on the wire per keystroke. Composed,
- * the same three keystrokes rewrite one character in place, as the device trace
- * does. Idempotent on the NFC text iPadOS was recorded producing.
- */
+/** Normalize NFD to NFC so appending jamo is seen as a syllable rewrite, not separate settled keystrokes; recorded iPad NFC remains unchanged. */
 function normalizeFieldText(value: string): string {
   return value.normalize('NFC')
 }
 
-/**
- * Diffs two field states, taking the common prefix as where the IME began.
- *
- * Why not "did the tail grow past what is held": Korean batchim migration
- * rewrites in place. `깨` + `ㅈ` becomes `깾` — a different codepoint, not an
- * extension — and only becomes `깨주` once the next vowel decides where the `ㅈ`
- * belongs. Any monotonic-growth assumption stalls there.
- *
- * No common-suffix half, unlike the usual textarea-IME diff: the IME edits at
- * the caret and the caret is the end of the helper textarea, so there is never
- * an untouched tail to discount.
- */
+/** Use common-prefix edit position, not monotonic growth: batchim migration rewrites 깨 → 깾 → 깨주. No common suffix is needed because the IME edits at the textarea’s end. */
 function diffFieldEdit(prev: string, next: string): FieldEdit {
   const limit = Math.min(prev.length, next.length)
   let start = 0
@@ -164,21 +130,12 @@ export function installTerminalIosHangulPreedit(
     if (!open) {
       return
     }
-    // The cancelled syllable never reached the PTY, so it must not survive in
-    // the field either.
+    // Cancelled syllables never reached the PTY and must leave the field too.
     textarea.value = open.baseValue
     close()
   }
 
-  /**
-   * Re-derives the hold from the field, releasing whatever the IME has stopped
-   * rewriting.
-   *
-   * A syllable is settled once the IME's own edit point has moved past it: up
-   * to that index the batchim question — does this consonant end this syllable
-   * or start the next — is already answered, and nothing there can change
-   * without a keystroke that ends the hold anyway.
-   */
+  /** Release only text before the IME’s edit point, where batchim placement is settled and cannot change without a hold-ending key. */
   const sync = (textarea: HTMLTextAreaElement): void => {
     const open = preedit
     if (!open) {
@@ -186,25 +143,19 @@ export function installTerminalIosHangulPreedit(
     }
     const value = normalizeFieldText(textarea.value)
     if (!value.startsWith(open.baseValue)) {
-      // The field was rewritten out from under the hold; commit rather than
-      // measure against text that is gone.
+      // External field replacement invalidates the comparison basis; commit rather than measure stale text.
       commit()
       return
     }
     const tail = value.slice(open.baseValue.length)
     if (tail.length === 0) {
-      // Backspace can decompose as delete-then-insert, so an emptied field is
-      // not proof the syllable is gone — only that this half of the rewrite
-      // wrote nothing. The hold stays open, empty; the Backspace that finds it
-      // empty is the one the PTY gets. Nothing was sent, so nothing needs
-      // undoing either way.
+      // An empty delete-half can precede replacing insertText; keep the hold open until a later Backspace owns an already-empty field.
       open.heldText = ''
       render('')
       return
     }
     const edit = diffFieldEdit(open.heldText, tail)
-    // An edit that wrote nothing settles nothing: a rewrite landing on the same
-    // text, or a Backspace shortening the tail, is not the IME deciding.
+    // Same-text rewrites and shortening Backspace settle nothing; only text before a new edit point is final.
     if (edit.start > 0 && edit.text.length > 0) {
       const settled = tail.slice(0, edit.start)
       open.baseValue += settled
@@ -225,9 +176,7 @@ export function installTerminalIosHangulPreedit(
     if (preedit) {
       preedit.editKind = 'compose'
       if (event.key === 'Escape' && isUnmodified(event)) {
-        // Escape cancels the syllable the way it cancels a composition. Stopped
-        // here so xterm cannot also send it; the default action still lets the
-        // IME clear its own state.
+        // Consume Escape without blocking its default action: xterm must not send it, but the IME must clear its state.
         event.stopImmediatePropagation()
         discard(textarea)
         return
@@ -238,8 +187,7 @@ export function installTerminalIosHangulPreedit(
           close()
           return
         }
-        // Backspace decomposes the held syllable in the field rather than
-        // erasing a written cell, so it must not reach the PTY as DEL.
+        // Backspace decomposes unwritten preedit; do not send DEL for cells the PTY never received.
         preedit.editKind = 'erase'
         event.stopImmediatePropagation()
         return
@@ -276,19 +224,15 @@ export function installTerminalIosHangulPreedit(
       return
     }
     if (isCompositionOwnedInput(event)) {
-      // A session took the field over; it owns the commit from here. Read off
-      // the event rather than the session state, so this cannot depend on which
-      // `input` listener on the pane element happens to run first.
+      // A real session takes ownership from the event, independent of pane input-listener ordering.
       commit()
       return
     }
-    // Why: the field keeps the syllable so the IME can rewrite it, and xterm
-    // must not read that as fresh input.
+    // Keep held field text away from xterm’s fresh-input path while the IME rewrites it.
     event.stopImmediatePropagation()
     preedit.imeWrote = true
     if (preedit.editKind === 'compose' && isDeletion(event)) {
-      // Half of the delete-then-insert the IME uses to replace a growing
-      // syllable. Reading the field between the two would see it emptied.
+      // Do not read the temporarily empty field between delete/insert halves.
       return
     }
     sync(textarea)

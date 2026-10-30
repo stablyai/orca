@@ -1,6 +1,7 @@
-import type { TaskPageProviderMetadataModel } from '../../use-task-page-provider-metadata'
+import type { TaskPageProviderMetadataModel } from '../use-task-page-provider-metadata'
 import { useState, useMemo, useEffect } from 'react'
 import { LINEAR_ISSUE_LIST_MAX } from '../../../../../shared/linear/issue-read-limits'
+import { translate } from '@/i18n/i18n'
 import { findTaskPageLinearIssue } from './task-page-linear-cache-selectors'
 import type { LinearTeam } from '../../../../../shared/linear/workspace-types'
 import {
@@ -45,8 +46,7 @@ export function useTaskPageLinearListSelectionPrelude(model: TaskPageProviderMet
     linearCustomViewContentsError,
     availableTeams
   } = model
-  // Why memoized: the normalized array feeds an effect that sets state, and a
-  // fresh array per render would re-run it every render.
+  // Memoize normalized selection because its state-writing effect would otherwise rerun on every render.
   const rawLinearTeamSelection = settings?.defaultLinearTeamSelection
   const defaultLinearTeamSelection = useMemo(
     () => storedLinearTeamSelection(rawLinearTeamSelection),
@@ -85,9 +85,13 @@ export function useTaskPageLinearListSelectionPrelude(model: TaskPageProviderMet
         : undefined
   const activeLinearIssueHasCollectionError = (activeLinearIssueCollectionErrors?.length ?? 0) > 0
   const activeLinearIssueContextLabel = selectedLinearProject
-    ? `Project: ${selectedLinearProject.name}`
+    ? translate('auto.components.TaskPage.linearProjectContext', 'Project: {{name}}', {
+        name: selectedLinearProject.name
+      })
     : selectedLinearCustomView?.model === 'issue'
-      ? `View: ${selectedLinearCustomView.name}`
+      ? translate('auto.components.TaskPage.linearViewContext', 'View: {{name}}', {
+          name: selectedLinearCustomView.name
+        })
       : null
   const canLoadMorePlainLinearIssues =
     !activeLinearIssueContextLabel &&

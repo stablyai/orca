@@ -2,7 +2,8 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem
 } from '../../../shared/agent-session-journal-types'
-import { withNativeChatCutTurnNotices } from '../../../shared/native-chat-cut-turn-notice'
+import { AgentSessionAcquisitionRootExitObservedError } from './structured-agent-session-adapter'
+import { withNativeChatCutTurnNotices } from '../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
 
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -57,11 +58,12 @@ export async function startAgent(state: {
 
 export async function interruptedRestart(
   work: 'turn' | 'submission' | 'send-after-reply' | 'children' | 'queued-cards' = 'turn',
-  historyBoundaryConsistent = true,
+  /** What the restarted host proves about the recorded owner; gone unless a test says otherwise. */
   probeOwner: NonNullable<StructuredAgentSessionHostDeps['probeOwner']> = async () => ({
     outcome: 'pid-absent'
   }),
-  agents: StructuredAgentRegistry = claudeAndCodexDeclared()
+  agents: StructuredAgentRegistry = claudeAndCodexDeclared(),
+  closeEvidence?: 'kill-delivered'
 ) {
   const previous = hostTestState()
   let children: AgentChildWorkView[] = []
@@ -136,6 +138,14 @@ export async function interruptedRestart(
       expect(queued).toMatchObject({ ok: true, value: { queued: expect.anything() } })
     }
   }
+  if (closeEvidence) {
+    previous.host.deps.adapter.closeSession = async () => {
+      throw new AgentSessionAcquisitionRootExitObservedError(
+        new Error('writer killed'),
+        closeEvidence
+      )
+    }
+  }
   await previous.host.flushAllStreamedEvents()
   const store = await openTestAgentSessionRecordStore(previous.root)
   const closeSession = vi.fn(async () => true)
@@ -145,19 +155,7 @@ export async function interruptedRestart(
     agents,
     logger: log.logger,
     store,
-    adapter: {
-      ...adapter(),
-      closeSession,
-      ...(work === 'submission' || work === 'send-after-reply'
-        ? {
-            providerHistoryWindow: async () => ({
-              items: [],
-              boundaryConsistent: historyBoundaryConsistent,
-              turnInFlight: false
-            })
-          }
-        : {})
-    },
+    adapter: { ...adapter(), closeSession },
     journalDatabase: openTestJournalHostDatabase(previous.root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-next',

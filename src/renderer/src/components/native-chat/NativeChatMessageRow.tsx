@@ -10,8 +10,9 @@ import type {
 import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
 import { NativeChatReasoningRow } from './NativeChatReasoningRow'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
-import { nativeChatNoticeBlock } from '../../../../shared/native-chat-notice'
-import { nativeChatBlocksInOwnWords } from './native-chat-stopped-before-start-row'
+import { nativeChatNoticeBlock } from '../../../../shared/native-chat/native-chat-notice'
+import { nativeChatStoppedBeforeStartLabel } from './native-chat-stopped-before-start-row'
+import { nativeChatBlocksInOwnWords } from '../../../../shared/native-chat/native-chat-stopped-before-start'
 import { ProviderFrameRow } from './NativeChatTranscriptChrome'
 import type { NativeChatDiffReveal } from './native-chat-turn-diffs'
 import type {
@@ -22,12 +23,10 @@ import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-typ
 import { useNativeChatWorkRun } from './use-native-chat-work-run'
 import { useNativeChatRowNavigation } from './use-native-chat-row-navigation'
 
-/** What a user message says about its delivery: that nothing has confirmed it yet, quietly in
- *  place of its time, or that it did not go through, with its own Retry when the surface can send
- *  it again. */
+/** Unconfirmed sending status or a failed-delivery notice with an optional dismissal. */
 export type NativeChatDeliveryNotice =
-  | { sending: true; text?: never; onDismiss?: never }
-  | { sending?: never; text: string; onDismiss?: () => void }
+  | { sending: true; text?: never; onDismiss?: never; detail?: never }
+  | { sending?: never; text: string; onDismiss?: () => void; detail?: string }
 
 export type MessageRowProps = {
   message: NativeChatMessage
@@ -54,8 +53,7 @@ export type MessageRowProps = {
   runtimeContext?: RuntimeFileOperationArgs | null
   /** On a user row: discards it and everything after it. */
   rewind?: NativeChatRewindSurface
-  /** This row draws a run of tool calls and thoughts: every message in it, `message` first.
-   *  The same row either way, so a row becoming a run keeps everything it has mounted. */
+  /** All messages in this work run, message first; preserve row identity when a message becomes a run. */
   workRun?: readonly NativeChatMessage[]
 }
 
@@ -69,11 +67,7 @@ function rowHasContent(content: ReturnType<typeof deriveNativeChatRowContent>): 
   )
 }
 
-/** One message: its prose first, then a collapsible run folding all of the
- *  turn's tool activity. Monochrome per STYLEGUIDE: user prompts read as a
- *  lifted card, assistant prose as body copy, reasoning de-emphasized.
- *  Memoized: a stream frame republishes the whole transcript, but settled rows
- *  keep their block identity, so only the changed row re-renders. */
+/** Memoize settled block identities so stream frames rerender only changed rows. */
 export const MessageRow = memo(function MessageRow(
   props: MessageRowProps
 ): React.JSX.Element | null {
@@ -90,9 +84,8 @@ export const MessageRow = memo(function MessageRow(
     workRun
   } = props
   const rowRef = useRef<HTMLDivElement | null>(null)
-  const blocks = nativeChatBlocksInOwnWords(message.blocks)
-  // One pass per block set, shared with the list that decides whether this row
-  // occupies a slot — so "draws nothing" means the same thing to both.
+  const blocks = nativeChatBlocksInOwnWords(message.blocks, nativeChatStoppedBeforeStartLabel())
+  // Share content derivation with slot selection so invisible rows cannot reserve transcript gaps.
   const content = deriveNativeChatRowContent(blocks)
   const { markdown, prose } = content
   const isUser = message.role === 'user'
@@ -108,9 +101,7 @@ export const MessageRow = memo(function MessageRow(
 
   const { scrollToTop, returnToView } = useNativeChatRowNavigation(rowRef, onScrollMessageToTop)
 
-  // Skip rows with nothing renderable so the transcript shows no empty/ghost
-  // bubble.
-  // After all hooks, so hook order stays unconditional.
+  // Return after all hooks to preserve hook order when content disappears.
   if (run === undefined && !rowHasContent(content)) {
     return null
   }

@@ -132,13 +132,13 @@ describe('CSV range routing', () => {
     await expect(readRuntimeFileRange(localArgs, -1, 3)).rejects.toThrow('position')
     await expect(readRuntimeFileRange(localArgs, 0, 256 * 1024 + 1)).rejects.toThrow('limit')
     expect(fsReadFileChunk).not.toHaveBeenCalled()
-    for (const result of [
-      { contentBase64: '', bytesRead: 0 },
-      { contentBase64: 'YWJj', bytesRead: 2 },
-      { contentBase64: 'YWJj', bytesRead: 3 }
+    for (const { result, length } of [
+      { result: { contentBase64: '', bytesRead: 0 }, length: 2 },
+      { result: { contentBase64: 'YWJj', bytesRead: 2 }, length: 3 },
+      { result: { contentBase64: 'YWJj', bytesRead: 3 }, length: 2 }
     ]) {
       fsReadFileChunk.mockResolvedValue(result)
-      await expect(readRuntimeFileRange(localArgs, 0, 2)).rejects.toThrow('invalid CSV chunk')
+      await expect(readRuntimeFileRange(localArgs, 0, length)).rejects.toThrow('invalid CSV chunk')
     }
   })
 })
@@ -156,7 +156,10 @@ describe('CSV file admission', () => {
   it('keeps small files editable and preserves existing dirty drafts', async () => {
     fsStat.mockResolvedValue({ ...snapshot, size: CSV_PAGED_PREVIEW_BYTES - 1 })
     fsReadFile.mockResolvedValue({ content: 'a,b\n1,2', isBinary: false })
-    expect((await readEditorCsvFileContent(localArgs)).csvPreview).toBeUndefined()
+    expect(await readEditorCsvFileContent(localArgs)).toEqual({
+      content: 'a,b\n1,2',
+      isBinary: false
+    })
     fsStat.mockClear()
     await readEditorCsvFileContent(localArgs, false)
     expect(fsStat).not.toHaveBeenCalled()

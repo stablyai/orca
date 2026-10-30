@@ -22,7 +22,7 @@ export class ClientSessionTabSelectionStore {
   private statesByClient = new Map<string, Map<string, StoredClientSessionTabSelection>>()
   private persistListener: ((state: PersistedMobileClientTabSelections) => void) | null = null
 
-  // Why: selections previously died with the process, so a host restart snapped every phone back to the first tab (deterministic-topology fallback).
+  // Persist across host restart so phones do not snap back to the first tab.
   hydrate(persisted: PersistedMobileClientTabSelections): void {
     for (const [clientNavigationId, selectionsByWorktree] of Object.entries(
       normalizePersistedMobileClientTabSelections(persisted)
@@ -97,15 +97,14 @@ export class ClientSessionTabSelectionStore {
           closedTabIds: closed.retainedClosedTabIds
         })
       }
-      // Why: an empty snapshot has no topology to project; writing it back would wipe a restart-hydrated selection before tabs arrive.
+      // Empty startup topology must not erase hydrated selections.
       return {
         ...closed.snapshot,
         publicationEpoch: `${snapshot.publicationEpoch}${CLIENT_NAVIGATION_PUBLICATION_EPOCH_SUFFIX}`,
         snapshotVersion: snapshot.snapshotVersion + state.revision
       }
     }
-    // Why: until the device picks a tab here, opening the worktree lands on what the host shows;
-    // clients keep their own tab while open, so this never moves a device mid-visit.
+    // Follow the host until this device first picks a tab; never move it mid-visit.
     const selection = state.shouldPersist
       ? state.selection
       : deriveClientSessionTabSelection(closed.snapshot)
@@ -114,8 +113,7 @@ export class ClientSessionTabSelectionStore {
       selection,
       state.topologyBeforeClose
     )
-    // Why: a browser guest process swap drops its tab for one snapshot; the topology fallback
-    // must not overwrite (and persist) the device's explicit pick, or focus never returns.
+    // Guest swaps briefly omit tabs; do not overwrite the explicit pick with a persistent fallback.
     const selectionSurvived =
       !selection.activeTabId || closed.snapshot.tabs.some((tab) => tab.id === selection.activeTabId)
     statesByWorktree.set(snapshot.worktree, {
@@ -123,7 +121,7 @@ export class ClientSessionTabSelectionStore {
       revision: state.revision,
       shouldPersist: state.shouldPersist,
       closedTabIds: closed.retainedClosedTabIds,
-      // Why: frozen while the pick is gone, so a close's fallback holds across snapshots.
+      // Freeze missing-pick topology so close fallback remains stable across snapshots.
       topologyBeforeClose: selectionSurvived
         ? { tabGroups: closed.snapshot.tabGroups, tabGroupLayout: closed.snapshot.tabGroupLayout }
         : state.topologyBeforeClose

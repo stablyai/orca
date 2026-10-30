@@ -189,7 +189,6 @@ describe('LinearAgentSkillPane', () => {
     expect(markup).toContain('Good to know')
     expect(markup).toContain('Start from a Linear issue')
     expect(markup).toContain('All set')
-    // Skill lives inside the checklist; notes stay after examples.
     expect(markup.indexOf('Example prompts')).toBeLessThan(markup.indexOf('Good to know'))
     const examples = getLinearUsageExamples()
     expect(examples).toHaveLength(5)

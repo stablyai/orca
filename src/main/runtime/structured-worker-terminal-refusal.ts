@@ -1,14 +1,5 @@
-/**
- * What a terminal verb should say when handed a structured worker's handle.
- *
- * `terminal_handle_stale` is a claim that the handle went dead, and for a structured worker it is
- * simply false: the session is live, it has no terminal, and it never had one. Callers acting on
- * that claim went looking for a remint that cannot exist. The refusal names the structured
- * equivalent instead, so an agent that lands here knows what to run rather than what failed.
- *
- * `terminal.show` stays non-resolving on purpose: synthesising a `ptyId`/`leafId`/`paneRuntimeId`
- * would hand every public terminal verb something that looks writable and is not.
- */
+/** Redirect live structured handles to their equivalent operation rather than falsely reporting terminal_handle_stale.
+ * terminal.show must not invent PTY/leaf/runtime ids that make read-only identity look writable. */
 
 import type { OrchestrationDb } from './orchestration/db'
 import { resolveStructuredWorkerAuthority } from './structured-worker-authority'

@@ -1,4 +1,5 @@
 import { lstat } from 'node:fs/promises'
+import { pruneGitWorktrees } from './worktree-prune-guard'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree/removal'
 import { windowsLongPathGitArgs } from '../../shared/windows-long-path-git-args'
@@ -16,6 +17,9 @@ import { withRepoRefMaintenancePaused } from './local-repo-ref-maintenance'
 import { bumpWorktreeScanGeneration, listWorktrees } from './worktree-scan-cache'
 import { invalidateSparseCheckoutState } from './worktree-sparse-checkout-cache'
 import { runUnderWorktreeDeleteLimit } from './worktree-delete-limit'
+import { removeWindowsCheckout, usesNativeWindowsRemoval } from './windows-worktree-removal'
+import { listWorktreesStrict } from './worktree-listing'
+import { isWorktreePathMissing } from '../worktree-removal-safety'
 import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
 
 const branchCleanupQueueByRepo = new Map<string, Promise<void>>()
@@ -49,15 +53,16 @@ async function performRemoveWorktree(
   options: RemoveWorktreeOptions = {}
 ): Promise<RemoveWorktreeResult> {
   const removedWorktree =
-    options.knownRemovedWorktree ??
-    (await listWorktrees(repoPath, options)).find((worktree) =>
-      areWorktreePathsEqual(worktree.path, worktreePath)
-    )
+    options.knownRemovedWorktree !== undefined
+      ? options.knownRemovedWorktree
+      : ((await listWorktrees(repoPath, options)).find((worktree) =>
+          areWorktreePathsEqual(worktree.path, worktreePath)
+        ) ?? null)
   const branchName = normalizeLocalBranchRef(removedWorktree?.branch ?? '')
   const branchHead = removedWorktree?.head ?? ''
 
   // Enforce locks even for callers that bypass IPC/runtime preflight.
-  assertWorktreeUnlockedForRemoval(removedWorktree)
+  assertWorktreeUnlockedForRemoval(removedWorktree ?? undefined)
 
   // Avoid default deadlines during large deletes; preserve Windows long-path support used at creation.
   const longPathArgs = windowsLongPathGitArgs(repoPath)
@@ -73,8 +78,31 @@ async function performRemoveWorktree(
   }
   args.push(worktreePath)
   await runUnderWorktreeDeleteLimit(async () => {
-    await gitExecFileAsync(args, execOptions)
-    await removeCheckoutLeftByGit(worktreePath, options)
+    if (usesNativeWindowsRemoval(worktreePath, options)) {
+      await removeWindowsCheckout(repoPath, worktreePath, force, {
+        ...options,
+        knownRemovedWorktree: removedWorktree
+      })
+      // Release only this administrative entry, and never override a newly acquired Git lock.
+      if (
+        (await listWorktreesStrict(repoPath, options)).some((row) =>
+          areWorktreePathsEqual(row.path, worktreePath)
+        )
+      ) {
+        if (!(await isWorktreePathMissing(worktreePath))) {
+          throw new Error(
+            `Worktree path appeared during deletion: ${worktreePath}. Retry deletion.`
+          )
+        }
+        await gitExecFileAsync(
+          [...longPathArgs, 'worktree', 'remove', '--force', '--', worktreePath],
+          execOptions
+        )
+      }
+    } else {
+      await gitExecFileAsync(args, execOptions)
+      await removeCheckoutLeftByGit(worktreePath, options)
+    }
   })
 
   if (!branchName) {
@@ -111,8 +139,8 @@ export async function finishUnregisteredWorktreeRemoval(
 ): Promise<RemoveWorktreeResult> {
   options = removalWorkerOptions(options)
   await assertCheckoutGone()
-  await gitExecFileAsync(['worktree', 'prune'], gitExecOptions(repoPath, options)).catch(
-    (error: unknown) => console.warn(`[git] worktree prune failed in ${repoPath}`, error)
+  await pruneGitWorktrees(gitExecOptions(repoPath, options)).catch((error: unknown) =>
+    console.warn(`[git] worktree prune failed in ${repoPath}`, error)
   )
   return deleteBranchOfUnregisteredWorktree(repoPath, worktreePath, branch, options)
 }
@@ -190,5 +218,5 @@ async function removeCheckoutLeftByGit(
     throw error
   }
   console.warn(`[git] worktree remove left files at "${worktreePath}"; deleting them`)
-  await removeHostTree(worktreePath)
+  await removeHostTree(worktreePath, { signal: options.checkoutDeleteSignal })
 }

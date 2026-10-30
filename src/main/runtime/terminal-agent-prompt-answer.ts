@@ -55,10 +55,7 @@ class PromptNoLongerPendingError extends Error {
   }
 }
 
-/**
- * Answers prompts on this host. Remembers what it answered, so a second answer to one prompt
- * refuses even while the agent has not yet reported moving on.
- */
+/** Remember answered prompt occurrences so another answer refuses before hooks report the prompt gone. */
 export class TerminalAgentPromptAnswers {
   private readonly answered = new Map<string, string>()
 

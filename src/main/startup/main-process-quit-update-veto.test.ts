@@ -13,7 +13,7 @@ const dependencyExports: [string, string[]][] = [
   ['../agent-hooks/managed-agent-hook-controls', ['removeManagedAgentHooksAsync']],
   ['../runtime/structured-agent-session-runtime', ['stopStructuredAgentSessionRuntime']],
   [
-    '../runtime/structured-agent-session-runtime-teardown',
+    '../runtime/agent-session/structured-agent-session-runtime-teardown',
     ['setStructuredAgentSessionTeardownTrigger']
   ],
   ['../runtime/files/watch/file-watcher-leases', ['awaitRuntimeFileWatcherUnsubscribes']],

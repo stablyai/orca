@@ -1,6 +1,6 @@
-import { StyleSheet, colors, radii, spacing } from './mobile-tasks-dependencies'
+import { themedStyleSheet, colors, radii, spacing } from './mobile-tasks-dependencies'
 
-export const mobileTasksListStyles = StyleSheet.create({
+export const mobileTasksListStyles = themedStyleSheet(() => ({
   taskRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -188,4 +188,4 @@ export const mobileTasksListStyles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
     paddingVertical: spacing.sm
   }
-})
+}))

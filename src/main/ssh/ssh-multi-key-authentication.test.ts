@@ -162,8 +162,7 @@ describe('ordered SSH private-key authentication', () => {
 
     expect(manual.privateKey).toEqual(Buffer.from('/keys/manual'))
     expect(unresolvedImport.privateKey).toEqual(Buffer.from('/keys/stale-imported'))
-    // Single-key targets are still ordered by Orca's handler so an MFA host reaches
-    // keyboard-interactive once per stage rather than once per connection.
+    // Single-key targets also need per-stage keyboard-interactive restart for MFA.
     expect(nextAuth(manual, true)).toMatchObject({ type: 'none' })
     expect(nextAuth(manual, false)).toMatchObject({
       type: 'publickey',
@@ -198,8 +197,7 @@ describe('ordered SSH private-key authentication', () => {
       })
     )
 
-    // The password retry reuses this config, so holding the challenge back here would leave a
-    // keyboard-interactive password host with no attempt that ever offers it.
+    // The password retry reuses config; it must offer keyboard-interactive instead of deferring forever.
     expect(walkInitialAuthLadder(config, ['publickey', 'keyboard-interactive'])).toEqual([
       'none',
       'publickey',

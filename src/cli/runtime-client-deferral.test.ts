@@ -100,7 +100,7 @@ describe('RuntimeClient module-graph deferral', () => {
   ]
 
   it.each(SUPPRESSED_GROUPS)(
-    'constructs exactly %s expected clients, with null remote selection',
+    'suppresses ambient remote selection for %s with the expected client count',
     async (_name, argv, constructs) => {
       vi.stubEnv('ORCA_PAIRING_CODE', 'pairing-code')
       vi.stubEnv('ORCA_ENVIRONMENT', 'some-environment')
@@ -197,10 +197,17 @@ describe('RuntimeClient module-graph deferral', () => {
   })
 
   it('reuses one client instance across repeated ctx.client reads', async () => {
-    callMock.mockResolvedValue({ result: { worktrees: [] } })
+    const dispatchSpy = vi.spyOn(dispatchModule, 'dispatch').mockResolvedValue(undefined)
+    try {
+      await main(['worktree', 'list', '--json'], '/tmp/repo')
 
-    await main(['worktree', 'list', '--json'], '/tmp/repo')
-
-    expect(constructorArgsMock).toHaveBeenCalledTimes(1)
+      expect(dispatchSpy).toHaveBeenCalledTimes(1)
+      const ctx = dispatchSpy.mock.calls[0]?.[1]
+      const first = ctx?.client
+      expect(ctx?.client).toBe(first)
+      expect(constructorArgsMock).toHaveBeenCalledTimes(1)
+    } finally {
+      dispatchSpy.mockRestore()
+    }
   })
 })

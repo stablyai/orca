@@ -24,8 +24,7 @@ function storeWithRepo(repo: Partial<Repo>) {
   return { store, ensureDetectedAgents, ensureRemoteDetectedAgents, ensureRuntimeDetectedAgents }
 }
 
-// Why (#21429, #25804): a paired server's workspace, including one on that server's own SSH
-// target, lists the agents the server finds there; never this client's or its SSH map's.
+// Paired workspaces, including nested SSH, must list their server’s agents rather than this client’s (#21429, #25804).
 describe('agent inventory for a worktree', () => {
   it("reads and loads a paired server's SSH workspace from that server", async () => {
     const harness = storeWithRepo({

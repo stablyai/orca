@@ -3,13 +3,13 @@ import WebSocket from 'ws'
 import { abortSignalReason, throwIfSignalAborted } from '../../abort-signal-reason'
 import type { PairedRuntimeConnection } from '../../paired-runtime-connection'
 import type { RuntimeCapability } from '../../protocol-version'
-import { remoteRuntimeClientCapabilities } from '../../remote-runtime-client-capabilities'
+import { remoteRuntimeClientCapabilities } from '../remote-runtime-client-capabilities'
 import {
   createRemoteRuntimeClientHandshake,
   formatRemoteRuntimeCloseMessage,
   ignoreSettledRemoteRuntimeSocketError
-} from '../../remote-runtime-client-handshake'
-import { RemoteRuntimeClientError } from '../../remote-runtime-client-error'
+} from '../remote-runtime-client-handshake'
+import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import {
   remoteRuntimeConnectFailureMessage,
   remoteRuntimeConnectOptions
@@ -18,7 +18,7 @@ import {
   REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES,
   serializeRemoteRuntimePayload,
   serializeRemoteRuntimeRpcRequest
-} from '../../remote-runtime-memory-limits'
+} from '../remote-runtime-memory-limits'
 import {
   prepareRemoteRuntimeRequest,
   releaseRemoteRuntimePreparedRequest,

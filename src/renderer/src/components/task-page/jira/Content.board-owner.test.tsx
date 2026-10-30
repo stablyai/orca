@@ -3,7 +3,7 @@
 import { useState, type ComponentProps } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import type { TaskPageJiraBoardView } from '../../task-page-jira-board-view'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import { defaultJiraListColumnIds, visibleJiraListColumns } from '../../jira-list-columns'

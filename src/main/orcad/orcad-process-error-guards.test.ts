@@ -91,7 +91,6 @@ describe('orcad process error guards (STA-5606)', () => {
       expect.stringContaining('native PTY exception'),
       expect.anything()
     )
-    // Once: a closed stderr would fail every later write too.
     expect(log.mock.calls.filter(([line]) => String(line).includes('EPIPE'))).toHaveLength(1)
   })
 

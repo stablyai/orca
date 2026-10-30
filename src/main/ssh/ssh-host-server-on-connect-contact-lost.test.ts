@@ -1,7 +1,4 @@
-/**
- * A network cut during a managed-server install is lost contact, not a failure on the host: the
- * connect must say so (live/unverifiable/exited vocabulary), never "couldn't start its server".
- */
+/** Lost contact during install is unverifiable host outcome, never proof the server failed to start. */
 import { describe, expect, it, vi } from 'vitest'
 import type { SshTarget } from '../../shared/ssh-types'
 import { resolveHostServerOnConnect } from './ssh-host-server-on-connect'

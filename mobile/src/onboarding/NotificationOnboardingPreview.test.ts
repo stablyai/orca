@@ -1,7 +1,8 @@
-import { createElement } from 'react'
+import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NotificationOnboardingPreview } from './NotificationOnboardingPreview'
+import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 const mocks = vi.hoisted(() => {
   const anim = () => ({ start: vi.fn(), stop: vi.fn() })
@@ -30,7 +31,7 @@ vi.mock('react-native', async () => {
     },
     Animated: {
       Value: AnimatedValue,
-      View: ({ children, ...props }: { children?: unknown }) =>
+      View: ({ children, ...props }: { children?: ReactNode }) =>
         React.createElement('AnimatedView', props, children),
       delay: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
       loop: mocks.loop,
@@ -75,8 +76,7 @@ describe('NotificationOnboardingPreview', () => {
   it('shows sample agent-done and needs-input banners as a decorative mock', async () => {
     await renderPreview()
     const preview = renderer!.root.findByProps({ testID: 'notification-onboarding-preview' })
-    const copy = renderer!.root
-      .findAllByType('Text')
+    const copy = findAllByHostType(renderer!.root, 'Text')
       .flatMap((node) => node.props.children)
       .join(' ')
 
@@ -87,6 +87,7 @@ describe('NotificationOnboardingPreview', () => {
   })
 
   it('does not animate the banners when the page is off-screen', async () => {
+    mocks.reducedMotion = false
     await renderPreview(false)
     expect(mocks.loop).not.toHaveBeenCalled()
   })

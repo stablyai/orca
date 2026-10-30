@@ -29,8 +29,7 @@ const {
 vi.mock('../gitlab/client', () => ({
   getProjectSlug: getProjectSlugMock,
   getMergeRequestForBranch: getMergeRequestForBranchMock,
-  // Why: forge-provider resolves branch reviews via the OrThrow variant so
-  // lookup failures surface as unavailable instead of "no PR found".
+  // Preserve provider errors as unavailable rather than false review absence.
   getMergeRequestForBranchOrThrow: getMergeRequestForBranchMock,
   getMergeRequest: vi.fn()
 }))
@@ -45,8 +44,7 @@ vi.mock('../github/client', () => ({
 vi.mock('../bitbucket/client', () => ({
   getBitbucketRepoSlug: getBitbucketRepoSlugMock,
   getBitbucketPullRequestForBranch: getBitbucketPullRequestForBranchMock,
-  // Why: forge-provider resolves branch reviews via the OrThrow variant so
-  // lookup failures surface as unavailable instead of "no PR found".
+  // Preserve provider errors as unavailable rather than false review absence.
   getBitbucketPullRequestForBranchOrThrow: getBitbucketPullRequestForBranchMock,
   getBitbucketPullRequest: vi.fn()
 }))
@@ -54,8 +52,7 @@ vi.mock('../bitbucket/client', () => ({
 vi.mock('../azure-devops/client', () => ({
   getAzureDevOpsRepoSlug: getAzureDevOpsRepoSlugMock,
   getAzureDevOpsPullRequestForBranch: getAzureDevOpsPullRequestForBranchMock,
-  // Why: forge-provider resolves branch reviews via the OrThrow variant so
-  // lookup failures surface as unavailable instead of "no PR found".
+  // Preserve provider errors as unavailable rather than false review absence.
   getAzureDevOpsPullRequestForBranchOrThrow: getAzureDevOpsPullRequestForBranchMock,
   getAzureDevOpsPullRequest: vi.fn()
 }))
@@ -63,8 +60,7 @@ vi.mock('../azure-devops/client', () => ({
 vi.mock('../gitea/client', () => ({
   getGiteaRepoSlug: getGiteaRepoSlugMock,
   getGiteaPullRequestForBranch: getGiteaPullRequestForBranchMock,
-  // Why: forge-provider resolves branch reviews via the OrThrow variant so
-  // lookup failures surface as unavailable instead of "no PR found".
+  // Preserve provider errors as unavailable rather than false review absence.
   getGiteaPullRequestForBranchOrThrow: getGiteaPullRequestForBranchMock,
   getGiteaPullRequest: vi.fn()
 }))
@@ -81,8 +77,7 @@ describe('getHostedReviewForBranch', () => {
     getAzureDevOpsPullRequestForBranchMock.mockReset()
     getGiteaRepoSlugMock.mockReset()
     getGiteaPullRequestForBranchMock.mockReset()
-    // The branch cache is process-wide, so one test's answer would otherwise
-    // satisfy the next one's lookup.
+    // Clear process-wide answers so one test cannot satisfy another's lookup.
     __resetHostedReviewBranchCacheForTests()
   })
 

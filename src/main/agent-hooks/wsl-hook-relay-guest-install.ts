@@ -20,6 +20,8 @@ type GuestInstallState = {
   mux?: SshChannelMultiplexer
   guestHome?: string
   codexHomePath?: string
+  claudeAgentViewDir?: string
+  claudeConfigDir?: string
   opencodeOverlayDir?: string
   opencode2OverlayDir?: string
   piAgentDir?: string
@@ -114,6 +116,8 @@ async function installGuestHooksAndPlugins(
     }
     if (overlay.kind !== 'unavailable') {
       state.lastOpenCodeSettings = settingsKey
+      state.claudeAgentViewDir = overlay.kind === 'dir' ? overlay.claudeDir : undefined
+      state.claudeConfigDir = overlay.kind === 'dir' ? overlay.claudeConfig : undefined
       state.opencodeOverlayDir = overlay.kind === 'dir' ? overlay.dir : undefined
       state.opencode2OverlayDir = overlay.kind === 'dir' ? overlay.dir2 : undefined
       if (kind === 'pi') {

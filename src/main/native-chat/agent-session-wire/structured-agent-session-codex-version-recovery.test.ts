@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { AgentCliInstallationError } from '../agent-cli-installation-error'
 import { isStructuredAgentSessionStartFailureRow } from '../../../shared/structured-agent-session-start-failure-row-key'
-import { projectQueuedMessageCards } from '../../../renderer/src/components/native-chat/structured-agent-session-queued-cards'
+import { projectQueuedMessageCards } from '../../../shared/structured-agent-session-queued-cards'
 import { HOST_TEST_SESSION, hostTestMessage } from './structured-agent-session-host-test-data'
 import {
   createQueuedMessageTestRig,

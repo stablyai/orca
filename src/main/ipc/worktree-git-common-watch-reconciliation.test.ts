@@ -1,7 +1,7 @@
 import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { subscribeViaWatcherProcess } from './parcel-watcher-process'
-import type { WatcherProcessCallback } from './parcel-watcher-process-subscription'
+import { subscribeViaWatcherProcess } from './filesystem/watcher-process/parcel-watcher-process'
+import type { WatcherProcessCallback } from './filesystem/watcher-process/parcel-watcher-process-subscription'
 import { startGitCommonPolling } from './worktree-git-common-polling'
 import { startGitCommonNarrowWatch } from './worktree-git-common-narrow-watch'
 import { createGitCommonWatchReconciliation } from './worktree-git-common-watch-reconciliation'
@@ -11,7 +11,9 @@ import type {
 } from './worktree-base-directory-poller'
 
 vi.mock('node:fs/promises', () => ({ stat: vi.fn(async () => ({ isDirectory: () => true })) }))
-vi.mock('./parcel-watcher-process', () => ({ subscribeViaWatcherProcess: vi.fn() }))
+vi.mock('./filesystem/watcher-process/parcel-watcher-process', () => ({
+  subscribeViaWatcherProcess: vi.fn()
+}))
 vi.mock('./worktree-git-common-polling', () => ({ startGitCommonPolling: vi.fn() }))
 
 const commonDirPath = resolve('repository', '.git')

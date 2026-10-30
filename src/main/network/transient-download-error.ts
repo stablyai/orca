@@ -1,4 +1,3 @@
-/** Download failures a later attempt may not hit: dropped connections, timeouts, 5xx. */
 export type HttpStatusError = Error & {
   httpStatusCode?: number
   retryAfterMs?: number
@@ -7,7 +6,7 @@ export type HttpStatusError = Error & {
 
 const RETRYABLE_NET_ERROR =
   /net::ERR_(CONTENT_LENGTH_MISMATCH|INCOMPLETE_CHUNKED_ENCODING|CONNECTION_(RESET|CLOSED|ABORTED|REFUSED|TIMED_OUT)|EMPTY_RESPONSE|NETWORK_CHANGED|TIMED_OUT|INTERNET_DISCONNECTED|ADDRESS_UNREACHABLE|NAME_NOT_RESOLVED|SOCKET_NOT_CONNECTED|HTTP2_PROTOCOL_ERROR|QUIC_PROTOCOL_ERROR)\b/
-// Node's `https` (orcad) names the same drops by code; `aborted` is a response cut mid-body.
+// Node reports mid-body aborts by code; Chromium uses net::ERR_* messages.
 const RETRYABLE_NODE_ERROR_CODES = new Set([
   'ECONNRESET',
   'ECONNREFUSED',

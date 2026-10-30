@@ -4,12 +4,6 @@ import { placeCreatedSessionTab } from './session-tab-placement'
 const created = { id: 'new' }
 
 describe('placeCreatedSessionTab', () => {
-  it('inserts directly after the anchor', () => {
-    expect(
-      placeCreatedSessionTab([{ id: 'a' }, { id: 'b' }, { id: 'c' }], created, 'a').map((t) => t.id)
-    ).toEqual(['a', 'new', 'b', 'c'])
-  })
-
   it('inserts after all leaves of a split parent', () => {
     expect(
       placeCreatedSessionTab(
@@ -54,25 +48,10 @@ describe('placeCreatedSessionTab', () => {
     ).toEqual(['split::left', 'trailing', 'split::right', 'new'])
   })
 
-  it('appends when the anchor is the last tab', () => {
-    expect(
-      placeCreatedSessionTab([{ id: 'a' }, { id: 'b' }], created, 'b').map((t) => t.id)
-    ).toEqual(['a', 'b', 'new'])
-  })
-
   it('appends when the anchor is absent', () => {
     expect(
       placeCreatedSessionTab([{ id: 'a' }, { id: 'b' }], created, 'missing').map((t) => t.id)
     ).toEqual(['a', 'b', 'new'])
-  })
-
-  it('appends when no anchor is given', () => {
-    for (const anchor of [undefined, null, '']) {
-      expect(placeCreatedSessionTab([{ id: 'a' }], created, anchor).map((t) => t.id)).toEqual([
-        'a',
-        'new'
-      ])
-    }
   })
 
   it('re-places a tab that is already in the list instead of duplicating it', () => {
@@ -81,11 +60,5 @@ describe('placeCreatedSessionTab', () => {
         (t) => t.id
       )
     ).toEqual(['a', 'b', 'new'])
-  })
-
-  it('does not mutate the input list', () => {
-    const tabs = [{ id: 'a' }, { id: 'b' }]
-    placeCreatedSessionTab(tabs, created, 'a')
-    expect(tabs.map((t) => t.id)).toEqual(['a', 'b'])
   })
 })

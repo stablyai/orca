@@ -27,13 +27,13 @@ import { indexedStatusFeedSession } from '../native-chat/agent-session-wire/stru
 import { invokeCanUseTool } from './claude-can-use-tool-test-support'
 import { system, toolUse } from './claude-child-work-producer-harness.test-fixture'
 import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
-import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import {
   fakeClaude,
   identityFor,
-  PROVIDER_SESSION_ID,
-  claudeStartupSettled
+  PROVIDER_SESSION_ID
 } from './claude-structured-session-test-support'
+import { claudeStartupSettled } from './claude-structured-startup-settled-test-support'
 
 const SESSION = 'session-1'
 const FENCE = 7
@@ -153,7 +153,7 @@ async function pipeline() {
         })
       ]
     ]),
-    getRecord: () => null,
+    getConversation: () => null,
     now,
     statusSink: () => ({
       publish: (summary, subject) => {
@@ -197,6 +197,7 @@ async function pipeline() {
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: null,
       resumesTranscript: false,
+      cliFlag: async () => 'supported' as const,
       continuesChain: false
     }),
     openConnection: claude.openConnection,

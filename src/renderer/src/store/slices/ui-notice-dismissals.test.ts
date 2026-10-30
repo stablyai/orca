@@ -290,9 +290,7 @@ describe('createUISlice clearOsc52ClipboardDefaultOnNotice', () => {
   })
 
   it('stops the toast this session even when the persist fails', () => {
-    // Why local-first: the flag is the only thing keeping the toast off screen, and a
-    // rejected ui.set must not leave it re-firing on every render of this session. Losing
-    // the persist just re-arms the notice next launch, which is the safe direction.
+    // Dismiss locally before persisting so failure cannot repeatedly toast this session; next launch may re-arm.
     const setUI = vi.fn(() => Promise.reject(new Error('runtime offline')))
     vi.stubGlobal('window', { api: { ui: { set: setUI } } })
     const store = createUIStore()

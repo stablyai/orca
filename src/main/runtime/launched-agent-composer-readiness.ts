@@ -1,21 +1,6 @@
-/**
- * The one answer to "has the agent Orca just launched opened its composer?", shared by every host
- * path that writes a first input into a fresh agent: `agent.launch`'s terminal prompt and, through
- * `waitForWorkerStartComposer`, an orchestration worker's first dispatch.
- *
- * The signal is the one the desktop's own paste used: bracketed paste turned on (DECSET 2004) plus
- * the agent's `draftPasteReadySignal` (its composer marker, or a quiet render after 2004), read by
- * the shared `draft-paste-ready-scanner`, within the same per-agent budget. That signal cannot tell
- * a composer from a startup dialog drawn in the same mode, so it counts only while the pane shows no
- * startup dialog and no Codex provisional header (`readFreshComposerHold`). Unlike the desktop's
- * paste it reads only output after the shell's last `?2004l`, and drops a signal while a shell is
- * proven in front (`readLaunchedAgentForeground`). A signal is never proof by itself: a shell back
- * at its prompt turns bracketed paste on too, so the write still needs the agent found in front.
- *
- * Where the desktop pasted blind once its budget ran out, the host falls back to the `tui-idle`
- * evidence ranking (idle titles, known ready screens), which also reports a dialog left up. Agents
- * whose composer marker a captured boot proves (`composerReadyCaptures`) wait for their marker alone.
- */
+/** Fresh-launch signals require shell handoff plus dialog/provisional-header vetoes; shells also enable bracketed paste.
+ * Captured-marker agents wait for their marker; others may fall back to tui-idle within the remaining budget.
+ * Readiness alone never authorizes writing: the foreground guard must still admit the agent. */
 
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { RuntimeTerminalWait } from '../../shared/runtime-terminal-contracts'
@@ -38,10 +23,7 @@ export type LaunchedAgentReadinessRuntime = Pick<
   'waitForTerminal' | 'waitForFreshWorkerComposer'
 >
 
-/**
- * What keeps a ready signal from counting: a startup dialog in the pane's text or on its screen, or
- * a rule file's hold anchor (Codex 0.157's provisional `model: loading` header, which discards input).
- */
+/** Startup dialogs and hold anchors veto signals; Codex's provisional loading header discards input. */
 export function readFreshComposerHold(
   waitText: string,
   screenLines: readonly string[] | null
@@ -55,12 +37,7 @@ export function readFreshComposerHold(
   return showsHoldAnchor(waitText.toLowerCase()) ? 'starting' : null
 }
 
-/**
- * A fresh orchestration worker's first dispatch. Marker agents wait for their marker, as a launch
- * does; every other agent takes main's cue for this path, `tui-idle`, which settles on the agent's
- * own ready title instead of a quiet window after it. That dispatch waits for the render to settle
- * before Enter, so it never needed the desktop paste's later cue.
- */
+/** Workers wait for proven markers or tui-idle; their pre-Enter render wait avoids the desktop paste's later cue. */
 export async function waitForWorkerStartComposer(
   runtime: LaunchedAgentReadinessRuntime,
   handle: string,
@@ -97,20 +74,21 @@ export async function waitForWorkerStartComposer(
 }
 
 /**
- * An agent whose only rest signal is its bare name, which a launch holds to quiet output, and whose
- * composer draws a marker: that marker answers first. Grok draws its glyph at 0.6 s, then animates
- * its logo for ten.
+ * An agent whose composer draws a marker, and whose only rest signal is its bare name (which a
+ * launch holds to quiet output) or a title the user can turn off: that marker answers first. Grok
+ * draws its glyph at 0.6 s, then animates its logo for ten; Claude without its title never settles.
  */
 export function workerStartReadsComposerMarker(agent: TuiAgent): boolean {
-  const signal = TUI_AGENT_CONFIG[agent].draftPasteReadySignal
+  const config = TUI_AGENT_CONFIG[agent]
+  const signal = config.draftPasteReadySignal
   return (
     signal !== undefined &&
     draftPasteReadySignalHasMarker(signal) &&
-    !nameOnlyIdleNeedsCorroboration(agent)
+    (config.workerStartReadsComposerMarker === true || !nameOnlyIdleNeedsCorroboration(agent))
   )
 }
 
-/** The first wait to answer; a failure counts only once both failed, and then as the idle wait's. */
+/** First answer wins; reject only after both fail, preferring the idle error. */
 function firstAnswer(
   idle: Promise<RuntimeTerminalWait>,
   marker: Promise<RuntimeTerminalWait>
@@ -137,23 +115,17 @@ export function waitForWorkerAgentReady(
   handle: string,
   args: { agent: TuiAgent | undefined; reusesTerminal: boolean; timeoutMs: number }
 ): Promise<RuntimeTerminalWait> {
-  // A caller-supplied terminal was not freshly launched, so its composer marker may be long gone.
   return args.agent && !args.reusesTerminal
     ? waitForWorkerStartComposer(runtime, handle, args.agent, args.timeoutMs)
     : runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: args.timeoutMs })
 }
 
-/**
- * The composer signal's wait, then — if it did not settle within the desktop paste's budget, or a
- * startup dialog is up — the `tui-idle` wait for what is left of `timeoutMs`, whose result says
- * ready, blocked by a dialog, or not ready. Throws when that runs out too.
- */
+/** Fall back from composer detection to tui-idle using only the remaining launch budget. */
 export async function waitForLaunchedAgentComposer(
   runtime: LaunchedAgentReadinessRuntime,
   handle: string,
   agent: TuiAgent,
   timeoutMs: number,
-  /** Aborting rejects the wait; the idle fallback rejects on the same signal. */
   signal?: AbortSignal
 ): Promise<RuntimeTerminalWait> {
   const abort = signal ? { signal } : {}
@@ -171,10 +143,8 @@ export async function waitForLaunchedAgentComposer(
       { requireComposerMarker: false, stopOnDialog: true, ...abort }
     )
   } catch {
-    // Out of budget, a dialog up, or a pane it could not read: the idle wait answers each, and
-    // throws for a handle that is gone.
+    // tui-idle classifies timeout/dialog/unreadable panes and rejects lost handles.
   }
-  // Checked, where the desktop pasted blind: an agent that shows no readiness keeps its text.
   return runtime.waitForTerminal(handle, {
     condition: 'tui-idle',
     timeoutMs: Math.max(1, timeoutMs - (Date.now() - startedAt)),

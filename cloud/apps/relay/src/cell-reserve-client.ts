@@ -9,9 +9,7 @@ import {
 } from './cell-reserve-contract.js'
 import type { ReserveAttempt } from './reserve-placement.js'
 
-// The director's calls to cells. Bookings for one cell batch for up to 5 ms or 64 items;
-// a cell that does not answer within the timeout is unverifiable, and every item in the
-// batch reads `unreachable` (one of the request's three tries).
+// Batch bookings per cell for 5ms/64 items; unreadable replies mark the whole batch unreachable for one of the request’s three tries.
 export const CELL_RESERVE_FLUSH_MS = 5
 export const CELL_RESERVE_TIMEOUT_MS = 1_000
 

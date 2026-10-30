@@ -37,8 +37,7 @@ export function assertClipboardImageDimensionsWithinLimit({
   }
 }
 
-/** Longest edge of the thumbnail the composer shows while the full clipboard
- *  image is still being written to disk. Small enough to cross IPC instantly. */
+/** Bound previews for fast IPC while full clipboard images finish writing. */
 export const CLIPBOARD_IMAGE_THUMBNAIL_MAX_EDGE = 320
 
 export type ClipboardImageThumbnail = ClipboardImageDimensions & {
@@ -46,8 +45,7 @@ export type ClipboardImageThumbnail = ClipboardImageDimensions & {
   dataUrl: string
 }
 
-/** Scale `size` down so its longest edge fits the thumbnail budget. Returns the
- *  input unchanged when it already fits, so small images skip the resize. */
+/** Fit the thumbnail budget; preserve already-small dimensions so callers skip resizing. */
 export function clipboardImageThumbnailSize({
   height,
   width
@@ -63,8 +61,7 @@ export function clipboardImageThumbnailSize({
   }
 }
 
-/** Clipboard format lists (Electron `availableFormats`, browser `ClipboardItem.types`)
- *  name image data by MIME type, so presence needs no decode. */
+/** Clipboard formats are MIME types, so image presence needs no decode. */
 export function clipboardFormatsIncludeImage(formats: readonly string[]): boolean {
   return formats.some((format) => format.startsWith('image/'))
 }

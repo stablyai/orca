@@ -1,5 +1,4 @@
-// A sleeping record a pre-stable-id build keyed by the pane's number (`tab:2`) instead of its leaf.
-// Shipped builds still write them for agents in panes spawned before the stable-id migration.
+// Pre-stable-ID panes still persist numbered keys (tab:2) until their old panes retire.
 
 import type { SleepingAgentSessionRecord } from './agent-session-resume'
 import { parseLegacyNumericPaneKey } from './stable-pane-id'
@@ -12,11 +11,8 @@ export function getProviderSessionClaimKey(record: SleepingAgentSessionRecord): 
     : base
 }
 
-/**
- * The tab's numbered record for the pane: the one with its number, else the oldest capture when
- * every numbered record in the tab names one conversation. `aliases`: every numbered key of the tab
- * in this workspace. A pane whose number is unknown (main) matches only by the one-conversation rule.
- */
+/** Prefer the pane’s numbered record, otherwise the oldest if all numbered records name one conversation.
+ * Unknown pane numbers require that one-conversation fallback; aliases contains every numbered key in the workspace/tab. */
 export function findLegacyNumericSleepingRecord(
   records: Readonly<Record<string, SleepingAgentSessionRecord>>,
   pane: { tabId: string; numericPaneId?: string },
@@ -42,8 +38,7 @@ export function findLegacyNumericSleepingRecord(
   const oldestLegacyMatch = legacyMatches
     .slice()
     .sort(([, a], [, b]) => a.capturedAt - b.capturedAt || a.updatedAt - b.updatedAt)[0]
-  // Why: duplicate legacy aliases can point at one provider session; consume
-  // the oldest capture as canonical and clear its aliases after resume.
+  // Canonicalize duplicate conversation aliases to the oldest capture; clear all aliases after resume.
   const selected =
     exactLegacyMatch ??
     (providerSessionKeys.size === 1

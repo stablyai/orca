@@ -8,20 +8,20 @@ import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-work
 import type { Tab } from '../../../shared/tab-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import { defaultAgentChatLabel } from '../../../shared/agent-session-chat-label'
+import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-session-chat-label'
 import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
 import { useAppStore } from '@/store'
 import { resolveUnifiedTabCreatePlacement } from '@/store/slices/tabs/tabs-create-placement'
-import type { StructuredLaunchSurfaceAddress } from './structured-agent-session-launch-record'
+import type { StructuredLaunchSurfaceAddress } from './agent-session/launch/structured-agent-session-launch-record'
 import {
   readStructuredAgentLaunchRecord,
   readStructuredAgentLaunchRecords,
   writeStructuredAgentLaunchRecord
-} from './structured-agent-session-launch-persistence'
+} from './agent-session/launch/structured-agent-session-launch-persistence'
 import {
   getStructuredAgentSessionLaunchOwner,
   getStructuredLaunchStateBySessionId
-} from './structured-agent-session-launch-registry'
+} from './agent-session/launch/structured-agent-session-launch-registry'
 import {
   structuredAgentSessionFocusOwner,
   structuredAgentSessionTargetForHost

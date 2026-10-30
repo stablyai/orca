@@ -18,6 +18,7 @@ import { MANAGE_SESSIONS_SECTION_ID } from './TerminalTccAttributionNotice'
 import { useAppStore } from '../../store'
 import { translate } from '@/i18n/i18n'
 import { isWebClientLocation } from '@/lib/web-client-location'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function TerminalWindowsAdministratorSection(): React.JSX.Element {
   const [administrator, setAdministrator] = useState<boolean | null | undefined>()
@@ -236,9 +237,10 @@ export function TerminalWindowsAdministratorSection(): React.JSX.Element {
               <Button
                 variant="link"
                 size="sm"
-                onClick={() =>
-                  void window.api.shell.openUrl(
-                    'https://www.onorca.dev/docs/terminal#windows-administrator-mode'
+                onClick={(event) =>
+                  openAppHttpLink(
+                    'https://www.onorca.dev/docs/terminal#windows-administrator-mode',
+                    { event }
                   )
                 }
               >

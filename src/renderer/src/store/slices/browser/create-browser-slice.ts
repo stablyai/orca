@@ -9,6 +9,7 @@ import { createBrowserPageCreateActions } from './browser-page-create-actions'
 import { createBrowserPageConversionActions } from './browser-page-conversion-actions'
 import { createBrowserPageFocusActions } from './browser-page-focus-actions'
 import { createBrowserPageStateActions } from './browser-page-state-actions'
+import { createBrowserAudioActions } from './browser-audio-actions'
 import { createBrowserPageMetadataActions } from './browser-page-metadata-actions'
 import { createBrowserHydrationActions } from './browser-hydration-actions'
 import { createBrowserProfileListActions } from './browser-profile-list-actions'
@@ -21,6 +22,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   browserTabsByWorktree: {},
   browserPagesByWorkspace: {},
   browserCertificateFailuresByPageId: {},
+  browserAudiblePageIds: {},
+  browserAudioMutedTabIds: {},
   browserAnnotationsByPageId: {},
   browserAnnotationMarkerIdsByPageId: {},
   remoteBrowserPageHandlesByPageId: {},
@@ -39,8 +42,6 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   browserUrlHistory: [],
   workspaceDocHistory: [],
   browserHistoryPageId: null,
-  defaultBrowserSessionProfileId: null,
-  defaultBrowserSessionProfileIdByHostId: {},
   detectedBrowsers: [],
   detectedBrowsersLoaded: false,
   detectedBrowsersHost: null,
@@ -52,6 +53,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   ...createBrowserPageConversionActions(set, get),
   ...createBrowserPageFocusActions(set, get),
   ...createBrowserPageStateActions(set, get),
+  ...createBrowserAudioActions(set, get),
   ...createBrowserPageMetadataActions(set, get),
   ...createBrowserHydrationActions(set, get),
   ...createBrowserProfileListActions(set, get),

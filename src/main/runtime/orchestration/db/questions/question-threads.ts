@@ -143,7 +143,7 @@ export function answerQuestion(
       threadId: question.message_id,
       runId: params.runId
     })
-    // Why: ask returns thread state directly; leaving its answer unread would deliver it again via check.
+    // ask returns the answer directly; mark it read to prevent replay through check.
     this.markAsRead([message.id])
     this.db
       .prepare(
@@ -168,7 +168,7 @@ export function answerQuestion(
 }
 
 export function closeQuestionsForDispatch(this: OrchestrationDb, dispatchId: string): string[] {
-  // Every settlement path calls this, so it is also where helper mail moves to the Run.
+  // Every settlement passes here, so transfer helper mail to the Run here too.
   handHelperMailToRun(this, dispatchId)
   const rows = this.db
     .prepare("SELECT message_id FROM question_threads WHERE dispatch_id = ? AND status = 'pending'")

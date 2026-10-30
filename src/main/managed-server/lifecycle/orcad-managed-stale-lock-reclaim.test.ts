@@ -52,7 +52,6 @@ const evidence = {
   ageMinutes: 90,
   nonce: 'n-1'
 }
-// What orcad adds to a status line beyond the fields every answer carries.
 type AnswerExtras = { exitCode?: number; evidence?: typeof evidence }
 
 const answer = (status: string, extra: AnswerExtras = {}) =>
@@ -87,7 +86,7 @@ describe('runManagedOrcadStaleLockReclaim', () => {
     const command: string = mocks.exec.mock.calls[0][1]
     expect(command).toContain("--reclaim-stale-lock --data-root '/home/dev/.orca' --json")
     expect(command).not.toContain('--yes')
-    // Only the slot gate names the pin; a dry run passes no nonce to orcad.
+    // Dry runs gate slot support but do not pass a nonce to the reclaim command.
     expect(command.split('--expect-nonce')).toHaveLength(2)
     expect(mocks.wake).not.toHaveBeenCalled()
   })
@@ -98,7 +97,6 @@ describe('runManagedOrcadStaleLockReclaim', () => {
       yes: true,
       expectNonce: 'n-1'
     })
-    // The slot supports the command, so nothing here argues for deleting the lock by hand.
     expect(result).toEqual({ status: 'no-answer', message: expect.any(String) })
     expect(mocks.wake).not.toHaveBeenCalled()
   })
@@ -165,10 +163,8 @@ describe('runManagedOrcadStaleLockReclaim', () => {
     expect(mocks.rebuild).toHaveBeenCalledWith('/u', 'env-1')
   })
 
-  // Runs the real command in a shell against a slot whose runtime records any invocation.
-  // The fake runtime prints nothing, which a slot that runs the command reports as no answer.
+  // A silent fake runtime distinguishes unsupported slots from commands that ran without a reply.
   it.skipIf(process.platform === 'win32').each([
-    // A build with the reclaim but not the nonce pin must never be confirmed from here.
     [
       'never starts an orcad that has the reclaim but not the pin',
       'argv[2] === "--reclaim-stale-lock"',

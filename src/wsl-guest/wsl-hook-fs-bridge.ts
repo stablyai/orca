@@ -1,8 +1,4 @@
-// Guest-side fs bridge for the WSL agent-hook relay. Exposes the handful of
-// home-scoped file operations the shared remote hook installers need, as
-// JSON-RPC request handlers over the relay's stdio channel — so the host
-// installs hook configs/scripts into the distro without per-file wsl.exe
-// spawns (load-sensitive, see docs/agent-status-over-wsl.md).
+// Install hook files through guest stdio RPCs instead of spawning wsl.exe per file.
 import { promises as fs } from 'node:fs'
 import { posix } from 'node:path'
 
@@ -25,12 +21,7 @@ export function registerWslHookFsHandlers(
   // (port fallback) ride it so the host can breadcrumb them.
   linkStatus?: () => Record<string, unknown>
 ): void {
-  // Why: the bridge exists solely to write agent hook configs into the guest
-  // user's home. Refusing paths outside it bounds the blast radius of a
-  // compromised host-side caller to what hook installation touches anyway.
-  // The bound is lexical (symlinks inside home are followed) — acceptable
-  // because the only caller is the host-owned stdio channel, never an
-  // agent-reachable surface.
+  // Scope host-owned stdio operations lexically to the guest home; symlinks within home are intentionally followed.
   const homeRoot = posix.resolve(home)
   const resolveRaw = (rawPath: unknown): string => {
     if (typeof rawPath !== 'string' || rawPath.length === 0) {
@@ -45,10 +36,7 @@ export function registerWslHookFsHandlers(
     }
     return resolved
   }
-  // Why: the installers' mkdir-p walks top-down from `/`, probing every
-  // ancestor of home with readdir before it ever creates a dir. Allow
-  // read-only existence probes on those ancestors; everything else stays
-  // home-scoped.
+  // Allow read-only ancestor probes for installer mkdir-p walks from /; keep all writes home-scoped.
   const scopedProbe = (rawPath: unknown): string => {
     const resolved = resolveRaw(rawPath)
     if (resolved === '/' || homeRoot === resolved || homeRoot.startsWith(`${resolved}/`)) {

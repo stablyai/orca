@@ -5,12 +5,7 @@ import type {
   TerminalLeafMoveResult
 } from '../../../../shared/terminal-leaf-move'
 
-/**
- * A layout-owner build's drag-out: main moves the pane under the desktop's move rules and names the
- * new tab; a paired server's workspace its frames draw goes to that server's main. Today's move
- * runs instead when no main can act on it (a paired server's workspace its frames do not draw, or a
- * tab or pane main's copy lacks, such as a legacy tab whose tab-bar id differs from its terminal's).
- */
+/** Ask the layout-owning main to move the pane and name its tab; use paired main only when its frames draw the workspace. Fall back to window moves for unowned or legacy tab/pane identities main lacks. */
 export function moveLeafThroughLayoutOwner(
   request: TerminalLeafMoveRequest,
   placement: { groupId: string; index: number | undefined },
@@ -36,8 +31,7 @@ export function moveLeafThroughLayoutOwner(
             result.tabId
               ? {
                   status: 'moved',
-                  // A server's main answers its own terminal id: the pane takes the binding its
-                  // frame (drawn before this answer) gave it, else the one this desktop knew.
+                  // Server IDs are not client bindings; prefer the preceding frame’s mapped terminal, then the client’s existing one.
                   ptyId: origin.routed
                     ? (drawnBinding(result.tabId, request.leafId) ??
                       (result.ptyId ? request.ptyId : null))

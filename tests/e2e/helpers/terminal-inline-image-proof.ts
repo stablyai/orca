@@ -66,8 +66,7 @@ export type InlineImageResources = {
   blobBytes: number
 }
 
-/** One walk of the addon's private state, shared by every image spec so the
- *  internals contract against the patched dependency has a single definition. */
+// Keep the patched addon’s private-state contract in one reader for every image spec.
 export async function readInlineImageResources(
   page: Page,
   tabIds: string[]

@@ -5,6 +5,7 @@ import { subscribeToUnpairedDeviceAuthNotification } from '../unpaired-device-au
 import { translate } from '@/i18n/i18n'
 import { toast } from 'sonner'
 import { useAppStore } from '../../store'
+import { openPluginInstallLink } from '../../store/plugin-preview-request'
 
 function getShortcutPlatform(): NodeJS.Platform {
   if (navigator.userAgent.includes('Mac')) {
@@ -51,14 +52,25 @@ export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): voi
       .catch(() => {})
   }
 
+  unsubs.push(window.api.ui.onOpenPluginInstallLink?.(openPluginInstallLink) ?? (() => {}))
+  const pendingPluginLink = window.api.ui.consumePendingPluginInstallLink?.()
+  if (pendingPluginLink && typeof pendingPluginLink.then === 'function') {
+    void pendingPluginLink
+      .then((link) => {
+        if (link) {
+          openPluginInstallLink(link)
+        }
+      })
+      .catch(() => {})
+  }
+
   unsubs.push(
     window.api.ui.onOpenSetupGuide?.(() => {
       useAppStore.getState().openModal('setup-guide', { telemetrySource: 'help_menu' })
     }) ?? (() => {})
   )
 
-  // Why: a phone stuck in a silent 4001 auth loop (lost device registry) reads as
-  // "phone won't connect" with no clue on either end; main throttles to once per session.
+  // Lost-registry auth loops need a visible remedy on either end; main throttles this notice once per session.
   unsubs.push(
     subscribeToUnpairedDeviceAuthNotification(window.api.mobile, () => {
       toast.warning(

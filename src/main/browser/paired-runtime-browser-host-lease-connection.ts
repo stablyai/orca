@@ -11,8 +11,8 @@ import {
   subscribeRemoteRuntimeRequest,
   type RemoteRuntimeSubscription,
   type RemoteRuntimeSubscriptionCallbacks
-} from '../../shared/remote-runtime-client'
-import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+} from '../../shared/remote-runtime/remote-runtime-client'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
 import { createBrowserClientHostAttachRequest } from './browser-client-host-attach-request'
 import { sameBrowserClientHostLeaseAuthority } from './browser-client-host-command-authority'
 import type { PairedRuntimeBrowserHostLeaseOptions } from './paired-runtime-browser-host-lease-options'

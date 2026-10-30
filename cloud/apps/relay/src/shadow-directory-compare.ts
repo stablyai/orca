@@ -2,9 +2,7 @@ import { RELAY_PROTOCOL_LIMITS } from '@orca-cloud/relay-contract'
 import { relayHostLogDigest } from './relay-host-log-digest.js'
 import type { ShadowSeatDirectory } from './shadow-seat-directory.js'
 
-// Step 3: compares the shadow seat map with the database answer on the two
-// reads step 5 will serve from memory. It only counts and logs; the database
-// answer is always the one returned.
+// Compare memory seats against database answers for sticky verification/resolve; only count/log, preserving the database response.
 
 export type ShadowCompareRoute = 'sticky-verify' | 'resolve'
 
@@ -34,11 +32,9 @@ export type ShadowCompareVerdict = { class: ShadowCompareClass; explained: boole
 export type ShadowCompareDatabaseAnswer = { cellId: string; assignmentEpoch: number } | null
 
 export const SHADOW_COMPARE_FLUSH_MS = 60_000
-// One poll, its timeout, and a reconnect (p95 ~6 s on 10-02). A move older than
-// this is not "the map catching up": a lost leave must not read as explained forever.
+// One poll/timeout/reconnect (~6s p95); cap explanations so lost leaves cannot look like lag forever.
 export const SHADOW_COMPARE_LAG_BOUND_MS = 10_000
-// A superseded half-open control lingers until the cell's silence close (the timeout plus up
-// to one ping interval), then the map trails that close by a poll.
+// Half-open superseded controls linger through silence timeout + ping interval + map polling lag.
 export const SHADOW_COMPARE_SUPERSEDED_CLOSE_MS =
   RELAY_PROTOCOL_LIMITS.controlSilenceTimeoutMs +
   RELAY_PROTOCOL_LIMITS.controlPingIntervalMs +
@@ -57,8 +53,7 @@ export function classifyShadowSeat(
   // When this instance began comparing; omitted, a missing sighting is never excused.
   startedAt = -Infinity
 ): ShadowCompareVerdict {
-  // Pure: only ShadowDirectoryCompare records sightings. An epoch never seen is new; unlike the
-  // superseded rule, a wrong guess here only explains a mismatch for one lag bound.
+  // Classification must not record sightings; a new-epoch guess explains mismatch for only one lag bound.
   const movedAt = answer
     ? (directory.databaseEpochFirstSeen(
         identity.userId,
@@ -100,8 +95,7 @@ export function classifyShadowSeat(
     if (!supersededShape) return { class: 'duplicate-seat', explained: false }
     const known = directory.databaseEpochOf(identity.userId, identity.relayHostId)
     if (!known) {
-      // Later, no sighting means another instance served the earlier compares, or the map evicted
-      // the host, so a harmless supersede still reads as an unexplained duplicate-seat.
+      // Later missing sightings can mean other instances served compares or eviction; keep supersedes unexplained.
       const starting = now - startedAt <= SHADOW_COMPARE_SUPERSEDED_CLOSE_MS
       return { class: starting ? 'superseded-unknown-age' : 'duplicate-seat', explained: false }
     }
@@ -117,8 +111,7 @@ export function classifyShadowSeat(
       .some((entry) => entry.cellId === answer.cellId)
     return { class: left ? 'db-only-left' : 'db-only-unseen', explained: true }
   }
-  // The map trails the cells by a poll. The database answer carries no grant time, so the
-  // move's age is how long this director has seen the newer epoch.
+  // No database grant time: date moves by this director’s first sighting of the newer epoch.
   const mapBehind =
     answer.assignmentEpoch > seat.epoch && now - movedAt <= SHADOW_COMPARE_LAG_BOUND_MS
   if (seat.cellId !== answer.cellId) {
@@ -138,8 +131,7 @@ export function classifyShadowSeat(
   return { class: 'agree', explained: true }
 }
 
-// When the move to the answer's epoch happened, from the sighting recorded before this compare.
-// A regressed epoch means unknown, not new.
+// Date moves from prior sightings; regressed epochs are unknown, not new.
 function movedSince(
   known: { epoch: number; firstSeenAt: number },
   answer: { assignmentEpoch: number },
@@ -150,9 +142,7 @@ function movedSince(
   return known.epoch < answer.assignmentEpoch ? now : known.firstSeenAt
 }
 
-// The database's cell, or with no row every seat's cell; an unexplained cell-mismatch or
-// duplicate-seat also counts on every seat cell, so a stale seat feed shows on its own cell.
-// A compare with neither (agree-absent, or map-incomplete with no row and no seat) has none.
+// Count DB cell and, for unexplained mismatch/duplicate, every seated cell so stale feeds show locally; no row/seats means no cells.
 function comparedCells(
   directory: ShadowSeatDirectory,
   identity: { userId: string; relayHostId: string },
@@ -217,8 +207,7 @@ export class ShadowDirectoryCompare {
     return verdict
   }
 
-  // One line per route and class per window; the log metric sums `count`. `countByCell`
-  // counts each compare once on every cell it involves (see comparedCells).
+  // Flush per route/class; count each compare once on every involved cell (comparedCells).
   flush(now: number = this.now()): void {
     for (const [key, { count, countByCell }] of this.counts) {
       const [route, verdictClass, explained] = key.split('\u0000')

@@ -7,8 +7,7 @@ describe('terminal-pty-ack-gate cumulative totals', () => {
   const ackDataMock = vi.fn()
 
   beforeEach(() => {
-    // Why: the cumulative totals are module state; a fresh module per test
-    // mirrors a fresh renderer page (renderer lifecycle reset).
+    // Fresh modules model renderer reload resetting cumulative ACK accounting.
     vi.resetModules()
     ackDataMock.mockClear()
     ;(window as unknown as { api: unknown }).api = { pty: { ackData: ackDataMock } }
@@ -82,11 +81,9 @@ describe('terminal-pty-ack-gate parse-deferred crediting', () => {
       credit = takeCurrentPtyDeliveryAckCredit()
     })
 
-    // Claimed: nothing credited at delivery return.
     expect(ackDataMock).not.toHaveBeenCalled()
     credit!()
     expect(ackDataMock).toHaveBeenCalledWith('pty-a', 10, 10)
-    // Fire-once: split slices / discard paths may re-invoke harmlessly.
     credit!()
     expect(ackDataMock).toHaveBeenCalledTimes(1)
   })

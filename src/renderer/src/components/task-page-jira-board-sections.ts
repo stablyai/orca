@@ -49,8 +49,7 @@ export function buildJiraBoardSections(
       section.issues.push(issue)
       continue
     }
-    // Why: statuses outside the board config (other projects, hidden statuses)
-    // still deserve a lane instead of silently dropping their issues.
+    // Keep issues outside the board’s configured statuses visible in extra lanes.
     const extraKey = `status:${issue.status.name}`
     const extra = extras.get(extraKey)
     if (extra) {

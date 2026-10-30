@@ -2,7 +2,8 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, screen } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -26,7 +27,7 @@ afterEach(() => {
   expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
 })
 
-import { subagentGroupFallbackText } from '../../../../shared/native-chat-subagent-summary'
+import { subagentGroupFallbackText } from '../../../../shared/native-chat/transcript/native-chat-subagent-summary'
 
 import type {
   NativeChatMessage,
@@ -72,6 +73,63 @@ import type {
     })
     afterAll(() => restoreViewport())
     afterEach(cleanup)
+    it.each([true, false])(
+      'copies selections across message roots from the transcript (math=%s)',
+      (math) => {
+        const sources = math
+          ? ['Before $x^2$ after.', 'Then \\(y_i\\).']
+          : ['Before plain after.', 'Then plain.']
+        const view = render(
+          <NativeChatMessageList
+            session={{
+              ...session,
+              messages: sources.map((text, index) => ({
+                id: `selection-${index}`,
+                role: 'assistant',
+                blocks: [{ type: 'text', text }],
+                timestamp: index + 1,
+                source: 'transcript'
+              }))
+            }}
+            isWorking={false}
+            expandSignal={false}
+          />
+        )
+        const transcript = view.container.querySelector('[data-native-chat-scroll]')
+        const paragraphs = view.container.querySelectorAll('[data-native-chat-quote-source] p')
+        if (!transcript || paragraphs.length !== 2) {
+          throw new Error('Missing transcript paragraphs')
+        }
+        const range = document.createRange()
+        range.setStart(paragraphs[0].firstChild ?? paragraphs[0], 0)
+        range.setEnd(paragraphs[1], paragraphs[1].childNodes.length)
+        const selection = document.getSelection()
+        selection?.removeAllRanges()
+        selection?.addRange(range)
+        for (const target of [paragraphs[0], transcript]) {
+          const setData = vi.fn()
+          const event = new Event('copy', { bubbles: true, cancelable: true })
+          Object.defineProperty(event, 'clipboardData', { value: { setData } })
+          fireEvent(target, event)
+          if (math) {
+            const copied = setData.mock.calls.find(([type]) => type === 'text/plain')?.[1]
+            expect(copied).toBe(sources.join('\n\n'))
+            expect(event.defaultPrevented).toBe(true)
+          } else {
+            expect(setData).not.toHaveBeenCalled()
+            expect(event.defaultPrevented).toBe(false)
+          }
+        }
+        const setData = vi.fn()
+        const handled = new Event('copy', { bubbles: true, cancelable: true })
+        handled.preventDefault()
+        Object.defineProperty(handled, 'clipboardData', { value: { setData } })
+        fireEvent(transcript, handled)
+        expect(setData).not.toHaveBeenCalled()
+        selection?.removeAllRanges()
+      }
+    )
+
     it('keeps a running tool live when transcript lifecycle metadata is absent', () => {
       render(
         <NativeChatMessageList
@@ -147,9 +205,7 @@ import type {
       expect(screen.getAllByRole('button', { name: 'Scroll this message to top' })).toHaveLength(2)
     })
 
-    // Only the turn's trailing run is live. Once the agent has said something
-    // after it, that run is done whatever its last call still reports; a
-    // reasoning aside is not "after it" — the agent is still inside the batch.
+    // Prose settles the preceding run; reasoning asides remain inside it.
     it('settles a run once prose follows it, but not for a reasoning aside', () => {
       const run = {
         id: 'assistant-tool-1',
@@ -226,11 +282,7 @@ import type {
     })
   })
 
-  // List-level, because every defect this feature has shipped so far lived in the
-  // assembly between rows — the roster is its own `role: 'system'` journal row, and
-  // what reaches the DOM depends on `foldToolMessages`, the turn-key mapping and the
-  // disclosure state the list owns. Rendering `NativeChatToolRun` in isolation
-  // supplies those by hand and agrees with whatever the caller was asked to assume.
+  // Exercise list assembly: folding, turn mapping and disclosure decide whether roster rows reach the DOM.
   describe('NativeChatMessageList spawn-group roster', () => {
     let restoreViewport = (): void => {}
     beforeAll(() => {
@@ -243,8 +295,7 @@ import type {
       { id: 'b', label: 'search', state: 'failed' }
     ]
 
-    /** The exact two-block row `codexSubagentGroupBody` writes: the structured
-     *  block plus the plain-text twin a client without the block type reads. */
+    /** Match the producer’s structured roster plus plain-text fallback for older clients. */
     function rosterMessage(agents: NativeChatSubagentEntry[], at: number): NativeChatMessage {
       return {
         id: 'roster-1',
@@ -258,9 +309,7 @@ import type {
       }
     }
 
-    // Explicit ascending timestamps: the list re-sorts by (timestamp, id), so rows
-    // sharing a millisecond tie-break alphabetically and the user turn can land
-    // last — which would strand the roster outside its own turn.
+    // Use ascending timestamps; equal times sort by id and can move the opener after its roster.
     function rosterSession(
       agents: NativeChatSubagentEntry[],
       startedAt: number
@@ -291,10 +340,6 @@ import type {
       }
     }
 
-    // A settled turn with its activity collapsed is the resting state of the whole
-    // transcript, so this is the roster's normal appearance, not an edge case. The
-    // completed-turn disclosure guard used to swallow it here — the compact row the
-    // feature exists to leave behind vanished the moment its turn ended.
     it('leaves the roster row behind on a settled turn whose activity is collapsed', () => {
       const startedAt = Date.now() - 3000
       render(
@@ -311,15 +356,11 @@ import type {
         'false'
       )
       expect(screen.getByRole('button', { name: /Ran 2 subagents/ })).toHaveTextContent('1 failed')
-      // The twin is the roster written out for clients that cannot draw the block.
-      // This one draws it, so printing the sentence too would say it all twice.
+      // Structured roster rendering replaces only its plain-text fallback.
       expect(screen.queryByText('Ran 2 subagents (1 failed)')).toBeNull()
     })
 
-    // The block is provider-agnostic — the Claude lane feeds it too — so a lane
-    // that folds a roster into a message carrying real prose is a live shape. The
-    // filter used to drop EVERY text block once a roster was present, so that
-    // prose vanished on desktop while mobile, which reads the raw blocks, kept it.
+    // Providers may fold a roster beside real prose; remove only its fallback twin.
     it('keeps prose beside a roster block and drops only the twin', () => {
       const startedAt = Date.now() - 3000
       const twin = subagentGroupFallbackText(ROSTER)
@@ -352,9 +393,7 @@ import type {
       expect(screen.queryByText(twin)).toBeNull()
     })
 
-    // The reordering that kept the roster visible must not have let TOOL activity
-    // out from behind the same disclosure: a failed child command reading as live
-    // on a finished turn is what put that guard there.
+    // Roster visibility must not bypass the disclosure for settled tool activity.
     it('keeps tool activity behind the disclosure the roster now bypasses', () => {
       const startedAt = Date.now() - 3000
       render(
@@ -368,9 +407,7 @@ import type {
 
       expect(screen.queryByRole('button', { name: /pwd/ })).toBeNull()
       fireEvent.click(screen.getByRole('button', { name: 'Toggle turn details' }))
-      // The run header and its single row name the same command.
       expect(screen.getAllByRole('button', { name: /pwd/ }).length).toBeGreaterThan(0)
-      // Expanding must reveal the tools beside the roster, never a second copy of it.
       expect(screen.getAllByRole('button', { name: /Ran 2 subagents/ })).toHaveLength(1)
     })
 
@@ -398,12 +435,7 @@ import type {
       )
     })
 
-    // The QA defect, at the seam that produced it. A mid-turn correction opens a
-    // NEW turn, so `isCurrentTurn` goes false for the fan-out's row and the list
-    // passes `activeTurnIsWorking={false}` down to the roster. The row used to
-    // relabel every live child `unverifiable` and flip its headline to "Ran" —
-    // claiming both that contact was lost and that the fan-out had finished, while
-    // the three real children were still running and completed 57-87s later.
+    // A newer turn must not turn still-running children into completed or unverifiable agents.
     it('keeps live children working after a newer turn supersedes their own', () => {
       const startedAt = Date.now() - 3000
       const live = rosterSession(
@@ -442,11 +474,7 @@ import type {
     })
   })
 
-  // The block schema admits `agents: []`, so a childless spawn group is a shape the
-  // wire allows even though no producer writes one. It draws nothing, so the row
-  // must not be mounted on its account: "counts as renderable" and "actually draws"
-  // have to answer the same. A row that passes the first and fails the second is an
-  // invisible div that still consumes one `gap-5` slot of the transcript.
+  // Empty rosters render nothing and must consume no transcript gap.
   describe('NativeChatMessageList childless spawn group', () => {
     let restoreViewport = (): void => {}
     beforeAll(() => {
@@ -473,7 +501,6 @@ import type {
       }
     }
 
-    /** Every slot the transcript column lays out — one per row that mounted. */
     function emptySlots(container: HTMLElement): Element[] {
       const column = container.querySelector('[data-native-chat-transcript-column]')
       expect(column).not.toBeNull()
@@ -515,8 +542,7 @@ import type {
         />
       )
 
-      // The twin is dropped only because the block draws the roster instead. This
-      // one cannot, so suppressing it too would leave the row with nothing at all.
+      // An empty roster cannot replace its fallback text.
       expect(screen.getByText(subagentGroupFallbackText(NO_AGENTS))).toBeInTheDocument()
       expect(emptySlots(container)).toEqual([])
     })
@@ -586,8 +612,7 @@ import type {
     }
   }
 
-  /** The journal behind `messages`: one turn `user-1` opened, holding every later row. With
-   *  `statesScope` false, the rows carry no turn scope, as an older host writes them. */
+  /** One turn owns every later row; statesScope=false models older hosts without row scopes. */
   function journalOf(
     messages: readonly NativeChatMessage[],
     statesScope: boolean
@@ -620,8 +645,6 @@ import type {
     ]
   }
 
-  // A finished turn is the transcript's resting state, and it should read as the
-  // answer to the prompt — not as the transcript of the work that produced it.
   describe('NativeChatMessageList settled turn fold', () => {
     let restoreViewport = (): void => {}
     beforeAll(() => {
@@ -672,9 +695,7 @@ import type {
       )
     })
 
-    // Nothing closes the disclosure when a turn ends; the fold arrives already
-    // closed. While the turn runs there is no fold at all, so the reader watches
-    // the work happen.
+    // The fold starts closed only once settled; live work stays visible.
     it('folds nothing while the turn is still running', () => {
       const startedAt = Date.now() - 3000
       render(
@@ -691,9 +712,7 @@ import type {
       expect(screen.queryByRole('button', { name: 'Toggle turn details' })).toBeNull()
     })
 
-    // The #23621 shape: the host folded a mid-turn send into the running turn, so
-    // the rows after it are still the opener's. One bar under the opener folds
-    // them all; the steered bubble stays visible and never grows a bar or group.
+    // A mid-turn steer remains in the opener’s fold without gaining its own turn bar.
     it.each([
       ['states each row’s turn', true],
       ['states no scope', false]
@@ -734,8 +753,6 @@ import type {
       }
     )
 
-    // The answer is the LAST prose the agent produced. A turn whose final output
-    // is a tool run still answers with the prose before it.
     it('keeps the last prose row when the turn ends on tool activity', () => {
       const startedAt = Date.now() - 3000
       const base = session(startedAt)

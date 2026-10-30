@@ -339,9 +339,8 @@ describe('orchestration RPC methods', () => {
       let observedTimeoutMs: number | undefined
       vi.spyOn(runtime, 'waitForMessage').mockImplementation(async (_handle, options) => {
         observedTimeoutMs = options?.timeoutMs
-        // End the wait loop so the assertion runs against the first budget slice.
         const outbound = db.getInbox(10).find((message) => message.type === 'question')
-        // Why: without a reply the handler's while(true) spins on this mock until vitest times out, hanging instead of failing.
+        // Reply once to end the mocked loop; otherwise a regression hangs until Vitest timeout instead of asserting.
         expect(outbound).toBeDefined()
         db.answerQuestion({
           messageId: outbound!.id,

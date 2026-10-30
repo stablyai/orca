@@ -1,5 +1,4 @@
-// The one step every layout commit runs over the panes it dropped (layout-owner builds), so no
-// close path (phone, CLI by handle, window, headless) retires its panes on its own.
+// Every owner-build commit handles dropped panes centrally so phone/CLI/window/headless closes share retirement semantics.
 import { recordClosedTerminalPanes, type ClosedTerminalPane } from '../closed-terminal-panes'
 import type { ExecutionHostId } from '../execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'

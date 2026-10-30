@@ -4,7 +4,6 @@ export function getIpynbCellKey(cell: IpynbCell, index: number): string {
   return cell.id ?? `${index}:${cell.kind}`
 }
 
-/** The cell a source draft was typed against. */
 export type IpynbSourceDraftBase = { source: string; cellKinds: readonly IpynbCell['kind'][] }
 
 export type IpynbSourceDraftRebase = {

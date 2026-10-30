@@ -1,8 +1,13 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Check, Download, Trash2 } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import type { Translate } from '../i18n/mobile-i18n'
+import { getUiIntlLocale } from '../i18n/ui-intl-locale'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
-  CLOUD_MODEL_NEEDS_KEY,
+  cloudModelNeedsKey,
   dictationModelRowAction,
   isModelInFlight,
   type MobileSpeechModel,
@@ -19,29 +24,35 @@ type Props = {
   onDelete: (model: MobileSpeechModel) => void
 }
 
-function formatSize(bytes: number | null | undefined): string {
+function formatSize(bytes: number | null | undefined, t: Translate): string {
   if (!bytes) {
     return ''
   }
-  return `${Math.round(bytes / 1_000_000)} MB`
+  return t('components.voiceModelList.modelSize', '{{size}} MB', {
+    size: Math.round(bytes / 1_000_000).toLocaleString(getUiIntlLocale())
+  })
 }
 
-function modelMeta(model: MobileSpeechModel): string {
+function modelMeta(model: MobileSpeechModel, t: Translate): string {
   if (model.provider === 'openai') {
     return 'OpenAI API'
   }
   const inFlight = isModelInFlight(model)
   if (inFlight && model.progress != null) {
-    return `${formatSize(model.sizeBytes)} · ${Math.round(model.progress * 100)}%`
+    return t('components.voiceModelList.modelProgress', '{{size}} · {{progress}}%', {
+      size: formatSize(model.sizeBytes, t),
+      progress: Math.round(model.progress * 100).toLocaleString(getUiIntlLocale())
+    })
   }
   if (model.status === 'extracting') {
-    return `${formatSize(model.sizeBytes)} · extracting…`
+    return t('components.voiceModelList.modelExtracting', '{{size}} · extracting…', {
+      size: formatSize(model.sizeBytes, t)
+    })
   }
-  return formatSize(model.sizeBytes)
+  return formatSize(model.sizeBytes, t)
 }
 
-// Renders the speech-model rows shared between the setup sheet and the Voice
-// settings page: size/progress, recommended badge, selected check, download, delete.
+// Share model size/progress/recommendation/selection/download/delete rows between setup and Voice settings.
 export function VoiceModelList({
   setup,
   disabled,
@@ -50,6 +61,8 @@ export function VoiceModelList({
   onDownload,
   onDelete
 }: Props): React.JSX.Element {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   return (
     <View style={disabled ? styles.disabled : undefined} pointerEvents={disabled ? 'none' : 'auto'}>
       {setup.models.map((model, idx) => {
@@ -68,18 +81,24 @@ export function VoiceModelList({
                   <Text style={styles.modelLabel} numberOfLines={1}>
                     {model.label}
                   </Text>
-                  {model.recommended ? <Text style={styles.recommended}>Recommended</Text> : null}
+                  {model.recommended ? (
+                    <Text style={styles.recommended}>
+                      {t('components.voiceModelList.recommended', 'Recommended')}
+                    </Text>
+                  ) : null}
                 </View>
-                <Text style={styles.modelMeta}>{modelMeta(model)}</Text>
+                <Text style={styles.modelMeta}>{modelMeta(model, t)}</Text>
               </View>
               {action === 'needs-api-key' ? (
-                <Text style={styles.modelStateText}>{CLOUD_MODEL_NEEDS_KEY}</Text>
+                <Text style={styles.modelStateText}>{cloudModelNeedsKey()}</Text>
               ) : action === 'in-use' || action === 'use' ? (
                 <View style={styles.readyActions}>
                   {action === 'in-use' ? (
                     <View style={styles.selectedTag}>
                       <Check size={14} color={colors.statusGreen} strokeWidth={2.4} />
-                      <Text style={styles.selectedText}>In use</Text>
+                      <Text style={styles.selectedText}>
+                        {t('components.voiceModelList.inUse', 'In use')}
+                      </Text>
                     </View>
                   ) : (
                     <Pressable
@@ -89,14 +108,18 @@ export function VoiceModelList({
                       ]}
                       disabled={anyBusy}
                       accessibilityRole="button"
-                      accessibilityLabel={`Use ${model.label}`}
+                      accessibilityLabel={t('components.voiceModelList.useModel', 'Use {{label}}', {
+                        label: model.label
+                      })}
                       accessibilityState={{ disabled: anyBusy }}
                       onPress={() => onUseModel(model)}
                     >
                       {selectBusy ? (
                         <ActivityIndicator size="small" color={colors.textSecondary} />
                       ) : (
-                        <Text style={styles.actionText}>Use</Text>
+                        <Text style={styles.actionText}>
+                          {t('components.voiceModelList.use', 'Use')}
+                        </Text>
                       )}
                     </Pressable>
                   )}
@@ -106,7 +129,13 @@ export function VoiceModelList({
                       style={({ pressed }) => [styles.iconButton, pressed && styles.actionPressed]}
                       disabled={anyBusy}
                       onPress={() => onDelete(model)}
-                      accessibilityLabel={`Delete ${model.label}`}
+                      accessibilityLabel={t(
+                        'components.voiceModelList.deleteModel',
+                        'Delete {{label}}',
+                        {
+                          label: model.label
+                        }
+                      )}
                     >
                       {deleteBusy ? (
                         <ActivityIndicator size="small" color={colors.statusRed} />
@@ -124,7 +153,13 @@ export function VoiceModelList({
                   disabled={anyBusy}
                   onPress={() => onDownload(model)}
                   accessibilityRole="button"
-                  accessibilityLabel={`Download ${model.label}`}
+                  accessibilityLabel={t(
+                    'components.voiceModelList.downloadModel',
+                    'Download {{label}}',
+                    {
+                      label: model.label
+                    }
+                  )}
                   accessibilityState={{ disabled: anyBusy }}
                 >
                   {downloadBusy ? (
@@ -142,7 +177,7 @@ export function VoiceModelList({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   disabled: { opacity: 0.5 },
   modelRow: {
     flexDirection: 'row',
@@ -190,4 +225,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.borderSubtle,
     marginHorizontal: spacing.md
   }
-})
+}))

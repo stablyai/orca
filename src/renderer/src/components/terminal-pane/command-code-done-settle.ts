@@ -1,15 +1,6 @@
-/**
- * Cross-mount owner of Command Code's done-settle window.
- *
- * Why: park unmounts the pane and reveal disposes the parked watcher, both
- * possibly mid-settle, and neither successor can re-observe the idle composer
- * that opened the window. Owning the deadline here means park cannot strand the
- * row at 'working' and reveal need not complete the turn early; only the row
- * write (routing + title slot) stays with whoever currently owns the pane.
- */
+/** Own settle deadlines across park/reveal so remounts cannot strand working rows or complete early; current pane owners retain row writes. */
 
-// Mirrors the mounted and parked policies: the settle window must be identical
-// whether the pane is mounted or parked, or park/reveal changes completion timing.
+// Use the same settle window mounted or parked so park/reveal cannot change completion timing.
 export const COMMAND_CODE_OUTPUT_DONE_SETTLE_MS = 1500
 
 type CommandCodeDoneSettleExecutor = (normalizedPrompt: string) => void
@@ -17,10 +8,7 @@ type CommandCodeDoneSettleExecutor = (normalizedPrompt: string) => void
 const executorByPaneKey = new Map<string, CommandCodeDoneSettleExecutor>()
 const timerByPaneKey = new Map<string, ReturnType<typeof setTimeout>>()
 
-/** Registers the current writer for this pane; returns its release.
- *  Last registrant wins by design: park and reveal each hand the pane to a new
- *  owner while the predecessor is still registered, so refusing the overwrite
- *  would leave the row with an owner that can no longer write it. */
+/** Last registrant wins during overlapping park/reveal handoff; return an identity-checked release. */
 export function setCommandCodeDoneSettleExecutor(
   paneKey: string,
   execute: CommandCodeDoneSettleExecutor
@@ -54,7 +42,6 @@ export function cancelCommandCodeDoneSettle(paneKey: string): void {
   }
 }
 
-/** Test-only: drops every pending window so suites cannot leak timers across cases. */
 export function _resetCommandCodeDoneSettlesForTest(): void {
   for (const timer of timerByPaneKey.values()) {
     clearTimeout(timer)

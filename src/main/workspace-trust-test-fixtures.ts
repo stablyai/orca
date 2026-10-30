@@ -20,6 +20,8 @@ export function workspaceTrustWritten(home: string, preset: AgentTrustPreset): b
       return existsSync(join(home, '.qoder', 'settings.json'))
     case 'antigravity':
       return existsSync(join(home, '.gemini', 'antigravity-cli', 'settings.json'))
+    case 'kimi':
+      return existsSync(join(home, '.kimi-code', 'workspace-trust'))
   }
 }
 

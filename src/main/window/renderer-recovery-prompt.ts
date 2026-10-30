@@ -30,12 +30,12 @@ export async function presentRendererRecoveryPrompt(
   if (deps.isQuitting()) {
     return
   }
-  // Probed once: Copy Commands re-shows the box and must not spawn again. The loop re-checks quitting after it.
+  // Probe once before the dialog loop; Copy Commands must not spawn again. Recheck quitting afterward.
   const launchProbe = launchFailed ? await deps.probeLaunchCapacity?.() : undefined
   // Copying must preserve the only available recovery surface.
   while (!deps.isQuitting()) {
     const diagnosis = lowCommit ? null : deps.diagnose()
-    // Why no Restart button: relaunching needs a free process slot too, and app.relaunch fails silently without one.
+    // Restart needs a free process slot and app.relaunch silently fails without one.
     const buttons = [
       launchFailed
         ? translateMain('rendererRecovery.tryAgain', 'Try Again')

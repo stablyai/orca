@@ -11,6 +11,7 @@ import {
 import { parseExecutionHostId } from '../../shared/execution-host'
 import { getWorkspaceCleanupHostIdentity } from '../../shared/workspace-cleanup-host-identity'
 import { scanWorkspaceCleanup } from './workspace-cleanup-scan'
+import { abortWhenRendererGone } from './renderer-lifetime-abort'
 import { hasTargetedWorkspaceCleanupScan } from './workspace-cleanup-scan-targets'
 import {
   persistWorkspaceCleanupScanResult,
@@ -62,14 +63,14 @@ export function registerWorkspaceCleanupHandlers(store: Store): void {
         broadScanControllersBySenderMode.set(broadScanKey, controller)
       }
       // Window retirement must cancel scan work, not merely mute its progress.
-      const onSenderDestroyed = (): void => controller.abort()
-      sender.once('destroyed', onSenderDestroyed)
+      const lifetime = abortWhenRendererGone(sender)
+      lifetime.signal.addEventListener('abort', () => controller.abort(), { once: true })
       try {
         const result = await scanWorkspaceCleanup(store, scanArgs, {
           signal: controller.signal,
           onProgress: scanArgs.scanId
             ? (progress) => {
-                if (!sender.isDestroyed()) {
+                if (!controller.signal.aborted && !sender.isDestroyed()) {
                   sender.send('workspaceCleanup:scanProgress', progress)
                 }
               }
@@ -81,9 +82,7 @@ export function registerWorkspaceCleanupHandlers(store: Store): void {
         }
         return result
       } finally {
-        if (!sender.isDestroyed()) {
-          sender.removeListener('destroyed', onSenderDestroyed)
-        }
+        lifetime.dispose()
         if (scanKey && activeScans.get(scanKey) === controller) {
           activeScans.delete(scanKey)
         }

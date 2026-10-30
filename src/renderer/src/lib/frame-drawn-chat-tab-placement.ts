@@ -1,6 +1,4 @@
-// A chat this desktop opens in a workspace its server's frames draw (L270): the frames keep the
-// provisional tab, through the created-here hold, until the server lists it; the create names the
-// tab's place in the server's ids, so the server saves it there instead of at the group's end.
+// Hold provisional chats in server-drawn groups until publication; send placement in server IDs so created tabs retain their intended position (L270).
 
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { StructuredAgentSessionCreateParams } from '../../../shared/structured-agent-session-create'
@@ -59,8 +57,7 @@ function chatTabPlacement(
   return { groupId: group.id, ...(afterTabId ? { afterTabId } : {}) }
 }
 
-/** The create's params, with the tab's place when the host takes one. Read as the create is sent:
- *  synchronously, since a tick here lets a retiring source drop the create. */
+/** Read placement synchronously as create is sent; yielding lets a retiring source invalidate the launch. */
 export function withFrameDrawnChatTabPlacement(intent: {
   target: RuntimeClientTarget
   worktreeId: string

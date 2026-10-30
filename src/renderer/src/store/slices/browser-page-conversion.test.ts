@@ -359,8 +359,7 @@ describe('convertBrowserPage placement and activation', () => {
     expect(store.getState().browserCertificateFailuresByPageId[pageId]).toBeUndefined()
   })
 
-  // The leg the remote pane's address bar reaches: converting a runtime-owned page must close the
-  // host's page and drop the handle, or a ghost page stays open on the remote host.
+  // Remote conversion must close the host page and drop its handle or an unseen ghost remains.
   it('closes the remote page and drops its handle when a runtime-owned page converts', async () => {
     const store = await createStoreWithWorktree()
     const tab = store.getState().createBrowserTab(WORKTREE_ID, 'https://remote.example/')
@@ -390,8 +389,7 @@ describe('convertBrowserPage placement and activation', () => {
     )
   })
 
-  // Ownership rides provenance both ways, or Back silently moves a remote tab's browsing onto
-  // this desktop (the ssh-execution-boundary concern).
+  // Both provenance directions retain owner or Back silently moves remote browsing local (ssh-execution-boundary).
   it('carries runtime ownership through provenance and honors it on the return leg', async () => {
     const store = await createStoreWithWorktree()
     const tab = store.getState().createBrowserTab(WORKTREE_ID, 'https://remote.example/', {

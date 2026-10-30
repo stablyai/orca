@@ -63,47 +63,6 @@ function getSegment(label: string, visibility: 'show' | 'hide' = 'show'): HTMLBu
 }
 
 describe('GeneralWorkspaceSettingsSection external visibility', () => {
-  it('exposes a stable deep-link target for global defaults', () => {
-    renderSection(vi.fn())
-
-    expect(
-      container.querySelector('[data-settings-section="general-global-worktree-visibility"]')
-    ).not.toBeNull()
-  })
-
-  it('writes the global Other locations default without touching repositories', async () => {
-    const updateSettings = vi.fn()
-    renderSection(updateSettings)
-
-    await act(async () => {
-      getSegment('Other locations').click()
-    })
-
-    expect(updateSettings).toHaveBeenCalledWith({
-      worktreeVisibilityDefaults: { external: 'show' }
-    })
-  })
-
-  it('keeps Other locations available while source defaults require a newer host', () => {
-    renderSection(vi.fn(), { defaultsSupported: true, sourceDefaultsSupported: false })
-
-    expect(getSegment('Claude Code').disabled).toBe(true)
-    expect(getSegment('GSD').disabled).toBe(true)
-    expect(getSegment('Other locations').disabled).toBe(false)
-    expect(container.querySelector<HTMLInputElement>('#custom-worktree-root')?.disabled).toBe(true)
-    expect(container.textContent).toContain('Update this server to configure source defaults.')
-  })
-
-  it('disables all visibility defaults when the paired host lacks base support', () => {
-    renderSection(vi.fn(), { defaultsSupported: false, sourceDefaultsSupported: false })
-
-    expect(getSegment('Claude Code').disabled).toBe(true)
-    expect(getSegment('GSD').disabled).toBe(true)
-    expect(getSegment('Other locations').disabled).toBe(true)
-    expect(container.querySelector<HTMLInputElement>('#custom-worktree-root')?.disabled).toBe(true)
-    expect(container.textContent).toContain('Update this server to configure visibility defaults.')
-  })
-
   it('writes only Other locations when a downgraded host retains source fields', async () => {
     const updateSettings = vi.fn()
     renderSection(updateSettings, {

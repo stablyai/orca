@@ -2,8 +2,7 @@ import type { CSSProperties } from 'react'
 import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser-screencast-protocol'
 import { getPositiveFiniteNumber } from './remote-browser-page-input-model'
 
-// Why the device size and not the bitmap's: the host labels every frame with the CSS viewport it
-// shows, while the bitmap's own size moves with DPR and the frame budget's scaling.
+// Use the host’s displayed CSS viewport; bitmap dimensions vary with DPR and frame-budget scaling.
 export function getRemoteBrowserFrameStyle(
   metadata: BrowserScreencastFrameMetadata | null
 ): CSSProperties {
@@ -12,9 +11,7 @@ export function getRemoteBrowserFrameStyle(
   if (!width || !height) {
     return { width: '100%', height: '100%', objectFit: 'fill', objectPosition: 'top left' }
   }
-  // Why contain: a host can stream a smaller viewport than this pane asked for (it cannot paint
-  // past its own view), and a frame from before a resize lands in a pane of another shape.
-  // Stretching either distorts the page. Pointer input reads this box back off the image.
+  // Contain smaller or pre-resize frames without distortion; pointer mapping uses this same letterboxed box.
   const aspect = width / height
   return {
     inset: 0,

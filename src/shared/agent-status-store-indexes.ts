@@ -1,5 +1,4 @@
-// Lookups the store keeps beside its maps, so a read or a mutation costs what it touches rather
-// than the whole store. Every index is derived from the committed maps and moved only at commit.
+// Derive indexes from committed maps and change them only at commit; reads/writes cost what they touch, not the whole store.
 
 import {
   serializeAgentChildWorkAliasKey,

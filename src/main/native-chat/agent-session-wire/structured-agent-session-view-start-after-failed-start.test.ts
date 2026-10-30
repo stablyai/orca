@@ -58,6 +58,7 @@ beforeEach(async () => {
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: null,
       resumesTranscript: (store.getRecord(SESSION)?.providerHandleChain.length ?? 0) > 0,
+      cliFlag: async () => 'supported' as const,
       continuesChain: (store.getRecord(SESSION)?.providerHandleChain.length ?? 0) > 0
     }),
     onEvent: (event) => {
@@ -145,7 +146,7 @@ describe('a fresh chat whose Claude start fails', () => {
     ['after the create already died', false],
     ['while the create is still starting', true]
   ] as const)(
-    'starts once for the open and once for a send, one row each, when the view binds %s',
+    'starts once for the open and retries a send five times, one final row each, when the view binds %s',
     async (_when, createStillStarting) => {
       // Bind views before releasing create, independent of runner speed.
       let releaseCreate = (): void => {}
@@ -190,13 +191,13 @@ describe('a fresh chat whose Claude start fails', () => {
         ).toMatchObject({ dispatchState: 'rejected', reason: startFailure })
       )
       await settleExits()
-      expect(claude.connections).toHaveLength(2)
+      expect(claude.connections).toHaveLength(6)
       expect(await timeline()).toEqual([startFailure, 'message', startFailure])
 
       unsubscribe()
       await view(SURFACE)
       await settleExits()
-      expect(claude.connections).toHaveLength(2)
+      expect(claude.connections).toHaveLength(6)
       expect(await timeline()).toEqual([startFailure, 'message', startFailure])
     }
   )

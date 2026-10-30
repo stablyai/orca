@@ -3,8 +3,7 @@
 // Why: a reserved prefix with escaping avoids collisions with real IDs; printable for cmdk values.
 const DUPLICATE_KEY_NAMESPACE = 'palette-dup:'
 
-// Why prepend rather than strip: prepending is injective, and the result can never
-// look generated because a generated key always has `\d+:` after the prefix.
+// Injective prepending distinguishes escaped IDs from generated keys, whose prefix is followed by a numeric occurrence.
 function escapeReservedNamespace(entryId: string): string {
   return entryId.startsWith(DUPLICATE_KEY_NAMESPACE)
     ? `${DUPLICATE_KEY_NAMESPACE}${entryId}`
@@ -17,8 +16,7 @@ export function buildPaletteListEntryRenderKeys(entryIds: readonly string[]): st
     const occurrence = occurrences.get(entryId) ?? 0
     occurrences.set(entryId, occurrence + 1)
     const escaped = escapeReservedNamespace(entryId)
-    // Why keep the first key bare: stable ids must survive re-renders untouched.
-    // Later occurrences encode their index, so (id, occurrence) maps one-to-one to a key.
+    // Keep first occurrences stable; encode later occurrence indices to disambiguate duplicates.
     return occurrence === 0 ? escaped : `${DUPLICATE_KEY_NAMESPACE}${occurrence}:${escaped}`
   })
 }

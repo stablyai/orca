@@ -6,7 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useAppStore } from '@/store'
 import { useRepoAssignees } from '@/hooks/useIssueMetadata'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
-import { getGitHubPRReviewerRows } from '@/components/github-pr-reviewer-display'
+import { getGitHubPRReviewerRows } from '../../../../../shared/github/pr-reviewer-display'
 import {
   filterGitHubPRReviewerCandidates,
   getGitHubPRReviewerQueryState

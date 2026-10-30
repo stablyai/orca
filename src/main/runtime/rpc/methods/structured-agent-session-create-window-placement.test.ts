@@ -1,5 +1,4 @@
-// A chat this machine's window creates is placed by the window's own open, where it reserved the
-// chat's place; main's publish of it places nothing. Any other caller's chat main places itself.
+// The local window places its reserved chat itself; main places chats for every other caller.
 import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'

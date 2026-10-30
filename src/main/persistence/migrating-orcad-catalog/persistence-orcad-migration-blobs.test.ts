@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import type { OrcadMigrationBlobDescriptor } from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
 import { getOrcadMigrationReceivedBlobPath } from './orcad-migration-blob-staging'
 import { manifest } from './persistence-orcad-migration-catalog-fixture'
-import { createStore, testState } from '../../persistence-test-harness'
+import { createStore, testState } from '../persistence-test-harness'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -51,7 +51,7 @@ describe('orcad migration blobs through the store', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it('reports staged progress across a restart and refuses commit until complete', async () => {
+  it('reloads staged progress from disk and refuses commit until complete', async () => {
     const input = manifest()
     const store = createStore()
     store.stageOrcadMigrationCatalog(input)

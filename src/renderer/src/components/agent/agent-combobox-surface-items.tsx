@@ -16,7 +16,7 @@ import { translate } from '@/i18n/i18n'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { resolveAgentMenuSelection } from '@/lib/agent-menu-selection'
 import { renderAgentComboboxItem } from './agent-combobox-items'
-import { AgentTerminalLaunchButton } from './AgentTerminalLaunchButton'
+import { AgentSurfaceLaunchButton } from './AgentSurfaceLaunchButton'
 
 /** The "+" menu's rows in the picker: a chat row picks the chat, its terminal button the CLI. */
 export type AgentComboboxSurfaceRows = {
@@ -194,7 +194,8 @@ export function SurfaceAgentItems({
               {chatUnavailableLabel(row.reason)}
             </span>
           ) : rowOffersTerminal(model, row) ? (
-            <AgentTerminalLaunchButton
+            <AgentSurfaceLaunchButton
+              surface="terminal"
               title={terminalPickTitle(agentLabel)}
               aria-pressed={pressed}
               className={cn(

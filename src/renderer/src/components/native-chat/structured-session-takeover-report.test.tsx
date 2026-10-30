@@ -1,14 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * A user typing into a structured worker's chat pane is a TAKEOVER.
- *
- * The guard has always existed — `worker_terminal_resources.ownership_state = 'user_owned'` makes
- * `worker-release` retain with `user_takeover` — and for a structured worker it was simply never
- * armed: `reportWorkerTerminalUserInput` has one call site, on a PTY connection. So a user
- * mid-conversation in a chat pane had their session closed and its tab retired, while
- * `orchestration-worker-specs.ts` promised "Never closes … user-taken-over terminals".
- */
+/** Accepted chat input must claim structured workers for the user so orchestration release cannot close their active conversation. */
 
 import { describe, expect, it, vi } from 'vitest'
 import { renderHook } from '@testing-library/react'
@@ -65,8 +57,7 @@ function send(structuredTransport: NativeChatStructuredComposerTransport): (text
 
 describe('a real user send from a structured chat pane', () => {
   it('reports the takeover, addressed by session and never by pane key', async () => {
-    // By session on purpose: the worker's pane key is a random identity credential held in main,
-    // and a renderer echoing it back would make it learnable by anyone who can see a chat pane.
+    // Use session identity; exposing main’s random pane-key credential would leak takeover authority.
     reportStructuredSessionUserInput.mockClear()
     dispatchStructuredComposerText.mockResolvedValue({ accepted: true, error: null })
     send(transport())('ship it')
@@ -76,8 +67,6 @@ describe('a real user send from a structured chat pane', () => {
   })
 
   it('reports nothing when the transport refused the send', async () => {
-    // A refused send is not a takeover; relinquishing ownership on one would retain every worker
-    // whose composer merely errored.
     reportStructuredSessionUserInput.mockClear()
     dispatchStructuredComposerText.mockResolvedValue({ accepted: false, error: 'nope' })
     send(transport())('ship it')

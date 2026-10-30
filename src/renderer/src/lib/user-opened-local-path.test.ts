@@ -13,14 +13,17 @@ vi.mock('@/lib/connection-context', () => ({
   getConnectionIdForFile: boundaryMocks.getConnectionIdForFile
 }))
 
-const mocks = vi.hoisted(() => ({ statRuntimePath: vi.fn() }))
+const mocks = vi.hoisted(() => ({ statRuntimePath: vi.fn(), readRuntimeDirectory: vi.fn() }))
 
 vi.mock('@/runtime/runtime-file-routing', () => ({ isRemoteRuntimeFileOperation: () => false }))
 vi.mock('@/runtime/runtime-file-metadata-client', () => ({
   statRuntimePath: mocks.statRuntimePath
 }))
+vi.mock('@/runtime/runtime-file-mutation-client', () => ({
+  readRuntimeDirectory: mocks.readRuntimeDirectory
+}))
 
-import { statUserOpenedPath } from './user-opened-local-path'
+import { readUserOpenedDirectory, statUserOpenedPath } from './user-opened-local-path'
 
 const project: RuntimeFileOperationArgs = {
   target: { kind: 'local' as const },
@@ -65,7 +68,10 @@ describe('statUserOpenedPath', () => {
       escapesWorktree: false
     })
     expect(mocks.statRuntimePath).toHaveBeenCalledTimes(1)
-    expect(mocks.statRuntimePath).toHaveBeenCalledWith(project, '/repo/src/a.ts')
+    // Opening a path is a user act, so its stat may start a stopped WSL distro.
+    expect(mocks.statRuntimePath).toHaveBeenCalledWith(project, '/repo/src/a.ts', undefined, {
+      wakeWslDistro: true
+    })
   })
 
   it.each([false, true])(
@@ -77,9 +83,12 @@ describe('statUserOpenedPath', () => {
         isDirectory,
         escapesWorktree: true
       })
-      expect(mocks.statRuntimePath).toHaveBeenLastCalledWith(project, '/repo/link', {
-        kind: 'user-file'
-      })
+      expect(mocks.statRuntimePath).toHaveBeenLastCalledWith(
+        project,
+        '/repo/link',
+        { kind: 'user-file' },
+        { wakeWslDistro: true }
+      )
     }
   )
 
@@ -113,8 +122,68 @@ describe('statUserOpenedPath', () => {
       isDirectory: false,
       escapesWorktree: false
     })
-    expect(mocks.statRuntimePath).toHaveBeenCalledExactlyOnceWith(context, filePath, {
-      kind: 'user-file'
+    expect(mocks.statRuntimePath).toHaveBeenCalledExactlyOnceWith(
+      context,
+      filePath,
+      { kind: 'user-file' },
+      { wakeWslDistro: true }
+    )
+  })
+})
+
+describe('readUserOpenedDirectory', () => {
+  const OUTSIDE = 'Access denied: path resolves outside allowed directories.'
+  const entries = [{ name: 'notes.md', isDirectory: false, isSymlink: false }]
+  const FOLLOW = { followProjectFolderLink: true }
+
+  /** Main's answers: contained listings refuse; a project-folder-link listing answers `linkAnswer`. */
+  function answerList(containedError: Error, linkAnswer: Error | typeof entries): void {
+    mocks.readRuntimeDirectory.mockImplementation(
+      async (_context: unknown, _path: string, options: { access?: unknown }) => {
+        if (!options.access) {
+          throw containedError
+        }
+        if (linkAnswer instanceof Error) {
+          throw linkAnswer
+        }
+        return linkAnswer
+      }
+    )
+  }
+
+  beforeEach(() => {
+    mocks.readRuntimeDirectory.mockReset()
+  })
+
+  it('lists a project folder link that leads outside as one', async () => {
+    answerList(new Error(OUTSIDE), entries)
+
+    await expect(readUserOpenedDirectory(project, '/repo/linked', FOLLOW)).resolves.toEqual({
+      entries,
+      escapesWorktree: true
     })
+    expect(mocks.readRuntimeDirectory).toHaveBeenLastCalledWith(project, '/repo/linked', {
+      access: { kind: 'project-folder-link' }
+    })
+  })
+
+  it('never follows a link unless the caller allows it', async () => {
+    answerList(new Error(OUTSIDE), entries)
+
+    await expect(readUserOpenedDirectory(project, '/repo/linked', {})).rejects.toThrow(OUTSIDE)
+  })
+
+  it('keeps other failures and paths outside the project as they are', async () => {
+    answerList(new Error('ENOENT: no such directory'), entries)
+    await expect(readUserOpenedDirectory(project, '/repo/gone', FOLLOW)).rejects.toThrow('ENOENT')
+
+    answerList(new Error(OUTSIDE), entries)
+    await expect(readUserOpenedDirectory(project, '/elsewhere', FOLLOW)).rejects.toThrow(OUTSIDE)
+  })
+
+  it('shows why a link target cannot be listed', async () => {
+    answerList(new Error(OUTSIDE), new Error('EPERM: operation not permitted'))
+
+    await expect(readUserOpenedDirectory(project, '/repo/linked', FOLLOW)).rejects.toThrow('EPERM')
   })
 })

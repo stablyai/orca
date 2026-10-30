@@ -23,14 +23,7 @@ function getWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): Work
     return cachedSnapshot
   }
 
-  // Why: a race between createWorktree (which appends) and fetchWorktrees
-  // (which replaces) can produce duplicate entries within one repo array. That
-  // duplicate is the SAME workspace twice, so it collapses — but the key has to
-  // include the host (STA-4343). `worktreeId` is `repoId::path` with no host
-  // component, so the local host and an SSH host can publish the same id for
-  // two genuinely different workspaces, and collapsing those hides one of them
-  // from the sidebar entirely. Last wins within a host: fetchWorktrees replaces,
-  // so the later entry is the current one.
+  // Deduplicate same-host create/fetch races, last wins. repoId::path collides across hosts; retain those rows or one workspace vanishes (STA-4343).
   const byHostAndId = new Map<string, Worktree>()
   for (const worktrees of Object.values(worktreesByRepo)) {
     for (const worktree of worktrees) {
@@ -40,16 +33,11 @@ function getWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): Work
   const allWorktrees: Worktree[] = []
   const worktreeMap = new Map<string, Worktree>()
   const worktreesById = new Map<string, Worktree[]>()
-  // Why the identity round-trip: `worktree.id` is a getter on some snapshots and
-  // retained selectors assert it is read exactly once per row, so recover the id
-  // from the key instead of reading the property again.
+  // Recover IDs from keys: snapshot getters and retained selectors require one ID read per row.
   for (const [identity, worktree] of byHostAndId) {
     const worktreeId = getWorktreeIdFromHostIdentity(identity)
     allWorktrees.push(worktree)
-    // FIRST wins across hosts, matching `buildWorktreeByIdIndex` and the `.find()`
-    // both replaced. Freshness is not the question here: the same-host duplicate
-    // was already collapsed above, so what is left is a genuine two-host collision
-    // that no bare-id lookup can resolve.
+    // First host wins for legacy bare-ID lookups, matching buildWorktreeByIdIndex/.find; freshness cannot resolve distinct owners.
     if (!worktreeMap.has(worktreeId)) {
       worktreeMap.set(worktreeId, worktree)
     }
@@ -69,13 +57,7 @@ export function getIndexedAllWorktrees(worktreesByRepo: AppState['worktreesByRep
   return getWorktreeSnapshot(worktreesByRepo).allWorktrees
 }
 
-/**
- * One row per id — a LEGACY convenience for the many id-only lookups.
- *
- * It cannot represent a collision, so it is not evidence of ownership: a
- * destructive path must take an explicit host (see `WorktreeRemovalTarget`) and
- * use `getIndexedWorktreesById` when it needs to see every owner.
- */
+/** Legacy bare-ID view cannot prove ownership amid collisions; destructive paths need explicit WorktreeRemovalTarget hosts and getIndexedWorktreesById. */
 export function getIndexedWorktreeMap(
   worktreesByRepo: AppState['worktreesByRepo']
 ): Map<string, Worktree> {

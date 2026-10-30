@@ -1,21 +1,14 @@
-/**
- * Detached executor for accepted account-switch restarts (Codex and Claude).
- *
- * Why: queued restarts used to execute only inside mounted TerminalPane
- * instances, so accepting the prompt stranded every unmounted pane — prompt
- * gone, keyboard blocked, Codex still running under the old account until the
- * tab was next revealed. This driver watches pendingPaneAccountRestarts and
- * kill-and-respawns any pane no mounted transport claims, rebinding the store
- * so a later mount reattaches to the replacement PTY like a restored session.
- */
+/** Execute accepted Codex/Claude account restarts for unmounted local panes so input cannot stay blocked until reveal. */
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AppState } from '@/store'
 import { useAppStore } from '@/store'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
-import { buildPaneAccountRestartStartup } from '@/lib/agent-account-restart-startup'
-import { CODEX_ACCOUNT_RESTART_STARTUP } from '@/lib/codex-session-restart'
+import {
+  buildCodexAccountRestartStartup,
+  buildPaneAccountRestartStartup
+} from '@/lib/agent-account-restart-startup'
 import { isClaudePaneMidTurn } from '@/lib/claude-session-account-move'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import { isForeignMachineCodexPtyId } from '@/lib/codex-pane-selection-lane'
@@ -61,23 +54,18 @@ async function restartUnclaimedPane(ptyId: string, onSettled?: () => void): Prom
   let located: LocatedCodexPane | null = null
   let releaseSlot: (() => void) | null = null
   try {
-    // Why: remote-runtime spawns need that machine's transport assembly, which
-    // only the mounted pane path carries today; leave those queued for mount.
+    // Remote spawns need mounted transport assembly; leave them queued for mount.
     if (isForeignMachineCodexPtyId(ptyId)) {
       return
     }
-    // Why: a live primary handler means a mounted pane owns this PTY, and its
-    // restart effect re-runs on both the queue write and the transport bind —
-    // it is guaranteed to claim, and only it can reconnect the xterm in place.
+    // Mounted primary handlers own restart and xterm reconnection, including queue writes racing transport bind.
     if (ptyDataHandlers.has(ptyId) || inFlightPtyIds.has(ptyId)) {
       return
     }
     const state = useAppStore.getState()
     located = locateCodexPane(state, ptyId)
     if (!located) {
-      // Why not consume: a sleep-retained pending id is unbound on purpose and
-      // wake migrates it onto the respawned PTY — taking it here would lose
-      // that restart. Only a notice still muting input forces a resolution.
+      // Wake migrates sleeping unbound IDs; resolve missing ownership only when an extant notice still blocks input.
       if (state.codexRestartNoticeByPtyId[ptyId]) {
         if (state.consumePendingPaneAccountRestart(ptyId)) {
           state.clearCodexRestartNotice(ptyId)
@@ -85,9 +73,7 @@ async function restartUnclaimedPane(ptyId: string, onSettled?: () => void): Prom
       }
       return
     }
-    // Why the registry check too: a revealed tab reads its layout into a ref at
-    // mount, before its transports bind (and register a primary handler). A
-    // takeover in that window would kill the PTY the pane is attaching to.
+    // Mounted tabs register before transport bind; taking over in that gap would kill the PTY being attached.
     if (hasRegisteredRuntimeTerminalTab(located.tab.id, located.worktreeId)) {
       return
     }
@@ -114,8 +100,7 @@ async function restartUnclaimedPane(ptyId: string, onSettled?: () => void): Prom
     await executeDetachedCodexPaneRestart(located, ptyId, agent)
   } catch (err) {
     console.warn('[codex-restart] detached pane restart failed:', err)
-    // Why: one malformed claim must not abort later panes or leave this one with
-    // an answered prompt whose restart never executed.
+    // Contain each bad claim so later panes still restart and this prompt cannot remain silently answered.
     if (located) {
       reopenCurrentCodexRestartPrompt(located, ptyId)
     } else {
@@ -147,8 +132,7 @@ function locateCodexPane(state: AppState, ptyId: string): LocatedCodexPane | nul
         Object.entries(state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {}).find(
           ([, boundPtyId]) => boundPtyId === ptyId
         )?.[0] ?? null
-      // Why the format check: pre-UUID layouts carry numeric leaf ids, which the
-      // pane-key env and main's binding flush both reject.
+      // Reject legacy numeric leaves because pane-key environment and main binding require UUIDs.
       return {
         worktreeId,
         tab,
@@ -171,17 +155,20 @@ async function executeDetachedCodexPaneRestart(
     if (agent === 'claude') {
       return
     }
-    // Why: without a usable layout leaf the replacement cannot be bound in
-    // place, so kill now and let the tab's next mount run the Codex startup.
+    // Without a usable layout leaf, stop the old PTY and let the next mount run Codex startup.
     if (!isLocatedCodexPaneCurrent(state, located, ptyId)) {
       reopenCurrentCodexRestartPrompt(located, ptyId)
       return
     }
+    const startup = buildCodexAccountRestartStartup({
+      worktreeId: located.worktreeId,
+      shellOverride: located.tab.shellOverride
+    })
     const store = useAppStore.getState()
     store.suppressPtyExit(ptyId)
     store.clearTabPtyId(located.tab.id, ptyId)
     store.consumeSuppressedPtyExit(ptyId)
-    store.queueTabStartupCommand(located.tab.id, { ...CODEX_ACCOUNT_RESTART_STARTUP })
+    store.queueTabStartupCommand(located.tab.id, startup)
     store.clearCodexRestartNotice(ptyId)
     killReplacedCodexPanePty(ptyId)
     return
@@ -202,8 +189,7 @@ async function executeDetachedCodexPaneRestart(
   const capabilities = hasCachedWindowsTerminalCapabilities()
     ? getCachedWindowsTerminalCapabilities()
     : null
-  // Why: same runtime context the mounted spawn ships (pty-connection.ts), so a
-  // WSL-defaulted project respawns into the same distro it launched from.
+  // Carry the mounted spawn’s project runtime context so WSL-defaulted projects stay in the same distro.
   const projectRuntime = getLocalProjectExecutionRuntimeContext(state, worktreeId, undefined, {
     wslAvailable: capabilities?.wslAvailable,
     availableWslDistros: capabilities?.wslDistros ?? null
@@ -225,9 +211,7 @@ async function executeDetachedCodexPaneRestart(
     return
   }
 
-  // Hidden replacements converge on mount; provider sizing must not delay ownership transfer.
-  // Main stops `ptyId` first and labels its exit as a replacement, so parked watchers and the
-  // pre-attach buffer leave the pane alone; a failed stop sends no exit and changes nothing here.
+  // Transfer hidden ownership without waiting for sizing; main labels replacement exits so parked/pre-attach handlers preserve the pane.
   const spawned = await window.api.pty.spawn({
     cols: 80,
     rows: 24,
@@ -247,8 +231,7 @@ async function executeDetachedCodexPaneRestart(
     initiallyHidden: true
   })
 
-  // Why adopt rather than stand down: main stopped `ptyId` before replying, so the replacement is
-  // the pane's only process — even if that exit already cleared the old binding or a pane mounted.
+  // Adopt even after old-binding cleanup or mount races because main already stopped the old PTY and the replacement is the only process.
   const store = useAppStore.getState()
   if (!isLocatedCodexPaneLeafAdoptable(store, located, ptyId, spawned.id)) {
     reopenCurrentCodexRestartPrompt(located, ptyId)
@@ -257,8 +240,7 @@ async function executeDetachedCodexPaneRestart(
   }
   store.updateTabPtyId(tab.id, spawned.id, ptyId)
   if (!useAppStore.getState().ptyIdsByTabId[tab.id]?.includes(spawned.id)) {
-    // Why: the tab was retired while the spawn was in flight; without a binding
-    // the fresh PTY would idle in the daemon forever, so reap it and stand down.
+    // Reap a replacement whose tab retired during spawn so no unbound PTY leaks in the daemon.
     store.clearCodexRestartNotice(ptyId)
     reapUnboundCodexPty(spawned.id, 'retired-tab spawn')
     return
@@ -266,8 +248,7 @@ async function executeDetachedCodexPaneRestart(
   if (paneOwner === 'window') {
     rebindCodexPaneLayoutLeaf(tab.id, leafId, spawned.id)
   }
-  // Why both ids: updateTabPtyId migrates the replaced pane's notice onto the
-  // new PTY; the restart it recorded is now done, so the block must lift.
+  // Clear both notice IDs because rebinding migrates the old notice onto the replacement PTY.
   store.clearCodexRestartNotice(spawned.id)
   store.clearCodexRestartNotice(ptyId)
   releaseReplacedCodexPanePty(ptyId)
@@ -327,9 +308,7 @@ function reopenCurrentCodexRestartPrompt(located: LocatedCodexPane, replacedPtyI
   }
 }
 
-// Why: mount replays panes from the root — a root that doesn't name this leaf
-// mints a fresh one and silently orphans the replacement PTY. Rewriting is
-// only safe when this is the tab's sole bound pane; a split keeps its root.
+// Rewrite only sole-pane roots to name the replacement leaf; split roots must retain siblings and reveal must not mint another leaf.
 function restartReplacesLayoutRoot(
   layout: TerminalLayoutSnapshot | undefined,
   leafId: string

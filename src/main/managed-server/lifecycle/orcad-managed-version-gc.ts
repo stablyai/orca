@@ -14,19 +14,22 @@ export function provenLiveDaemonVersion(readiness: ServeReadiness): string | nul
   return daemon?.state === 'absent' ? null : undefined
 }
 
-export async function pruneManagedOrcadVersions(args: {
+export type ManagedOrcadPruneArgs = {
   slot: OrcadSlotOptions
   serverTarget: NodeRuntimeTarget
   activeVersion: string
   readiness: ServeReadiness
-}): Promise<void> {
+}
+
+/** True only when GC ran and left no stale version dir behind. */
+export async function pruneManagedOrcadVersions(args: ManagedOrcadPruneArgs): Promise<boolean> {
   const liveDaemonVersion = provenLiveDaemonVersion(args.readiness)
   // Unknown daemon versions could still execute from any candidate tree; skip GC.
   if (liveDaemonVersion === undefined) {
-    return
+    return false
   }
   try {
-    await gcOldOrcadVersions({
+    return await gcOldOrcadVersions({
       conn: args.slot.conn,
       host: args.slot.host,
       remoteHome: args.slot.remoteHome,
@@ -40,5 +43,6 @@ export async function pruneManagedOrcadVersions(args: {
   } catch (error) {
     // Cleanup must not fail completed deploys; later connects retry.
     console.warn('[orcad-gc] Pruning old orcad versions failed:', error)
+    return false
   }
 }

@@ -43,7 +43,7 @@ export function acquireElectronDebugger(webContents: WebContents): ElectronDebug
         return
       }
       debuggerLeases.delete(webContents)
-      if (!state.attachedByLease || !dbg.isAttached()) {
+      if (!state.attachedByLease || webContents.isDestroyed() || !dbg.isAttached()) {
         return
       }
       try {

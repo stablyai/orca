@@ -112,6 +112,19 @@ describe('dashboard payload validation', () => {
     ).toBe(true)
   })
 
+  it('admits legacy and known verdicts without widening the base dot states', () => {
+    for (const verdict of [undefined, 'interrupted', 'failed', 'unconfirmed']) {
+      expect(isDashboardSnapshot({ ...SNAPSHOT, cards: [{ ...SNAPSHOT.cards[0], verdict }] })).toBe(
+        true
+      )
+    }
+    for (const verdict of [null, 'success', {}, 1]) {
+      expect(isDashboardSnapshot({ ...SNAPSHOT, cards: [{ ...SNAPSHOT.cards[0], verdict }] })).toBe(
+        false
+      )
+    }
+  })
+
   it('rejects malformed or unbounded snapshot fields', () => {
     expect(isDashboardSnapshot({ ...SNAPSHOT, generatedAt: Number.NaN })).toBe(false)
     expect(

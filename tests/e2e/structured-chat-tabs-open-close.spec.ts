@@ -5,7 +5,7 @@ import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { buildFakeAgentCommandOverride } from './helpers/fake-agent-command-override'
 import { SUPPORTED, createChatOnHost, test } from './helpers/structured-claude-stub'
 import { resolveCliCommand } from '../../src/shared/node-cli-command-resolution'
-import { claudeSessionIdForOrcaSession } from '../../src/main/claude/claude-structured-session-id'
+import { claudeSessionIdForOrcaSession } from '../../src/main/claude/structured/claude-structured-session-id'
 
 type ChatTab = { id: string; entityId: string }
 
@@ -123,8 +123,7 @@ test.describe('structured chat tabs', () => {
       homePath: process.env.HOME
     }))
     expect(resolveCliCommand('claude', mainEnv)).toBe(claudeStub.command)
-    // Every Claude process Orca started was the stub: a version probe, or a launch for one of
-    // these chats' conversations.
+    // Require every launched Claude process to be this stub’s version probe or one of the two chat conversations.
     const providerIds = [first, second, opened!.entityId].map((id) =>
       claudeSessionIdForOrcaSession(id)
     )

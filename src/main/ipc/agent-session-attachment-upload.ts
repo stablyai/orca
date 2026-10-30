@@ -19,7 +19,7 @@ import {
   isRuntimeEnvironmentManuallyDisconnected,
   RUNTIME_MANUALLY_DISCONNECTED_MESSAGE
 } from './runtime-environments/runtime-environment-manual-disconnect'
-import { stageOneSourceForRuntimeUpload } from './filesystem-runtime-upload-staging'
+import { stageOneSourceForRuntimeUpload } from './filesystem/filesystem-runtime-upload-staging'
 import { streamExternalFileSlices } from './runtime-upload-file-stream'
 import { formatByteCeiling } from './runtime-import-limits'
 

@@ -11,10 +11,7 @@ export const SINGLE_INSTANCE_LOCK_BYPASS_MESSAGE =
   '[single-instance] ORCA_BYPASS_SINGLE_INSTANCE_LOCK=1 is set; bypassing the packaged macOS single-instance lock for diagnostics. Do not use this with another Orca instance running for the same profile.'
 export { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../shared/single-instance-exit-code'
 
-// Why: a duplicate `orca serve` is a supervisor artifact, not a user asking for a window; fail open when argv is unavailable.
-// Why not `argv.includes('--serve')`: the documented systemd unit runs `<binary> serve --port …`, so a
-// duplicate start hands this handler CLI-form argv the CLI redirect never rewrote (#12677) — matching only
-// the flag form would promote the live headless server to a desktop window, un-fixing #11935.
+// Supervisor duplicate serve launches must not activate desktop; recognize CLI-form argv too (#12677, #11935). Missing argv preserves activation.
 export function shouldActivateDesktopForSecondInstance(argv: readonly string[] = []): boolean {
   return !argvRequestsServeMode(argv)
 }
@@ -109,8 +106,7 @@ export function shouldBypassSingleInstanceLock(options: {
   )
 }
 
-// Why only the E2E harness: dev desktops lock like packaged ones, since two on one profile corrupt
-// every store; each E2E launch has its own throwaway profile, and a spec opts in to test the lock.
+// Only disposable E2E profiles skip by default; concurrent dev desktops still corrupt stores without locking.
 export function shouldSkipSingleInstanceLock(options: {
   env?: NodeJS.ProcessEnv
   isDev: boolean
@@ -132,7 +128,7 @@ export function singleInstanceLockFailureMessage(options: {
   if (!options.isDevDesktop) {
     return SINGLE_INSTANCE_LOCK_FAILURE_MESSAGE
   }
-  return `[single-instance] Another Orca dev instance is already running on the profile at ${options.userDataPath}; exiting this launch after passing it this launch's request. To run another dev copy at the same time, give it its own profile: ORCA_DEV_USER_DATA_PATH=<another directory> pnpm dev`
+  return `[single-instance] Another Orca dev instance is already running on the profile at ${options.userDataPath}; exiting this launch after passing it this launch's request. To run another dev copy at the same time, give it its own profile: \`pnpm dev --worktree-profile\` (the default in linked worktrees) or ORCA_DEV_USER_DATA_PATH=<another directory> pnpm dev`
 }
 
 export function logSingleInstanceLockFailure(

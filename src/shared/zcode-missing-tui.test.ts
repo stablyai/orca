@@ -15,12 +15,10 @@ describe('isZCodeMissingTuiOutput', () => {
   })
 
   it('does not match a build that has the TUI but no TTY', () => {
-    // Why this case matters: it is the healthy build's stderr when stdin is not a terminal.
     expect(isZCodeMissingTuiOutput('TUI requires an interactive terminal.')).toBe(false)
   })
 
   it('does not match the localized form of that same healthy message', () => {
-    // Why: ZCode translates it, which is exactly why this rule keys on Node's error instead.
     expect(isZCodeMissingTuiOutput('TUI 需要交互式终端。')).toBe(false)
   })
 

@@ -7,19 +7,13 @@ type BrowserHostClientProfileResolver = (browserProfileId: string) => unknown
 
 let resolveProfile: BrowserHostClientProfileResolver | null = null
 
-/** Installed by the host that owns browser profiles; without one, pages carry only profile ids. */
 export function setBrowserHostClientProfileResolver(
   resolver: BrowserHostClientProfileResolver | null
 ): void {
   resolveProfile = resolver
 }
 
-/**
- * The host-owned profile a page command may carry to the desktop.
- *
- * Why: a desktop can only rebuild a page in a profile it was told about, so restores and
- * recoveries after a switch need the same metadata the switch sent. Its own default needs none.
- */
+/** Restore/recovery must carry the same host-owned profile metadata as a switch; the desktop default needs none. */
 export function browserHostClientProfileFor(
   lease: { hostCapabilities: readonly string[] },
   browserProfileId: string

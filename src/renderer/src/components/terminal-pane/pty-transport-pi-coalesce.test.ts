@@ -1,11 +1,4 @@
-// Why: regression guard for the Pi spinner loss. node-pty and the
-// main-process 8ms batch window commonly coalesce multiple OSC title updates
-// into a single IPC payload. Before the fix, the transport's handler used
-// `extractLastOscTitle` and surfaced only the last title — dropping the
-// intermediate working frames when Pi's agent_end flushed a trailing idle
-// title in the same chunk. The worktree card then never observed the
-// working state. Each OSC title in a chunk must reach onTitleChange in
-// order so the agent tracker and the store see the working→idle transition.
+// Every coalesced OSC title must reach observers in order; keeping only the last idle title hides working frames on fast Pi turns.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -55,41 +48,27 @@ describe('pty-transport — coalesced OSC titles from Pi', () => {
   })
 
   it('surfaces working frames even when the chunk ends with a trailing idle title', async () => {
-    // Why: Pi's extension emits working frames on `agent_start` and a final
-    // idle title on `agent_end`. When the PTY batches those into one IPC
-    // payload, a last-title-only reader would see only the idle title and
-    // the store would never observe the working state. This is the exact
-    // failure mode users hit on fast agents — the spinner never appears.
+    // Main’s batch can end with idle after multiple spinner frames; assert the intermediate working state survives.
     const { createIpcPtyTransport } = await import('./pty-transport')
     const onTitleChange = vi.fn()
     const transport = createIpcPtyTransport({ onTitleChange })
     await transport.connect({ url: '', callbacks: {} })
 
-    // One realistic chunk: working frames from setInterval(80ms) followed by
-    // agent_end's stopAnimation idle title. All buffered by the node-pty
-    // read batch on the main side.
-    // agent_end fires stopAnimation -> trailing idle title after working frames
+    // Batch working frames with the final agent_end idle title, matching PTY read coalescing.
     const chunk = `${workingFrame('⠋')}some response text\r\n${workingFrame('⠙')}more response text\r\n${idleTitle()}`
     onData?.({ id: 'pty-pi', data: chunk })
     await flushPtySideEffects()
 
     const seen = onTitleChange.mock.calls.map((c) => c[0])
-    // Users expect the working state to register SOMEWHERE in the sequence,
-    // even if extractLastOscTitle only took the last frame. The worktree card
-    // renders 'working' as long as detectAgentStatusFromTitle sees a working
-    // title — if the intermediate frames are dropped, users never see the
-    // spinner on fast-agent prompts.
+    // Observers need the working edge even when the same chunk ends idle.
     expect(seen).toContain('⠋ π - cwd')
-    // Idle must land last so the spinner disappears on agent_end.
     expect(seen.at(-1)).toBe('π - cwd')
 
     transport.disconnect()
   })
 
   it('surfaces working frames when many spinner frames arrive in one chunk', async () => {
-    // Why: a slow renderer/DOM event loop can delay main-process flushes,
-    // batching 10+ 80ms spinner frames into one IPC event. Every frame must
-    // still feed the observer in order.
+    // Delayed renderer flushes can batch many spinner frames; all must retain observer order.
     const { createIpcPtyTransport } = await import('./pty-transport')
     const onTitleChange = vi.fn()
     const transport = createIpcPtyTransport({ onTitleChange })

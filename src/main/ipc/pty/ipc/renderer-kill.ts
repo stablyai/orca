@@ -3,8 +3,8 @@ import type {
   PtyFencedTerminationOutcome
 } from '../../../../shared/pty-fenced-termination'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
-import { getPtyIpc } from '../../pty-host-bindings'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { getPtyIpc } from '../pty-host-bindings'
 import type { Store } from '../../../persistence'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { TerminalIntentionalStopKind } from '../../../runtime/terminal-intentional-stops'
@@ -161,7 +161,15 @@ async function stopFencedRendererPty(
     if (!provider?.killFenced) {
       return { outcome: 'refused', reason: 'unsupported' }
     }
-    const result = await provider.killFenced(args)
+    // Main attaches what it spawns, so only main sees viewers; best-effort, a later viewer sees the confirmed End.
+    if (args.requireUnattached && deps.runtime?.hasTerminalViewer(args.id)) {
+      return { outcome: 'refused', reason: 'attached' }
+    }
+    // Without a runtime to ask about viewers, keep the daemon's attached check.
+    const result = await provider.killFenced({
+      ...args,
+      requireUnattached: args.requireUnattached && !deps.runtime
+    })
     if (
       (result.outcome === 'ended' || result.outcome === 'already_exited') &&
       ptyIncarnationById.get(args.id) === args.expectedIncarnationId

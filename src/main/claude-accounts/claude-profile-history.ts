@@ -67,7 +67,7 @@ function drainDirectory(
   pending: string,
   destination: string,
   report: ClaudeProfileReport,
-  name: (typeof CLAUDE_PROFILE_HISTORY_DIRS)[number]
+  name: string
 ): void {
   const result: MoveResult = { retained: 0, failed: [] }
   moveHistoryTree(pending, destination, result)
@@ -80,10 +80,11 @@ function drainDirectory(
   }
 }
 
-function mergeDirectory(
+/** Link the default home's `name` folder in place of the profile's, moving its entries there. */
+export function mergeClaudeProfileDirectory(
   profile: string,
   home: string,
-  name: (typeof CLAUDE_PROFILE_HISTORY_DIRS)[number],
+  name: string,
   platform: NodeJS.Platform,
   report: ClaudeProfileReport
 ): ClaudeProfileSurfaceOutcome {
@@ -176,7 +177,7 @@ export async function shareClaudeProfileHistory(args: {
   mkdirSync(defaultHome, { recursive: true, mode: 0o700 })
   for (const name of CLAUDE_PROFILE_HISTORY_DIRS) {
     await runClaudeProfileSurface(report, name, () =>
-      mergeDirectory(args.profileHome, defaultHome, name, platform, report)
+      mergeClaudeProfileDirectory(args.profileHome, defaultHome, name, platform, report)
     )
   }
   await runClaudeProfileSurface(report, 'sessions', () =>

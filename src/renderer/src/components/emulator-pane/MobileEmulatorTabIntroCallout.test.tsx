@@ -15,8 +15,7 @@ vi.mock('./use-mobile-emulator-tab-intro-actions', () => ({
   useMobileEmulatorTabIntroActions: () => ({ keepIntro, hideIntro, dismissIntro })
 }))
 
-// Why: the Tooltip primitive needs a provider/portal we don't care about here;
-// render its trigger children directly so the test stays focused on wiring.
+// Render tooltip triggers directly to isolate wiring from provider/portal setup.
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: React.ReactNode }) => children,
   TooltipTrigger: ({ children }: { children: React.ReactNode }) => children,
@@ -82,8 +81,7 @@ describe('MobileEmulatorTabIntroCallout', () => {
   })
 
   it('exposes no menu-closing prop, so reintroducing Issue 1 is a compile error', () => {
-    // Why: Issue 1's root cause was a parent-supplied close callback
-    // (onAction={() => setNewTabMenuOpen(false)}). The callout must accept no
+    // Forbid the former parent close callback so callout actions cannot dismiss the surrounding menu.
     // such prop — re-adding one fails this typechecked file's @ts-expect-error.
     // @ts-expect-error - MobileEmulatorTabIntroCallout intentionally takes no props
     const reintroduced = <MobileEmulatorTabIntroCallout onAction={() => undefined} />

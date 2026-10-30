@@ -47,9 +47,7 @@ async function readClipboardImageBlob(): Promise<Blob | null> {
   return null
 }
 
-/** Web counterpart of the main-process clipboard probe: decodes the clipboard
- *  image once and returns a small preview so the composer can show a chip while
- *  the full image is still being uploaded to the runtime. */
+/** Decode once for a small composer preview while the full clipboard image uploads to the runtime. */
 export async function readClipboardImageThumbnail(): Promise<ClipboardImageThumbnail | null> {
   const blob = await readClipboardImageBlob()
   if (!blob) {

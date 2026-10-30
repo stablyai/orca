@@ -256,13 +256,11 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
           ]
         })
 
-        // The cleared title still lands; the cache timer is cleared.
         expect(deps.setRuntimePaneTitle).toHaveBeenLastCalledWith('tab-1', 1, 'Codex')
         expect(deps.setCacheTimerStartedAt).toHaveBeenLastCalledWith(
           makePaneKey('tab-1', LEAF_1),
           null
         )
-        // But no task-complete notification or unread attention is scheduled.
         vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS * 2)
         expect(deps.dispatchNotification).not.toHaveBeenCalled()
         expect(deps.markTerminalBell).not.toHaveBeenCalled()
@@ -390,7 +388,7 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
           agentType: 'command-code'
         })
 
-        // Why: done is a hint — the settle timer stays in pane policy so it can consult the live status row before completing.
+        // Done facts are hints; pane policy owns settling so it can consult the live row before completion.
         handler._dispatchTerminalSideEffectBatchForTest({
           ptyId: 'pty-fact-cc',
           seq: 2,
@@ -514,7 +512,6 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
           facts: [{ kind: 'command-code-done', prompt: 'Run a slow command' }]
         })
         vi.advanceTimersByTime(1000)
-        // An active repaint within the settle window cancels the pending done.
         handler._dispatchTerminalSideEffectBatchForTest({
           ptyId: 'pty-fact-cc-repaint',
           seq: 3,
@@ -576,7 +573,6 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
         const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as (ptyId: string) => void
         onPtySpawn('pty-prehydration')
 
-        // No fact consumer registered: channel batches are dropped.
         handler._dispatchTerminalSideEffectBatchForTest({
           ptyId: 'pty-prehydration',
           seq: 1,

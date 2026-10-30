@@ -134,9 +134,7 @@ describe('useUnreadDockBadge', () => {
     expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(0)
   })
 
-  // Why render-counted: this hook is mounted on the App root, so anything that wakes its
-  // subscription re-renders the whole shell — the chrome layout, both providers and every
-  // non-memoised overlay — for a badge integer that did not move.
+  // Count renders because this App-root subscription can rerender the entire shell for an unchanged badge.
   it('leaves the App root asleep through title frames and wakes it only on a badge change', () => {
     const worktrees = Array.from({ length: 20 }, (_, index) =>
       makeWorktree({ id: `repo::worktree-${index}`, repoId: 'repo', isUnread: index === 19 })
@@ -257,7 +255,6 @@ describe('useUnreadDockBadge', () => {
     )
     expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(2)
 
-    // An open panel hides the launcher dot; the bell is then only a tab highlight.
     hook.rerender({ open: true })
     expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(1)
 

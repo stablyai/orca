@@ -19,8 +19,7 @@ describe('isHostAuthoritativeLayout', () => {
   })
 
   it('is true for a desktop client when a leaf has a remote-runtime pty (remote server tab)', () => {
-    // Why: the split-render bug — desktop viewing a remote server got the host
-    // layout but skipped reconciliation, so the split never rendered.
+    // Remote-server desktop panes need reconciliation to materialize host-published splits.
     expect(
       isHostAuthoritativeLayout({
         isWebClient: false,
@@ -241,9 +240,7 @@ describe('planTerminalLiveLayoutRemovals', () => {
   const BOTH = new Set(['leaf-a', 'leaf-b'])
 
   it('plans the mounted leaf a host-retired layout no longer names', () => {
-    // Why: closing one pane of a remote-server split kills its PTY on the host,
-    // which retires the leaf and republishes a one-leaf layout; the pane mounted
-    // for the retired leaf must go too, or it lingers as a blank ghost.
+    // Closing a host split retires its leaf; remove the mounted pane too or it remains a blank ghost.
     const layout: TerminalPaneLayoutNode = { type: 'leaf', leafId: 'leaf-a' }
 
     expect(
@@ -269,9 +266,7 @@ describe('planTerminalLiveLayoutRemovals', () => {
   })
 
   it('leaves a mounted leaf the host has never named alone', () => {
-    // Why: a pane the client just split is still spawning, so its transport has
-    // no PTY yet, and a host snapshot that lands mid-spawn does not name it.
-    // Only a leaf the host named before can be one the host retired.
+    // Snapshots can race a still-spawning client pane; only previously published leaves can be retired.
     const layout: TerminalPaneLayoutNode = { type: 'leaf', leafId: 'leaf-a' }
 
     expect(
@@ -289,14 +284,12 @@ describe('selectRetiredPaneIds', () => {
   })
 
   it('closes the pane whose transport lost its PTY', () => {
-    // Why: the host retired the leaf because its PTY ended, so a pane that no
-    // longer has one is exactly the blank ghost the layout stopped naming.
+    // A retired leaf without a PTY is the blank ghost the host removed.
     expect(selectRetiredPaneIds(['leaf-b'], view({ 1: 'pty-a', 2: null }))).toEqual([2])
   })
 
   it('keeps a pane still bound to a PTY or not yet attached to a transport', () => {
-    // A stale snapshot may simply not name a live pane yet; a pane with no
-    // transport is still mounting. Neither is evidence of a retired leaf.
+    // Live PTYs and missing transports may reflect stale snapshots or mounting, never proven retirement.
     expect(selectRetiredPaneIds(['leaf-b'], view({ 1: 'pty-a', 2: 'pty-b' }))).toEqual([])
     expect(selectRetiredPaneIds(['leaf-b'], view({ 1: 'pty-a', 2: undefined }))).toEqual([])
   })
@@ -324,8 +317,7 @@ describe('trackRetiredLeafIds', () => {
   })
 
   it('keeps a retired leaf until its pane is gone', () => {
-    // Why: the removal may have been skipped while the transport still held its
-    // PTY; the next reconciliation must still see the leaf as retired.
+    // Keep retirement pending if a bound PTY delayed removal; retry after it clears.
     const args = {
       retiredLeafIds: new Set(['leaf-b']),
       previousLayoutLeafIds: new Set(['leaf-a']),
@@ -362,10 +354,7 @@ describe('trackRetiredLeafIds', () => {
 
 describe('host retirement that lands before the transport teardown', () => {
   it('removes the pane on the reconciliation after its PTY clears', () => {
-    // Why: the host drops the leaf and ends its PTY in one step, but the two
-    // reach the client separately. If the layout arrives first the pane still
-    // holds its PTY and must not be closed yet; once the exit lands and rewrites
-    // the layout bindings, the effect runs again and must close it then.
+    // Host layout and PTY exit arrive separately; preserve the bound pane until exit clears it, then reconcile again.
     const layout: TerminalPaneLayoutNode = { type: 'leaf', leafId: 'leaf-a' }
     const mounted = ['leaf-a', 'leaf-b']
     const paneIdForLeaf = (leafId: string) =>

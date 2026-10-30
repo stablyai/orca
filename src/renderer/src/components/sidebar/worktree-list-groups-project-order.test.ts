@@ -14,8 +14,7 @@ describe('buildRows project grouping order', () => {
     [repoB.id, repoB],
     [repoC.id, repoC]
   ])
-  // Activity: C (300) is freshest, then A (200), then B (100). wAStale (50) is
-  // an older sibling of A so a repo's rank is its max child, not its first.
+  // A stale sibling precedes A’s fresh child to require max-child activity ranking.
   const wA: Worktree = {
     ...worktree,
     id: 'wt-a',
@@ -46,7 +45,6 @@ describe('buildRows project grouping order', () => {
   }
 
   it('orders repo headers by explicit repoOrder, not first-encounter', () => {
-    // Worktree stream encounters in order C, A, B — but repoOrder says B, A, C.
     const repoOrder = new Map([
       [repoB.id, 0],
       [repoA.id, 1],
@@ -58,7 +56,6 @@ describe('buildRows project grouping order', () => {
   })
 
   it('places unknown repo ids last and sorts them by label', () => {
-    // Only repoB is in repoOrder; repoA and repoC fall through to label sort.
     const repoOrder = new Map([[repoB.id, 0]])
     const rows = buildRows('repo', [wC, wA, wB], map, null, new Set(), repoOrder)
     const headerKeys = rows.filter((r) => r.type === 'header').map((r) => r.key)
@@ -66,9 +63,7 @@ describe('buildRows project grouping order', () => {
   })
 
   it('orders repo headers by max(lastActivityAt) per repo in Recent mode', () => {
-    // repoOrder pins B, A, C, but Recent ignores it: C (300) > A (200) > B (100).
-    // The incoming array is name-sorted (not pre-sorted by recency), proving the
-    // resolver computes the timestamp itself rather than trusting encounter order.
+    // Pass name order and conflicting manual ranks so Recent must compute activity ranks itself.
     const repoOrder = new Map([
       [repoB.id, 0],
       [repoA.id, 1],
@@ -89,7 +84,6 @@ describe('buildRows project grouping order', () => {
   })
 
   it("uses each repo's freshest visible child, not its first, in Recent mode", () => {
-    // repo-a has a fresh child (200) and a stale one (50); its rank is the max.
     const rows = buildRows(
       'repo',
       [wAStale, wA, wB, wC],
@@ -167,7 +161,6 @@ describe('buildRows project grouping order', () => {
 
 describe('buildRows Recent project order fallbacks', () => {
   const active: Repo = { ...repo, id: 'repo-active', displayName: 'active', addedAt: 0 }
-  // Empty project has no visible worktrees, so Recent falls back to addedAt.
   const empty: Repo = { ...repo, id: 'repo-empty', displayName: 'empty', addedAt: 999 }
   const map = new Map([
     [active.id, active],
@@ -182,8 +175,7 @@ describe('buildRows Recent project order fallbacks', () => {
   }
 
   it('sorts placeholder projects after projects with activity', () => {
-    // empty.addedAt (999) is numerically higher than active's worktree (100),
-    // but a real activity timestamp must always outrank an addedAt fallback.
+    // Real workspace activity must outrank an empty project’s larger addedAt fallback.
     const rows = buildRows(
       'repo',
       [activeWorktree],
@@ -397,8 +389,7 @@ describe('project groups', () => {
       updatedAt: 1
     }
     const groupB: ProjectGroup = { ...groupA, id: 'group-b', name: 'Infra', tabOrder: 0 }
-    // Inside group A: repoStale ordered first by projectGroupOrder, but repoFresh
-    // is more recently active so recent mode must lift it above repoStale.
+    // Recent activity must override conflicting projectGroupOrder within the group.
     const repoStale: Repo = {
       ...repo,
       id: 'repo-stale',
@@ -435,8 +426,7 @@ describe('project groups', () => {
       new Map(worktrees.map((entry) => [entry.id, entry])),
       false,
       undefined,
-      // Group headers always follow tabOrder (Infra=0 before Platform=1),
-      // independent of projectOrderBy.
+      // Group headers retain tabOrder regardless of projectOrderBy.
       [groupA, groupB]
     )
 

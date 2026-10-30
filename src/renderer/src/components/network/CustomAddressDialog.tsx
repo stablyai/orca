@@ -28,8 +28,7 @@ export type CustomAddressDialogCopy = {
 type CustomAddressDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  // Why: prefill from the current selection when it is already a custom value
-  // so reopening to edit shows what is in use rather than a blank field.
+  // Reopening a custom selection should show its current value.
   initialValue?: string
   validate: CustomAddressValidator
   copy: CustomAddressDialogCopy
@@ -37,8 +36,7 @@ type CustomAddressDialogProps = {
   onConfirm: (value: string) => boolean | void | Promise<boolean | void>
 }
 
-// Why: surfaces inject their own grammar and copy; Mobile accepts IPv4/IPv6,
-// hostnames, and full HTTP(S)/WebSocket URLs.
+// Callers supply grammar/copy; Mobile also accepts full HTTP(S)/WebSocket URLs.
 export function CustomAddressDialog({
   open,
   onOpenChange,
@@ -52,8 +50,7 @@ export function CustomAddressDialog({
   const [submitting, setSubmitting] = useState(false)
   const [confirmationFailed, setConfirmationFailed] = useState(false)
 
-  // Why: reseed each time the dialog opens so a prior cancelled edit doesn't
-  // leak into the next open.
+  // Reset on open so canceled edits cannot leak into later visits.
   useEffect(() => {
     if (open) {
       setValue(initialValue ?? '')
@@ -75,8 +72,7 @@ export function CustomAddressDialog({
   }
 
   const parsed = validate(value)
-  // Why: only flag invalid input once the user has typed something — an empty
-  // field on open shouldn't read as an error.
+  // Keep empty fields neutral until the user enters a value.
   const showInvalid = value.trim() !== '' && !parsed.ok
 
   const submit = async (): Promise<void> => {
@@ -125,9 +121,7 @@ export function CustomAddressDialog({
               }
             }}
           />
-          {/* Why: neutral helper copy that doubles as validation guidance —
-              kept muted (not destructive-red) so a half-typed value doesn't
-              feel like a hard error. */}
+          {/* Keep guidance muted so partially typed values do not look like hard errors. */}
           <p className="text-xs text-muted-foreground">{copy.hint}</p>
           {confirmationFailed ? (
             <p className="text-xs text-destructive" role="alert">

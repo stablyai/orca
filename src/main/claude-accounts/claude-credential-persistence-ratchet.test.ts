@@ -1,4 +1,13 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { expect, it } from 'vitest'
 import { stripComments } from '../../shared/source-scan/source-tree-scan'
@@ -29,6 +38,8 @@ const fsAllowances: Record<string, readonly string[]> = {
     'symlinkSync',
     'unlinkSync'
   ],
+  // Stores Claude config folder paths only.
+  'claude-accounts/claude-observed-config-dirs.ts': ['writeFileAtomically'],
   'claude-accounts/claude-profile-paths.ts': ['mkdirSync', 'writeFileAtomically'],
   'claude-accounts/claude-profile-router.ts': ['mkdirSync', 'rmSync', 'writeFileAtomically'],
   'claude-accounts/claude-account-folder.ts': ['rmSync', 'rmdirSync', 'unlinkSync'],
@@ -177,11 +188,34 @@ function files(dir: string): string[] {
         ? []
         : files(file)
       : /\.(?:ts|tsx|mts|cts|js|mjs|cjs|sh)$/.test(entry.name) &&
-          !/\.test\.|\.spec\.|test-harness|harness\.ts|test-fixtures|test-utils/.test(entry.name)
+          !/\.test\.|\.spec\.|test-harness|harness\.ts|test-fixtures|test-utils|(?:^|-)test-constants\.ts$/.test(
+            entry.name
+          )
         ? [file]
         : []
   })
 }
+
+it('excludes test constants without hiding credential mutations in neighboring production files', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'orca-credential-scan-'))
+  const productionFiles = [
+    'credential-refresh.ts',
+    'pty-ipc-test-constants-reader.ts',
+    'contest-constants.ts'
+  ]
+  try {
+    for (const name of ['pty-ipc-test-constants.ts', ...productionFiles]) {
+      writeFileSync(join(dir, name), "fetch('/oauth/token', { body: 'refresh_token' })")
+    }
+    const scanned = files(dir)
+    expect(scanned.map((file) => relative(dir, file)).sort()).toEqual(productionFiles.sort())
+    for (const file of scanned) {
+      expect(credentialMutations(readFileSync(file, 'utf8'))).toEqual(['token refresh'])
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
 
 it('keeps every Claude credential writer removed, in every form and on every launch path', () => {
   const violations = credentialRoots

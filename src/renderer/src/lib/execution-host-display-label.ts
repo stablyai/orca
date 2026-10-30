@@ -10,10 +10,7 @@ import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { selectRuntimeAwareSshTargetLabel } from '@/store/slices/runtime-environment-ssh-selectors'
 import type { AppState } from '@/store/types'
 
-/**
- * What to call an execution host in front of a user: their own rename first, then the machine's
- * published name (paired runtime) or the SSH target's label, and the raw id only as a last resort.
- */
+/** Prefer the user rename, then published machine/SSH label, then raw host ID. */
 export function selectExecutionHostDisplayLabel(
   state: AppState,
   hostId: ExecutionHostId,
@@ -43,10 +40,7 @@ export function selectExecutionHostDisplayLabel(
   return getExecutionHostLabel(hostId)
 }
 
-/**
- * The machine a worktree's files live on, or null when ownership is still contested — the
- * `unresolved-owner` sentinel is routing bookkeeping and must never reach a reader as a host name.
- */
+/** Return null for contested ownership; unresolved-owner is routing bookkeeping, never a user-visible machine name. */
 export function selectWorktreeHostDisplayLabel(state: AppState, worktreeId: string): string | null {
   const hostId = getExecutionHostIdForWorktree(state, worktreeId)
   if (isUnresolvedOwnerHostId(hostId)) {

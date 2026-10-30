@@ -136,9 +136,7 @@ describe('WorktreeCreationPanel', () => {
     expect(container.querySelector('pre')?.textContent).toBe(
       'creating sandbox\nstarting orca serve\n'
     )
-    // Constant height so the log box never grows before the scroll kicks in.
     expect(container.querySelector('pre')?.className).toContain('h-72')
-    // A visible Cancel control, not just the tiny tab X, since the hint says Cancel stops provisioning.
     const cancel = [...container.querySelectorAll('button')].find(
       (button) => button.textContent === 'Cancel'
     )
@@ -156,12 +154,10 @@ describe('WorktreeCreationPanel', () => {
 
     const container = await renderPanel(false)
 
-    // The short status, the actionable log, and Retry/Dismiss are all present.
     expect(container.textContent).toContain('Couldn’t create worktree')
     expect(container.textContent).toContain('Recipe exited with code 1.')
     const log = container.querySelector('pre')
     expect(log?.textContent).toBe('pulling image…\nERROR: no space left on device\n')
-    // Failure reuses the same centered provisioning layout (h-72 log) so nothing shifts.
     expect(log?.className).toContain('h-72')
     expect(container.textContent).toContain('Retry')
   })

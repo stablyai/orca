@@ -22,6 +22,8 @@ type TrackedCodexSubagent = {
   state: 'working' | 'waiting'
   startedAt: number
   identityTranscriptPath?: string
+  /** Relay session whose own roster listed this child; only that session may retire it by omission. */
+  reportedBy?: string
 }
 
 export function upsertCodexSubagent(
@@ -82,12 +84,7 @@ export function enrichCodexSubagentIdentity(
     child.description
 }
 
-/**
- * Record the model a already-tracked child is running. Deliberately narrower
- * than `upsertCodexSubagent`: it never creates a roster entry and never touches
- * `state`, so late model discovery from a child rollout cannot resurrect a
- * finished child nor move any child's lifecycle.
- */
+/** Update only an existing child’s model, preserving lifecycle so late discovery cannot resurrect finished children. */
 export function setCodexSubagentModel(
   roster: CodexSubagentRoster,
   id: string,
@@ -106,7 +103,8 @@ export function setCodexSubagentModel(
 
 export function seedCodexSubagentRoster(
   roster: CodexSubagentRoster,
-  snapshots: readonly AgentSubagentSnapshot[]
+  snapshots: readonly AgentSubagentSnapshot[],
+  reportedBy?: string
 ): void {
   for (const snapshot of snapshots) {
     if (snapshot.state !== 'working' && snapshot.state !== 'waiting') {
@@ -123,6 +121,10 @@ export function seedCodexSubagentRoster(
       },
       snapshot.startedAt
     )
+    const tracked = reportedBy ? roster.get(snapshot.id.trim()) : undefined
+    if (tracked) {
+      tracked.reportedBy = reportedBy
+    }
   }
 }
 
@@ -140,13 +142,11 @@ export function codexRosterToSnapshots(
     state: tracked.state,
     startedAt: tracked.startedAt
   }))
-  snapshots.sort((a, b) => a.startedAt - b.startedAt || a.id.localeCompare(b.id))
+  snapshots.sort((a, b) => a.startedAt - b.startedAt || a.id.localeCompare(b.id, 'en'))
   return snapshots
 }
 
-/** The roster as child-work evidence for the shared fold. Every tracked child is a spawned
- *  agent thread, classified by the one kind test the other lanes use, so a waiting child
- *  reads `waiting` and a live one `working`; nothing here is a watch loop. */
+/** Project spawned agent threads through the shared kind policy: waiting/working child evidence, never watch loops. */
 export function codexRosterChildWorkLiveness(
   roster: CodexSubagentRoster | undefined
 ): AgentChildWorkLiveness {

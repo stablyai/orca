@@ -8,17 +8,13 @@ export type SkillRowAction = {
   label: string
   icon: React.JSX.Element
   disabled?: boolean
-  /** Why an item-level reason: the existing row badge is shown only in selection
-   *  mode, and a disabled `Delete…` has to explain itself outside it too. */
+  /** Explain disabled actions outside selection mode too, where the row badge is absent. */
   disabledReason?: string
   destructive?: boolean
   onSelect: () => void
 }
 
-/**
- * Radix disables pointer events on a disabled item, so the tooltip has to fire
- * on a wrapper that keeps them.
- */
+/** Wrap disabled items to retain pointer events for their explanatory tooltip. */
 function withReason(action: SkillRowAction, item: React.JSX.Element): React.JSX.Element {
   if (!action.disabled || !action.disabledReason) {
     return item

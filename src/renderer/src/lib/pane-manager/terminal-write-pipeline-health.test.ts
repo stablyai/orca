@@ -140,7 +140,6 @@ describe('terminal write pipeline health', () => {
     armTerminalWriteStallWatch(terminal)
     const generation = captureTerminalParseProgressGeneration(terminal)
     vi.advanceTimersByTime(WRITE_PIPELINE_STALL_CHECK_MS)
-    // Probe write queued; the pipeline is alive and parses it.
     expect(terminal.pendingCallbacks).toHaveLength(1)
     terminal.flush()
     vi.advanceTimersByTime(WRITE_PIPELINE_STALL_CHECK_MS * 3)
@@ -227,7 +226,6 @@ describe('terminal write pipeline health', () => {
 
     armTerminalWriteStallWatch(terminal)
     vi.advanceTimersByTime(WRITE_PIPELINE_STALL_CHECK_MS)
-    // The stalled completion finally arrives while the probe is pending.
     settleTerminalWriteStallWatch(terminal)
     vi.advanceTimersByTime(WRITE_PIPELINE_STALL_CHECK_MS * 3)
 

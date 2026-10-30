@@ -1,7 +1,7 @@
 // Share mutation admission/planning/publication. Conversation writes need no child lease;
 // provider-only effects start their child before admission, sends start through delivery.
 
-import { latestNativeChatUsageLimitCut } from '../../../shared/native-chat-usage-limit-cut'
+import { latestNativeChatUsageLimitCut } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 import { refuse } from '../../../shared/agent-session-wire'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import { shouldQueueStructuredAgentSessionSend } from './structured-agent-session-queued-messages'
@@ -56,6 +56,7 @@ import {
   type StructuredAgentSessionOptionsReader
 } from './structured-agent-session-options-read'
 import { settleStructuredAgentSessionLateDispatch } from './structured-agent-session-late-dispatch'
+import { confirmIdleStructuredAgentSessionOption } from './structured-agent-session-idle-option'
 
 export function sendStructuredAgentSessionTurn(
   context: StructuredAgentSessionMutationContext,
@@ -67,6 +68,7 @@ export function sendStructuredAgentSessionTurn(
     delivery?: 'queue-if-active'
     queuedImageCards?: boolean
     options?: Readonly<Record<string, string>>
+    selection?: Readonly<Record<string, string>>
     usageLimitContinuationOfTurnItemId?: string
     /** Client send RPCs set origin=client for recovery; host mail/continuations/launch sends omit it. */
     userSend?: true
@@ -232,7 +234,13 @@ export async function setStructuredAgentSessionOption(
     {
       ...plan,
       conversationWrite: true,
-      run: (ctx) => recordStructuredAgentSessionOptionIntent(context.deps, ctx, params)
+      run: async (ctx) => {
+        const picked = await recordStructuredAgentSessionOptionIntent(context.deps, ctx, params)
+        if (picked.ok) {
+          confirmIdleStructuredAgentSessionOption(context, ctx, params)
+        }
+        return picked
+      }
     },
     openForWrite(context, params.envelope)
   )

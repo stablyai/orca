@@ -11,20 +11,7 @@ assert(
   sources.every((source) => source.includes('export function buildRemovedSshTargetCleanupPatch'))
 )
 
-async function load(source, instrument = false) {
-  if (instrument) {
-    const spread = '...nextTabsByWorktree'
-    assert.equal(source.split(spread).length, 2)
-    source = source.replace(spread, '...countTabMapCopy(nextTabsByWorktree)')
-    source += `
-      export const tabMapCopies = { count: 0, entries: 0 };
-      function countTabMapCopy(map) {
-        tabMapCopies.count++;
-        tabMapCopies.entries += Reflect.ownKeys(map).length;
-        return map;
-      }
-    `
-  }
+async function load(source) {
   source += "\nexport { toAppSshPtyId } from '../../../../shared/ssh-pty-id';"
   const result = await build({
     entryPoints: [entry],
@@ -62,7 +49,7 @@ function emptyState() {
     tabsByWorktree: {},
     ptyIdsByTabId: {},
     lastKnownRelayPtyIdByTabId: {},
-    pendingCodexPaneRestartIds: {},
+    pendingPaneAccountRestarts: {},
     codexRestartNoticeByPtyId: {},
     deferredSshSessionIdsByTabId: {},
     pendingReconnectPtyIdByTabId: {},
@@ -72,6 +59,7 @@ function emptyState() {
     sshTargetLabels: new Map(),
     sshTargetGenerations: new Map(),
     portForwardsByConnection: {},
+    unrestoredPortForwardsByConnection: {},
     detectedPortsByConnection: {},
     sshCredentialQueue: []
   }
@@ -201,7 +189,7 @@ for (let iteration = 0; iteration < 3000; iteration++) {
         state.pendingReconnectPtyIdByTabId[id] = toAppSshPtyId(owner, 'reconnect')
       }
       if (ptyId) {
-        state.pendingCodexPaneRestartIds[ptyId] = true
+        state.pendingPaneAccountRestarts[ptyId] = 'codex'
         state.codexRestartNoticeByPtyId[ptyId] = {
           previousAccountLabel: 'old',
           nextAccountLabel: 'new'
@@ -227,35 +215,13 @@ for (let iteration = 0; iteration < 3000; iteration++) {
 }
 console.log('3,000 frozen-state full-patch / identity differential cases passed')
 
-// Instrument only the copy site for counts; timing arms above remain uninstrumented.
-const counted = await Promise.all(sources.map((source) => load(source, true)))
-for (const stride of [1, 10, 0]) {
-  const state = timedState(100, stride, false)
-  const expectedCopies = stride === 0 ? [0, 0] : [100 / stride, 1]
-  counted.forEach((module, index) => {
-    module.tabMapCopies.count = 0
-    module.tabMapCopies.entries = 0
-    assert.deepEqual(
-      module.buildRemovedSshTargetCleanupPatch(state, 'removed'),
-      arms[index](state, 'removed')
-    )
-    assert.deepEqual(module.tabMapCopies, {
-      count: expectedCopies[index],
-      entries: expectedCopies[index] * 100
-    })
-  })
-  console.log(
-    JSON.stringify({ stride, copiedEntries: counted.map((module) => module.tabMapCopies.entries) })
-  )
-}
-
-function sample(arm, state, repeats) {
+function sample(arm, state, repeats, expectedChanged) {
   const start = performance.now()
   let changed = 0
   for (let i = 0; i < repeats; i++) {
     changed += arm(state, 'removed') !== null ? 1 : 0
   }
-  assert(changed === 0 || changed === repeats)
+  assert.equal(changed, expectedChanged ? repeats : 0)
   return (performance.now() - start) / repeats
 }
 
@@ -281,19 +247,22 @@ for (const [count, stride, catalog, tabsPerWorkspace] of [
   [500, 1, true, 4]
 ]) {
   const state = timedState(count, stride, catalog, tabsPerWorkspace)
-  compare(state, 'removed')
+  const expectedChanged = compare(state, 'removed')[0] !== null
   for (const arm of arms) {
     const until = performance.now() + 80
     while (performance.now() < until) {
-      sample(arm, state, 1)
+      sample(arm, state, 1, expectedChanged)
     }
   }
-  const repeats = Math.max(1, Math.min(20000, Math.ceil(40 / sample(arms[0], state, 1))))
+  const repeats = Math.max(
+    1,
+    Math.min(20000, Math.ceil(40 / sample(arms[0], state, 1, expectedChanged)))
+  )
   /** @type {number[][]} */
   const samples = [[], []]
   for (let pair = 0; pair < 8; pair++) {
     for (const index of pair % 2 ? [1, 0] : [0, 1]) {
-      samples[index].push(sample(arms[index], state, repeats))
+      samples[index].push(sample(arms[index], state, repeats, expectedChanged))
     }
   }
   const median = samples.map((values) => {

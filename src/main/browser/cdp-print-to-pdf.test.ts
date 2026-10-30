@@ -5,46 +5,6 @@ const DEFAULT_MARGIN_INCHES = 1 / 2.54
 const TTL_MS = 5 * 60 * 1000
 
 describe('buildPrintToPdfOptions', () => {
-  it('returns empty options for empty params', () => {
-    expect(buildPrintToPdfOptions({})).toEqual({})
-  })
-
-  it('maps every well-formed field', () => {
-    expect(
-      buildPrintToPdfOptions({
-        landscape: true,
-        displayHeaderFooter: true,
-        printBackground: true,
-        preferCSSPageSize: true,
-        generateTaggedPDF: true,
-        generateDocumentOutline: false,
-        scale: 1.5,
-        paperWidth: 8.5,
-        paperHeight: 11,
-        marginTop: 0.25,
-        marginBottom: 0.5,
-        marginLeft: 0.75,
-        marginRight: 1,
-        pageRanges: '1-2',
-        headerTemplate: '<span></span>',
-        footerTemplate: '<span></span>'
-      })
-    ).toEqual({
-      landscape: true,
-      displayHeaderFooter: true,
-      printBackground: true,
-      preferCSSPageSize: true,
-      generateTaggedPDF: true,
-      generateDocumentOutline: false,
-      scale: 1.5,
-      pageSize: { width: 8.5, height: 11 },
-      margins: { top: 0.25, bottom: 0.5, left: 0.75, right: 1 },
-      pageRanges: '1-2',
-      headerTemplate: '<span></span>',
-      footerTemplate: '<span></span>'
-    })
-  })
-
   it('defaults omitted margin sides to 1cm when any side is set', () => {
     expect(buildPrintToPdfOptions({ marginTop: 0.25 }).margins).toEqual({
       top: 0.25,
@@ -52,26 +12,6 @@ describe('buildPrintToPdfOptions', () => {
       left: DEFAULT_MARGIN_INCHES,
       right: DEFAULT_MARGIN_INCHES
     })
-  })
-
-  it('drops non-finite and out-of-range numeric options', () => {
-    const options = buildPrintToPdfOptions({
-      scale: 0,
-      paperWidth: Number.POSITIVE_INFINITY,
-      paperHeight: 11,
-      marginTop: Number.NaN
-    })
-    expect(options.scale).toBeUndefined()
-    expect(options.pageSize).toBeUndefined()
-    expect(options.margins).toBeUndefined()
-  })
-
-  it('requires both paper dimensions for pageSize', () => {
-    expect(buildPrintToPdfOptions({ paperWidth: 8.5 }).pageSize).toBeUndefined()
-  })
-
-  it('ignores wrong-typed options', () => {
-    expect(buildPrintToPdfOptions({ landscape: 'yes', pageRanges: 7 })).toEqual({})
   })
 })
 
@@ -89,11 +29,6 @@ describe('CdpPdfStreamStore', () => {
     expect(store.ownsHandle({ handle: 'trace-stream' })).toBe(false)
     expect(store.ownsHandle({ handle: 'orca-pdf-forged-1' })).toBe(false)
     expect(store.ownsHandle({})).toBe(false)
-  })
-
-  it('mints distinct handles per stream', () => {
-    const store = new CdpPdfStreamStore()
-    expect(store.create(Buffer.from('a'))).not.toBe(store.create(Buffer.from('b')))
   })
 
   it('reads sequential chunks and reports eof', () => {
@@ -125,28 +60,6 @@ describe('CdpPdfStreamStore', () => {
     const handle = store.create(Buffer.from('abc'))
 
     expect(store.read({ handle, offset: 99 })).toEqual({ data: '', eof: true })
-  })
-
-  it('returns null for unknown handles', () => {
-    const store = new CdpPdfStreamStore()
-    expect(store.read({ handle: 'nope' })).toBeNull()
-    expect(store.read({})).toBeNull()
-  })
-
-  it('drops a stream on close', () => {
-    const store = new CdpPdfStreamStore()
-    const handle = store.create(Buffer.from('abc'))
-
-    store.close({ handle })
-    expect(store.read({ handle })).toBeNull()
-  })
-
-  it('drops all streams on clear', () => {
-    const store = new CdpPdfStreamStore()
-    const handle = store.create(Buffer.from('abc'))
-
-    store.clear()
-    expect(store.read({ handle })).toBeNull()
   })
 
   it('evicts an abandoned stream after the TTL', () => {

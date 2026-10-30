@@ -72,6 +72,7 @@ function createGuest(id: number) {
   return {
     id,
     isDestroyed: vi.fn(() => false),
+    isCurrentlyAudible: vi.fn(() => false),
     getType: vi.fn(() => 'webview'),
     setBackgroundThrottling: browserMocks.guestSetBackgroundThrottlingMock,
     setWindowOpenHandler: browserMocks.guestSetWindowOpenHandlerMock,

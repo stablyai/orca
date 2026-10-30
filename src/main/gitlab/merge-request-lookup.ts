@@ -96,21 +96,22 @@ export async function getMergeRequestForBranch(
   }
   await acquire()
   try {
-    if (typeof linkedMRIid === 'number') {
+    const fetchByIid = async (iid: number): Promise<MRInfo> => {
       const { stdout } = await glabExecFileAsync(
         [
           'api',
           ...glabHostnameArgs(projectRef, connectionId),
-          `projects/${encodedProject(projectRef.path)}/merge_requests/${linkedMRIid}?with_merge_status_recheck=true`
+          `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}?with_merge_status_recheck=true`
         ],
         glabRepoExecOptions(repoPath, connectionId, localGitOptions)
       )
-      const raw = JSON.parse(stdout) as Parameters<typeof mapMRInfo>[0] & {
-        head_pipeline?: { status?: string } | null
-        pipeline?: { status?: string } | null
-      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the single-MR endpoint returns the MR fields and its optional pipeline.
+      const raw = JSON.parse(stdout) as Parameters<typeof mapMRInfo>[0]
       const pipelineStatus = derivePipelineStatus(raw.head_pipeline ?? raw.pipeline ?? null)
       return mapMRInfo(raw, pipelineStatus)
+    }
+    if (typeof linkedMRIid === 'number') {
+      return await fetchByIid(linkedMRIid)
     }
     if (branchName) {
       const { stdout } = await glabExecFileAsync(
@@ -122,15 +123,11 @@ export async function getMergeRequestForBranch(
         ],
         glabRepoExecOptions(repoPath, connectionId, localGitOptions)
       )
-      const data = JSON.parse(stdout) as (Parameters<typeof mapMRInfo>[0] & {
-        head_pipeline?: { status?: string } | null
-        pipeline?: { status?: string } | null
-      })[]
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the branch-list endpoint returns MR summaries; only their identity is used.
+      const data = JSON.parse(stdout) as Parameters<typeof mapMRInfo>[0][]
       if (Array.isArray(data) && data.length > 0) {
-        const raw = data[0]
-        // Older GitLab uses pipeline instead of head_pipeline.
-        const pipelineStatus = derivePipelineStatus(raw.head_pipeline ?? raw.pipeline ?? null)
-        const info = mapMRInfo(raw, pipelineStatus)
+        // List summaries omit head_pipeline; only detail can supply an authoritative check result.
+        const info = await fetchByIid(data[0].iid ?? data[0].number ?? 0)
         const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
           state: info.state,
           reviewNumber: info.number,

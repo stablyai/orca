@@ -4,8 +4,6 @@ import type { OrchestrationDb } from '../orchestration-db'
 import type { OrcaSessionId } from '../../../../../shared/orca-session-address'
 import { mailboxAddressOf } from '../../orchestration-caller-identity'
 
-// ── Runs ──
-
 export function createRun(
   this: OrchestrationDb,
   params: {

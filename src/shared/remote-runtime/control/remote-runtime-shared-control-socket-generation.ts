@@ -1,4 +1,4 @@
-import type { RemoteRuntimeClientError } from '../../remote-runtime-client-error'
+import type { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import type { SharedControlLogicalSubscription } from './remote-runtime-shared-control-types'
 
 export class SharedControlSocketGeneration {

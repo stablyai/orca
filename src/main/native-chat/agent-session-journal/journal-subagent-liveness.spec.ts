@@ -9,13 +9,13 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { backgroundTaskFallbackText } from '../../../shared/native-chat-background-task-row'
+import { backgroundTaskFallbackText } from '../../../shared/native-chat/input/native-chat-background-task-row'
 import { isBackgroundTaskBlock, isSubagentGroupBlock } from '../../../shared/native-chat-types'
 import type {
   NativeChatBackgroundTaskBlock,
   NativeChatSubagentEntry
 } from '../../../shared/native-chat-types'
-import { subagentGroupFallbackText } from '../../../shared/native-chat-subagent-summary'
+import { subagentGroupFallbackText } from '../../../shared/native-chat/transcript/native-chat-subagent-summary'
 import type { openAgentSessionJournal } from './journal-store-factory'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
 import { lostLiveWorkJournalBody, staleSubagentRosterRevisions } from './journal-subagent-liveness'

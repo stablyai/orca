@@ -123,7 +123,7 @@ describe('remote runtime input journal', () => {
     await expect(results).resolves.toEqual([false, true])
   })
 
-  it('drops unacked input sent to another terminal or a restarted host runtime', () => {
+  it('drops unacked input when the host runtime ledger changes', () => {
     const first = recordingStream('ledger-1')
     const journal = createRemoteRuntimeInputJournal({
       currentStream: () => null

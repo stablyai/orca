@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { test as base, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
+import type { GitHubWorkItem } from '../../src/shared/github/work-item-types'
 
 const fakeGhDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-fake-gh-'))
 const fakeGhBody = `#!/usr/bin/env node
@@ -51,13 +52,10 @@ if (process.platform === 'win32') {
 }
 
 const test = base.extend({
-  launchEnv: [
-    {
-      PATH: `${fakeGhDir}${path.delimiter}${process.env.PATH ?? ''}`,
-      ORCA_GH_EXEC_TIMEOUT_MS: '1000'
-    },
-    { option: true }
-  ]
+  launchEnv: {
+    PATH: `${fakeGhDir}${path.delimiter}${process.env.PATH ?? ''}`,
+    ORCA_GH_EXEC_TIMEOUT_MS: '1000'
+  }
 })
 
 test.afterAll(() => {
@@ -101,7 +99,7 @@ test('GitHub Tasks drawer recovers when gh stalls on issue details', async ({
     if (!repo) {
       throw new Error(`Expected repo to be loaded: ${repoPath}`)
     }
-    const item = {
+    const item: GitHubWorkItem = {
       id: 'issue-5388',
       type: 'issue',
       number: 5388,
@@ -117,15 +115,13 @@ test('GitHub Tasks drawer recovers when gh stalls on issue details', async ({
     return { repoId: repo.id }
   }, testRepoPath)
 
-  // The item detail opens as an inline task-detail page (no longer a modal
-  // dialog): the item title heading proves it mounted.
+  // Use the detail heading to prove the inline task page mounted.
   const detailHeading = orcaPage.getByRole('heading', {
     name: /Issue detail fetch that hangs in gh/
   })
   await expect(detailHeading).toBeVisible({ timeout: 10_000 })
 
-  // Why: the bounded gh timeout rejects instead of hanging, so this terminal
-  // error text (replacing the body, not a spinner) proves the stall recovered.
+  // Require terminal error text to prove bounded gh timeout recovery, not a persistent spinner.
   await expect(orcaPage.getByText('Unable to load details for this GitHub item.')).toBeVisible({
     timeout: 5_000
   })

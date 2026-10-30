@@ -30,7 +30,8 @@ function goal(overrides: Partial<AgentJournalThreadGoal> = {}): AgentJournalThre
 function renderBanner(
   value: AgentJournalThreadGoal,
   pending = false,
-  runningTurn: { startedAt: number | null } | null = { startedAt: null }
+  runningTurn: { startedAt: number | null } | null = { startedAt: null },
+  startsHeld = false
 ) {
   const onChange = vi.fn()
   const view = render(
@@ -39,6 +40,7 @@ function renderBanner(
         goal={value}
         pending={pending}
         hostChanges
+        startsHeld={startsHeld}
         sendUnavailable={false}
         isVisible
         runningTurn={runningTurn}
@@ -100,15 +102,27 @@ describe('NativeChatThreadGoalBanner', () => {
     expect(screen.queryByRole('button', { name: 'Resume goal' })).toBeNull()
   })
 
+  it.each(['paused', 'blocked'] as const)(
+    'admits pending %s Resume but honors a permission hold',
+    (status) => {
+      const { onChange, view } = renderBanner(goal({ status }), true)
+      fireEvent.click(screen.getByRole('button', { name: 'Resume goal' }))
+      expect(onChange).toHaveBeenCalledWith({ kind: 'status', status: 'active' })
+      view.unmount()
+      renderBanner(goal({ status }), true, null, true)
+      expect(screen.getByRole('button', { name: 'Resume goal' })).toBeDisabled()
+    }
+  )
+
   it('renders nothing for a completed goal', () => {
     const { view } = renderBanner(goal({ status: 'complete' }))
     expect(view.container).toBeEmptyDOMElement()
   })
 
-  it('disables the goal commands while one is in flight, but not the expand toggle', () => {
+  it('keeps Pause and Clear available while another goal change is in flight', () => {
     renderBanner(goal(), true)
-    expect(screen.getByRole('button', { name: 'Clear goal' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Pause goal' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Clear goal' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Pause goal' })).toBeEnabled()
 
     fireEvent.click(screen.getByRole('button', { name: 'Show full goal' }))
     expect(screen.getByRole('button', { name: 'Hide full goal' })).toBeEnabled()

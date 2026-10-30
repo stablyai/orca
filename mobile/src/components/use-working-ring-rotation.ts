@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Animated, Easing, Platform } from 'react-native'
 
-/** The working ring's rotation: one turn per second while `active`, reset to 0 otherwise. */
 export function useWorkingRingRotation(active: boolean): Animated.AnimatedInterpolation<string> {
   const spinValue = useRef(new Animated.Value(0)).current
 
@@ -14,7 +13,7 @@ export function useWorkingRingRotation(active: boolean): Animated.AnimatedInterp
           easing: Easing.linear,
           // Decorative loops must not hold up interaction-scheduled list rendering.
           isInteraction: false,
-          // Why: web has no native driver, so a loop over a native-driver timing plays it once.
+          // Web has no native driver; looping native-driver timing would play only once.
           useNativeDriver: Platform.OS !== 'web'
         })
       )

@@ -24,7 +24,6 @@ vi.mock('react-native', () => ({
   View: 'View',
   StyleSheet: { create: <T,>(styles: T) => styles }
 }))
-// The library's hooks are plain reads of its two contexts, which is all this stands in for.
 vi.mock('react-native-safe-area-context', async () => {
   const { createContext, useContext } = await import('react')
   const SafeAreaInsetsContext = createContext<EdgeInsets | null>(null)

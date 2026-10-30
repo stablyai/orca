@@ -7,7 +7,7 @@ import {
   isDesktopBrowserBridgeMethod
 } from '../../shared/desktop-browser-bridge-protocol'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
-import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
+import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime/remote-runtime-client'
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
 import {
   getOrcadSshDeployment,
@@ -165,7 +165,11 @@ export function installDesktopBrowserBridge(options: {
           worktreeIdForPage: (browserPageId) =>
             browserManager.getWorktreeIdForTab(browserPageId) ?? null,
           dispatch: (method, params) =>
-            getDispatcher().dispatch({ id: randomUUID(), authToken: '', method, params }),
+            // Why: the SSH host's orca CLI is an agent caller; the cursor and tab badge key off it.
+            getDispatcher().dispatch(
+              { id: randomUUID(), authToken: '', method, params },
+              { caller: { kind: 'local-cli' } }
+            ),
           audit: (entry) => log(`audit ${JSON.stringify(entry)}`)
         },
         signal,

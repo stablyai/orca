@@ -186,7 +186,7 @@ describe('a failed ACP turn says why', () => {
       {
         kind: 'status',
         tone: 'warning',
-        text: 'The agent hit its usage limit. Send a message once it resets to continue.',
+        text: 'The agent hit its usage limit.',
         failure: { kind: 'usageLimitReached', detail: { text: REASON, audience: 'person' } }
       }
     ])

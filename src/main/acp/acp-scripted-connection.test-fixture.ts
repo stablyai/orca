@@ -15,9 +15,9 @@ export class FakeAcpChild extends AcpSessionRuntime implements AcpStructuredConn
   stderr = ''
   processTreeUnproven = false
   private exitListeners: ((exit: ProviderProcessExit) => void)[] = []
-  private gone = false
   private closing = false
   private lostWith: Error | undefined
+  private exitedWith: ProviderProcessExit | null = null
   closes = 0
 
   constructor(
@@ -36,17 +36,20 @@ export class FakeAcpChild extends AcpSessionRuntime implements AcpStructuredConn
   }
 
   get exited() {
-    return this.gone
+    return this.exitedWith !== null
   }
   onExit(listener: (exit: ProviderProcessExit) => void): void {
-    if (this.gone) {
-      listener(FAKE_EXIT)
+    if (this.exitedWith) {
+      listener(this.exitedWith)
     } else {
       this.exitListeners.push(listener)
     }
   }
   stderrTail(): string {
     return this.stderr
+  }
+  get exitStatus(): ProviderProcessExit | null {
+    return this.exitedWith
   }
   pauseReading(): void {
     this.agent.stdout.pause()
@@ -61,26 +64,26 @@ export class FakeAcpChild extends AcpSessionRuntime implements AcpStructuredConn
   }
   override close(error?: Error): Promise<boolean> {
     this.closes += 1
-    this.closing ||= !this.gone
+    this.closing ||= this.exitedWith === null
     this.drainNotifications(error)
     return this.proveClose().finally(() => super.close(error))
   }
-  exit(): void {
-    if (this.gone) {
+  exit(status: ProviderProcessExit = FAKE_EXIT): void {
+    if (this.exitedWith) {
       return
     }
-    this.gone = true
+    this.exitedWith = status
     const error =
       this.lostWith ?? new AcpConnectionClosedError(this.stderr || `${this.launch.command} exited`)
     super.close(error)
-    this.connectionOptions.onExit?.(error, { expected: this.closing, exit: FAKE_EXIT })
+    this.connectionOptions.onExit?.(error, { expected: this.closing, exit: status })
     for (const listener of this.exitListeners.splice(0)) {
-      listener(FAKE_EXIT)
+      listener(status)
     }
   }
   private lost(error: Error): void {
     this.lostWith ??= error
-    if (this.closing || this.gone) {
+    if (this.closing || this.exitedWith) {
       return
     }
     this.connectionOptions.onClose?.(error)

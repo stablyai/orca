@@ -416,7 +416,7 @@ describe('Grok roster evidence through the existing host child store', () => {
   })
 
   // Refusal proves no cancellation; a mismatched reply leaves the outcome unknown.
-  // unknown. The Stop is accepted either way, and its note says which.
+  // Stop is accepted in either case; its note reports the cancellation outcome.
   it.each([
     ['rpc-error', "The background task wasn't stopped."],
     ['mismatched-id', 'Cancellation was not confirmed.']

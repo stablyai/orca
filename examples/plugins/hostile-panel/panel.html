@@ -2,10 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <!-- Security test fixture: every attempt below MUST be contained by the
-         host-injected CSP, the iframe sandbox, and the bridge budgets. Each
-         probe reports pass/fail into the DOM so the containment run is
-         directly observable in the panel. -->
+    <!-- Hostile fixture: CSP, sandbox and bridge budgets must contain each probe; DOM verdicts expose failures. -->
   </head>
   <body>
     <h1>Hostile panel fixture</h1>
@@ -76,8 +73,7 @@
         }
       }, 3000)
 
-      // Navigation probes are opt-in so a failed attempt cannot erase the
-      // network and bridge evidence before the harness observes it.
+      // Opt-in navigation preserves network/bridge evidence until the harness reads it.
       document.getElementById('navigate-top').addEventListener('click', function () {
         markNavigationInvocation('top-navigation')
         try {
@@ -131,70 +127,52 @@
       })
 
       // Probe 7: an oversized valid-looking call must receive a real refusal.
-      window.addEventListener('message', function (event) {
-        var data = event.data
-        if (event.source !== window.parent || !data || data.type !== 'orca-panel-action-result') {
-          return
-        }
-        if (data.requestId === 'oversized-probe') {
-          report(
-            'oversized-message',
-            !data.ok && data.errorCode === 'invalid_request',
-            data.errorCode || 'unexpected success'
-          )
-        }
-        if (data.requestId === 'flood-result') {
-          report(
-            'message-flood',
-            !data.ok && data.errorCode === 'rate_limited',
-            data.errorCode || 'unexpected success'
-          )
-        }
-      })
-
-      document.getElementById('bridge').addEventListener('click', function () {
-        window.parent.postMessage(
-          {
-            type: 'orca-panel-action',
-            requestId: 'oversized-probe',
-            action: 'workspace.readContext',
-            params: { padding: 'x'.repeat(128 * 1024) }
+      function expectRefusal(name, call, code) {
+        var settled = false
+        call.then(
+          function () {
+            settled = true
+            report(name, false, 'unexpected success')
           },
-          '*'
+          function (error) {
+            settled = true
+            report(name, error.code === code, error.code)
+          }
         )
         setTimeout(function () {
-          report('oversized-message', false, 'host sent no refusal')
+          if (!settled) {
+            report(name, false, 'host sent no refusal')
+          }
         }, 2000)
+      }
 
-        // Probe 8: invalid, pong, and binary floods must all spend rate budget
-        // before parsing; the final valid call is the observable oracle.
+      document.getElementById('bridge').addEventListener('click', function () {
+        expectRefusal(
+          'oversized-message',
+          window.orca.host.call('workspace.readContext', { padding: 'x'.repeat(128 * 1024) }),
+          'too_large'
+        )
+
+        // Invalid, pong and binary floods must spend rate budget before parsing; the final valid call proves it.
         setTimeout(function () {
           for (var i = 0; i < 40; i++) {
             var payload =
               i % 3 === 0
-                ? { type: 'orca-panel-pong', pingId: i }
+                ? { orca: 1, kind: 'evt', event: 'pong', payload: i }
                 : i % 3 === 1
                   ? { type: 'invalid-hostile-message', sequence: i }
                   : new Uint8Array(2048)
             window.parent.postMessage(payload, '*')
           }
-          window.parent.postMessage(
-            {
-              type: 'orca-panel-action',
-              requestId: 'flood-result',
-              action: 'workspace.readContext',
-              params: {}
-            },
-            '*'
+          expectRefusal(
+            'message-flood',
+            window.orca.host.call('workspace.readContext', {}),
+            'rate_limited'
           )
-          setTimeout(function () {
-            report('message-flood', false, 'host sent no rate-limit refusal')
-          }, 2000)
         }, 150)
       })
 
-      // Probe 9: opt-in busy loop. The watchdog should demote the panel while
-      // Chromium keeps the sandboxed frame in its isolated renderer process.
+      // Opt-in busy loop: watchdog must demote the panel while Chromium isolates its renderer.
       function enterBusyLoop() {
         report('busy-loop', true, 'watchdog should suspend this panel')
         while (true) {

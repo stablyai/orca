@@ -1,6 +1,7 @@
 import type { BrowserWindow } from 'electron'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import { EmulatorError } from '../emulator/emulator-errors'
+import { emulatorFailureText } from '../../shared/emulator-failure-copy'
 import {
   inspectEmulatorAvailability,
   type EmulatorAvailability
@@ -13,13 +14,11 @@ import type { SimulatorDevice } from '../emulator/simctl-simulator-devices'
 import type { EmulatorDevice } from '../emulator/backends/emulator-backend'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 
-// Settings slice the emulator surface needs; keeps the host contract honest (no widening cast).
 type EmulatorHostSettings = Pick<
   GlobalSettings,
   'mobileEmulatorEnabled' | 'mobileEmulatorDefaultDeviceUdid' | 'androidSdkPath'
 >
 
-// Why: dedicated file for "one surface" separation (emulator), parallel to orca-runtime-browser.ts. Keeps OrcaRuntimeService focused; emulator routing easy to scan. No max-lines disable (split further if grows; per AGENTS + plan Phase 3).
 export type RuntimeEmulatorCommandHost = {
   getEmulatorBridge(): EmulatorBridge | null
   resolveEmulatorWorkspaceId(selector: string): Promise<string>
@@ -36,17 +35,15 @@ export class RuntimeEmulatorCommands {
   private requireEmulatorBridge(): EmulatorBridge {
     const bridge = this.host.getEmulatorBridge()
     if (!bridge) {
-      throw new EmulatorError('emulator_no_active', 'No emulator session is active')
+      throw new EmulatorError('emulator_no_active', emulatorFailureText('noSession'))
     }
-    // Honor the user's configured Android SDK path before the backend resolves it.
     setConfiguredAndroidSdkPath(this.host.getSettings().androidSdkPath ?? null)
     return bridge
   }
 
-  // Why: RPC envelopes require a serializable `result` field; void/undefined omits it and breaks CLI schema validation.
+  // RPC must serialize result; undefined would omit it and fail CLI schema validation.
   private static readonly OK = { ok: true as const }
 
-  // High-level delegation (mirror browser* methods).
   async emulatorTap(
     params: EmulatorTargetParams & { x: number; y: number }
   ): Promise<{ ok: true }> {
@@ -129,7 +126,7 @@ export class RuntimeEmulatorCommands {
   }): Promise<{ attached: boolean; info?: EmulatorSessionInfo }> {
     const settings = this.host.getSettings()
     if (settings.mobileEmulatorEnabled === false) {
-      throw new EmulatorError('emulator_disabled', 'Mobile Emulator is disabled in Settings.')
+      throw new EmulatorError('emulator_disabled', emulatorFailureText('disabled'))
     }
     const bridge = this.requireEmulatorBridge()
     let device = params.device ?? settings.mobileEmulatorDefaultDeviceUdid ?? undefined
@@ -137,25 +134,20 @@ export class RuntimeEmulatorCommands {
       device = await resolveDefaultAttachDevice(bridge)
     }
     if (!device) {
-      throw new EmulatorError(
-        'emulator_device_not_found',
-        'No emulator device specified. Choose a default device in Settings > Mobile Emulator or pass a device.'
-      )
+      throw new EmulatorError('emulator_device_not_found', emulatorFailureText('noDeviceSpecified'))
     }
     const worktreeId = await this.resolveWorktreeId(params.worktree)
     if (worktreeId) {
       const reusable = await bridge.getReusableActiveForWorktree(worktreeId, device)
       if (reusable) {
-        // Why: renderer remounts should reconnect to the existing stream, not
-        // kill it and create the stream-disconnected reload loop users see.
+        // Renderer remounts must reuse streams to avoid disconnected reload loops.
         this.notifyRendererEmulatorAutoAttach(worktreeId, reusable)
         if (params.focus) {
           this.notifyRendererEmulatorPaneFocus(worktreeId)
         }
         return { attached: true, info: reusable }
       }
-      // A different requested device is an explicit switch; the bridge keeps a
-      // slow-to-boot Android emulator alive for instant switch-back.
+      // Device switch retains slow-boot Android emulators for fast switch-back.
       await bridge.stopActiveForSwitch(worktreeId)
     }
     const lease = await bridge.acquireHelperForDevice(device)
@@ -164,19 +156,13 @@ export class RuntimeEmulatorCommands {
       try {
         const currentWorktreeId = await this.resolveWorktreeId(params.worktree)
         if (currentWorktreeId !== worktreeId) {
-          throw new EmulatorError(
-            'emulator_no_active',
-            'The workspace changed while the emulator was starting. Reattach the emulator.'
-          )
+          throw new EmulatorError('emulator_no_active', emulatorFailureText('workspaceChanged'))
         }
       } catch (error) {
-        // Why: the workspace can disappear while a slow Android device boots.
+        // Workspaces can disappear during slow Android boots; release their lease.
         await lease.release({ cleanupIfUnused: true }).catch(() => {})
         if (error instanceof Error && error.message === 'selector_not_found') {
-          throw new EmulatorError(
-            'emulator_no_active',
-            'The workspace changed while the emulator was starting. Reattach the emulator.'
-          )
+          throw new EmulatorError('emulator_no_active', emulatorFailureText('workspaceChanged'))
         }
         throw error
       }
@@ -189,7 +175,6 @@ export class RuntimeEmulatorCommands {
     } else {
       await lease.release()
     }
-    // Default: no auto steal (mirror browser tab create/switch). --focus sends emulator:pane-focus only when requested.
     return { attached: true, info }
   }
 
@@ -208,10 +193,7 @@ export class RuntimeEmulatorCommands {
   }
 
   async emulatorListSimulators(_params: { worktree?: string } = {}): Promise<SimulatorDevice[]> {
-    // Why: exposed for the EmulatorPane auto-flow on "New Mobile Emulator" tab creation.
-    // Returns the full simctl list (including Shutdown devices) so the pane can choose a default and
-    // rely on startHelperForDevice + ensureDeviceBooted to boot if needed. Worktree param ignored
-    // (simulators are host-local, not per-worktree).
+    // Include shutdown simulators so pane auto-start can choose/boot one; devices are host-local.
     const bridge = this.requireEmulatorBridge()
     return bridge.listSimulators()
   }
@@ -220,8 +202,6 @@ export class RuntimeEmulatorCommands {
     return inspectEmulatorAvailability(this.requireEmulatorBridge())
   }
 
-  // Why: unified device inventory across backends (iOS simulators + Android
-  // devices/AVDs) for the cross-platform `orca emulator devices` command.
   async emulatorListDevices(_params: { worktree?: string } = {}): Promise<EmulatorDevice[]> {
     return this.requireEmulatorBridge().listAllDevices()
   }
@@ -321,16 +301,14 @@ export class RuntimeEmulatorCommands {
     return { ok: true, deviceUdid: shutdownUdid }
   }
 
-  // Window may not exist during shutdown, so sends are best-effort.
+  // Shutdown may already have destroyed the window; send best-effort.
   private sendToRenderer(channel: string, payload: unknown): void {
     try {
       this.host.getAuthoritativeWindow().webContents.send(channel, payload)
-    } catch {
-      // Window may not exist during shutdown
-    }
+    } catch {}
   }
 
-  // Why: mirror browser:pane-focus — scoped per worktree, no cross-worktree yank unless user is already there.
+  // Match browser pane focus: never navigate to a different workspace.
   private notifyRendererEmulatorPaneFocus(worktreeId: string): void {
     this.sendToRenderer('emulator:pane-focus', { worktreeId })
   }
@@ -339,7 +317,6 @@ export class RuntimeEmulatorCommands {
     this.sendToRenderer('ui:emulatorAutoAttach', { worktreeId, info })
   }
 
-  // Raw for extensibility.
   async emulatorExecRaw(params: {
     command: string
     device?: string

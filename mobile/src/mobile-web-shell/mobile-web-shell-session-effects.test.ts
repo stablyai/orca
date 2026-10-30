@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MobileWebShellSessionEvent } from './mobile-web-shell-session-contract'
 
-/** Each place a read of the host's generation can fail, and the cause it reports. */
 const doubles = vi.hoisted(() => ({
   manifest: (): Promise<unknown> => Promise.reject(new Error('no manifest staged')),
   fetch: (): Promise<unknown> => Promise.reject(new Error('no fetch staged'))
@@ -26,7 +25,6 @@ import { createFakeGenerationFileSystem } from './generation-file-system-fake'
 import { deriveHostCacheKey } from './host-cache-key'
 import { download, openCache, readManifest } from './mobile-web-shell-session-effects'
 
-// The mocked operations never touch the client; they only need one to exist.
 const CLIENT: RpcClient = {
   sendRequest: async () => {
     throw new Error('unused')
@@ -221,10 +219,7 @@ describe('the download', () => {
   })
 })
 
-/**
- * Against the real store: the copies a reused asset needs are made by the stage, on the store's
- * queue, so what other mounts do to the staging tree mid-download cannot take them away.
- */
+// Use the real store queue: reused-asset copies must survive concurrent mounts sweeping staging during download.
 describe('a download that reuses the cached generation', () => {
   const HOST = deriveHostCacheKey('host-a')
 
@@ -247,7 +242,6 @@ describe('a download that reuses the cached generation', () => {
     }
   }
   const CACHED = bundle(4)
-  // The page changed; the script is left to the stage to copy.
   const UPDATE = {
     ...bundle(8),
     assets: new Map([['index.html', new Uint8Array(8)]]),
@@ -261,7 +255,7 @@ describe('a download that reuses the cached generation', () => {
     return { fileSystem, store }
   }
 
-  function runFor(store: GenerationStore) {
+  function runFor(store: GenerationStore, downloads = new Set<AbortController>()) {
     const { events, send } = collect()
     const done = download({
       client: CLIENT,
@@ -275,11 +269,69 @@ describe('a download that reuses the cached generation', () => {
         setTimer: () => () => {}
       },
       startedAt: 0,
-      downloads: new Set(),
+      downloads,
       send
     })
     return done.then(() => events)
   }
+
+  it('writes no staging bytes when canceled while its staging waits in the store queue', async () => {
+    const fileSystem = createFakeGenerationFileSystem()
+    const store = createGenerationStore({ fileSystem })
+    const NEXT = bundle(16)
+    const BLOCKER = deriveHostCacheKey('host-b')
+    let enterBlocker = (): void => {}
+    const blockerEntered = new Promise<void>((resolve) => {
+      enterBlocker = resolve
+    })
+    let releaseBlocker = (): void => {}
+    const blockerReleased = new Promise<void>((resolve) => {
+      releaseBlocker = resolve
+    })
+    const list = fileSystem.list.bind(fileSystem)
+    fileSystem.list = async (uri) => {
+      if (uri.includes(`/${BLOCKER}/`)) {
+        enterBlocker()
+        await blockerReleased
+      }
+      return list(uri)
+    }
+    const writes: string[] = []
+    const writeBytes = fileSystem.writeBytes.bind(fileSystem)
+    fileSystem.writeBytes = async (uri, bytes) => {
+      writes.push(uri)
+      await writeBytes(uri, bytes)
+    }
+    let blocker: Promise<unknown> = Promise.resolve()
+    doubles.fetch = async () => {
+      blocker = store.readActiveGeneration(BLOCKER)
+      await blockerEntered
+      return NEXT
+    }
+    let markQueued = (): void => {}
+    const stageQueued = new Promise<void>((resolve) => {
+      markQueued = resolve
+    })
+    const downloads = new Set<AbortController>()
+    const run = runFor(
+      {
+        ...store,
+        stageGeneration: (...args) => {
+          const staged = store.stageGeneration(...args)
+          markQueued()
+          return staged
+        }
+      },
+      downloads
+    )
+
+    await stageQueued
+    downloads.forEach((controller) => controller.abort())
+    releaseBlocker()
+    await Promise.all([run, blocker])
+
+    expect(writes.filter((uri) => uri.includes(`/tmp/${NEXT.manifest.buildId}/`))).toEqual([])
+  })
 
   it('commits whole when another mount sweeps the staging trees mid-download', async () => {
     const { fileSystem, store } = await cachedStore()

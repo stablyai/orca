@@ -55,7 +55,6 @@ function pump(filePath: string): void {
   void window.api.notebook.execute({ filePath, code: next.code })
 }
 
-/** False once the notebook's tab has closed, which ends its session mid-await. */
 function isOpen(filePath: string): boolean {
   return filePath in store.getState().sessions
 }
@@ -81,14 +80,14 @@ async function discoverEnvironment(
   return recommended
 }
 
-/** Starts the notebook's kernel; the one place a notebook's Python runs, so it refuses until trusted. */
+/** Gate the single kernel-start path on notebook trust. */
 async function start(filePath: string, rootPath: string | null = null): Promise<void> {
   if (!getSession(filePath).trusted) {
     return
   }
   const lifetime = sessionLifetimes.get(filePath) ?? Symbol()
   sessionLifetimes.set(filePath, lifetime)
-  // Why 'starting' before discovery: a second run meanwhile must queue, not start another kernel.
+  // Set starting before awaiting discovery so concurrent runs queue instead of launching duplicate kernels.
   updateSession(filePath, () => ({ status: 'starting' }))
   let result: KernelStartResult | null
   try {
@@ -119,7 +118,6 @@ async function start(filePath: string, rootPath: string | null = null): Promise<
     updateSession(filePath, () => ({ status: 'ready', setup: null }))
     pump(filePath)
   } else if (result.status === 'missing-ipykernel') {
-    // The kernel was started in this notebook's chosen environment, so it is set.
     const base = store.getState().environments[filePath]
     updateSession(filePath, () => ({
       status: 'off',
@@ -194,7 +192,6 @@ export function interruptKernel(filePath: string): void {
   }, INTERRUPT_STALL_MS)
 }
 
-/** Moves the open setup to `phase`; returns the new setup, or null when there is none. */
 function enterSetupPhase(filePath: string, phase: KernelSetup['phase']): KernelSetup | null {
   const current = getSession(filePath).setup
   if (!current) {
@@ -205,7 +202,6 @@ function enterSetupPhase(filePath: string, phase: KernelSetup['phase']): KernelS
   return setup
 }
 
-/** Whether `setup` is still the one on screen; a closed tab or reopened session means no. */
 function isShowing(filePath: string, setup: KernelSetup): boolean {
   return getSession(filePath).setup === setup
 }
@@ -238,7 +234,6 @@ export async function installIpykernel(filePath: string): Promise<void> {
   }
 }
 
-/** Creates the notebook's `.venv` from the setup's base with ipykernel, then switches to it. */
 export async function createVirtualEnvironment(
   filePath: string,
   rootPath: string | null
@@ -260,12 +255,11 @@ export async function createVirtualEnvironment(
   }
 }
 
-/** Opens the setup dialog offering a new `.venv` built from `base`. */
 export function offerVirtualEnvironment(filePath: string, base: PythonEnvironment): void {
   updateSession(filePath, () => ({ setup: { base, offer: 'venv', phase: 'idle', error: null } }))
 }
 
-/** Closes the setup dialog; cells waiting on a kernel that will not start are dropped. */
+/** Cancel setup and drop cells waiting for an unstarted kernel. */
 export function cancelSetup(filePath: string): void {
   updateSession(filePath, ({ status, queue }) => ({
     setup: null,
@@ -322,7 +316,7 @@ function handleFrame({ filePath, frame }: KernelFrameEvent): void {
   }))
 }
 
-// Kernels only exist once this module has loaded with the notebook viewer, so it subscribes here.
+// Subscribe lazily with the notebook viewer, which owns kernel sessions.
 window.api.notebook.onKernelFrame(handleFrame)
 // A kernel shuts down once its notebook's tab closes, however it closed.
 useAppStore.subscribe((state, previous) => {

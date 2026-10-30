@@ -1,8 +1,9 @@
+import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
+import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
 import { structuredAgentSessionSendBody } from '../../../shared/structured-agent-session-send-mutation'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -659,7 +660,7 @@ describe("the reopen's mark", () => {
     void working
     const sent = rig.dispatch.mock.calls.length
     rig.crashRestartHostProcess()
-    await rig.host.restoreReadableSessions([SESSION])
+    await openTestChats(rig.host, [SESSION])
     expect(rig.host.collaboratorsForTests().sessions.has(SESSION)).toBe(true)
     await observationClock.observe(100)
     expect(await rig.handoff(queued.id)).toBeUndefined()

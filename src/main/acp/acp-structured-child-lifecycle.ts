@@ -9,6 +9,10 @@ import {
   ACP_STOP_GRACE_MS,
   type AcpStructuredSessionAdapterDeps
 } from './acp-structured-session-adapter-deps'
+import {
+  createStructuredAgentSessionLogger,
+  neverThrowingStructuredAgentSessionLogger
+} from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { windDownAcpTurn } from './acp-structured-stop'
 
 export class AcpStructuredChildren {
@@ -32,10 +36,31 @@ export class AcpStructuredChildren {
       (pending() || lane.hasPendingDiagnostic(input.clientMessageId))
   }
 
+  stopAfterFailure(sessionId: string): void {
+    void this.stop(sessionId, false).catch((error: unknown) => {
+      const logger = neverThrowingStructuredAgentSessionLogger(
+        this.deps.logger ?? createStructuredAgentSessionLogger()
+      )
+      logger.warn('ACP failed-child cleanup failed', {
+        scope: 'acp-child-cleanup',
+        sessionId,
+        error
+      })
+    })
+  }
+
   /** Requires root exit; reports unproven descendant cleanup separately. */
-  async close(sessionId: string): Promise<boolean> {
+  async close(sessionId: string, requested = true): Promise<boolean> {
     const connection = this.sessions.get(sessionId)?.connection
-    const closed = await this.stop(sessionId, true)
+    const failed = this.starts.failedConnection(sessionId)
+    const closed = await this.stop(sessionId, requested)
+    const result = connection?.lastCloseResult ?? failed?.lastCloseResult
+    if (closed && result?.killDelivered && result.root !== 'exited') {
+      throw new AgentSessionAcquisitionRootExitObservedError(
+        new Error('ACP writer killed'),
+        'kill-delivered'
+      )
+    }
     if (closed && connection?.processTreeUnproven) {
       throw new AgentSessionAcquisitionRootExitObservedError(
         new Error(
@@ -53,6 +78,22 @@ export class AcpStructuredChildren {
       this.stopSession(sessionId, requested)
     ])
     return failedStart && session
+  }
+
+  async closeAll(tasks: (Promise<boolean | void> | undefined)[]): Promise<void> {
+    const ids = new Set([...this.sessions.keys(), ...this.starts.failedSessionIds()])
+    // The host aborts in-progress starts before this teardown.
+    const results = await Promise.allSettled([
+      ...[...ids].map((sessionId) => this.stop(sessionId, true)),
+      ...tasks
+    ])
+    const failure = results.find((result) => result.status === 'rejected')
+    if (failure?.status === 'rejected') {
+      throw failure.reason
+    }
+    if (results.some((result) => result.status === 'fulfilled' && result.value === false)) {
+      throw new Error('an ACP agent child could not be proven stopped')
+    }
   }
 
   private async stopSession(sessionId: string, requested: boolean): Promise<boolean> {
@@ -105,6 +146,9 @@ export class AcpStructuredChildren {
       session.dispose()
       this.deps.onEvent?.({
         type: 'ended',
+        ...(session.connection.lastCloseResult?.killDelivered && !session.connection.exited
+          ? { deathEvidenceKind: 'kill-delivered' as const }
+          : {}),
         sessionId: session.sessionId,
         fence: session.fence,
         acquisitionGeneration: session.acquisitionGeneration,
@@ -143,7 +187,7 @@ export class AcpStructuredChildren {
       `${session.spec.agent} ACP connection closed: ${error.message || error.name}`,
       error
     )
-    void this.stop(session.sessionId, false)
+    this.stopAfterFailure(session.sessionId)
   }
 
   private stopGraceMs(): number {

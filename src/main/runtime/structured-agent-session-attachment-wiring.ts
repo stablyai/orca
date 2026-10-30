@@ -1,5 +1,4 @@
-// Installs the chat attachment store beside the structured host, and its sweeps. The store lives in
-// the same state directory as the journal, whose database holds the claims the sweeps honor.
+// Keep chat attachment storage/sweeps beside the journal; its database owns upload claims the sweeps honor.
 
 import { mkdirSync } from 'node:fs'
 import { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'

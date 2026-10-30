@@ -14,9 +14,7 @@ export type FakeRelay = {
   openError: Error | null
   shutdowns: string[]
   shutdownError: Error | null
-  /** The process identity each listed PTY reports, when the relay reports one. */
   incarnations: Map<string, string>
-  /** Whether a stop reports `pty.exit` (the relay's normal answer). */
   exitOnShutdown: boolean
 }
 

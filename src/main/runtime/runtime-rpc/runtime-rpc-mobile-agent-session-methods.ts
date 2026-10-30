@@ -8,6 +8,7 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.cancel',
   'agentSession.queuedMessageSend',
   'agentSession.queuedMessageDelete',
+  'agentSession.queuedMessageMove',
   'agentSession.queuedMessageUpdate',
   'agentSession.queuedMessageEditHold',
   'agentSession.queuedMessagesResume',
@@ -35,6 +36,8 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSessionAttachment.uploadAppend',
   'agentSessionAttachment.uploadCommit',
   'agentSessionAttachment.uploadAbort',
+  // Stored images back as previews when the phone has no copy of its own.
+  'agentSessionAttachment.read',
   // No-ops on a current host; kept until MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION passes the
   // mobile builds that still call them.
   'agentSession.hold',

@@ -19,8 +19,7 @@ export function callLayoutApply(
       (reply) =>
         afterLayoutFrame(reply.frameSeq, () => answer(reply), layoutFramePositionKey(target)),
       (error: unknown) => {
-        // Why: a thrown write is rolled back. An indeterminate disk write is not, and may leave a
-        // pane main minted, which its frame then draws. Never sent again: main may have applied it.
+        // Thrown writes roll back; indeterminate disk writes may leave minted panes main’s frames draw. Never replay a possibly applied intent.
         console.warn(`[layout-owner] ${command.type} refused: call_failed`, errorMessage(error))
         answer(null)
       }

@@ -1,15 +1,38 @@
 // Chat Stop ends the captured child for every provider; default prompt Cancel interrupts its turn.
 
 import type {
+  AgentChildWorkStopAcknowledgement,
+  AgentSessionBackgroundTaskStops
+} from '../../../shared/agent-child-work-stop-targets'
+import type {
   AgentJournalApprovalItem,
   AgentJournalDispatchState,
   AgentJournalQuestionItem
 } from '../../../shared/agent-session-journal-types'
 import type { ProviderDiagnostic } from '../../../shared/agent-session-failure'
 
+export type AgentSessionCloseEvidence = {
+  root?: 'live' | 'unverifiable' | 'exited'
+  workload?: 'live' | 'unverifiable' | 'exited'
+  deathEvidenceKind?: 'kill-delivered'
+}
+export type AgentSessionCloseObserver = (evidence: AgentSessionCloseEvidence | undefined) => void
+
+/** In-process completion evidence is separate from durable command acceptance. */
+export type AgentSessionStopOutcome = {
+  /** Read/pause acknowledgement, not universal durable-write quiescence. */
+  pause: 'acknowledged' | 'not-needed' | 'unconfirmed'
+  interrupt: 'accepted' | 'not-needed' | 'unconfirmed'
+  root: 'exited' | 'unproven'
+  workload: 'exited' | 'unproven'
+  deathEvidenceKind?: 'kill-delivered'
+  errors: unknown[]
+}
+
 /** Distinguish refused interrupts, absent turns with possible pending openers, and the journal turn actually stopped. */
 export type AgentSessionCancelOutcome = {
   cancelled: boolean
+  stop?: AgentSessionStopOutcome
   refusal?: { detail?: ProviderDiagnostic; turnNotRunning?: true; turnMayOpen?: true }
   turnId?: string
 }
@@ -17,6 +40,15 @@ export type AgentSessionCancelOutcome = {
 export type AgentSessionPromptCancelRoute = { kind: 'dismiss' } | { kind: 'stop' }
 
 export type StructuredAgentSessionAdapterStop = {
+  /** Stop named tasks only; acknowledge each accepted stop immediately so later batch failures cannot erase it. */
+  stopBackgroundTasks?(input: {
+    sessionId: string
+    fence: number
+    taskIds: readonly string[]
+    acknowledge?: (acknowledgement: AgentChildWorkStopAcknowledgement) => void
+  }): Promise<{ cancelled: boolean; stillRunning?: true }>
+  /** Undefined when no live session exposes stop support. */
+  backgroundTaskStops?(sessionId: string): AgentSessionBackgroundTaskStops | undefined
   /** Cancel only the requested turn; absent turnId also covers dispatches whose turns have not opened. */
   cancelTurn(input: {
     sessionId: string
