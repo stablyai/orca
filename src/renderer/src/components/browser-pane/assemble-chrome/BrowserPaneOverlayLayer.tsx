@@ -1,4 +1,3 @@
-import { noteViewerGroupNavigation } from '@/lib/viewer-selection-request'
 import { memo, useCallback, useEffect, useMemo } from 'react'
 import { registerBrowserOverlaySlotViewport } from '../host-guest/browser-page-viewport'
 import { useShallow } from 'zustand/react/shallow'
@@ -148,10 +147,7 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
 
   // Why: stable identity so BrowserOverlaySlot's memo holds; groupId is passed at call time so one callback serves every slot.
   const focusOwningGroup = useCallback(
-    (groupId: string) => {
-      noteViewerGroupNavigation(useAppStore.getState(), worktreeId, groupId)
-      focusGroup(worktreeId, groupId)
-    },
+    (groupId: string) => focusGroup(worktreeId, groupId),
     [focusGroup, worktreeId]
   )
 

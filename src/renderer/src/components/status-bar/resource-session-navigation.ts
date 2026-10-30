@@ -1,4 +1,3 @@
-import { noteViewerNavigation } from '@/lib/viewer-selection-request'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 
 type TabLookup = Record<string, { id: string }[]>
@@ -23,7 +22,6 @@ export function navigateResourceSessionToTab(
   paneKey: string | null,
   deps: ResourceSessionNavigationDeps
 ): void {
-  noteViewerNavigation()
   for (const [worktreeId, tabs] of Object.entries(deps.tabsByWorktree)) {
     if (tabs.some((tab) => tab.id === tabId)) {
       deps.activateAndRevealWorktree(worktreeId)

@@ -17,10 +17,7 @@ import {
 import type { PaneClosedHandlerContext } from './terminal-pane-mount-context'
 
 export function createTerminalPaneClosedHandler(
-  context: Pick<
-    PaneClosedHandlerContext,
-    'deps' | 'refs' | 'deferredSplitHandoffs' | 'getOwnedManager'
-  >
+  context: Omit<PaneClosedHandlerContext, 'paneId' | 'closedPane'>
 ): (paneId: number, closedPane?: PaneClosedHandlerContext['closedPane']) => void {
   return (paneId, closedPane) => {
     const { deps, refs } = context
@@ -158,9 +155,8 @@ export function createTerminalPaneClosedHandler(
       paneTitlesRef.current = next
     }
     setRenamingPaneId((current) => (current === paneId ? null : current))
-    const manager = context.getOwnedManager?.() ?? managerRef.current
-    setPaneCount(manager?.getPanes().length ?? 0)
-    const activePane = manager?.getActivePane()
+    setPaneCount(managerRef.current?.getPanes().length ?? 0)
+    const activePane = managerRef.current?.getActivePane()
     if (activePane) {
       reportActiveRendererPtyForPane(paneTransportsRef.current, activePane.id)
       const paneTitles = useAppStore.getState().runtimePaneTitlesByTabId[tabId] ?? {}

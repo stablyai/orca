@@ -1,4 +1,3 @@
-import { protectSwitchProjections } from '@/lib/conversation-switch-projection'
 // Select moved tabs with the frame showing the move (L120); a later reply may already be superseded by another drag.
 
 import type { AppState } from '../../types'
@@ -85,26 +84,13 @@ export function withMovedTabsSelected(
 
 /** Writes a frame's patch, with the selection of each moved tab it shows; returns those moves. */
 export function showFramePatch(
-  store: {
-    getState: () => AppState
-    setState: (patch: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void
-  },
-  patch: Partial<AppState> | ((current: AppState) => Partial<AppState>),
-  select?: (current: AppState, accepted: Partial<AppState>) => Partial<AppState>
+  store: { getState: () => AppState; setState: (patch: Partial<AppState>) => void },
+  patch: Partial<AppState>
 ): MovedTabSelection[] {
-  if (typeof patch !== 'function' && Object.keys(patch).length === 0) {
+  if (Object.keys(patch).length === 0) {
     return []
   }
-  let taken: MovedTabSelection[] = []
-  store.setState((current) => {
-    const shown = withMovedTabSelections(
-      current,
-      typeof patch === 'function' ? patch(current) : patch
-    )
-    taken = shown.taken
-    const protectedPatch = protectSwitchProjections(current, shown.patch)
-    const next = select ? select(current, protectedPatch) : protectedPatch
-    return Object.keys(next).length === 0 ? current : next
-  })
-  return taken
+  const shown = withMovedTabSelections(store.getState(), patch)
+  store.setState(shown.patch)
+  return shown.taken
 }

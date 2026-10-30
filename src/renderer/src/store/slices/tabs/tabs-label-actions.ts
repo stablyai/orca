@@ -1,4 +1,3 @@
-import { noteSwitchPresentationUse } from '@/lib/conversation-switch-projection'
 import { emitNativeChatToggled } from '@/lib/native-chat-telemetry'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
 import type { AppState } from '../../types'
@@ -148,11 +147,6 @@ export function createTabsLabelActions(set: TabsSliceSet, get: TabsSliceGet): Ta
 
   return {
     reorderUnifiedTabs: (groupId, tabIds, opts) => {
-      if (opts?.recordInteraction !== false) {
-        for (const tabId of tabIds) {
-          noteSwitchPresentationUse(tabId)
-        }
-      }
       let reordered = false
       const changes: { worktreeId: string; from: string[]; to: string[] }[] = []
       set((state) => {

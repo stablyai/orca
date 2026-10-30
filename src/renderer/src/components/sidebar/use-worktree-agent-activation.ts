@@ -1,4 +1,3 @@
-import { noteViewerNavigation } from '@/lib/viewer-selection-request'
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -26,7 +25,6 @@ export function useWorktreeAgentActivation(worktreeId: string) {
         dismissStaleAgentRowByKey(paneKey)
         return
       }
-      noteViewerNavigation()
       // Use shared activation for cross-repo reveal and navigation history.
       activateAndRevealWorktree(worktreeId)
       const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []

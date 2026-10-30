@@ -19,22 +19,13 @@ import type {
  */
 export async function createWebRuntimeSessionTerminal(
   args: CreateWebRuntimeSessionTerminalArgs,
-  options: {
-    notifyFailure?: boolean
-    userAct?: boolean
-    canActivate?: () => boolean
-    viewerSelection?: string
-  } = {}
+  options: { notifyFailure?: boolean; userAct?: boolean } = {}
 ): Promise<WebRuntimeTerminalCreateOutcome> {
   if (options.userAct && !(await startStoppedWslHostForUserAct(args.environmentId))) {
     // The start already told the user why; the host is still stopped.
     return { status: 'failed', message: stoppedWslHostMessage(args.environmentId) }
   }
-  const created = await createWebRuntimeSessionTerminalResult(
-    args,
-    options.canActivate,
-    options.viewerSelection
-  )
+  const created = await createWebRuntimeSessionTerminalResult(args)
   if (
     created.hostFailed &&
     created.outcome.status === 'failed' &&

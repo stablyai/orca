@@ -1,4 +1,3 @@
-import { noteViewerNavigation } from '@/lib/viewer-selection-request'
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import { clearClientHostedBrowserRowSelection } from '@/lib/pane-manager/client-hosted-browser-row-state'
 import { noteUserWorkspaceSwitch } from '@/lib/workspace-switch-user-act'
@@ -71,10 +70,6 @@ export function useTabBarItemActions(source: TabBarItemActionSource): TabBarItem
       noteUserWorkspaceSwitch(useAppStore.getState().activeWorktreeId)
       activate()
     }
-    const navigate = (action: () => void): void => {
-      noteViewerNavigation()
-      action()
-    }
     const actions: TabBarItemActions = {
       activateTerminal: (tabId) => activateRealTab(() => latest.current.props.onActivate(tabId)),
       activateFile: (fileId) =>
@@ -83,14 +78,14 @@ export function useTabBarItemActions(source: TabBarItemActionSource): TabBarItem
         activateRealTab(() => latest.current.props.onActivateBrowserTab?.(tabId)),
       activateAgentSession: (tabId) =>
         activateRealTab(() => latest.current.props.onActivateAgentSession?.(tabId)),
-      close: (tabId) => navigate(() => latest.current.props.onClose(tabId)),
-      closeFile: (fileId) => navigate(() => latest.current.props.onCloseFile?.(fileId)),
-      closeBrowserTab: (tabId) => navigate(() => latest.current.props.onCloseBrowserTab?.(tabId)),
-      closeOthers: (tabId) => navigate(() => latest.current.props.onCloseOthers(tabId)),
-      closeToRight: (tabId) => navigate(() => latest.current.props.onCloseToRight(tabId)),
-      closeToLeft: (tabId) => navigate(() => latest.current.props.onCloseToLeft(tabId)),
-      closeSplitPane: () => navigate(() => latest.current.props.onCloseSplitPane?.()),
-      closeAllFiles: () => navigate(() => latest.current.props.onCloseAllFiles?.()),
+      close: (tabId) => latest.current.props.onClose(tabId),
+      closeFile: (fileId) => latest.current.props.onCloseFile?.(fileId),
+      closeBrowserTab: (tabId) => latest.current.props.onCloseBrowserTab?.(tabId),
+      closeOthers: (tabId) => latest.current.props.onCloseOthers(tabId),
+      closeToRight: (tabId) => latest.current.props.onCloseToRight(tabId),
+      closeToLeft: (tabId) => latest.current.props.onCloseToLeft(tabId),
+      closeSplitPane: () => latest.current.props.onCloseSplitPane?.(),
+      closeAllFiles: () => latest.current.props.onCloseAllFiles?.(),
       setCustomTitle: (tabId, title) => latest.current.props.onSetCustomTitle(tabId, title),
       setTabColor: (tabId, color) => latest.current.props.onSetTabColor(tabId, color),
       togglePaneExpand: (tabId) => latest.current.props.onTogglePaneExpand(tabId),
@@ -99,7 +94,7 @@ export function useTabBarItemActions(source: TabBarItemActionSource): TabBarItem
       makePreviewFilePermanent: (fileId, tabId) =>
         latest.current.props.onMakePreviewFilePermanent?.(fileId, tabId),
       togglePinned: (item) => latest.current.togglePinned(item),
-      toggleViewMode: (tabId) => navigate(() => latest.current.toggleTabViewMode(tabId))
+      toggleViewMode: (tabId) => latest.current.toggleTabViewMode(tabId)
     }
     return ORCA_LAYOUT_OWNER_IS_MAIN
       ? { ...actions, ...withLayoutOwnerTabProps(actions, () => latest.current.props.worktreeId) }

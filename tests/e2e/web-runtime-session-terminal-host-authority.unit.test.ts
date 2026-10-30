@@ -475,7 +475,7 @@ describe('createWebRuntimeSessionTerminal', () => {
       snapshot,
       ENVIRONMENT_ID,
       undefined,
-      { offerOpenSelection: undefined },
+      undefined,
       mocks.changedAgentPaneKeys
     )
   })

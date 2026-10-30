@@ -1,4 +1,3 @@
-import { noteViewerNavigation } from '@/lib/viewer-selection-request'
 import { prepareQuickOpenFiles, rankQuickOpenFiles } from '../../../shared/quick-open-path-search'
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
 import { detectLanguage } from '@/lib/language-detect'
@@ -30,7 +29,6 @@ export async function openQuickOpenFile(
   rawQuery?: string,
   assertInteractionCurrent: () => void = () => {}
 ): Promise<void> {
-  noteViewerNavigation()
   const guard = captureFileExplorerOperationGuard(
     worktreeId,
     getFileExplorerOperationOwner(worktreeId)

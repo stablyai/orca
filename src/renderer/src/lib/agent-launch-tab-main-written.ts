@@ -1,12 +1,5 @@
-import { isSessionTabSelectionRequest } from '../../../shared/session-tab-placement'
-import { openPlacementSourceCurrent } from '@/runtime/web-session-tabs-sync/open-placement'
-import {
-  bindViewerSelectionDestination,
-  endViewerSelectionForDestination
-} from './viewer-selection-request'
-import { conversationSwitchViewerSelectionCurrent } from '@/lib/conversation-switch-selection'
-import { agentLaunchPaneAttemptCurrent } from './agent-launch-pane-start'
-import { afterLayoutFrame, layoutFramesFlowing } from '@/runtime/layout-frame-position'
+/** Main owns tab creation/closure; attach this window’s session-only prompt, pane verdict and presentation state when its frame draws, retaining them for undrawn workspaces. */
+
 import type { AgentLaunchPaneVerdictEvent } from '../../../shared/agent-launch-pane-verdict'
 import type {
   AgentLaunchTabPublished,
@@ -20,9 +13,8 @@ import {
   rememberAgentLaunchPanePrompt
 } from './agent-launch-pane-prompt'
 import { revealWorkspaceSurface } from './workspace-surface-reveal'
+import { layoutFramesFlowing } from '@/runtime/layout-frame-position'
 import { layoutFrameTerminalTab } from '@/runtime/layout-frame-terminal-panes'
-
-/** Main owns tab creation/closure; attach this window’s session-only prompt, pane verdict and presentation state when its frame draws, retaining them for undrawn workspaces. */
 
 type LaunchPane = NonNullable<TerminalTab['agentLaunchPane']>
 
@@ -84,80 +76,57 @@ function goneFromFrames(worktreeId: string, tabId: string): boolean {
 function keepWhenDrawn(request: AgentLaunchTabPublishRequest, present: () => void): boolean {
   const { worktreeId, tabId } = request
   undrawn.get(tabId)?.stop()
-
-  const forgetIfGone = () => {
-    if (
-      undrawn.get(tabId)?.pane.operationId === request.operationId &&
-      goneFromFrames(worktreeId, tabId)
-    ) {
-      endViewerSelectionForDestination(worktreeId, tabId)
-      dropUndrawn(tabId)
-    }
+  if (goneFromFrames(worktreeId, tabId)) {
+    dropUndrawn(tabId)
+    return false
   }
   const stop = useAppStore.subscribe(() => {
     const tab = drawnTab(worktreeId, tabId)
     if (!tab) {
-      afterLayoutFrame(request.shownByMain?.frameSeq, forgetIfGone)
+      if (goneFromFrames(worktreeId, tabId)) {
+        dropUndrawn(tabId)
+      }
       return
     }
     const entry = undrawn.get(tabId)
     undrawn.delete(tabId)
     stop()
-    if (entry && agentLaunchPaneAttemptCurrent(tabId, entry.pane.leafId, entry.pane.operationId)) {
+    if (entry) {
       keepLaunchPane(tabId, tab, entry.pane)
       entry.present()
     }
   })
   undrawn.set(tabId, { pane: launchPaneOf(request), present, stop })
-  if (request.shownByMain) {
-    afterLayoutFrame(request.shownByMain.frameSeq, forgetIfGone)
-  }
-  return undrawn.has(tabId)
+  return true
 }
 
 export function keepAgentLaunchTabMainWrote(
   request: AgentLaunchTabPublishRequest
 ): AgentLaunchTabPublished {
   const { worktreeId, tabId, leafId, viewer } = request
-  if (!agentLaunchPaneAttemptCurrent(tabId, leafId, request.operationId)) {
-    throw new Error('agent_launch_superseded')
-  }
   const created = request.shownByMain?.created === true
-  const viewerSelection = request.openPlacement?.viewerSelection ?? request.viewerSelection
-  bindViewerSelectionDestination(viewerSelection, { worktreeId, tabId })
   noteMainWritten(tabId)
   if (request.prompt) {
     rememberAgentLaunchPanePrompt(tabId, request.prompt)
   }
-  // Ordinary retries retain focus; explicit viewer requests use their one-shot owner.
+  // Only the launch that made the tab moves anyone, as the window's own publication.
   const present = (): void => {
-    if (
-      (created || isSessionTabSelectionRequest(viewerSelection)) &&
-      (!request.openPlacement ||
-        (request.openPlacement.activate &&
-          openPlacementSourceCurrent(useAppStore.getState(), worktreeId, request.openPlacement)))
-    ) {
-      presentAgentLaunchTab(viewer, worktreeId, tabId, leafId, viewerSelection)
+    if (created) {
+      presentAgentLaunchTab(viewer, worktreeId, tabId, leafId)
     }
   }
   const tab = drawnTab(worktreeId, tabId)
   if (tab) {
     keepLaunchPane(tabId, tab, launchPaneOf(request))
     present()
-  } else if (
-    created &&
-    viewer === 'focus-window' &&
-    conversationSwitchViewerSelectionCurrent(viewerSelection)
-  ) {
+  } else if (created && viewer === 'focus-window') {
     // Reveal the workspace while awaiting its tab frame, unless main already closed the tab.
     if (keepWhenDrawn(request, present)) {
-      if (viewerSelection === undefined) {
-        revealWorkspaceSurface(useAppStore.getState(), worktreeId, [tabId])
-      }
+      revealWorkspaceSurface(useAppStore.getState(), worktreeId, [tabId])
     }
   } else {
     // Nobody is moved to an undrawn workspace; its tab keeps the launch when it draws.
-    keepWhenDrawn(request, present)
+    keepWhenDrawn(request, () => {})
   }
   const groupId =
     useAppStore
@@ -168,22 +137,15 @@ export function keepAgentLaunchTabMainWrote(
 
 /** Retain verdicts for undrawn launch panes; return false when no such pane is pending. */
 export function applyVerdictToUndrawnLaunchTab(event: AgentLaunchPaneVerdictEvent): boolean {
-  if (!agentLaunchPaneAttemptCurrent(event.tabId, event.leafId, event.operationId)) {
-    return false
-  }
   const entry = undrawn.get(event.tabId)
-  if (entry?.pane.leafId !== event.leafId || entry.pane.operationId !== event.operationId) {
+  if (entry?.pane.leafId !== event.leafId) {
     return false
   }
   const { verdict } = event
-  if (verdict.kind === 'not-started') {
-    endViewerSelectionForDestination(event.worktreeId, event.tabId)
-  }
   if (verdict.kind === 'not-started' || verdict.kind === 'unconfirmed') {
     entry.pane = { ...entry.pane, outcome: verdict }
     return true
   }
-  endViewerSelectionForDestination(event.worktreeId, event.tabId)
   dropUndrawn(event.tabId)
   return true
 }

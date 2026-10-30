@@ -1,4 +1,3 @@
-import { conversationSwitchViewerSelectionCurrent } from '@/lib/conversation-switch-selection'
 import { conversationSwitchFailureText } from '@/lib/conversation-switch-feedback'
 import { useAppStore } from '@/store'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -26,12 +25,11 @@ import type { CliChatResumeSource } from './cli-chat-resume-source'
 export async function reportCliChatResumeFailure(
   source: CliChatResumeSource,
   error: unknown,
-  target: RuntimeClientTarget,
-  viewerSelection?: string
+  target: RuntimeClientTarget
 ): Promise<boolean> {
   const owner = structuredLaunchFailure(error)?.owner
   if (owner) {
-    return switchIntoOwnerLegacy(source, owner, target, viewerSelection)
+    return switchIntoOwnerLegacy(source, owner, target)
   }
   toastCliChatResumeFailure(source, error)
   return false
@@ -41,7 +39,6 @@ export async function switchIntoOwnerLegacy(
   source: Pick<AiVaultSession, 'agent'> & Pick<CliChatResumeSource, 'tabId' | 'workspaceId'>,
   structuredSession: NonNullable<AiVaultSession['structuredSession']>,
   target: RuntimeClientTarget,
-  viewerSelection?: string,
   reportFailure?: (error: unknown) => void
 ): Promise<boolean> {
   // A host without the switch keeps the earlier behaviour: the chat is shown, the terminal stays.
@@ -50,7 +47,6 @@ export async function switchIntoOwnerLegacy(
       { structuredSession },
       undefined,
       target,
-      viewerSelection,
       ...(reportFailure ? ([() => reportFailure(undefined)] as const) : ([] as const))
     )
     return false
@@ -62,7 +58,6 @@ export async function switchIntoOwnerLegacy(
     { structuredSession },
     undefined,
     target,
-    viewerSelection,
     ...(reportFailure ? ([() => reportFailure(undefined)] as const) : ([] as const))
   )
   if (shown !== 'activated') {
@@ -107,10 +102,7 @@ export async function switchIntoOwnerLegacy(
         order.splice(index, 0, chat.id)
         state.reorderUnifiedTabs(group.id, order)
       } else {
-        state.moveUnifiedTabToGroup(chat.id, group.id, {
-          index,
-          activate: conversationSwitchViewerSelectionCurrent(viewerSelection)
-        })
+        state.moveUnifiedTabToGroup(chat.id, group.id, { index, activate: true })
       }
     }
   }

@@ -1,11 +1,12 @@
 import { inPlaceSwitchEnabled } from '../../../../shared/structured-agent-cli-conversation-adoption'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import {
+  useConversationSwitchBusy,
   useConversationSwitchReadiness,
   runNativeChatCliSwitch
 } from '@/lib/conversation-surface-switch'
 import { isNativeChatEnabled } from '../../../../shared/structured-native-chat-launch-route'
-import { SquareTerminal } from 'lucide-react'
+import { Loader2, SquareTerminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
@@ -54,6 +55,8 @@ export function NativeChatTopRightControls({
         }
       : null
   )
+  const busy = useConversationSwitchBusy(readiness.pending)
+
   const enabled = useAppStore((state) => isNativeChatEnabled(state.settings))
   if (find.isOpen) {
     return <NativeChatFindBar find={find} isVisible={session.isVisible} />
@@ -86,7 +89,7 @@ export function NativeChatTopRightControls({
               }
             }}
           >
-            <SquareTerminal />
+            {busy ? <Loader2 className="animate-spin" /> : <SquareTerminal />}
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={4}>

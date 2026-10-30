@@ -1,4 +1,3 @@
-import { noteViewerNavigation } from '@/lib/viewer-selection-request'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
@@ -13,7 +12,6 @@ export function createActiveWorkspaceTerminalActions(
 ): Pick<TerminalSlice, 'openNewTerminalTabInActiveWorkspace'> {
   return {
     openNewTerminalTabInActiveWorkspace: async (groupId) => {
-      noteViewerNavigation()
       const state = get()
       const worktreeId = state.activeWorktreeId
       if (!worktreeId) {

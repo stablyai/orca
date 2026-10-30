@@ -1,4 +1,3 @@
-import { noteViewerNavigation } from '@/lib/viewer-selection-request'
 import { usePluginCommands } from '@/store/plugin-panels'
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { matchesRecentTabSwitcherChord } from '../../../../shared/window-shortcut-policy'
@@ -133,7 +132,6 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
       ) {
         return
       }
-      noteViewerNavigation()
       state.toggleTabViewMode(tab.id)
       e.preventDefault()
       e.stopImmediatePropagation()

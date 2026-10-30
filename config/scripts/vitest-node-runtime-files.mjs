@@ -40,7 +40,6 @@ const NODE_RUNTIME_INCLUDE = [
   // Asserts an observer survives a forced collection; conservative retention would hide a lost one.
   'config/scripts/happy-dom-mutation-observer-retention.test.ts',
   // These reach Node SQLite through a shared helper or a dynamic import, which the scan skips.
-  'tests/e2e/mobile-terminal-session-switch.unit.test.ts',
   'src/main/claude/claude-transcript-catch-up.test.ts',
   'src/main/claude/claude-transcript-duration.test.ts',
   'tests/e2e/native-chat-startup-option-pickers.unit.test.ts',

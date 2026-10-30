@@ -8,16 +8,6 @@ import {
   adoptsCliConversations
 } from '../../../shared/structured-agent-cli-conversation-adoption'
 import { toHostSessionPaneKey } from '../../../shared/terminal-surface-id'
-import {
-  captureSwitchProjection,
-  releaseUnsentSwitchProjection
-} from './conversation-switch-projection'
-import {
-  beginSwitchPresentation,
-  reportSwitchPresentationFailure,
-  settleSwitchPresentation,
-  type SwitchPresentationVisit
-} from './conversation-switch-presentation'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -45,8 +35,6 @@ import {
 import { AgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
 import { prepareAiVaultSessionForResume } from './ai-vault-session-resume-preparation'
 import type { CliChatResumeSource } from '@/components/tab-bar/cli-chat-resume-source'
-import { beginViewerSelectionRequest } from './viewer-selection-request'
-import { presentConversationSwitchResult } from './conversation-switch-result-selection'
 import { runLegacyConversationSwitch } from './conversation-switch-legacy'
 import {
   type ConversationSwitch,
@@ -75,6 +63,11 @@ export function runNativeChatCliSwitch(
     .finally(args.onComplete)
 }
 
+/**
+ * Consent, one RPC, one settle. The host stops the agent, prepares the other view at rest and
+ * replaces the tab in one layout write; here the source tab only shows the pending state. Every
+ * exit is visible: the tab is replaced, or it stays as it was with one message.
+ */
 export async function runConversationSwitch(args: ConversationSwitch): Promise<boolean> {
   if (
     (args.direction === 'chat' && !isNativeChatEnabled(useAppStore.getState().settings)) ||
@@ -86,16 +79,14 @@ export async function runConversationSwitch(args: ConversationSwitch): Promise<b
   args = withConversationSwitchPlatform(args)
   const target = structuredAgentSessionTargetForHost(args.executionHostId)
   const hostId = parseExecutionHostId(args.executionHostId)?.id
+  const feedback =
+    args.feedback ?? ((message: string, kind: 'error' | 'info') => toast[kind](message))
   if (!target || !hostId) {
+    feedback(conversationSwitchFailureText(new Error('host unavailable'), args), 'error')
     return false
   }
   const deadline = agentSessionSwitchDeadline(Date.now, AGENT_SESSION_SWITCH_CLIENT_MS)
-  const invocationId = createBrowserUuid()
-  const selection = beginViewerSelectionRequest(invocationId, deadline)
-  const viewerSelection = selection.token
   const key = keyFor(args)
-  const feedback =
-    args.feedback ?? ((message: string, kind: 'error' | 'info') => toast[kind](message))
   pending.set(key, {
     chatTabId: args.source?.tabId ?? args.chatTabId ?? null,
     workspaceId: args.workspaceId,
@@ -103,14 +94,11 @@ export async function runConversationSwitch(args: ConversationSwitch): Promise<b
   })
   conversationSwitchChanged()
   let consented = false
-  let sent = false
-  let presentation: SwitchPresentationVisit | undefined
   try {
     const supported = await deadline.wait(supportsInPlaceSwitch(target, args.agent, true))
     if (!supported && args.legacyContinue) {
-      selection.accept()
       consented = true
-      await args.legacyContinue(viewerSelection)
+      await args.legacyContinue()
       return false
     }
     if (conversationSwitchReplying(args)) {
@@ -129,158 +117,39 @@ export async function runConversationSwitch(args: ConversationSwitch): Promise<b
         return false
       }
     }
-    selection.accept()
     consented = true
-    if (args.direction === 'terminal' && args.sessionId && args.chatTabId) {
-      captureSwitchProjection(
-        useAppStore.getState(),
-        args.workspaceId,
-        {
-          invocationId,
-          generation: invocationId,
-          sessionId: args.sessionId,
-          tabId: args.chatTabId,
-          phase: 'prepare'
-        },
-        () => {}
-      )
-    }
     if (!supported) {
-      await runLegacyConversationSwitch(args, target, viewerSelection)
+      await runLegacyConversationSwitch(args, target)
       return false
     }
-    let sessionId = args.sessionId
-    let execution: Record<string, unknown> = { invocationId, viewerSelection }
-    if (args.direction === 'chat' && args.source) {
-      const captured = await deadline.wait(captureSourceTerminal(args.source))
-      if (!captured) {
-        throw new Error('source unavailable')
-      }
-      const intent = createStructuredAgentSessionLaunchIntent(
-        args.workspaceId,
-        await deadline.wait(
-          adoptingAgentOnHost(args.source.agent, args.workspaceId, args.source.executionHostId)
-        ),
-        args.source.executionHostId,
+    const { sessionId, execution } = await switchRequest(args, hostId, deadline)
+    const answer = await deadline.wait(
+      callStructuredAgentSession<AgentSessionSwitchResult>(
+        target,
+        args.direction === 'chat' ? 'agentSession.switchToChat' : 'agentSession.switchToTerminal',
+        { sessionId, execution },
         {
-          providerSessionId: args.source.providerSessionId,
-          cliSource: {
-            workspaceId: args.workspaceId,
-            paneKey: toHostSessionPaneKey(args.source.paneKey)
-          }
-        },
-        undefined,
-        false
-      )
-      sessionId = intent.sessionId
-      const group = useAppStore
-        .getState()
-        .groupsByWorktree[args.workspaceId]?.find((row) =>
-          row.tabOrder.includes(args.source!.tabId)
-        )
-      execution = {
-        ...execution,
-        create: {
-          ...intent.params,
-          tabPlacement: { groupId: group?.id, afterTabId: args.source.tabId }
-        },
-        source: {
-          terminal: captured.handle,
-          expectedIncarnationId: captured.incarnationId,
-          originalPresentation: captured.presentation
+          signal: deadline.signal,
+          dispatchObservation: deadline.delegateSend,
+          beforeSend: (sentAt) => deadline.beforeSend(sentAt)
         }
-      }
-    } else if (
-      args.direction === 'chat' &&
-      !sessionId &&
-      args.history &&
-      adoptsCliConversations(args.history.agent)
-    ) {
-      const prepared = await deadline.wait(prepareAiVaultSessionForResume(args.history))
-      const intent = createStructuredAgentSessionLaunchIntent(
-        args.workspaceId,
-        await deadline.wait(adoptingAgentOnHost(args.history.agent, args.workspaceId, hostId)),
-        hostId,
-        {
-          providerSessionId: prepared.sessionId
-        },
-        undefined,
-        false
       )
-      sessionId = intent.sessionId
-      execution = { ...execution, create: intent.params }
-    } else if (args.direction === 'terminal') {
-      const state = useAppStore.getState()
-      execution = {
-        ...execution,
-        sourceTabId: args.chatTabId ?? undefined,
-        groupId: state.groupsByWorktree[args.workspaceId]?.find((row) =>
-          row.tabOrder.includes(args.chatTabId ?? '')
-        )?.id,
-        commandOverride: state.settings?.agentCmdOverrides?.[args.agent]
-      }
-    }
-    const method =
-      args.direction === 'chat' ? 'agentSession.switchToChat' : 'agentSession.switchToTerminal'
-    const invoke = () =>
-      deadline.wait(
-        callStructuredAgentSession<AgentSessionSwitchResult>(
-          target,
-          method,
-          { sessionId, execution },
-          {
-            signal: deadline.signal,
-            dispatchObservation: deadline.delegateSend,
-            beforeSend: (sentAt) => {
-              deadline.beforeSend(sentAt)
-              sent = true
-            }
-          }
-        )
-      )
-    if (args.direction === 'chat' && sessionId) {
-      presentation = beginSwitchPresentation(target, sessionId)
-    }
-    const answer = await invoke()
-    if (args.direction === 'chat' && answer.sessionId !== sessionId) {
-      presentation?.release()
-      presentation = beginSwitchPresentation(target, answer.sessionId)
-    }
+    )
     if (answer.status !== 'completed') {
-      if (answer.status === 'refused') {
-        selection.discard()
-      }
-      if (!presentation || reportSwitchPresentationFailure(presentation, answer.failureItemId)) {
-        feedback(
-          conversationSwitchFailureText(new AgentSessionRefusalError(answer.refusal), args),
-          'error'
-        )
-      }
+      feedback(
+        conversationSwitchFailureText(new AgentSessionRefusalError(answer.refusal), args),
+        'error'
+      )
       return false
-    }
-    if (target.kind === 'environment') {
-      await presentConversationSwitchResult(args, target, answer, viewerSelection)
     }
     if (answer.sourceRetained) {
       feedback(conversationSwitchSourceKept(args.agent), 'info')
     }
     return true
   } catch (error) {
-    if (!sent) {
-      selection.discard()
-    }
-    if (!presentation || reportSwitchPresentationFailure(presentation)) {
-      feedback(conversationSwitchFailureText(error, args), 'error')
-    }
+    feedback(conversationSwitchFailureText(error, args), 'error')
     return false
   } finally {
-    if (!consented) {
-      selection.discard()
-    }
-    if (!sent) {
-      releaseUnsentSwitchProjection(invocationId)
-    }
-    settleSwitchPresentation(presentation)
     deadline.dispose()
     pending.delete(key)
     conversationSwitchChanged()
@@ -290,8 +159,80 @@ export async function runConversationSwitch(args: ConversationSwitch): Promise<b
   }
 }
 
+/** The host call's identity and execution facts, captured after consent. */
+async function switchRequest(
+  args: ConversationSwitch,
+  hostId: string,
+  deadline: ReturnType<typeof agentSessionSwitchDeadline>
+): Promise<{ sessionId: string | undefined; execution: Record<string, unknown> }> {
+  const invocationId = createBrowserUuid()
+  if (args.direction === 'chat' && args.source) {
+    const captured = await deadline.wait(captureSourceTerminal(args.source))
+    if (!captured) {
+      throw new Error('source unavailable')
+    }
+    const intent = createStructuredAgentSessionLaunchIntent(
+      args.workspaceId,
+      await deadline.wait(
+        adoptingAgentOnHost(args.source.agent, args.workspaceId, args.source.executionHostId)
+      ),
+      args.source.executionHostId,
+      {
+        providerSessionId: args.source.providerSessionId,
+        cliSource: {
+          workspaceId: args.workspaceId,
+          paneKey: toHostSessionPaneKey(args.source.paneKey)
+        }
+      },
+      undefined,
+      false
+    )
+    return {
+      sessionId: intent.sessionId,
+      execution: {
+        invocationId,
+        create: intent.params,
+        source: {
+          terminal: captured.handle,
+          expectedIncarnationId: captured.incarnationId,
+          originalPresentation: captured.presentation
+        }
+      }
+    }
+  }
+  if (
+    args.direction === 'chat' &&
+    !args.sessionId &&
+    args.history &&
+    adoptsCliConversations(args.history.agent)
+  ) {
+    const prepared = await deadline.wait(prepareAiVaultSessionForResume(args.history))
+    const intent = createStructuredAgentSessionLaunchIntent(
+      args.workspaceId,
+      await deadline.wait(adoptingAgentOnHost(args.history.agent, args.workspaceId, hostId)),
+      hostId,
+      { providerSessionId: prepared.sessionId },
+      undefined,
+      false
+    )
+    return { sessionId: intent.sessionId, execution: { invocationId, create: intent.params } }
+  }
+  if (args.direction === 'terminal') {
+    return {
+      sessionId: args.sessionId,
+      execution: {
+        invocationId,
+        sourceTabId: args.chatTabId ?? undefined,
+        commandOverride: useAppStore.getState().settings?.agentCmdOverrides?.[args.agent]
+      }
+    }
+  }
+  return { sessionId: args.sessionId, execution: { invocationId } }
+}
+
 export {
   useConversationSwitchPending,
+  useConversationSwitchBusy,
   useConversationSwitchReadiness,
   type ConversationSwitch
 } from './conversation-switch-state'

@@ -1,4 +1,3 @@
-import { noteViewerNavigation } from '@/lib/viewer-selection-request'
 import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import type { ActiveRightSidebarTab } from '@/store/slices/editor'
@@ -80,7 +79,6 @@ export function useRightSidebarTabRouting({
     rememberedFolderTabByWorkspaceKeyRef.current[activeFolderWorkspaceKey] = effectiveTab
   }, [activeFolderWorkspaceKey, effectiveTab, visibleItems])
   const selectActivityTab = (tab: ActiveRightSidebarTab): void => {
-    noteViewerNavigation()
     if (activeFolderWorkspaceKey) {
       rememberedFolderTabByWorkspaceKeyRef.current[activeFolderWorkspaceKey] = tab
     }

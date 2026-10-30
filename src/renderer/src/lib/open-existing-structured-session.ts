@@ -9,9 +9,6 @@ import { refreshLocalStructuredSessionWorktreeTabs } from '@/runtime/local-struc
 import { STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
 import { executionHostIdForStructuredTarget } from '@/runtime/structured-agent-session-owner'
-import { isSessionTabSelectionRequest } from '../../../shared/session-tab-placement'
-import { viewerSelectionOutcome } from './viewer-selection-request'
-import { conversationSwitchViewerSelectionCurrent } from './conversation-switch-selection'
 
 type StructuredSessionIdentity = { workspaceId: string; sessionId: string }
 
@@ -34,12 +31,7 @@ export type StructuredSessionOpenDeps = {
   }) => Promise<StructuredSessionRevealOutcome>
 }
 
-export type StructuredSessionOpenOutcome =
-  | 'activated'
-  | 'gone'
-  | 'host-cannot-open'
-  | 'unavailable'
-  | 'none'
+export type StructuredSessionOpenOutcome = 'activated' | 'gone' | 'host-cannot-open' | 'unavailable'
 
 const defaultDeps: StructuredSessionOpenDeps = {
   activate: activateStructuredAgentSessionById,
@@ -55,24 +47,23 @@ export async function openExistingStructuredSession(
   options: {
     target?: RuntimeClientTarget
     deps?: StructuredSessionOpenDeps
-    viewerSelection?: string
     present: (outcome: StructuredSessionOpenOutcome) => void
     onError?: () => void
   }
 ): Promise<StructuredSessionOpenOutcome> {
-  const { target, deps = defaultDeps, present, viewerSelection } = options
+  const { target, deps = defaultDeps, present } = options
   const hostKey = executionHostIdForStructuredTarget(
     target ??
       runtimeTargetForOwnerEnvironment(
         runtimeEnvironmentIdOrLocalUnlessTwin(useAppStore.getState(), structured.workspaceId)
       )
   )
-  const key = `${hostKey}\0${structured.workspaceId}\0${structured.sessionId}\0${viewerSelection ?? ''}`
+  const key = `${hostKey}\0${structured.workspaceId}\0${structured.sessionId}`
   const inFlight = activationsInFlight.get(key)
   if (inFlight) {
     return inFlight
   }
-  const activation = activateStructuredSession(structured, deps, target, viewerSelection).then(
+  const activation = activateStructuredSession(structured, deps, target).then(
     (outcome) => {
       present(outcome)
       return outcome
@@ -93,50 +84,27 @@ export async function openExistingStructuredSession(
 async function activateStructuredSession(
   structured: StructuredSessionIdentity,
   deps: StructuredSessionOpenDeps,
-  host?: RuntimeClientTarget,
-  viewerSelection?: string
+  host?: RuntimeClientTarget
 ): Promise<StructuredSessionOpenOutcome> {
   const target = {
     worktreeId: structured.workspaceId,
     sessionId: structured.sessionId,
     ...(host ? { target: host } : {})
   }
-  const modern = viewerSelection !== undefined && isSessionTabSelectionRequest(viewerSelection)
-  const activate = () => {
-    if (modern && viewerSelectionOutcome(viewerSelection) === 'fulfilled') {
-      return true
-    }
-    return (
-      conversationSwitchViewerSelectionCurrent(viewerSelection) &&
-      deps.activate({
-        ...target,
-        ...(modern ? { viewerSelection, callerOnly: true } : {})
-      })
-    )
-  }
-  if (!activate()) {
+  if (!deps.activate(target)) {
     // Refresh can avoid reveal, but failure must fall through: host republication is the actual repair.
     const refreshed = await refreshedWithoutThrowing(deps, structured.workspaceId, host)
-    if (!refreshed || !activate()) {
-      if (!conversationSwitchViewerSelectionCurrent(viewerSelection)) {
-        return 'none'
-      }
+    if (!refreshed || !deps.activate(target)) {
       // Ask the host to republish a closed or unpublished tab from its persisted record.
       const revealed = await deps.reveal(target)
       if (revealed !== 'revealed') {
         return revealed === 'unreachable' ? 'unavailable' : revealed
       }
       await refreshedWithoutThrowing(deps, structured.workspaceId, host)
-      if (!activate()) {
-        if (!conversationSwitchViewerSelectionCurrent(viewerSelection)) {
-          return 'none'
-        }
+      if (!deps.activate(target)) {
         return 'unavailable'
       }
     }
-  }
-  if (modern) {
-    return viewerSelectionOutcome(viewerSelection) === 'fulfilled' ? 'activated' : 'none'
   }
   return 'activated'
 }

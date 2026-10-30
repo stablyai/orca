@@ -1,4 +1,3 @@
-import { noteViewerNavigation } from '@/lib/viewer-selection-request'
 import type { RefObject } from 'react'
 import type { DragEndEvent } from '@dnd-kit/core'
 import { useAppStore } from '../../store'
@@ -64,7 +63,6 @@ export function commitTabDragDrop({
       finishDrag(true)
       return
     }
-    noteViewerNavigation()
     const moved = dropUnifiedTab(activeData.unifiedTabId, {
       groupId: paneColumnSplit.groupId,
       splitDirection: paneColumnSplit.zone
@@ -160,7 +158,6 @@ export function commitTabDragDrop({
         finishDrag(true)
         return
       }
-      noteViewerNavigation()
       const moved = dropUnifiedTab(activeData.unifiedTabId, {
         groupId: overData.groupId,
         index
@@ -197,7 +194,6 @@ export function commitTabDragDrop({
         finishDrag(true)
         return
       }
-      noteViewerNavigation()
       const moved = dropUnifiedTab(activeData.unifiedTabId, {
         groupId: overData.groupId
       })

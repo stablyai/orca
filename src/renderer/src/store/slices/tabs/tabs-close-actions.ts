@@ -1,4 +1,3 @@
-import { endViewerSelectionForDestination } from '@/lib/viewer-selection-request'
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { collapseGroupLayout } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
@@ -46,7 +45,6 @@ export function createTabsCloseActions(
         return null
       }
       const { tab, worktreeId } = found
-      endViewerSelectionForDestination(worktreeId, tab.id)
       forgetDesktopCreatedServerTab(tab.id)
       forgetDesktopCreatedServerTab(tab.entityId)
       const group = findGroupForTab(state.groupsByWorktree, worktreeId, tab.groupId)

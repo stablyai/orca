@@ -1,4 +1,3 @@
-import { noteViewerNavigation } from '@/lib/viewer-selection-request'
 import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat/native-chat-appearance-settings'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
@@ -242,7 +241,6 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
   },
 
   setActiveRuntimeEnvironmentPreference: async (environmentId) => {
-    noteViewerNavigation()
     const nextId = normalizeRuntimeEnvironmentId(environmentId)
     const previousId = normalizeRuntimeEnvironmentId(get().settings?.activeRuntimeEnvironmentId)
     if (previousId === nextId) {

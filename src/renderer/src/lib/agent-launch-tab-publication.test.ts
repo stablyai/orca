@@ -1,7 +1,4 @@
-import type { AppState } from '@/store/types'
-import { forgetAgentLaunchPaneAttempts } from './agent-launch-pane-start'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { disposeSwitchProjections } from './conversation-switch-projection'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type { AgentLaunchTabPublishRequest } from '../../../shared/agent-launch-tab-publication'
 import { createTabsSliceMockApi } from '../store/slices/tabs-slice-test-harness'
@@ -19,8 +16,6 @@ const testStore = vi.hoisted(() => {
 })
 vi.mock('@/store', () => ({
   useAppStore: {
-    setState: (patch: Partial<AppState> | ((state: AppState) => Partial<AppState>)) =>
-      testStore.current!.setState(patch),
     getState: () => {
       if (!testStore.current) {
         throw new Error('no test store')
@@ -67,13 +62,11 @@ function launchTab() {
 }
 
 beforeEach(() => {
-  forgetAgentLaunchPaneAttempts(TAB_ID)
   store = createTestStore()
   testStore.current = store
   focusTerminalInitiatedTab.mockClear()
   store.getState().setActiveWorktree(WT)
 })
-afterEach(() => disposeSwitchProjections())
 
 describe('publishing a launch tab before its agent exists', () => {
   it('creates the tab under the host ids with its one pane laid out and no process', () => {

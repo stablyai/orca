@@ -13,7 +13,6 @@ export async function reportCliChatResumeFailure(
   error: unknown,
   openOwner: boolean,
   target: RuntimeClientTarget,
-  viewerSelection?: string,
   reportFailure?: (error: unknown) => void
 ): Promise<void> {
   const refusal = structuredLaunchFailure(error)
@@ -23,15 +22,12 @@ export async function reportCliChatResumeFailure(
   ) {
     const owner = refusal.owner
     if (openOwner && owner) {
-      await (viewerSelection === undefined
-        ? activateAiVaultStructuredSession({ structuredSession: owner }, undefined, target)
-        : activateAiVaultStructuredSession(
-            { structuredSession: owner },
-            undefined,
-            target,
-            viewerSelection,
-            ...(reportFailure ? ([() => reportFailure(error)] as const) : ([] as const))
-          ))
+      await activateAiVaultStructuredSession(
+        { structuredSession: owner },
+        undefined,
+        target,
+        ...(reportFailure ? ([() => reportFailure(error)] as const) : ([] as const))
+      )
       return
     }
     if (reportFailure) {

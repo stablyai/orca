@@ -1,4 +1,3 @@
-import { selectSessionTabForViewer } from '@/runtime/web-session-tabs-sync/store-patch'
 // Send open with the chat’s own tab ID, select only after main draws it, and use afterPendingTab before reading the returned tab from store.
 
 import type { ExecutionHostId } from '../../../shared/execution-host'
@@ -19,8 +18,6 @@ export type AgentSessionTabOpen = {
   targetGroupId?: string
   afterTabId?: string
   activate: boolean
-  viewerSelection?: string
-  canActivate?: () => boolean
   /** Today's draw, for a twin main may route to a paired server. */
   drawHere: () => Tab
 }
@@ -55,11 +52,7 @@ export function openAgentSessionTabThroughLayoutOwner(
     command: { type: 'openAgentSessionTab', tabId, sessionId, agent: open.agent, ...placement },
     facts: { label },
     shown: (shownId) => {
-      if (!open.activate || open.canActivate?.() === false) {
-        return
-      }
-      if (open.viewerSelection) {
-        selectSessionTabForViewer(worktreeId, shownId, open.viewerSelection)
+      if (!open.activate) {
         return
       }
       // As the window's own open: the chat is selected in its group; the focused group stays.

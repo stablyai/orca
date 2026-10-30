@@ -1,4 +1,3 @@
-import { noteViewerNavigation } from './viewer-selection-request'
 /**
  * The user's own switches to a workspace (opening it, picking one of its tabs) in this window. Only
  * these may wake or start a stopped WSL distro (E9); launch restore, a reload, remounts and Orca's own
@@ -22,7 +21,6 @@ export function noteUserWorkspaceSwitch(workspaceKey: string | null | undefined)
   if (!workspaceKey) {
     return
   }
-  noteViewerNavigation()
   lastSwitchAt.set(workspaceKey, Date.now())
   switchCounts.set(workspaceKey, (switchCounts.get(workspaceKey) ?? 0) + 1)
 }

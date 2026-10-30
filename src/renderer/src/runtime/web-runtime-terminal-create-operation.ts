@@ -1,4 +1,3 @@
-import { presentAgentLaunchTab } from '@/lib/agent-launch-tab-presentation'
 import { createWebRuntimeAgentTerminalHostAuthority } from './web-runtime-agent-terminal-host-authority'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../shared/runtime-types'
@@ -10,16 +9,13 @@ import { runRemoteAgentSessionLaunch } from './remote-agent-session-launch'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { resolveWebRuntimeSessionEnvironmentId } from './web-runtime-session-workspace-routing'
-import {
-  recordWebSessionFocusIntent,
-  resolveWebSessionVisibleTabId
-} from './web-session-focus-intent'
+import { recordWebSessionFocusIntent } from './web-session-focus-intent'
 import {
   forgetWebSessionTerminalPlacement,
   recordWebSessionTerminalPlacement,
   webTerminalPlacementParentTabId
 } from './web-session-terminal-placement'
-import { toHostSessionTabId, toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { toHostSessionTabId } from '../../../shared/terminal-surface-id'
 import {
   captureRuntimeEnvironmentCall,
   captureWebSessionIntentOwner,
@@ -39,16 +35,11 @@ import {
   type WebRuntimeSessionWorkspaceSelectionRollback
 } from './web-runtime-session-workspace-selection'
 import { createdTerminalLeafId } from './web-runtime-terminal-identity'
-import {
-  captureWebRuntimeTerminalPlacement,
-  settleWebRuntimeTerminalPlacement
-} from './web-runtime-terminal-placement-settlement'
+import { settleWebRuntimeTerminalPlacement } from './web-runtime-terminal-placement-settlement'
 import { buildPlainCreateTerminalParams } from './web-runtime-plain-terminal-create-params'
 
 export async function createWebRuntimeSessionTerminalResult(
-  args: CreateWebRuntimeSessionTerminalArgs,
-  canActivate?: () => boolean,
-  viewerSelection?: string
+  args: CreateWebRuntimeSessionTerminalArgs
 ): Promise<CreatedWebRuntimeSessionTerminal> {
   const environmentId = resolveWebRuntimeSessionEnvironmentId(
     args.environmentId,
@@ -69,7 +60,7 @@ export async function createWebRuntimeSessionTerminalResult(
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId, intentOwner.pairingRevision)
 
   let workspaceSelectionRollback: WebRuntimeSessionWorkspaceSelectionRollback | null = null
-  if (args.selectWorktree !== false && !canActivate) {
+  if (args.selectWorktree !== false) {
     const previous = readActiveWorkspaceSelection()
     selectWebRuntimeSessionWorktree(args.worktreeId, environmentId)
     workspaceSelectionRollback = {
@@ -80,7 +71,6 @@ export async function createWebRuntimeSessionTerminalResult(
       }
     }
   }
-  const { captured, placementGroupId } = captureWebRuntimeTerminalPlacement(args)
   let hostCreated = false
   let createdTabId: string | undefined
   let createdLeafId: string | undefined
@@ -129,7 +119,7 @@ export async function createWebRuntimeSessionTerminalResult(
               ...(args.viewMode ? { viewMode: args.viewMode } : {}),
               // Old hosts use activate:false; new hosts use select/navigation for caller-local focus.
               activate: false,
-              select: args.activate !== false && !canActivate,
+              select: args.activate !== false,
               navigation: 'caller'
             },
             timeoutMs: 15_000
@@ -176,33 +166,18 @@ export async function createWebRuntimeSessionTerminalResult(
       createdTabId = created.tab.id
       createdLeafId = created.tab.leafId
     }
-    if (placementGroupId && createdTabId) {
-      // Why: the host drops client-minted group ids, so this client's own record is what
-      // lands the mirrored tab in the requested pane under client-owned placement.
+    if (args.targetGroupId && createdTabId) {
+      // Host drops client-minted group IDs; client placement must land the mirrored tab in the requested pane.
       recordWebSessionTerminalPlacement({
         environmentId,
         worktreeId: args.worktreeId,
         hostTabId: webTerminalPlacementParentTabId(createdTabId),
-        groupId: placementGroupId
+        groupId: args.targetGroupId
       })
     }
-    if (
-      viewerSelection === undefined &&
-      args.activate !== false &&
-      canActivate?.() !== false &&
-      createdTabId &&
-      matchesWebSessionIntentOwner(intentOwner)
-    ) {
+    if (args.activate !== false && createdTabId && matchesWebSessionIntentOwner(intentOwner)) {
       // Intent lets reconciliation focus this new terminal instead of sticky-keeping the previous tab.
-      recordWebSessionFocusIntent(
-        intentOwner,
-        args.worktreeId,
-        createdTabId,
-        createdLeafId,
-        canActivate
-          ? resolveWebSessionVisibleTabId(useAppStore.getState(), args.worktreeId)
-          : undefined
-      )
+      recordWebSessionFocusIntent(intentOwner, args.worktreeId, createdTabId, createdLeafId)
     }
     const placementTabId =
       createdTabId && (args.targetGroupId || args.afterTabId) ? createdTabId : undefined
@@ -220,26 +195,10 @@ export async function createWebRuntimeSessionTerminalResult(
         args.worktreeId,
         webTerminalPlacementParentTabId(placementTabId),
         {
-          groupId: placementGroupId,
+          groupId: args.targetGroupId,
           afterTabId: args.afterTabId,
-          captured,
-          activate: args.activate !== false && viewerSelection === undefined,
-          canActivate
+          activate: args.activate !== false
         }
-      )
-    }
-    if (
-      viewerSelection &&
-      createdTabId &&
-      args.activate !== false &&
-      matchesWebSessionIntentOwner(intentOwner)
-    ) {
-      presentAgentLaunchTab(
-        'focus-window',
-        args.worktreeId,
-        toWebTerminalSurfaceTabId(webTerminalPlacementParentTabId(createdTabId)),
-        createdLeafId,
-        viewerSelection
       )
     }
     return {

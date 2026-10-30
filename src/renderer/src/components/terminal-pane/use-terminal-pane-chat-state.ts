@@ -1,4 +1,3 @@
-import { noteViewerNavigation } from '@/lib/viewer-selection-request'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
@@ -217,7 +216,6 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
       if (!unifiedTabId) {
         return
       }
-      noteViewerNavigation()
       if (effectiveChatViewMode && chatLeafId === leafId) {
         setChatLeafId(null)
         toggleTabViewMode(unifiedTabId)
@@ -240,7 +238,6 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
   const switchNativeChatToTerminal = useCallback(() => {
     if (chatLeafId && unifiedTabId) {
       setChatLeafId(null)
-      noteViewerNavigation()
       setTabViewMode(unifiedTabId, 'terminal')
     }
   }, [chatLeafId, setChatLeafId, setTabViewMode, unifiedTabId])

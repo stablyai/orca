@@ -1,4 +1,3 @@
-import { noteViewerNavigation } from '@/lib/viewer-selection-request'
 import React from 'react'
 import { Terminal } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -30,7 +29,6 @@ function useReferenceTabs(workspace: Worktree): Tab[] {
 }
 
 function focusOrigin(workspace: Worktree, tab: Tab, paneKey: string | undefined): void {
-  noteViewerNavigation()
   const state = useAppStore.getState()
   if (!state.setActiveWorktree(workspace.id, workspace.hostId)) {
     return

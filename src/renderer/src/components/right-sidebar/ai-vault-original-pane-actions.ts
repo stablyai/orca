@@ -1,4 +1,3 @@
-import { noteViewerNavigation } from '@/lib/viewer-selection-request'
 import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
@@ -74,7 +73,6 @@ export function useAiVaultOriginalPaneActions(): {
 
   const jumpToOriginalPane = useCallback(
     async (session: AiVaultSession): Promise<boolean> => {
-      noteViewerNavigation()
       if (session.structuredSession && isStructuredSessionOpen(session)) {
         return activateAiVaultStructuredSession(session)
       }
@@ -104,7 +102,6 @@ export function useAiVaultOriginalPaneActions(): {
   )
 
   const jumpToWorktree = useCallback((worktreeId: string): void => {
-    noteViewerNavigation()
     revealSessionWorkspace(worktreeId)
   }, [])
 

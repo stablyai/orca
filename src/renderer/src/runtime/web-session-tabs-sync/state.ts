@@ -61,13 +61,7 @@ export type SessionTabsRuntimeHistory = RetiredValueHistory
 /** Bounded retired-epoch history prevents sibling streams’ delayed frames rolling back accepted replacements after restart. */
 export type SessionTabsPublicationEpochHistory = RetiredValueHistory
 
-export type SnapshotOpenSelectionOffer = (
-  state: WebSessionTabsSyncState,
-  patch: Partial<WebSessionTabsSyncState>
-) => Partial<WebSessionTabsSyncState>
-
 export type WebSessionTabsSnapshotApplyOptions = {
-  offerOpenSelection?: (offer: SnapshotOpenSelectionOffer) => void
   contentScope?: 'all' | 'agent-session'
   preserveLocalLayout?: boolean
   terminalPtyMode?: 'local' | 'remote'
@@ -237,15 +231,6 @@ export type WebSessionTabsSyncState = Pick<
   Partial<
     Pick<
       AppState,
-      | 'activeWorkspaceExecutionHostId'
-      | 'activeWorkspaceKey'
-      | 'activePendingCreationId'
-      | 'activeView'
-      | 'worktreeNavHistory'
-      | 'worktreeNavHistoryIndex'
-      | 'isNavigatingHistory'
-      | 'closedTerminalTabTombstonesByTabId'
-      | 'pairedTerminalTabCloseIntentsByEnvironment'
       | 'acknowledgedAgentsByPaneKey'
       | 'activityClearedAtByPaneKey'
       | 'agentLaunchConfigByPaneKey'

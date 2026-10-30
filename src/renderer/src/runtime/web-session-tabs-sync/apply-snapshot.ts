@@ -20,7 +20,6 @@ import { buildWebSessionTabsFinalPatch } from './apply-final-patch'
 import { isFrameDrawnServerWorkspace } from './frame-drawn-server-workspaces'
 import { buildFrameDrawnWorkspaceStatusPatch } from './frame-drawn-workspace-status-patch'
 import { indexMirroredTerminalSurfaces } from './mirrored-terminal-handle-index'
-import { applySnapshotOpenSelection } from './open-placement-selection'
 
 export function applyWebSessionTabsSnapshotWithContext(
   state: WebSessionTabsSyncState,
@@ -79,24 +78,5 @@ export function applyWebSessionTabsSnapshotWithContext(
   const browserRecords = applyBrowserRecordUpdates(terminalRecords)
   const worktreeRecords = applyWorktreeRecordUpdates(browserRecords)
   const activeState = applyActiveStateUpdates(worktreeRecords)
-  const patch = buildWebSessionTabsFinalPatch(activeState)
-  options?.offerOpenSelection?.((current, membership) =>
-    applySnapshotOpenSelection(
-      current,
-      membership,
-      worktreeId,
-      environmentId,
-      base.openPlacements,
-      unified.hostToLocalTabId,
-      true
-    )
-  )
-  return applySnapshotOpenSelection(
-    state,
-    patch,
-    worktreeId,
-    environmentId,
-    base.openPlacements,
-    unified.hostToLocalTabId
-  )
+  return buildWebSessionTabsFinalPatch(activeState)
 }

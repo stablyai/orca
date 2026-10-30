@@ -1,6 +1,5 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import type {
-  SnapshotOpenSelectionOffer,
   WebSessionTabsBatchContext,
   WebSessionTabsSnapshotApplyOptions,
   WebSessionTabsSyncState
@@ -44,19 +43,8 @@ export function createWebSessionTabsSnapshotPatch(
   snapshot: RuntimeMobileSessionTabsResult,
   environmentId: string
 ) {
-  return (
-    state: WebSessionTabsSyncState,
-    keys: Set<string>,
-    offerOpenSelection?: (offer: SnapshotOpenSelectionOffer) => void
-  ) =>
-    applyWebSessionTabsSnapshot(
-      state,
-      snapshot,
-      environmentId,
-      undefined,
-      { offerOpenSelection },
-      keys
-    )
+  return (state: WebSessionTabsSyncState, keys: Set<string>) =>
+    applyWebSessionTabsSnapshot(state, snapshot, environmentId, undefined, undefined, keys)
 }
 
 export function applyWebSessionTabsSnapshots(
@@ -147,8 +135,7 @@ export function decideWebSessionTabsSnapshotOperations(
 export function applyWebSessionTabsSnapshotOperations(
   state: WebSessionTabsSyncState,
   operations: readonly DecidedWebSessionTabsSnapshotOperation[],
-  changedAgentPaneKeys?: Set<string>,
-  options?: WebSessionTabsSnapshotApplyOptions
+  changedAgentPaneKeys?: Set<string>
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
   let nextState = state
   let mergedPatch: Partial<WebSessionTabsSyncState> = {}
@@ -161,7 +148,7 @@ export function applyWebSessionTabsSnapshotOperations(
       snapshot,
       environmentId,
       undefined,
-      options,
+      undefined,
       changedAgentPaneKeys
     )
     if (patch === nextState) {

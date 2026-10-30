@@ -40,9 +40,7 @@ export async function runOrdinaryCliChatResume(
   source: CliChatResumeSource,
   openOwner = false,
   selection?: {
-    token?: string
     reportFailure?: (error: unknown) => void
-    current: () => boolean
     sourceCurrent: () => boolean
     afterTabId: string
   }
@@ -148,13 +146,7 @@ export async function runOrdinaryCliChatResume(
       plan,
       hooks: { beforeCreate: handoff },
       deferPublication: true,
-      ...(selection
-        ? {
-            viewerSelection: selection.token,
-            canActivate: selection.current,
-            afterTabId: selection.afterTabId
-          }
-        : {})
+      ...(selection ? { afterTabId: selection.afterTabId } : {})
     })
     if (!launch) {
       return
@@ -169,20 +161,12 @@ export async function runOrdinaryCliChatResume(
         result.error,
         openOwner,
         target,
-        selection?.token,
         selection?.reportFailure
       )
     }
   } catch (error) {
     if (pending.get(key) === controller) {
-      await reportCliChatResumeFailure(
-        source,
-        error,
-        false,
-        target,
-        selection?.token,
-        selection?.reportFailure
-      )
+      await reportCliChatResumeFailure(source, error, false, target, selection?.reportFailure)
     }
   } finally {
     clearTimeout(timer)

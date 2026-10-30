@@ -1,4 +1,3 @@
-import { noteViewerNavigation } from '@/lib/viewer-selection-request'
 import { revealTerminalPane } from '@/lib/reveal-terminal-pane'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
@@ -10,7 +9,6 @@ import { useAppStore } from '@/store'
 import type { DashboardRevealAgentArgs } from '../../../../shared/dashboard-snapshot'
 
 export function revealDashboardAgent(args: DashboardRevealAgentArgs): boolean {
-  noteViewerNavigation()
   const state = useAppStore.getState()
   const tab = state.unifiedTabsByWorktree[args.worktreeId]?.find(
     (candidate) =>

@@ -149,7 +149,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       snapshot,
       ENVIRONMENT_ID,
       undefined,
-      { offerOpenSelection: undefined },
+      undefined,
       mocks.changedAgentPaneKeys
     )
     expect(mocks.acceptReplayedWebSessionTabsSnapshot).toHaveBeenCalledWith(
@@ -429,7 +429,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       snapshot,
       ENVIRONMENT_ID,
       undefined,
-      { offerOpenSelection: undefined },
+      undefined,
       mocks.changedAgentPaneKeys
     )
     expect(setStateResults.at(-1)).toEqual({ state: 'after' })

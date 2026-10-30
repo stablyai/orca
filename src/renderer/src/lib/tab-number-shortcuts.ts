@@ -1,4 +1,3 @@
-import { noteViewerNavigation } from './viewer-selection-request'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -58,7 +57,6 @@ export function activateTabNumberShortcut(index: number): boolean {
     return false
   }
 
-  noteViewerNavigation()
   const worktreeId = target.worktreeId
   const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(store, worktreeId)
   store.focusGroup(worktreeId, target.groupId)

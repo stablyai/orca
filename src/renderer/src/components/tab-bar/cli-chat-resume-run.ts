@@ -17,12 +17,10 @@ import { adoptingAgentOnHost } from '../right-sidebar/ai-vault-session-resume-in
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { captureSourceTerminal } from './cli-chat-resume-terminal-capture'
 import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
-import { captureConversationSwitchSelection } from '@/lib/conversation-switch-state'
 
 /** Old peers stop the addressed PTY before ordinary adoption; a kill acknowledgement is never exit proof. */
 export async function runLegacyCliChatResume(
   source: CliChatResumeSource,
-  viewerSelection?: string,
   reportFailure?: (error: unknown) => void
 ): Promise<void> {
   const key = `${source.executionHostId}\0${source.agent}\0${source.providerSessionId}`
@@ -30,7 +28,6 @@ export async function runLegacyCliChatResume(
   if (!target || source.hostUpdateRequired || isCliChatResumePending(key)) {
     return
   }
-  const stillSelected = captureConversationSwitchSelection(viewerSelection)
   const leafId = source.paneKey.slice(source.tabId.length + 1)
   const rendererIdentity = captureTerminalSurfaceIdentity(
     useAppStore.getState(),
@@ -114,9 +111,7 @@ export async function runLegacyCliChatResume(
       return
     }
     await runOrdinaryCliChatResume(source, true, {
-      token: viewerSelection,
       reportFailure,
-      current: stillSelected,
       sourceCurrent: stillCaptured,
       afterTabId: source.tabId
     })

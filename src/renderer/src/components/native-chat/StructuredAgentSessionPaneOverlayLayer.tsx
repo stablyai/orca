@@ -1,4 +1,3 @@
-import { noteViewerGroupNavigation } from '@/lib/viewer-selection-request'
 import { memo, useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
@@ -79,10 +78,7 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
     )
     const focusGroup = useAppStore((state) => state.focusGroup)
     const focusOwningGroup = useCallback(
-      (groupId: string) => {
-        noteViewerGroupNavigation(useAppStore.getState(), worktreeId, groupId)
-        focusGroup(worktreeId, groupId)
-      },
+      (groupId: string) => focusGroup(worktreeId, groupId),
       [focusGroup, worktreeId]
     )
     const groupActiveTabById = useMemo(

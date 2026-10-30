@@ -1,4 +1,3 @@
-import { retireTerminalPresentation } from '@/components/terminal-pane/terminal-presentation-retirement'
 import { createRuntimeFilePositionQueue } from './runtime-file-position'
 import { applyClosedTerminalLeafNotice } from '@/components/terminal-pane/closed-terminal-leaf-notice'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
@@ -168,7 +167,7 @@ export function registerMobileAndTerminalCloseIpcBridge(
   if (window.api.ui.onTerminalTabCloseRequest) {
     unsubs.push(
       window.api.ui.onTerminalTabCloseRequest(
-        ({ requestId, tabId, localPtyTeardownOwnedExternally, force, originalSurface }) => {
+        ({ requestId, tabId, localPtyTeardownOwnedExternally, force }) => {
           let responded = false
           const respond = (error?: string): void => {
             if (responded) {
@@ -176,39 +175,6 @@ export function registerMobileAndTerminalCloseIpcBridge(
             }
             responded = true
             window.api.ui.respondTerminalTabClose({ requestId, ...(error ? { error } : {}) })
-          }
-          if (originalSurface) {
-            void (async () => {
-              if (originalSurface.tabId !== tabId || !localPtyTeardownOwnedExternally) {
-                throw new Error('terminal_pane_owner_changed')
-              }
-              const failures: unknown[] = []
-              try {
-                retireTerminalPresentation(originalSurface)
-              } catch (error) {
-                failures.push(error)
-              }
-              try {
-                const state = useAppStore.getState()
-                await persistWorkspaceSessionByHost(
-                  window.api.session,
-                  buildWorkspaceSessionPayload(state),
-                  state
-                )
-              } catch (error) {
-                failures.push(error)
-              }
-              if (failures.length === 1) {
-                throw failures[0]
-              }
-              if (failures.length > 1) {
-                throw new AggregateError(failures, 'terminal_tab_close_failed')
-              }
-              respond()
-            })().catch((error: unknown) =>
-              respond(error instanceof Error ? error.message : 'terminal_tab_close_failed')
-            )
-            return
           }
           closeTerminalTab(tabId, {
             rejectPinned: true,

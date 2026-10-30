@@ -1,6 +1,5 @@
 import type { TerminalState } from './terminal-state'
 import type { Tab } from '../../../../shared/tab-types'
-import type { SessionTabOpenPlacement } from '../../../../shared/session-tab-placement'
 import type { TabSplitTarget } from '../slices/tabs/tabs-slice-contract'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -77,7 +76,6 @@ export type TerminalActions = {
       /** Published atomically with pendingStartup for automatic resume ownership. */
       automaticResumeClaim?: AutomaticAgentResumeClaim
       activate?: boolean
-      placement?: SessionTabOpenPlacement['placement']
       /** Creates the tab in a new split group instead of targetGroupId. */
       split?: TabSplitTarget
       recordInteraction?: boolean

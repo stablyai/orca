@@ -1,6 +1,6 @@
 import { resolveWorktreeExecutionHostPlatform } from './execution-host-facts'
 import { translate } from '@/i18n/i18n'
-import { useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
@@ -10,10 +10,6 @@ import { useInPlaceSwitchCapability } from './in-place-switch-support'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import { refreshLocalStructuredSessionWorktreeTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
 import {
-  captureConversationSwitchViewerSelection,
-  conversationSwitchViewerSelectionCurrent
-} from './conversation-switch-selection'
-import {
   pendingNativeChatCliSwitches as pending,
   pendingCliChatResumes,
   subscribeConversationSwitch as subscribe
@@ -22,7 +18,7 @@ import type { AiVaultSession, AiVaultAgent } from '../../../shared/ai-vault-type
 import type { CliChatResumeSource } from '@/components/tab-bar/cli-chat-resume-source'
 
 export type ConversationSwitch = {
-  legacyContinue?: (viewerSelection: string) => Promise<void>
+  legacyContinue?: () => Promise<void>
   confirm?: ConfirmationDialogContextValue
   direction: 'chat' | 'terminal'
   executionHostId: string
@@ -71,6 +67,20 @@ export function useConversationSwitchPending(args: ConversationSwitch | null): b
   )
 }
 
+/** Controls bind disabled at once; the visible working state waits so a fast local switch stays clean. */
+export function useConversationSwitchBusy(pending: boolean, delayMs = 200): boolean {
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    if (!pending) {
+      setBusy(false)
+      return
+    }
+    const timer = setTimeout(() => setBusy(true), delayMs)
+    return () => clearTimeout(timer)
+  }, [pending, delayMs])
+  return pending && busy
+}
+
 /** Live facts choose consent only; never open a reader to classify saved work. */
 export function conversationSwitchReplying(args: ConversationSwitch): boolean {
   const state = useAppStore.getState()
@@ -111,12 +121,6 @@ export function useConversationSwitchReadiness(args: ConversationSwitch | null) 
         )
       : undefined
   }
-}
-
-export function captureConversationSwitchSelection(
-  selection = captureConversationSwitchViewerSelection()
-): () => boolean {
-  return () => conversationSwitchViewerSelectionCurrent(selection)
 }
 
 export function rederiveConversationSwitch(args: ConversationSwitch): void {

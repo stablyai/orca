@@ -15,10 +15,8 @@ export function applyVisibilityResumeRepairs(
   }
   const decided = decideWebSessionTabsSnapshotOperations(operations)
   const settle = applyWebSessionTabsStorePatch(
-    (state, changedAgentPaneKeys, offerOpenSelection) =>
-      applyWebSessionTabsSnapshotOperations(state, decided, changedAgentPaneKeys, {
-        offerOpenSelection
-      }),
+    (state, changedAgentPaneKeys) =>
+      applyWebSessionTabsSnapshotOperations(state, decided, changedAgentPaneKeys),
     {
       frames: decided.map(({ environmentId, snapshot, decision }) => ({
         environmentId,

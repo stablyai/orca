@@ -200,7 +200,7 @@ describe('refreshWebRuntimeSessionTabsSnapshot', () => {
       recovered,
       ENVIRONMENT_ID,
       undefined,
-      { offerOpenSelection: undefined },
+      undefined,
       mocks.changedAgentPaneKeys
     )
   })
@@ -265,7 +265,7 @@ describe('activateWebRuntimeSessionWorktree', () => {
       snapshot,
       ENVIRONMENT_ID,
       undefined,
-      { offerOpenSelection: undefined },
+      undefined,
       mocks.changedAgentPaneKeys
     )
     expect(mocks.acceptReplayedWebSessionTabsSnapshot).toHaveBeenCalledWith(

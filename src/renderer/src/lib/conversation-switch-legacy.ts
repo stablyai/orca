@@ -10,28 +10,22 @@ import { resumeAiVaultSessionInNewChat } from '@/components/right-sidebar/ai-vau
 
 import type { ConversationSwitch } from './conversation-switch-state'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-export function runLegacyConversationSwitch(
-  args: ConversationSwitch,
-  target: RuntimeClientTarget,
-  viewerSelection: string
-) {
+export function runLegacyConversationSwitch(args: ConversationSwitch, target: RuntimeClientTarget) {
   const reportFailure = (error: unknown) => toast.error(conversationSwitchFailureText(error, args))
   if (args.direction === 'terminal' && args.sessionId) {
     return runLegacyNativeChatCliSwitch({
       ...args,
       sessionId: args.sessionId,
       chatTabId: args.chatTabId ?? null,
-      viewerSelection,
       reportFailure
     })
   } else if (args.source) {
-    return runLegacyCliChatResume(args.source, viewerSelection, reportFailure)
+    return runLegacyCliChatResume(args.source, reportFailure)
   } else if (args.sessionId) {
     return switchIntoOwnerLegacy(
       { agent: args.agent, tabId: args.chatTabId ?? '', workspaceId: args.workspaceId },
       { sessionId: args.sessionId, workspaceId: args.workspaceId },
       target,
-      viewerSelection,
       reportFailure
     )
   } else if (args.history && adoptsCliConversations(args.agent)) {
@@ -41,7 +35,6 @@ export function runLegacyConversationSwitch(
       args.workspaceId,
       newAgentLaunchRequestId(),
       undefined,
-      viewerSelection,
       reportFailure
     )
   }

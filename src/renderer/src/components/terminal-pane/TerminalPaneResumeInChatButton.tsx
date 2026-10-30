@@ -1,8 +1,12 @@
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
-import { useConversationSwitchReadiness, runCliChatResume } from '@/lib/conversation-surface-switch'
+import {
+  useConversationSwitchBusy,
+  useConversationSwitchReadiness,
+  runCliChatResume
+} from '@/lib/conversation-surface-switch'
 import { isNativeChatEnabled } from '../../../../shared/structured-native-chat-launch-route'
 import { useShallow } from 'zustand/react/shallow'
-import { MessagesSquare } from 'lucide-react'
+import { Loader2, MessagesSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
@@ -31,6 +35,8 @@ export function TerminalPaneResumeInChatButton({
   const readiness = useConversationSwitchReadiness(
     source ? { direction: 'chat', ...source, source } : null
   )
+  const busy = useConversationSwitchBusy(readiness.pending)
+
   const enabled = useAppStore((state) => isNativeChatEnabled(state.settings))
   if (!enabled) {
     return null
@@ -75,7 +81,11 @@ export function TerminalPaneResumeInChatButton({
               }
             }}
           >
-            <MessagesSquare className="size-3" />
+            {busy ? (
+              <Loader2 className="size-3 animate-spin" />
+            ) : (
+              <MessagesSquare className="size-3" />
+            )}
           </Button>
         </span>
       </TooltipTrigger>

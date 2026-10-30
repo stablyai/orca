@@ -1,4 +1,3 @@
-import { noteViewerGroupNavigation } from '@/lib/viewer-selection-request'
 import { useShallow } from 'zustand/react/shallow'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
@@ -89,7 +88,6 @@ export function useTabGroupWorkspaceModel({
     expandedPaneByTabId: worktreeState.expandedPaneByTabId,
     commands: {
       focusGroup: () => {
-        noteViewerGroupNavigation(useAppStore.getState(), worktreeId, groupId)
         focusGroup(worktreeId, groupId)
       },
       activateAgentSession,

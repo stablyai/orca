@@ -1,4 +1,3 @@
-import { registerTerminalPaneMount } from './terminal-pane-mount-registration'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
@@ -26,6 +25,7 @@ import type { PtyConnectionDeps } from './pty-connection-types'
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
 import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
+import { registerRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
 import { normalizeTerminalLayoutSnapshot } from './layout-serialization'
 import { applyTerminalAppearance } from './terminal-appearance'
 import { terminalLinkClickBehaviorFor } from './terminal-link-click-behavior'
@@ -52,8 +52,6 @@ export type TerminalPaneMountPreparation = {
   ptyDeps: PtyConnectionDeps
   deferredSplitHandoffs: Map<number, DeferredSplitPaneHandoffHandle>
   unregisterRuntimeTab: () => void
-  setOwnedManager: (manager: PaneManager) => void
-  getOwnedManager: () => PaneManager | null
   fileOpenLinkHint: string
   getPaneLinkCwd: (paneId: number) => string
   getUrlOpenLinkHint: (paneId: number) => string
@@ -77,8 +75,7 @@ export type TerminalPaneMountPreparation = {
 export function prepareTerminalPaneMount(
   deps: UseTerminalPaneLifecycleDeps,
   refs: TerminalPaneLifecycleRefs,
-  mountFollowsTerminalPark: boolean,
-  onEmpty: (manager: PaneManager) => void
+  mountFollowsTerminalPark: boolean
 ): TerminalPaneMountPreparation | null {
   const { containerRef, expandedStyleSnapshotRef, paneTransportsRef, panePtyBindingsRef } = deps
   const container = containerRef.current
@@ -235,10 +232,14 @@ export function prepareTerminalPaneMount(
     restoredPtyIdByLeafId: deps.initialLayoutRef.current.ptyIdsByLeafId ?? {},
     deferredSplitHandoffs
   })
-  const { unregisterRuntimeTab, setOwnedManager, getOwnedManager } = registerTerminalPaneMount(
-    { deps, refs, deferredSplitHandoffs },
-    onEmpty
-  )
+  const unregisterRuntimeTab = registerRuntimeTerminalTab({
+    tabId: deps.tabId,
+    worktreeId: deps.worktreeId,
+    getManager: () => deps.managerRef.current,
+    getContainer: () => deps.containerRef.current,
+    getPtyIdForPane: (paneId) => paneTransports.get(paneId)?.getPtyId() ?? null,
+    getTabWideAgentHintLeafId: deps.getTabWideAgentHintLeafId
+  })
   const fileOpenLinkHint = getTerminalFileOpenHint()
   const getUrlOpenLinkHint = (paneId: number): string =>
     getTerminalUrlOpenHint({
@@ -262,8 +263,6 @@ export function prepareTerminalPaneMount(
     ptyDeps,
     deferredSplitHandoffs,
     unregisterRuntimeTab,
-    setOwnedManager,
-    getOwnedManager,
     fileOpenLinkHint,
     getPaneLinkCwd,
     getUrlOpenLinkHint,

@@ -157,7 +157,7 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
       ? decideWebSessionTabsSnapshot(recovered, environmentId)
       : WEB_SESSION_TABS_FRAME_OUTRANKED
     const settleMirror = applyWebSessionTabsStorePatch(
-      (state, changedAgentPaneKeys, offerOpenSelection) => {
+      (state, changedAgentPaneKeys) => {
         // Eager refresh can outlive workspace switches; update tabs without taking focus.
         const patch = decision.apply
           ? applyWebSessionTabsSnapshot(
@@ -165,7 +165,7 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
               recovered,
               environmentId,
               undefined,
-              { offerOpenSelection },
+              undefined,
               changedAgentPaneKeys
             )
           : state

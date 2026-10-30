@@ -1,4 +1,3 @@
-import { isSessionTabSelectionRequest } from '../../../shared/session-tab-placement'
 import { toast } from 'sonner'
 import type { AiVaultSession } from '../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
@@ -58,18 +57,10 @@ export async function activateAiVaultStructuredSession(
   session: Pick<AiVaultSession, 'structuredSession'>,
   deps?: StructuredSessionActivationDeps,
   target?: RuntimeClientTarget,
-  viewerSelection?: string,
   onFailure?: () => void
 ): Promise<boolean> {
-  return (
-    (await activateAiVaultStructuredSessionVerified(
-      session,
-      deps,
-      target,
-      viewerSelection,
-      onFailure
-    )) !== 'none'
-  )
+  await activateAiVaultStructuredSessionVerified(session, deps, target, onFailure)
+  return true
 }
 
 /** `activated` only when the chat's tab is really active; `reported` means the click's toast said why
@@ -78,7 +69,6 @@ export async function activateAiVaultStructuredSessionVerified(
   session: Pick<AiVaultSession, 'structuredSession'>,
   deps?: StructuredSessionActivationDeps,
   target?: RuntimeClientTarget,
-  viewerSelection?: string,
   onFailure?: () => void
 ): Promise<'activated' | 'reported' | 'none'> {
   const structured = session.structuredSession
@@ -88,16 +78,13 @@ export async function activateAiVaultStructuredSessionVerified(
   const feedback = onFailure
     ? { unavailable: onFailure, gone: onFailure, hostCannotOpen: onFailure }
     : (deps ?? structuredSessionOpenFeedback)
-  const modern = viewerSelection !== undefined && isSessionTabSelectionRequest(viewerSelection)
   const outcome = await openExistingStructuredSession(structured, {
     target,
     deps,
-    viewerSelection,
     present: (outcome) => {
       if (outcome === 'activated') {
         // A moved project's chat opens under its retained entry; the catalog does not list it.
         if (
-          !modern &&
           useAppStore.getState().activeWorktreeId !== structured.workspaceId &&
           !activateWslMovedWorkspace(structured.workspaceId)
         ) {
@@ -107,10 +94,10 @@ export async function activateAiVaultStructuredSessionVerified(
         feedback.gone()
       } else if (outcome === 'host-cannot-open') {
         feedback.hostCannotOpen()
-      } else if (outcome === 'unavailable') {
+      } else {
         feedback.unavailable()
       }
     }
   })
-  return outcome === 'activated' || outcome === 'none' ? outcome : 'reported'
+  return outcome === 'activated' ? 'activated' : 'reported'
 }

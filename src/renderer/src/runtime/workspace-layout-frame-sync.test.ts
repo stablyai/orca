@@ -1,19 +1,6 @@
-import {
-  beginViewerSelectionRequest,
-  disposeViewerSelection,
-  viewerSelectionOutcome
-} from '@/lib/viewer-selection-request'
-import { agentSessionSwitchDeadline } from '../../../shared/agent-session-switch-execution'
-import {
-  captureSwitchProjection,
-  retireSwitchProjection,
-  disposeSwitchProjections
-} from '@/lib/conversation-switch-projection'
-import { noteUserWorkspaceSwitch } from '@/lib/workspace-switch-user-act'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { PublishedTab } from '../../../shared/workspace-layout/workspace-layout-published'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { LEGACY_WORKSPACE_LAYOUT_PROFILES } from '../../../shared/workspace-layout/workspace-layout-legacy-profile.test-fixture'
 import {
@@ -22,8 +9,6 @@ import {
 } from '../../../shared/workspace-layout/workspace-layout-profile.test-fixture'
 import type { WorkspaceLayoutChangeFrame } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
 import {
-  addWorkspace,
-  leaf,
   emptySession,
   GIT_KEY
 } from '../../../shared/workspace-layout/workspace-layout-session.test-fixture'
@@ -44,8 +29,6 @@ import {
   mainLayoutFrameSender,
   mainLoadedLayouts
 } from './main-loaded-layout-frames.test-fixture'
-import { countOpenPlacementWork } from './open-placement-work-counter.test-fixture'
-import * as frameFlushPlan from './workspace-layout-frame-flush-plan'
 import { installLayoutFrameApplyCheck } from './workspace-layout-frame-apply-check.test-fixture'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -135,8 +118,6 @@ beforeEach(() => {
   check = installLayoutFrameApplyCheck()
 })
 afterEach(() => {
-  disposeViewerSelection()
-  disposeSwitchProjections()
   endLayoutFramePositions()
   check.uninstall()
   expect(check.failures).toEqual([])
@@ -451,231 +432,3 @@ describe('the window drawn from layout frames', () => {
     sync.close()
   })
 })
-
-it.each([false, true])(
-  'selects once after natural retirement and a real coalesced frame; later re-click=%s',
-  async (navigate) => {
-    const session = addWorkspace(emptySession(), GIT_KEY, [
-      {
-        id: 'G',
-        activeTabId: 'A',
-        recent: ['C'],
-        tabs: [
-          {
-            id: 'A',
-            entityId: 'canonical-A',
-            kind: 'agent-session',
-            entry: { agentSessionAgent: 'codex' }
-          },
-          { id: 'B', leaves: [[leaf(1), 'pty-B']] },
-          { id: 'C', leaves: [[leaf(2), 'pty-C']] }
-        ]
-      }
-    ])
-    const { store, sync, layouts, frames } = await bootWithFrames('local', session)
-    const deadline = agentSessionSwitchDeadline(Date.now)
-    sync.start()
-    await flushMicrotasks()
-    try {
-      const request = beginViewerSelectionRequest('frame-switch', deadline)
-      request.accept()
-      const proposal = {
-        invocationId: 'frame-switch',
-        generation: 'generation',
-        sessionId: 'canonical-A',
-        tabId: 'A',
-        phase: 'prepare' as const
-      }
-      captureSwitchProjection(store.getState(), GIT_KEY, proposal, () => {})
-      const retired = retireSwitchProjection(store.getState(), { ...proposal, phase: 'retire' })
-      expect(retired).not.toBeNull()
-      store.setState(retired!)
-      const siblingTree = store.getState().terminalLayoutsByTabId.B
-      const fallback = store.getState().groupsByWorktree[GIT_KEY][0].activeTabId
-      expect(fallback).toBe('C')
-      if (navigate) {
-        // The ordinary explicit tab ingress counts even a re-click at the automatic fallback.
-        noteUserWorkspaceSwitch(GIT_KEY)
-        store.getState().activateTab('C', { worktreeId: GIT_KEY })
-      }
-      const destination = structuredClone(layouts[GIT_KEY]!)
-      destination.tabs = destination.tabs.filter((tab) => tab.id !== 'A')
-      const published: PublishedTab = {
-        id: 'D',
-        entityId: 'D',
-        kind: 'terminal',
-        createdAt: 123,
-        customTitle: null,
-        color: null,
-        executionHostId: 'local',
-        terminal: {
-          root: { type: 'leaf', leafId: leaf(3) },
-          panes: [{ leafId: leaf(3), ptyId: 'pty-D' }]
-        },
-        openPlacement: {
-          invocationId: 'frame-switch',
-          generation: 'generation',
-          placement: { groupId: 'G', index: 0 },
-          activate: true,
-          viewerSelection: request.token
-        }
-      }
-      destination.tabs.unshift(published)
-      destination.groups[0].tabIds = ['D', 'B', 'C']
-      stream.onFrame!(frames.records(GIT_KEY, destination))
-      await flushMicrotasks()
-      expect(store.getState().groupsByWorktree[GIT_KEY][0].tabOrder).toEqual(['D', 'B', 'C'])
-      expect(store.getState().groupsByWorktree[GIT_KEY][0].activeTabId).toBe(navigate ? 'C' : 'D')
-      expect(store.getState().terminalLayoutsByTabId.B).toEqual(siblingTree)
-      expect(viewerSelectionOutcome(request.token)).toBe(navigate ? 'superseded' : 'fulfilled')
-      stream.onFrame!(frames.snapshot({ [GIT_KEY]: destination }))
-      await flushMicrotasks()
-      expect(store.getState().groupsByWorktree[GIT_KEY][0].activeTabId).toBe(navigate ? 'C' : 'D')
-    } finally {
-      deadline.dispose()
-      sync.close()
-    }
-  }
-)
-
-it.each([10, 100])(
-  'bounds retained undrawn metadata discovery on an unrelated coalesced frame flush (%i destinations)',
-  async (count) => {
-    const visible = addWorkspace(emptySession(), GIT_KEY, [
-      { id: 'visible', tabs: [{ id: 'C', leaves: [[leaf(1), 'pty-C']] }] }
-    ])
-    const store = createTestStore()
-    await bootWindowFromPartitions(store, [{ hostId: 'local', session: visible }])
-    const session = structuredClone(visible)
-    const undrawnKeys = ['folder:undrawn-one', 'folder:undrawn-two']
-    for (const [workspaceIndex, key] of undrawnKeys.entries()) {
-      addWorkspace(session, key, [
-        {
-          id: `undrawn-${workspaceIndex}`,
-          tabs: Array.from(
-            { length: count / 2 },
-            (_, i): { id: string; leaves: [string, string][] } => {
-              const n = (workspaceIndex * count) / 2 + i
-              return {
-                id: `D-${n}`,
-                leaves: [
-                  [`10000000-0000-4000-8000-${String(n + 2).padStart(12, '0')}`, `pty-D-${n}`]
-                ]
-              }
-            }
-          )
-        }
-      ])
-    }
-    const layouts = mainLoadedLayouts('local', session)
-    const deadline = agentSessionSwitchDeadline(Date.now)
-    const sync = openWorkspaceLayoutFrameSync(store)
-    let counter: ReturnType<typeof countOpenPlacementWork> | undefined
-    let restorePlan: (() => void) | undefined
-    try {
-      const tokens: string[] = []
-      for (const key of undrawnKeys) {
-        for (const tab of layouts[key].tabs) {
-          const request = beginViewerSelectionRequest(`cached-${tab.id}`, deadline)
-          request.accept()
-          tokens.push(request.token)
-          tab.openPlacement = {
-            invocationId: `cached-${tab.id}`,
-            generation: `generation-${tab.id}`,
-            placement: { groupId: layouts[key].groups[0].id, index: 0 },
-            activate: true,
-            viewerSelection: request.token,
-            source: {
-              worktreeId: key,
-              tabId: `absent-source-${tab.id}`,
-              leafId: leaf(1),
-              createdAt: 1,
-              generation: 0,
-              hasLeaf: true,
-              ptyId: `source-pty-${tab.id}`,
-              incarnationId: null
-            }
-          }
-        }
-      }
-      const visibleRequest = beginViewerSelectionRequest('visible-choice', deadline)
-      visibleRequest.accept()
-      // An unchanged startup patch is discarded before the selection writer; publish a real change.
-      layouts[GIT_KEY].tabs[0].customTitle = 'initial publication'
-      layouts[GIT_KEY].tabs[0].openPlacement = {
-        invocationId: 'visible-choice',
-        generation: 'visible-generation',
-        placement: { groupId: 'visible', index: 0 },
-        activate: true,
-        viewerSelection: visibleRequest.token
-      }
-      const frames = mainLayoutFrameSender()
-      stream.onFrame!(frames.snapshot(layouts))
-      sync.start()
-      await flushMicrotasks()
-      expect(viewerSelectionOutcome(visibleRequest.token)).toBe('fulfilled')
-      expect(tokens.map(viewerSelectionOutcome)).toEqual(
-        Array.from({ length: count }, () => 'superseded')
-      )
-      for (const key of undrawnKeys) {
-        expect(store.getState().unifiedTabsByWorktree[key]).toBeUndefined()
-        expect(store.getState().tabsByWorktree[key]).toBeUndefined()
-      }
-      counter = countOpenPlacementWork()
-      const plan = vi.spyOn(frameFlushPlan, 'planLayoutFrameFlush')
-      restorePlan = () => plan.mockRestore()
-      const changed = structuredClone(layouts[GIT_KEY])
-      changed.tabs[0].customTitle = 'first update'
-      stream.onFrame!(frames.records(GIT_KEY, changed))
-      changed.tabs[0].customTitle = 'second update'
-      stream.onFrame!(frames.records(GIT_KEY, changed))
-      await flushMicrotasks()
-      expect(plan).toHaveBeenCalledTimes(1)
-      expect(plan.mock.results[0].value).toMatchObject({ fullBuilt: [], workspaceBuilt: [GIT_KEY] })
-      expect(counter.builtKeys).toEqual([[GIT_KEY]])
-      expect(counter.visits).toEqual([
-        ...undrawnKeys.map((worktreeId) => ({ pass: 'discovery', worktreeId, rows: count / 2 })),
-        { pass: 'writer', worktreeId: GIT_KEY, rows: 2 }
-      ])
-      expect(counter.reads).toEqual([
-        ...undrawnKeys.map((worktreeId) => ({
-          pass: 'discovery',
-          worktreeId,
-          tabRows: 0,
-          terminalRows: 0,
-          snapshotRows: 0,
-          mappingCopies: 0,
-          mappingRows: 0,
-          sourceChecks: 0,
-          viewerChecks: count / 2,
-          destinationLookups: 0
-        })),
-        {
-          pass: 'writer',
-          worktreeId: GIT_KEY,
-          tabRows: 2,
-          terminalRows: 1,
-          snapshotRows: 0,
-          mappingCopies: 0,
-          mappingRows: 0,
-          sourceChecks: 0,
-          viewerChecks: 1,
-          destinationLookups: 0
-        }
-      ])
-      expect(counter.fingerprints()).toBe(0)
-      expect(store.getState().groupsByWorktree[GIT_KEY][0].activeTabId).toBe('C')
-      expect(store.getState().tabsByWorktree[GIT_KEY][0].customTitle).toBe('second update')
-      for (const key of undrawnKeys) {
-        expect(store.getState().unifiedTabsByWorktree[key]).toBeUndefined()
-        expect(store.getState().tabsByWorktree[key]).toBeUndefined()
-      }
-      expect(viewerSelectionOutcome(visibleRequest.token)).toBe('fulfilled')
-    } finally {
-      restorePlan?.()
-      counter?.stop()
-      sync.close()
-      deadline.dispose()
-    }
-  }
-)

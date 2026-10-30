@@ -1,7 +1,3 @@
-import { noteViewerNavigation } from '@/lib/viewer-selection-request'
-import { isSessionTabSelectionRequest } from '../../../../shared/session-tab-placement'
-import { selectSessionTabForViewer } from '@/runtime/web-session-tabs-sync/store-patch'
-import { conversationSwitchViewerSelectionCurrent } from '@/lib/conversation-switch-selection'
 import type { SplitTerminalPaneDetail } from '@/constants/terminal'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import {
@@ -135,15 +131,10 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
         flashFocusedPane,
         scrollToBottomIfOutputSinceLastView
       }) => {
-        const notificationFocus =
-          ackPaneKeyOnSuccess || flashFocusedPane || scrollToBottomIfOutputSinceLastView
-        if (notificationFocus) {
-          noteViewerNavigation()
-        }
         const store = useAppStore.getState()
         revealWorkspaceSurface(store, worktreeId)
         store.setActiveTab(tabId)
-        if (notificationFocus) {
+        if (ackPaneKeyOnSuccess || flashFocusedPane || scrollToBottomIfOutputSinceLastView) {
           activateTabAndFocusPane(tabId, leafId ?? null, {
             ...(ackPaneKeyOnSuccess ? { ackPaneKeyOnSuccess } : {}),
             ...(flashFocusedPane ? { flashFocusedPane: true } : {}),
@@ -159,13 +150,7 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
   )
 
   unsubs.push(
-    window.api.ui.onFocusEditorTab(({ tabId, worktreeId, userInitiated, viewerSelection }) => {
-      if (userInitiated && viewerSelection === undefined) {
-        noteViewerNavigation()
-      }
-      if (!conversationSwitchViewerSelectionCurrent(viewerSelection)) {
-        return
-      }
+    window.api.ui.onFocusEditorTab(({ tabId, worktreeId, userInitiated }) => {
       const localTabId = resolveWindowTabIdForHostTab(worktreeId, tabId)
       const store = useAppStore.getState()
       const tab = (store.unifiedTabsByWorktree[worktreeId] ?? []).find(
@@ -175,7 +160,6 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
       // Courtesy completion reveals must not undo user navigation; explicit notification clicks may reveal before async activation updates the active ID.
       if (
         !userInitiated &&
-        viewerSelection === undefined &&
         tab?.contentType === 'agent-session' &&
         store.activeWorktreeId !== worktreeId
       ) {
@@ -188,10 +172,6 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
           store.setActiveBrowserTab(browserTarget.workspaceId)
           store.setActiveTabType('browser', worktreeId)
         }
-        return
-      }
-      if (viewerSelection && isSessionTabSelectionRequest(viewerSelection)) {
-        selectSessionTabForViewer(worktreeId, tab.id, viewerSelection)
         return
       }
       revealWorkspaceSurface(store, worktreeId)

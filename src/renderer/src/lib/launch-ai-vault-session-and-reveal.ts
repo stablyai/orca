@@ -26,10 +26,7 @@ export async function launchAiVaultSessionAndReveal(
       return
     }
   }
-  if (
-    args.viewerSelection === undefined &&
-    useAppStore.getState().activeWorktreeId !== args.worktreeId
-  ) {
+  if (useAppStore.getState().activeWorktreeId !== args.worktreeId) {
     activateAiVaultResumeWorkspace(args.worktreeId)
   }
   if (queuedMessage === undefined) {

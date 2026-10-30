@@ -1,7 +1,6 @@
 import { inPlaceSwitchEnabled } from '../../../../shared/structured-agent-cli-conversation-adoption'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import {
-  conversationSwitchFailureText,
   runNativeChatCliSwitch,
   useConversationSwitchPending
 } from '@/lib/conversation-surface-switch'
@@ -121,22 +120,12 @@ export function NativeChatResumeInCliButton({
               nativeChat
             })
             if (subject?.kind === 'chat') {
-              const legacyContinue = (viewerSelection?: string) =>
+              const legacyContinue = () =>
                 runNativeChatCliFork({
                   subject,
                   tab,
                   agent,
                   commandOverrides,
-                  ...(viewerSelection
-                    ? {
-                        viewerSelection,
-                        describeFailure: (message: string) =>
-                          conversationSwitchFailureText(new Error(message), {
-                            agent,
-                            direction: 'terminal'
-                          })
-                      }
-                    : {}),
                   queuedMessage: translate(
                     'components.tab.bar.switch.legacyCopy',
                     'A copy of this {{agent}} conversation opens in a new terminal. The original chat stays open.',

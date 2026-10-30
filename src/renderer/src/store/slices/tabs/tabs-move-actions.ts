@@ -1,4 +1,3 @@
-import { noteSwitchPresentationUse } from '@/lib/conversation-switch-projection'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { collapseGroupLayout } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
 import { buildActiveSurfacePatch } from './tabs-surface'
@@ -18,7 +17,6 @@ export function createTabsMoveActions(
 ): Pick<TabsSlice, 'moveUnifiedTabToGroup'> {
   return {
     moveUnifiedTabToGroup: (tabId, targetGroupId, opts) => {
-      noteSwitchPresentationUse(tabId)
       let moved = false
       set((state) => {
         const foundTab = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)

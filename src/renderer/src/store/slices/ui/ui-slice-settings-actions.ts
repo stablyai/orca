@@ -1,11 +1,9 @@
-import { noteViewerNavigation } from '@/lib/viewer-selection-request'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import { isSettingsNavigationTarget } from '../../../lib/settings-navigation-types'
 
 export function createUiSettingsActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
     openSettingsPage: () => {
-      noteViewerNavigation()
       // Why: settings search is a transient filter; opening Settings shouldn't inherit hidden sections from last visit.
       get().setSettingsSearchQuery('')
       set((state) => ({
@@ -15,13 +13,12 @@ export function createUiSettingsActions(set: UISliceSet, get: UISliceGet): Parti
           state.activeView === 'settings' ? state.previousViewBeforeSettings : state.activeView
       }))
     },
-    closeSettingsPage: () => {
-      noteViewerNavigation()
-      set((state) => ({ activeView: state.previousViewBeforeSettings }))
-    },
+    closeSettingsPage: () =>
+      set((state) => {
+        return { activeView: state.previousViewBeforeSettings }
+      }),
     settingsNavigationTarget: null,
     openSettingsTarget: (target) => {
-      noteViewerNavigation()
       if (!isSettingsNavigationTarget(target)) {
         if (import.meta.env.DEV) {
           throw new TypeError('openSettingsTarget received an invalid navigation target')

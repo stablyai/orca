@@ -1,4 +1,3 @@
-import { useSwitchPresentationRows } from '@/lib/conversation-switch-presentation'
 import { copyChatMathSelection } from '../sidebar/chat-markdown-math-selection'
 import {
   nativeChatTranscriptOuterClass,
@@ -133,7 +132,6 @@ export function NativeChatMessageList({
     [journalItems]
   )
   const scrollRef = useRef<HTMLDivElement | null>(null)
-  useSwitchPresentationRows(scrollRef)
   const contentRef = useRef<HTMLDivElement | null>(null)
   const [expandedTurnIds, setExpandedTurnIds] = useState<ReadonlySet<string>>(new Set())
   const disclosures = useNativeChatDisclosures()

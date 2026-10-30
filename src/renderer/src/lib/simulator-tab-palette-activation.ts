@@ -1,4 +1,3 @@
-import { noteViewerNavigation } from './viewer-selection-request'
 import { useAppStore } from '@/store'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { activateAndRevealWorkspace } from './worktree-activation'
@@ -59,7 +58,6 @@ export function activateSimulatorTabPaletteResult({
   }
 
   const state = useAppStore.getState()
-  noteViewerNavigation()
   state.focusGroup(worktreeId, tab.groupId)
   state.activateTab(tab.id, { worktreeId })
   state.setActiveTab(tab.id)

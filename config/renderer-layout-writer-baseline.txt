@@ -21,8 +21,6 @@
 3 src/renderer/src/components/worktree-jump-palette-status-inputs.ts
 9 src/renderer/src/lib/agent-background-session-test-state.ts
 1 src/renderer/src/lib/agent-hibernation-coordinator.ts
-7 src/renderer/src/lib/agent-launch-pane-verdict-application.ts # Shipped window owner: fenced launch withdrawal/outcome; port when main owns layout.
-8 src/renderer/src/lib/conversation-switch-projection.ts # Shipped window owner: fenced retirement/restoration; port when main owns layout.
 4 src/renderer/src/lib/floating-workspace-terminal-actions.ts
 1 src/renderer/src/lib/pane-manager/client-hosted-browser-row-state.ts
 4 src/renderer/src/lib/session-write-subscriber.ts

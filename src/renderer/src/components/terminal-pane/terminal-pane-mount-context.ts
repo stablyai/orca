@@ -13,7 +13,6 @@ import type { resolveTerminalHttpLinkSourceOwner } from './terminal-http-link-so
 import type { SessionRestoredBannerReason } from './session-restored-banner-pane-state'
 
 export type TerminalPaneMountContext = {
-  getOwnedManager?: () => PaneManager | null
   deps: UseTerminalPaneLifecycleDeps
   refs: TerminalPaneLifecycleRefs
   ptyDeps: PtyConnectionDeps

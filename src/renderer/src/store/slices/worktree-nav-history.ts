@@ -1,4 +1,3 @@
-import { noteViewerNavigation } from '@/lib/viewer-selection-request'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import { findWorktreeById } from './worktree-helpers'
@@ -272,7 +271,6 @@ function navigateToIndex(
   if (targetIndex === null) {
     return
   }
-  noteViewerNavigation()
   const targetEntry = state.worktreeNavHistory[targetIndex]
 
   // Why: capture-and-restore (not force false) so re-entrant navigation doesn't clobber the flag.

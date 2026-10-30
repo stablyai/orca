@@ -1,4 +1,3 @@
-import { noteViewerNavigation } from '@/lib/viewer-selection-request'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { translate } from '@/i18n/i18n'
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from './browser-slice-contract'
@@ -178,7 +177,6 @@ export function createBrowserTabActions(
     },
 
     openNewBrowserTabInActiveWorkspace: async (groupId, splitDirection) => {
-      noteViewerNavigation()
       const state = get()
       // Why: the invoking group owns its workspace; global selection may already point elsewhere.
       const worktreeId =

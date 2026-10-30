@@ -1,4 +1,3 @@
-import { noteViewerNavigation } from '@/lib/viewer-selection-request'
 import { useAppStore } from '../store'
 import { getActiveTabNavOrder } from '@/components/tab-bar/group-tab-order'
 import {
@@ -45,7 +44,6 @@ function resolveCycleContext(): CycleContext | null {
 
 /** Activate by unified tab ID after file/browser updates so duplicate entities focus the correct split instance. */
 export function activateCyclableTab(store: AppStoreState, next: TypeCyclableTab): void {
-  noteViewerNavigation()
   const worktreeId = store.activeWorktreeId
   if (next.type === 'terminal') {
     store.setActiveTab(next.id)
@@ -311,7 +309,6 @@ export function handleSwitchTerminalTab(direction: number): boolean {
   if (next.id === store.activeTabId && store.activeTabType === 'terminal') {
     return false
   }
-  noteViewerNavigation()
   store.setActiveTab(next.id)
   store.setActiveTabType('terminal', worktreeId)
   activateCycledTabOnOwner(worktreeId, next)

@@ -1,4 +1,3 @@
-import { noteViewerNavigation } from '@/lib/viewer-selection-request'
 import { useCallback } from 'react'
 import type React from 'react'
 import type { RefObject } from 'react'
@@ -90,7 +89,6 @@ export async function activateFileExplorerNode(args: {
     toggleDir(activeWorktreeId, node.path)
     return
   }
-  noteViewerNavigation()
   let escapesWorktree = false
   if (node.isSymlink) {
     // Resolve symlinks only on explicit activation because targets may be protected by macOS TCC.

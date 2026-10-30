@@ -57,9 +57,7 @@ export function structuredLaunchOwner(
 
 /** Only a launch that takes the user to its chat may ask host publication to select it. */
 function launchHooks(args: ProvisionalLaunchArgs): StructuredAgentLaunchHooks {
-  return args.activate === false || args.canActivate
-    ? { ...args.hooks, activate: false }
-    : args.hooks
+  return args.activate === false ? { ...args.hooks, activate: false } : args.hooks
 }
 
 export type ProvisionalLaunchArgs = {
@@ -70,8 +68,6 @@ export type ProvisionalLaunchArgs = {
   targetGroupId?: string
   afterTabId?: string
   activate?: boolean
-  viewerSelection?: string
-  canActivate?: () => boolean
   /** Identity-only resumes publish on commit; unknown outcomes keep their recovery tab. */
   deferPublication?: true
   /** Allow workspace reveal before host acquisition, when the launch has no session ID or owned chat tab yet. */
@@ -106,7 +102,7 @@ export function beginStructuredAgentSessionProvisionalLaunch(
   ): ReturnType<typeof beginLocalProvisionalLaunch> => {
     if (launch?.tab) {
       tabOpened = true
-      if (args.activate !== false && args.canActivate?.() !== false) {
+      if (args.activate !== false) {
         focusIntent?.request(launch.tab.id)
       }
     } else if (!launch) {
@@ -208,9 +204,7 @@ function beginLocalProvisionalLaunch(
       agent: args.plan.agent,
       ...(args.targetGroupId ? { targetGroupId: args.targetGroupId } : {}),
       ...(args.afterTabId ? { afterTabId: args.afterTabId } : {}),
-      ...(args.activate !== undefined ? { activate: args.activate } : {}),
-      viewerSelection: args.viewerSelection,
-      canActivate: args.canActivate
+      ...(args.activate !== undefined ? { activate: args.activate } : {})
     })
     return { ...handle, tab }
   } catch (error) {
@@ -230,32 +224,7 @@ function beginDeferredPublication(
   const releaseHold = holdEmptyWorkspaceDefaultSurfaceForLaunch(worktreeId)
   let handle: StructuredAgentLaunchHandle | null
   try {
-    const hooks = launchHooks(args)
-    handle = args.plan.begin(
-      args.viewerSelection
-        ? {
-            ...hooks,
-            onStructuredReady: (sessionId) => {
-              hooks.onStructuredReady?.(sessionId)
-              if (!handle) {
-                return
-              }
-              openStructuredAgentSessionProvisionalTab({
-                worktreeId,
-                executionHostId: handle.executionHostId,
-                sessionId,
-                agent: args.plan.agent,
-                targetGroupId: args.targetGroupId,
-                afterTabId: args.afterTabId,
-                activate: args.activate,
-                viewerSelection: args.viewerSelection,
-                canActivate: args.canActivate
-              })
-            }
-          }
-        : hooks,
-      args.target
-    )
+    handle = args.plan.begin(launchHooks(args), args.target)
   } catch (error) {
     releaseHold()
     throw error

@@ -1,4 +1,3 @@
-import { noteViewerNavigation } from '@/lib/viewer-selection-request'
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { resolveGroupTabFromVisibleId } from '@/components/tab-group/tab-group-visible-id'
@@ -44,7 +43,6 @@ export function useFloatingTerminalCreateActions({
 }: FloatingTerminalCreateActionsInput) {
   const activateFloatingItem = useCallback(
     (visibleId: string) => {
-      noteViewerNavigation()
       const item = resolveGroupTabFromVisibleId(groupTabs, visibleId)
       if (!item) {
         return
@@ -69,7 +67,6 @@ export function useFloatingTerminalCreateActions({
 
   const createFloatingTerminalTab = useCallback(
     (shellOverride?: string) => {
-      noteViewerNavigation()
       const tabId = createBrowserUuid()
       createTab(FLOATING_TERMINAL_WORKTREE_ID, activeGroup?.id, shellOverride, { id: tabId })
       focusTerminalTabSurface(tabId)
@@ -78,7 +75,6 @@ export function useFloatingTerminalCreateActions({
   )
 
   const createFloatingBrowserTab = useCallback(() => {
-    noteViewerNavigation()
     if (!ensureClientCreationActionAllowed(FLOATING_TERMINAL_WORKTREE_ID, 'managed-browser')) {
       return
     }
@@ -95,7 +91,6 @@ export function useFloatingTerminalCreateActions({
   }, [activeGroup, browserDefaultUrl, createBrowserTab])
 
   const createFloatingMarkdownTab = useCallback(() => {
-    noteViewerNavigation()
     if (!markdownCwd) {
       return
     }

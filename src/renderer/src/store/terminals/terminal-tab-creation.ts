@@ -21,7 +21,6 @@ import {
   updateGroup
 } from '../slices/tab-group-state'
 import { dedupeTabOrder } from '../../../../shared/workspace-layout/tab-order'
-import { insertOpenPlacementTab } from '../../lib/session-tab-open-placement-order'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { emptySplitGroup, insertSplitGroup } from '../slices/tabs/tabs-group-actions'
 import { ownsGlobalSelection } from '../global-selection-owner'
@@ -203,15 +202,7 @@ export function createTerminalTabCreationActions(
           // Why: omit for non-agent tabs so they keep the implicit 'terminal' view mode.
           ...(options?.viewMode ? { viewMode: options.viewMode } : {})
         }
-        const nextGroupOrder =
-          options?.placement && !existingTerminalTab
-            ? insertOpenPlacementTab(
-                cleanedGroupOrder,
-                [...existingUnifiedTabs, unifiedTab],
-                unifiedTab.id,
-                options.placement
-              )
-            : dedupeTabOrder([...cleanedGroupOrder, unifiedTab.id])
+        const nextGroupOrder = dedupeTabOrder([...cleanedGroupOrder, unifiedTab.id])
         const nextRecent = shouldActivate
           ? pushRecentTabId(sanitizeRecentTabIds(group.recentTabIds, nextGroupOrder), unifiedTab.id)
           : sanitizeRecentTabIds(cleanedTargetGroup.recentTabIds, nextGroupOrder)

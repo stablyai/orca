@@ -29,7 +29,6 @@ export async function runLegacyNativeChatCliSwitch(args: {
   agent: AiVaultAgent
   chatTabId: string | null
   onComplete?: () => void
-  viewerSelection?: string
   reportFailure?: (error: unknown) => void
 }): Promise<void> {
   const key = `${args.executionHostId}\0${args.sessionId}\0legacy`

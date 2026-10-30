@@ -3,8 +3,6 @@ import type { WorkspaceLayoutCache } from '@/store/workspace-layout-cache'
 import type { TerminalTabTitleUpdate } from '@/store/slices/terminal-tab-title-batch'
 import type { PendingWorkspaceChanges } from './workspace-layout-frame-pending'
 import type { LayoutFrameSource } from './layout-frame-stream'
-import { LOCAL_STRUCTURED_SESSION_OWNER } from './local-structured-session-owner'
-import { frameOpenPlacements } from './workspace-layout-frame-open-selection'
 import { liveTitleUpdates } from './workspace-layout-frame-changes'
 
 /** Classify and take accumulated frame work before the ordinary store writer builds it. */
@@ -15,10 +13,6 @@ export function planLayoutFrameFlush(
   shown: Set<string>,
   source: LayoutFrameSource
 ) {
-  const owner =
-    source.target.kind === 'environment'
-      ? source.target.environmentId
-      : LOCAL_STRUCTURED_SESSION_OWNER
   const drawn = source.draws(state)
   const changed: string[] = []
   const fullBuilt: string[] = []
@@ -27,11 +21,7 @@ export function planLayoutFrameFlush(
   const titleUpdates: TerminalTabTitleUpdate[] = []
   for (const [key, layout] of Object.entries(cache)) {
     const changes = pending.get(key)
-    const opensHere =
-      !drawn(key) &&
-      frameOpenPlacements(state, layout, owner).some((entry) => entry.activate) &&
-      source.draws(state, new Set([key]))(key)
-    if (!drawn(key) && !opensHere) {
+    if (!drawn(key)) {
       // Frames the window did not draw: its next draw takes the full build.
       if (changes) {
         shown.delete(key)

@@ -1,12 +1,13 @@
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import {
+  useConversationSwitchBusy,
   useConversationSwitchReadiness,
   runCliChatResume,
   runNativeChatCliSwitch
 } from '@/lib/conversation-surface-switch'
 import { isNativeChatEnabled } from '../../../../shared/structured-native-chat-launch-route'
 import { useShallow } from 'zustand/react/shallow'
-import { MessagesSquare, SquareTerminal } from 'lucide-react'
+import { Loader2, MessagesSquare, SquareTerminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -61,6 +62,8 @@ function ChatSwitchAction({
         }
       : null
   )
+  const busy = useConversationSwitchBusy(readiness.pending)
+
   if (!chat || !agent || !inPlaceSwitchEnabled(agent)) {
     return null
   }
@@ -81,7 +84,7 @@ function ChatSwitchAction({
         })
       }
     >
-      <SquareTerminal />
+      {busy ? <Loader2 className="animate-spin" /> : <SquareTerminal />}
       {translate('components.tab.bar.switch.toCli', 'Switch to CLI')}
     </Button>
   )
@@ -97,6 +100,8 @@ function TerminalSwitchAction({
   const readiness = useConversationSwitchReadiness(
     source ? { direction: 'chat', ...source, source } : null
   )
+  const busy = useConversationSwitchBusy(readiness.pending)
+
   if (!source || !inPlaceSwitchEnabled(source.agent)) {
     return null
   }
@@ -108,7 +113,7 @@ function TerminalSwitchAction({
       title={readiness.explanation}
       onClick={() => void runCliChatResume(source, confirm)}
     >
-      <MessagesSquare />
+      {busy ? <Loader2 className="animate-spin" /> : <MessagesSquare />}
       {translate('components.tab.bar.switch.toNativeChat', 'Switch to native chat')}
     </Button>
   )

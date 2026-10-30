@@ -1,7 +1,5 @@
 import { structuredLaunchSlotIds } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
-import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
-import type { SessionTabOpenPlacement } from '../../../shared/session-tab-placement'
-import { insertOpenPlacementTab } from '../lib/session-tab-open-placement-order'
+import type { TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
 import {
   pickNextActiveTab,
   pushRecentTabId,
@@ -12,7 +10,6 @@ import {
 export type ClientOwnedAdoptedTab = {
   tabId: string
   groupId: string
-  openPlacement?: SessionTabOpenPlacement['placement']
 }
 
 export type ClientOwnedPlacementInput = {
@@ -22,7 +19,6 @@ export type ClientOwnedPlacementInput = {
   validUnifiedTabIds: ReadonlySet<string>
   /** Never-seen tabs in snapshot order; groupId is a hint (host group or fallback). */
   adoptedTabs: readonly ClientOwnedAdoptedTab[]
-  tabs?: readonly Tab[]
   /** Client-recorded placements; these are authoritative and may move an already-placed tab. */
   placementMoves: readonly ClientOwnedAdoptedTab[]
   /** Identity rekeys (provisional/local unified id → mirrored id); placement carries over. */
@@ -179,14 +175,7 @@ export function reconcileClientOwnedTabPlacement(
     }
     const target = ensureGroup(targetGroupId)
     if (!target.tabOrder.includes(adopted.tabId)) {
-      target.tabOrder = adopted.openPlacement
-        ? insertOpenPlacementTab(
-            target.tabOrder,
-            input.tabs ?? [],
-            adopted.tabId,
-            adopted.openPlacement
-          )
-        : [...target.tabOrder, adopted.tabId]
+      target.tabOrder.push(adopted.tabId)
     }
   }
 

@@ -1,6 +1,5 @@
 // Layout-owner windows draw main’s locally owned, held workspaces; paired servers remain mirror-owned. Local tab changes stay drawn until main answers (layout-owner-drawn-tab-holds). Records frames apply binding/title deltas directly and rebuild other changed workspaces from store. Startup/reopen/new/whole workspaces use full save/Loader builds (E2a/E2b).
 
-import { frameOpenSelectionPatch } from './workspace-layout-frame-open-selection'
 import { showFramePatch, withMovedTabsSelected } from '@/store/slices/tabs/moved-tab-selection'
 import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
@@ -50,7 +49,7 @@ import {
 
 type FrameSyncStore = {
   getState: () => AppState
-  setState: (patch: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void
+  setState: (patch: Partial<AppState>) => void
   subscribe: (listener: (state: AppState) => void) => () => void
 }
 
@@ -84,11 +83,8 @@ export function openWorkspaceLayoutFrameSync(
 
   /** The moved tabs' selections this flush's writes took. */
   let selectionsTaken: MovedTabSelection[] = []
-  const show = (
-    patch: LayoutFrameBuildPatch | ((current: AppState) => LayoutFrameBuildPatch),
-    select?: (current: AppState, accepted: Partial<AppState>) => Partial<AppState>
-  ): void => {
-    selectionsTaken.push(...showFramePatch(store, patch, select))
+  const show = (patch: LayoutFrameBuildPatch): void => {
+    selectionsTaken.push(...showFramePatch(store, patch))
   }
 
   // Pane trees show at once; only a tab the window's own pane command holds waits.
@@ -133,24 +129,10 @@ export function openWorkspaceLayoutFrameSync(
     // One update: a move's or rename's content rekeys with the frame that shows it.
     const rekeyed = shownContentRekeyPatch(state, cache)
     const base: AppState = { ...state, ...rekeyed }
-    const membership = {
+    show({
       ...rekeyed,
       ...layoutFrameFlushPatch(base, cache, { fullBuilt, workspaceBuilt, rebound }, holds)
-    }
-    let openSelectionTaken: Partial<AppState> = {}
-    show(membership, (current, accepted) =>
-      frameOpenSelectionPatch(
-        current,
-        accepted,
-        cache,
-        [...fullBuilt, ...workspaceBuilt],
-        source.target,
-        true,
-        (selection) => {
-          openSelectionTaken = { ...openSelectionTaken, ...selection }
-        }
-      )
-    )
+    })
     if (titleUpdates.length > 0) {
       store.getState().updateTabTitles(titleUpdates)
     }
@@ -180,13 +162,7 @@ export function openWorkspaceLayoutFrameSync(
       workspaceBuilt,
       rowFieldsTaken,
       held: holds.held,
-      selectTakenMovedTabs: (built) => {
-        const moved = withMovedTabsSelected(built, selectionsTaken)
-        return {
-          ...moved,
-          ...openSelectionTaken
-        }
-      }
+      selectTakenMovedTabs: (state) => withMovedTabsSelected(state, selectionsTaken)
     })
     followHeldTabs()
   }

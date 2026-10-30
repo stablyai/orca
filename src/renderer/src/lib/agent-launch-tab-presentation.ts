@@ -1,6 +1,3 @@
-import { isSessionTabSelectionRequest } from '../../../shared/session-tab-placement'
-import { selectSessionTabForViewer } from '@/runtime/web-session-tabs-sync/store-patch'
-import { conversationSwitchViewerSelectionCurrent } from '@/lib/conversation-switch-selection'
 import type { AgentLaunchTabViewerRule } from '../../../shared/agent-launch-tab-publication'
 import { focusTerminalInitiatedTab } from '../hooks/ipc-events/terminal-command-state'
 import { useAppStore } from '../store'
@@ -11,24 +8,8 @@ export function presentAgentLaunchTab(
   viewer: AgentLaunchTabViewerRule,
   worktreeId: string,
   tabId: string,
-  leafId?: string,
-  viewerSelection?: string
+  leafId?: string
 ): void {
-  if (!conversationSwitchViewerSelectionCurrent(viewerSelection)) {
-    return
-  }
-  if (viewerSelection && isSessionTabSelectionRequest(viewerSelection)) {
-    const state = useAppStore.getState()
-    if (
-      viewer === 'focus-window' ||
-      (viewer === 'focus-in-workspace' && state.activeWorktreeId === worktreeId)
-    ) {
-      if (selectSessionTabForViewer(worktreeId, tabId, viewerSelection)) {
-        focusTerminalInitiatedTab(tabId, leafId, worktreeId)
-      }
-    }
-    return
-  }
   if (viewer === 'focus-window') {
     revealWorkspaceSurface(useAppStore.getState(), worktreeId, [tabId])
   }

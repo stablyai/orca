@@ -1,8 +1,3 @@
-import {
-  captureSessionTabPlacement,
-  placeUnpinnedSessionTabAtCapture,
-  type CapturedSessionTabPlacement
-} from '../../../shared/session-tab-placement'
 import { insertUnifiedTabAfterAnchor } from '../lib/unified-tab-anchor-insertion'
 import { useAppStore } from '../store'
 import {
@@ -25,38 +20,12 @@ function anchorUnifiedTabId(worktreeId: string, afterTabId: string): string {
     : toWebTerminalSurfaceTabId(webTerminalPlacementParentTabId(toHostSessionTabId(afterTabId)))
 }
 
-/** Capture before creation can retire the anchor on the execution host. */
-export function captureWebRuntimeTerminalPlacement(args: {
-  worktreeId: string
-  afterTabId?: string
-  targetGroupId?: string
-}) {
-  const sourceGroup = useAppStore
-    .getState()
-    .groupsByWorktree[args.worktreeId]?.find(
-      (group) => args.afterTabId && group.tabOrder.includes(args.afterTabId)
-    )
-  return {
-    placementGroupId: args.targetGroupId ?? sourceGroup?.id,
-    captured:
-      !args.targetGroupId || args.targetGroupId === sourceGroup?.id
-        ? captureSessionTabPlacement(sourceGroup?.tabOrder ?? [], args.afterTabId)
-        : undefined
-  }
-}
-
 /** Settle the placement once the mirrored tab exists (bounded poll), then consume the record. */
 export async function settleWebRuntimeTerminalPlacement(
   environmentId: string,
   worktreeId: string,
   hostTabId: string,
-  placement: {
-    groupId?: string
-    afterTabId?: string
-    activate: boolean
-    canActivate?: () => boolean
-    captured?: CapturedSessionTabPlacement
-  }
+  placement: { groupId?: string; afterTabId?: string; activate: boolean }
 ): Promise<void> {
   const unifiedTabId = toWebTerminalSurfaceTabId(hostTabId)
   const findTab = () =>
@@ -89,29 +58,13 @@ export async function settleWebRuntimeTerminalPlacement(
     if (tab.groupId !== targetGroup.id) {
       // Snapshot may beat placement recording; repair through the same client-owned move as user drags.
       state.moveUnifiedTabToGroup(unifiedTabId, targetGroup.id, {
-        activate: placement.activate && placement.canActivate?.() !== false,
+        activate: placement.activate,
         recordInteraction: false
       })
     }
-    if (anchorId && targetGroup.tabOrder.includes(anchorId)) {
+    if (anchorId) {
+      // The create caller owns this insertion; subsequent host snapshots preserve client order.
       insertUnifiedTabAfterAnchor(worktreeId, unifiedTabId, anchorId)
-    } else if (placement.captured) {
-      const current = useAppStore.getState()
-      const group = current.groupsByWorktree[worktreeId]?.find(
-        (group) => group.id === targetGroup.id
-      )
-      if (group) {
-        current.reorderUnifiedTabs(
-          group.id,
-          placeUnpinnedSessionTabAtCapture(
-            group.tabOrder,
-            current.unifiedTabsByWorktree[worktreeId] ?? [],
-            unifiedTabId,
-            placement.captured
-          ),
-          { recordInteraction: false }
-        )
-      }
     }
   } finally {
     forgetWebSessionTerminalPlacement({ environmentId, worktreeId, hostTabId })

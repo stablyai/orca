@@ -1,4 +1,3 @@
-import { noteViewerNavigation } from '@/lib/viewer-selection-request'
 import { toast } from 'sonner'
 import { useAppStore } from '../../store'
 import { focusTerminalTabSurface } from '../../lib/focus-terminal-tab-surface'
@@ -41,14 +40,12 @@ export function useTabGroupCreationCommands({
 
   return {
     newBrowserTab: () => {
-      noteViewerNavigation()
       void openNewBrowserTabInActiveWorkspace(groupId).catch((error) => {
         toast.error(error instanceof Error ? error.message : String(error))
       })
     },
     newSimulatorTab: worktreeState.mobileEmulatorEnabled
       ? () => {
-          noteViewerNavigation()
           if (getSimulatorTabForWorktree(worktreeId)) {
             void ensureSimulatorTab(worktreeId, { surfacePane: true })
             return
@@ -62,11 +59,9 @@ export function useTabGroupCreationCommands({
         }
       : undefined,
     openEntry: async (args: TabCreateEntryArgs) => {
-      noteViewerNavigation()
       await openTabBarEntry(args)
     },
     duplicateBrowserTab: (browserTabId: string, sourceUnifiedTabId: string) => {
-      noteViewerNavigation()
       void (async () => {
         const state = useAppStore.getState()
         const tabs = state.browserTabsByWorktree[worktreeId] ?? []
@@ -115,15 +110,12 @@ export function useTabGroupCreationCommands({
     },
     // Why: target the owning group explicitly; the "+" menu can fire from an unfocused panel without updating global group focus.
     newFileTab: async () => {
-      noteViewerNavigation()
       await openNewMarkdownInActiveWorkspace(groupId)
     },
     newTerminalTab: () => {
-      noteViewerNavigation()
       void openNewTerminalTabInActiveWorkspace(groupId)
     },
     newTerminalWithShell: (shellOverride: string) => {
-      noteViewerNavigation()
       void (async () => {
         const environmentId = runtimeEnvironmentIdOrLocalUnlessTwin(
           useAppStore.getState(),

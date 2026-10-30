@@ -1,11 +1,3 @@
-import {
-  beginViewerSelectionRequest,
-  disposeViewerSelection,
-  viewerSelectionOutcome
-} from './viewer-selection-request'
-import { agentSessionSwitchDeadline } from '../../../shared/agent-session-switch-execution'
-import { noteUserWorkspaceSwitch } from './workspace-switch-user-act'
-import { _resetLayoutFramePositionForTests } from '@/runtime/layout-frame-position'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type { AgentLaunchTabPublishRequest } from '../../../shared/agent-launch-tab-publication'
@@ -32,8 +24,6 @@ vi.mock('@/store', () => {
   return {
     useAppStore: {
       getState: () => current().getState(),
-      setState: (...args: Parameters<ReturnType<typeof createTestStore>['setState']>) =>
-        current().setState(...args),
       subscribe: (listener: () => void) => current().subscribe(listener)
     }
   }
@@ -97,14 +87,12 @@ const launchPane = () =>
   store.getState().tabsByWorktree[WT]?.find((tab) => tab.id === TAB_ID)?.agentLaunchPane
 
 beforeEach(() => {
-  _resetLayoutFramePositionForTests()
   store = createTestStore()
   testStore.current = store
   focusTerminalInitiatedTab.mockClear()
   store.getState().setActiveWorktree(WT)
 })
 afterEach(() => {
-  disposeViewerSelection()
   _resetUndrawnLaunchTabsForTests()
   frames.flowing = false
   frames.holdsTab = true
@@ -143,7 +131,6 @@ describe("a launch tab main wrote, in a layout-owner build's window", () => {
       worktreeId: WT,
       tabId: TAB_ID,
       leafId: LEAF_ID,
-      operationId: 'op-1',
       verdict: { kind: 'not-started', code: 'boom' }
     })
 
@@ -160,7 +147,6 @@ describe("a launch tab main wrote, in a layout-owner build's window", () => {
       worktreeId: WT,
       tabId: TAB_ID,
       leafId: LEAF_ID,
-      operationId: 'op-1',
       verdict: { kind: 'unconfirmed' }
     })
 
@@ -179,7 +165,6 @@ describe("a launch tab main wrote, in a layout-owner build's window", () => {
       worktreeId: WT,
       tabId: TAB_ID,
       leafId: LEAF_ID,
-      operationId: 'op-1',
       verdict: { kind: 'proceed' }
     })
 
@@ -197,7 +182,6 @@ describe("a launch tab main wrote, in a layout-owner build's window", () => {
       worktreeId: WT,
       tabId: TAB_ID,
       leafId: LEAF_ID,
-      operationId: 'op-1',
       verdict: { kind: 'withdrawn' }
     })
 
@@ -228,59 +212,3 @@ describe("a launch tab main wrote, in a layout-owner build's window", () => {
     expect(agentLaunchPanePrompt(TAB_ID)).toBeNull()
   })
 })
-
-it.each([false, true])(
-  'the actual undrawn callback fulfils once, preserving a newer user choice=%s',
-  (navigate) => {
-    const other = store.getState().createTab(WT)
-    const deadline = agentSessionSwitchDeadline(Date.now)
-    try {
-      const older = beginViewerSelectionRequest('older-dialog', deadline)
-      const selection = beginViewerSelectionRequest('accepted-action', deadline)
-      selection.accept()
-      older.accept()
-      expect(viewerSelectionOutcome(selection.token)).toBe('pending')
-      keepAgentLaunchTabMainWrote(
-        request({
-          viewer: 'focus-window',
-          openPlacement: {
-            invocationId: 'accepted-action',
-            generation: 'op-1',
-            placement: {},
-            activate: true,
-            viewerSelection: selection.token
-          }
-        })
-      )
-      expect(viewerSelectionOutcome(selection.token)).toBe('pending')
-      expect(revealWorkspaceSurface).not.toHaveBeenCalled()
-      if (navigate) {
-        noteUserWorkspaceSwitch(WT)
-        store
-          .getState()
-          .activateTab(
-            store.getState().unifiedTabsByWorktree[WT].find((tab) => tab.entityId === other.id)!.id
-          )
-      }
-      drawMainTab()
-      expect(viewerSelectionOutcome(selection.token)).toBe(navigate ? 'superseded' : 'fulfilled')
-      expect(store.getState().getActiveTab(WT)?.entityId).toBe(navigate ? other.id : TAB_ID)
-      const focusCount = focusTerminalInitiatedTab.mock.calls.length
-      keepAgentLaunchTabMainWrote(
-        request({
-          viewer: 'focus-window',
-          openPlacement: {
-            invocationId: 'accepted-action',
-            generation: 'op-1',
-            placement: {},
-            activate: true,
-            viewerSelection: selection.token
-          }
-        })
-      )
-      expect(focusTerminalInitiatedTab).toHaveBeenCalledTimes(focusCount)
-    } finally {
-      deadline.dispose()
-    }
-  }
-)

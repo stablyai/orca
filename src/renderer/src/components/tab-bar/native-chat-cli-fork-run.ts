@@ -51,7 +51,6 @@ export async function runNativeChatCliFork(args: {
   subject: NativeChatCliForkSubject
   tab: { id: string; worktreeId: string }
   agent: AiVaultAgent
-  viewerSelection?: string
   queuedMessage?: string
   describeFailure?: (message: string) => string
   onComplete?: () => void
@@ -149,8 +148,7 @@ export async function runNativeChatCliFork(args: {
       {
         agent: target.agent,
         worktreeId: subject.workspaceId,
-        ...startup,
-        ...(args.viewerSelection ? { viewerSelection: args.viewerSelection } : {})
+        ...startup
       },
       args.describeFailure ?? describeAiVaultCliForkFailure,
       args.queuedMessage
