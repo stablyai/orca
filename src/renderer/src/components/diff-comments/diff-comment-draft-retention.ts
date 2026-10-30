@@ -1,4 +1,4 @@
-import { useEffect, type RefObject } from 'react'
+import { useEffect, useRef, type RefObject } from 'react'
 import { setWithLRU } from '@/lib/scroll-cache'
 import type { DiffCommentDraft } from './diff-comment-draft-zone'
 
@@ -41,6 +41,23 @@ export function clearRetainedDiffCommentDraft(key: string | undefined): void {
   }
 }
 
+// A carried draft belongs to the key it was typed under; its cleanup already stored it there.
+function useDropPendingDraftOnKeyChange(
+  key: string | undefined,
+  pendingDraftRef: RefObject<RetainedDiffCommentDraft | null>,
+  cancelReanchorFrame: () => void
+): void {
+  const previousKeyRef = useRef(key)
+  useEffect(() => {
+    if (previousKeyRef.current === key) {
+      return
+    }
+    previousKeyRef.current = key
+    cancelReanchorFrame()
+    pendingDraftRef.current = null
+  }, [cancelReanchorFrame, key, pendingDraftRef])
+}
+
 export function useRetainedDiffCommentDraft({
   key,
   editorReady,
@@ -56,6 +73,7 @@ export function useRetainedDiffCommentDraft({
   scheduleReanchor: () => void
   cancelReanchorFrame: () => void
 }): void {
+  useDropPendingDraftOnKeyChange(key, pendingDraftRef, cancelReanchorFrame)
   useEffect(() => {
     if (!editorReady || !canOpenDraft || pendingDraftRef.current) {
       return
@@ -66,7 +84,13 @@ export function useRetainedDiffCommentDraft({
     }
     pendingDraftRef.current = retained
     scheduleReanchor()
-    return cancelReanchorFrame
+    return () => {
+      cancelReanchorFrame()
+      // Teardown before the reanchor frame mounts the card must not strand the taken draft.
+      if (pendingDraftRef.current === retained) {
+        retainDiffCommentDraft(key, retained)
+      }
+    }
   }, [canOpenDraft, cancelReanchorFrame, editorReady, key, pendingDraftRef, scheduleReanchor])
 }
 

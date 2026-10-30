@@ -3,6 +3,7 @@ import { act, fireEvent, renderHook, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   useDiffCommentDraftZone,
+  type DiffCommentDraftZoneHandle,
   type UseDiffCommentDraftZoneArgs
 } from './diff-comment-draft-zone'
 import {
@@ -34,7 +35,10 @@ function renderRetainedDraftZone(
   )
 }
 
-function openDraftAt(hook: ReturnType<typeof renderDraftZone>, lineNumber: number): void {
+function openDraftAt(
+  hook: { result: { current: DiffCommentDraftZoneHandle } },
+  lineNumber: number
+): void {
   act(() => {
     hook.result.current.onAddCommentClickRef.current({ lineNumber, top: 0 })
   })
@@ -323,6 +327,45 @@ describe('useDiffCommentDraftZone teardown', () => {
     expect(draftCard(replacement).textarea.value).toBe(BODY)
     expect([...replacement.zones.values()][0].afterLineNumber).toBe(DRAFT_LINE)
     returned.unmount()
+  })
+
+  it('keeps a draft when its file unmounts before the reanchor frame mounts the card', () => {
+    const firstFile = createFakeDiffCommentEditor()
+    const brief = createFakeDiffCommentEditor()
+    const replacement = createFakeDiffCommentEditor()
+    const onCreateComment = vi.fn().mockResolvedValue(true)
+    const first = renderRetainedDraftZone(firstFile, 'file-a', onCreateComment)
+    openDraftAt(first, DRAFT_LINE)
+    typeDraft(firstFile, BODY)
+    first.unmount()
+
+    renderRetainedDraftZone(brief, 'file-a', onCreateComment).unmount()
+    const returned = renderRetainedDraftZone(replacement, 'file-a', onCreateComment)
+    pumpFrames()
+
+    expect(draftCard(replacement).textarea.value).toBe(BODY)
+    returned.unmount()
+  })
+
+  it('does not reopen a draft under a different retention key', () => {
+    const fake = createFakeDiffCommentEditor()
+    const onCreateComment = vi.fn().mockResolvedValue(true)
+    const hook = renderHook(
+      ({ draftRetentionKey }: { draftRetentionKey: string }) =>
+        useDiffCommentDraftZone({ editor: fake.editor, draftRetentionKey, onCreateComment }),
+      { initialProps: { draftRetentionKey: 'file-a' } }
+    )
+    openDraftAt(hook, DRAFT_LINE)
+    typeDraft(fake, BODY)
+
+    hook.rerender({ draftRetentionKey: 'file-b' })
+    pumpFrames()
+    expect(fake.zones.size).toBe(0)
+
+    hook.rerender({ draftRetentionKey: 'file-a' })
+    pumpFrames()
+    expect(draftCard(fake).textarea.value).toBe(BODY)
+    hook.unmount()
   })
 
   it('does not retain a cancelled or successfully submitted draft across file switches', async () => {
