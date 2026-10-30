@@ -1228,9 +1228,7 @@
         "jira": {
           "856083302c": "Jira 連線已被新的請求取代。"
         },
-        "linear": {
-          "37d36984d0": "Linear 連線已被新的請求取代。"
-        },
+        "linear": {},
         "orca": {
           "profiles": {
             "612f7f6861": "建立設定檔失敗",
@@ -8193,18 +8191,6 @@
           "191ac34567": "代理程式編排",
           "nestedWorkerDepthTitle": "巢狀工作者層數",
           "nestedWorkerDepthDescription": "允許派出的工作者再派出工作者的最大層數。設為 1 時，代理程式樹維持單層：協調者可派出工作者，但工作者不能再派出其他工作者。",
-          "chatErrorEscalationTitle": "將聊天錯誤回報給協調代理程式",
-          "chatErrorEscalationDescription": "當分派的代理程式遇到導致回合結束的錯誤時，將原始錯誤傳送給分派它的協調代理程式。任務仍由該代理程式負責。僅適用於在聊天介面中執行的代理程式。",
-          "chatErrorEscalationKeywordError": "錯誤",
-          "chatErrorEscalationKeywordChat": "聊天",
-          "heartbeatTitle": "工作代理程式心跳",
-          "heartbeatDescription": "分派的工作代理程式每隔幾分鐘會回報一次，讓協調代理程式判斷代理程式是在工作還是已無回應。關閉後，傳送給協調代理程式的訊息會減少，但也會失去這個回報訊號。此設定適用於變更後分派的工作代理程式。",
-          "heartbeatKeywordHeartbeat": "心跳",
-          "heartbeatKeywordStalled": "停滯",
-          "heartbeatKeywordInterval": "間隔",
-          "heartbeatIntervalTitle": "心跳間隔",
-          "heartbeatIntervalDescription": "間隔越短，協調代理程式收到的回報越頻繁，但訊息也越多。間隔越長，訊息越少，但兩次回報之間的空檔也越長。此設定適用於變更後分派的工作代理程式。",
-          "heartbeatIntervalSuffix": "分鐘",
           "7bc082f4de": "複製安裝命令"
         },
         "OrchestrationSetupCard": {
@@ -12821,7 +12807,6 @@
           "previous": "上一版",
           "updated": "更新時間",
           "license": "授權",
-          "homepage": "首頁",
           "whatsNew": "新功能"
         },
         "PluginDetailPage": {
@@ -12948,6 +12933,15 @@
         },
         "pluginTryAction": {
           "incompleteLanguage": "此語言套件過於不完整，無法切換。"
+        },
+        "PluginUpdateReviewToast": {
+          "movedTitle": "{{value0}} {{value1}} 來自不同的儲存庫",
+          "accessTitle": "{{value0}} {{value1}} 要求更多存取權限",
+          "manyTitle": "{{value0}} 個外掛程式更新等待你審查",
+          "oneDescription": "發佈者：{{value0}}。在你審查之前不會更新。",
+          "manyDescription": "在你審查之前不會更新。",
+          "review": "審查",
+          "dismiss": "關閉"
         }
       },
       "right": {
@@ -18128,6 +18122,13 @@
           "confirm": "登入",
           "cancel": "取消"
         },
+        "javaScriptDialog": {
+          "title": "{{origin}} 顯示",
+          "anonymousTitle": "此網頁顯示",
+          "confirm": "確定",
+          "cancel": "取消",
+          "answer": "回答"
+        },
         "sitePermission": {
           "label": {
             "camera": "攝影機",
@@ -21835,10 +21836,7 @@
       "issuesLoadFailed": "無法載入 Linear 議題。",
       "listLabel": "Linear 清單",
       "localKeyStorage": "本機執行環境的金鑰會儲存在此裝置上，並在可用時使用 Electron 的加密儲存功能。",
-      "projectIssuesLoadFailed": "無法載入專案議題。",
-      "projectLoadFailed": "無法載入專案。",
       "projectNotFound": "找不到專案。",
-      "projectsLoadFailed": "無法載入專案。",
       "remoteKeyStorage": "此金鑰由目前使用中的遠端執行環境儲存。",
       "titleUpdateFailed": "無法更新標題",
       "truncated": {
@@ -21855,8 +21853,6 @@
       },
       "updateAccess": "更新存取權限",
       "updateWorkspaceAccess": "更新 {{workspace}} 的 Linear 存取權限",
-      "viewContentsLoadFailed": "無法載入檢視內容。",
-      "viewsLoadFailed": "無法載入檢視。",
       "workspaceApiKeyHint": "請貼上 {{workspace}} 的個人 API 金鑰。若此工作區已連線，Orca 會取代已儲存的金鑰。"
     }
   },

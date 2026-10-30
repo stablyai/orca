@@ -1256,9 +1256,7 @@
         "jira": {
           "856083302c": "Jira bağlantısının yerini daha yeni bir istek aldı."
         },
-        "linear": {
-          "37d36984d0": "Linear bağlantısının yerini daha yeni bir istek aldı."
-        },
+        "linear": {},
         "orca": {
           "profiles": {
             "612f7f6861": "Profil oluşturulamadı",
@@ -8356,18 +8354,6 @@
           "191ac34567": "Ajan Orkestrasyonu",
           "nestedWorkerDepthTitle": "İç içe çalışan derinliği",
           "nestedWorkerDepthDescription": "Gönderilen çalışanların kendi çalışanlarını kaç nesil boyunca oluşturabileceği. 1 değeri ajan ağacını düz tutar: bir koordinatör çalışanlar gönderir ve bu çalışanlar kendileri çalışan göndermez.",
-          "chatErrorEscalationTitle": "Sohbet hatalarını koordinatöre bildir",
-          "chatErrorEscalationDescription": "Görevlendirilen bir ajanın turu bir hata yüzünden sonlandığında, hatanın tam metni onu görevlendiren koordinatöre gönderilir. Görev ajana atanmış olarak kalır. Yalnızca sohbet arayüzünde çalışan ajanlar için geçerlidir.",
-          "chatErrorEscalationKeywordError": "hata",
-          "chatErrorEscalationKeywordChat": "sohbet",
-          "heartbeatTitle": "Çalışan ajanların yaşam sinyalleri",
-          "heartbeatDescription": "Görevlendirilen ajanlar birkaç dakikada bir durum bildirir; böylece koordinatör, çalışan ajanlarla takılı kalanları ayırt edebilir. Bu ayar kapatıldığında koordinatöre daha az mesaj gider, ancak koordinatör bu durum sinyalini kaybeder. Değişiklikten sonra görevlendirilen ajanlar için geçerlidir.",
-          "heartbeatKeywordHeartbeat": "yaşam sinyali",
-          "heartbeatKeywordStalled": "takılı kalmış",
-          "heartbeatKeywordInterval": "aralık",
-          "heartbeatIntervalTitle": "Yaşam sinyali aralığı",
-          "heartbeatIntervalDescription": "Daha kısa aralıklar koordinatöre daha sık durum bildirimi, dolayısıyla daha fazla mesaj gönderilmesini sağlar. Daha uzun aralıklar daha az mesaj gönderir, ancak durum bildirimleri arasında daha uzun boşluklar bırakır. Değişiklikten sonra görevlendirilen ajanlar için geçerlidir.",
-          "heartbeatIntervalSuffix": "dakika",
           "7bc082f4de": "Kurulum komutunu kopyala"
         },
         "OrchestrationSetupCard": {
@@ -12984,7 +12970,6 @@
           "previous": "Önceki",
           "updated": "Güncellendi",
           "license": "Lisans",
-          "homepage": "Web sitesi",
           "whatsNew": "Yenilikler"
         },
         "PluginDetailPage": {
@@ -13111,6 +13096,15 @@
         },
         "pluginTryAction": {
           "incompleteLanguage": "Bu dil paketi geçiş yapılamayacak kadar eksik."
+        },
+        "PluginUpdateReviewToast": {
+          "movedTitle": "{{value0}} {{value1}} farklı bir depodan geliyor",
+          "accessTitle": "{{value0}} {{value1}} daha fazla erişim istiyor",
+          "manyTitle": "{{value0}} eklenti güncellemesi incelemenizi bekliyor",
+          "oneDescription": "Yayıncı: {{value0}}. Siz inceleyene kadar güncellenmeyecek.",
+          "manyDescription": "Siz inceleyene kadar güncellenmeyecekler.",
+          "review": "İncele",
+          "dismiss": "Kapat"
         }
       },
       "right": {
@@ -18367,6 +18361,13 @@
           "confirm": "Oturum aç",
           "cancel": "İptal"
         },
+        "javaScriptDialog": {
+          "title": "{{origin}} diyor ki",
+          "anonymousTitle": "Bu sayfa diyor ki",
+          "confirm": "Tamam",
+          "cancel": "İptal",
+          "answer": "Yanıt"
+        },
         "sitePermission": {
           "label": {
             "camera": "Kamera",
@@ -22150,10 +22151,7 @@
       "issuesLoadFailed": "Linear sorunları yüklenemedi.",
       "listLabel": "Linear listesi",
       "localKeyStorage": "Yerel çalışma zamanı anahtarları bu cihazda saklanır; kullanılabiliyorsa Electron'un şifreli depolaması kullanılır.",
-      "projectIssuesLoadFailed": "Proje sorunları yüklenemedi.",
-      "projectLoadFailed": "Proje yüklenemedi.",
       "projectNotFound": "Proje bulunamadı.",
-      "projectsLoadFailed": "Projeler yüklenemedi.",
       "remoteKeyStorage": "Bu anahtar etkin uzak çalışma zamanı tarafından saklanır.",
       "titleUpdateFailed": "Başlık güncellenemedi",
       "truncated": {
@@ -22170,8 +22168,6 @@
       },
       "updateAccess": "Erişimi güncelle",
       "updateWorkspaceAccess": "{{workspace}} için Linear erişimini güncelle",
-      "viewContentsLoadFailed": "Görünüm içeriği yüklenemedi.",
-      "viewsLoadFailed": "Görünümler yüklenemedi.",
       "workspaceApiKeyHint": "{{workspace}} için bir Kişisel API anahtarı yapıştırın. Bu çalışma alanı zaten bağlıysa Orca kayıtlı anahtarını değiştirir."
     }
   },

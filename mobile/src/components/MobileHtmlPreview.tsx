@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { Code, Eye } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { htmlPreviewWithInertLinks } from './html-preview-inert-links'
@@ -117,7 +117,7 @@ const styles = themedStyleSheet(() => ({
     gap: 5,
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   toggleActive: {

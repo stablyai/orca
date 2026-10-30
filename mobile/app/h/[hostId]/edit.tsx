@@ -20,21 +20,11 @@ import { resolveHostEndpointEdit } from '../../../src/transport/host-endpoint-ed
 import { usePrimeHosts, useRefreshHostClient } from '../../../src/transport/host-client-hooks'
 import type { HostProfile } from '../../../src/transport/types'
 import { hostOs } from '../../../src/platform/host-os'
-import { SideSafeArea } from '../../../src/layout/side-safe-area'
 import { translate } from '../../../src/i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../src/i18n/use-mobile-translation'
 import { TextField } from '../../../src/components/composer-input/TextField'
 
-// The host group leaves the Duo's status-bar rail to its pages; this native screen pads it.
-export default function EditHostRoute() {
-  return (
-    <SideSafeArea>
-      <EditHostScreen />
-    </SideSafeArea>
-  )
-}
-
-function EditHostScreen() {
+export default function EditHostScreen() {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const router = useRouter()
@@ -328,7 +318,7 @@ const styles = themedStyleSheet(() => ({
     minWidth: 64,
     height: 34,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.surfaceBright,
     alignItems: 'center',
     justifyContent: 'center'
@@ -395,7 +385,7 @@ const styles = themedStyleSheet(() => ({
     alignSelf: 'flex-start',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   secondaryButtonText: {

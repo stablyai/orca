@@ -50,7 +50,7 @@ export function registerJournalWriteQueueTests(): void {
 
   afterEach(async () => {
     await Promise.allSettled(opened.splice(0).map((journal) => journal.close()))
-    closeTestJournalHostDatabases()
+    await closeTestJournalHostDatabases()
     await rm(root, { recursive: true, force: true })
   })
 

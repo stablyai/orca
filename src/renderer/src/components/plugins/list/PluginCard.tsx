@@ -4,6 +4,7 @@ import { Badge } from '../../ui/badge'
 import { PluginCardArt, type PluginArtPalette } from './PluginCardArt'
 import type { PluginListEntry } from './plugin-list-entries'
 import { pluginArtShortcut, pluginArtTypes } from './PluginRowArt'
+import { servedPluginHostImages } from '../../../../../shared/plugins/images/plugin-image-url'
 
 type PluginCardProps = {
   entry: PluginListEntry
@@ -34,7 +35,9 @@ export function PluginCard({
   onIntent,
   onIntentEnd
 }: PluginCardProps): React.JSX.Element {
-  const cover = entry.installed?.images?.cover ?? entry.listing?.images?.cover
+  const cover =
+    servedPluginHostImages(entry.installed?.images)?.cover ??
+    servedPluginHostImages(entry.listing?.images)?.cover
   return (
     <li
       data-plugin-key={entry.pluginKey}

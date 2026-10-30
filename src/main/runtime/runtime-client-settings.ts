@@ -127,18 +127,16 @@ export class RuntimeClientSettingsController {
     }
     const beforeSettings = this.store.getSettings()
     const before = beforeSettings.agentStatusHooksEnabled !== false
+    const { agentDefaultArgs, agentDefaultEnv, ...otherUpdates } = updates
     // Legacy clients can select an agent or a shell, but cannot select None.
     this.store.updateSettings(
       {
-        ...updates,
+        ...otherUpdates,
         // An older client writes Arguments as it reads them, flag included.
-        ...(updates.agentDefaultArgs !== undefined || updates.agentDefaultEnv !== undefined
+        ...(agentDefaultArgs !== undefined || agentDefaultEnv !== undefined
           ? legacyLaunchTextUpdates(
               beforeSettings,
-              {
-                agentDefaultArgs: updates.agentDefaultArgs,
-                agentDefaultEnv: updates.agentDefaultEnv
-              },
+              { agentDefaultArgs, agentDefaultEnv },
               process.platform
             )
           : {}),

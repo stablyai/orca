@@ -92,7 +92,7 @@ it('persists unknown Set objective and receipt across reopen, without replay ove
   await abandonStructuredAgentSessionHost(host)
   await hostTestRecoveryCapsuleSettled()
   const database = host.deps.journalDatabase
-  closeTestJournalHostDatabase(root)
+  await closeTestJournalHostDatabase(root)
   expect(database.isClosed).toBe(true)
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({

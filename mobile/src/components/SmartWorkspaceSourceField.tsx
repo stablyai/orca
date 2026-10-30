@@ -146,7 +146,7 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     gap: spacing.sm,
     backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
+    borderRadius: radii.pill,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderWidth: 1,

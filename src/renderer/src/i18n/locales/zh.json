@@ -835,9 +835,7 @@
         "jira": {
           "856083302c": "Jira 连接已被新的请求取代。"
         },
-        "linear": {
-          "37d36984d0": "Linear 连接已被新的请求取代。"
-        },
+        "linear": {},
         "orca": {
           "profiles": {
             "612f7f6861": "创建配置文件失败",
@@ -7699,18 +7697,6 @@
           "191ac34567": "智能体编排",
           "nestedWorkerDepthTitle": "工作智能体嵌套深度",
           "nestedWorkerDepthDescription": "已派发的工作智能体可以再派发自己的工作智能体的层数。设为 1 时智能体树保持扁平：协调者派发工作智能体，这些工作智能体不再派发。",
-          "chatErrorEscalationTitle": "将聊天错误告知协调者",
-          "chatErrorEscalationDescription": "当被分派的智能体遇到结束其回合的错误时，将原始错误发送给分派它的协调者。任务仍分配给该智能体。仅适用于在聊天界面中运行的智能体。",
-          "chatErrorEscalationKeywordError": "错误",
-          "chatErrorEscalationKeywordChat": "聊天",
-          "heartbeatTitle": "工作者心跳",
-          "heartbeatDescription": "已分派的工作者每隔几分钟报告一次，让协调者能区分正在工作的智能体和卡住的智能体。关闭后发给协调者的消息会减少，但协调者也不再收到这一报告信号。仅对更改后分派的工作者生效。",
-          "heartbeatKeywordHeartbeat": "心跳",
-          "heartbeatKeywordStalled": "卡住",
-          "heartbeatKeywordInterval": "间隔",
-          "heartbeatIntervalTitle": "心跳间隔",
-          "heartbeatIntervalDescription": "间隔越短，协调者收到报告越频繁，但消息也越多。间隔越长，消息越少，但两次报告之间的空档也越长。仅对更改后分派的工作者生效。",
-          "heartbeatIntervalSuffix": "分钟",
           "7bc082f4de": "复制安装命令"
         },
         "OrchestrationSetupCard": {
@@ -11402,7 +11388,6 @@
         },
         "PluginThemeUseNow": {
           "label": "立即使用：",
-          "useName": "立即使用：{{value0}}",
           "useForLight": "用于浅色：",
           "useForDark": "用于深色："
         },
@@ -12560,7 +12545,6 @@
           "previous": "上一版本",
           "updated": "更新于",
           "license": "许可证",
-          "homepage": "主页",
           "whatsNew": "新功能",
           "hashCopied": "已复制内容哈希",
           "hashCopyFailed": "无法复制哈希。"
@@ -12648,6 +12632,15 @@
         },
         "pluginTryAction": {
           "incompleteLanguage": "此语言包过于不完整，无法切换。"
+        },
+        "PluginUpdateReviewToast": {
+          "movedTitle": "{{value0}} {{value1}} 来自不同的仓库",
+          "accessTitle": "{{value0}} {{value1}} 请求更多访问权限",
+          "manyTitle": "{{value0}} 个插件更新等待你审核",
+          "oneDescription": "发布者：{{value0}}。在你审核之前不会更新。",
+          "manyDescription": "在你审核之前不会更新。",
+          "review": "审核",
+          "dismiss": "关闭"
         }
       },
       "right": {
@@ -17886,6 +17879,13 @@
           "retry": "该用户名或密码无效。",
           "description": "{{origin}} 要求输入用户名和密码。"
         },
+        "javaScriptDialog": {
+          "title": "{{origin}} 显示",
+          "anonymousTitle": "此网页显示",
+          "confirm": "确定",
+          "cancel": "取消",
+          "answer": "回答"
+        },
         "sitePermission": {
           "label": {
             "camera": "摄像头",
@@ -19566,6 +19566,10 @@
       "caution": "注意"
     },
     "automations": {
+      "openIn": "打开方式",
+      "chat": "聊天",
+      "terminal": "终端",
+      "runChatUnavailable": "运行聊天不可用。正在显示其工作区；已保存的输出仍可在运行详情中查看。",
       "runTerminalUnavailable": "运行终端不可用。"
     },
     "jiraIssueTitleField": {
@@ -21954,12 +21958,7 @@
       "fetchMore": "加载更多",
       "connectionFailed": "连接失败",
       "listLabel": "Linear 列表",
-      "projectsLoadFailed": "无法加载项目。",
       "projectNotFound": "未找到项目。",
-      "projectLoadFailed": "无法加载项目。",
-      "projectIssuesLoadFailed": "无法加载项目 issue。",
-      "viewsLoadFailed": "无法加载视图。",
-      "viewContentsLoadFailed": "无法加载视图内容。",
       "issuesLoadFailed": "无法加载 Linear issue。",
       "apiKeyHint": "粘贴你希望 Orca 使用的 Linear 工作区的个人 API 密钥。如果该工作区已连接，Orca 会替换其已存储的密钥。",
       "remoteKeyStorage": "此密钥由当前远程运行时存储。",

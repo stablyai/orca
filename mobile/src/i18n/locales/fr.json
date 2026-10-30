@@ -1435,14 +1435,6 @@
     "hostPendingCreationRow": {
       "creatingWorkspace": "Création de l'espace de travail…"
     },
-    "hostRailActions": {
-      "accounts": "Comptes",
-      "closeSearch": "Fermer la recherche",
-      "floatingWorkspace": "Espace de travail flottant",
-      "newWorkspace": "Nouvel espace de travail",
-      "searchWorkspaces": "Rechercher des espaces de travail",
-      "tasks": "Tâches"
-    },
     "hostScreenHeader": {
       "accounts": "Comptes",
       "activeFilters_many": "Options des espaces de travail ({{count}} filtres actifs)",
@@ -2199,6 +2191,7 @@
       "requestFailed": "Échec de la requête : {{method}}"
     },
     "header": {
+      "workspaceDetailsHint": "Affiche le nom complet de l'espace de travail et son emplacement",
       "backToWorktrees": "Retour aux worktrees",
       "moreActions": "Autres actions de la session",
       "openFileExplorer": "Ouvrir l'explorateur de fichiers",
@@ -2407,9 +2400,6 @@
       "terminalName": "Nom du terminal",
       "unsavedMarkdown": "Modifications Markdown non enregistrées",
       "urlPrompt": "Saisissez une URL ou laissez le champ vide pour un nouvel onglet."
-    },
-    "sideRail": {
-      "backToWorktrees": "Retour aux worktrees"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "Aucun agent IA activé n'a été détecté sur l'hôte de cet espace de travail.",

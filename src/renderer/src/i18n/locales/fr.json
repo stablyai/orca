@@ -1061,9 +1061,7 @@
         "jira": {
           "856083302c": "La connexion Jira a été remplacée par une requête plus récente."
         },
-        "linear": {
-          "37d36984d0": "La connexion Linear a été remplacée par une requête plus récente."
-        },
+        "linear": {},
         "orca": {
           "profiles": {
             "612f7f6861": "Échec de la création du profil",
@@ -8251,18 +8249,6 @@
           "191ac34567": "Orchestration d'agents",
           "nestedWorkerDepthTitle": "Profondeur du travailleur imbriqué",
           "nestedWorkerDepthDescription": "Combien de générations de travailleurs détachés peuvent engendrer leurs propres travailleurs. 1 maintient l'arborescence des agents à plat : un coordinateur répartit les travailleurs, et ces travailleurs ne répartissent pas.",
-          "chatErrorEscalationTitle": "Prévenir le coordinateur des erreurs du chat",
-          "chatErrorEscalationDescription": "Quand un agent assigné rencontre une erreur qui met fin à son tour, envoie l'erreur exacte au coordinateur qui l'a assigné. La tâche reste assignée à l'agent. Fonctionne uniquement pour les agents dans l'interface de chat.",
-          "chatErrorEscalationKeywordError": "erreur",
-          "chatErrorEscalationKeywordChat": "chat",
-          "heartbeatTitle": "Signaux de vie des travailleurs",
-          "heartbeatDescription": "Les travailleurs assignés se signalent toutes les quelques minutes pour que le coordinateur distingue un agent qui travaille d'un agent figé. Les désactiver réduit les messages envoyés au coordinateur, mais il perd ce signal de suivi. S'applique aux travailleurs assignés après le changement.",
-          "heartbeatKeywordHeartbeat": "signal de vie",
-          "heartbeatKeywordStalled": "bloqué",
-          "heartbeatKeywordInterval": "intervalle",
-          "heartbeatIntervalTitle": "Intervalle des signaux de vie",
-          "heartbeatIntervalDescription": "Un intervalle plus court donne au coordinateur des nouvelles plus fréquentes, mais lui envoie plus de messages. Un intervalle plus long envoie moins de messages, mais laisse plus de temps entre deux signaux. S'applique aux travailleurs assignés après le changement.",
-          "heartbeatIntervalSuffix": "minutes",
           "7bc082f4de": "Copier la commande d'installation"
         },
         "OrchestrationSetupCard": {
@@ -11900,7 +11886,6 @@
         },
         "PluginThemeUseNow": {
           "label": "Utiliser maintenant :",
-          "useName": "Utiliser maintenant : {{value0}}",
           "useForLight": "Utiliser en clair :",
           "useForDark": "Utiliser en sombre :"
         },
@@ -13037,7 +13022,6 @@
           "previous": "Précédente",
           "updated": "Mis à jour",
           "license": "Licence",
-          "homepage": "Page d’accueil",
           "whatsNew": "Nouveautés",
           "hashCopied": "Empreinte du contenu copiée",
           "hashCopyFailed": "Impossible de copier l’empreinte."
@@ -13158,6 +13142,15 @@
         },
         "pluginTryAction": {
           "incompleteLanguage": "Ce pack de langue est trop incomplet pour l’utiliser."
+        },
+        "PluginUpdateReviewToast": {
+          "movedTitle": "{{value0}} {{value1}} provient d’un autre dépôt",
+          "accessTitle": "{{value0}} {{value1}} demande plus d’accès",
+          "manyTitle": "{{value0}} mises à jour de plugins attendent votre vérification",
+          "oneDescription": "Publié par {{value0}}. Il ne sera pas mis à jour tant que vous ne l’aurez pas vérifié.",
+          "manyDescription": "Elles ne seront pas installées tant que vous ne les aurez pas vérifiées.",
+          "review": "Vérifier",
+          "dismiss": "Ignorer"
         }
       },
       "right": {
@@ -18581,6 +18574,13 @@
           "retry": "Ce nom d'utilisateur ou ce mot de passe n'a pas fonctionné.",
           "description": "{{origin}} demande un nom d'utilisateur et un mot de passe."
         },
+        "javaScriptDialog": {
+          "title": "{{origin}} indique",
+          "anonymousTitle": "Cette page indique",
+          "confirm": "OK",
+          "cancel": "Annuler",
+          "answer": "Réponse"
+        },
         "sitePermission": {
           "label": {
             "camera": "Caméra",
@@ -20369,6 +20369,10 @@
       "caution": "Attention"
     },
     "automations": {
+      "openIn": "Ouvrir dans",
+      "chat": "Chat",
+      "terminal": "Terminal",
+      "runChatUnavailable": "Le chat de cette exécution est indisponible. Son espace de travail est affiché ; toute sortie enregistrée reste dans les détails de l’exécution.",
       "runTerminalUnavailable": "Le terminal d'exécution est indisponible."
     },
     "jiraIssueTitleField": {
@@ -22633,12 +22637,7 @@
       "fetchMore": "Charger plus",
       "connectionFailed": "Échec de la connexion",
       "listLabel": "Liste Linear",
-      "projectsLoadFailed": "Impossible de charger les projets.",
       "projectNotFound": "Le projet est introuvable.",
-      "projectLoadFailed": "Impossible de charger le projet.",
-      "projectIssuesLoadFailed": "Impossible de charger les issues du projet.",
-      "viewsLoadFailed": "Impossible de charger les vues.",
-      "viewContentsLoadFailed": "Impossible de charger le contenu de la vue.",
       "issuesLoadFailed": "Impossible de charger les issues Linear.",
       "apiKeyHint": "Collez une clé API personnelle de l’espace de travail Linear à utiliser dans Orca. Si cet espace est déjà connecté, Orca remplace la clé enregistrée.",
       "remoteKeyStorage": "Cette clé est stockée par l’environnement d’exécution distant actif.",

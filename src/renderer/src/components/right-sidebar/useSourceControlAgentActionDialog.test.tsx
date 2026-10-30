@@ -202,6 +202,7 @@ it.each(['codex', null] as const)(
         agentArgs: '--dangerously-bypass-approvals-and-sandbox --model chosen',
         sessionOptions: { model: 'chosen' },
         agentLaunchPreferences: {
+          agentLaunchChoices: {},
           defaultTuiAgent: 'codex',
           disabledTuiAgents: ['opencode', 'claude']
         }

@@ -157,9 +157,7 @@ export function buildDefaultSettings(args: {
     artifactSharingEnabled: false,
     agentSkillSharingEnabled: false,
     nestedWorkerMaxDepth: 1,
-    orchestrationChatErrorEscalationEnabled: true,
-    orchestrationHeartbeatsEnabled: true,
-    orchestrationHeartbeatIntervalMinutes: 5,
+    orchestrationWorkerAutoReleaseEnabled: true,
     showArtifactsButton: false,
     showSkillsButton: false,
     showMobileButton: true,
@@ -229,6 +227,7 @@ export function buildDefaultSettings(args: {
     agentCmdOverrides: {},
     // Arguments hold only the user's own text; the permission flag comes from the choice below.
     agentDefaultArgs: {},
+    agentLaunchChoices: {},
     agentDefaultEnv: {},
     agentYoloDefaultsMigrated: true,
     agentPermissionDefault: 'full-access',
