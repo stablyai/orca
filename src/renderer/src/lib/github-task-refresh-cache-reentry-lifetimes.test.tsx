@@ -218,7 +218,9 @@ it.each([false, true])(
     await mount(false, outputs, activeQuery, true)
     const directReads = direct.mock.calls.length
     const tokens = new Map<object, number>()
-    const tokenId = (token?: object) => {
+    const tokenId = (
+      token?: NonNullable<ReturnType<typeof gitHubTaskFamilyOrigin>>['listLifetime']
+    ) => {
       if (!token) {
         return null
       }
