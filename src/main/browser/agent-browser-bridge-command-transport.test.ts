@@ -1,18 +1,28 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { execFileMock, webContentsFromIdMock, existsSyncMock, readFileSyncMock, stdinWrites } =
-  vi.hoisted(() => ({
-    execFileMock: vi.fn(),
-    webContentsFromIdMock: vi.fn(),
-    existsSyncMock: vi.fn(() => false),
-    readFileSyncMock: vi.fn(() => Buffer.from('')),
-    stdinWrites: [] as string[]
-  }))
+const {
+  execFileMock,
+  webContentsFromIdMock,
+  existsSyncMock,
+  readFileSyncMock,
+  rmSyncMock,
+  createFromPathMock,
+  stdinWrites
+} = vi.hoisted(() => ({
+  execFileMock: vi.fn(),
+  webContentsFromIdMock: vi.fn(),
+  existsSyncMock: vi.fn(() => false),
+  readFileSyncMock: vi.fn(() => Buffer.from('')),
+  rmSyncMock: vi.fn(),
+  createFromPathMock: vi.fn(),
+  stdinWrites: [] as string[]
+}))
 
 vi.mock('child_process', () => ({ execFile: execFileMock }))
 vi.mock('fs', () => ({
   existsSync: existsSyncMock,
   readFileSync: readFileSyncMock,
+  rmSync: rmSyncMock,
   accessSync: vi.fn(),
   chmodSync: vi.fn(),
   constants: { X_OK: 1 }
@@ -21,7 +31,8 @@ vi.mock('os', () => ({ platform: () => 'darwin', arch: () => 'arm64' }))
 vi.mock('electron', () => {
   return {
     app: { getPath: vi.fn(() => '/app'), getAppPath: vi.fn(() => '/project'), isPackaged: false },
-    webContents: { fromId: webContentsFromIdMock }
+    webContents: { fromId: webContentsFromIdMock },
+    nativeImage: { createFromPath: createFromPathMock }
   }
 })
 const { CdpWsProxyMock } = vi.hoisted(() => {
@@ -61,6 +72,7 @@ import {
   mockWebContents,
   overrideBridgeWebContentsLookup,
   resetAgentBrowserBridgeMocks,
+  succeedRecordingAgentBrowserSpawns,
   type ExecFileCallback
 } from './agent-browser-bridge-test-harness'
 
@@ -136,6 +148,64 @@ describe('AgentBrowserBridge', () => {
       code: 'browser_tab_not_found',
       message: 'Browser page tab-1 is no longer available'
     })
+  })
+
+  it('passes typed snapshot options to agent-browser as its flags', async () => {
+    const spawns = succeedRecordingAgentBrowserSpawns(execFileMock, stdinWrites, {
+      snapshot: 'tree'
+    })
+
+    await bridge.snapshot(undefined, undefined, {
+      interactive: true,
+      compact: true,
+      depth: 2,
+      selector: '#main form',
+      urls: true,
+      delta: true
+    })
+
+    expect(spawns.find(({ command }) => command[0] === 'snapshot')?.command).toEqual([
+      'snapshot',
+      '-i',
+      '-c',
+      '-d',
+      '2',
+      '-s',
+      '#main form',
+      '-u',
+      '--delta'
+    ])
+  })
+
+  it('returns screenshots in CSS pixels and deletes the file agent-browser wrote', async () => {
+    const wc = mockWebContents(100)
+    wc.debugger.sendCommand.mockResolvedValue({ cssVisualViewport: { clientWidth: 800 } })
+    webContentsFromIdMock.mockReturnValue(wc)
+    const resized = { toPNG: () => Buffer.from('css-png') }
+    const captured = {
+      getSize: () => ({ width: 1600, height: 1200 }),
+      resize: vi.fn(() => resized)
+    }
+    createFromPathMock.mockReturnValue(captured)
+    existsSyncMock.mockReturnValue(true)
+    const spawns = succeedRecordingAgentBrowserSpawns(execFileMock, stdinWrites, {
+      path: '/ab-tmp/shot.png',
+      changed: true
+    })
+
+    await expect(bridge.screenshot({ ifChanged: true })).resolves.toEqual({
+      data: Buffer.from('css-png').toString('base64'),
+      format: 'png',
+      changed: true
+    })
+    expect(spawns.find(({ command }) => command[0] === 'screenshot')?.command).toEqual([
+      'screenshot',
+      '--if-changed',
+      '--screenshot-format',
+      'png'
+    ])
+    expect(captured.resize).toHaveBeenCalledWith({ width: 800, quality: 'best' })
+    expect(rmSyncMock).toHaveBeenCalledWith('/ab-tmp/shot.png', { force: true })
   })
 
   it('strips --cdp and --session from exec commands', async () => {

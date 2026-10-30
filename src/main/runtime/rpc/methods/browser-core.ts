@@ -18,6 +18,7 @@ import {
   Scroll,
   Select,
   SelectorPath,
+  Snapshot,
   TabCurrent,
   TabClose,
   TabList,
@@ -38,7 +39,7 @@ export const BROWSER_CORE_METHODS = [
   defineMethod({
     name: 'browser.snapshot',
     permission: 'workspace',
-    params: BrowserTarget,
+    params: Snapshot,
     handler: async (params, { runtime }) => runtime.browserSnapshot(params)
   }),
   defineMethod({

@@ -1,4 +1,5 @@
 import type {
+  BrowserSnapshotOptions,
   BrowserSnapshotResult,
   BrowserClickResult,
   BrowserGotoResult,
@@ -15,18 +16,29 @@ import {
   waitForAbortedNavigationReplacement
 } from './agent-browser-bridge-process'
 import { AgentBrowserBridgeQueue } from './agent-browser-bridge-queue'
+import { agentBrowserSnapshotArgs } from './agent-browser-snapshot-arguments'
 
 export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQueue {
-  async snapshot(worktreeId?: string, browserPageId?: string): Promise<BrowserSnapshotResult> {
+  async snapshot(
+    worktreeId?: string,
+    browserPageId?: string,
+    options: BrowserSnapshotOptions = {}
+  ): Promise<BrowserSnapshotResult> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName, target) => {
-      const result = (await this.execAgentBrowser(sessionName, [
-        'snapshot'
-      ])) as BrowserSnapshotResult
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: agent-browser's snapshot --json answers the snapshot and refs of BrowserSnapshotResult; page fields are set below.
+      const result = (await this.execAgentBrowser(
+        sessionName,
+        agentBrowserSnapshotArgs(options)
+      )) as BrowserSnapshotResult
       // The agent now holds this tree, so its next action diffs against a fresh baseline.
       this.forgetDeltaBaseline(sessionName)
+      // agent-browser's snapshot carries neither, so read them off the page it captured.
+      const wc = this.requireTargetWebContents(target)
       return {
         ...result,
-        browserPageId: target.browserPageId
+        browserPageId: target.browserPageId,
+        url: wc.getURL(),
+        title: wc.getTitle()
       }
     })
   }

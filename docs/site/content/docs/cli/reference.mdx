@@ -240,6 +240,8 @@ orca screenshot --worktree active --json
 
 Refs such as `@e3` come from `snapshot`. Re-snapshot after navigation, tab switches, clicks that change the page, and any stale-ref error.
 
+`snapshot --interactive` lists only controls and links, `--delta` returns only what changed since the last `--delta` snapshot, and `--selector <css>` or `--depth <n>` narrow the tree. `screenshot` and `full-screenshot` save the image where the CLI runs and print its path, in CSS pixels.
+
 Tab and capture commands:
 
 ```bash

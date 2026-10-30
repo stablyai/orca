@@ -335,13 +335,15 @@ describe('captureFullPageScreenshot', () => {
     expect(release).toHaveBeenCalledTimes(1)
   })
 
-  it('uses cssContentSize so HiDPI pages are captured at the real page size', async () => {
+  it('captures HiDPI pages at their CSS size in CSS pixels', async () => {
     const webContents = createMockWebContents()
     webContents.debugger.sendCommand.mockImplementation((method: string) => {
       if (method === 'Page.getLayoutMetrics') {
         return Promise.resolve({
           cssContentSize: { width: 640.25, height: 1280.75 },
-          contentSize: { width: 1280.5, height: 2561.5 }
+          contentSize: { width: 1280.5, height: 2561.5 },
+          cssVisualViewport: { clientWidth: 640 },
+          visualViewport: { clientWidth: 1280 }
         })
       }
       if (method === 'Page.captureScreenshot') {
@@ -358,7 +360,7 @@ describe('captureFullPageScreenshot', () => {
     expect(webContents.debugger.sendCommand).toHaveBeenNthCalledWith(2, 'Page.captureScreenshot', {
       format: 'png',
       captureBeyondViewport: true,
-      clip: { x: 0, y: 0, width: 641, height: 1281, scale: 1 }
+      clip: { x: 0, y: 0, width: 641, height: 1281, scale: 0.5 }
     })
   })
 

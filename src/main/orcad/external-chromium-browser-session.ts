@@ -10,6 +10,11 @@ import {
   parseAgentBrowserJsonOutput
 } from '../browser/agent-browser-batch-command'
 import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../shared/runtime-types'
+import { Screenshot } from '../../shared/rpc-contract/browser-params'
+import {
+  AgentBrowserScreenshotResult,
+  agentBrowserScreenshotArgs
+} from '../browser/agent-browser-screenshot-arguments'
 import { runProcess } from '@orca/process-host'
 
 const COMMAND_TIMEOUT_MS = 90_000
@@ -29,7 +34,6 @@ const AgentBrowserTab = z.object({
   url: z.string()
 })
 const AgentBrowserTabsResult = z.object({ tabs: z.array(AgentBrowserTab).optional() })
-const AgentBrowserScreenshotResult = z.object({ path: z.string().min(1) })
 const AgentBrowserEnvelope = z.object({
   success: z.boolean(),
   data: z.unknown().optional(),
@@ -150,12 +154,20 @@ export class ExternalChromiumBrowserSession {
   }
 
   async screenshot(params: Record<string, unknown>, full: boolean): Promise<unknown> {
-    const format = params.format === 'jpeg' ? 'jpeg' : 'png'
-    const command = ['screenshot', ...(full ? ['--full'] : []), '--screenshot-format', format]
-    const result = AgentBrowserScreenshotResult.parse(await this.run(command, { cliArgv: true }))
-    const data = (await readFile(result.path)).toString('base64')
-    await rm(result.path, { force: true }).catch(() => undefined)
-    return { data, format }
+    const options = Screenshot.parse(params)
+    const format = options.format === 'jpeg' ? 'jpeg' : 'png'
+    const { path, changed, annotations } = AgentBrowserScreenshotResult.parse(
+      await this.run(agentBrowserScreenshotArgs(options, full), { cliArgv: true })
+    )
+    if (!path) {
+      if (changed === false) {
+        return { data: '', format, changed, annotations }
+      }
+      throw new BrowserError('browser_error', 'Screenshot returned no file path')
+    }
+    const data = (await readFile(path)).toString('base64')
+    await rm(path, { force: true }).catch(() => undefined)
+    return { data, format, changed, annotations }
   }
 
   async pdf(): Promise<unknown> {

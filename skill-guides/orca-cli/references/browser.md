@@ -5,9 +5,17 @@ Pin one page, snapshot it once, then act on it. Each action reports what it chan
 ```text
 ORCA tab current --json
 ORCA goto --page <browserPageId> --url https://example.com --json
-ORCA snapshot --page <browserPageId> --json
+ORCA snapshot --page <browserPageId> --interactive --delta
 ORCA click --page <browserPageId> --element @e3 --json
 ```
+
+Choosing what to look at, cheapest first:
+
+- `snapshot --interactive` lists only controls and links with their refs, often under half the size of the whole tree. It leaves out page text, including error and status messages.
+- Add `--delta` and the next snapshot with the same flags returns only what changed: "no change", or which lines of your last tree to replace and with what. The first call, a navigation, or a large change returns the whole tree again; `--full` asks for the whole tree and restarts the baseline.
+- `--selector <css>` limits the tree to one part of the page, `--depth <n>` limits nesting, `--compact` drops empty structure, and `--urls` adds link targets.
+- To read page text, run `exec --command "read"` (the page as Markdown) or a plain `snapshot` (the whole tree with its text).
+- `screenshot` saves a PNG and prints its path; open that file to see the page. Its pixels are CSS pixels, so x/y read off it work with `ORCA mouse`. `--annotate` labels each control with its ref, and `--if-changed` saves nothing when the page looks the same as last time.
 
 Common commands:
 
@@ -15,9 +23,11 @@ Common commands:
 ORCA goto --page <browserPageId> --url <url> --json
 ORCA back --page <browserPageId> --json
 ORCA reload --page <browserPageId> --json
-ORCA snapshot --page <browserPageId> --json
-ORCA screenshot --page <browserPageId> --json
-ORCA full-screenshot --page <browserPageId> --json
+ORCA snapshot --page <browserPageId> --interactive --delta
+ORCA snapshot --page <browserPageId> --selector main --depth 4
+ORCA screenshot --page <browserPageId>
+ORCA screenshot --page <browserPageId> --annotate
+ORCA full-screenshot --page <browserPageId>
 ORCA pdf --page <browserPageId> --json
 ORCA click --page <browserPageId> --element <ref> --json
 ORCA fill --page <browserPageId> --element <ref> --value <text> --json
@@ -32,7 +42,7 @@ ORCA upload --page <browserPageId> --element <ref> --files <paths> --json
 ORCA wait --page <browserPageId> --text <text> --json
 ORCA wait --page <browserPageId> --url <substring> --json
 ORCA wait --page <browserPageId> --selector <css> --json
-ORCA wait --page <browserPageId> --load networkidle --json
+ORCA wait --page <browserPageId> --load load --json
 ORCA eval --page <browserPageId> --expression <js> --json
 ORCA dialog accept --page <browserPageId> [--text <answer>] --json
 ORCA dialog dismiss --page <browserPageId> --json
@@ -46,7 +56,8 @@ ORCA cookie get --page <browserPageId> --json
 ORCA capture start --page <browserPageId> --json
 ORCA console --page <browserPageId> --limit 50 --json
 ORCA network --page <browserPageId> --limit 50 --json
-ORCA exec --page <browserPageId> --command "help" --json
+ORCA exec --page <browserPageId> --command "read" --json
+ORCA exec --page <browserPageId> --command "get text @e3" --json
 ```
 
 Browser rules:
@@ -60,8 +71,8 @@ Browser rules:
 - Browser commands default to the current worktree. `--page` reaches the page in any worktree unless you also pass `--worktree <selector>`. Use `--worktree all` only intentionally.
 - Use typed tab commands (`ORCA tab list/create/close/switch`), not `ORCA exec --command "tab ..."`, so Orca keeps UI state synchronized.
 - Use `ORCA set device` or `ORCA viewport --mobile`, not `ORCA exec --command "set device ..."`, so the page also gets touch input and `pointer: coarse`. Each page load (reload, `goto`, link click) resets it, so run it again after navigating.
-- Prefer `wait --text`, `--url`, `--selector`, or `--load` after async page changes instead of bare timeouts.
-- Anything not listed above goes through `ORCA exec --page <browserPageId> --command "<agent-browser command>"`.
+- Prefer `wait --text`, `--url`, `--selector`, or `--load` after async page changes instead of bare timeouts. Avoid `--load networkidle` except on pages known to go quiet: polling, websockets and streaming keep it from ever resolving.
+- Anything not listed above goes through `ORCA exec --page <browserPageId> --command "<agent-browser command>"`, which takes agent-browser's own command syntax (for example `"get text @e3"` or `"is visible @e3"`) and prints JSON. It has no `help` command.
 - `fill` sets a field's whole value in one step, at any size. `type` presses real keys into the focused element, so `minlength`/`maxlength`, key handlers, Enter and Tab act as they would for a person; `ORCA focus` the element first. Use `type` when the page reacts to keystrokes.
 - On server-hosted pages `fill` and `type` still insert text the engine's own way. If either does nothing on a custom input there, try `ORCA focus --page <browserPageId> --element @e1 --json` then `ORCA inserttext --page <browserPageId> --text "text" --json`.
 - A client-hosted page renders in the paired desktop's browser engine, so every command against it needs that desktop online and returns `browser_host_unavailable` while it is closed, asleep, or disconnected. Server-hosted pages run with no desktop attached; prefer them for long or unattended automation.

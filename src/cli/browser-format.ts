@@ -1,5 +1,6 @@
-import { formatBase64PayloadByteCount } from './base64-payload-byte-count'
 import { readBrowserActionEffects } from '../shared/browser-action-effects'
+import { writeCliScreenshotTempFile } from './cli-screenshot-temp-file'
+import type { RuntimeRpcSuccess } from './runtime-client'
 import type {
   BrowserProfileListResult,
   BrowserScreenshotResult,
@@ -12,12 +13,75 @@ import type {
 } from '../shared/runtime-types'
 
 export function formatSnapshot(result: BrowserSnapshotResult): string {
-  const header = `page: ${result.browserPageId}\n${result.title} — ${result.url}\n`
-  return header + result.snapshot
+  // Older runtimes leave url and title unset.
+  const location = [result.title, result.url].filter(Boolean).join(' — ')
+  const header = [`page: ${result.browserPageId}`, ...(location ? [location] : [])].join('\n')
+  return `${header}\n${formatSnapshotBody(result.snapshot)}`
 }
 
-export function formatScreenshot(result: BrowserScreenshotResult): string {
-  return `Screenshot captured (${result.format}, ${formatBase64PayloadByteCount(result.data)})`
+function formatSnapshotBody(snapshot: BrowserSnapshotResult['snapshot']): string {
+  if (typeof snapshot === 'string') {
+    return snapshot
+  }
+  if (snapshot.kind === 'full') {
+    return `revision ${snapshot.revision} (whole tree)\n${snapshot.tree}`
+  }
+  if (snapshot.kind === 'unchanged') {
+    return `revision ${snapshot.revision}: no change since revision ${snapshot.baseRevision}`
+  }
+  const change = snapshot.treeChange
+  const summary = `revision ${snapshot.revision}: changes to revision ${snapshot.baseRevision}`
+  if (!change) {
+    return `${summary}; the tree lines are the same`
+  }
+  // 1-based so agents can count lines in the tree they already have.
+  const first = change.startLine + 1
+  const range =
+    change.deleteCount === 1 ? `line ${first}` : `lines ${first}-${first + change.deleteCount - 1}`
+  if (change.deleteCount === 0) {
+    return [`${summary}; insert before line ${first}:`, ...change.lines].join('\n')
+  }
+  if (change.lines.length === 0) {
+    return `${summary}; delete ${range}`
+  }
+  return [`${summary}; replace ${range} with:`, ...change.lines].join('\n')
+}
+
+export type SavedBrowserScreenshot = Omit<BrowserScreenshotResult, 'data'> & {
+  path?: string
+  expiresAt?: string
+}
+
+const BROWSER_SCREENSHOT_TEMP_DIR = {
+  envVar: 'ORCA_BROWSER_SCREENSHOT_TMPDIR',
+  dirName: 'orca-browser-screenshots'
+}
+
+// Base64 is unreadable to an agent and the host's disk may be another machine, so save it here.
+export function saveBrowserScreenshot(
+  response: RuntimeRpcSuccess<BrowserScreenshotResult>
+): RuntimeRpcSuccess<SavedBrowserScreenshot> {
+  const { data, ...result } = response.result
+  if (!data) {
+    return { ...response, result }
+  }
+  const saved = writeCliScreenshotTempFile(
+    BROWSER_SCREENSHOT_TEMP_DIR,
+    response.id,
+    data,
+    result.format === 'jpeg' ? 'jpg' : 'png'
+  )
+  return { ...response, result: { ...result, ...saved } }
+}
+
+export function formatScreenshot(result: SavedBrowserScreenshot): string {
+  if (!result.path) {
+    return 'Screenshot unchanged since the last --if-changed capture; nothing saved'
+  }
+  const legend = (result.annotations ?? []).map(
+    (a) => `[${a.number}] @${a.ref} ${a.role}${a.name?.trim() ? ` "${a.name.trim()}"` : ''}`
+  )
+  return [`Screenshot saved to ${result.path} (${result.format})`, ...legend].join('\n')
 }
 
 export function formatTabList(result: BrowserTabListResult): string {

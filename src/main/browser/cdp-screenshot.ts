@@ -115,8 +115,28 @@ function getLayoutClip(
     y: 0,
     width: Math.ceil(width),
     height: Math.ceil(height),
-    scale: 1
+    scale: cssPixelClipScale(metrics)
   }
+}
+
+// CDP multiplies clip.scale by the device scale factor; undo it so HiDPI pages come back in CSS pixels.
+function cssPixelClipScale(metrics: unknown): number {
+  if (!isRecord(metrics)) {
+    return 1
+  }
+  const deviceWidth = isRecord(metrics.visualViewport) ? metrics.visualViewport.clientWidth : null
+  const cssWidth = isRecord(metrics.cssVisualViewport)
+    ? metrics.cssVisualViewport.clientWidth
+    : null
+  if (
+    typeof deviceWidth !== 'number' ||
+    typeof cssWidth !== 'number' ||
+    !(deviceWidth > 0) ||
+    !(cssWidth > 0)
+  ) {
+    return 1
+  }
+  return Math.min(1, cssWidth / deviceWidth)
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {

@@ -100,7 +100,12 @@ describe('AgentBrowserBridge', () => {
     const snapshotArgs = spawns.find(({ command }) => command[0] === 'snapshot')?.args
     expect(snapshotArgs).toContain('--session')
     expect(snapshotArgs![snapshotArgs!.indexOf('--session') + 1]).toBe('orca-tab-tab-b')
-    expect(result).toEqual({ browserPageId: 'tab-b', snapshot: 'tree output' })
+    expect(result).toEqual({
+      browserPageId: 'tab-b',
+      snapshot: 'tree output',
+      url: 'https://b.com',
+      title: 'B'
+    })
     expect(b.getActiveWebContentsId()).toBe(1)
   })
 
@@ -460,7 +465,12 @@ describe('AgentBrowserBridge', () => {
     expect(releaseSnapshot).not.toBeNull()
 
     releaseSnapshot!()
-    await expect(snapshot).resolves.toEqual({ browserPageId: 'tab-a', snapshot: 'tree' })
+    await expect(snapshot).resolves.toEqual({
+      browserPageId: 'tab-a',
+      snapshot: 'tree',
+      url: 'https://example.com',
+      title: 'Example'
+    })
     await expect(switched).resolves.toEqual({ switched: 1, browserPageId: 'tab-b' })
     expect(b.getActiveWebContentsId()).toBe(2)
   })

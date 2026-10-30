@@ -4,6 +4,7 @@ import {
   OptionalBoolean,
   OptionalFiniteNumber,
   OptionalPlainString,
+  OptionalPositiveInt,
   OptionalString,
   requiredString,
   requiredStringAllowingEmpty
@@ -44,12 +45,24 @@ export const Scroll = BrowserTarget.extend({
     .optional()
 })
 
+export const Snapshot = BrowserTarget.extend({
+  interactive: OptionalBoolean,
+  compact: OptionalBoolean,
+  depth: OptionalPositiveInt,
+  selector: OptionalString,
+  urls: OptionalBoolean,
+  delta: OptionalBoolean,
+  full: OptionalBoolean
+})
+
 export const Screenshot = BrowserTarget.extend({
   format: z
     .unknown()
     .transform((v) => (v === 'png' || v === 'jpeg' ? v : undefined))
     .pipe(z.union([z.enum(['png', 'jpeg']), z.undefined()]))
-    .optional()
+    .optional(),
+  ifChanged: OptionalBoolean,
+  annotate: OptionalBoolean
 })
 
 export const Screencast = BrowserTarget.extend({

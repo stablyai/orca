@@ -1,7 +1,17 @@
-import { existsSync, readFileSync } from 'node:fs'
-import type { BrowserScreenshotResult, BrowserEvalResult } from '../../shared/runtime-types'
+import { existsSync, rmSync } from 'node:fs'
+import { z } from 'zod'
+import { nativeImage, type WebContents } from 'electron'
+import type {
+  BrowserScreenshotOptions,
+  BrowserScreenshotResult,
+  BrowserEvalResult
+} from '../../shared/runtime-types'
 import { BrowserError } from './cdp-bridge'
 import { captureFullPageScreenshot } from './cdp-screenshot'
+import {
+  AgentBrowserScreenshotResult,
+  agentBrowserScreenshotArgs
+} from './agent-browser-screenshot-arguments'
 import { acquireElectronDebugger } from './electron-debugger-lease'
 import { sendGuestCdpCommand } from './guest-cdp-command'
 import { AgentBrowserBridgeUtilityCommands } from './agent-browser-bridge-utility-commands'
@@ -11,19 +21,18 @@ import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abo
 
 export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBridgeUtilityCommands {
   async screenshot(
-    format?: string,
+    options: BrowserScreenshotOptions,
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserScreenshotResult> {
-    const screenshotFormat = format === 'jpeg' ? 'jpeg' : 'png'
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
+    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName, target) => {
+      const raw = await this.execAgentBrowser(sessionName, agentBrowserScreenshotArgs(options), {
+        cliArgv: true
+      })
       return this.readScreenshotFromResult(
-        await this.execAgentBrowser(
-          sessionName,
-          ['screenshot', '--screenshot-format', screenshotFormat],
-          { cliArgv: true }
-        ),
-        screenshotFormat
+        raw,
+        options.format,
+        this.requireTargetWebContents(target)
       )
     })
   }
@@ -45,16 +54,36 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
     })
   }
 
-  private readScreenshotFromResult(raw: unknown, format?: string): BrowserScreenshotResult {
-    const parsed = raw as { path?: string } | undefined
-    if (!parsed?.path) {
+  private async readScreenshotFromResult(
+    raw: unknown,
+    format: BrowserScreenshotOptions['format'],
+    wc: WebContents
+  ): Promise<BrowserScreenshotResult> {
+    const screenshotFormat = format === 'jpeg' ? 'jpeg' : 'png'
+    const parsed = AgentBrowserScreenshotResult.safeParse(raw)
+    if (!parsed.success) {
       throw new BrowserError('browser_error', 'Screenshot returned no file path')
     }
-    if (!existsSync(parsed.path)) {
-      throw new BrowserError('browser_error', `Screenshot file not found: ${parsed.path}`)
+    const { path, changed, annotations } = parsed.data
+    if (!path) {
+      if (changed === false) {
+        return { data: '', format: screenshotFormat, changed, annotations }
+      }
+      throw new BrowserError('browser_error', 'Screenshot returned no file path')
     }
-    const data = readFileSync(parsed.path).toString('base64')
-    return { data, format: format === 'jpeg' ? 'jpeg' : 'png' } as BrowserScreenshotResult
+    if (!existsSync(path)) {
+      throw new BrowserError('browser_error', `Screenshot file not found: ${path}`)
+    }
+    try {
+      const image = await scaleToCssPixels(nativeImage.createFromPath(path), wc)
+      const data = (screenshotFormat === 'jpeg' ? image.toJPEG(90) : image.toPNG()).toString(
+        'base64'
+      )
+      return { data, format: screenshotFormat, changed, annotations }
+    } finally {
+      // agent-browser keeps every capture in its own temp folder; the bytes are ours now.
+      rmSync(path, { force: true })
+    }
   }
 
   async evaluate(
@@ -133,4 +162,30 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
       { ensureSession: false }
     )
   }
+}
+
+const CssViewportMetrics = z.object({
+  cssVisualViewport: z.object({ clientWidth: z.number().positive() })
+})
+
+// HiDPI captures come back in device pixels; CSS pixels keep x/y equal to page coordinates.
+async function scaleToCssPixels(
+  image: Electron.NativeImage,
+  wc: WebContents
+): Promise<Electron.NativeImage> {
+  const lease = acquireElectronDebugger(wc)
+  let metrics: unknown
+  try {
+    metrics = await sendGuestCdpCommand(wc, 'Page.getLayoutMetrics', {})
+  } finally {
+    lease.release()
+  }
+  const parsed = CssViewportMetrics.safeParse(metrics)
+  if (!parsed.success) {
+    return image
+  }
+  const cssWidth = Math.round(parsed.data.cssVisualViewport.clientWidth)
+  return image.getSize().width > cssWidth
+    ? image.resize({ width: cssWidth, quality: 'best' })
+    : image
 }
