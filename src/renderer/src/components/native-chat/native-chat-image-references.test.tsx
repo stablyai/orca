@@ -199,7 +199,7 @@ describe('composer image chips', () => {
   })
 
   it.each(['start', 'end'] as const)(
-    'cancels an uploading image at the %s of a hidden draft as the shown editor does',
+    'cancels an uploading image at the %s of a hidden draft with its space, in text and box alike',
     (caret) => {
       const composer = renderComposer('chat-a')
       changePrompt(composer.textbox(), 'look at this')
