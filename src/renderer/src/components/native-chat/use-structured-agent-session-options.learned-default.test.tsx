@@ -24,14 +24,16 @@ import type {
   AgentSessionOptionsResult
 } from '../../../../shared/agent-session-wire'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
-import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
+import {
+  recordHostModelCatalogSnapshot,
+  resetHostModelCatalogSnapshotsForTests
+} from '@/runtime/host-model-catalog-snapshots'
 import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
 import { useStructuredAgentSessionSendOptions } from './use-structured-agent-session-send-options'
 import type { AcpDeclaredEffortFixtureModule } from '../../../../shared/acp-declared-effort.test-fixture-contract'
 import { structuredAgentSessionMessageSelection } from '../../../../shared/structured-agent-session-option-view'
 import { firstFrameOptionState } from './structured-agent-session-option-first-frame'
-import { recordHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
 
 // Only the first chat without a saved pick may wait to name its model; later launches use the host’s learned default.
 
