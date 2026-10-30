@@ -23,7 +23,7 @@ import { translate } from '@/i18n/i18n'
 import {
   createTaskPageGitHubProjectionContext,
   overlayPendingOnTaskPagePages,
-  restoreTaskPageGitHubReadPage
+  deliverTaskPageGitHubRead
 } from '@/components/task-page/github/task-page-github-work-item-mutation-pages'
 
 import { scopeGitHubTaskSearch } from '../../../../../shared/task-github-search'
@@ -191,13 +191,26 @@ export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProje
           )[0] ?? []
         pagesRef.current = nextPages
         currentPageRef.current = target
-        setPages((current) => restoreTaskPageGitHubReadPage(read, current, items, target, context))
+        deliverTaskPageGitHubRead(
+          read,
+          items,
+          setPages,
+          pagesRef,
+          context,
+          (current, rows, materialize) => {
+            const next = [...current]
+            while (next.length <= target) {
+              next.push(null)
+            }
+            next[target] = materialize(rows, current[target] ?? [])
+            return next
+          }
+        )
         setCurrentPage(target)
       } catch (err) {
         console.error('Failed to load next page:', err)
       } finally {
-        read.dispose()
-        activeReads.current.delete(read)
+        read.finish(() => activeReads.current.delete(read))
         if (paginationGenerationRef.current === requestGeneration) {
           setPaginationLoading(false)
           setLoadingTargetPage(null)

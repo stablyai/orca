@@ -25,6 +25,7 @@ import {
 import {
   type createListEntryRetirement,
   getListEntry,
+  listInput,
   completedListClaim,
   matchesListClaim,
   deleteConfirmedListSnapshot
@@ -258,7 +259,8 @@ export function adoptQuietSearchFieldsForItem(args: {
           family,
           observation,
           args.item.type,
-          args.retireListEntry
+          args.retireListEntry,
+          listInput(args.serverItem, family, observation)
         )
     )
   }

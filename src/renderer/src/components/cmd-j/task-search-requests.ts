@@ -1,3 +1,4 @@
+import type { GitHubTaskRead } from '@/store/github/request-coordination'
 import { useAppStore } from '@/store'
 import { linearSearchIssuesForTarget, linearStatusForTarget } from '@/runtime/runtime-linear-client'
 import { jiraSearchIssuesForTarget, jiraStatusForTarget } from '@/runtime/runtime-jira-client'
@@ -31,7 +32,8 @@ export type CmdJTaskSearchRequest = {
   id: string
   provider: TaskProvider
   hostLabel: string
-  run: () => Promise<CmdJTaskSearchResult[]>
+  githubSource?: { repoId: string; path: string; sourceContext: TaskSourceContext }
+  run: (read?: GitHubTaskRead) => Promise<CmdJTaskSearchResult[]>
 }
 
 export function createCmdJTaskSearchRequests(args: {
@@ -76,7 +78,10 @@ export function createCmdJTaskSearchRequests(args: {
         id: `${provider}:${source.hostId}:${repo.id}`,
         provider,
         hostLabel,
-        run: async () => {
+        ...(provider === 'github'
+          ? { githubSource: { repoId: repo.id, path: repo.path, sourceContext: source } }
+          : {}),
+        run: async (read) => {
           if (signal.aborted) {
             return []
           }
@@ -86,7 +91,7 @@ export function createCmdJTaskSearchRequests(args: {
               repo.path,
               RESULT_LIMIT,
               `is:issue is:open ${query}`,
-              { sourceContext: source, requireComplete: true }
+              { sourceContext: source, requireComplete: true, taskRead: read }
             )
             return items
               .filter((issue) => issue.type === 'issue' && issue.state === 'open')

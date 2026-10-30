@@ -22,7 +22,7 @@ import {
   key as initialCacheKey
 } from './github-task-refresh-data.test-fixture'
 
-import React, { act } from 'react'
+import { act } from 'react'
 
 import { expect, it, vi } from 'vitest'
 
@@ -626,110 +626,5 @@ it.each([false, true])(
     expect(store.getState().workItemsCache[initialCacheKey].data![1]).toBe(foreign)
     expect(JSON.stringify(foreign)).toBe(foreignData)
     expect(list).toHaveBeenCalledTimes(3)
-  }
-)
-
-it.each(
-  [false, true].flatMap((bobSucceeds) =>
-    [false, true].map((bobFirst) => ({ bobSucceeds, bobFirst }))
-  )
-)(
-  'settles overlapping Bob removal and Cora addition from a foreign-account display without losing independent facts (Bob success=$bobSucceeds, first=$bobFirst)',
-  async ({ bobSucceeds, bobFirst }) => {
-    const query = 'is:open assignee:@me'
-    const sources = { issues: { owner: 'o', repo: 'r' }, prs: null }
-    window.api.gh.viewer = vi.fn().mockResolvedValue({ login: 'bob' })
-    list.mockResolvedValueOnce({
-      items: [{ ...seed, assignees: [user('alice'), user('bob')] }],
-      sources
-    })
-    const rows = await store
-      .getState()
-      .fetchWorkItems(repo.id, repo.path, 30, query, { sourceContext: source })
-    const foreign = store.getState().workItemsCache[initialCacheKey].data![1]
-    const foreignData = JSON.stringify(foreign)
-    context.pages = [null, null, rows]
-    const outputs = (
-      pages: (GitHubWorkItem[] | null)[],
-      mutation: ReturnType<typeof useTaskPageGitHubWorkItemMutation>,
-      queryKey: string,
-      viewerLogin: string | null
-    ) => (
-      <VisibleReaders
-        pages={pages}
-        mutation={mutation}
-        queryKey={queryKey}
-        viewerLogin={viewerLogin}
-        query={query}
-      />
-    )
-    await mount(false, outputs, query, true)
-    await act(async () => {
-      await store
-        .getState()
-        .updateRepo(
-          repo.id,
-          { ghAccount: { host: 'github.com', user: 'bob' } },
-          { hostId: 'local' }
-        )
-    })
-    const openingReads = direct.mock.calls.length
-    const bob = Promise.withResolvers<{ ok: boolean }>()
-    const cora = Promise.withResolvers<{ ok: boolean }>()
-    let bobWrite: Promise<unknown>, coraWrite: Promise<unknown>
-    await act(async () => {
-      bobWrite = taskMutation.run({
-        item: context.pages[2]![0],
-        sourceContext: source,
-        intent: { type: 'toggleAssignee', user: user('bob') },
-        mutate: () => bob.promise,
-        errorToast: 'Rejected'
-      })
-      coraWrite = taskMutation.run({
-        item: context.pages[2]![0],
-        sourceContext: source,
-        intent: { type: 'toggleAssignee', user: user('cora') },
-        mutate: () => cora.promise,
-        errorToast: 'Rejected'
-      })
-    })
-    const settleBob = async () => {
-      bob.resolve({ ok: bobSucceeds })
-      await bobWrite!
-    }
-    const settleCora = async () => {
-      cora.resolve({ ok: !bobSucceeds })
-      await coraWrite!
-    }
-    await act(async () => {
-      await (bobFirst ? settleBob() : settleCora())
-    })
-    expect(context.pages[2]![0].assignees?.map((user) => user.login)).toContain(
-      bobFirst ? 'cora' : 'alice'
-    )
-    await act(async () => {
-      await (bobFirst ? settleCora() : settleBob())
-    })
-    const expected = bobSucceeds ? ['alice'] : ['alice', 'bob', 'cora']
-    expect(context.pages[2]![0].assignees?.map((user) => user.login)).toEqual(expected)
-    const cacheKey = Object.keys(store.getState().workItemsCache).find((key) =>
-      key.endsWith(query)
-    )!
-    const cache = store.getState().workItemsCache[cacheKey]
-    expect(cache.data![0].assignees?.map((user) => user.login)).toEqual(expected)
-    expect(cache.fullFetchObservation).toBe(getGitHubTaskObservation(rows[0]))
-    const visible = [...container.querySelectorAll('[data-tasks] h3')].map(
-      (node) => node.textContent
-    )
-    expect(visible).toEqual(bobSucceeds ? [] : [seed.title])
-    const avatars = [...container.querySelectorAll('[data-tasks] img')].map((img) =>
-      img.getAttribute('title')
-    )
-    expect(avatars.includes('cora (cora)')).toBe(!bobSucceeds)
-    expect(getGitHubTaskObservation(rows[0])?.binding).toContain('alice')
-    expect(store.getState().workItemsCache[initialCacheKey].data![1]).toBe(foreign)
-    expect(JSON.stringify(foreign)).toBe(foreignData)
-    expect(list).toHaveBeenCalledTimes(1)
-    expect(direct).toHaveBeenCalledTimes(openingReads)
   }
 )

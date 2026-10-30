@@ -160,7 +160,8 @@ function setTaskPageGitHubMutationQueryKeyNow(
   const inputs = transition?.resolve?.(entries)
   const retire = createListEntryRetirement()
   const plans = entries.flatMap((entry) => {
-    const retirement = retire(entry, inputs?.get(entry))
+    const input = inputs?.get(entry)
+    const retirement = retire(entry, input)
     return retirement ? [{ address: retirement.address, retirement }] : []
   })
   clearLastConfirmedClientValues()

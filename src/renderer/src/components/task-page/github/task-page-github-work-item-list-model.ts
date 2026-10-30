@@ -12,7 +12,11 @@ import type { GitHubAssignableUser } from '../../../../../shared/github/pull-req
 
 import type { TaskPageGitHubListFamily } from './task-page-github-work-item-registry-types'
 
-import { loginSetOfUsers, loginSetsEqual } from './task-page-github-work-item-mutation-patches'
+import {
+  applyTaskPageGitHubListOps,
+  loginSetOfUsers,
+  loginSetsEqual
+} from './task-page-github-work-item-mutation-patches'
 
 export type ListInput = {
   kind: 'full' | 'display'
@@ -76,6 +80,28 @@ export function completedListClaim(entry: ListEntry | undefined): ListProtection
       : entry.protection.facts.size > 0)
     ? entry.protection
     : undefined
+}
+export function completedListInput(entry: ListEntry | undefined): ListInput | undefined {
+  if (!entry || !completedListClaim(entry)) {
+    return undefined
+  }
+  const users =
+    entry.protection.kind === 'whole'
+      ? entry.protection.expectedUsers.map((user) => ({ ...user }))
+      : applyTaskPageGitHubListOps(
+          entry.base.users,
+          [...entry.protection.facts].map(([login, fact]) => ({
+            family: entry.family,
+            logins: [login],
+            kind: fact.user ? 'add' : 'remove',
+            users: fact.user ? [fact.user] : undefined
+          }))
+        )
+  return {
+    kind: 'display',
+    users,
+    origin: entry.base.origin ? { kind: 'ordinary', owner: entry.base.origin.owner } : undefined
+  }
 }
 export function matchesListClaim(
   claim: ListProtection,

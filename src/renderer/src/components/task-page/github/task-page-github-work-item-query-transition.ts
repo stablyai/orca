@@ -1,7 +1,5 @@
 import type { AppState } from '@/store/types'
 
-import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
-
 import { taskPageGitHubOwnedItemKey } from './task-page-github-work-item-mutation-keys'
 
 import {
@@ -59,20 +57,33 @@ export function transitionTaskPageGitHubMutationQuery(
       const inspect = (row: Parameters<typeof listInput>[0]) => {
         const owner = currentOwner(row)
         for (const family of ['assignees', 'reviewRequests'] as const) {
-          const key =
-            taskPageGitHubOwnedItemKey(
-              owner ? getTaskSourceCacheScope(owner.source) : null,
-              row.repoId,
-              taskPageGitHubMutationItemId(row),
-              owner?.key
-            ) + family
-          const entry = addresses.get(key)
-          if (!entry || inputs.has(entry)) {
-            continue
+          const matches = owner
+            ? owner.associations.flatMap((association) => {
+                const entry = addresses.get(
+                  taskPageGitHubOwnedItemKey(
+                    association.scope,
+                    row.repoId,
+                    taskPageGitHubMutationItemId(row),
+                    association.key
+                  ) + family
+                )
+                return entry ? [entry] : []
+              })
+            : []
+          const legacy = addresses.get(
+            taskPageGitHubOwnedItemKey(null, row.repoId, taskPageGitHubMutationItemId(row)) + family
+          )
+          if (legacy) {
+            matches.push(legacy)
           }
-          const input = listInput(row, family, entry.observation)
-          if (input.kind === 'full') {
-            inputs.set(entry, input)
+          for (const entry of matches) {
+            if (entry.itemType !== row.type || inputs.has(entry)) {
+              continue
+            }
+            const input = listInput(row, family, entry.observation)
+            if (input.kind === 'full') {
+              inputs.set(entry, input)
+            }
           }
         }
       }
@@ -92,7 +103,9 @@ export function transitionTaskPageGitHubMutationQuery(
       if (!plans.length) {
         return
       }
-      const requests = new Map<string, GitHubWorkItemPatch>()
+      const requests = new Map(
+        plans.map((plan) => [plan, new Map<string, GitHubWorkItemPatch>()] as const)
+      )
       const lifetimes = new Map(
         plans.flatMap((plan) =>
           plan.retirement ? [[plan.retirement.fromLifetime, plan] as const] : []
@@ -106,14 +119,8 @@ export function transitionTaskPageGitHubMutationQuery(
             if (!plan) {
               continue
             }
-            const key = JSON.stringify([
-              row.repoId,
-              row.id,
-              plan.address.sourceScope,
-              plan.address.observation?.key,
-              family
-            ])
-            requests.set(key, {
+            const key = JSON.stringify([row.repoId, row.id])
+            requests.get(plan)?.set(key, {
               itemId: row.id,
               repoId: row.repoId,
               patch: {},
@@ -128,9 +135,9 @@ export function transitionTaskPageGitHubMutationQuery(
           }
         }
       }
-      state.patchWorkItems([...requests.values()])
+      state.patchWorkItems([...requests.values()].flatMap((selectors) => [...selectors.values()]))
+      const apply = createTaskPageGitHubListCompositionProgram(plans)
       setPages?.((current) => {
-        const apply = createTaskPageGitHubListCompositionProgram(plans)
         return current.map((page) => page?.map(apply) ?? null)
       })
     }

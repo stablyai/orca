@@ -1,6 +1,6 @@
 import { getListEntry } from './task-page-github-work-item-list-registry'
 
-import { applyTaskPageGitHubListOps } from './task-page-github-work-item-mutation-patches'
+import { completedListInput } from './task-page-github-work-item-list-model'
 
 import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
 
@@ -134,18 +134,7 @@ export function getConfirmedListSnapshot(
   itemType?: GitHubWorkItem['type']
 ): GitHubAssignableUser[] | undefined {
   const entry = getListEntry({ sourceScope, repoId, itemId, family, observation, itemType })
-  if (!entry || !completedListClaim(entry)) {
-    return undefined
-  }
-  return entry.protection.kind === 'whole'
+  return entry?.protection.kind === 'whole' && entry.protection.confirmed
     ? entry.protection.expectedUsers
-    : applyTaskPageGitHubListOps(
-        entry.base.users,
-        [...entry.protection.facts].map(([login, fact]) => ({
-          family,
-          logins: [login],
-          kind: fact.user ? 'add' : 'remove',
-          users: fact.user ? [fact.user] : undefined
-        }))
-      )
+    : completedListInput(entry)?.users
 }

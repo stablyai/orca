@@ -1,3 +1,4 @@
+import { markGitHubTaskListWrites, markGitHubTaskDeliveryWrites } from './task-read-reconciliation'
 import {
   batchTaskPageGitHubMutationRegistry,
   observeExistingListBase
@@ -51,6 +52,8 @@ export const createWorkItemMutationActions = (
         observeExistingListBase(address, input, true)
       }
       set(prepared.storePatch)
+      markGitHubTaskDeliveryWrites(prepared.deliveryWrites)
+      markGitHubTaskListWrites(patches.flatMap((request) => request.options?.listComposition ?? []))
     }),
   patchWorkItem: (itemId, patch, repoId, options) =>
     batchTaskPageGitHubMutationRegistry(() => {
@@ -59,6 +62,8 @@ export const createWorkItemMutationActions = (
         observeExistingListBase(address, input, true)
       }
       set(prepared.storePatch)
+      markGitHubTaskDeliveryWrites(prepared.deliveryWrites)
+      markGitHubTaskListWrites(options?.listComposition ?? [])
     }),
 
   setIssueSourcePreference: async (repoId, repoPath, preference, hostId) => {

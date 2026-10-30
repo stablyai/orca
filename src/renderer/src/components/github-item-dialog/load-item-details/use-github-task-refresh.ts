@@ -1,3 +1,4 @@
+import { qualifyGitHubTaskLists } from '@/lib/github-task-observation'
 import { getTaskPageRepoSourceContext } from '@/components/task-page/task-page-source-context'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
 import { getGitHubSourceRuntimeHost } from '@/lib/github-source-runtime-context'
@@ -11,7 +12,7 @@ import {
 import { observeGitHubWorkItemWrites } from '@/lib/github-work-item-writes'
 import { publishGitHubTaskRefresh } from '@/lib/github-task-refresh-publication'
 import { captureTaskPageGitHubRefreshMasks } from '@/components/task-page/github/task-page-github-refresh-masks'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { lookupGitHubWorkItemDetailsForSource } from '@/lib/github-work-item-source-lookup'
 import { canUseGitHubRepoContext } from '@/lib/github-source-runtime-context'
@@ -53,20 +54,23 @@ export function useGitHubTaskRefresh({
   )
   const executionIdentity = useAppStore(() => githubTaskExecutionIdentity(registeredRepo))
   const issueSourcePreference = registeredRepo?.issueSourcePreference
-  const target = useMemo(
-    () =>
-      workItem?.type === 'issue' && sourceContext && registeredRepo
-        ? captureGitHubTaskTarget(
-            useAppStore.getState,
-            workItem,
-            sourceContext,
-            getTaskPageRepoSourceContext(registeredRepo, 'github')
-          )
-        : null,
+  const { target } = useMemo(
+    () => ({
+      executionIdentity,
+      target:
+        workItem?.type === 'issue' && sourceContext && registeredRepo
+          ? captureGitHubTaskTarget(
+              useAppStore.getState,
+              workItem,
+              sourceContext,
+              getTaskPageRepoSourceContext(registeredRepo, 'github')
+            )
+          : null
+    }),
     [workItem, sourceContext, registeredRepo, executionIdentity]
   )
   const [refreshCapability, setRefreshCapability] = useState<string | null>(null)
-  useEffect(() => {
+  const checkRefreshCapability = useEffectEvent(() => {
     let cancelled = false
     if (!target) {
       return
@@ -93,7 +97,8 @@ export function useGitHubTaskRefresh({
     return () => {
       cancelled = true
     }
-  }, [target?.key])
+  })
+  useEffect(() => checkRefreshCapability(), [target?.key])
   const [refreshing, setRefreshing] = useState(false)
   const [refreshFailure, setRefreshFailure] = useState<{ key: string; message: string } | null>(
     null
@@ -212,7 +217,16 @@ export function useGitHubTaskRefresh({
               if (!accepts()) {
                 return false
               }
-              if (result && !retire(result.item)) {
+              if (
+                result &&
+                !retire(
+                  result.item,
+                  qualifyGitHubTaskLists(
+                    { ...result.item, githubObservation: target.observation },
+                    target.observation
+                  )
+                )
+              ) {
                 throw new Error('Task changed during refresh. Try again.')
               }
               return true
@@ -240,7 +254,7 @@ export function useGitHubTaskRefresh({
     } finally {
       dispose()
     }
-  }, [target, canonicalCacheKey, detailsCacheKey, onTaskRefresh, mounted])
+  }, [target, canonicalCacheKey, detailsCacheKey, mounted])
 
   return {
     target,

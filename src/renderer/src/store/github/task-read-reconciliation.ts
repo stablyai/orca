@@ -1,51 +1,37 @@
 import { taskPageGitHubResumeCache } from '@/components/task-page/github/task-page-github-resume-cache'
-
 import {
   createTaskPageGitHubAuthorityProjection,
-  createTaskPageGitHubListCompositionProgram,
-  restoreTaskPageGitHubListOutput
+  createTaskPageGitHubListCompositionProgram
 } from '@/components/task-page/github/task-page-github-work-item-mutation-composition'
-
-import { taskPageGitHubMutationItemId } from '@/components/task-page/github/task-page-github-work-item-mutation-keys'
-
-import {
-  listInput,
-  type ListRetirement
+import type {
+  ListComposition,
+  ListRetirement
 } from '@/components/task-page/github/task-page-github-work-item-mutation-registry'
-
-import { patchObservedGitHubWorkItem } from '@/lib/github-task-observation'
-
 import {
-  captureGitHubTaskObservation,
   getGitHubTaskObservation,
   type ObservedGitHubWorkItem
 } from '@/lib/github-task-observation'
-
-import { getGitHubRepoLookupIndex } from '../slices/github-repo-lookup-index'
-
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-
+import { githubTaskSourceKey } from '@/lib/github-task-target'
 import { getGitHubSourceRuntimeTarget } from '@/lib/github-source-runtime-context'
-
-import {
-  githubTaskIdentity,
-  githubTaskSourceKey,
-  githubTaskContent,
-  type captureGitHubTaskTarget
-} from '@/lib/github-task-target'
-
+import { captureGitHubTaskReadDomains } from './task-read-domains'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-
 import type { AppState } from '../types'
+import {
+  applyGitHubTaskReadProgram,
+  rowKey,
+  dependency,
+  type RefreshTarget,
+  type ReadOperation,
+  type ReadPatch,
+  type ReadWrite,
+  type GitHubTaskDeliveryWrite
+} from './task-read-program'
+import { materializeGitHubTaskDelivery } from './task-read-delivery'
+export type { GitHubTaskDeliveryWrite } from './task-read-program'
 
-type RefreshTarget = NonNullable<ReturnType<typeof captureGitHubTaskTarget>>
-type ReadPatch = { target: RefreshTarget; item: ObservedGitHubWorkItem; body: string }
-type ReadListProgram = { retirements: readonly ListRetirement[] }
 const liveTaskReads = new Set<GitHubTaskRead>()
-const rowKey = (row: GitHubWorkItem, host = row.repoHostId ?? '') =>
-  `${row.repoId}\0${host}\0${githubTaskIdentity(row)}`
 export type GitHubTaskRead = ReturnType<typeof beginGitHubTaskRead>
 /** Marks live only through their final owner's commit; queued pure updaters keep their local marks. */
 export function beginGitHubTaskRead(
@@ -53,35 +39,24 @@ export function beginGitHubTaskRead(
   projectTarget?: RuntimeClientTarget,
   state?: Pick<AppState, 'repos'>
 ) {
-  const lookup = getGitHubRepoLookupIndex(state?.repos)
-  const owners = sources.map((source) => {
-    const repo = source.sourceContext?.hostId
-      ? source.path
-        ? lookup.findOnHost(source.sourceContext.hostId, source.repoId, source.path)
-        : lookup.findByHostAndId(source.sourceContext.hostId, source.repoId)
-      : lookup.findByIdOrPath(source.repoId, source.path ?? '')
-    return { source, observation: repo && captureGitHubTaskObservation(repo, source.sourceContext) }
-  })
-  const scopes = new Set(
-    owners.flatMap((owner) => (owner.observation ? [owner.observation.key] : []))
-  )
-  const legacy = new Set(
-    owners
-      .filter((owner) => !owner.observation)
-      .map((owner) =>
-        JSON.stringify([owner.source.repoId, githubTaskSourceKey(owner.source.sourceContext)])
-      )
-  )
-  const listDomains = new Set(
-    owners.flatMap((owner) =>
-      owner.observation
-        ? owner.observation.associations.map((association) =>
-            JSON.stringify([owner.source.repoId, association.scope])
-          )
-        : [JSON.stringify([owner.source.repoId, githubTaskSourceKey(owner.source.sourceContext)])]
-    )
-  )
-  const program: (ReadPatch | ReadListProgram)[] = []
+  const { scopes, legacy, listDomains } = captureGitHubTaskReadDomains(sources, state)
+  let program: ReadOperation[] = []
+  const borrowed = new Set<string>()
+  const borrowedRows = new Map<string, GitHubWorkItem>()
+  let pending: GitHubWorkItem[] | undefined
+  let publish: ((update: (current: GitHubWorkItem[]) => GitHubWorkItem[]) => void) | undefined
+  let previous: GitHubWorkItem[] | undefined
+  const ownedFields = new Map<string, Set<keyof GitHubWorkItem>>()
+  let release: (() => void) | undefined
+  let version = 0,
+    settled = false,
+    committed = 0
+  const receive = (operation: ReadOperation) => {
+    program = [...program, operation]
+    if (pending && publish) {
+      read.deliver(pending, publish)
+    }
+  }
   const read = {
     mark(target: RefreshTarget, item: GitHubWorkItem, body: string) {
       if (
@@ -93,15 +68,129 @@ export function beginGitHubTaskRead(
           JSON.stringify(projectTarget) ===
             JSON.stringify(getGitHubSourceRuntimeTarget(target.source)))
       ) {
-        program.push({ target, item, body })
+        receive({ target, item, body })
       }
     },
-    retire(index: ReadonlyMap<string, readonly ListRetirement[]>) {
+    retire(
+      index: ReadonlyMap<string, readonly ListRetirement[]>,
+      projection = createTaskPageGitHubAuthorityProjection()
+    ) {
       for (const domain of listDomains) {
         const retirements = index.get(domain)
         if (retirements?.length) {
-          program.push({ retirements })
+          receive({ retirements, projection })
         }
+      }
+    },
+    assign(index: ReadonlyMap<string, readonly GitHubTaskDeliveryWrite[]>) {
+      for (const domain of listDomains) {
+        for (const write of index.get(domain) ?? []) {
+          receive(write)
+        }
+      }
+    },
+    borrow(items: readonly GitHubWorkItem[]) {
+      for (const item of items) {
+        if (!borrowedRows.has(rowKey(item))) {
+          borrowedRows.set(rowKey(item), item)
+        }
+        for (const family of ['assignees', 'reviewRequests']) {
+          borrowed.add(dependency(item, family))
+        }
+      }
+    },
+    write(index: ReadonlyMap<string, readonly ListComposition[]>, apply: ReadWrite['apply']) {
+      for (const domain of listDomains) {
+        const plans = index.get(domain)
+        if (plans?.length) {
+          receive({ plans, apply })
+        }
+      }
+    },
+    deliver(items: readonly GitHubWorkItem[], destination: NonNullable<typeof publish>) {
+      const next = read.apply(items)
+      for (const operation of program) {
+        if ('target' in operation) {
+          const key = rowKey(operation.item, operation.target.hostId)
+          ownedFields.set(
+            key,
+            new Set([
+              ...(ownedFields.get(key) ?? []),
+              'title',
+              'state',
+              'labels',
+              'assignees',
+              'author',
+              'authorAvatarUrl',
+              'updatedAt'
+            ])
+          )
+        }
+      }
+      for (let index = 0; index < next.length; index++) {
+        const before: ObservedGitHubWorkItem = items[index],
+          after: ObservedGitHubWorkItem = next[index]
+        if (before === after) {
+          continue
+        }
+        const fields = ownedFields.get(rowKey(after)) ?? new Set<keyof GitHubWorkItem>()
+        for (const field of [
+          'title',
+          'state',
+          'labels',
+          'assignees',
+          'author',
+          'authorAvatarUrl',
+          'updatedAt',
+          'reviewRequests',
+          'autoMergeEnabled'
+        ] as const) {
+          const family =
+            field === 'autoMergeEnabled'
+              ? 'autoMerge'
+              : field === 'state' || field === 'assignees' || field === 'reviewRequests'
+                ? field
+                : undefined
+          if (
+            before[field] !== after[field] ||
+            (family && before.githubValueOrigins?.[family] !== after.githubValueOrigins?.[family])
+          ) {
+            fields.add(field)
+          }
+        }
+        ownedFields.set(rowKey(after), fields)
+      }
+      program = []
+      pending = next
+      publish = destination
+      const prior = previous
+      previous = next
+      const publication = ++version
+      const dependencies = new Set(borrowed)
+      const previousRows = prior
+        ? new Map(prior.map((row) => [rowKey(row), row]))
+        : new Map(borrowedRows)
+      const fields = new Map([...ownedFields].map(([key, fields]) => [key, new Set(fields)]))
+      destination(
+        Object.assign(
+          (current: GitHubWorkItem[]) =>
+            materializeGitHubTaskDelivery(current, next, prior, previousRows, fields, dependencies),
+          {
+            commit: () => {
+              committed = Math.max(committed, publication)
+              if (settled && committed === version) {
+                read.dispose()
+              }
+            }
+          }
+        )
+      )
+    },
+    finish(onRelease?: () => void) {
+      release = onRelease
+      settled = true
+      if (!publish || committed === version) {
+        read.dispose()
       }
     },
     projectPatches() {
@@ -111,98 +200,23 @@ export function beginGitHubTaskRead(
       items: readonly GitHubWorkItem[],
       current: readonly GitHubWorkItem[] = []
     ): GitHubWorkItem[] {
-      if (!program.length) {
-        return items as GitHubWorkItem[]
-      } // SAFETY: callers never mutate the unchanged readonly array.
-      const keyOf = (repoId: string, itemId: string) => `${repoId}\0${itemId}`
-      const instructions = new Map<string, (ReadPatch | ListRetirement)[]>()
-      for (const operation of program) {
-        for (const instruction of 'retirements' in operation
-          ? operation.retirements
-          : [operation]) {
-          if ('target' in instruction && !instruction.target.current()) {
-            continue
-          }
-          const key =
-            'target' in instruction
-              ? keyOf(instruction.item.repoId, taskPageGitHubMutationItemId(instruction.item))
-              : keyOf(instruction.address.repoId, instruction.address.itemId)
-          const group = instructions.get(key) ?? []
-          group.push(instruction)
-          instructions.set(key, group)
-        }
-      }
-      const latest = new Map(current.map((row: ObservedGitHubWorkItem) => [rowKey(row), row]))
-      let projection: ReturnType<typeof createTaskPageGitHubAuthorityProjection> | undefined
-      return items.map((row: ObservedGitHubWorkItem) => {
-        let result = row
-        const retiredFamilies = new Set<'assignees' | 'reviewRequests'>()
-        for (const instruction of instructions.get(
-          keyOf(row.repoId, taskPageGitHubMutationItemId(row))
-        ) ?? []) {
-          if ('target' in instruction) {
-            const patch = instruction
-            if (!patch.target.matches(row)) {
-              continue
-            }
-            const candidate =
-              latest.get(rowKey(row, patch.target.hostId)) ?? latest.get(rowKey(row, ''))
-            const present =
-              candidate &&
-              (!getGitHubTaskObservation(candidate) ||
-                patch.target.observations.some(
-                  (owner) => owner?.key === getGitHubTaskObservation(candidate)?.key
-                )) &&
-              patch.target.matches(candidate)
-                ? candidate
-                : patch.item
-            result = {
-              ...result,
-              ...githubTaskContent(present),
-              githubObservation: getGitHubTaskObservation(present),
-              githubValueOrigins: present.githubValueOrigins
-            }
-          } else {
-            const { address } = instruction
-            retiredFamilies.add(address.family)
-            if (
-              result.githubValueOrigins?.[address.family]?.listLifetime !== instruction.fromLifetime
-            ) {
-              continue
-            }
-            const candidate =
-              latest.get(rowKey(row, address.observation?.hostId)) ?? latest.get(rowKey(row, ''))
-            result =
-              candidate && listInput(candidate, address.family, address.observation).kind === 'full'
-                ? patchObservedGitHubWorkItem(
-                    result,
-                    { [address.family]: candidate[address.family] },
-                    { [address.family]: candidate.githubValueOrigins?.[address.family] }
-                  )
-                : restoreTaskPageGitHubListOutput(result, instruction)
-          }
-        }
-        // Only dependent output participates; ordinary incoming provider rows stay raw.
-        for (const family of retiredFamilies) {
-          const origin = result.githubValueOrigins?.[family]
-          if (origin?.listLifetime) {
-            result = (projection ??= createTaskPageGitHubAuthorityProjection()).list(result, {
-              address: {
-                sourceScope: origin.owner ? githubTaskSourceKey(origin.owner.source) : null,
-                repoId: result.repoId,
-                itemId: taskPageGitHubMutationItemId(result),
-                itemType: result.type,
-                family,
-                observation: origin.owner
-              }
-            })
-          }
-        }
-        return result
-      })
+      return applyGitHubTaskReadProgram(
+        items,
+        current,
+        program,
+        pending,
+        ownedFields,
+        borrowed,
+        borrowedRows
+      )
     },
     dispose() {
       liveTaskReads.delete(read)
+      pending = undefined
+      publish = undefined
+      const released = release
+      release = undefined
+      released?.()
     }
   }
   liveTaskReads.add(read)
@@ -223,8 +237,9 @@ export function markGitHubTaskListRetirements(retirements: readonly ListRetireme
     group.push(retirement)
     index.set(key, group)
   }
+  const projection = createTaskPageGitHubAuthorityProjection()
   for (const read of liveTaskReads) {
-    read.retire(index)
+    read.retire(index, projection)
   }
   taskPageGitHubResumeCache.patch(
     () => true,
@@ -232,4 +247,41 @@ export function markGitHubTaskListRetirements(retirements: readonly ListRetireme
       retirements.map((retirement) => ({ address: retirement.address, retirement }))
     )
   )
+}
+
+export function markGitHubTaskListWrites(plans: readonly ListComposition[]) {
+  if (!plans.length) {
+    return
+  }
+  const index = new Map<string, ListComposition[]>()
+  for (const plan of plans) {
+    const key = JSON.stringify([plan.address.repoId, plan.address.sourceScope])
+    const group = index.get(key) ?? []
+    group.push(plan)
+    index.set(key, group)
+  }
+  const apply = createTaskPageGitHubListCompositionProgram(plans)
+  for (const read of liveTaskReads) {
+    read.write(index, apply)
+  }
+}
+
+export function markGitHubTaskDeliveryWrites(writes: readonly GitHubTaskDeliveryWrite[]) {
+  if (!writes.length) {
+    return
+  }
+  const index = new Map<string, GitHubTaskDeliveryWrite[]>()
+  for (const write of writes) {
+    const owner = getGitHubTaskObservation(write.after)
+    const key = JSON.stringify([
+      write.after.repoId,
+      owner ? githubTaskSourceKey(owner.source) : null
+    ])
+    const group = index.get(key) ?? []
+    group.push(write)
+    index.set(key, group)
+  }
+  for (const read of liveTaskReads) {
+    read.assign(index)
+  }
 }

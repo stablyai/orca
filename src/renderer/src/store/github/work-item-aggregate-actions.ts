@@ -72,6 +72,7 @@ export const createWorkItemAggregateActions = (
         try {
           return await state.fetchWorkItems(r.repoId, r.path, perRepoLimit, query, {
             ...options,
+            taskRead: read,
             sourceContext: r.sourceContext ?? options?.sourceContext
           })
         } catch (err) {
@@ -101,6 +102,7 @@ export const createWorkItemAggregateActions = (
           const cached = get().workItemsCache[key]?.data
           if (cached && options?.allowStaleFallback !== false) {
             console.warn(`[workItems] ${r.repoId} failed, serving cached:`, err)
+            read.borrow(cached)
             return cached
           }
           console.warn(`[workItems] ${r.repoId} failed:`, err)

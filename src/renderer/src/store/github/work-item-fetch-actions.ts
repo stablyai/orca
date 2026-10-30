@@ -133,14 +133,17 @@ export const createWorkItemFetchActions = (
       observation?.key === cached?.fullFetchObservation?.key &&
       isFresh(cached, WORK_ITEMS_CACHE_TTL)
     ) {
+      options?.taskRead?.borrow(cached.data ?? [])
       return cached.data ?? []
     }
     const inflightKey = `${workItemsInflightRequestKey(key, requestContext.target)}::${observation?.key ?? ''}`
-    const read = beginGitHubTaskRead(
-      [{ repoId, path: repoPath, sourceContext: options?.sourceContext }],
-      undefined,
-      requestState
-    )
+    const read =
+      options?.taskRead ??
+      beginGitHubTaskRead(
+        [{ repoId, path: repoPath, sourceContext: options?.sourceContext }],
+        undefined,
+        requestState
+      )
     let waitedForUpgrade = false
     for (;;) {
       const existing = inflightWorkItemsRequests.get(inflightKey)
@@ -155,7 +158,11 @@ export const createWorkItemFetchActions = (
       if (!weakerThanRequested) {
         return existing.promise
           .then((items) => read.apply(items, get().workItemsCache[key]?.data))
-          .finally(read.dispose)
+          .finally(() => {
+            if (!options?.taskRead) {
+              read.dispose()
+            }
+          })
       }
       // Wait once for weaker requests to coalesce upgrades without starvation.
       if (waitedForUpgrade) {
@@ -284,7 +291,9 @@ export const createWorkItemFetchActions = (
         releaseWorkItemSlot()
       }
     })().finally(() => {
-      read.dispose()
+      if (!options?.taskRead) {
+        read.dispose()
+      }
       if (ownsInflightRequest(inflightWorkItemsRequests, inflightKey, requestId)) {
         inflightWorkItemsRequests.delete(inflightKey)
       }

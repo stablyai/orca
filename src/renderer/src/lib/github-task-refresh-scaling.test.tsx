@@ -374,9 +374,9 @@ it('bounds real ordinary cache reapplication after accepted publication when app
     )
     const readSpies = reads.map((read) => {
       const retire = read.retire
-      return vi.spyOn(read, 'retire').mockImplementation((index) => {
+      return vi.spyOn(read, 'retire').mockImplementation((index, projection) => {
         retiredReads++
-        retire(index)
+        retire(index, projection)
       })
     })
     let visits = 0,
@@ -544,4 +544,234 @@ it('bounds real ordinary cache reapplication after accepted publication when app
     expect(quietScans, 'one quiet adoption traversal').toBeLessThanOrEqual(30 * n + 100)
     expect(quietWrites, 'two ordered quiet transactions').toBeLessThanOrEqual(2)
   }
+})
+
+it('bounds the actual query-transition collector and unchanged sink independently by rows, retired plans and registered owners', async () => {
+  const { transitionTaskPageGitHubMutationQuery } =
+    await import('@/components/task-page/github/task-page-github-work-item-query-transition')
+  const { createTaskPageGitHubAuthorityProjection } =
+    await import('@/components/task-page/github/task-page-github-work-item-mutation-composition')
+  const { subscribeTaskPageGitHubMutationRegistry } =
+    await import('@/components/task-page/github/task-page-github-work-item-mutation-registry')
+  const { observeGitHubWorkItem, gitHubTaskFamilyOrigin } =
+    await import('./github-task-observation')
+  const selectors = await import('@/store/github/work-item-patch-selectors')
+  const measured: object[] = []
+  for (const [n, p, s] of [
+    [100, 10, 1],
+    [1000, 10, 1],
+    [1000, 100, 1],
+    [1000, 1000, 1],
+    [100, 10, 100],
+    [100, 10, 1000]
+  ]) {
+    resetTaskPageGitHubMutationRegistryForTests()
+    setTaskPageGitHubMutationQueryKey('before')
+    fixture()
+    const repos = [
+      repo,
+      ...Array.from({ length: s - 1 }, (_, i) => ({
+        ...repo,
+        id: `unrelated-${i}`,
+        path: `/unrelated-${i}`
+      }))
+    ]
+    store.setState({ repos })
+    const observation = captureGitHubTaskObservation(repo, source)!
+    const scope = getTaskSourceCacheScope(source)
+    const plain = Array.from({ length: n }, (_, i): GitHubWorkItem => ({
+      ...returned.item,
+      id: `issue:${i + 100}`,
+      number: i + 100,
+      repoId: repo.id,
+      url: `https://github.com/o/r/issues/${i + 100}`,
+      assignees: [user('bob')]
+    }))
+    for (const row of [
+      ...plain.slice(0, p),
+      {
+        ...plain[0],
+        number: n + 100,
+        url: `https://github.com/o/r/issues/${n + 100}`,
+        id: `issue:${n + 100}`
+      }
+    ]) {
+      confirmListForTest(
+        scope,
+        repo.id,
+        taskPageGitHubMutationItemId(row),
+        'assignees',
+        [user('bob')],
+        observation
+      )
+    }
+    const project = createTaskPageGitHubAuthorityProjection()
+    const rows = plain.map((row) =>
+      project(observeGitHubWorkItem(row, observation, true), scope, observation)
+    )
+    store.setState({ workItemsCache: { [key]: { data: rows, fetchedAt: 19 } } })
+    let phase = 'collector',
+      familyProbes = 0,
+      tokenProbes = 0,
+      ownerProbes = 0,
+      entryVisits = 0,
+      traversals = 0,
+      rowVisits = 0,
+      sinkRows = 0,
+      commits = 0
+    for (const owner of repos) {
+      const path = owner.path
+      Object.defineProperty(owner, 'path', {
+        configurable: true,
+        enumerable: true,
+        get: () => {
+          ownerProbes++
+          return path
+        }
+      })
+    }
+    const measuredOrigins = new Set<object>()
+    for (const row of rows) {
+      const origins = row.githubValueOrigins
+      if (!origins) {
+        throw new Error('Expected production-issued provenance')
+      }
+      for (const family of ['assignees', 'reviewRequests'] as const) {
+        const origin = origins[family]
+        Object.defineProperty(origins, family, {
+          configurable: true,
+          enumerable: true,
+          get: () => {
+            if (phase === 'collector') {
+              familyProbes++
+            }
+            return origin
+          }
+        })
+        if (origin?.listLifetime && !measuredOrigins.has(origin)) {
+          measuredOrigins.add(origin)
+          const token = origin.listLifetime
+          Object.defineProperty(origin, 'listLifetime', {
+            configurable: true,
+            enumerable: true,
+            get: () => {
+              if (phase === 'collector') {
+                tokenProbes++
+              }
+              return token
+            }
+          })
+        }
+      }
+    }
+    const entries = getTaskPageGitHubListEntries()
+    const values = entries.values.bind(entries)
+    const population = vi.spyOn(entries, 'values').mockImplementation(function* () {
+      for (const entry of values()) {
+        entryVisits++
+        yield entry
+      }
+    })
+    const iterator = rows[Symbol.iterator].bind(rows)
+    const traversal = vi.spyOn(rows, Symbol.iterator).mockImplementation(function* () {
+      if (phase === 'collector') {
+        traversals++
+      }
+      for (const row of iterator()) {
+        if (phase === 'collector') {
+          rowVisits++
+        }
+        yield row
+      }
+    })
+    const forEach = rows.forEach.bind(rows)
+    const callbacks = vi.spyOn(rows, 'forEach').mockImplementation((callback, thisArg) =>
+      forEach((row, index, array) => {
+        sinkRows++
+        callback.call(thisArg, row, index, array)
+      })
+    )
+    const candidates = vi.spyOn(selectors, 'rowMatchesPatch')
+    const events: string[] = []
+    const offStore = store.subscribe(() => {
+      commits++
+      events.push('cache')
+    })
+    const read = beginGitHubTaskRead(
+      [{ repoId: repo.id, path: repo.path, sourceContext: source }],
+      undefined,
+      store.getState()
+    )
+    const retire = read.retire.bind(read)
+    const handoff = vi.spyOn(read, 'retire').mockImplementation((program, projection) => {
+      events.push('read')
+      retire(program, projection)
+    })
+    const offRegistry = subscribeTaskPageGitHubMutationRegistry(() => {
+      events.push('registry')
+      expect(getTaskPageGitHubListEntries().size).toBe(0)
+      const data = store.getState().workItemsCache[key].data!
+      expect(
+        data.slice(0, p).every((row) => !gitHubTaskFamilyOrigin(row, 'assignees')?.listLifetime)
+      ).toBe(true)
+    })
+    const realPatch = store.getState().patchWorkItems
+    const patch = vi.spyOn(store.getState(), 'patchWorkItems').mockImplementation((requests) => {
+      phase = 'sink'
+      realPatch(requests)
+      phase = 'after'
+    })
+    transitionTaskPageGitHubMutationQuery('after', store.getState())
+    const emissions = patch.mock.calls[0][0].length
+    const candidateWork = candidates.mock.calls.length
+    const data = store.getState().workItemsCache[key].data!
+    const count = {
+      n,
+      p,
+      s,
+      familyProbes,
+      tokenProbes,
+      ownerProbes,
+      entryVisits,
+      traversals,
+      rowVisits,
+      emissions,
+      sinkRows,
+      candidateWork,
+      commits,
+      events: [...events]
+    }
+    measured.push(count)
+    expect(emissions).toBe(p)
+    expect(traversals).toBe(2)
+    expect(rowVisits).toBe(2 * n)
+    expect(familyProbes).toBeLessThanOrEqual(4 * n + 2 * p)
+    expect(tokenProbes).toBe(p)
+    expect(entryVisits).toBeLessThanOrEqual(8 * (p + 1))
+    expect(ownerProbes).toBeLessThanOrEqual(20 * s + 100)
+    expect(sinkRows).toBe(n)
+    expect(candidateWork).toBe(p)
+    expect(commits).toBe(1)
+    expect(events).toEqual(['cache', 'read', 'registry'])
+    expect(data.slice(0, p).map((row) => row.url)).toEqual(plain.slice(0, p).map((row) => row.url))
+    expect(data.slice(0, p).every((row) => row.assignees?.[0]?.login === 'bob')).toBe(true)
+    expect(data.slice(p).every((row, i) => row === rows[p + i])).toBe(true)
+    const snapshot = store.getState().workItemsCache
+    commits = 0
+    events.length = 0
+    transitionTaskPageGitHubMutationQuery('empty', store.getState())
+    expect(commits).toBe(0)
+    expect(store.getState().workItemsCache).toBe(snapshot)
+    expect(patch).toHaveBeenCalledTimes(1)
+    offRegistry()
+    offStore()
+    read.dispose()
+    patch.mockRestore()
+    handoff.mockRestore()
+    candidates.mockRestore()
+    callbacks.mockRestore()
+    traversal.mockRestore()
+    population.mockRestore()
+  }
+  console.info('Actual query transition operations', JSON.stringify(measured))
 })

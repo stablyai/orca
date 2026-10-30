@@ -17,6 +17,7 @@ import {
 
 import {
   createListEntryRetirement,
+  listInput,
   getTaskPageGitHubMutationQueryKey,
   batchTaskPageGitHubMutationRegistry,
   getListEntry,
@@ -56,7 +57,7 @@ export function captureTaskPageGitHubRefreshMasks(
       )
     }
   })
-  return (accepted: Pick<GitHubWorkItem, 'state' | 'assignees'>): boolean =>
+  return (accepted: Pick<GitHubWorkItem, 'state' | 'assignees'>, full?: GitHubWorkItem): boolean =>
     batchTaskPageGitHubMutationRegistry(() => {
       const currentIndex = createTaskPageGitHubScalarAuthorityIndex()
       const entries = captured.map((capture) => ({
@@ -120,7 +121,8 @@ export function captureTaskPageGitHubRefreshMasks(
             'assignees',
             entry.observation,
             'issue',
-            retire
+            retire,
+            full ? listInput(full, 'assignees', entry.observation) : undefined
           )
         }
       }

@@ -29,6 +29,8 @@ import {
 import {
   createTaskPageGitHubProjectionContext,
   reapplyPendingTaskPageGitHubMutationsToCache,
+  deliverTaskPageGitHubRead,
+  taskPageGitHubObservedRowKey,
   reconcileTaskPagePagesAfterQuietRefresh
 } from '@/components/task-page/github/task-page-github-work-item-mutation-pages'
 
@@ -272,27 +274,40 @@ export function runTaskPageGitHubQuietRefresh(model: TaskPageGitHubQuietRefreshP
             })
       })
       pagesRef.current = reconciledPages
-      setPages((current) =>
-        reconcileTaskPagePagesAfterQuietRefresh({
-          pages: current,
-          queryKey: githubWorkItemMutationQueryKey,
-          context,
-          authorityPage: quietPage,
-          authorityItems: read.apply(
-            authorityItems,
-            current.flatMap((page) => page ?? [])
-          ),
-          membershipChanged,
-          ...(liveVisiblePage === undefined || liveVisibleItems === undefined
-            ? {}
-            : {
-                visiblePage: liveVisiblePage,
-                visibleItems: read.apply(
-                  liveVisibleItems,
-                  current.flatMap((page) => page ?? [])
-                )
-              })
-        })
+      const authorityRows = new Set(authorityItems.map(taskPageGitHubObservedRowKey))
+      const visibleKeys = new Set(liveVisibleItems?.map(taskPageGitHubObservedRowKey))
+      deliverTaskPageGitHubRead(
+        read,
+        [...authorityItems, ...(liveVisibleItems ?? [])],
+        setPages,
+        pagesRef,
+        context,
+        (current, rows, materialize) => {
+          const next = [...current]
+          const lastPage = liveVisiblePage ?? quietPage
+          while (next.length <= lastPage) {
+            next.push(null)
+          }
+          next[quietPage] = materialize(
+            rows.filter((row) => authorityRows.has(taskPageGitHubObservedRowKey(row))),
+            current[quietPage] ?? []
+          )
+          if (liveVisiblePage !== undefined && liveVisibleItems !== undefined) {
+            if (membershipChanged) {
+              for (let page = quietPage + 1; page < liveVisiblePage; page++) {
+                next[page] = null
+              }
+            }
+            next[liveVisiblePage] = materialize(
+              rows.filter((row) => visibleKeys.has(taskPageGitHubObservedRowKey(row))),
+              current[liveVisiblePage] ?? []
+            )
+          }
+          if (membershipChanged) {
+            next.length = lastPage + 1
+          }
+          return next
+        }
       )
       const attempts = getTaskPageQuietRevalidateBackoffAttempt(quietState.lagSkipAttempts.values())
       const wallExceeded =
@@ -331,7 +346,7 @@ export function runTaskPageGitHubQuietRefresh(model: TaskPageGitHubQuietRefreshP
       }
     })
     .finally(() => {
-      read.dispose()
+      read.finish()
       if (
         !finishTaskPageQuietRevalidateRun(
           quietState,

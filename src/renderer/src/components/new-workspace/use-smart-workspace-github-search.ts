@@ -170,7 +170,8 @@ export function useSmartWorkspaceGithubSearch({
         target.githubSourceContext
       )
       if (cached) {
-        setGithubItems(cached.slice(0, RESULT_LIMIT))
+        read.borrow(cached)
+        read.deliver(cached.slice(0, RESULT_LIMIT), setGithubItems)
         setGithubLoading(false)
       } else {
         setGithubLoading(true)
@@ -181,16 +182,17 @@ export function useSmartWorkspaceGithubSearch({
       })
         .then((items) => {
           if (!stale) {
-            setGithubItems((current) => read.apply(items, current).slice(0, RESULT_LIMIT))
+            read.deliver(items.slice(0, RESULT_LIMIT), setGithubItems)
           }
         })
         .catch(() => {
           if (!stale) {
+            read.dispose()
             setGithubItems([])
           }
         })
         .finally(() => {
-          read.dispose()
+          read.finish()
           if (!stale) {
             setGithubLoading(false)
           }
@@ -211,16 +213,17 @@ export function useSmartWorkspaceGithubSearch({
       )
         .then((result) => {
           if (!stale) {
-            setGithubItems((current) => read.apply(result.items, current))
+            read.deliver(result.items, setGithubItems)
           }
         })
         .catch(() => {
           if (!stale) {
+            read.dispose()
             setGithubItems([])
           }
         })
         .finally(() => {
-          read.dispose()
+          read.finish()
           if (!stale) {
             setGithubLoading(false)
           }

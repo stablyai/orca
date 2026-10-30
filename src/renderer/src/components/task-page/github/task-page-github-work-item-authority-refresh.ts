@@ -1,3 +1,6 @@
+import { taskPageGitHubMutationItemId } from './task-page-github-work-item-mutation-keys'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import { getGitHubTaskObservation } from '@/lib/github-task-observation'
 import type { GitHubTaskObservation } from '@/lib/github-task-observation'
 
 import {
@@ -7,6 +10,7 @@ import {
 
 import {
   createListEntryRetirement,
+  listInput,
   clearConfirmedAuthorityForItem,
   deleteConfirmedListSnapshot,
   getTaskPageGitHubConfirmedAuthorities,
@@ -78,8 +82,24 @@ export function getTaskPageGitHubRevalidatableAuthorityItemKeys(
 function clearTaskPageGitHubAuthorityThroughGenerationNow(
   queryKey: string,
   generation: number,
-  owns?: (owner: GitHubTaskObservation | undefined) => boolean
+  owns?: (owner: GitHubTaskObservation | undefined) => boolean,
+  items: readonly GitHubWorkItem[] = []
 ): void {
+  const replacements = new Map<string, GitHubWorkItem>()
+  for (const item of items) {
+    const owner = getGitHubTaskObservation(item)
+    for (const association of owner?.associations ?? []) {
+      const key = taskPageGitHubOwnedItemKey(
+        association.scope,
+        item.repoId,
+        taskPageGitHubMutationItemId(item),
+        association.key
+      )
+      if (!replacements.has(key)) {
+        replacements.set(key, item)
+      }
+    }
+  }
   const quiet = getQuietRevalidateState(queryKey)
   const retire = createListEntryRetirement()
   for (const {
@@ -106,7 +126,8 @@ function clearTaskPageGitHubAuthorityThroughGenerationNow(
           family,
           observation,
           itemType,
-          retire
+          retire,
+          replacements.has(key) ? listInput(replacements.get(key)!, family, observation) : undefined
         )
       } else if (
         getLastConfirmedClientEntry(sourceScope, repoId, itemId, family)?.observation?.key ===

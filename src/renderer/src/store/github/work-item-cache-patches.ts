@@ -1,3 +1,4 @@
+import type { GitHubTaskDeliveryWrite } from './task-read-reconciliation'
 import { inheritScalarOrigins } from './work-item-patch-selectors'
 
 import {
@@ -40,6 +41,7 @@ export function prepareWorkItemPatches(
   indexed: boolean
 ) {
   const projection = createTaskPageGitHubAuthorityProjection()
+  const deliveryWrites: GitHubTaskDeliveryWrite[] = []
   const existingEntryBaseObservations: { address: ListAddress; input: ListInput }[] = []
   const observationFor = createGitHubTaskObservationIndex(s.repos, () => null)
   const validated = new Map<
@@ -150,7 +152,7 @@ export function prepareWorkItemPatches(
     }
   })
   if (!prepared.length) {
-    return { storePatch: s, existingEntryBaseObservations }
+    return { storePatch: s, existingEntryBaseObservations, deliveryWrites }
   }
   const destinations: (() => void)[] = []
   let nextCache: AppState['workItemsCache'] | undefined
@@ -263,6 +265,29 @@ export function prepareWorkItemPatches(
         if (updated === item) {
           return
         }
+        const written = (
+          [
+            'title',
+            'state',
+            'labels',
+            'assignees',
+            'author',
+            'authorAvatarUrl',
+            'updatedAt',
+            'reviewRequests',
+            'autoMergeEnabled'
+          ] as const
+        ).filter(
+          (field) =>
+            fields.has(field) ||
+            program.some(
+              (instruction) =>
+                !instruction.plan && instruction.assigned && instruction.family === field
+            )
+        )
+        if (written.length) {
+          deliveryWrites.push({ before: item, after: updated, written })
+        }
         updatedItems ??= [...entry.data!]
         updatedItems[index] = updated
         nextCache ??= { ...s.workItemsCache }
@@ -275,7 +300,8 @@ export function prepareWorkItemPatches(
   }
   return {
     storePatch: nextCache ? { workItemsCache: nextCache } : s,
-    existingEntryBaseObservations
+    existingEntryBaseObservations,
+    deliveryWrites
   }
 }
 

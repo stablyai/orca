@@ -1,4 +1,6 @@
-import { useEffect, useEffectEvent, useMemo, useState } from 'react'
+import { beginGitHubTaskRead, type GitHubTaskRead } from '@/store/github/request-coordination'
+import { makeCmdJTaskSearchResult } from './cmd-j/task-search-results'
+import { useEffect, useEffectEvent, useLayoutEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import { forEachWithConcurrency } from '../../../shared/map-with-concurrency'
@@ -20,7 +22,7 @@ type Input = Pick<WorktreeJumpPaletteStoreState, 'visible' | 'repos' | 'settings
 type SearchSnapshot = {
   key: string
   session: object
-  results: CmdJTaskSearchResult[]
+  groups: ReadonlyMap<string, { results: CmdJTaskSearchResult[]; commit?: () => void }>
   loading: boolean
   failures: string[]
 }
@@ -45,6 +47,11 @@ export function useWorktreeJumpPaletteTaskSearch({
     }))
   )
   const [snapshot, setSnapshot] = useState<SearchSnapshot | null>(null)
+  useLayoutEffect(() => {
+    for (const group of snapshot?.groups.values() ?? []) {
+      group.commit?.()
+    }
+  }, [snapshot])
   const [retryNonce, setRetryNonce] = useState(0)
   const hostLabels = useMemo(
     () => new Map(hostOptions.map((host) => [host.id, host.label])),
@@ -77,8 +84,9 @@ export function useWorktreeJumpPaletteTaskSearch({
     connectionScope,
     retryNonce
   ])
-  const buildRequests = useEffectEvent((signal: AbortSignal) =>
-    createCmdJTaskSearchRequests({
+  const buildRequests = useEffectEvent((signal: AbortSignal) => ({
+    repos,
+    requests: createCmdJTaskSearchRequests({
       query: query.trim(),
       repos,
       settings,
@@ -87,26 +95,29 @@ export function useWorktreeJumpPaletteTaskSearch({
       hostLabels,
       signal
     })
-  )
+  }))
   useEffect(() => {
     if (!searchEnabled) {
       return
     }
     const controller = new AbortController()
-    const resultsByRequest = new Map<string, CmdJTaskSearchResult[]>()
+    const reads = new Set<GitHubTaskRead>()
     const failures: string[] = []
-    const requests = buildRequests(controller.signal)
+    const { requests, repos: requestRepos } = buildRequests(controller.signal)
     let loadingVisible = false
     let pending = requests.length
     const publish = (): void => {
       if (!controller.signal.aborted) {
-        setSnapshot({
+        const loading = pending > 0 && loadingVisible
+        const failed = [...failures]
+        setSnapshot((current) => ({
           key: requestKey,
           session,
-          results: mergeCmdJTaskSearchResults([...resultsByRequest.values()]),
-          loading: pending > 0 && loadingVisible,
-          failures: [...failures]
-        })
+          groups:
+            current?.key === requestKey && current.session === session ? current.groups : new Map(),
+          loading,
+          failures: failed
+        }))
       }
     }
     const loadingTimer = setTimeout(() => {
@@ -124,14 +135,93 @@ export function useWorktreeJumpPaletteTaskSearch({
         if (controller.signal.aborted) {
           return
         }
+        let read: GitHubTaskRead | undefined
         try {
-          const results = await request.run()
-          resultsByRequest.set(request.id, results)
+          read = request.githubSource
+            ? beginGitHubTaskRead([request.githubSource], undefined, { repos: requestRepos })
+            : undefined
+          if (read) {
+            reads.add(read)
+          }
+          const results = await request.run(read || undefined)
+          if (controller.signal.aborted) {
+            return
+          }
+          const loading = pending > 1 && loadingVisible
+          const failed = [...failures]
+          if (read) {
+            const template = new Map(
+              results.map((result) => [
+                result.task.issue.url,
+                {
+                  sourceContext: result.sourceContext,
+                  initialRepoId: result.initialRepoId,
+                  hostLabel: result.hostLabel
+                }
+              ])
+            )
+            const items = results.flatMap((result) =>
+              result.task.provider === 'github' ? [result.task.issue] : []
+            )
+            read.deliver(items, (update) =>
+              setSnapshot((current) => {
+                const groups = new Map(
+                  current?.key === requestKey && current.session === session ? current.groups : []
+                )
+                const existing = groups.get(request.id)?.results ?? []
+                const rows = update(
+                  existing.flatMap((result) =>
+                    result.task.provider === 'github' ? [result.task.issue] : []
+                  )
+                )
+                const receipt = 'commit' in update ? update.commit : undefined
+                groups.set(request.id, {
+                  results: rows.flatMap((issue) => {
+                    const wrapper = template.get(issue.url)
+                    return wrapper
+                      ? [
+                          makeCmdJTaskSearchResult(
+                            { provider: 'github', issue },
+                            wrapper.sourceContext,
+                            wrapper.initialRepoId,
+                            wrapper.hostLabel
+                          )
+                        ]
+                      : []
+                  }),
+                  commit: typeof receipt === 'function' ? () => receipt() : undefined
+                })
+                return {
+                  key: requestKey,
+                  session,
+                  groups,
+                  loading:
+                    current?.key === requestKey && current.session === session
+                      ? current.loading
+                      : loading,
+                  failures:
+                    current?.key === requestKey && current.session === session
+                      ? current.failures
+                      : failed
+                }
+              })
+            )
+          } else {
+            setSnapshot((current) => {
+              const groups = new Map(
+                current?.key === requestKey && current.session === session ? current.groups : []
+              )
+              groups.set(request.id, { results })
+              return { key: requestKey, session, groups, loading, failures: failed }
+            })
+          }
         } catch {
           if (!controller.signal.aborted) {
             failures.push(`${request.provider} · ${request.hostLabel}`)
           }
         } finally {
+          const completed = read
+          completed?.finish(() => reads.delete(completed))
           pending -= 1
           publish()
         }
@@ -145,20 +235,27 @@ export function useWorktreeJumpPaletteTaskSearch({
     }, TASK_SEARCH_DEBOUNCE_MS)
     return () => {
       controller.abort()
+      for (const read of reads) {
+        read.dispose()
+      }
       clearTimeout(debounce)
       clearTimeout(loadingTimer)
     }
   }, [searchEnabled, session, requestKey])
   const current =
     searchEnabled && snapshot?.key === requestKey && snapshot.session === session ? snapshot : null
+  const groups = current?.groups
   const taskItems = useMemo(
     () =>
-      (current?.results ?? EMPTY_RESULTS).map((result) => ({
+      (groups
+        ? mergeCmdJTaskSearchResults([...groups.values()].map((group) => group.results))
+        : EMPTY_RESULTS
+      ).map((result) => ({
         id: result.id,
         type: 'task' as const,
         result
       })),
-    [current?.results]
+    [groups]
   )
   const retryTaskSearch = (): void => setRetryNonce((value) => value + 1)
   return {

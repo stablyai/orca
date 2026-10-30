@@ -390,6 +390,74 @@ it('reconciles a real aggregate held leaf at landing final commit against a newe
     'After second acceptance'
   )
   quietCleanup?.()
+  const { useTaskPageGitHubLandingRefresh } =
+    await import('@/components/task-page/github/use-task-page-github-landing-refresh')
+  const { VisibleReaders } = await import('./github-task-refresh-visible-readers.test-fixture')
+  const cancelledLeaf = Promise.withResolvers<unknown>()
+  list.mockImplementation((args: { query?: string }) =>
+    args.query === 'is:open assignee:cora'
+      ? cancelledLeaf.promise
+      : Promise.resolve({
+          items: [{ ...seed, title: 'Current landing Dora', assignees: [user('dora')] }],
+          sources: { issues: { owner: 'o', repo: 'r' }, prs: null }
+        })
+  )
+  let landingPages = context.pages
+  function LandingOwner({ search, mutationKey }: { search: string; mutationKey: string }) {
+    const [pages, setPages] = React.useState<(GitHubWorkItem[] | null)[]>([])
+    const live = React.useRef(pages)
+    React.useLayoutEffect(() => {
+      landingPages = pages
+      live.current = pages
+    }, [pages])
+    useTaskPageGitHubLandingRefresh({
+      ...model,
+      selectedRepos: [repo],
+      appliedTaskSearch: search,
+      appliedTaskQuery: parseTaskQuery(search),
+      githubWorkItemMutationQueryKey: mutationKey,
+      currentPageRef,
+      pagesRef: live,
+      setPages,
+      githubResumeContextKey: 'cancellation-control',
+      taskRefreshNonce: 3
+    } as TaskPageGitHubSearchPaginationModel)
+    // SAFETY: reuse the complete real landing model with this owner's actual React pages/setter.
+    return (
+      <TooltipProvider>
+        <VisibleReaders
+          pages={[null, null, pages[0] ?? null]}
+          mutation={taskMutation}
+          queryKey={mutationKey}
+          query={search}
+          viewerLogin="alice"
+          kind="issues"
+        />
+      </TooltipProvider>
+    )
+  }
+  await act(async () =>
+    context.root.render(<LandingOwner search="is:open assignee:cora" mutationKey="landing-old" />)
+  )
+  await act(async () =>
+    context.root.render(<LandingOwner search="is:open assignee:dora" mutationKey="landing-new" />)
+  )
+  expect(landingPages[0]?.[0].title).toBe('Current landing Dora')
+  await act(async () =>
+    cancelledLeaf.resolve({
+      items: [{ ...seed, title: 'Cancelled landing Cora', assignees: [user('cora')] }],
+      sources: { issues: { owner: 'o', repo: 'r' }, prs: null }
+    })
+  )
+  console.info(
+    'R5-BOUNDARY-LANDING-CANCEL',
+    JSON.stringify({
+      pages: landingPages,
+      visible: [...container.querySelectorAll('[data-tasks] h3')].map((n) => n.textContent)
+    })
+  )
+  expect(landingPages[0]?.[0].title).toBe('Current landing Dora')
+  expect(container.querySelector('[data-tasks] h3')?.textContent).toBe('Current landing Dora')
 })
 
 it.each(['rollback', 'null', 'error'] as const)(

@@ -52,7 +52,6 @@ export function publishGitHubTaskRefresh(
         : []
     )
   )
-  markGitHubTaskReads(target, accepted, details.body)
   const state = useAppStore.getState()
   state.patchWorkItem(target.item.id, patch, target.item.repoId, {
     observation: target.observation,
@@ -95,6 +94,7 @@ export function publishGitHubTaskRefresh(
       ),
     (row) => (target.matches(row) ? { ...row, ...patch } : row)
   )
+  markGitHubTaskReads(target, accepted, details.body)
   onItem?.(accepted, target)
   return accepted
 }

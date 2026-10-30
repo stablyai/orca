@@ -27,6 +27,7 @@ import {
 
 import {
   listInput,
+  completedListInput,
   type ListEntry,
   type ListAddress,
   type ListInput,
@@ -244,7 +245,7 @@ export function retireListEntry(
   const survivors = pending
     .get(key)
     ?.some((op) => op.key.observation?.key === expected.observation?.key)
-  const base = present?.kind === 'full' ? present : expected.base
+  const base = present ?? completedListInput(expected) ?? expected.base
   const { sourceScope, repoId, itemId, itemType, family, observation } = expected
   const address = { sourceScope, repoId, itemId, itemType, family, observation }
   confirmedSnapshots.delete(key)
@@ -275,10 +276,11 @@ export function deleteConfirmedListSnapshot(
   family: TaskPageGitHubListFamily,
   observation?: GitHubTaskObservation,
   itemType: GitHubWorkItem['type'] = 'issue',
-  retire = createListEntryRetirement()
+  retire = createListEntryRetirement(),
+  input?: ListInput
 ): ListRetirement | undefined {
   const entry = getListEntry({ sourceScope, repoId, itemId, family, observation, itemType })
-  const retirement = entry && retire(entry)
+  const retirement = entry && retire(entry, input)
   if (retirement) {
     publishListRetirements([retirement])
   }
