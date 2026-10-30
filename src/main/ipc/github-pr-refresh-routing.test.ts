@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = await vi.hoisted(async () => {
@@ -125,7 +126,7 @@ describe('registerGitHubHandlers', () => {
 
     expect(
       handlers['gh:reportVisiblePRRefreshCandidates'](
-        { sender: { id: 7, once: vi.fn() } },
+        { sender: Object.assign(new EventEmitter(), { id: 7 }) },
         {
           generation: 1,
           candidates: [
@@ -165,7 +166,7 @@ describe('registerGitHubHandlers', () => {
     registerGitHubHandlers(store as never, stats as never)
 
     await handlers['gh:reportVisiblePRRefreshCandidates'](
-      { sender: { id: 8, once: vi.fn() } },
+      { sender: Object.assign(new EventEmitter(), { id: 8 }) },
       {
         generation: 2,
         candidates: [

@@ -65,16 +65,20 @@ export function codexAuthCouldBelongToManagedAccount(
   account: CodexManagedAccount
 ): boolean {
   const identity = readCodexAuthIdentity(runtimeAuthContents)
-  return (
-    !identity ||
-    !identityContradictsSelection(
-      {
-        email: normalizeField(account.email),
-        providerAccountId: normalizeField(account.providerAccountId),
-        workspaceAccountId: normalizeField(account.workspaceAccountId)
-      },
-      identity
-    )
+  return !identity || !codexAuthIdentityContradictsAccount(identity, account)
+}
+
+export function codexAuthIdentityContradictsAccount(
+  identity: CodexAuthIdentity,
+  account: CodexManagedAccount
+): boolean {
+  return identityContradictsSelection(
+    {
+      email: normalizeField(account.email),
+      providerAccountId: normalizeField(account.providerAccountId),
+      workspaceAccountId: normalizeField(account.workspaceAccountId)
+    },
+    identity
   )
 }
 

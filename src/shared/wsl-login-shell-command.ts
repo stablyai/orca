@@ -1,17 +1,9 @@
 import { getFishClaudeShellFunction } from './claude-shell-function'
+import { FISH_WSL_CWD_REPORT_FUNCTION } from './fish-wsl-cwd-report'
 import { buildPosixStdoutFence, type PosixStdoutFence } from './posix-stdout-fence'
 import { quotePosixShell } from './shell-argument-quoting'
 
-/**
- * Build `wsl.exe` argv that hands a POSIX script to the guest byte-for-byte.
- *
- * Why: `wsl.exe -d <distro> -- <argv>` expands `$name` in every argument against
- * the guest environment before the guest ever runs — it does this even when no
- * shell is in the command, so `-- /usr/bin/printf %s '$HOME'` prints /home/you.
- * That silently rewrites scripts (`awk '{print $2}'` loses its field ref) and no
- * amount of escaping on our side is reliable. `--exec` skips that preprocessing
- * and passes argv through untouched, so scripts mean what they say.
- */
+/** Use --exec to preserve guest argv. WSL’s -- expands $name even without a shell, corrupting scripts such as awk field references; host escaping cannot reliably prevent it. */
 export function buildWslExecArgs(
   distro: string | undefined,
   shellArgs: readonly string[],
@@ -46,21 +38,18 @@ export function buildWslLoginShellCommand(command: string): string {
 
 export type WslCapturedLoginShellCommand = PosixStdoutFence
 
-/**
- * Run `command` through the distro login shell and fence its stdout.
- *
- * Why: the login shell has to be interactive for bash/zsh so PATH matches what
- * the user sees in their own terminal (nvm, mise and asdf all install into rc
- * files that only interactive shells read). But an interactive shell also runs
- * the distro's rc/motd, and stock Ubuntu writes its "run a command as
- * administrator" hint to *stdout*. The fence keeps the PATH benefit without the noise.
- */
+/** Use interactive bash/zsh login rc files for the user’s PATH, then fence stdout to exclude distro rc/motd chatter. */
 export function buildWslCapturedLoginShellCommand(
   command: string,
   nonce?: string
 ): WslCapturedLoginShellCommand {
   const fence = buildPosixStdoutFence(command, 'WSL', nonce)
   return { ...fence, command: buildWslLoginShellCommand(fence.command) }
+}
+
+/** A bridge fish pane's `-C`: run after the user's config.fish, so it adds and never replaces. */
+export function getWslFishInitCommand(): string {
+  return `${getFishClaudeShellFunction()}\n${FISH_WSL_CWD_REPORT_FUNCTION}`
 }
 
 export function buildWslInteractiveLoginShellCommand(): string {
@@ -73,10 +62,7 @@ export function buildWslInteractiveLoginShellCommand(): string {
     '  _orca_wsl_shell=/bin/sh',
     'fi',
     '_orca_shell_ready_root=""',
-    // Why the explicit root first: the wrapper tree is content-addressed, so its
-    // path carries a hash the guest cannot derive. The host publishes the
-    // resolved root and WSLENV /p-translates it. The ORCA_USER_DATA_PATH branch
-    // stays as the fallback for an older host that exports only that.
+    // Use the host-published content-addressed wrapper root, /p-translated by WSLENV. Retain userData fallback for older hosts.
     'if [ -n "${ORCA_SHELL_READY_ROOT:-}" ]; then',
     '  _orca_shell_ready_root="${ORCA_SHELL_READY_ROOT%/}"',
     'elif [ -n "${ORCA_USER_DATA_PATH:-}" ]; then',
@@ -90,12 +76,33 @@ export function buildWslInteractiveLoginShellCommand(): string {
     '    fi',
     '    ;;',
     // Why: a WSL fish pane gets no shell-ready wrapper or XDG handoff, so this is its only `claude`.
+    // fish before 2.7 rejects -C and would fail the pane; it starts plain (no claude, no cwd hook).
+    // fish 2.x prints --version to stderr, so both streams are read.
     '  fish)',
-    `    exec "$_orca_wsl_shell" -l -C ${quotePosixShell(getFishClaudeShellFunction())}`,
+    '    _orca_fish_version=$("$_orca_wsl_shell" --version 2>&1)',
+    '    case "${_orca_fish_version##*version }" in',
+    '      [01].*|2.[0-6]|2.[0-6].*) ;;',
+    `      *) exec "$_orca_wsl_shell" -l -C ${quotePosixShell(getWslFishInitCommand())} ;;`,
+    '    esac',
     '    ;;',
     '  zsh)',
     '    if [ -n "${_orca_shell_ready_root:-}" ] && [ -d "${_orca_shell_ready_root}/zsh" ]; then',
     '      export ZDOTDIR="${_orca_shell_ready_root}/zsh"',
+    '    fi',
+    '    ;;',
+    // Why ENV: dash has no rcfile flag or prompt hook; an interactive sh reads $ENV after ~/.profile.
+    // The shell expands ENV's value, so a root containing $, ` or \ is skipped, never mangled.
+    '  sh|dash|ash)',
+    '    if [ -n "${_orca_shell_ready_root:-}" ] && [ -f "${_orca_shell_ready_root}/sh/env" ]; then',
+    '      case "$_orca_shell_ready_root" in',
+    "        *'$'*|*'`'*|*'\\'*) ;;",
+    '        *)',
+    // If ~/.profile replaces ENV, nothing of ours runs after it to unset this; it then holds only the
+    // user's own former ENV value.
+    '          if [ -n "${ENV+x}" ]; then export ORCA_WSL_USER_ENV="$ENV"; fi',
+    '          export ENV="${_orca_shell_ready_root}/sh/env"',
+    '          ;;',
+    '      esac',
     '    fi',
     '    ;;',
     'esac',

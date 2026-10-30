@@ -1,3 +1,4 @@
+import './native-chat-reasoning-order.spec'
 import { describe, expect, it } from 'vitest'
 import type {
   AgentJournalItemBody,
@@ -108,8 +109,7 @@ describe("a subagent's rows are not the conversation's", () => {
     ])
   })
 
-  // The conversation's grouping rule, not position: a send made mid-turn does not own the
-  // rows written before its own turn opened, and a turn keyed to its record owns its rows.
+  // Turn records own rows; a mid-turn send cannot claim work before its own turn opens.
   it("takes each row's turn from the journal's turn records, as the conversation's rows do", () => {
     const rows = [
       row('first', say('go'), { role: 'user' }),

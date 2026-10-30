@@ -10,7 +10,7 @@ import { commitStagedOrcadMigrationCatalogDurably } from '../../runtime/orcad-mi
 import { getHistoryRoot } from '../../terminal-history-paths'
 import { hashWorktreeId } from '../../terminal-history-id'
 import { FOLDER_WORKSPACE } from './persistence-orcad-migration-catalog-fixture'
-import { testState, type createStore } from '../../persistence-test-harness'
+import { testState, type createStore } from '../persistence-test-harness'
 
 type Store = ReturnType<typeof createStore>
 export type EncodedBlob = { descriptor: OrcadMigrationBlobDescriptor; bytes: Buffer }

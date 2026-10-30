@@ -39,13 +39,17 @@ vi.mock('@/store', () => ({
   })
 }))
 
-vi.mock('@/store/selectors', () => ({
-  useAllWorktrees: () => [],
-  useRepoById: (repoId?: string) =>
-    repoId ? { id: repoId, name: repoId, displayName: repoId, projectGroupId: null } : undefined,
-  useRepoMap: () => new Map(),
-  useWorktreeMap: () => new Map()
-}))
+vi.mock('@/store/selectors', () => {
+  const emptyWorktrees: never[] = []
+  const emptyMap = new Map()
+  return {
+    getAllWorktreesFromState: () => emptyWorktrees,
+    useRepoById: (repoId?: string) =>
+      repoId ? { id: repoId, name: repoId, displayName: repoId, projectGroupId: null } : undefined,
+    getRepoMapFromState: () => emptyMap,
+    getWorktreeMapFromState: () => emptyMap
+  }
+})
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback,
@@ -118,7 +122,7 @@ function clickMenuItem(label: string): void {
     (element) => element.textContent === label
   )
   expect(item, `menu item "${label}"`).toBeTruthy()
-  // Why: the menu swallows clicks until a primary pointerdown proves they aren't the opening right-click.
+  // Primary pointerdown distinguishes selection from the opening right-click, which the menu ignores.
   act(() => {
     item?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
     item?.click()

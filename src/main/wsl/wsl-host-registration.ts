@@ -1,16 +1,9 @@
-/**
- * Adding a WSL distro as a host: admit it, refuse one whose orcad this desktop already reaches,
- * connect (which may boot it), then persist the environment and its WSL record.
- */
+/** Admit, refuse duplicate orcad ownership, connect (possibly booting), then persist the environment and WSL record. */
 import { errorMessage } from '../../shared/error-message'
 import { addWslHostEnvironment } from '../../shared/runtime-environment-wsl-host-store'
 import type { WslHostDeploymentRecord } from '../../shared/wsl-host-deployment-store'
 import { wslHostEnvironmentLabel, type WslHostAddResult } from '../../shared/wsl-host-types'
-import {
-  admitWslHostDistro,
-  WSL_HOSTS_DISABLED_MESSAGE,
-  wslHostRunRefusal
-} from './wsl-host-add-admission'
+import { admitWslHostDistro, wslHostAddRefusal, wslHostRunRefusal } from './wsl-host-add-admission'
 import { abandonWslHostAdd, connectForWslHostAdd } from './wsl-host-first-connect'
 import type { WslHostConnector, WslHostServiceDependencies } from './wsl-host-service'
 import { wslHostSshManagedRefusal } from './wsl-host-ssh-orcad-conflict'
@@ -59,7 +52,7 @@ export async function registerWslHost(
   const connected = await connectForWslHostAdd(context.wsl(), distro.name, () =>
     generation === context.disableGeneration()
       ? wslHostRunRefusal(context.deps)
-      : { ok: false, kind: 'disabled', message: WSL_HOSTS_DISABLED_MESSAGE }
+      : wslHostAddRefusal('disabled', 'turnedOff')
   )
   if (!('connection' in connected)) {
     return connected

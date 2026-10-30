@@ -1,15 +1,16 @@
-/**
- * Who the mail a chat is pointed at is from: every distinct sender, named the
- * way orchestration names a party, and each message's own sender and records. The run, dispatch
- * and message ids join back to orchestration's own rows while those exist.
- */
+/** Snapshot distinct sender provenance and join mail to its surviving Run, Dispatch and message records. */
 
 import type {
   AgentMessageSource,
   AgentMessageSender
-} from '../../../shared/agent-session-message-source'
+} from '../../../shared/agent-session/agent-session-message-source'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import type { MessageRow, OrchestrationDb } from './db'
+import { agentMessageRelation } from './agent-message-relation'
 import { agentMessageSender, type SenderNameResolver } from './agent-message-sender'
+import type { OrchestrationCliCommand } from './cli-command'
+import { formatMessagePointer } from './formatter'
+import type { OrchestrationPointerBatch } from './mailbox-pointer-eligibility'
 
 export type MailSourceMessage = Pick<
   MessageRow,
@@ -23,23 +24,54 @@ export function structuredMailSource(input: {
   batch: readonly MailSourceMessage[]
   senderName: SenderNameResolver
 }): AgentMessageSource {
-  const senders = new Map<string, AgentMessageSender>()
-  for (const { from_handle: address } of input.batch) {
-    if (!senders.has(address)) {
-      senders.set(
-        address,
-        agentMessageSender(
-          address,
-          input.db,
-          input.senderName,
-          reportedDispatchId(input.batch, address)
-        )
-      )
+  const groups = new Map<string, { message: MailSourceMessage; report: ReportFact }[]>()
+  for (const message of input.batch) {
+    let group = groups.get(message.from_handle)
+    if (!group) {
+      group = []
+      groups.set(message.from_handle, group)
     }
+    group.push({ message, report: reportFact(message) })
+  }
+  const senders: AgentMessageSender[] = []
+  for (const [address, group] of groups) {
+    const reported = group.find(({ report }) => report.kind === 'valid')?.report
+    const sender = agentMessageSender(
+      address,
+      input.db,
+      input.senderName,
+      reported?.kind === 'valid' ? reported.dispatchId : undefined
+    )
+    const relations = new Map<string, AgentMessageSender['relation']>()
+    const values = group.map(({ message, report }) => {
+      // Sender and DB are fixed by this group/invocation; every varying evidence field is keyed.
+      const key = JSON.stringify([input.mailboxHandle, input.dispatchId, message.run_id, report])
+      if (!relations.has(key)) {
+        relations.set(
+          key,
+          report.kind === 'invalid'
+            ? undefined
+            : agentMessageRelation({
+                db: input.db,
+                sender: sender.party,
+                recipient: input.mailboxHandle,
+                runId: message.run_id,
+                reportedDispatchId: report.kind === 'valid' ? report.dispatchId : undefined,
+                recipientDispatchId: input.dispatchId
+              })
+        )
+      }
+      return relations.get(key)
+    })
+    const relation = values[0]
+    senders.push({
+      ...sender,
+      ...(relation && values.every((value) => value === relation) ? { relation } : {})
+    })
   }
   return {
     kind: 'agent',
-    senders: [...senders.values()],
+    senders,
     orchestration: {
       message: 'mail-notice',
       mailbox: input.mailboxHandle,
@@ -53,28 +85,51 @@ export function structuredMailSource(input: {
   }
 }
 
-/** The dispatch a sender's own `worker_done` here reports: the task it just finished, whose
- *  dispatch that report already settled. */
-function reportedDispatchId(
-  batch: readonly MailSourceMessage[],
-  address: string
-): string | undefined {
-  for (const message of batch) {
-    if (message.from_handle !== address || message.type !== 'worker_done' || !message.payload) {
-      continue
-    }
+/** The chat turn a structured pointer sends: a terminal's pointer text, with who the mail is from. */
+export function structuredMailNotice(input: {
+  db: OrchestrationDb
+  mailboxHandle: string
+  dispatchId: string | null
+  batch: OrchestrationPointerBatch
+  cliCommand: OrchestrationCliCommand
+  senderName: SenderNameResolver
+}): AgentJournalMessageItem {
+  const { messages, heldDeliveryId } = input.batch
+  const text = formatMessagePointer(
+    messages.length,
+    input.mailboxHandle,
+    input.cliCommand,
+    heldDeliveryId
+  )
+  return {
+    kind: 'message',
+    role: 'user',
+    blocks: [{ type: 'text', text: text.trim() }],
+    from: structuredMailSource({ ...input, batch: messages })
+  }
+}
+
+type ReportFact = { kind: 'mail' } | { kind: 'invalid' } | { kind: 'valid'; dispatchId: string }
+
+function reportFact(message: MailSourceMessage): ReportFact {
+  if (message.type !== 'worker_done') {
+    return { kind: 'mail' }
+  }
+  if (message.payload) {
     try {
       const payload: unknown = JSON.parse(message.payload)
-      const dispatchId =
-        typeof payload === 'object' && payload !== null && 'dispatchId' in payload
-          ? payload.dispatchId
-          : undefined
-      if (typeof dispatchId === 'string' && dispatchId.length > 0) {
-        return dispatchId
+      if (
+        typeof payload === 'object' &&
+        payload !== null &&
+        'dispatchId' in payload &&
+        typeof payload.dispatchId === 'string' &&
+        payload.dispatchId.length > 0
+      ) {
+        return { kind: 'valid', dispatchId: payload.dispatchId }
       }
     } catch {
-      // A payload that does not parse names no dispatch.
+      // Invalid evidence stays unknown; delivery and the other messages remain intact.
     }
   }
-  return undefined
+  return { kind: 'invalid' }
 }

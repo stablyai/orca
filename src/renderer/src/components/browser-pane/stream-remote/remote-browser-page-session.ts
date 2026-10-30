@@ -32,9 +32,7 @@ export type RemoteBrowserPageSessionDeps = {
   closeMissingRemotePage(remotePageId: string | null): void
 }
 
-// Owns the runtime-side page this pane is bound to: creating or adopting it, reading its tab info,
-// and the debounced post-input refresh. Split from the stream lifecycle so page identity stays
-// testable on its own.
+// Keep runtime page identity and post-input refresh separate from screencast ownership.
 export class RemoteBrowserPageSession {
   private tabRefreshTimer: ReturnType<typeof setTimeout> | null = null
 

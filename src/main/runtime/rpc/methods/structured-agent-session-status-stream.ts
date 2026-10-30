@@ -3,7 +3,7 @@
 // Session lists read turn state from here instead of replaying transcripts: one stream per client
 // covers every session, and unlike a transcript subscription it retains none of them.
 
-import { restoreStructuredTabsIfSupported } from './structured-session-tab-restore'
+import { prepareStructuredTabsIfSupported } from './structured-session-tab-restore'
 import { defineStreamingMethod, type RpcContext } from '../core'
 import { requireStructuredHost as requireHost } from './structured-agent-session-gate'
 import { structuredAgentSessionStatusSubscriptionId } from './structured-agent-session-subscription-id'
@@ -49,7 +49,7 @@ export const STRUCTURED_AGENT_SESSION_STATUS_METHODS = [
     permission: 'workspace',
     params: null,
     handler: async (_params, ctx, emit) => {
-      const restoration = restoreStructuredTabsIfSupported(ctx)
+      const restoration = prepareStructuredTabsIfSupported(ctx)
       if (restoration) {
         await restoration
       }
@@ -66,10 +66,18 @@ export const STRUCTURED_AGENT_SESSION_STATUS_METHODS = [
           if (event.type === 'snapshot') {
             emit({
               ...event,
+              ...(event.conversationNames
+                ? {
+                    conversationNames: event.conversationNames.filter((note) => {
+                      const record = host.deps.store.getConversation(note.sessionId)
+                      return record && clientReadsStructuredSessionAgent(ctx, record.provider)
+                    })
+                  }
+                : {}),
               ...(event.namingActiveSessionIds
                 ? {
                     namingActiveSessionIds: event.namingActiveSessionIds.filter((sessionId) => {
-                      const record = host.deps.store.getRecord(sessionId)
+                      const record = host.deps.store.getConversation(sessionId)
                       return record && clientReadsStructuredSessionAgent(ctx, record.provider)
                     })
                   }

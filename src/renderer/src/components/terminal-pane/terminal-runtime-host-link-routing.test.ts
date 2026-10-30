@@ -97,8 +97,7 @@ function clickEvent(): MouseEvent {
   } as unknown as MouseEvent
 }
 
-// Why: runtimes bind per workspace, so the global activeRuntimeEnvironmentId is
-// null even while the clicked pane lives on a remote host.
+// Workspace runtimes can own the clicked pane while the global active runtime is null.
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
@@ -128,6 +127,7 @@ describe('terminal HTTP links on a runtime-hosted pane', () => {
       workspaceId: 'wt-1',
       url: URL,
       intent: { kind: 'url' },
+      linkContext: { linkIntent: null, canReveal: expect.any(Function) },
       expectedRuntimeEnvironmentId: 'env-1'
     })
     expect(openUrlMock).not.toHaveBeenCalled()
@@ -199,6 +199,7 @@ describe('terminal HTTP links on a direct SSH pane', () => {
       workspaceId: 'wt-1',
       url: URL,
       intent: { kind: 'url' },
+      linkContext: { linkIntent: null, canReveal: expect.any(Function) },
       expectedSshConnectionId: 'ssh-1'
     })
     expect(openUrlMock).not.toHaveBeenCalled()
@@ -250,7 +251,12 @@ describe('terminal HTTP links on a local pane', () => {
   it('still opens an OSC 8 hyperlink in an Orca browser tab', () => {
     expect(handleOscLink(URL, clickEvent(), { ...baseDeps, runtimeEnvironmentId: null })).toBe(true)
 
-    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', URL, { activate: true })
+    expect(openRuntimeBrowserTabMock).toHaveBeenCalledWith({
+      workspaceId: 'wt-1',
+      url: URL,
+      intent: { kind: 'url' },
+      linkContext: { linkIntent: null, canReveal: expect.any(Function) }
+    })
     expect(openUrlMock).not.toHaveBeenCalled()
   })
 
@@ -262,7 +268,12 @@ describe('terminal HTTP links on a local pane', () => {
       ([name, _listener, options]) => name === 'mouseup' && options === undefined
     )?.[1](clickEvent())
 
-    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', URL, { activate: true })
+    expect(openRuntimeBrowserTabMock).toHaveBeenCalledWith({
+      workspaceId: 'wt-1',
+      url: URL,
+      intent: { kind: 'url' },
+      linkContext: { linkIntent: null, canReveal: expect.any(Function) }
+    })
     expect(openUrlMock).not.toHaveBeenCalled()
     disposable.dispose()
   })

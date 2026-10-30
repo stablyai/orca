@@ -44,10 +44,7 @@ export function staleLockReclaimCommandFrom(detail: string): string | null {
   )
 }
 
-/**
- * Clears a managed server's instance lock that a start refused because another machine sharing
- * the home may hold it (#32177). The host checks first; only the user can rule that machine out.
- */
+/** Reclaim refused instance locks after host checks; only the user can exclude another machine sharing the home (#32177). */
 export function SshHostRecoverServerDialog({
   status,
   open,
@@ -63,7 +60,6 @@ export function SshHostRecoverServerDialog({
   if (!api || !open) {
     return null
   }
-  // Mounted per opening, so each one starts from a fresh check.
   return (
     <OpenRecoverServerDialog
       api={api}
@@ -85,8 +81,7 @@ function OpenRecoverServerDialog({
   onOpenChange: (open: boolean) => void
   onChanged: () => void
 }): React.JSX.Element | null {
-  // Frozen at opening: the reclaim itself clears the note that offered it, and a later status
-  // push must neither close the dialog nor hide the result the user is reading.
+  // Freeze opening context: reclaim clears its own refusal, but status pushes must preserve the dialog and result.
   const [opened] = useState(() =>
     status?.kind === 'managed'
       ? { environmentId: status.environmentId, detail: status.serving?.detail ?? '' }
@@ -127,7 +122,6 @@ function OpenRecoverServerDialog({
           return
         }
       }
-      // A cleared lock ends the flow: its evidence and the confirmation no longer apply.
       setCheck(result)
     } catch (cause) {
       if (mountedRef.current) {
@@ -140,7 +134,7 @@ function OpenRecoverServerDialog({
     }
   }
   const eligible = check?.status === 'eligible'
-  // The confirmation is pinned to the record the user saw; without its nonce there is none to pin.
+  // Pin confirmation to the evidence nonce the user reviewed.
   const approvedNonce = eligible ? check.evidence?.nonce : undefined
   return (
     <Dialog open onOpenChange={(next) => !next && !busy && onOpenChange(false)}>
@@ -260,7 +254,6 @@ function CheckOutcome({
   detail: string
 }): React.JSX.Element {
   if (check.status === 'reclaimed') {
-    // The lock is gone, so neither the reclaim command nor a delete by hand applies.
     return (
       <div className="space-y-2 text-sm">
         <p>
@@ -289,7 +282,7 @@ function CheckOutcome({
       {check.status === 'refused' || check.status === 'no-answer' ? (
         <ManualReclaim detail={detail} />
       ) : null}
-      {/* Its orcad's own reclaim is safer than a delete; only a host without one gets rm. */}
+      {/* Prefer the host’s own reclaim command; offer rm only when unsupported. */}
       {check.status === 'unsupported' ? (
         check.reclaimWithoutPin ? (
           <ManualReclaim detail={detail} />

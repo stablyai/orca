@@ -1,11 +1,6 @@
 import type { Editor, JSONContent } from '@tiptap/react'
 
-/**
- * Why: an inline image cannot be fitted into `codeBlock` (`text*`), so inserting one at a
- * position inside a fence makes ProseMirror dissolve the block — the remaining code escapes
- * as prose and the language attribute is lost. Wrapping the image in a paragraph makes
- * ProseMirror split the fence instead, leaving both halves intact.
- */
+/** Wrap inline images in paragraphs so insertion splits code fences without dissolving them into prose or losing their language. */
 export function buildRichMarkdownImageInsertContent(
   editor: Editor,
   pos: number,

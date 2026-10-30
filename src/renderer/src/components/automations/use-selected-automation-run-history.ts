@@ -34,10 +34,7 @@ export type SelectedAutomationRunHistoryOutcome = {
   navigation: SelectedAutomationRunNavigation
   reloadToken: number
   runs: AutomationRun[]
-  /**
-   * Non-null when the host refused or failed the read. The runs are then unknown
-   * rather than absent, and the caller must say so instead of showing zero runs.
-   */
+  /** A failed/refused read leaves history unknown; never present it as zero runs. */
   notice: AutomationActionNotice | null
 }
 

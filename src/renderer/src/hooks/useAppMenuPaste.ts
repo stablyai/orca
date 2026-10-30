@@ -19,8 +19,7 @@ export function useAppMenuPaste(): void {
           }
         })
         .catch(() => {
-          // Why: only the request handler knows whether native fallback is
-          // still targeting the originally owned control after async work.
+          // Only the request handler can revalidate the originally owned control after async fallback work.
           return undefined
         })
     }

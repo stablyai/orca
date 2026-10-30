@@ -54,13 +54,11 @@ it('pauses autosave once for a non-UTF-8 file until a confirmed explicit save co
     const file = (): NonNullable<ReturnType<typeof store.getState>['openFiles'][0]> =>
       store.getState().openFiles[0]!
     expect(await queue.queueSave(file(), `${latin1}!`, 'autosave')).toBe('failed')
-    // A second automatic attempt is gated before it reaches the host, with no second notice.
     expect(await queue.queueSave(file(), `${latin1}!`, 'autosave')).toBe('failed')
     expect(disk.writeFile).toHaveBeenCalledTimes(1)
     expect(toast.warning).toHaveBeenCalledTimes(1)
     expect(vi.mocked(toast.warning).mock.calls[0]?.[0]).toContain("isn't UTF-8 text")
 
-    // An explicit save without consent leaves the bytes alone.
     expect(await queue.queueSave(file(), `${latin1}!`, 'user')).toBe('not-utf8')
     expect(disk.files.get(GUARDED_PATH)).toBe(latin1)
     expect(await queue.queueSave(file(), `${latin1}!`, 'convert')).toBe('written')
@@ -84,7 +82,7 @@ it.each(['close', 'reload'] as const)(
         'failed'
       )
       if (ending === 'close') {
-        // Why: the minimal fixture store lacks the layout state closeFile walks.
+        // The minimal store lacks the layout state closeFile requires.
         store.setState({ openFiles: [], editorBuffers: {}, editorDrafts: {} })
       } else {
         store.getState().markFileDirty(GUARDED_PATH, false)

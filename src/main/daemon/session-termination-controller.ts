@@ -1,7 +1,5 @@
-import { killWithDescendantSweep } from '../pty-descendant-termination'
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import type { SubprocessHandle } from './session-subprocess-handle'
-import type { TuiAgent } from '../../shared/tui-agent'
 import {
   IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS,
   SESSION_FORCE_KILL_RETRY_MS
@@ -14,7 +12,6 @@ const SESSION_FORCE_KILL_MAX_ATTEMPTS = 2
 export type SessionTerminationControllerDeps = {
   sessionId: string
   subprocess: SubprocessHandle
-  launchAgent: TuiAgent | null
   isExited(): boolean
   releaseProducerPause(opts: { resume: boolean }): void
 }
@@ -22,7 +19,7 @@ export type SessionTerminationControllerDeps = {
 export class SessionTerminationController {
   private _isTerminating = false
   private killTimer: ReturnType<typeof setTimeout> | null = null
-  private forceKillSent = false
+  private forceKillRequest: Promise<void> | null = null
   private subprocessDisposed = false
   private readonly physicalExit = new PhysicalExitTracker()
 
@@ -49,36 +46,6 @@ export class SessionTerminationController {
     // Resume a child blocked on write before snapshotting so it can process termination.
     this.deps.releaseProducerPause({ resume: true })
     return true
-  }
-
-  kill(): void {
-    if (!this.beginTermination()) {
-      return
-    }
-    if (!this.deps.launchAgent) {
-      this.signalTerminationRoot()
-    } else {
-      // Detached agent tool groups can survive the shell’s SIGHUP.
-      void Promise.resolve(
-        killWithDescendantSweep(
-          this.deps.subprocess.pid,
-          () => {
-            this.signalTerminationRoot()
-          },
-          {
-            // A root that exited during inspection may already have a recycled PID.
-            ownsRoot: () => !this.deps.isExited(),
-            terminateOwnedTree: () => this.deps.subprocess.terminateOwnedTree()
-          }
-        )
-      ).catch((error) => {
-        if (!this.deps.isExited()) {
-          this.resetTerminationAfterSignalFailure()
-        }
-        console.warn('[Session] descendant-aware graceful kill failed:', error)
-      })
-    }
-    this.scheduleForceDisposeFallback()
   }
 
   signalTerminationRoot(): void {
@@ -131,6 +98,11 @@ export class SessionTerminationController {
     this.deps.subprocess.signal(sig)
   }
 
+  /** Joins any in-flight request so disposal never starts a second process-group sweep. */
+  forceKillDuringDispose(): Promise<void> {
+    return this.requestForceKill()
+  }
+
   disposeSubprocessHandle(): void {
     if (this.subprocessDisposed) {
       return
@@ -153,37 +125,44 @@ export class SessionTerminationController {
     this.killTimer = setTimeout(() => {
       this.killTimer = null
       if (!this.deps.isExited()) {
-        try {
-          this.requestForceKill()
-        } catch (error) {
+        this.requestForceKill().catch((error: unknown) => {
           console.warn('[Session] failed to force-kill terminating subprocess:', error)
           // A transient force-kill rejection must not consume the only fallback attempt.
           if (attemptsRemaining > 1) {
             this.armForceKillFallback(SESSION_FORCE_KILL_RETRY_MS, attemptsRemaining - 1)
           }
-        }
+        })
       }
     }, delayMs)
   }
 
-  private requestForceKill(): void {
-    if (this.deps.isExited() || this.forceKillSent) {
-      return
+  /** Joiners await the in-flight request so their exit budget starts after signals are sent. */
+  private requestForceKill(): Promise<void> {
+    if (this.deps.isExited()) {
+      return Promise.resolve()
     }
-    this.forceKillSent = true
-    try {
-      this.deps.subprocess.forceKill()
-    } catch (error) {
-      this.forceKillSent = false
-      throw error
+    if (!this.forceKillRequest) {
+      const request = this.sendForceKill()
+      this.forceKillRequest = request
+      // A refused signal releases the claim so a retry can send again.
+      request.catch(() => {
+        if (this.forceKillRequest === request) {
+          this.forceKillRequest = null
+        }
+      })
     }
+    return this.forceKillRequest
+  }
+
+  private async sendForceKill(): Promise<void> {
+    await this.deps.subprocess.forceKill()
   }
 
   private async requestForceKillWithRetry(): Promise<void> {
     let lastError: unknown
     for (let attempt = 0; attempt < SESSION_FORCE_KILL_MAX_ATTEMPTS; attempt++) {
       try {
-        this.requestForceKill()
+        await this.requestForceKill()
         return
       } catch (error) {
         lastError = error

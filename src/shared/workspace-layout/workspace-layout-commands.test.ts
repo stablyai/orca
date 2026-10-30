@@ -562,8 +562,7 @@ describe('layout command effects', () => {
       incarnationId: 'inc'
     })
 
-    // Main's copy lacks the window's other panes, so the tab stays for them (no rule check: to
-    // main's copy alone it reads as the tab re-ided).
+    // Main lacks the window’s sibling panes, so retain their tab; main alone sees only a re-ID and cannot run the structural check.
     const last = applyLayoutCommand(
       model,
       {

@@ -85,6 +85,18 @@ describe('useLinearSourceConnection', () => {
     expect(mocks.linearStatus).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps the loaded status when the selected repo changes on the same host', async () => {
+    mocks.linearStatus.mockResolvedValue(status(true))
+    const { result, rerender } = renderHook(
+      ({ source }) => useLinearSourceConnection({ enabled: true, sourceContext: source }),
+      { initialProps: { source: context('runtime:host') } }
+    )
+    await waitFor(() => expect(result.current.loaded).toBe(true))
+    rerender({ source: { ...context('runtime:host'), projectId: 'project-2', repoId: 'repo-2' } })
+    expect(result.current).toEqual({ status: status(true), loaded: true })
+    expect(mocks.linearStatus).toHaveBeenCalledTimes(1)
+  })
+
   it('hides old status immediately and rejects late responses after a host switch', async () => {
     let resolveOld: (value: LinearConnectionStatus) => void = () => {}
     const oldRead = new Promise<LinearConnectionStatus>((resolve) => {
@@ -175,6 +187,11 @@ describe('useLinearSourceConnection', () => {
         linearStatusContextKey: 'runtime:saved-host#0',
         linearStatus: { ...status(true), selectedWorkspaceId: 'updated' }
       })
+    })
+    // Same-host re-read keeps the last status so the Linear tab stays selected.
+    expect(result.current).toMatchObject({
+      loaded: true,
+      status: { selectedWorkspaceId: 'original' }
     })
     await waitFor(() => expect(result.current.status?.selectedWorkspaceId).toBe('updated'))
     expect(mocks.linearStatus).toHaveBeenCalledTimes(2)

@@ -7,11 +7,7 @@ import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { createRootDispatch } from './db/root-dispatch-test-fixture'
 
-// STA-4604: failActiveDispatchOnExit fails the dispatch on worker PTY exit but used to
-// gate the "Agent exited unexpectedly" escalation on the legacy coordinator_runs table.
-// A lightweight Run (runs + run_coordinator_handles) never populates that table, so
-// worker death was silent for its coordinator. The escalation now follows the dispatch's
-// own Run to the mailbox `orchestration check` actually reads.
+// Lightweight Runs lack coordinator_runs rows; worker exits must escalate through their own reachable Run mailbox (STA-4604).
 
 const WORKTREE_ID = 'repo-1::/tmp/sta-4604-worktree'
 const WORKER_LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -102,8 +98,7 @@ function makeRuntimeWithTwoPanes(): {
 // Pointer delivery runs on a microtask; let it settle before the DB closes.
 const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
 
-// The single oracle every mode is graded by: after a worker PTY exit, is the dispatch
-// failed, and did the escalation reach a mailbox this coordinator actually reads?
+// Require both Dispatch failure and an escalation in a mailbox this coordinator reads.
 async function gradeWorkerExit(
   mode: 'lightweight-run' | 'legacy-run' | 'legacy-run-no-coordinator'
 ): Promise<{
@@ -144,10 +139,9 @@ async function gradeWorkerExit(
       dispatchStatus: db.getDispatchContextById(dispatch.id)?.status,
       escalationsToCoordinatorHandle: direct.length,
       escalationsInRunMailbox: runMailbox.length,
-      // The ticket's literal claim: the coordinator receives no message of any kind.
       totalUnreadForCoordinator:
         db.getUnreadMessages(coordinatorHandle).length + db.getUnreadRunMailbox(runId, 100).length,
-      // Counts alone stay green while the escalation's content rots.
+      // Check escalation content as well as counts.
       escalation: escalation
         ? {
             from: escalation.from_handle,
@@ -171,9 +165,7 @@ async function gradeWorkerExit(
 }
 
 describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
-  // Why: every other case here uses a short single-line spec, where the derived title and the
-  // raw spec are identical — so a refactor that inlines `task.spec` stays green while the
-  // banner rots. Grade the prose the coordinator actually reads.
+  // Use a multi-line spec so substituting raw spec for task_title cannot pass unnoticed.
   it('titles the escalation from task_title, not the raw spec', async () => {
     const { runtime, workerHandle, coordinatorHandle } = makeRuntimeWithTwoPanes()
     const db = new OrchestrationDb(':memory:')
@@ -204,7 +196,6 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
     const graded = await gradeWorkerExit('lightweight-run')
     expect(graded).toMatchObject({
       dispatchStatus: 'failed',
-      // Addressed run:<id> — the only address getOrCreateRunDelivery / getUnreadRunMailbox read.
       escalationsToCoordinatorHandle: 0,
       escalationsInRunMailbox: 1,
       totalUnreadForCoordinator: 1
@@ -225,8 +216,7 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
         taskId: expect.any(String),
         dispatchId: expect.any(String),
         exitCode: 137,
-        // Why: the code alone cannot say whether the agent was killed, finished,
-        // or was closed on purpose (STA-4603/STA-4536).
+        // Exit code alone cannot distinguish intentional close from crash (STA-4603, STA-4536).
         exitCause: { kind: 'exited', exitCode: 137 },
         handle: graded.workerHandle
       }
@@ -324,8 +314,7 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
       runtime.onPtyExit(WORKER_PTY_ID, 137)
 
       await expect(waiting).resolves.toBe('notified')
-      // Why: waitForMessage resolves off the notification alone, so without this the test
-      // would pass on a notify with no message behind it.
+      // A notification can wake waitForMessage without durable mail; assert the stored message too.
       expect(db.getUnreadRunMailbox(run.id, 100, ['escalation'])).toEqual([
         expect.objectContaining({
           run_id: run.id,
@@ -344,7 +333,7 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
     const { runtime, workerHandle, coordinatorHandle } = makeRuntimeWithTwoPanes()
     const db = new OrchestrationDb(':memory:')
     try {
-      // A second, more recently created Run is the trap: any "latest active run" lookup picks it.
+      // A newer decoy Run catches latest-active-Run routing.
       const ownRun = db.createRun({
         objective: 'run that owns the dying worker',
         coordinatorHandle,
@@ -428,7 +417,6 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
         coordinatorPaneKey: COORDINATOR_PANE_KEY
       })
       const task = db.createTask({ spec: 'repeatedly failing work', runId: run.id })
-      // Burn the breaker down to its last life so this exit is the one that trips it.
       for (let attempt = 1; attempt < DISPATCH_CIRCUIT_BREAK_FAILURES; attempt += 1) {
         const previous = createRootDispatch(db, task.id, workerHandle, WORKER_PANE_KEY)
         db.failDispatch(previous.id, `attempt ${attempt}`, { workerProcessExited: true })
@@ -444,8 +432,7 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
         dispatch: db.getDispatchContextById(dispatch.id)?.status,
         escalations: escalations.length
       }).toEqual({ dispatch: 'circuit_broken', escalations: 1 })
-      // Why: a tripped breaker means nobody will retry it, so the body must not
-      // tell the coordinator the task is ready to go again.
+      // A tripped breaker must not tell the coordinator the Task will retry.
       expect(escalations.at(-1)?.body).toBe(
         `Worker ${workerHandle} stopped while running task ` +
           `"repeatedly failing work" (${task.id}). Agent process exited with code 137. ` +
@@ -494,7 +481,6 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
       })
       const task = db.createTask({ spec: 'work outliving its coordinator', runId: run.id })
       createRootDispatch(db, task.id, workerHandle, WORKER_PANE_KEY)
-      // Rebinding the pane to a newer Run clears the old Run's coordinator_handle.
       db.createRun({
         objective: 'newer run on the same coordinator pane',
         coordinatorHandle,
@@ -506,8 +492,7 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
       runtime.onPtyExit(WORKER_PTY_ID, 137)
       await settle()
 
-      // Why: with no coordinator handle to address, only the durable run:<id> mailbox
-      // keeps the escalation reachable for whoever rebinds next.
+      // Without a current coordinator handle, the durable Run mailbox preserves escalation for the next binding.
       expect(db.getUnreadRunMailbox(run.id, 100, ['escalation'])).toEqual([
         expect.objectContaining({ to_handle: `run:${run.id}`, run_id: run.id })
       ])
@@ -516,7 +501,7 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
     }
   })
 
-  // Resolving the recipient reads the DB too, so it needs the same protection as the insert.
+  // Protect recipient lookup as well as insertion from DB errors.
   it.each([
     [
       'the recipient lookup',
@@ -548,8 +533,7 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
       ...dbOverrides
     } as never)
 
-    // Why: onPtyExit walks leaves synchronously — a throwing mailbox would abandon the
-    // rest of the exit, so the worker death must stay durable and the exit must complete.
+    // Synchronous exit handling must survive a throwing mailbox and still record worker death.
     expect(() => runtime.onPtyExit(WORKER_PTY_ID, 137)).not.toThrow()
     expect(failDispatch).toHaveBeenCalledWith('ctx-1', 'Agent process exited with code 137', {
       workerProcessExited: true,

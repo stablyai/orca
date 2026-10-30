@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { GitHubAssignableUser } from '../../../../src/shared/github/pull-request-types'
 import type { RpcClient } from '../../transport/rpc-client'
 import { fetchAssignableUsers } from '../../session/github-pr-rpc'
@@ -23,13 +25,10 @@ type Props = {
 type LoadState =
   | { status: 'idle' }
   | { status: 'loading' }
-  | { status: 'error'; message: string }
+  | { status: 'error'; message: string | null }
   | { status: 'loaded'; users: GitHubAssignableUser[] }
 
-// Searchable assignable-user list in a BottomDrawer. Mapped rows (not FlatList):
-// this drawer is opened from the PR ScrollView, and a VirtualizedList nested in
-// that ScrollView throws and can leave the Reviewers section blank.
-// Seeded reviewers + author sort first for quick un-request.
+// Use mapped rows: VirtualizedList nested in PR ScrollView throws and can blank section. Seed reviewers/author first for easy unrequest.
 export function ReviewerPickerDrawer({
   visible,
   onClose,
@@ -39,6 +38,8 @@ export function ReviewerPickerDrawer({
   isRequested,
   onToggle
 }: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const [load, setLoad] = useState<LoadState>({ status: 'idle' })
   const [query, setQuery] = useState('')
 
@@ -61,7 +62,7 @@ export function ReviewerPickerDrawer({
       })
       .catch(() => {
         if (!cancelled) {
-          setLoad({ status: 'error', message: 'Failed to load people' })
+          setLoad({ status: 'error', message: null })
         }
       })
     return () => {
@@ -74,7 +75,6 @@ export function ReviewerPickerDrawer({
       return []
     }
     const seed = new Set(seededLogins.map((l) => l.toLowerCase()))
-    // Seeded reviewers sort first so the user can quickly un-request them.
     const sorted = [...load.users].sort((a, b) => {
       const aSeed = seed.has(a.login.toLowerCase()) ? 0 : 1
       const bSeed = seed.has(b.login.toLowerCase()) ? 0 : 1
@@ -91,12 +91,14 @@ export function ReviewerPickerDrawer({
 
   return (
     <BottomDrawer visible={visible} onClose={onClose} dragContentToDismiss={false}>
-      <Text style={styles.pickerTitle}>Reviewers</Text>
+      <Text style={styles.pickerTitle}>
+        {t('pullRequest.reviewerPickerDrawer.title', 'Reviewers')}
+      </Text>
       <TextInput
         style={styles.pickerSearch}
         value={query}
         onChangeText={setQuery}
-        placeholder="Search people"
+        placeholder={t('pullRequest.reviewerPickerDrawer.searchPeople', 'Search people')}
         placeholderTextColor={colors.textMuted}
         autoCapitalize="none"
         autoCorrect={false}
@@ -107,11 +109,16 @@ export function ReviewerPickerDrawer({
         </View>
       ) : load.status === 'error' ? (
         <View style={styles.pickerStateArea}>
-          <Text style={styles.emptyText}>{load.message}</Text>
+          <Text style={styles.emptyText}>
+            {load.message ??
+              t('pullRequest.reviewerPickerDrawer.loadFailed', 'Failed to load people')}
+          </Text>
         </View>
       ) : ordered.length === 0 ? (
         <View style={styles.pickerStateArea}>
-          <Text style={styles.emptyText}>No matching people</Text>
+          <Text style={styles.emptyText}>
+            {t('pullRequest.reviewerPickerDrawer.noMatches', 'No matching people')}
+          </Text>
         </View>
       ) : (
         <View style={styles.pickerList}>
@@ -124,7 +131,15 @@ export function ReviewerPickerDrawer({
                 onPress={() => onToggle(item.login)}
                 accessibilityRole="button"
                 accessibilityState={{ selected: requested }}
-                accessibilityLabel={`${requested ? 'Remove' : 'Request'} ${item.login}`}
+                accessibilityLabel={
+                  requested
+                    ? t('pullRequest.reviewerPickerDrawer.removeReviewer', 'Remove {{login}}', {
+                        login: item.login
+                      })
+                    : t('pullRequest.reviewerPickerDrawer.requestReviewer', 'Request {{login}}', {
+                        login: item.login
+                      })
+                }
               >
                 <View style={styles.rowTrailing}>
                   {requested ? (

@@ -1,5 +1,4 @@
-// Test-only (never imported by production code): the window-lane launch parity table for row 1, the
-// "+" launches C2 moves onto the pane trigger. Covers each "+" entry point; local hosts only.
+// Local + launch parity (row 1/C2): cover every entry point moved onto the pane trigger.
 import { POSIX_PATH, WIN_PATH } from './launch-parity-window-cases.test-fixture'
 import type {
   LaunchClient,

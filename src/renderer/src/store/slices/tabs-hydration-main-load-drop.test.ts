@@ -1,5 +1,4 @@
-// L286: a layout-owner build's main drops view-less saved editor tabs at load and writes that back.
-// A window-owned build reading the written session must restore exactly what it did before.
+// Main load drops view-less editor tabs and persists that result; window-owned restore must preserve the saved result (L286).
 
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'

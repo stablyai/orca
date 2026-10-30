@@ -29,7 +29,6 @@ it('does not offer to resume a chat whose agent this build no longer drives, and
   const { host, root, acquire } = await interruptedRestart(
     undefined,
     undefined,
-    undefined,
     codexOnAnotherTransport()
   )
 
@@ -44,7 +43,6 @@ it('does not offer to resume a chat whose agent this build no longer drives, and
 
 it('lists a recorded failure of such a chat as not retryable', async () => {
   const { host, root, marker } = await interruptedRestart(
-    undefined,
     undefined,
     undefined,
     codexOnAnotherTransport()
@@ -73,7 +71,6 @@ it('lists a recorded failure of such a chat as not retryable', async () => {
 
 it('keeps such a chat readable and refuses to start its agent', async () => {
   const { host, store, acquire } = await interruptedRestart(
-    undefined,
     undefined,
     undefined,
     codexOnAnotherTransport()

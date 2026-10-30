@@ -8,7 +8,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import { spawnProcess } from '@orca/process-host'
-import { tearDownRuntime } from '../../runtime/structured-agent-session-runtime-teardown'
+import { tearDownRuntime } from '../../runtime/agent-session/structured-agent-session-runtime-teardown'
 import { journalDatabasePath } from './journal-host-database'
 import {
   closeTestJournalHostDatabases,
@@ -231,9 +231,17 @@ setTimeout(() => { db.exec('COMMIT'); db.close() }, 200)`,
       const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
       const database = openTestJournalHostDatabase(root)
       const installed = {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: teardown calls only `stopDelivery` and `flushAllStreamedEvents` on the host.
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: teardown calls the supplied producer stop, flush and status-drain stages.
         host: {
           stopDelivery: () => {},
+          drainStatusWrites: async () => {
+            expect(database.isClosed).toBe(false)
+            expect(
+              readTestJournalRows(database.db, IDENTITY.sessionId, journal.epoch).map(
+                (row) => row.seq
+              )
+            ).toEqual([1, 2])
+          },
           flushAllStreamedEvents: async () => {
             await new Promise<void>((resolve) => setTimeout(resolve, 10))
             await journal.appendItem(item(1), text('written during quit'), {

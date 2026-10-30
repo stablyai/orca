@@ -1,4 +1,3 @@
-import { useShallow } from 'zustand/react/shallow'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { isFloatingWorkspacePanelFocused } from '@/lib/floating-workspace-terminal-actions'
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
@@ -19,16 +18,21 @@ import {
 import { useAppStore } from '../store'
 import type { usePluginCommands } from '@/store/plugin-panels'
 import { isGitRepoKind } from '../../../shared/repo-kind'
+import { openPluginsSettings } from '@/lib/open-plugins-settings'
+import { resolveActiveTabRenameTarget } from './active-tab-rename-target'
+import { createPluginsSettingsShortcutHandler } from './plugin-settings-shortcut-handler'
 import type {
   KeybindingActionId,
   KeybindingContext,
   PhysicalModifierToken
 } from '../../../shared/keybindings'
 import { shortcutPlatform } from './app-window-chrome'
+export { useAppShortcutActions } from './use-app-shortcut-actions'
+import type { useAppShortcutActions } from './use-app-shortcut-actions'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
-// Abstraction over a real KeyboardEvent and a synthetic double-tap gesture so one dispatch path serves both; KeybindingInput-compatible.
+// Share dispatch between KeyboardEvent and synthetic double-tap input.
 export type ShortcutDispatchInput = {
   isComposing?: boolean
   altGraph?: boolean
@@ -62,52 +66,12 @@ export type AppShortcutState = {
   workspaceChromeActive: boolean
 }
 
-export function useAppShortcutActions() {
-  // Why: consolidate action refs into one useShallow subscription so React runs one equality check per store mutation instead of one per action.
-  return useAppStore(
-    useShallow((s) => ({
-      toggleSidebar: s.toggleSidebar,
-      toggleRightSidebar: s.toggleRightSidebar,
-      setRightSidebarOpen: s.setRightSidebarOpen,
-      setRightSidebarTab: s.setRightSidebarTab,
-      showRightSidebarFiles: s.showRightSidebarFiles,
-      showRightSidebarSearch: s.showRightSidebarSearch,
-      openDiffNotesSendMenuForActiveWorktree: s.openDiffNotesSendMenuForActiveWorktree
-    }))
-  )
-}
-
 export function getKeybindingContext(target: EventTarget | null): KeybindingContext {
   return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
     ? 'terminal'
     : 'app'
 }
 
-/**
- * The tab id the inline rename editor listens on, which differs per tab kind: a terminal tab is
- * addressed by its backing terminal id (`activeTabId`), a structured chat tab by its unified tab
- * id. `activeTabId` is terminal-only state and never moves for a structured tab, so reading it
- * there targets whichever terminal was last active. Mirrors TabGroupPanel's tab-strip resolution.
- */
-function resolveRenameTargetTabId(activeWorktreeId: string | null): string | null {
-  const store = useAppStore.getState()
-  if (store.activeTabType === 'terminal') {
-    return store.activeTabId
-  }
-  if (store.activeTabType !== 'agent-session' || !activeWorktreeId) {
-    return null
-  }
-  const activeTab = store.getActiveTab(activeWorktreeId)
-  return activeTab?.contentType === 'agent-session' ? activeTab.id : null
-}
-
-/**
- * Builds the app-level handlers for every keybindable action. Each returns whether it claimed
- * the chord, so an unavailable surface (settings view, closed floating panel) falls through to
- * the terminal or the next handler instead of silently no-opping.
- *
- * `input` is absent when a command is invoked from the palette/menu rather than a key event.
- */
 export function createAppCommandHandlers(
   state: AppShortcutState,
   input?: ShortcutDispatchInput,
@@ -207,7 +171,7 @@ export function createAppCommandHandlers(
         }
         return claim('sidebar.childWorkspaces.toggle', () => {
           const expanding = store.collapsedGroups.has(groupKey)
-          // Why: same scroll anchoring as the chip click, so the viewport does not jump.
+          // Match chip-click scroll anchoring to avoid viewport jumps.
           requestVirtualizedScrollAnchorRecord('[data-worktree-sidebar]')
           store.toggleCollapsedGroup(groupKey)
           if (expanding) {
@@ -231,9 +195,8 @@ export function createAppCommandHandlers(
         if (!workspaceChromeActive || floatingWorkspaceFocused) {
           return false
         }
-        // Why: a structured chat tab is renamed through the same inline editor, so gating on
-        // 'terminal' alone left the shortcut a silent no-op there.
-        const tabId = resolveRenameTargetTabId(activeWorktreeId)
+        // Resolve both terminal and structured-chat rename targets; a terminal-only gate silently ignores chat.
+        const tabId = resolveActiveTabRenameTarget(activeWorktreeId, useAppStore.getState())
         if (!tabId) {
           return false
         }
@@ -289,6 +252,12 @@ export function createAppCommandHandlers(
         }
         return claim('view.tasks', () => store.openTaskPage())
       }
+    ],
+    [
+      'view.plugins',
+      createPluginsSettingsShortcutHandler(input?.target, () =>
+        claim('view.plugins', openPluginsSettings)
+      )
     ],
     [
       'sidebar.right.toggle',

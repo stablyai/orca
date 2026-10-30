@@ -5,6 +5,7 @@ import { getRetainedLinuxPackageManualInstallStatus } from '../linux-package-dow
 import type { UpdateCheckOptions, UpdateStatus } from '../../shared/update-status-types'
 import type { UpdateCheckVariant } from './updater-types'
 import { UpdaterStatus } from './updater-status'
+import type { UpdaterCodedMessage } from '../../shared/updater-failure-copy'
 import {
   AUTO_UPDATE_CHECK_INTERVAL_MS,
   AUTO_UPDATE_RETRY_INTERVAL_MS,
@@ -31,9 +32,7 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
     if (options?.includePrerelease) {
       return 'prerelease'
     }
-    // Why: a persisted 'rc' override makes every routine check follow the RC series
-    // without the user re-holding shift; the dev channels need an explicit tag, so
-    // neither is a routine-check variant.
+    // Persisted RC preference applies to routine checks; dev channels still require explicit tags.
     if (this.getReleaseChannelOverride?.() === 'rc') {
       return 'prerelease'
     }
@@ -43,7 +42,7 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
   protected launchPendingUserInitiatedCheckAfterInFlight(variant: UpdateCheckVariant): void {
     this.pendingUserInitiatedCheckAfterInFlight = null
     setTimeout(() => {
-      // Why: defer one tick after electron-updater clears its in-flight promise so the queued modifier check starts fresh instead of deduping into the stable one.
+      // Wait one tick for electron-updater to clear its promise or the modifier check dedupes into the stable check.
       if (this.currentStatus.state === 'checking') {
         this.currentStatus = { state: 'idle' }
       }
@@ -162,7 +161,7 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
     this.updateCheckAttemptSequence += 1
     this.activeUpdateCheckAttemptId = this.updateCheckAttemptSequence
     this.armUpdateCheckStallTimer(this.activeUpdateCheckAttemptId)
-    // Why: issue #7576 warnings recurred at retry cadence; timestamp each attempt to confirm or rule out the updater.
+    // Timestamp attempts to correlate recurring retry-cadence warnings (#7576).
     writeMainThreadDiagnosticMarker('updater-check-attempt')
     return this.activeUpdateCheckAttemptId
   }
@@ -200,7 +199,7 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
     const shouldRetrySoon = this.consumeSilentCheckShortRetryReason()
     this.clearAvailableUpdateContext()
     if (shouldRetrySoon) {
-      // Why: a silent result against a temporary last-good feed is still a release transition, so it must not suppress the short publish retry.
+      // Last-good silent results remain release transitions; preserve the short publishing retry.
       this.scheduleAutomaticUpdateCheck(AUTO_UPDATE_RETRY_INTERVAL_MS)
       return true
     }
@@ -248,7 +247,7 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
       return
     }
     this.clearUpdateCheckSilentSettleTimer()
-    // Why: electron-updater can resolve before the terminal event arrives; grace-period it, then unstick checks that resolved without one.
+    // Promise resolution may precede the terminal event; allow a grace period before unsticking silent checks.
     this.updateCheckSilentSettleTimer = setTimeout(() => {
       this.updateCheckSilentSettleTimer = null
       this.settleSilentUpdateCheck(attemptId, this.getSettledCheckUserInitiated())
@@ -259,7 +258,7 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
     if (this.getActiveUpdateCheckEventAttemptId() !== null) {
       return true
     }
-    // Why: electron-updater emits check errors globally; once a check settles, only active download/install flows should consume them.
+    // After check settlement, global errors belong only to active download/install flows.
     return (
       this.downloadInFlight ||
       this.currentStatus.state === 'downloading' ||
@@ -267,7 +266,9 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
     )
   }
 
-  protected sendErrorStatus(message: string, userInitiated?: boolean): void {
+  protected sendErrorStatus(failure: string | UpdaterCodedMessage, userInitiated?: boolean): void {
+    const coded = typeof failure === 'string' ? { message: failure } : failure
+    const { message } = coded
     if (
       this.currentStatus.state === 'error' &&
       this.currentStatus.message === message &&
@@ -275,26 +276,31 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
     ) {
       return
     }
-    // Why: count AV/EDR-blocked Windows signature checks in the field to size the affected cohort before bigger updater changes.
+    // Measure AV/EDR-blocked signature checks before changing updater policy.
     if (isWindowsSignatureCheckUnavailableFailure(message)) {
       recordUpdaterLifecycle('windows_signature_check_blocked', undefined, {
         level: 'warn',
         message: 'Windows update signature check could not run'
       })
     }
-    this.sendStatus({ state: 'error', message, userInitiated })
+    this.sendStatus({ state: 'error', ...coded, userInitiated })
   }
 
-  /**
-   * Settles a check without discarding a retained manual-install card. A distro-managed host has a
-   * downloaded package it can still be told about, and the ordinary settle status would erase it.
-   */
+  /** Retain the distro-package manual-install card when settling a check; ordinary status would erase it. */
   protected sendSettledCheckStatus(status: UpdateStatus): void {
     const retainedStatus = getRetainedLinuxPackageManualInstallStatus()
     if (retainedStatus) {
       this.sendStatus(retainedStatus)
     } else if (status.state === 'error') {
-      this.sendErrorStatus(status.message, status.userInitiated)
+      const { message, messageCode, messageParams } = status
+      this.sendErrorStatus(
+        {
+          message,
+          ...(messageCode === undefined ? {} : { messageCode }),
+          ...(messageParams === undefined ? {} : { messageParams })
+        },
+        status.userInitiated
+      )
     } else {
       this.sendStatus(status)
     }

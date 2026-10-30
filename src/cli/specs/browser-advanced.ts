@@ -1,7 +1,8 @@
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
+import { withBrowserPageTarget } from './browser-page-target'
 
-export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = [
+export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = withBrowserPageTarget([
   {
     path: ['cookie', 'get'],
     summary: 'Get cookies for the active tab (optionally filter by URL)',
@@ -183,7 +184,8 @@ export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['set', 'media'],
-    summary: 'Set color scheme and reduced motion preferences',
+    summary:
+      'Set color scheme and reduced motion preferences (omitted ones reset to no preference)',
     usage:
       'orca set media [--color-scheme <dark|light>] [--reduced-motion <reduce|no-preference>] [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'color-scheme', 'reduced-motion', 'worktree']
@@ -262,4 +264,4 @@ export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca highlight --selector <ref> [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'selector', 'worktree']
   }
-]
+])

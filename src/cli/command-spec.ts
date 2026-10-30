@@ -14,6 +14,8 @@ export type CommandSpec = {
   variadicPositional?: boolean
   examples?: string[]
   notes?: string[]
+  // Takes `--page <browserPageId>`; only the browser spec modules set it.
+  browserPageTarget?: boolean
   // Caller flags must match the acting agent session; target flags may name another session.
   identityFlagRoles?: Partial<Record<IdentityFlag, 'caller' | 'target'>>
 }

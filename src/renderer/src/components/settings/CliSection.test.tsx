@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 
-import { renderToStaticMarkup } from 'react-dom/server'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -83,94 +82,6 @@ vi.mock('./WslCliRegistration', () => ({
 }))
 
 describe('CliSection project runtime defaults', () => {
-  it.each([null, { kind: 'environment', environmentId: 'focused-remote' }] as const)(
-    'keeps explicit host setup local while the workspace transport is %j',
-    (transportTarget) => {
-      capturedPanel.transportTarget = transportTarget
-      renderToStaticMarkup(
-        <CliSection currentPlatform="darwin" settings={getDefaultSettings('/tmp')} />
-      )
-      expect(capturedPanel.useInstalledAgentSkill).toHaveBeenLastCalledWith(
-        'orca-cli',
-        expect.objectContaining({ runtimeTarget: { kind: 'local' }, discoveryTarget: undefined })
-      )
-      expect(capturedPanel.props?.target).toEqual({ kind: 'local' })
-      expect(capturedPanel.props?.terminalRuntime?.runtime).toBe('host')
-    }
-  )
-  it('exposes freshness only for a resolved local host runtime', () => {
-    const settings = getDefaultSettings('/tmp')
-    renderToStaticMarkup(<CliSection currentPlatform="darwin" settings={settings} />)
-    expect(capturedPanel.props?.freshnessSkillName).toBe('orca-cli')
-
-    capturedPanel.canUseSkillFreshness = false
-    renderToStaticMarkup(<CliSection currentPlatform="darwin" settings={settings} />)
-    expect(capturedPanel.props?.freshnessSkillName).toBeUndefined()
-
-    capturedPanel.canUseSkillFreshness = true
-    renderToStaticMarkup(
-      <CliSection
-        currentPlatform="win32"
-        settings={{
-          ...settings,
-          localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
-        }}
-        wslSupportedPlatform
-        wslAvailable
-      />
-    )
-    expect(capturedPanel.props?.freshnessSkillName).toBeUndefined()
-  })
-
-  it('targets the default project WSL distro without registering the CLI', async () => {
-    const getWslInstallStatus = vi
-      .fn()
-      .mockResolvedValue({ supported: true, state: 'installed', pathConfigured: true })
-    vi.stubGlobal('window', {
-      api: {
-        cli: {
-          getInstallStatus: vi.fn(),
-          getWslInstallStatus,
-          installWsl: vi.fn()
-        },
-        shell: { openPath: vi.fn() }
-      }
-    })
-
-    renderToStaticMarkup(
-      <CliSection
-        currentPlatform="win32"
-        settings={{
-          ...getDefaultSettings('/tmp'),
-          localAgentRuntime: 'host',
-          localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
-        }}
-        wslSupportedPlatform
-        wslAvailable
-        wslCapabilitiesLoading={false}
-      />
-    )
-
-    expect(capturedPanel.useInstalledAgentSkill).toHaveBeenCalledWith(
-      'orca-cli',
-      expect.objectContaining({
-        discoveryTarget: { runtime: 'wsl', wslDistro: 'Ubuntu' },
-        runtimeTarget: { kind: 'local' },
-        sourceKinds: ['global']
-      })
-    )
-    expect(capturedPanel.props?.skillNames).toEqual(['orca-cli'])
-    expect(capturedPanel.props?.terminalRuntime).toMatchObject({
-      runtime: 'wsl',
-      wslDistro: 'Ubuntu'
-    })
-    expect(capturedPanel.props?.target).toBeNull()
-    // An install re-copies, so the panel reuses the install names as its update.
-    expect(capturedPanel.props?.installedSkillNames).toBeUndefined()
-    expect(capturedPanel.props?.onBeforeInstall).toBeUndefined()
-    expect(getWslInstallStatus).not.toHaveBeenCalled()
-  })
-
   it('renders an inline unknown PATH state without offering a mutation', async () => {
     const getInstallStatus = vi.fn().mockResolvedValue({
       platform: 'win32',

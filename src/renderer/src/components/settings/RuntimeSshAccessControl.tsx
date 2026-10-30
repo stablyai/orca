@@ -30,7 +30,6 @@ export function RuntimeSshAccessControl({
   onChanged,
   footerStart
 }: RuntimeSshAccessControlProps): React.JSX.Element {
-  // Why: with a single SSH host there is nothing to choose.
   const [targetId, setTargetId] = useState(targets.length === 1 ? (targets[0]?.id ?? '') : '')
   const [remotePort, setRemotePort] = useState(DEFAULT_REMOTE_PORT)
   const [busy, setBusy] = useState(false)
@@ -52,8 +51,7 @@ export function RuntimeSshAccessControl({
   }
 
   if (pending) {
-    // Why the saved request id: main resumes or cancels only the operation it recorded, and a
-    // fresh id made an unfinished link a dead end that also blocked removing the server (#27765).
+    // Reuse the recorded operation ID; fresh IDs cannot resume/cancel unfinished links and can trap server removal (#27765).
     const requestId = pending.requestId
     const retry = (): Promise<unknown> =>
       pending.operation === 'link'

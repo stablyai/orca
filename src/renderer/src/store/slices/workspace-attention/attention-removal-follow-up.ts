@@ -114,11 +114,7 @@ export function dismissReadNotifications(paneKeys: ReadonlySet<string>): void {
   void window.api?.notifications?.dismiss?.([], [...paneKeys])?.catch(() => {})
 }
 
-/**
- * Runs a marker-removing `set()` (close, sleep, hibernate, retire, purge, superseded turn), then
- * settles the flag of each workspace that lost a marker and dismisses the removed panes'
- * notifications. No-op when no marker was removed, so closing an unmarked tab keeps a manual unread.
- */
+/** After marker-removing updates, settle affected workspace flags and dismiss pane notifications; no marker removal leaves manual unread intact. */
 export function settleAttentionRemovedBy(
   set: WorkspaceAttentionSet,
   get: WorkspaceAttentionGet,

@@ -1,11 +1,4 @@
-// ─── Observation provenance for agent status (STA-4293, step 1) ─────────────
-// An AgentStatusEntry today cannot say who observed it, on whose clock, or in what
-// order relative to the pane's other observations. Hook rows carry main's
-// watermark-forced monotonic clock while byte-derived rows carry the renderer's
-// Date.now(), and both are arbitrated by one strict `<` on updatedAt. This facet
-// records the missing facts at every ingress.
-//
-// NOTHING READS IT YET. It is stamped so consumers can be migrated one at a time.
+// Stamp evidence provenance at ingress: hook and byte-derived rows use distinct clocks/order spaces. Reporters cannot supply their own provenance.
 
 import { createNonSecureContextUuid } from './non-secure-context-uuid'
 
@@ -29,15 +22,7 @@ export const AGENT_STATUS_OBSERVATION_ORIGINS = [
 ] as const
 export type AgentStatusObservationOrigin = (typeof AGENT_STATUS_OBSERVATION_ORIGINS)[number]
 
-/**
- * What the observation claims, independent of `state`.
- * - `transition` — an event asserting the pane just changed state.
- * - `snapshot` — a repaint/replay of the state already believed true (OSC repaints, relay
- *   replay, title-derived rows re-derived every render). Never proof of a new turn.
- * - `identity-only` — a resume-identity refresh whose status-shaped fields are transport
- *   placeholders (`providerSessionOnly`, agent-status-types.ts). PR #14657 had to
- *   special-case exactly this; the facet exists so the next consumer need not rediscover it.
- */
+/** transition asserts a state change; snapshot is repaint/replay, never a new-turn proof; identity-only refreshes resume identity with placeholder status fields (providerSessionOnly). */
 export type AgentStatusObservationKind = 'transition' | 'snapshot' | 'identity-only'
 
 export type AgentStatusObservation = {
@@ -46,87 +31,33 @@ export type AgentStatusObservation = {
   authorityId: string
   /** Bumped when the pane/PTY behind this key is rebound. Non-decreasing per pane. */
   incarnation: number
-  /** Monotonic per pane within one authority. Compare it; never count with it (values are shared
-   *  across the authority's panes, so consecutive observations of one pane leave gaps). */
+  /** Monotonic within one authority; compare, never count: other panes share the counter and leave gaps. */
   revision: number
   /** The AUTHORITY's clock when it sequenced this observation — not the reader's. */
   observedAt: number
-  /** This observation is a user-initiated new turn. Stamped from the hook listener's
-   *  own per-provider `isNewTurnEvent`, never from a fresh list of event-name literals:
-   *  the retired-pane gate (server.ts) matched two raw literals and stranded providers
-   *  whose boundary event is named anything else — the defect PR #14626 fixed one instance of. */
+  /** Use each provider's isNewTurnEvent for user-turn boundaries; raw event-name lists stranded other providers in the retired-pane gate (#14626). */
   boundary?: true
   kind?: AgentStatusObservationKind
 }
 
-/** The observation facet, mixed into every row shape that carries one. Optional and read by
- *  nothing yet (STA-4293): rows from old hosts, persisted rehydration, and any ingress not yet
- *  stamped carry none, so consumers must keep working without it. Deliberately NOT mixed into
- *  `AgentStatusPayload` — the ingress stamps it and it is never read back out of the reported
- *  body, so a hook or OSC writer cannot declare its own provenance. */
+/** Optional for older hosts, hydration and unstamped ingress. Keep it out of AgentStatusPayload: only trusted ingress may stamp provenance, never hook/OSC body writers. */
 export type WithAgentStatusObservation = { observation?: AgentStatusObservation }
 
-/** REPLICA-local receipt clock for a row this renderer mirrored from another host's snapshot.
- *  Stamped by `buildMirroredAgentStatusPatch` when the authority's observation clock advances,
- *  and carried forward when it does not (a repeated snapshot restates evidence already seen;
- *  it is not a new observation). `agentStatusEvidenceObservedAt` prefers it, so a mirrored row
- *  decays against THIS machine's clock instead of subtracting the host's — see THE DECAY RULE.
- *  Absent on every locally observed row. Never sent over IPC or persisted. */
+/** Replica-local receipt advances only for new authority evidence, never repeated snapshots. Freshness uses this clock to avoid host skew; absent locally, never persisted or sent over IPC. */
 export type MirroredEvidenceReceipt = { mirroredEvidenceReceivedAt?: number }
 
-/** Renderer-local count of ACCEPTED status writes this pane's row has taken. Incremented only by
- *  the store's accept branch, off the row it replaces, and carried through by every field-level
- *  rewrite — so it answers "did the pane report again?", which `updatedAt` cannot, because the
- *  accept rule admits equal timestamps. Lives on the row rather than in a side table so no
- *  teardown path can reset it out from under a reader (STA-4612). Never sent over IPC or
- *  persisted to last-status.json.
- *
- *  Declared here beside the observation facet because both are per-write facets mixed into
- *  `AgentStatusEntry` rather than fields a reporter supplies. */
+/** Count accepted writes on the row because equal updatedAt values may still be accepted. Preserve through field rewrites so teardown cannot reset readers via a side table (STA-4612). Renderer-only, never IPC/persisted. */
 export type AgentStatusRowFacets = WithAgentStatusObservation &
   MirroredEvidenceReceipt & { acceptedStatusSeq?: number }
 
-// ─── THE ORDERING RULE ──────────────────────────────────────────────────────
-// `(authorityId, incarnation, revision)` is a total order ONLY within one authorityId.
-// A different authorityId means "incomparable", not "older" — the id is regenerated per
-// authority instance, so a restarted main, a second machine, and a renderer that parsed
-// bytes itself all sequence into disjoint spaces. Consumers must fall back to today's
-// timestamp rule across authorities, never mix the two orders.
-//
-// ─── THE DECAY RULE (neither original review caught this) ───────────────────
-// Staleness must be computed against the SAME authority clock that stamped `observedAt`,
-// or replicas must decay on LOCAL RECEIPT time instead.
-//
-// `observedAt` is the authority's wall clock. `isExplicitAgentStatusFresh`
-// (renderer/src/lib/pane-agent-evidence.ts) computes `rendererNow - <observation clock>`, and
-// for a MIRRORED REMOTE entry the authority's stamps are the HOST's clock. A host running
-// minutes fast made every remote row look permanently fresh; a host running slow made them
-// decay on arrival. Declaring `observedAt` display-only does NOT fix that — the skew is in the
-// subtraction, not in the tiebreak. A replica must either receive the authority's own
-// freshness verdict, or stamp its own receipt time and decay against that.
-//
-// RESOLVED by the receipt stamp: `buildMirroredAgentStatusPatch` writes
-// `mirroredEvidenceReceivedAt` from the replica's own clock, and
-// `agentStatusEvidenceObservedAt` decays against it, so both sides of the subtraction come
-// from one machine. The authority's own verdict was rejected: a published verdict is computed
-// at publish time and cannot age between snapshots, so the moment the host stops publishing —
-// the loss-of-contact case this whole rule exists for — the replica would hold `fresh` forever.
-// The receipt stamp keeps decaying while nothing arrives, which is the required behaviour.
+// Order incarnation/revision only within one authorityId; restarts/machines/byte parsers are incomparable and use the timestamp fallback.
+// Decay against the stamping authority's clock or replica-local receipt, never cross-machine subtraction. Carry receipt across repeated snapshots.
+// A published host freshness verdict cannot age after contact loss; local receipt keeps decaying without new frames.
 
-/** Bounds the per-pane incarnation map. Panes are created for the life of the process;
- *  eviction is safe because `incarnation` is floored by an authority-wide counter (below). */
+/** Bound pane state; authority-wide incarnation floors preserve order after eviction. */
 const OBSERVATION_PANE_STATE_MAX = 1024
 
-/**
- * Assigns ordering metadata for one authority (one main process, one renderer).
- *
- * `revision` is a single authority-wide counter rather than one per pane: it is then
- * strictly increasing for every pane by construction, including a pane whose per-pane
- * state was evicted, so a future consumer can never read a restarted counter as "older".
- *
- * `incarnation` is per pane, floored by an authority-wide counter that `rebind` advances.
- * A pane re-observed after eviction therefore resumes at a value no lower than its last.
- */
+/** Authority-wide revisions stay increasing after per-pane eviction; rebind advances the incarnation floor so reobserved panes never move backwards. */
 export class AgentStatusObservationSequencer {
   private revision = 0
   private incarnationFloor = 0
@@ -193,9 +124,7 @@ export class AgentStatusObservationSequencer {
   }
 }
 
-/** Per-instance authority id. Regenerated every process start on purpose: a restarted
- *  authority's revision counter starts over, so its observations must not be comparable
- *  with the ones it emitted before (including any rehydrated from disk). */
+/** Regenerate IDs each process start: reset revision counters must not compare with old or hydrated observations. */
 export function createAgentStatusAuthorityId(role: string): string {
   return `${role}:${createNonSecureContextUuid()}`
 }

@@ -41,8 +41,7 @@ export function getWorkspaceFileBrowserOpenTarget(params: {
     getConnectionIdForFile(params.worktreeId, params.filePath) !== null ||
     runtimeEnvironmentIdOrLocalUnlessTwin(state, params.worktreeId)
   ) {
-    // Why: Chromium resolves file:// URLs on the local machine. Remote files
-    // need an Orca-served URL before the browser can render them correctly.
+    // file:// always resolves locally; serve remote files through Orca before browser rendering.
     return {
       status: 'unsupported',
       reason: 'remote-worktree',

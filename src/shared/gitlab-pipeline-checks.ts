@@ -35,8 +35,7 @@ export function mapGitLabPipelineJobStatusToConclusion(
   if (s === 'skipped') {
     return 'skipped'
   }
-  // Why: manual GitLab jobs are intentionally waiting for a human trigger; calling them pending
-  // would make the Checks tab look stuck forever, and action_required flags green MRs as failing.
+  // Manual jobs wait for a person; pending looks stuck, while action_required falsely marks green MRs as failing.
   if (s === 'manual') {
     return 'neutral'
   }

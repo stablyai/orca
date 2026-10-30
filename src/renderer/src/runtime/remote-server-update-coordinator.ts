@@ -11,7 +11,10 @@ import type {
   RemoteServerUpdaterSnapshot,
   RemoteServerUpdateSupport
 } from '../../../shared/remote-server-update'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import {
+  getOrcadSshDeployment,
+  type PublicKnownRuntimeEnvironment
+} from '../../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { UpdateCheckOptions } from '../../../shared/update-status-types'
 import { waitForReplacementRuntime } from './remote-server-restart-wait'
@@ -43,6 +46,8 @@ export type RemoteServerUpdateEntry = {
   liveLeafCount: number
   support: RemoteServerUpdateSupport | null
   error: string | null
+  /** This desktop updates it over SSH, not through the host's own updater. */
+  managedOverSsh?: boolean
 }
 
 export type RemoteServerUpdateTransport = {
@@ -92,7 +97,8 @@ export function checkingRemoteServerUpdateEntry(
     liveTabCount: 0,
     liveLeafCount: 0,
     support: null,
-    error: null
+    error: null,
+    managedOverSsh: Boolean(getOrcadSshDeployment(environment))
   }
 }
 

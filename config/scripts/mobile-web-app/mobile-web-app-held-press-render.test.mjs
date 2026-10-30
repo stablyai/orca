@@ -26,14 +26,8 @@ import {
 } from './preview/mobile-web-app-render-harness.mjs'
 import { LAYOUT_SOURCE } from './preview/mobile-web-app-terminal-probe-route.mjs'
 
-/**
- * Held presses on the page. Held ~500 ms, Android WebView turns a touch into a long-press: it fires
- * `contextmenu`, and where text can be selected it starts a selection and then cancels the touch.
- * react-native-web ends a press on all three unless the press refuses `contextmenu` (a Pressable
- * with `onLongPress`), and the page's native-parity style leaves no text to select. Traced on an
- * emulator; headless Chromium generates no long-press from CDP touches, so `holdLikeAndroidWebView`
- * plays it.
- */
+// Android long-press (~500ms) emits contextmenu plus selection/touchcancel on selectable text; RN-Web ends press unless onLongPress refuses contextmenu.
+// Native-parity CSS removes selection; headless CDP does not synthesize Android long-press, so holdLikeAndroidWebView replays observed sequence.
 
 const ROUTES = {
   mic: `/${MOBILE_WEB_APP_ROUTE_ROOT}/hold-dictation-probe`,
@@ -71,14 +65,15 @@ beforeAll(async () => {
     join(routeDir, 'hold-dictation-probe.tsx'),
     holdDictationProbeRouteSource({
       terminalActionsModule: join(sessionDir, 'MobileTerminalInputActions'),
-      chatComposerModule: join(sessionDir, 'MobileNativeChatComposer')
+      chatComposerModule: join(sessionDir, 'native-chat', 'composer', 'MobileNativeChatComposer')
     })
   )
   await writeFile(
     join(routeDir, 'command-dock-probe.tsx'),
     commandDockProbeRouteSource({
       commandDockModule: join(sessionDir, 'MobileSessionCommandDock'),
-      keyDefinitionsModule: join(terminalDir, 'terminal-key-definitions')
+      keyDefinitionsModule: join(terminalDir, 'terminal-key-definitions'),
+      accessorySelectionModule: join(sessionDir, 'use-mobile-session-accessory-selection')
     })
   )
   await writeFile(
@@ -138,14 +133,11 @@ async function openProbe(pathname) {
   return { errors, page }
 }
 
-/**
- * Touch-holds `selector` for `holdMs`, reads `read()` mid-hold, then lifts. At 500 ms it plays
- * Android WebView's long-press: `contextmenu`, then — only where the touch could select text —
- * `selectionchange` and `touchcancel`, which is what the device did while page text was selectable.
- */
+// Hold/read mid-press, then release; at 500ms replay contextmenu and selectionchange/touchcancel only for selectable text, matching Android WebView.
 async function holdLikeAndroidWebView(page, selector, { holdMs, read }) {
   // A handle, not a locator: a label the selector matches can change as soon as the press lands.
   const target = await page.waitForSelector(selector)
+  await target.scrollIntoViewIfNeeded()
   const box = await target.boundingBox()
   const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
   const input = await page.context().newCDPSession(page)
@@ -181,6 +173,29 @@ async function holdLikeAndroidWebView(page, selector, { holdMs, read }) {
   await page.clock.runFor(300)
   return { midHold, afterRelease: await read(target) }
 }
+
+async function beginRepeatKeyTouch(page) {
+  const key = await page.waitForSelector(`[aria-label="${REPEAT_KEY_LABEL}"]`)
+  await key.scrollIntoViewIfNeeded()
+  const box = await key.boundingBox()
+  const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  const input = await page.context().newCDPSession(page)
+  await input.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] })
+  return { input, key, point }
+}
+
+const keyScrollOffset = (key) =>
+  key.evaluate((node) => {
+    for (let parent = node.parentElement; parent; parent = parent.parentElement) {
+      if (
+        parent.scrollWidth > parent.clientWidth &&
+        getComputedStyle(parent).overflowX !== 'visible'
+      ) {
+        return parent.scrollLeft
+      }
+    }
+    throw new Error('Key bar does not overflow')
+  })
 
 const pressOuts = (page) => page.evaluate(() => globalThis.__orcaHeldPressProbe.pressOuts())
 
@@ -237,7 +252,7 @@ describeRender(
     })
 
     describe('the key bar', () => {
-      it('starts repeat on press and stops it only when the finger lifts', async () => {
+      it('repeats a held key without an extra send when the finger lifts', async () => {
         const { errors, page } = await openProbe(ROUTES.keys)
         const { midHold, afterRelease } = await holdLikeAndroidWebView(
           page,
@@ -246,18 +261,139 @@ describeRender(
             holdMs: 1500,
             read: () =>
               page.evaluate(() => ({
-                sent: globalThis.__orcaHeldPressProbe.sent(),
-                repeats: globalThis.__orcaHeldPressProbe.repeats()
+                repeats: globalThis.__orcaHeldPressProbe.repeats(),
+                sent: globalThis.__orcaHeldPressProbe.sent()
               }))
           }
         )
         expect(midHold).toEqual({
           selectable: false,
-          sent: ['\x1b[A'],
-          repeats: [{ kind: 'start', bytes: '\x1b[A' }]
+          repeats: [{ kind: 'start', bytes: '\x1b[A' }],
+          sent: expect.arrayContaining(['\x1b[A'])
         })
-        expect(afterRelease.sent).toEqual(['\x1b[A'])
+        expect(midHold.sent.length).toBeGreaterThan(1)
+        expect(afterRelease.sent).toEqual(midHold.sent)
         expect(afterRelease.repeats).toEqual([{ kind: 'start', bytes: '\x1b[A' }, { kind: 'stop' }])
+        expect(errors).toEqual([])
+        await page.close()
+      }, 300_000)
+
+      it('sends a repeatable tap once on release without waiting for the hold delay', async () => {
+        const { errors, page } = await openProbe(ROUTES.keys)
+        const { input } = await beginRepeatKeyTouch(page)
+        await page.clock.runFor(100)
+        expect(await page.evaluate(() => globalThis.__orcaHeldPressProbe.sent())).toEqual([])
+        await input.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+        await page.clock.runFor(1)
+        expect(await page.evaluate(() => globalThis.__orcaHeldPressProbe.sent())).toEqual([
+          '\x1b[A'
+        ])
+        await page.clock.runFor(1000)
+        expect(await page.evaluate(() => globalThis.__orcaHeldPressProbe.sent())).toEqual([
+          '\x1b[A'
+        ])
+        expect(errors).toEqual([])
+        await page.close()
+      }, 300_000)
+
+      it('does not repeat after movement cancels long-press recognition', async () => {
+        const { errors, page } = await openProbe(ROUTES.keys)
+        const { input, point } = await beginRepeatKeyTouch(page)
+        await page.clock.runFor(100)
+        await input.send('Input.dispatchTouchEvent', {
+          type: 'touchMove',
+          touchPoints: [{ ...point, y: point.y + 20 }]
+        })
+        await page.clock.runFor(1000)
+        expect(await page.evaluate(() => globalThis.__orcaHeldPressProbe.sent())).toEqual([])
+        await input.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+        await page.clock.runFor(1000)
+        expect(
+          await page.evaluate(() => globalThis.__orcaHeldPressProbe.sent().length)
+        ).toBeLessThanOrEqual(1)
+        expect(errors).toEqual([])
+        await page.close()
+      }, 300_000)
+
+      it('drops a prepared tap after switching terminals and accepts a new accessibility click', async () => {
+        const { errors, page } = await openProbe(ROUTES.keys)
+        const { input, key } = await beginRepeatKeyTouch(page)
+        await page.clock.runFor(100)
+        await page.evaluate(() => globalThis.__orcaHeldPressProbe.switchTerminal())
+        await page.waitForFunction(
+          () => globalThis.__orcaHeldPressProbe.activeHandle === 'other-terminal'
+        )
+        await input.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+        await page.clock.runFor(1000)
+        expect(await page.evaluate(() => globalThis.__orcaHeldPressProbe.sent())).toEqual([])
+        await key.evaluate((node) => node.click())
+        expect(await page.evaluate(() => globalThis.__orcaHeldPressProbe.deliveries())).toEqual([
+          { bytes: '\x1b[A', target: 'other-terminal' }
+        ])
+        expect(errors).toEqual([])
+        await page.close()
+      }, 300_000)
+
+      it.each([
+        [100, false],
+        [700, false],
+        [700, true]
+      ])(
+        'keeps Enter activation bound to keydown terminal with hold=%sms and switch=%s',
+        async (holdMs, switchTerminal) => {
+          const { errors, page } = await openProbe(ROUTES.keys)
+          const key = await page.waitForSelector(`[aria-label="${REPEAT_KEY_LABEL}"]`)
+          await key.focus()
+          await page.keyboard.down('Enter')
+          await page.clock.runFor(100)
+          expect(await page.evaluate(() => globalThis.__orcaHeldPressProbe.deliveries())).toEqual([
+            { bytes: '\x1b[A', target: 'held-press-terminal' }
+          ])
+          if (switchTerminal) {
+            await page.evaluate(() => globalThis.__orcaHeldPressProbe.switchTerminal())
+            await page.waitForFunction(
+              () => globalThis.__orcaHeldPressProbe.activeHandle === 'other-terminal'
+            )
+          }
+          await page.clock.runFor(holdMs - 100)
+          const beforeRelease = await page.evaluate(() =>
+            globalThis.__orcaHeldPressProbe.deliveries()
+          )
+          if (holdMs === 100 || switchTerminal) {
+            expect(beforeRelease).toHaveLength(1)
+          } else {
+            expect(beforeRelease.length).toBeGreaterThan(1)
+          }
+          expect(beforeRelease).toEqual(
+            beforeRelease.map(() => ({ bytes: '\x1b[A', target: 'held-press-terminal' }))
+          )
+          await page.keyboard.up('Enter')
+          await page.clock.runFor(1000)
+          expect(errors).toEqual([])
+          expect(await page.evaluate(() => globalThis.__orcaHeldPressProbe.deliveries())).toEqual(
+            beforeRelease
+          )
+          await page.close()
+        },
+        300_000
+      )
+
+      it('scrolls across a repeatable key without sending it', async () => {
+        const { errors, page } = await openProbe(ROUTES.keys)
+        const { input, key, point } = await beginRepeatKeyTouch(page)
+        const before = await keyScrollOffset(key)
+        await page.clock.runFor(70)
+        for (let step = 1; step <= 8; step += 1) {
+          await input.send('Input.dispatchTouchEvent', {
+            type: 'touchMove',
+            touchPoints: [{ ...point, x: point.x - step * 20 }]
+          })
+          await page.clock.runFor(20)
+        }
+        await input.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+        await page.clock.runFor(1000)
+        expect(await keyScrollOffset(key)).toBeGreaterThan(before)
+        expect(await page.evaluate(() => globalThis.__orcaHeldPressProbe.sent())).toEqual([])
         expect(errors).toEqual([])
         await page.close()
       }, 300_000)

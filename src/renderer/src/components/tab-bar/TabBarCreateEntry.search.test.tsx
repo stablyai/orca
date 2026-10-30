@@ -156,6 +156,18 @@ describe('TabBarCreateEntry search behavior', () => {
       ]
       const url = visitedRoot ? 'https://linear.app/' : 'https://linear.app/acme/issues'
       seedBrowserHistory(url, 'Linear')
+      useAppStore.setState((state) => ({
+        browserUrlHistory: [
+          {
+            url: 'https://linear.app/acme/inbox',
+            normalizedUrl: 'https://linear.app/acme/inbox',
+            title: 'Linear inbox',
+            lastVisitedAt: 2,
+            visitCount: 10
+          },
+          ...state.browserUrlHistory
+        ]
+      }))
       const onOpenEntry = vi.fn().mockResolvedValue(undefined)
       renderEntry({ onOpenEntry })
       setQuery('linear.app')
@@ -187,6 +199,78 @@ describe('TabBarCreateEntry search behavior', () => {
     expect(onOpenEntry).toHaveBeenCalledWith(
       expect.objectContaining({
         classification: { kind: 'explicit-url', url: 'http://localhost/' }
+      })
+    )
+  })
+
+  it.each([
+    { loading: false, loadError: null },
+    { loading: true, loadError: null },
+    { loading: false, loadError: 'scan failed' }
+  ])('submits the exact visited URL ahead of a more popular subpage (index: %j)', (fileIndex) => {
+    fileListMock.current = { files: [], ...fileIndex }
+    const url = 'https://x.com/bonafide714/status/211363866'
+    seedBrowserHistory(url, 'Nico on X')
+    useAppStore.setState((state) => ({
+      browserUrlHistory: [
+        {
+          url: `${url}/photo/1`,
+          normalizedUrl: `${url}/photo/1`,
+          title: 'Photo on X',
+          lastVisitedAt: 2,
+          visitCount: 10
+        },
+        ...state.browserUrlHistory
+      ]
+    }))
+    const onOpenEntry = vi.fn().mockResolvedValue(undefined)
+    renderEntry({ onOpenEntry })
+    setQuery(url)
+
+    const firstOption = container.querySelector('[role="option"]')
+    expect(firstOption?.textContent).toContain('Open page')
+    expect(firstOption?.getAttribute('aria-selected')).toBe('true')
+    expect(container.querySelector('input')?.getAttribute('aria-activedescendant')).toBe(
+      firstOption?.id
+    )
+
+    submit()
+    expect(onOpenEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ classification: { kind: 'explicit-url', url } })
+    )
+  })
+
+  it('waits for files before selecting a visited host and stays blocked after reindexing', () => {
+    fileListMock.current = { files: [], loading: true, loadError: null }
+    seedBrowserHistory('https://example.com/', 'Example')
+    const onOpenEntry = vi.fn().mockResolvedValue(undefined)
+    renderEntry({ onOpenEntry })
+    setQuery('example.com')
+
+    expect(container.querySelector('[role="option"]')?.textContent).toContain('Open page')
+    expect(container.querySelector('[aria-selected="true"]')).toBeNull()
+    submit()
+    expect(onOpenEntry).not.toHaveBeenCalled()
+
+    fileListMock.current = { files: ['example.com'], loading: false, loadError: null }
+    renderEntry({ onOpenEntry })
+    expect(container.querySelector('[aria-selected="true"]')?.textContent).toContain('Open file')
+
+    fileListMock.current = { files: [], loading: true, loadError: null }
+    renderEntry({ onOpenEntry })
+    fileListMock.current = { files: [], loading: false, loadError: null }
+    renderEntry({ onOpenEntry })
+    expect(container.querySelector('[role="option"]')?.textContent).toContain('Open page')
+    expect(container.querySelector('[aria-selected="true"]')).toBeNull()
+    expect(container.querySelector('input')?.getAttribute('aria-activedescendant')).toBeNull()
+    submit()
+    expect(onOpenEntry).not.toHaveBeenCalled()
+
+    press('ArrowDown')
+    submit()
+    expect(onOpenEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        classification: { kind: 'explicit-url', url: 'https://example.com/' }
       })
     )
   })

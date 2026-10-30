@@ -1,5 +1,4 @@
-// R1 gate: the working tree must attach the newest release's terminal daemon, or an
-// upgrade strands every live terminal. Rollback crossing is reported, not enforced.
+// Newest release daemon must attach or upgrades strand live terminals; rollback crossing is advisory.
 // Usage: node check-daemon-protocol-crossing.mjs [--release-ref <ref>]
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'

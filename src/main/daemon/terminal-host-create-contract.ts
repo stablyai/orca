@@ -37,6 +37,8 @@ export type CreateOrAttachOptions = {
   streamClient: {
     onData: (data: string, rawLength?: number, transformed?: boolean, seq?: number) => void
     onExit: (code: number, incarnationId: PtyIncarnationId, cause?: TerminalExitCause) => void
+    /** The child may still run, but its PTY master no longer takes input. */
+    onInputClosed?: (incarnationId: PtyIncarnationId) => void
   }
   /** Resolve the adopted owner’s canonical ID before stream callbacks can emit output. */
   onSessionResolved?: (sessionId: string) => void
@@ -55,4 +57,6 @@ export type CreateOrAttachResult = {
   agentSessionEnsure?: AgentSessionClaimedSpawnResult
   /** Fresh non-WSL spawns with an explicit cwd only; false means a proven permission denial. */
   cwdReadableByDaemon?: boolean
+  /** The live child can no longer take input through its PTY master. */
+  inputClosed?: true
 }

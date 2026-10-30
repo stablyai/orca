@@ -1,6 +1,6 @@
 import { join } from 'node:path'
-import { subscribeViaWatcherProcess } from './parcel-watcher-process'
-import type { WatcherProcessSubscription } from './parcel-watcher-process-subscription'
+import { subscribeViaWatcherProcess } from './filesystem/watcher-process/parcel-watcher-process'
+import type { WatcherProcessSubscription } from './filesystem/watcher-process/parcel-watcher-process-subscription'
 import type {
   WorktreeBasePollEvent,
   WorktreeBaseSubscription,

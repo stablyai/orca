@@ -2,7 +2,6 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { ShellOpenExternalEditorResult } from '../../../../shared/shell-open-types'
 
-/** Actionable toast for a refused or failed Open in launch. */
 export function showOpenFailureToast(
   result: Exclude<ShellOpenExternalEditorResult, { ok: true }>,
   remote: boolean
@@ -56,7 +55,7 @@ export function showOpenFailureToast(
     toast.error(
       translate(
         'auto.components.sidebar.WorktreeOpenInMenu.sshAliasRequired',
-        'VS Code needs an SSH config alias for this host.'
+        'This editor needs an SSH config alias for this host.'
       ),
       {
         description: translate(
@@ -77,7 +76,7 @@ export function showOpenFailureToast(
       {
         description: translate(
           'auto.components.sidebar.WorktreeOpenInMenu.remoteEditorUnsupportedDetail',
-          'Choose VS Code or use the app locally.'
+          'Choose VS Code, Cursor, or Zed, or use the app locally.'
         )
       }
     )
@@ -124,12 +123,12 @@ export function showOpenFailureToast(
     toast.error(
       translate(
         'auto.components.sidebar.WorktreeOpenInMenu.remoteLaunchFailed',
-        'Could not open the path in VS Code.'
+        'Could not open the path in the editor.'
       ),
       {
         description: translate(
           'auto.components.sidebar.WorktreeOpenInMenu.remoteLaunchFailedDetail',
-          'Check the VS Code command configured on this machine.'
+          'Check the editor command configured on this machine.'
         )
       }
     )

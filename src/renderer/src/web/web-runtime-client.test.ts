@@ -41,8 +41,7 @@ describe('WebRuntimeClient', () => {
     vi.stubGlobal('window', {
       setTimeout,
       clearTimeout,
-      // Why: the connected-state liveness heartbeat arms a window.setInterval, so
-      // the stub must provide interval timers once a client reaches 'connected'.
+      // Connected-state heartbeat needs interval timers in the window stub.
       setInterval,
       clearInterval,
       atob: (value: string) => Buffer.from(value, 'base64').toString('binary'),
@@ -281,6 +280,53 @@ describe('WebRuntimeClient', () => {
       await Promise.resolve()
 
       expect(replacementSocket.send).toHaveBeenCalledTimes(1)
+    } finally {
+      client.close()
+      random.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
+  it('retires a socket whose handshake expires without waiting for the browser close event', async () => {
+    vi.useFakeTimers()
+    const timerWindow = window as unknown as {
+      setTimeout: typeof setTimeout
+      clearTimeout: typeof clearTimeout
+    }
+    timerWindow.setTimeout = setTimeout
+    timerWindow.clearTimeout = clearTimeout
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0)
+    const client = new WebRuntimeClient(
+      pairedRuntimeConnectionFromOffer({
+        v: 2,
+        endpoint: 'ws://127.0.0.1:6768',
+        deviceToken: 'token',
+        publicKeyB64: Buffer.alloc(32).toString('base64')
+      })
+    )
+
+    try {
+      const stalled = fakeSockets[0]!
+      stalled.readyState = FakeWebSocket.OPEN
+      stalled.onopen?.()
+      const callPromise = client.call('status.get', {}, { timeoutMs: 30_000 })
+      const settled = vi.fn()
+      callPromise.then(settled, settled)
+
+      // Browsers can hold a closing socket for tens of seconds before onclose fires.
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(stalled.close).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(500)
+      expect(fakeSockets).toHaveLength(2)
+
+      stalled.onerror?.()
+      stalled.onclose?.()
+      await Promise.resolve()
+      expect(settled).not.toHaveBeenCalled()
+      expect(fakeSockets).toHaveLength(2)
+
+      client.close()
+      await expect(callPromise).rejects.toThrow('Remote Orca runtime connection closed.')
     } finally {
       client.close()
       random.mockRestore()
@@ -710,7 +756,7 @@ describe('WebRuntimeClient', () => {
     vi.stubGlobal('WebSocket', WebSocket)
     const serverKeys = generateKeyPair()
     const frame = new Uint8Array([9, 8, 7])
-    // host must match the 127.0.0.1 clients dial: a wildcard bind lets a foreign loopback listener claim the port and answer here.
+    // Bind the dialed 127.0.0.1 address; wildcard binding lets a foreign loopback listener claim this port.
     const wss = new WebSocketServer({ host: '127.0.0.1', port: 0 })
     const sockets = new Set<WebSocket>()
     wss.on('connection', (socket) => {

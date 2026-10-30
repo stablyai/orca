@@ -1,4 +1,4 @@
-import type { RemoteRuntimeClientError } from '../../remote-runtime-client-error'
+import type { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { releaseRemoteRuntimePreparedRequest } from '../requests/remote-runtime-prepared-request-admission'
 import { remoteRuntimeUnavailableError } from '../requests/remote-runtime-request-frames'
 import type { RuntimeRpcResponse } from '../../runtime-rpc-envelope'
@@ -45,8 +45,7 @@ export function refreshSharedControlPendingRequestTimeouts(
   pendingRequests: Map<string, SharedControlPendingRequest<unknown>>
 ): void {
   for (const pending of pendingRequests.values()) {
-    // Why: only long-poll requests opted into keepalive refresh; refreshing an
-    // ordinary short RPC would keep a genuinely-stuck server call alive forever.
+    // Unrelated keepalives must not extend a stuck short RPC’s deadline.
     if (!pending.refreshTimeoutOnKeepalive) {
       continue
     }
@@ -115,9 +114,7 @@ export function handleSharedControlSubscriptionResponse(
   subscription: SharedControlLogicalSubscription<unknown>,
   response: RuntimeRpcResponse<unknown>
 ): void {
-  // The replay window ends on either success or error. An error created no
-  // remote subscription, so a later close must finish locally instead of
-  // waiting forever for an id that will never arrive.
+  // End the replay window even on error: no remote ID will arrive for a later close to clean up.
   subscription.awaitingResubscribe = false
   if (!response.ok) {
     subscription.sent = false

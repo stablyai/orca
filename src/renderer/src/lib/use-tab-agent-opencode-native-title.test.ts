@@ -9,7 +9,7 @@ import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { TerminalAgent } from '../../../shared/terminal-agent'
 import { parseWorkspaceSession } from '../../../shared/workspace-session-schema'
-import { resolveTabAgentFromSignals } from './tab-agent-from-signals'
+import { resolveTabAgentFromSignals } from '../../../shared/tab-agent-from-signals'
 import { useTabAgent } from './use-tab-agent'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true

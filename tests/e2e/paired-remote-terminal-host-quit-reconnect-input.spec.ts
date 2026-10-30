@@ -1,14 +1,5 @@
-/**
- * A paired client's ACTIVE remote terminal must keep accepting keyboard input after the desktop host
- * quits (daemon survives) and relaunches. The relaunched host's graph publication is held so the
- * client's reconnect deterministically meets the host before its renderer has published any tabs —
- * the window a slow (e.g. Windows) host start leaves open in the field.
- *
- * Run:
- *   ORCA_BACKGROUND_LAUNCH=1 pnpm exec playwright test \
- *     tests/e2e/paired-remote-terminal-host-quit-reconnect-input.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */
+// Keep the active paired terminal interactive after desktop-host quit/relaunch with its daemon alive.
+// Hold renderer graph publication so reconnect deterministically reaches the started host before it has published any tabs.
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -214,7 +205,11 @@ async function readPane(page: Page, webTabId: string): Promise<PaneProbe> {
       banner:
         document
           .querySelector('[data-terminal-remote-runtime-reconnect-banner]')
-          ?.getAttribute('data-terminal-remote-runtime-reconnect-banner') ?? null
+          ?.getAttribute('data-terminal-remote-runtime-reconnect-banner') ??
+        document
+          .querySelector('[data-remote-server-outage-notice]')
+          ?.getAttribute('data-remote-server-outage-notice') ??
+        null
     }
   }, webTabId)
 }

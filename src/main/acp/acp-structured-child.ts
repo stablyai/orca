@@ -1,5 +1,6 @@
 import type { SubmissionRejectionFact } from '../../shared/agent-session-failure'
 import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
+import type { StructuredAgentSessionSetOptionInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { AcpAgentError } from './acp-errors'
 import { acpAuthenticationRequired, acpSignInRequiredFailure } from './acp-turn-failures'
 import type { AcpStructuredSession } from './acp-structured-session'
@@ -32,6 +33,22 @@ export function isAcpReadySession(
   session: AcpStructuredChild | null | undefined
 ): session is AcpStructuredSession & AcpStructuredChild {
   return session != null && session.lane !== null && session.turns !== null
+}
+
+export function canSetAcpOptionWhileIdle(
+  session: AcpStructuredChild | undefined,
+  input: StructuredAgentSessionSetOptionInput
+): boolean {
+  return !!(
+    session &&
+    isAcpReadySession(session) &&
+    session.fence === input.fence &&
+    session.journalClosed === null &&
+    !session.closeRequested &&
+    !session.turns.running &&
+    input.key === 'model' &&
+    session.options.write('model', input.value)?.method === 'config'
+  )
 }
 
 export function acpStartupFailure(

@@ -36,21 +36,14 @@ function failures(at: string, observation: Observation): string[] {
   return found
 }
 
-/**
- * A refused projection settles as data — the throw is captured as an effect and the action stays
- * `pending` — so `--record` writes it and the suite goes green over it. Two adapters shipped that
- * way (#20667, and the worktree catalog), and a revert plus a re-record would restore either one
- * silently. A detached rejection is not banned here: recording one is how a real main bug gets
- * pinned, and `unhandled-recording.test.ts` pins the capture itself.
- */
+// Projection refusals can be captured as data and re-recorded green; reject those while allowing real detached product failures.
 describe('recorder failures never reach a golden', () => {
   it('records no refused projection in any observation field', () => {
     const ids = readdirSync(directory)
       .filter((file) => file.endsWith('.json'))
       .map((file) => file.replace(/\.json$/, ''))
 
-    // Positive control: absence proves nothing unless the detector fires. `effects` carries the
-    // shape both real defects took — the refusal captured as the message of a recorded error.
+    // Seed a captured refusal to prove absence checking detects the real failure shape.
     const seeded: Observation = {
       sender: [],
       payloads: [],

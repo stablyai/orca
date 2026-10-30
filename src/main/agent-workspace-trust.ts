@@ -20,6 +20,8 @@ export type AgentTrustLaunchContext = {
   wslDistro: string | null
   /** SSH connection that runs the agent; null means this machine. */
   connectionId: string | null
+  /** CODEX_HOME Orca injects after this step; the env does not carry it yet. */
+  codexHome?: string | null
 }
 
 export type AgentTrustSpawnFields = {
@@ -69,7 +71,8 @@ export async function applyAgentWorkspaceTrust(
           claudeAuth: context.claudeAuth,
           wslDistro: context.wslDistro
         }),
-      codexConfigFiles: () => getLocalCodexTrustConfigFiles(agentHome),
+      codexConfigFiles: () => getLocalCodexTrustConfigFiles(agentHome, context.codexHome),
+      kimiHome: context.env?.KIMI_CODE_HOME || process.env.KIMI_CODE_HOME,
       // Codex shares its config lock queue with hook installs.
       deadlineMs:
         preset === 'codex' ? AGENT_TRUST_WRITE_DEADLINE_MS : SHORT_AGENT_TRUST_WRITE_DEADLINE_MS

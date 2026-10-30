@@ -28,8 +28,7 @@ import {
   WslTranscriptFsError
 } from '../native-chat/wsl-transcript-fs-gate'
 
-// A stalled task holds the gate's single scan slot until it settles, so every
-// case releases its stall before the next one runs.
+// Release stalled tasks between cases: each holds the gate’s single scan slot until settlement.
 let releaseStall: (() => void) | undefined
 
 function stalls<T>(): Promise<T> {
@@ -38,8 +37,7 @@ function stalls<T>(): Promise<T> {
   })
 }
 
-// Complete: UNC readdir results pass through the child dispatcher's dirent
-// serializer, which reads every kind flag.
+// The child serializer reads every dirent kind flag.
 function dirent(name: string) {
   return {
     name,
@@ -53,8 +51,6 @@ function dirent(name: string) {
   }
 }
 
-// The point of the gate: an ungated syscall on a stalled 9P mount never returns,
-// so the call must still be pending at the deadline and settle just after it.
 async function settlesOnlyAtTheScanDeadline(pending: Promise<string[]>): Promise<string[]> {
   let settled = false
   const tracked = pending.then((value) => {
@@ -70,8 +66,7 @@ async function settlesOnlyAtTheScanDeadline(pending: Promise<string[]>): Promise
 let originalDatabaseOverride: string | undefined
 
 beforeEach(() => {
-  // blockedRoutes is persistent gate state: a prior stall must not quarantine
-  // this test's route.
+  // Persistent route quarantine must not leak between cases.
   resetWslTranscriptFsGateForTests()
   originalDatabaseOverride = process.env.OPENCODE_DB
   delete process.env.OPENCODE_DB
@@ -95,14 +90,11 @@ afterEach(async () => {
   }
 })
 
-// Why this file exists: the AI Vault's primary OpenCode source reaches these
-// syscalls transitively, so the import-guard that pins direct `node:fs` use in
-// the transcript modules never saw them (STA-4049).
+// These transitive discovery syscalls escape direct filesystem import guards.
 describe('OpenCode database discovery on a stalled WSL data directory', () => {
   it('gates the data-directory listing instead of hanging the scan', async () => {
     mocks.readdir.mockImplementation(stalls)
-    // Asserted because an empty list alone also matches a missing data dir; the
-    // AI Vault's OpenCode source turns this callback into the scan issue.
+    // Empty results alone cannot distinguish missing data from gated refusal.
     const onRefusal = vi.fn()
 
     expect(await settlesOnlyAtTheScanDeadline(listOpenCodeDatabases(onRefusal))).toEqual([])
@@ -116,8 +108,7 @@ describe('OpenCode database discovery on a stalled WSL data directory', () => {
 
     expect(await settlesOnlyAtTheScanDeadline(listOpenCodeDatabases(onRefusal))).toEqual([])
     expect(mocks.readdir).not.toHaveBeenCalled()
-    // Loose on the path: `isAbsolute` is host-flavoured, so a UNC override only
-    // stays verbatim on Windows. The refusal reaching the caller is the contract.
+    // UNC paths remain verbatim only on Windows; assert refusal across hosts.
     expect(onRefusal).toHaveBeenCalledWith(
       expect.stringContaining('opencode.db'),
       expect.any(WslTranscriptFsError)

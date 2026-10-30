@@ -1,7 +1,4 @@
-// Node wrapper around window-watch.ps1: start/stop the background window watch
-// and parse its JSONL event log. Also runnable standalone as `--selftest`,
-// which opens a real transient PowerShell window and asserts the watch caught
-// it — so the harness's own instrument is testable without any installers.
+// Wrap background window-watch.ps1 JSONL collection; --selftest opens a transient real console on an isolated Windows runner to verify detection.
 
 import { existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -13,11 +10,7 @@ const HERE = import.meta.dirname
 const WATCH_SCRIPT = path.join(HERE, 'window-watch.ps1')
 const ENUM_SCRIPT = path.join(HERE, 'window-enum.ps1')
 
-/**
- * Take a one-shot baseline snapshot of visible top-level windows and write it
- * to baselinePath. Returns the window array. Normalizes the PS 5.1 single-item
- * unwrap (windows may arrive as one object or as a nested array).
- */
+// Write baseline visible-window snapshot, normalizing PS 5.1 object/flat/nested arrays.
 export function captureBaseline(baselinePath) {
   assertWin32('window-watch baseline')
   const parsed = runScriptFileJson(ENUM_SCRIPT)
@@ -41,11 +34,7 @@ function normalizeWindows(raw) {
   return [raw]
 }
 
-/**
- * Start the background watch. Returns a handle with stop() -> events array.
- * The watch seeds from baselinePath and records new windows to outPath until
- * stop() (which drops a stop-file) or durationSec elapses.
- */
+// Watch baseline-relative new windows until stop-file or durationSec; return a stop handle yielding events.
 export function startWatch({ baselinePath, outPath, stopFile, durationSec = 600, pollMs = 500 }) {
   assertWin32('window-watch')
   const resolvedStopFile = stopFile ?? `${outPath}.stop`
@@ -80,8 +69,7 @@ export function startWatch({ baselinePath, outPath, stopFile, durationSec = 600,
     stopFile: resolvedStopFile,
     outPath,
     async stop() {
-      // Signal the loop to end, then wait for it to flush and exit. Fall back
-      // to a hard kill if the loop is wedged so a stuck watch never hangs teardown.
+      // Signal graceful stop/flush, then bound fallback kill so a wedged watch cannot hang teardown.
       writeFileSync(resolvedStopFile, 'stop')
       const timer = setTimeout(() => child.kill(), 5000)
       await exited
@@ -121,16 +109,11 @@ async function selftest() {
   console.log(`[selftest] baseline captured ${baseline.length} visible windows`)
 
   const watch = startWatch({ baselinePath, outPath, durationSec: 20, pollMs: 300 })
-  // Give the watch a moment to compile Add-Type and take its first poll before
-  // the transient window appears, so the appearance is genuinely "new".
+  // Wait for Add-Type/first poll before creating the transient window, preserving the new-window premise.
   await delay(1500)
 
   console.log(`[selftest] opening transient window titled ${canary}`)
-  // Must be a real console window: Start-Process allocates one, whereas a
-  // detached Node spawn gets DETACHED_PROCESS (no console at all) and would
-  // never appear in enumeration. This mirrors how a daemon child that lacks
-  // CREATE_NO_WINDOW allocates a fresh visible console — exactly the flash the
-  // real harness must catch.
+  // Use Start-Process for a real console; detached Node has no console and would not test CREATE_NO_WINDOW flash detection.
   const transientScript = path.join(dir, 'transient.ps1')
   writeFileSync(transientScript, `$host.UI.RawUI.WindowTitle='${canary}'; Start-Sleep -Seconds 5`)
   runCommandSync(

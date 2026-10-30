@@ -6,11 +6,15 @@ import {
   type PendingBulkCloseConfirmation
 } from './mobile-bulk-close-sheet-actions'
 import type { RpcSuccess } from '../transport/types'
+import { mobileBulkTabCloseCopy } from './mobile-bulk-tab-close-copy'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { activateMobileSessionTab } from './mobile-session-tab-activation'
 import type { MobileSessionTab, SessionTabsResult } from './mobile-session-route-types'
 import type { MobileSessionCloseActionsModel } from './use-mobile-session-close-actions'
 
 export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel) {
+  const t = useMobileTranslation()
+  const copy = mobileBulkTabCloseCopy(t)
   const {
     worktreeId,
     client,
@@ -53,6 +57,15 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
     }
   }
   const cancelBulkClose = () => setPendingBulkClose(null)
+  const bulkCloseConfirm = {
+    visible: false,
+    title: copy.title.others,
+    message: copy.description,
+    confirmLabel: copy.confirm,
+    destructive: true,
+    onConfirm: confirmBulkClose,
+    onCancel: cancelBulkClose
+  }
 
   const visibleTabs: MobileSessionTab[] = sessionTabs
   const activeMarkdownTab = activeSessionTab?.type === 'markdown' ? activeSessionTab : null
@@ -77,7 +90,7 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
     if (pendingTerminalActivationAttemptRef.current === activationKey) {
       return
     }
-    // Why: a server-owned tab can be active but still pending; activation is the RPC that materializes its PTY handle.
+    // Pending server-owned tabs need activation to materialize their PTY handles.
     pendingTerminalActivationAttemptRef.current = activationKey
     void activateMobileSessionTab(client, {
       worktree: `id:${worktreeId}`,
@@ -85,8 +98,6 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
       leafId: activePendingTerminalTab.leafId,
       notifyClients: false,
       navigation: 'caller',
-      // Why: this only ever runs for the tab the user is looking at, so it is the
-      // tail of their tap — the gesture that materializes a parked pane.
       intent: 'user'
     })
       .then((response) => {
@@ -116,6 +127,7 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
   ])
   return {
     bulkCloseActions,
+    bulkCloseConfirm,
     closeWithBulkActions,
     pendingBulkClose,
     confirmBulkClose,

@@ -1,5 +1,4 @@
-// Status rows a host writes in its own words. Each names itself with a presentation so a client can
-// say it in the reader's language; its `text` stays the words for a client that can't.
+// Keep English text for legacy clients and presentation keys for translated host status rows.
 
 import type { AgentJournalPlainStatusItem } from './agent-session-journal-types'
 

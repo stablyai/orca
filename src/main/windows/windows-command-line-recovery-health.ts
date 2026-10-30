@@ -1,22 +1,4 @@
-/**
- * One warning, once per session, when command-line recovery has stopped working.
- *
- * The reader has no PEB fallback by design: falling back was a total-defeat
- * vector, because any single anomalous NTSTATUS reinstated address-space reads
- * for the life of the process. The cost of removing it is a cliff -- if
- * `NtQueryInformationProcess(ProcessCommandLineInformation)` is refused, every
- * command line comes back empty and agent identity matching silently degrades
- * to image names, while the addon still loads and still enumerates, so every
- * health check stays green. A cliff nobody can see is the failure mode this
- * area keeps producing, so it gets a signal.
- *
- * The querying process is the unambiguous probe. A process can always open
- * itself with `PROCESS_QUERY_LIMITED_INFORMATION`, so its own command line
- * coming back empty means the query is refused host-wide -- not that some
- * target denied a handle, which is normal for roughly a quarter of the table.
- * That is why this keys on our own row rather than a fraction: no threshold to
- * tune, and no false positive on a hardened box where most processes deny.
- */
+/** Warn once when our own command line is empty: self permits a limited query handle, while other processes may deny one. No PEB fallback may restore address-space reads after a refused kernel query. */
 type CommandLineRow = { pid: number; commandLine?: string }
 
 let warned = false
@@ -41,7 +23,7 @@ export function reportWindowsCommandLineRecoveryHealth(rows: CommandLineRow[]): 
   )
 }
 
-/** Test-only: the warning is once per session, so cases must not inherit it. */
+/** Reset the once-per-session warning between tests. */
 export function resetWindowsCommandLineRecoveryHealthForTests(): void {
   warned = false
 }

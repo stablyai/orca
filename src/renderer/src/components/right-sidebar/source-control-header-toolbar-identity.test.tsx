@@ -115,7 +115,6 @@ describe('SourceControlHeaderToolbar branch identity', () => {
     const branchIndex = markup.indexOf('brennanb2025/source-control-branch-name')
     const createPrIndex = markup.indexOf('Create PR')
 
-    // Why: the #9787 regression — identity must not evict Create PR.
     expect(branchIndex).toBeGreaterThan(-1)
     expect(createPrIndex).toBeGreaterThan(-1)
     expect(markup).toContain('aria-label="brennanb2025/source-control-branch-name → origin/main"')

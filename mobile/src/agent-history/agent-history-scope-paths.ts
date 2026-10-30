@@ -1,64 +1,38 @@
-import {
-  isRuntimePathAbsolute,
-  normalizeRuntimePathForComparison
-} from '../../../src/shared/cross-platform-path'
-import type { Worktree } from '../worktree/workspace-list-types'
+import { deriveAiVaultScopeSessionPaths } from '../../../src/shared/ai-vault-scope-paths'
 import {
   AI_VAULT_SCOPE_PATHS_MAX_COUNT,
   type AiVaultScope
 } from '../../../src/shared/ai-vault-types'
+import type { Worktree } from '../worktree/workspace-list-types'
 
-// Why: the renderer's deriveAiVault* helpers are renderer-located and
-// Metro-unresolvable, so mobile does its own minimal derivation seeded by the
-// active worktree's path plus same-repo sibling worktrees (mobile already loads
-// the full worktree list via worktree.ps). scopePaths only widen the host scan's
-// discovery breadth; they are host-local match prefixes, never device paths.
+type ScopeWorktree = Pick<Worktree, 'worktreeId' | 'path' | 'repoId' | 'priorWorktreeIds'>
+
+/** Desktop's scope paths from worktree.ps rows; with no project metadata on the phone, Project is the active repo. */
 export function deriveMobileAiVaultScopePaths(
   scope: AiVaultScope,
-  activeWorktree: Pick<Worktree, 'worktreeId' | 'path' | 'repoId'> | null,
-  liveWorktrees: readonly Pick<Worktree, 'worktreeId' | 'path' | 'repoId'>[]
+  activeWorktree: ScopeWorktree | null,
+  liveWorktrees: readonly ScopeWorktree[]
 ): string[] {
-  // 'all' scope scans without scope hints — the host returns the global recency
-  // list, so no scopePaths are needed (and would only narrow discovery).
-  if (scope === 'all' || !activeWorktree) {
+  if (!activeWorktree) {
     return []
   }
-
-  const paths: string[] = []
-  const comparisonPaths = new Set<string>()
-  addScopePath(paths, comparisonPaths, activeWorktree.path)
-
-  // Workspace scope = the active worktree only. Project scope additionally
-  // covers same-repo sibling worktrees so the project view stays complete.
-  if (scope === 'project') {
-    for (const worktree of liveWorktrees) {
-      // Why: the RPC rejects (does not truncate) oversized scopePaths, and the
-      // list only widens discovery — dropping tail siblings beats hard-failing.
-      if (paths.length >= AI_VAULT_SCOPE_PATHS_MAX_COUNT) {
-        break
-      }
-      if (worktree.repoId === activeWorktree.repoId) {
-        addScopePath(paths, comparisonPaths, worktree.path)
-      }
-    }
-  }
-
-  return paths
+  return deriveAiVaultScopeSessionPaths(
+    toScopePathWorktree(activeWorktree),
+    liveWorktrees.map(toScopePathWorktree),
+    { scope }
+  )
 }
 
-function addScopePath(
-  paths: string[],
-  comparisonPaths: Set<string>,
-  pathValue: string | undefined
-): void {
-  const trimmedPath = pathValue?.trim()
-  if (!trimmedPath || !isRuntimePathAbsolute(trimmedPath)) {
-    return
+/** The scan hints sent to the host; older hosts reject oversized scopePaths, and hints only widen discovery. */
+export function mobileAiVaultScanScopePaths(scopePaths: readonly string[]): string[] {
+  return scopePaths.slice(0, AI_VAULT_SCOPE_PATHS_MAX_COUNT)
+}
+
+function toScopePathWorktree(worktree: ScopeWorktree) {
+  return {
+    id: worktree.worktreeId,
+    path: worktree.path,
+    repoId: worktree.repoId,
+    priorWorktreeIds: worktree.priorWorktreeIds
   }
-  const comparisonPath = normalizeRuntimePathForComparison(trimmedPath)
-  if (comparisonPaths.has(comparisonPath)) {
-    return
-  }
-  comparisonPaths.add(comparisonPath)
-  paths.push(trimmedPath)
 }

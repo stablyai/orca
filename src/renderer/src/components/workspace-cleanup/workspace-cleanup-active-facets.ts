@@ -18,10 +18,6 @@ const FACET_GROUP_KEYS: readonly WorkspaceCleanupFacetGroupKey[] = [
   'safety'
 ]
 
-/**
- * Facet groups the user has moved off the default state. Drives the "N filters
- * on" badge.
- */
 export function listActiveWorkspaceCleanupFacetGroups(
   filters: WorkspaceCleanupFilterState
 ): WorkspaceCleanupFacetGroupKey[] {

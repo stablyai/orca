@@ -7,7 +7,6 @@ import { taskSourceRuntimeTarget } from './task-source-runtime-target'
 
 type DefaultHostSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 
-// Projects the shared primitive; the exported readers below are the sanctioned ways to reach it.
 function readDefaultHost(settings: DefaultHostSettings): RuntimeClientTarget {
   return (
     ipcOrRuntimeTargetForHostId(getSettingsFocusedExecutionHostId(settings)) ?? { kind: 'local' }

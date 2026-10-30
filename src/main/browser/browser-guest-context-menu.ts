@@ -8,6 +8,7 @@ import type { BrowserContextMenuRequestedEvent } from '../../shared/browser-gues
 import { readContextMenuSpelling } from '../window/editable-context-menu'
 import { readGuestNavigationState } from './browser-guest-navigation-state'
 import type { ResolveRenderer } from './browser-guest-renderer-target'
+import { buildBrowserExtensionPageContextMenu } from './extensions/browser-extension-context-menu-host'
 
 export function setupGuestContextMenu(args: {
   browserTabId: string
@@ -56,7 +57,8 @@ export function setupGuestContextMenu(args: {
       image:
         params.mediaType === 'image' && params.srcURL
           ? { url: params.srcURL, canCopy: params.hasImageContents }
-          : null
+          : null,
+      extensionMenu: buildBrowserExtensionPageContextMenu(guest, params) ?? undefined
     } satisfies BrowserContextMenuRequestedEvent)
   }
 

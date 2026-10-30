@@ -7,6 +7,7 @@ import {
   type LocalGitExecOptions
 } from '../../gh-utils'
 import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
+import { codeHostFailure, classifiedFailure } from '../../../../shared/code-host-failure-copy'
 
 export async function markPRReadyForReview(
   repoPath: string,
@@ -22,7 +23,7 @@ export async function markPRReadyForReview(
     localGitOptions
   )
   if (!ownerRepo) {
-    return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
+    return codeHostFailure('github.repoUnresolved')
   }
 
   await acquire()
@@ -36,7 +37,7 @@ export async function markPRReadyForReview(
   } catch (err) {
     const message =
       err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error'
-    return { ok: false, error: classifyPullRequestUpdateError(message).message }
+    return classifiedFailure(classifyPullRequestUpdateError(message))
   } finally {
     release()
   }

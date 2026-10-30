@@ -8,10 +8,7 @@ export type ComposerAgentRows = {
   detectionTarget: AgentDetectionTarget | undefined
 }
 
-/**
- * The workspace the quick-create agent would start in, named the way the create submit names it.
- * Null where that host is not known until creation (an ephemeral VM): the picker keeps its plain list.
- */
+/** Resolve the same launch workspace as submit; unknown pre-create hosts such as ephemeral VMs keep the unfiltered agent list. */
 export function resolveComposerAgentRows(state: ComposerModel): ComposerAgentRows | null {
   if (state.isProjectGroupTarget) {
     const group = state.selectedProjectGroup
@@ -43,7 +40,6 @@ export function resolveComposerAgentRows(state: ComposerModel): ComposerAgentRow
         executionHostId: runTarget?.hostId ?? state.selectedRepoExecutionHostId ?? undefined
       }
     },
-    // Same inventory host the dialog's own agent list reads.
     detectionTarget: runtimeEnvironmentId
       ? { kind: 'runtime', environmentId: runtimeEnvironmentId }
       : typeof connectionId === 'string'

@@ -96,11 +96,7 @@ vi.mock('./terminal-input-activity', () => ({
   recordTerminalUserInputForLeaf: mocks.recordTerminalUserInputForLeaf
 }))
 
-// Why: this suite invokes the hook outside a real React render (the react mock
-// above runs effects synchronously and manages refs by hand), so a reactive
-// useAppStore(selector) call would throw an "Invalid hook call". Read the
-// current snapshot synchronously instead; getState/setState stay real so tests
-// can seed terminalLayoutsByTabId.
+// This harness runs hooks without React rendering; use real synchronous store snapshots instead of reactive selectors that would throw invalid-hook-call.
 vi.mock('@/store', async (importOriginal) => {
   const actual = await importOriginal<typeof StoreModule>()
   const realHook = actual.useAppStore
@@ -202,8 +198,7 @@ describe('useTerminalPaneGlobalEffects', () => {
     useTerminalPaneGlobalEffects(mountArgs)
     expect(window.api.pty.setActiveRendererPty).toHaveBeenCalledWith('pty-old', true)
 
-    // Deferred reattach rebinds the active leaf to a new PTY; isActive/isVisible/
-    // isWorktreeActive never flip, so only the reactive leaf→PTY binding changes.
+    // Reattach can change leaf → PTY binding without visibility/activity changes; that binding must wake reporting.
     seedActiveLeafPty('tab-1', 'leaf-1', 'pty-new')
     beginHookRender()
     useTerminalPaneGlobalEffects(mountArgs)

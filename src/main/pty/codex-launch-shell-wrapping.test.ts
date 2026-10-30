@@ -5,14 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
 import { selectShellStartupFeatures } from '../shell-startup-features'
 
-// Why: the codex --no-daemon wrapper only reaches shells Orca wraps. Orca's own
-// Codex launches carry a startup command, so each launch shell must be wrapped.
+// Orca-launched Codex needs shell wrapping to receive --no-daemon.
 const COMMAND = "codex 'fix the bug'"
 const NO_DAEMON = 'set -- --no-daemon "$@"'
 const FISH_NO_DAEMON = 'set argv --no-daemon $argv'
 
 function codexLaunchFeatures(shellPath: string) {
-  // Why an empty env: a system-default Codex home, with hooks off, carries no overlay key.
+  // System-default Codex with hooks off has no overlay key.
   const waitsForShellReady = shouldUseShellReadyStartupDelivery({ command: COMMAND, shellPath })
   return selectShellStartupFeatures({
     shellPath,

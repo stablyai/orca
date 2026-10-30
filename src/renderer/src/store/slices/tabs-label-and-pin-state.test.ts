@@ -17,7 +17,6 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
   }
 })
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -30,10 +29,6 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
 )
 
 {
-  // Mock sonner (imported by repos.ts)
-
-  // Mock agent-status (imported by terminal-helpers)
-
   createTabsSliceMockApi()
   const mockWindow = globalThis.window
 
@@ -49,8 +44,6 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
     beforeEach(() => {
       store = createTestStore()
     })
-
-    // ─── setTabLabel / setTabCustomLabel / setUnifiedTabColor ─────────
 
     describe('tab property setters', () => {
       it('setTabLabel updates the label', () => {
@@ -88,8 +81,6 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
         expect(store.getState().unifiedTabsByWorktree[WT][0].color).toBe('#ff0000')
       })
     })
-
-    // ─── pinTab / unpinTab ────────────────────────────────────────────
 
     describe('pinTab / unpinTab', () => {
       it('pins a tab and promotes preview to permanent', async () => {
@@ -171,7 +162,7 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
       })
 
       it('syncs isPinned to the TerminalTab in tabsByWorktree (reconcile echo guard)', async () => {
-        // Why: reconcile derives pin from tabsByWorktree[*].isPinned; without syncing, a host snapshot re-computes isPinned:false and un-pins during the echo window.
+        // Sync legacy isPinned too or reconciliation unpins the tab during host-snapshot echo.
         const tab = store.getState().createUnifiedTab(WT, 'terminal')
         store.setState((state) => ({
           tabsByWorktree: {

@@ -60,7 +60,6 @@ function Probe(props: {
   return null
 }
 
-/** Mounts the probe; omitted props fall back to the defaults declared in `Probe`. */
 async function mount(props: Parameters<typeof Probe>[0] = {}): Promise<Root> {
   return mountProbe(<Probe {...props} />)
 }
@@ -124,7 +123,6 @@ describe('useSourceControlGitHistory stale completion', () => {
       root.render(<Probe worktreeId="B" worktreePath="/b" />)
     })
     await flush()
-    // B has no cached history yet, so it must load rather than render A's commits.
     expect(latest?.gitHistoryState).toEqual({ status: 'loading' })
 
     await act(async () => {
@@ -200,7 +198,6 @@ describe('useSourceControlGitHistory stale completion', () => {
     mocks.getRuntimeGitHistory.mockReturnValueOnce(a.promise)
 
     const root = await mount({ worktreeId: 'A', worktreePath: '/a' })
-    // Worktree A is deleted while its history request is still running.
     const withoutA = new Map<string, unknown>([['B', {}]])
     await act(async () => {
       root.render(<Probe worktreeId="A" worktreePath="/a" worktreeMap={withoutA} />)
@@ -214,7 +211,6 @@ describe('useSourceControlGitHistory stale completion', () => {
     await act(async () => {
       root.render(<Probe worktreeId="A" worktreePath="/a" worktreeMap={ALL_WORKTREES} />)
     })
-    // Exact empty state, not merely "different": the entry must be gone, not replaced.
     expect(latest?.gitHistoryState).toEqual({ status: 'idle' })
   })
 
@@ -223,6 +219,7 @@ describe('useSourceControlGitHistory stale completion', () => {
     await flush()
     expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(
       expect.objectContaining({ worktreeId: 'A', worktreePath: '/a' }),
+      // A mount with Commits already open is restored state, not a user act: no WSL wake (E9).
       { limit: 50, baseRef: 'origin/main' }
     )
 
@@ -231,6 +228,7 @@ describe('useSourceControlGitHistory stale completion', () => {
     })
     await flush()
     expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(2)
+    // A base-ref move refetches in the background; it never starts a stopped distro.
     expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(expect.anything(), {
       limit: 50,
       baseRef: 'origin/dev'
@@ -258,7 +256,7 @@ describe('useSourceControlGitHistory stale completion', () => {
       expect.anything()
     )
 
-    // A new settings object with the same owner host must not trigger another git read.
+    // New target objects with unchanged host identity must not trigger another Git read.
     await act(async () => {
       root.render(<Probe activeRepoTarget={{ kind: 'environment', environmentId: 'env-1' }} />)
     })

@@ -8,7 +8,7 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionConversationCommand } from '../../../shared/agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../../../shared/agent-session/agent-session-conversation-command'
 import { agentJournalTurnBody } from '../../../shared/agent-session-turn-record'
 import { structuredAgentSessionCommandTurn } from '../../../shared/structured-agent-session-command-turn-identity'
 import type { StructuredAgentSessionCommandHandoverContext } from './structured-agent-session-command-turn'

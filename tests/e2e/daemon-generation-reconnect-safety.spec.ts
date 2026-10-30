@@ -372,8 +372,7 @@ test('native Windows reconnect cannot turn stale mirror exits into cross-generat
     expect(Object.values(afterClose.daemons).every(Boolean)).toBe(true)
     expect(Object.values(afterClose.roots).every(Boolean)).toBe(true)
     expect(Object.values(afterClose.descendants).every(Boolean)).toBe(true)
-    // Why: each stale mirror crossed desktop and two remote-profile close paths
-    // before and after an app-process relaunch; process health cannot hide a kill.
+    // Require zero kills across all stale-mirror close paths and relaunch; surviving canaries alone cannot prove no kill was attempted.
     expect(
       targetCanaries.every((canary) => killEvents(canary.generation, canary.sessionId).length === 0)
     ).toBe(true)
@@ -437,8 +436,7 @@ test('shutdown disposal failure drops authority within a bounded window', async 
     await expect(lateClient.ensureConnected()).rejects.toThrow()
     lateClient.disconnect()
     const fencedLiveness = await collectLiveness(generations, canaries)
-    // Why: disposal failure may strand the fixture process, but fencing must
-    // remove authority without pretending that the retained PTY disappeared.
+    // Disposal failure can strand the fixture PTY; fencing must revoke authority without claiming it vanished.
     expect(fencedLiveness.daemons[generation.label]).toBe(true)
     expect(fencedLiveness.roots[canaryLabel(canary)]).toBe(true)
     expect(fencedLiveness.descendants[canaryLabel(canary)]).toBe(true)

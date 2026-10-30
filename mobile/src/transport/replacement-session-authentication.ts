@@ -19,12 +19,8 @@ export class ReplacementAuthenticationTimeoutError extends Error {
   }
 }
 
-// Why: a migration must not cut over to a session that has only opened a socket — the
-// replacement has to reach 'connected' (E2EE authenticated) first. The caller's bound
-// covers reaching an open socket; a relay session that reports dial stages re-arms a
-// per-stage budget on every advance, so a cell that accepted the dial and is working
-// slowly (lock-contended assignment tables) is not hung up on like a black hole — the
-// retry would land in the same window and burn a director round on the way.
+// Cut over only after authenticated connected state; socket open alone is insufficient.
+// Give progressing relay stages separate budgets so slow assignment does not restart the same work through director fallback.
 export function waitForAuthenticated(session: RpcClient, timeoutMs: number): Promise<void> {
   if (session.getState() === 'connected') {
     return Promise.resolve()

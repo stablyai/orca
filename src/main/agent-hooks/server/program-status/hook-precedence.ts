@@ -1,4 +1,5 @@
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
+import { isAgentStatusHeldOpenByChildWork } from '../../../../shared/agent-lead-status-fold'
 import type { EnrichedAgentHookEventPayload } from '../server-types'
 
 // Long tool calls can be hook-silent; allow sustained disagreement before yielding to OSC 7501.
@@ -19,7 +20,14 @@ export function programStatusHookYieldEndsAt(
   if (!sameAgent && previous.payload.state === 'done') {
     return undefined
   }
-  if (payload.state === previous.payload.state) {
+  // Hook and program child rosters cannot settle or reopen each other's turns.
+  if (
+    payload.state === previous.payload.state ||
+    (previous.payload.state === 'done' && isAgentStatusHeldOpenByChildWork(payload)) ||
+    (payload.state === 'done' &&
+      payload.sessionBoundary !== true &&
+      isAgentStatusHeldOpenByChildWork(previous.payload))
+  ) {
     return Infinity
   }
   // Settled turns are naturally silent; a later wait must prove intervening program work.
@@ -27,6 +35,16 @@ export function programStatusHookYieldEndsAt(
     return programWorkingSince !== undefined && programWorkingSince > previous.receivedAt
       ? undefined
       : Infinity
+  }
+  // A question sends no hooks while open, so a `working` that began before it (e.g. re-sent by the
+  // lease renewal) proves nothing; a working transition after it keeps the silence fallback.
+  if (
+    (previous.payload.state === 'waiting' || previous.payload.state === 'blocked') &&
+    payload.state === 'working' &&
+    programWorkingSince !== undefined &&
+    programWorkingSince <= previous.receivedAt
+  ) {
+    return Infinity
   }
   return previous.receivedAt + HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS
 }

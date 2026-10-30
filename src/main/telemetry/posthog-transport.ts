@@ -1,17 +1,20 @@
 import { arch as osArch, platform as osPlatform, release as osRelease } from 'node:os'
-import { PostHog } from 'posthog-node'
+import type * as PostHogSdk from 'posthog-node'
 import { getAppEnvironment } from '../../shared/app-environment'
+import { getMainHttpClient } from '../network/http-client'
 import type { CommonProps, EventName } from '../../shared/telemetry-events'
 import type { ConsentState } from './consent'
 
 const OPT_OUT_CAPTURE_ENQUEUE_TIMEOUT_MS = 1_000
+export const POSTHOG_FLUSH_AT = 20
+export const POSTHOG_FLUSH_INTERVAL_MS = 10_000
 
 export function buildCommonProps(
   installId: string,
   sid: string,
   channel: 'stable' | 'rc'
 ): CommonProps {
-  // Don't truncate here; the validator's `.max(64)` is authoritative, so an over-long string drops rather than being silently masked.
+  // Let authoritative max(64) validation drop overlong versions; truncation would hide invalid data.
   return {
     app_version: getAppEnvironment().getVersion(),
     platform: osPlatform(),
@@ -24,7 +27,7 @@ export function buildCommonProps(
 }
 
 export function waitForCaptureEnqueue(
-  client: PostHog,
+  client: PostHogSdk.PostHog,
   event: EventName,
   uuid: string
 ): Promise<boolean> {
@@ -45,7 +48,7 @@ export function waitForCaptureEnqueue(
       resolve(enqueued)
     }
 
-    // Why: posthog-node capture() enqueues async; this SDK event is the durable boundary before optOut().
+    // Node SDK capture enqueues asynchronously; observe its event before opting out.
     stopListening = client.on('capture', (payload: unknown) => {
       if (!payload || typeof payload !== 'object') {
         return
@@ -64,27 +67,28 @@ export function waitForCaptureEnqueue(
   })
 }
 
-/**
- * Whether to flip the PostHog SDK's in-memory `optedOut` flag at boot.
- *
- * True for DISABLED cohorts only, re-applied every boot (the flag doesn't persist) so any direct
- * `posthog.capture()` bypassing `track()` still drops for an opted-out user. Deliberately excludes
- * `pending_banner`: the direct `telemetry_opted_out` capture in `setOptIn(_, false)` must not drop,
- * or we'd lose the one signal that the opt-out flow works.
- */
+/** Reapply SDK opt-out each boot for disabled users. Keep pending-banner SDK enabled so the direct Turn Off capture can enqueue before optOut. */
 export function shouldOptOutSdkAtInit(consent: ConsentState): boolean {
   return consent.effective === 'disabled'
 }
 
-export function createPostHogClient(writeKey: string, consent: ConsentState): PostHog {
-  const client = new PostHog(writeKey, {
+// Load the SDK with the client; requiring it at startup costs ~58ms before any window (#35752).
+function loadPostHogSdk(): typeof PostHogSdk {
+  return require('posthog-node')
+}
+
+export function createPostHogClient(writeKey: string, consent: ConsentState): PostHogSdk.PostHog {
+  const client = new (loadPostHogSdk().PostHog)(writeKey, {
     host: 'https://us.i.posthog.com',
-    flushAt: 20,
-    flushInterval: 10_000,
-    // Strip SDK-auto GeoIP / client-IP enrichment; our wire is exactly CommonProps ∪ EventProps ∪ a small allow-list.
+    flushAt: POSTHOG_FLUSH_AT,
+    flushInterval: POSTHOG_FLUSH_INTERVAL_MS,
+    // Disable SDK GeoIP/IP enrichment to keep the wire inside the declared allow-list.
     disableGeoip: true,
-    // Bumped from the default 1000 (drops oldest-first past cap) to 5000 to tolerate long-offline sessions.
-    maxQueueSize: 5000
+    // Increase offline buffer from 1000 to 5000; overflow drops oldest events.
+    maxQueueSize: 5000,
+    // The SDK's default global fetch skips the desktop session's proxy; resolved per send.
+    // Omit credentials so the desktop session never attaches its cookies to telemetry.
+    fetch: (url, options) => getMainHttpClient().fetch(url, { ...options, credentials: 'omit' })
   })
 
   if (shouldOptOutSdkAtInit(consent)) {

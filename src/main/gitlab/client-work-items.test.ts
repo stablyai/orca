@@ -52,7 +52,7 @@ describe('gitlab client — combined listWorkItems', () => {
     }))
   })
 
-  it('merges MRs + issues and sorts by updatedAt desc', async () => {
+  it('merges and sorts MRs + issues while preserving unknown-total page continuation', async () => {
     glabApiWithHeadersMock.mockResolvedValueOnce({
       body: JSON.stringify([
         {
@@ -61,6 +61,15 @@ describe('gitlab client — combined listWorkItems', () => {
           title: 'older mr',
           state: 'opened',
           updated_at: '2026-05-05T00:00:00Z',
+          source_project_id: 5,
+          target_project_id: 5
+        },
+        {
+          id: 101,
+          iid: 2,
+          title: 'newest mr',
+          state: 'opened',
+          updated_at: '2026-05-09T00:00:00Z',
           source_project_id: 5,
           target_project_id: 5
         }
@@ -81,10 +90,25 @@ describe('gitlab client — combined listWorkItems', () => {
       }
     })
 
-    const result = await listWorkItems('/repo', 'opened', 1, 20)
-    expect(result.items.map((i) => i.title)).toEqual(['newer issue', 'older mr'])
-    expect(result.items[0].type).toBe('issue')
-    expect(result.items[1].type).toBe('mr')
+    const result = await listWorkItems('/repo', 'opened', 3, 2)
+    expect(result).toMatchObject({ page: 3, perPage: 2, totalCount: 0, totalPages: 4 })
+    expect(result.error).toBeUndefined()
+    expect(result.items.map(({ title, type }) => ({ title, type }))).toEqual([
+      { title: 'newest mr', type: 'mr' },
+      { title: 'newer issue', type: 'issue' },
+      { title: 'older mr', type: 'mr' }
+    ])
+    expect(glabApiWithHeadersMock).toHaveBeenCalledTimes(1)
+
+    glabApiWithHeadersMock.mockResolvedValueOnce({ body: '[]', headers: {} })
+    glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+    expect(await listWorkItems('/repo', 'opened', 4, 2)).toEqual({
+      items: [],
+      page: 4,
+      perPage: 2,
+      totalCount: 0,
+      totalPages: 4
+    })
   })
 
   it("skips the issues fetch when state === 'merged'", async () => {

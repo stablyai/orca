@@ -35,8 +35,7 @@ vi.mock('../transport/host-client-hooks', () => ({
   useForceReconnect: () => transport.forceReconnect
 }))
 
-// Captured at module scope: the list renders rows against Date.now() a few ms later,
-// so a 3h offset stays inside the '3h' relative-time bucket.
+// Capture now before render so a few milliseconds cannot move the relative-time bucket.
 const RENDER_NOW = Date.now()
 
 function historyResponse(subject: string): RpcResponse {
@@ -115,14 +114,12 @@ describe('MobileGitHistoryList', () => {
 
     await render(client, 'connected')
     expect(tree()).toContain('first load')
-    // Rows format the RPC timestamp (epoch ms); a regression to seconds-scaling
-    // renders every commit as 'just now' instead.
+    // RPC timestamps are epoch milliseconds; seconds rescaling would show every commit as just now.
     expect(tree()).toContain('3h')
 
     await update(client, 'reconnecting')
     expect(tree()).toContain('first load')
 
-    // The refetch is in flight: old rows must stay up instead of flashing empty.
     await update(client, 'connected')
     expect(tree()).toContain('first load')
 
@@ -176,7 +173,7 @@ describe('MobileGitHistoryList', () => {
     await act(async () => {
       row?.props.onPress()
     })
-    // Offline expand cannot request anything, so nothing is cached as "no file changes".
+    // Offline expansion must not cache an outage as an empty file list.
     expect(tree()).toContain('Waiting for desktop...')
     expect(sendRequest).toHaveBeenCalledTimes(1)
 

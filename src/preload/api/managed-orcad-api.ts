@@ -7,6 +7,7 @@ import type {
   OrcadManagedConversionResult,
   OrcadManagedDeployResult,
   OrcadManagedForgetResult,
+  OrcadManagedPastLiveTerminals,
   OrcadManagedPendingMigrationRow,
   OrcadManagedRecoveryResult,
   OrcadManagedRestartResult,
@@ -29,7 +30,11 @@ export type ManagedOrcadPreloadApi = {
     force?: boolean
   }) => Promise<OrcadManagedDeployResult>
   getStatus: (args: { selector: string }) => Promise<OrcadManagedRuntimeStatus>
-  update: (args: { selector: string; force?: boolean }) => Promise<OrcadManagedDeployResult>
+  update: (args: {
+    selector: string
+    force?: boolean
+    pastLiveTerminals?: OrcadManagedPastLiveTerminals
+  }) => Promise<OrcadManagedDeployResult>
   rollback: (args: { selector: string }) => Promise<OrcadManagedRollbackResult>
   recover: (args: {
     selector: string

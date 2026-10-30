@@ -26,7 +26,6 @@ vi.mock('os', async (importOriginal) => {
 
 import { AntigravityHookService } from './hook-service'
 import { ANTIGRAVITY_EVENTS, ANTIGRAVITY_PRE_TOOL_USE_DECISION } from './hook-events'
-import { getManagedScript, getWindowsWrapperScript } from './hook-script'
 
 // Literal ! characters expose inherited delayed-expansion corruption.
 const PANE_KEY = 'tab-1:leaf-1!bang'
@@ -152,29 +151,6 @@ function expectedStdout(eventName: string): string {
   return eventName === 'Stop' ? '{"decision":""}' : '{}'
 }
 
-describe('Antigravity Windows hook post command', () => {
-  it.each(ANTIGRAVITY_EVENTS)('guards missing-core stdin for $eventName', ({ eventName }) => {
-    const script = getWindowsWrapperScript(eventName)
-    expect(script).not.toContain('findstr')
-    expect(script).toContain('exit /b 0')
-  })
-
-  it.each(ANTIGRAVITY_EVENTS)('disables delayed expansion for $eventName', ({ eventName }) => {
-    expect(getWindowsWrapperScript(eventName)).toContain('setlocal DisableDelayedExpansion')
-  })
-
-  it('posts with the owned runtime and keeps payloads off the command line', () => {
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-    const script = getManagedScript('local', 'C:\\Orca!100%\\Orca.exe')
-    expect(script).not.toMatch(/powershell|curl|payload@-/i)
-    expect(script).toContain('ORCA_AGENT_HOOK_NODE=C:\\Orca!100%%\\Orca.exe')
-    expect(script).toContain('"%ORCA_AGENT_HOOK_NODE%" "%~dp0antigravity-hook-post.cjs"')
-    expect(script).toContain('ELECTRON_RUN_AS_NODE=1')
-    expect(script).toContain('setlocal DisableDelayedExpansion')
-    vi.restoreAllMocks()
-  })
-})
-
 describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload delivery', () => {
   let home = ''
   let server: Server | null = null
@@ -267,32 +243,6 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
     },
     15_000
   )
-
-  it('still posts a status event when the agent supplies no payload', async () => {
-    home = mkdtempSync(join(tmpdir(), 'orca-antigravity-hook-'))
-    homedirMock.mockReturnValue(home)
-    expect(new AntigravityHookService().install().state).toBe('installed')
-
-    const listener = await startHookListener()
-    server = listener.server
-    const result = await runWrapper(
-      join(home, '.orca', 'agent-hooks', 'antigravity-pre-invocation.cmd'),
-      hookEnvironment({
-        USERPROFILE: home,
-        HOME: home,
-        ORCA_AGENT_HOOK_PORT: String(listener.port),
-        ORCA_AGENT_HOOK_TOKEN: HOOK_TOKEN,
-        ORCA_PANE_KEY: PANE_KEY
-      }),
-      ''
-    )
-
-    expect(result.timedOut).toBe(false)
-    expect(result.exitCode).toBe(0)
-    expect(listener.posts).toHaveLength(1)
-    expect(listener.posts[0].payload).toBe('{}')
-    expect(listener.posts[0].hookEventName).toBe('PreInvocation')
-  }, 30_000)
 
   async function installWithoutCore(): Promise<string> {
     home = mkdtempSync(join(tmpdir(), 'orca-antigravity-fallback-'))

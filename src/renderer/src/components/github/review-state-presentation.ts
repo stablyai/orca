@@ -8,7 +8,6 @@ export type ReviewStateForDisplay = HostedReviewState | 'unknown' | null | undef
 export const OPEN_REVIEW_STATE_TONE =
   'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
 
-/** Outline-pill tone: purple merged, rose closed, slate draft, emerald open, neutral unknown. */
 export function getReviewStateTone(state: ReviewStateForDisplay): string {
   if (state === 'merged') {
     return 'border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-300'
@@ -25,8 +24,7 @@ export function getReviewStateTone(state: ReviewStateForDisplay): string {
   return 'border-border bg-background text-muted-foreground'
 }
 
-// Why: the glyph must carry review state — tone alone made a draft with failing
-// checks render as a red PR icon, which reads as closed.
+// Encode state in the glyph too; failing checks must not make a draft PR look closed.
 export function getReviewStateIcon(state: ReviewStateForDisplay): LucideIcon | null {
   if (state === 'merged') {
     return GitMerge

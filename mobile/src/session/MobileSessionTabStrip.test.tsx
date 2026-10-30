@@ -47,7 +47,6 @@ const visibleTabs = TAB_IDS.map((id) => ({
   title: id
 }))
 
-// The real activation reveal runs, so switching tabs scrolls the strip as it does in the app.
 function mountStrip(
   terminals: Pick<Controller['terminals'][number], 'handle' | 'agentIdentity'>[] = []
 ) {
@@ -89,7 +88,6 @@ function mountStrip(
   const root = tree!.root
   const tabs = root.findAll((node) => node.props.accessibilityRole === 'tab')
   const strip = root.find((node) => node.props.horizontal === true)
-  // A 300px strip with tab c cut off at its right edge.
   act(() => {
     strip.props.onLayout({ nativeEvent: { layout: { width: 300 } } })
     strip.props.onContentSizeChange(TAB_IDS.length * TAB_WIDTH)
@@ -97,7 +95,6 @@ function mountStrip(
       tab.props.onLayout({ nativeEvent: { layout: { x: index * TAB_WIDTH, width: TAB_WIDTH } } })
     )
   })
-  // Presses whichever tab sits under this screen x after any scroll so far.
   const tapAt = (screenX: number) =>
     act(() => tabs[Math.floor((screenX + offsetRef.current) / TAB_WIDTH)].props.onPress())
   const wait = (ms: number) =>

@@ -5,7 +5,6 @@ import { createTestStore, makeTabGroup, makeUnifiedTab } from '@/store/slices/st
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 
-// The user is present unless a test says otherwise.
 beforeEach(() => setPresenceGated(false))
 afterEach(() => setPresenceGated(true))
 

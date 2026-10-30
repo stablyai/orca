@@ -18,7 +18,7 @@ import {
 } from '../../claude/claude-agent-sdk-control-requests'
 import { CLAUDE_STOP_GRACE_MS } from '../../claude/claude-request-end-wait'
 import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
-import type { ClaudeStructuredSessionEvent } from '../../claude/claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from '../../claude/structured/claude-structured-session-state'
 import {
   claudeFrame as frame,
   claudeWasSent as wrote,
@@ -86,6 +86,7 @@ beforeEach(async () => {
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: null,
       resumesTranscript: (store.getRecord(SESSION)?.providerHandleChain.length ?? 0) > 0,
+      cliFlag: async () => 'supported' as const,
       continuesChain: (store.getRecord(SESSION)?.providerHandleChain.length ?? 0) > 0
     }),
     onEvent: (event) => {

@@ -1,4 +1,3 @@
-/** The pinned Node inside a Linux AppImage's resources, used where Orca would otherwise download it. */
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { chmod, copyFile, mkdir, rename, rm } from 'node:fs/promises'
@@ -16,7 +15,6 @@ export type AppImageNodeRuntime = {
   executableSha256: string
 }
 
-/** Null for every package that carries none: deb, rpm, macOS, Windows and dev builds. */
 export function findAppImageNodeRuntime(
   resourcesPath: string | undefined,
   arch: string = process.arch,
@@ -32,7 +30,7 @@ export function findAppImageNodeRuntime(
     : null
 }
 
-/** Copies the bundled Node to `destination`; only bytes that hash to the pin are published. */
+/** Publish copied bytes only after verifying the pin. */
 export async function copyVerifiedAppImageNodeRuntime(
   runtime: AppImageNodeRuntime,
   destination: string

@@ -465,7 +465,7 @@ describe('gcOldRemoteInstallVersions', () => {
     remoteHome = '/home/u',
     currentDir = '/home/u/.orca-remote/orcad-0.1.0+bbb',
     host?: RemoteHostPlatform
-  ): Promise<void> =>
+  ): Promise<boolean> =>
     gcOldRemoteInstallVersions(conn, ORCAD_INSTALL_MODEL, remoteHome, currentDir, host, {
       isDirLive: async (dir) => {
         const answer = await mockExec(conn, `liveness ${dir}`).catch((err: unknown) => {

@@ -1,5 +1,7 @@
 // WSL-host orcad must ignore Windows CLI shims; identify mounts by type because the automount root is configurable.
 import { existsSync, readFileSync } from 'node:fs'
+import { isAbsolute } from 'node:path'
+import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
 
 const WINDOWS_DRIVE_MOUNT_TYPES = new Set(['drvfs', '9p', 'virtiofs'])
 
@@ -7,6 +9,13 @@ const WINDOWS_DRIVE_MOUNT_TYPES = new Set(['drvfs', '9p', 'virtiofs'])
 export const ORCAD_WSL_HOST_ENV = 'ORCA_WSL_ORCAD_HOST'
 
 let cachedGuestMounts: readonly string[] | null = null
+
+// The Windows-copy check stats every drive-mounted PATH entry (~50 ms cold); reuse a recent verdict.
+const WINDOWS_COPY_VERDICT_TTL_MS = 30_000
+// Launch envs can vary PATH; bound what a long-lived host keeps.
+const WINDOWS_COPY_VERDICT_LIMIT = 32
+type WindowsCopyVerdict = { windowsOnly: boolean; checkedAt: number }
+let windowsCopyVerdicts = new WeakMap<typeof resolveCliCommand, Map<string, WindowsCopyVerdict>>()
 
 export function isWslGuestProcess(
   env: NodeJS.ProcessEnv = process.env,
@@ -77,6 +86,11 @@ export function readGuestWindowsDriveMounts(): readonly string[] {
   return mounts
 }
 
+/** Stand in for /proc/mounts so call-site tests can model a Windows drive; null re-reads. */
+export function _setGuestWindowsDriveMountsForTests(mounts: readonly string[] | null): void {
+  cachedGuestMounts = mounts
+}
+
 /** Keep CLI launches consistent with detection by removing Windows drive PATH entries only in WSL-host orcad. */
 export function guestNativePathEnv(
   pathEnv: string | null | undefined,
@@ -87,4 +101,74 @@ export function guestNativePathEnv(
   }
   const value = pathEnv ?? process.env.PATH ?? null
   return value === null ? null : withoutWindowsDriveMountDirs(value, mounts)
+}
+
+/** A one-shot agent child's env on a WSL-host orcad: its PATH lookup can't reach a Windows shim. */
+export function guestNativeSpawnEnv(
+  env: NodeJS.ProcessEnv,
+  mounts: readonly string[] = readGuestWindowsDriveMounts()
+): NodeJS.ProcessEnv {
+  if (mounts.length === 0) {
+    return env
+  }
+  const pathEnv = guestNativePathEnv(env.PATH ?? null, mounts)
+  return pathEnv === null || pathEnv === undefined ? env : { ...env, PATH: pathEnv }
+}
+
+/**
+ * Resolve an agent program as a WSL-host orcad must: never a Windows-drive copy. `null` means only a
+ * Windows copy exists; a bare name would reach it through the spawn's own PATH lookup.
+ */
+export function resolveGuestNativeProgram(
+  command: string,
+  options: NonNullable<Parameters<typeof resolveCliCommand>[1]>,
+  resolve: typeof resolveCliCommand = resolveCliCommand,
+  mounts: readonly string[] = readGuestWindowsDriveMounts()
+): string | null {
+  if (mounts.length === 0) {
+    return resolve(command, options)
+  }
+  const native = resolve(command, {
+    ...options,
+    pathEnv: guestNativePathEnv(options.pathEnv, mounts)
+  })
+  if (isAbsolute(native)) {
+    return native
+  }
+  return hasWindowsDriveCopy(command, options, resolve, mounts) ? null : native
+}
+
+function hasWindowsDriveCopy(
+  command: string,
+  options: NonNullable<Parameters<typeof resolveCliCommand>[1]>,
+  resolve: typeof resolveCliCommand,
+  mounts: readonly string[]
+): boolean {
+  const key = [
+    command,
+    options.pathEnv ?? process.env.PATH ?? '',
+    options.homePath ?? '',
+    options.platform ?? '',
+    mounts.join(':')
+  ].join('\0')
+  let verdicts = windowsCopyVerdicts.get(resolve)
+  if (!verdicts) {
+    verdicts = new Map()
+    windowsCopyVerdicts.set(resolve, verdicts)
+  }
+  const now = Date.now()
+  const known = verdicts.get(key)
+  if (known && now - known.checkedAt < WINDOWS_COPY_VERDICT_TTL_MS) {
+    return known.windowsOnly
+  }
+  const windowsOnly = isAbsolute(resolve(command, options))
+  if (verdicts.size >= WINDOWS_COPY_VERDICT_LIMIT) {
+    verdicts.clear()
+  }
+  verdicts.set(key, { windowsOnly, checkedAt: now })
+  return windowsOnly
+}
+
+export function _resetWindowsCopyVerdictsForTests(): void {
+  windowsCopyVerdicts = new WeakMap()
 }

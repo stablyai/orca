@@ -65,7 +65,7 @@ describe('AppUpdateSettingsRows', () => {
       'Last checked 2h ago'
     ])
     act(() => pressables[0].props.onPress())
-    expect(onUpdate).toHaveBeenCalledTimes(1)
+    expect(onUpdate).toHaveBeenCalledExactlyOnceWith('https://example.test')
   })
 
   it('shows a plain, untappable version row when current, and Never before a first success', () => {

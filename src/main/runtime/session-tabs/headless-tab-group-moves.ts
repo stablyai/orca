@@ -65,8 +65,7 @@ export abstract class RuntimeHeadlessTabGroups extends RuntimeHeadlessTabPropert
     const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
     const reorderedTargetActiveTabId =
       active?.type === 'terminal' ? active.parentTabId : active ? active.id : (tabOrder[0] ?? null)
-    // Why: reorder only changes ONE group's order. Preserve every other group so
-    // a multi-group split isn't deleted by re-sorting tabs in one of its groups.
+    // Reorder only the addressed group or multi-group siblings disappear.
     const existingGroups = snapshot.tabGroups ?? []
     const nextGroups = existingGroups.some((group) => group.id === targetGroup.id)
       ? existingGroups.map((group) =>
@@ -90,9 +89,7 @@ export abstract class RuntimeHeadlessTabGroups extends RuntimeHeadlessTabPropert
     return { moved: true }
   }
 
-  // Why: a drag-to-split-group used to be a client-only change the headless host
-  // never modeled, so the next snapshot coalesced every tab back into one group.
-  // Model + persist the multi-group layout so the split survives rebuilds.
+  // Persist headless split groups or snapshot rebuilds coalesce them back into one.
   protected splitHeadlessMobileSessionTabGroup(
     worktreeId: string,
     snapshot: RuntimeMobileSessionTabsSnapshot,
@@ -169,7 +166,7 @@ export abstract class RuntimeHeadlessTabGroups extends RuntimeHeadlessTabPropert
     return { moved: true }
   }
 
-  // Why: the builders return null for a missing target AND a legit no-op; only the no-op may succeed.
+  // Builders return null for missing targets and legitimate no-ops; only no-ops succeed.
   protected requireHeadlessTargetGroup(
     snapshot: RuntimeMobileSessionTabsSnapshot,
     targetGroupId: string
@@ -183,8 +180,7 @@ export abstract class RuntimeHeadlessTabGroups extends RuntimeHeadlessTabPropert
     return targetGroup
   }
 
-  // Persist the headless tab-GROUP layout so snapshot rebuilds keep the split; the tab bar follows
-  // the groups. Deleted by the switch (PR 6), when moves are layout commands.
+  // Persist headless groups across rebuilds; obsolete when group moves become layout commands.
   protected persistHeadlessTabGroups(
     worktreeId: string,
     groups: readonly RuntimeMobileSessionTabGroup[],

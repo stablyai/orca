@@ -1,3 +1,11 @@
+import {
+  assertStructuredAgentResolutionCurrent,
+  resolveAgainAfterRefreshOnMissingProgram,
+  resolveStructuredAgentCommand,
+  type StructuredAgentCommand,
+  type StructuredAgentCommandSettings,
+  type StructuredAgentResolutionOperation
+} from '../native-chat/structured-agent-command-resolution'
 // Launch from durable record values for the working directory, pinned account and resume session.
 
 import { delimiter } from 'node:path'
@@ -10,11 +18,6 @@ import {
 } from '../../shared/agent-session-provider-handle'
 import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import type { resolveCliCommand } from '../../shared/node-cli-command-resolution'
-import {
-  resolveAgainAfterRefreshOnMissingProgram,
-  resolveStructuredAgentCommand,
-  type StructuredAgentCommandSettings
-} from '../native-chat/structured-agent-command-resolution'
 import {
   checkAgentCliVersion,
   type AgentCliVersionCheck,
@@ -44,9 +47,8 @@ import type { AcpLaunchSpec } from './acp-launch-specs'
 import { acpSessionNotRestoredItem } from './acp-session-reopen-failure'
 import { loadAcpVisualsSkill, type AcpLaunchVisualsDeps } from './acp-structured-launch-visuals'
 
-export type AcpStructuredLaunch = {
+export type AcpStructuredLaunch = StructuredAgentCommand & {
   spec: AcpLaunchSpec
-  command: string
   args: string[]
   cwd: string
   /** Sealed for spawns; recovery reads use the unsealed agent environment. */
@@ -74,6 +76,7 @@ export type AcpStructuredLaunchPartDeps = {
 } & Pick<AcpLaunchVisualsDeps, 'logger'>
 
 export type AcpLaunchInvocationDeps = {
+  operation?: StructuredAgentResolutionOperation
   /** Reread per acquisition. */
   resolveEnvironment: () => Promise<Record<string, string>>
   resolveLaunchEnv?: (agent: string) => Record<string, string>
@@ -98,7 +101,7 @@ export function resolveAcpLaunchCommand(
     homePath?: string
     dataDirectory: string | null
   }
-): string {
+): StructuredAgentCommand {
   const homePath = env.HOME ?? env.USERPROFILE ?? options.homePath ?? homedir()
   const pathEnv = [env.PATH ?? env.Path, ...spec.installDirectories({ env, homePath })]
     .filter((entry): entry is string => Boolean(entry))
@@ -124,13 +127,14 @@ export function resolveAcpLaunchCommand(
   if (release) {
     return resolve(release.folder)
   }
-  const found = resolve(pathEnv)
-  return (found !== spec.command && copyBesidePinnedMembers(found, pin)) || spec.command
+  const { command } = resolve(pathEnv)
+  const pinned = command !== spec.command && copyBesidePinnedMembers(command, pin)
+  return { command: pinned || spec.command, prefixArgs: [] }
 }
 
 export async function checkAcpLaunchVersion(
   spec: AcpLaunchSpec,
-  launch: { command: string; cwd: string; env: Record<string, string> },
+  launch: Pick<AcpStructuredLaunch, 'command' | 'prefixArgs' | 'cwd' | 'env'>,
   wantVersion: boolean,
   read?: AgentCliVersionReader
 ): Promise<AgentCliVersionCheck> {
@@ -138,7 +142,7 @@ export async function checkAcpLaunchVersion(
     return { status: 'unknown', version: null }
   }
   return checkAgentCliVersion(
-    { program: launch.command, cwd: launch.cwd, env: launch.env },
+    { program: launch.command, prefixArgs: launch.prefixArgs, cwd: launch.cwd, env: launch.env },
     spec.minimumVersions ?? [],
     read
   )
@@ -149,11 +153,12 @@ export function resolveAcpLaunchInvocation(
   spec: AcpLaunchSpec,
   accountHome: AgentSessionAccountHome,
   deps: AcpLaunchInvocationDeps
-): Promise<{ command: string; env: Record<string, string>; envToDelete: string[] }> {
+): Promise<StructuredAgentCommand & { env: Record<string, string>; envToDelete: string[] }> {
   return resolveAgainAfterRefreshOnMissingProgram(
     () => readAcpLaunchInvocation(spec, accountHome, deps),
     deps.refreshEnvironmentAfterMiss,
-    { env: ({ env }) => env, cwd: deps.resolveWorkingDirectory }
+    { env: ({ env }) => env, cwd: deps.resolveWorkingDirectory },
+    deps.operation
   )
 }
 
@@ -161,19 +166,21 @@ async function readAcpLaunchInvocation(
   spec: AcpLaunchSpec,
   accountHome: AgentSessionAccountHome,
   deps: AcpLaunchInvocationDeps
-): Promise<{ command: string; env: Record<string, string>; envToDelete: string[] }> {
+): Promise<StructuredAgentCommand & { env: Record<string, string>; envToDelete: string[] }> {
+  assertStructuredAgentResolutionCurrent(deps.operation)
   const base = await deps.resolveEnvironment()
+  assertStructuredAgentResolutionCurrent(deps.operation)
   const env: Record<string, string> = spec.account.environment(accountHome, {
     ...base,
     ...deps.resolveLaunchEnv?.(spec.agent)
   })
   const envToDelete = spec.scrubEnvironment?.(env, deps.inheritedEnv ?? process.env) ?? []
   Object.assign(env, spec.env)
-  const command = resolveAcpLaunchCommand(spec, env, {
+  const invocation = resolveAcpLaunchCommand(spec, env, {
     ...deps,
     ...(deps.resolveCommandSettings ? { commandSettings: deps.resolveCommandSettings() } : {})
   })
-  return { command, env, envToDelete }
+  return { ...invocation, env, envToDelete }
 }
 
 export function acpStructuredLaunchPart(
@@ -182,7 +189,7 @@ export function acpStructuredLaunchPart(
 ): StructuredAgentLaunchPartResolver<AcpStructuredLaunch> {
   return async (basis, identity) => {
     const { record } = basis
-    const { env, envToDelete, command } = await resolveAcpLaunchInvocation(
+    const { env, envToDelete, command, prefixArgs } = await resolveAcpLaunchInvocation(
       spec,
       record.accountHome,
       {
@@ -202,7 +209,7 @@ export function acpStructuredLaunchPart(
     // PATH may have changed since chat creation.
     const launchVersion = await checkAcpLaunchVersion(
       spec,
-      { command, cwd, env },
+      { command, prefixArgs, cwd, env },
       visuals !== null,
       deps.probeVersion
     )
@@ -225,7 +232,8 @@ export function acpStructuredLaunchPart(
       launch: {
         spec,
         command,
-        args: spec.args({ fullAccess, pluginDir: skill?.pluginDir ?? null }),
+        prefixArgs,
+        args: [...prefixArgs, ...spec.args({ fullAccess, pluginDir: skill?.pluginDir ?? null })],
         fullAccess,
         resume: head
           ? {

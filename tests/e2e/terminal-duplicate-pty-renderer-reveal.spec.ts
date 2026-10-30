@@ -151,9 +151,7 @@ type RevealFrameDiagnostics = {
   screenRows: string[]
 }
 
-// Why: if the revealed pane ever fails to converge, whether the freshest marker is on
-// screen, only in normal-buffer scrollback, or absent is what separates a stalled
-// renderer from stale residue left by the restore replay (STA-5208).
+// STA-5208: distinguish live viewport markers from normal-buffer residue to diagnose stalled render versus stale restore.
 async function readRevealFrameDiagnostics(
   page: Page,
   tabId: string,
@@ -255,8 +253,7 @@ test('repairs duplicate persisted PTY renderers before streaming tab reveal', as
     await expect
       .poll(() => getActiveTabId(secondLaunch.page), { timeout: 10_000 })
       .toBe(restoredTabId)
-    // Ownership first: the frame is read off the single repaired pane, so the repair has
-    // to have settled before that read means anything.
+    // Wait for duplicate ownership repair before reading the surviving pane’s frame.
     await expect
       .poll(() => readRendererOwnership(secondLaunch.page, restoredTabId), { timeout: 10_000 })
       .toEqual({
@@ -274,16 +271,14 @@ test('repairs duplicate persisted PTY renderers before streaming tab reveal', as
           message: 'Revealed renderer did not catch up to hidden authoritative output'
         })
         .toBeGreaterThanOrEqual(hiddenFrame)
-      // The fixture enters the alternate buffer once at startup and repaints in place, so a
-      // revealed pane parked on the normal buffer is painting the TUI into scrollback.
+      // The TUI enters alt once; a normal-buffer reveal would paint its output into scrollback.
       const revealedScreen = await readActiveScreen(secondLaunch.page, restoredTabId)
       expect(
         revealedScreen?.bufferType,
         'revealed pane was missing or painting outside the alternate buffer'
       ).toBe('alternate')
     } catch (error) {
-      // Diagnostics are more page reads, so a dead page has to degrade to a note in the
-      // attachment rather than replacing the failure the attachment exists to explain.
+      // Degrade dead-page diagnostics to attachment notes so they cannot replace the assertion failure.
       revealFailure = error
       const diagnostics = await readRevealFrameDiagnostics(
         secondLaunch.page,
@@ -307,8 +302,7 @@ test('repairs duplicate persisted PTY renderers before streaming tab reveal', as
       throw revealFailure
     }
 
-    // Whatever the window saved, no stored pane may be left without its terminal: that pane
-    // would restore empty, and with no duplicate left the repair would never run again.
+    // Require persisted terminal bindings on every repaired pane or later restores become empty without another duplicate to repair.
     await session.close(secondApp)
     secondApp = null
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test owns the persisted fixture; optional fields are checked at use sites.

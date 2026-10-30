@@ -12,9 +12,9 @@ import {
   type SearchEngine
 } from '../../../../../shared/browser-url'
 import type { BrowserPageContextMenuState } from '../describe-page/browser-page-types'
+import { BrowserPageExtensionMenuItems } from './browser-page-extension-menu-items'
 
-// `focus:` rather than `focus-visible:` — items are only ever focused programmatically
-// while the menu is open, so every focus here is keyboard navigation.
+// Programmatic menu focus represents keyboard navigation, so use focus rather than focus-visible.
 const MENU_ITEM_CLASS =
   'relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 focus:bg-black/8 disabled:pointer-events-none disabled:opacity-50 dark:hover:bg-white/14 dark:focus:bg-white/14'
 
@@ -42,10 +42,7 @@ type BrowserPageContextMenuItemsProps = {
   onClose: () => void
 }
 
-/**
- * Chrome's page menu: what was clicked decides the sections (editable field, link, image,
- * selection), and the page's own Back/Forward/Reload only show when nothing specific was.
- */
+/** Specific editable/link/image/selection sections replace generic page navigation. */
 function buildMenuSections({
   menu,
   browserPageId,
@@ -190,8 +187,7 @@ function buildMenuSections({
             )
           ]
         : []),
-      // Why: the guest's own download path applies the page's download rules (local Downloads,
-      // or the remote workspace for client-hosted pages) instead of a second save flow.
+      // Use guest download rules for local Downloads or the client-hosted remote workspace.
       item(translate('auto.components.browser.pane.BrowserPane.saveImage', 'Save Image'), () =>
         webviewRef.current?.downloadURL(image.url)
       ),
@@ -283,11 +279,25 @@ export function BrowserPageContextMenuItems(
 ): React.JSX.Element {
   const searchEngine = useAppStore((s) => s.browserDefaultSearchEngine) ?? DEFAULT_SEARCH_ENGINE
   const sections = buildMenuSections({ ...props, searchEngine })
+  const { extensionMenu } = props.menu
   return (
     <>
       {sections.map((section, sectionIndex) => (
         <Fragment key={sectionIndex}>
           {sectionIndex > 0 ? <hr className="my-1 h-px border-0 bg-border/70" /> : null}
+          {/* Why here: Chrome lists extension items last, just above Inspect. */}
+          {extensionMenu && sectionIndex === sections.length - 1 ? (
+            <>
+              <BrowserPageExtensionMenuItems
+                // Why keyed: each right-click starts with every submenu closed.
+                key={extensionMenu.token}
+                menu={extensionMenu}
+                itemClassName={MENU_ITEM_CLASS}
+                onDone={props.onClose}
+              />
+              <hr className="my-1 h-px border-0 bg-border/70" />
+            </>
+          ) : null}
           {section.map((menuItem, itemIndex) => (
             <button
               key={itemIndex}

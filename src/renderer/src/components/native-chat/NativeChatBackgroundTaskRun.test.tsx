@@ -38,8 +38,6 @@ describe('NativeChatBackgroundTaskRun', () => {
     )
     expect(screen.queryByText('Background command')).toBeNull()
     expect(screen.getByText('Wait for the verification verdict')).toBeInTheDocument()
-    // The outcome is a state word plus its reason — the same vocabulary the
-    // strip above the composer uses — not a red row of prose.
     expect(screen.getByText(/^blocked · failed · 18\.2k · 1m 0s$/)).toBeInTheDocument()
     expect(
       screen.getByText('Background command "Wait" failed with exit code 1')

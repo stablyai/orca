@@ -135,7 +135,7 @@ describe('parseAgentSessionFileCached', () => {
     expect(incremental?.totalTokens).toBe(420)
   })
 
-  it('parses an oversized record without quadratic carry copying', async () => {
+  it('parses a multi-chunk record without quadratic carry copying', async () => {
     const root = await makeTempDir()
     const path = join(root, 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jsonl')
     // Span many chunks to expose quadratic copying from repeatedly joining the carried record prefix.
@@ -163,7 +163,12 @@ describe('parseAgentSessionFileCached', () => {
         process.platform,
         stats
       )
-      expect(parsed).not.toBeNull()
+      expect(parsed?.messageCount).toBe(3)
+      expect(parsed?.previewMessages.map((message) => message.text)).toEqual([
+        'question',
+        expect.stringMatching(/^x+\.\.\.$/),
+        'tail answer'
+      ])
     } finally {
       Buffer.concat = originalConcat
     }

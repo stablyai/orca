@@ -1,3 +1,6 @@
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { afterEach, expect, it, vi } from 'vitest'
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import {
@@ -47,7 +50,7 @@ it('files nothing for a chat the user moved on in before its attempt, and spends
 })
 
 it('says so in the chat when the agent cannot start for the continuation', async () => {
-  const { host, acquire } = await interruptedRestart()
+  const { host, acquire, root } = await interruptedRestart()
   await host.restartResume.list()
   acquire.mockRejectedValueOnce(new Error('provider could not reconnect'))
   expect(await readerNotes(host)).toEqual([QUIT_CUT_NOTICE])
@@ -63,6 +66,21 @@ it('says so in the chat when the agent cannot start for the continuation', async
   })
   // The failure note replaces the derived cut notice to avoid duplicate explanations.
   expect(await readerNotes(host)).toEqual(await statusNotes(host))
+  await host.flushAllStreamedEvents()
+  openTestJournalHostDatabase(root)
+    .db.prepare(
+      "UPDATE agent_session_records SET record_json = json_set(record_json, '$.lease.minimumNextFence', 'bad') WHERE session_id = ?"
+    )
+    .run(SESSION)
+  const store = await openTestAgentSessionRecordStore(root)
+  const restarted = new StructuredAgentSessionHost({ ...host.deps, store })
+  const starts = acquire.mock.calls.length
+  expect(await restarted.restartResume.listFailures()).toMatchObject([
+    { sessionId: SESSION, outcome: 'refused', retryable: false }
+  ])
+  expect(await restarted.restartResume.list()).toEqual([])
+  expect(acquire).toHaveBeenCalledTimes(starts)
+  await restarted.flushAllStreamedEvents()
 })
 
 // Successful continuation notes follow their own message; preserve the earlier cut notice.

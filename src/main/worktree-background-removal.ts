@@ -149,7 +149,8 @@ export function startBackgroundWorktreeRemoval(
 export function retryFailedWorktreeRemoval(
   worktreeId: string,
   hostId: ExecutionHostId | undefined,
-  jobFor: (record: WorktreeRemovalRecord) => BackgroundWorktreeRemovalJob
+  jobFor: (record: WorktreeRemovalRecord) => BackgroundWorktreeRemovalJob,
+  force?: boolean
 ): Promise<RemoveWorktreeResult> | undefined {
   const failed =
     (hostId ?? LOCAL_EXECUTION_HOST_ID) === LOCAL_EXECUTION_HOST_ID
@@ -158,7 +159,8 @@ export function retryFailedWorktreeRemoval(
   if (!failed) {
     return waitForPendingWorktreeRemoval(worktreeId, hostId)
   }
-  const { failure: _failure, ...record } = failed
+  const { failure: _failure, ...original } = failed
+  const record = { ...original, force: force ?? original.force }
   const settlement = addPendingRemoval(record)
   const job = jobFor(record)
   const leftoverOnly: BackgroundWorktreeRemovalJob = {

@@ -190,7 +190,7 @@ export function useProjectTargetActions(input: ProjectTargetActionsInput) {
       setSelectedProjectGroupId(null)
       const preferredHostId =
         selectedWorkspaceTarget.status === 'ready' ? selectedWorkspaceTarget.target.hostId : null
-      // Why: pass the current host as a preference (focusedHostScope), not a hard hostId — pinning made selecting a project set up only on another host a silent no-op.
+      // Prefer focusedHostScope rather than hard-pin hostId, so projects available only on another host remain selectable.
       const nextRepoId = resolveWorkspaceCreationRepoId({
         eligibleRepos,
         projects,

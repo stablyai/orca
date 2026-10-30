@@ -1,4 +1,3 @@
-// A phone shows the name the desktop shows for a tab (#8705, #30538).
 import { afterEach, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { ExecutionHostId } from '../../shared/execution-host'
@@ -8,7 +7,7 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { buildHeadlessMobileSessionTerminalTabs } from './mobile-session-terminal-projection'
 
-// Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
+// Preserve side-effect order: mocks, lifecycle, fixtures.
 const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
 await import('./orca-runtime-test-lifecycle.spec')
 const { store, TEST_WORKTREE_ID, HEADLESS_LEAF_ID, makeRuntimeStoreWithWorkspaceSession } =
@@ -16,7 +15,6 @@ const { store, TEST_WORKTREE_ID, HEADLESS_LEAF_ID, makeRuntimeStoreWithWorkspace
 
 afterEach(() => setStructuredAgentSessionHost(null))
 
-// #8705: a chat tab renamed on the desktop.
 it("publishes the desktop's chat tab name over the saved name, and the saved name once cleared", () => {
   let session: WorkspaceSessionState = getDefaultWorkspaceSession()
   const listeners = new Set<(hostId: ExecutionHostId | null) => void>()
@@ -34,7 +32,7 @@ it("publishes the desktop's chat tab name over the saved name, and the saved nam
   setStructuredAgentSessionHost({
     deps: {
       store: {
-        getRecord: () => ({
+        getConversation: () => ({
           location: { workspaceId: TEST_WORKTREE_ID },
           conversationName: 'auth/login'
         })
@@ -77,7 +75,6 @@ it("publishes the desktop's chat tab name over the saved name, and the saved nam
   expect(titles).toEqual(['Release notes', 'auth/login'])
 })
 
-// #30538: a headless host ranks a saved tab's names as the window does.
 async function listRestartedHeadlessCursorTab(
   generatedTitlesEnabled: boolean,
   liveFrame: string | null
@@ -113,7 +110,6 @@ async function listRestartedHeadlessCursorTab(
       )
     }
   })
-  // Rebuilt from the saved session, as a restarted headless host does.
   runtime.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(TEST_WORKTREE_ID, { force: true })
   if (liveFrame) {
     runtime.onPtyData('cursor-pty', `\x1b]0;${liveFrame}\x07`, Date.now())

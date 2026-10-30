@@ -48,7 +48,8 @@ export async function projectHostAuthenticationError(
   // Verify pasted hosts before sending ambient Enterprise credentials.
   return {
     type: 'auth_required',
-    message: `GitHub CLI is not authenticated to ${selectedHost}. Run gh auth login --hostname ${selectedHost}.`
+    message: `GitHub CLI is not authenticated to ${selectedHost}. Run gh auth login --hostname ${selectedHost}.`,
+    host: selectedHost
   }
 }
 
@@ -79,7 +80,10 @@ export function assertSlug(
       ok: false,
       error: {
         type: 'validation_error',
-        message: `Invalid ${field}: "${String(value)}" is not a valid GitHub slug.`
+        message: `Invalid ${field}: "${String(value)}" is not a valid GitHub slug.`,
+        reason: 'invalid_slug',
+        detail: field,
+        value: String(value)
       }
     }
   }
@@ -95,7 +99,9 @@ export function assertPositiveInt(
       ok: false,
       error: {
         type: 'validation_error',
-        message: `Invalid ${field}: must be a positive integer.`
+        message: `Invalid ${field}: must be a positive integer.`,
+        reason: 'invalid_positive_integer',
+        detail: field
       }
     }
   }
@@ -224,7 +230,12 @@ export async function runRest<T>(
     } catch {
       return {
         ok: false,
-        error: { type: 'unknown', message: `Unexpected REST response: ${stderr.trim()}` }
+        error: {
+          type: 'unknown',
+          message: `Unexpected REST response: ${stderr.trim()}`,
+          reason: 'unexpected_rest_response',
+          detail: stderr.trim()
+        }
       }
     }
   } catch (err) {

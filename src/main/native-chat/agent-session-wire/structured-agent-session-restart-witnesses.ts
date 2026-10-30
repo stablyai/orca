@@ -21,7 +21,12 @@ export type StructuredAgentSessionRestartWitnesses = {
 
 export function createStructuredAgentSessionRestartWitnesses(deps: {
   sessions: ReadonlyMap<string, NonNullable<WorkingAtStopInput['session']>>
-  getRecord: (sessionId: string) => AgentSessionRecord | null
+  getRecord: (
+    sessionId: string
+  ) => Pick<
+    AgentSessionRecord,
+    'provider' | 'providerHandleChain' | 'providerContextBoundary'
+  > | null
   childWork: WorkingAtStopInput['childWork']
   childWorkOpen: WorkingAtStopInput['childWorkOpen']
   capsule?: Pick<AgentSessionRecoveryCapsule, 'record'>

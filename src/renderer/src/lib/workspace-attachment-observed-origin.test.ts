@@ -132,5 +132,23 @@ describe('reference evidence native chat identity', () => {
       agent: 'claude',
       sessionId: 'chat-session'
     })
+
+    const renamed = {
+      ...chat,
+      unifiedTabsByWorktree: {
+        [workspaceId]: chat.unifiedTabsByWorktree[workspaceId].map((tab) => ({
+          ...tab,
+          customLabel: 'Pinned chat'
+        }))
+      }
+    }
+    expect(
+      getWorkspaceAttachmentObservedOrigin(
+        renamed,
+        workspaceId,
+        { kind: 'agent-session', tabId: 'chat-tab' },
+        'local'
+      )
+    ).toMatchObject({ label: 'Pinned chat' })
   })
 })

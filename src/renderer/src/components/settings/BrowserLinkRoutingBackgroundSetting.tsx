@@ -20,7 +20,6 @@ export function BrowserLinkRoutingBackgroundSetting({
       description={entry.description}
       keywords={entry.keywords}
     >
-      {/* Nested under Link Routing: it only changes how an Orca-routed link opens. */}
       <div className="ml-4 border-l border-border pl-4">
         <SettingsSwitchRow
           label={entry.title}

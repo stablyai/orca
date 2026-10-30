@@ -3,13 +3,7 @@ import { enqueueMobileDictationAudioChunk } from '../hooks/mobile-dictation-audi
 import type { DictationCaptureChunk } from './dictation-capture-contract'
 import type { RpcClient } from '../transport/rpc-client'
 
-// Why this file exists: the chunk sender takes what the capture seam hands over, and a microphone
-// event is not that — it carries no drop count, and the page's whole reason for a drop count is
-// audio the shell's ring could not hold. Typed as the event, the sender accepted either and read
-// `droppedBytes` off neither, so a page that had dropped audio sent it as though nothing was
-// missing. Every expect-error below is that claim as an assertion: tsc fails on a directive that
-// stops catching an error, so `tsc -p tsconfig.json` is the gate. Nothing here runs and no app code
-// imports it.
+// Pin capture chunks separately from raw microphone events so droppedBytes cannot disappear at the sender. Unused expect-error directives fail typecheck; this module never runs.
 
 declare const client: RpcClient
 declare const dictationId: string

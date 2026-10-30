@@ -10,8 +10,14 @@ import {
 } from './claude-structured-session-test-support'
 import { captureStructuredExecutionOptions } from '../native-chat/agent-session-wire/structured-agent-session-execution-options'
 import { claudeAndCodexAgents } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
-import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
+import * as dispatchContent from './claude-structured-dispatch-content'
 import { ClaudeControlRequestError } from './claude-stream-json-connection'
+import { createClaudeCliFlagSupport } from './claude-cli-flag-support'
+
+/** Claude ends a turn; a message sent before this joins the running turn on its choices. */
+const claudeTurnEnds = (connection: Parameters<typeof claudeFrame>[0]) =>
+  claudeFrame(connection, { type: 'system', subtype: 'session_state_changed', state: 'idle' })
 
 const MODELS = [
   { value: 'default', resolvedModel: 'claude-sonnet-5' },
@@ -57,6 +63,7 @@ describe('Claude accepted message choices', () => {
             fence: 7
           })
         ).resolves.toMatchObject({ state: 'admitted' })
+        claudeTurnEnds(connection)
         await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
       }
       expect(
@@ -74,6 +81,7 @@ describe('Claude accepted message choices', () => {
             fence: 7
           })
         ).resolves.toMatchObject({ state: 'admitted' })
+        claudeTurnEnds(connection)
       }
       expect(
         connection.calls.filter((call) =>
@@ -81,7 +89,8 @@ describe('Claude accepted message choices', () => {
         )
       ).toEqual([
         { subtype: 'set_model', params: { model: 'custom[1m]' } },
-        { subtype: 'apply_flag_settings', params: { settings: { effortLevel: 'low' } } }
+        { subtype: 'apply_flag_settings', params: { settings: { effortLevel: 'low' } } },
+        { subtype: 'apply_flag_settings', params: { settings: { fastMode: false } } }
       ])
       const failure = new Error('control refused')
       connection.setModel = async () => {
@@ -142,9 +151,74 @@ describe('Claude accepted message choices', () => {
     })
     expect(outcome).toEqual({
       state: 'admitted',
-      ranOptions: applied ? { model: 'claude-sonnet-5', ...ranOptions } : {}
+      ranOptions: { model: 'claude-sonnet-5', ...ranOptions }
     })
   })
+
+  // --effort arrived in Claude Code 2.1.38 and the live control in 2.1.50; older CLIs reject the flag
+  // and never answer the control, so either one failed every resume of a chat with a saved effort.
+  it.each([
+    ['2.1.31', undefined],
+    ['2.1.40', 'high']
+  ])(
+    'resumes a saved effort on Claude Code %s once its slow version probe answers',
+    async (version, launchedEffort) => {
+      let answer: (version: string) => void = () => {}
+      const probe = vi.fn(
+        () =>
+          new Promise<string | null>((resolve) => {
+            answer = resolve
+          })
+      )
+      const support = createClaudeCliFlagSupport({
+        probe,
+        keyOf: async (command, cwd) => `${command}\n${cwd}`,
+        budgetMs: 20,
+        now: () => performance.now()
+      })
+      const launch = { command: 'claude', cwd: '/work/repo', env: {} }
+      const saved = { model: 'sonnet', effort: 'high' }
+      const models = [{ value: 'default' }, { value: 'sonnet', displayName: 'Sonnet' }]
+      const claude = fakeClaude({ initModels: models })
+      const adapter = adapterFor(claude, {
+        resumesTranscript: true,
+        cliFlag: (flag, ...budget) => support.check(flag, launch, ...budget)
+      })
+      const acquired = adapter.acquire({
+        identity: identityFor(),
+        fence: 7,
+        spawnToken: 'resume',
+        options: saved,
+        events: recordingJournalSink()
+      })
+      await vi.waitFor(() => expect(probe).toHaveBeenCalled())
+      answer(version)
+      await acquired
+      const connection = claude.connections[0]!
+      expect(connection.launch.options).toMatchObject({ model: 'sonnet' })
+      expect(connection.launch.options.effort).toBe(launchedEffort)
+      await expect(
+        adapter.setOption({ sessionId: 'session-1', key: 'effort', value: 'low', fence: 7 })
+      ).rejects.toThrow('update Claude Code')
+      for (const clientMessageId of ['resumed', 'after-model-switch']) {
+        await expect(
+          adapter.dispatch({
+            sessionId: 'session-1',
+            clientMessageId,
+            body: USER_MESSAGE,
+            executionOptions: saved,
+            fence: 7
+          })
+        ).resolves.toMatchObject({ state: 'admitted' })
+        claudeTurnEnds(connection)
+        await adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'opus', fence: 7 })
+      }
+      expect(connection.calls.map((call) => call.subtype)).not.toContain('apply_flag_settings')
+      await expect(
+        adapter.readOptions({ sessionId: 'session-1', fence: 7 })
+      ).resolves.toMatchObject({ effortFixed: true, fastModeSupport: { supported: false } })
+    }
+  )
 
   it('applies a held message A before its prompt, then message B on the existing child', async () => {
     const order: string[] = []
@@ -204,6 +278,7 @@ describe('Claude accepted message choices', () => {
     release()
     await expect(a).resolves.toMatchObject({ state: 'admitted' })
     expect(order).toEqual(['model:sonnet', 'effort:{"effortLevel":"low"}', 'prompt'])
+    claudeTurnEnds(connection)
 
     order.length = 0
     await expect(
@@ -329,6 +404,7 @@ describe('Claude accepted message choices', () => {
           fence: 7
         })
       ).resolves.toMatchObject({ state: 'admitted' })
+      claudeTurnEnds(connection)
     }
     expect(captured.options.fastMode).toBe('true')
     expect(connection.calls.filter((call) => call.subtype === 'apply_flag_settings')).toEqual(
@@ -340,7 +416,7 @@ describe('Claude accepted message choices', () => {
     expect(connection.sent).toHaveLength(2)
   })
 
-  it('restores the configured model and effort for an empty snapshot', async () => {
+  it('inherits native state for an empty snapshot after an explicit effort', async () => {
     let currentEffort = 'high'
     const claude = fakeClaude({
       routes: {
@@ -371,8 +447,10 @@ describe('Claude accepted message choices', () => {
       fence: 7
     })
     const connection = claude.connections[0]!
+    claudeTurnEnds(connection)
     claudeFrame(connection, { type: 'system', subtype: 'init', model: 'claude-opus-5' })
     connection.calls.length = 0
+    connection.getSettings = () => new Promise(() => {})
     await expect(
       adapter.dispatch({
         sessionId: 'session-1',
@@ -384,10 +462,113 @@ describe('Claude accepted message choices', () => {
     ).resolves.toMatchObject({ state: 'admitted' })
     expect(
       connection.calls.filter((call) => ['set_model', 'apply_flag_settings'].includes(call.subtype))
-    ).toEqual([
-      { subtype: 'set_model', params: { model: 'claude-sonnet-5' } },
-      { subtype: 'apply_flag_settings', params: { settings: { effortLevel: 'high' } } }
-    ])
+    ).toEqual([])
     expect(connection.sent).toHaveLength(2)
+  })
+
+  it('keeps a running turn on its choices and applies new ones at the next turn', async () => {
+    const claude = fakeClaude({
+      initModels: MODELS.map((model) => ({ ...model, supportsFastMode: true })),
+      routes: { list_models: () => MODELS }
+    })
+    const adapter = await acquired(claude)
+    const connection = claude.connections[0]!
+    const send = (clientMessageId: string, model: string, body = USER_MESSAGE) =>
+      adapter.dispatch({
+        sessionId: 'session-1',
+        clientMessageId,
+        body,
+        executionOptions: {
+          model,
+          effort: model === 'sonnet' ? 'high' : 'low',
+          fastMode: model === 'sonnet' ? 'false' : 'true'
+        },
+        fence: 7
+      })
+    const models = () =>
+      connection.calls.flatMap((call) => (call.subtype === 'set_model' ? [call.params?.model] : []))
+    await expect(send('opens', 'sonnet')).resolves.toMatchObject({ state: 'admitted' })
+    expect(models()).toEqual(['sonnet'])
+    const settings = () => connection.calls.filter((call) => call.subtype === 'apply_flag_settings')
+    const liveSettings = [...settings()]
+    // Typed while that turn runs, after the pick changed: it joins the turn as it is.
+    await expect(send('joins', 'opus')).resolves.toMatchObject({ state: 'admitted' })
+    expect(models()).toEqual(['sonnet'])
+    expect(settings()).toEqual(liveSettings)
+    claudeTurnEnds(connection)
+    const mail = {
+      ...USER_MESSAGE,
+      from: {
+        kind: 'agent' as const,
+        senders: [],
+        orchestration: {
+          message: 'mail-notice' as const,
+          mailbox: 'agent:worker',
+          dispatchId: null,
+          messages: []
+        }
+      }
+    }
+    await expect(send('mail', 'opus', mail)).resolves.toMatchObject({ state: 'admitted' })
+    expect(models()).toEqual(['sonnet'])
+    expect(settings()).toEqual(liveSettings)
+    const held = Promise.withResolvers<void>()
+    const entered = Promise.withResolvers<void>()
+    const original = dispatchContent.claudeDispatchMessageContent
+    const content = vi
+      .spyOn(dispatchContent, 'claudeDispatchMessageContent')
+      .mockImplementationOnce(async (body) => {
+        entered.resolve()
+        await held.promise
+        return original(body)
+      })
+    const delayed = send('next', 'opus')
+    try {
+      await entered.promise
+      claudeTurnEnds(connection)
+      held.resolve()
+      await expect(delayed).resolves.toMatchObject({ state: 'admitted' })
+    } finally {
+      held.resolve()
+      content.mockRestore()
+    }
+    expect(models()).toEqual(['sonnet', 'opus'])
+    expect(settings()).toContainEqual({
+      subtype: 'apply_flag_settings',
+      params: { settings: { effortLevel: 'low' } }
+    })
+    expect(settings()).toContainEqual({
+      subtype: 'apply_flag_settings',
+      params: { settings: { fastMode: true } }
+    })
+    expect(connection.sent).toHaveLength(4)
+    claudeTurnEnds(connection)
+    const settingsAfterTurn = [...settings()]
+    const originalSend = connection.send
+    connection.send = async (message, prepare) => {
+      await prepare?.()
+      connection.sent.push(message)
+    }
+    try {
+      await expect(send('starts', 'opus')).resolves.toMatchObject({ state: 'admitted' })
+      expect(models()).toEqual(['sonnet', 'opus', 'opus'])
+      expect(settings()).toEqual([
+        ...settingsAfterTurn,
+        { subtype: 'apply_flag_settings', params: { settings: { effortLevel: 'low' } } },
+        { subtype: 'apply_flag_settings', params: { settings: { fastMode: true } } }
+      ])
+      const settingsAtStart = [...settings()]
+      claudeFrame(connection, {
+        type: 'command_lifecycle',
+        state: 'started',
+        command_uuid: connection.sent.at(-1)?.uuid
+      })
+      await expect(send('before-echo', 'sonnet')).resolves.toMatchObject({ state: 'admitted' })
+      expect(models()).toEqual(['sonnet', 'opus', 'opus'])
+      expect(settings()).toEqual(settingsAtStart)
+    } finally {
+      connection.send = originalSend
+      await adapter.closeAll()
+    }
   })
 })

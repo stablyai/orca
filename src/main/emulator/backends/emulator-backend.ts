@@ -4,6 +4,7 @@ import type {
   EmulatorSessionInfo,
   EmulatorStreamCodec
 } from '../emulator-types'
+import type { EmulatorCodedMessage } from '../../../shared/emulator-failure-copy'
 
 export type { EmulatorBackendKind, EmulatorStreamCodec }
 
@@ -25,10 +26,9 @@ export type EmulatorBackendCapabilities = {
   logcat: boolean
 }
 
-export type BackendAvailability = {
+export type BackendAvailability = EmulatorCodedMessage & {
   available: boolean
   devices: EmulatorDevice[]
-  message: string
   sdkPath?: string
 }
 
@@ -47,6 +47,8 @@ export type EmulatorBackend = {
   isSupportedOnHost(): boolean
   checkAvailability(): Promise<BackendAvailability>
   listDevices(): Promise<EmulatorDevice[]>
+  /** Ids of devices confirmed running now; null when the host could not answer. */
+  listRunningDeviceIds?(): Promise<string[] | null>
   ownsDevice(id: string): Promise<boolean>
   resolveDeviceId(deviceOrName: string): Promise<string>
 

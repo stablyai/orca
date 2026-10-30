@@ -78,13 +78,23 @@ function parseOpenAiTranscriptionResponse(data: OpenAiTranscriptionResponse): st
 export class OpenAiTranscriptionSession {
   private chunks: Float32Array[] = []
   private audioSeconds = 0
+  private readonly abortController = new AbortController()
 
   constructor(
     private readonly modelId: string,
     private readonly readApiKey: () => string
   ) {}
 
+  cancel(): void {
+    this.chunks = []
+    this.audioSeconds = 0
+    this.abortController.abort()
+  }
+
   feedAudio(samples: Float32Array, sampleRate: number): void {
+    if (this.abortController.signal.aborted) {
+      return
+    }
     const normalized = resampleToRate(samples, sampleRate, CLOUD_TRANSCRIPTION_SAMPLE_RATE)
     this.audioSeconds += normalized.length / CLOUD_TRANSCRIPTION_SAMPLE_RATE
     if (this.audioSeconds > MAX_CLOUD_AUDIO_SECONDS) {
@@ -109,12 +119,12 @@ export class OpenAiTranscriptionSession {
     const form = new FormData()
     form.append('model', apiModel)
     form.append('response_format', 'json')
-    // Why: OpenAI's transcription endpoint expects a multipart file object;
-    // a named WAV blob avoids filesystem temp files and works in packaged apps.
+    // A named WAV blob satisfies multipart uploads without temporary files.
     form.append('file', new Blob([wav], { type: 'audio/wav' }), 'dictation.wav')
 
     const response = await fetch(OPENAI_TRANSCRIPTION_URL, {
       method: 'POST',
+      signal: this.abortController.signal,
       headers: {
         Authorization: `Bearer ${this.readApiKey()}`
       },

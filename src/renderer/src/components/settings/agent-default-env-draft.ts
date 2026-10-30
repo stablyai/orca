@@ -2,7 +2,7 @@ import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard
 import { tokenizeCustomCommandTemplate } from '../../../../shared/commit-message-prompt'
 import { quotePosixShellDoubleQuotedApostrophe } from '../../../../shared/shell-argument-quoting'
 
-// Why: environment overrides are pasteable settings text; reject huge drafts before tokenizing.
+// Reject oversized pasted overrides before tokenization.
 export const AGENT_DEFAULT_ENV_DRAFT_MAX_BYTES = 8 * 1024
 
 export type AgentDefaultEnvDraftInvalidReason = 'too-large' | 'unclosed-quote'
@@ -21,7 +21,7 @@ export function stringifyAgentDefaultEnvDraft(env: Record<string, string>): stri
     .join(' ')
 }
 
-// Why: the parser groups quotes with literal backslashes, so this spelling never needs a backslash.
+// Use quote grouping that preserves literal backslashes without introducing escapes.
 function quoteAgentDefaultEnvDraftWord(word: string): string {
   return word && !/[\s'"]/.test(word) ? word : quotePosixShellDoubleQuotedApostrophe(word)
 }
@@ -30,7 +30,7 @@ export function parseAgentDefaultEnvDraft(value: string): AgentDefaultEnvDraftPa
   if (isClipboardTextByteLengthOverLimit(value, AGENT_DEFAULT_ENV_DRAFT_MAX_BYTES)) {
     return { env: {}, invalidReason: 'too-large' }
   }
-  // Why literal backslashes: Windows paths typed without quotes must keep their separators.
+  // Preserve unquoted Windows path separators as literal backslashes.
   const tokenized = tokenizeCustomCommandTemplate(value, 'literal')
   if (!tokenized.ok) {
     return { env: {}, invalidReason: 'unclosed-quote' }

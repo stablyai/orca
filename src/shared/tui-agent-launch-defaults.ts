@@ -4,14 +4,15 @@ import type { GlobalSettings } from './global-settings-types'
 import { isTuiAgent } from './tui-agent-config'
 import { YOLO_TUI_AGENT_ARGS, YOLO_TUI_AGENT_ENV } from './tui-agent-permissions'
 import {
-  agentPermissionArgs,
+  readLaunchPermissionChoice,
+  type AgentPermissionChoice,
   agentPermissionEnv,
   hasTypedAgentPermission,
   PERMISSION_CHOICE_AGENTS,
   resolveAgentPermission,
   sanitizeAgentPermissionUpdates
 } from './tui-agent-permission-choice'
-import { agentArgsSetPermission } from './tui-agent-permission-lift'
+import { projectAgentLaunchProfile } from './agent-launch-profile'
 import {
   resolveStartupShell,
   tokenizeStartupCommand,
@@ -33,6 +34,22 @@ export type AgentLaunchProfileSettings = Partial<
   >
 >
 
+/** Launch intent overrides only Orca's injected permission, preserving the user's args and env. */
+export function agentLaunchPermissionSettings<T extends AgentLaunchProfileSettings>(
+  agent: TuiAgent,
+  settings: T,
+  sessionOptions: Readonly<Record<string, unknown>> | undefined
+) {
+  const choice = readLaunchPermissionChoice(sessionOptions)
+  return choice
+    ? {
+        ...settings,
+        agentPermissionDefault: settings?.agentPermissionDefault ?? 'own',
+        agentPermissionOverrides: { ...settings?.agentPermissionOverrides, [agent]: choice }
+      }
+    : settings
+}
+
 // What an untouched agent ran with before permissions were stored as a choice; legacy text only.
 export const DEFAULT_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> &
   Readonly<Record<string, string | undefined>> = YOLO_TUI_AGENT_ARGS
@@ -51,12 +68,7 @@ export function hasUnsupportedTuiAgentArgs(agent: TuiAgent, value: unknown): boo
   return (UNSUPPORTED_TUI_AGENT_ARGS[agent] ?? []).some((arg) => argPattern(arg).test(value))
 }
 
-/**
- * Whether the configured arguments carry this agent's permission-bypass flag.
- *
- * Legacy profiles carry the permission in Arguments. Read the startup argv so quoted text and
- * operands after `--` cannot authorize a structured session.
- */
+/** Read legacy startup argv so quoted prompt text and operands after -- cannot masquerade as permission flags. */
 export function tuiAgentArgsBypassPermissions(
   agent: TuiAgent,
   value: string | null | undefined,
@@ -84,8 +96,7 @@ function sanitizeTuiAgentLaunchArgs(agent: TuiAgent, args: string): string {
   if (!unsupportedArgs) {
     return args.trim()
   }
-  // Why: a few agents have removed, relocated, or never exposed Claude-style
-  // skip-permission flags on the interactive TUI command Orca launches.
+  // Some interactive agent commands removed, relocated or never supported these skip-permission flags.
   return unsupportedArgs.reduce((next, arg) => next.replace(argPattern(arg), ' '), args).trim()
 }
 
@@ -157,34 +168,23 @@ function ownArgs(agent: string, settings: AgentLaunchProfileSettings | null | un
   return typeof value === 'string' ? value : undefined
 }
 
-/**
- * The Arguments a terminal launch of this agent gets: Orca's flag for the agent's stored
- * permission, then the user's own text. Text that sets permissions itself wins, so Orca adds none.
- * Settings without a stored choice (an older host's published text) already carry the flag.
- */
+export { agentPermissionArgsForLaunch } from './agent-permission-args'
+/** Compose stored permission flags with user arguments, letting explicit user permission text win. Older host text already includes its flags. */
 export function resolveTuiAgentLaunchArgs(
   agent: string,
-  settings: AgentLaunchProfileSettings | null | undefined
+  settings: AgentLaunchProfileSettings | null | undefined,
+  permissionChoice?: AgentPermissionChoice
 ): string {
-  const own = ownArgs(agent, settings)
-  if (!hasTypedAgentPermission(settings) || !isTuiAgent(agent)) {
-    return own ?? getTuiAgentDefaultArgs(agent)
+  if (!isTuiAgent(agent)) {
+    return ownArgs(agent, settings) ?? getTuiAgentDefaultArgs(agent)
   }
-  const user = own?.trim() ?? ''
-  const flag = agentPermissionArgs(agent, resolveAgentPermission(agent, settings).choice)
-  if (!flag || agentArgsSetPermission(agent, user)) {
-    return user
-  }
-  return user ? `${flag} ${user}` : flag
+  return projectAgentLaunchProfile(agent, settings, {
+    target: 'terminal',
+    ...(permissionChoice ? { choices: { permissionMode: permissionChoice } } : {})
+  }).args
 }
 
-/**
- * Whether this agent's *resolved* launch arguments ask for a permission bypass.
- *
- * Resolved, not configured: an untouched Arguments field falls back to the default Orca ships,
- * which is the bypass flag, so bypass is the posture a user gets until they choose otherwise.
- * Choosing Manual stores an empty string, which owns the key and so beats that default.
- */
+/** Legacy missing Arguments use Orca’s bypass default; Manual stores an explicit empty value that overrides it. */
 export function resolvedTuiAgentArgsBypassPermissions(
   agent: TuiAgent,
   settings:
@@ -233,11 +233,7 @@ export function resolveTuiAgentLaunchEnv(
   return Object.fromEntries(added.length ? [...added, ...(own ?? [])] : (own ?? []))
 }
 
-/**
- * Every agent's Arguments and env as its terminal launch gets them, flags included: what older
- * clients read, since they treat that text as the permission. Each permission agent gets a key so
- * an older client never falls back to its own built-in default.
- */
+/** Publish composed args/env for older clients that infer permission from text; explicit keys prevent fallback to their built-in defaults. */
 export function composeAgentLaunchProfile(
   settings: AgentLaunchProfileSettings,
   platform: NodeJS.Platform | null | undefined = agentPermissionHostPlatform()
@@ -268,11 +264,7 @@ export function composeAgentLaunchProfile(
   }
 }
 
-/**
- * The command, args and env a resume relaunches with: only what its original Orca launch recorded.
- * Why not settings defaults: an unrecorded launch (`claude` typed by hand) ran with none, and the
- * defaults carry the permission bypass, so filling the gap would widen the resumed session.
- */
+/** Resume only the recorded recipe; defaults would grant bypass to unrecorded manual launches that never used it. */
 export function resolveResumeLaunchRecipe(
   launchConfig: SleepingAgentLaunchConfig | undefined
 ): SleepingAgentLaunchConfig {

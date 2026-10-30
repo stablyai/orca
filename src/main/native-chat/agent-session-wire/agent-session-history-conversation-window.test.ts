@@ -12,7 +12,7 @@ import type {
   AgentSessionHistoryPage,
   AgentSessionHistoryRequest
 } from '../../../shared/agent-session-wire'
-import { serializeRemoteRuntimePayload } from '../../../shared/remote-runtime-memory-limits'
+import { serializeRemoteRuntimePayload } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
@@ -20,7 +20,7 @@ import {
   readAgentSessionHydrationPage
 } from './agent-session-history-page'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import { foldSubagentItems } from '../../../shared/native-chat-subagent-items'
+import { foldSubagentItems } from '../../../shared/native-chat/transcript/native-chat-subagent-items'
 import {
   subagentJournalBody,
   subagentJournalItemIdentity

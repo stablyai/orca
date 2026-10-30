@@ -82,7 +82,7 @@ describe('review report selector work', () => {
     }
   })
 
-  it('recomputes for every relevant input without retaining the whole state', () => {
+  it('recomputes for every relevant input', () => {
     const current = state().getState()
     const updates: Partial<AppState>[] = [
       { activeView: 'settings' },

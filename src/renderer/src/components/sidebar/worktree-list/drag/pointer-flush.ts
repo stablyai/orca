@@ -37,7 +37,6 @@ export type WorktreePointerDragFrameArgs = {
   setPinDragOver: (pinDragOver: boolean) => void
 }
 
-// Reflect a status/pin hover that has no insertion line of its own.
 function showStatusHoverWithoutInsertionLine(
   args: WorktreePointerDragFrameArgs,
   target: WorktreeSidebarLineageDropTarget
@@ -78,8 +77,6 @@ function clearInsertionLine(args: WorktreePointerDragFrameArgs): void {
   )
 }
 
-// One animation frame of an in-flight pointer drag: move the floating preview, then decide
-// whether the pointer is over the workspace board, a status/pin section, or a reorder slot.
 export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs): void {
   const { drag, ctx } = args
   drag.frameId = null
@@ -98,7 +95,7 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
     ctx.clearWorktreeDrag()
     return
   }
-  // Why: show the board preview as soon as a card drag begins so the drop target is visible up front, not only at the sidebar edge.
+  // Expose the board drop target when dragging starts, before the pointer reaches the sidebar edge.
   if (
     !drag.workspaceBoardDragPreviewRequested &&
     !args.workspaceBoardOpen &&

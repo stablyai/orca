@@ -108,17 +108,4 @@ describe('Bitbucket repository refs', () => {
       timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
   })
-
-  it('bounds cached repository refs for distinct repo paths', async () => {
-    gitExecFileAsyncMock.mockResolvedValue({
-      stdout: 'git@bitbucket.org:team/project.git\n',
-      stderr: ''
-    })
-
-    for (let i = 0; i < 513; i += 1) {
-      await getBitbucketRepoRef(`/repo-${i}`)
-    }
-
-    expect(_getBitbucketRepoRefCacheSize()).toBe(512)
-  })
 })

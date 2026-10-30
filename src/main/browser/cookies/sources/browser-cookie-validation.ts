@@ -1,9 +1,9 @@
-import { normalizeCookieDomain } from '../../browser-cookie-import-policy'
+import { normalizeCookieDomain } from '../browser-cookie-import-policy'
 import {
   readJsonCookiePartition,
   type SourcePartitionRead
-} from '../../browser-cookie-source-partition'
-import type { ImportedCookieFields } from '../../browser-cookie-import-write'
+} from './browser-cookie-source-partition'
+import type { ImportedCookieFields } from '../browser-cookie-import-write'
 
 export type RawCookieEntry = {
   domain?: unknown

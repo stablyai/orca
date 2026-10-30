@@ -85,6 +85,9 @@ export function createBrowserScreencastSnapshotCapture(
             SNAPSHOT_CAPTURE_TIMEOUT_MS,
             null
           )
+          if (isSnapshotStale(initialOnly, generation)) {
+            return
+          }
           if (nativeImage) {
             const capture = scaleSnapshotToFit(nativeImage, options)
             const buffer =

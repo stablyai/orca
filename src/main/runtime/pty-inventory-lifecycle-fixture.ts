@@ -1,6 +1,9 @@
 import { vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
-import type { RuntimePtyController } from './runtime-pty-controller-contract'
+import type {
+  PtyInventoryRefreshOptions,
+  RuntimePtyController
+} from './runtime-pty-controller-contract'
 import type { PtyProcessInfo } from '../providers/pty-process-info'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { registerBoundPty } from './bind-first-pane.test-fixture'
@@ -34,8 +37,20 @@ export function processRow(id = PTY, incarnationId = PREDECESSOR): PtyProcessInf
 }
 
 export class InventoryLifecycleRuntime extends OrcaRuntimeService {
-  read(connectionId?: string | null, target: string | null = null, deadline?: number) {
-    return this.refreshPtyWorktreeRecordsWithControllerInventory([], target, deadline, connectionId)
+  read(
+    connectionId?: string | null,
+    target: string | null = null,
+    deadline?: number,
+    inventoryOptions?: PtyInventoryRefreshOptions
+  ) {
+    return this.refreshPtyWorktreeRecordsWithControllerInventory(
+      [],
+      target,
+      deadline,
+      connectionId,
+      false,
+      inventoryOptions
+    )
   }
 
   register(incarnationId = PREDECESSOR): void {
@@ -66,8 +81,7 @@ export class InventoryLifecycleRuntime extends OrcaRuntimeService {
 
 export function createInventoryRuntime(listProcesses: InventoryListing) {
   const runtime = new InventoryLifecycleRuntime()
-  // Main's layout is the only answer to which pane holds a terminal; it lives in the store session.
-  // An empty store otherwise, as the null store reads.
+  // Main resolves terminal ownership from its session layout; keep the rest of the store empty.
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     Reflect.set(runtime, 'store', {
       getRepos: () => [],

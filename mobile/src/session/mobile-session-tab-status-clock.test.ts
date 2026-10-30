@@ -1,4 +1,19 @@
 import { describe, expect, it } from 'vitest'
+import { deepStrictEqual } from 'node:assert/strict'
+import {
+  createSessionTabsTabDeltaDecoder,
+  createSessionTabsTabDeltaEncoder
+} from '../../../src/shared/session-tabs-tab-delta'
+import { SESSION_TABS_TAB_DELTA_RUNTIME_CAPABILITY } from '../../../src/shared/session-tabs-runtime-capabilities'
+import { shouldClearNativeChatWorkingSuppression } from '../../../src/shared/native-chat/native-chat-working-suppression'
+import { isRpcResponse } from '../transport/rpc-response-shape'
+import { resolveMobileTerminalTabAgentId } from './mobile-terminal-tab-agent'
+import {
+  canShowMobileNativeChat,
+  resolveMobileNativeChat,
+  withRememberedNativeChatIdentity
+} from './native-chat/mobile-native-chat-eligibility'
+import { shouldDismissKeyboardAfterTerminalSend } from './agent-send-keyboard-dismissal'
 import { agentDotState } from '../worktree/agent-row-display'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import {
@@ -48,13 +63,93 @@ function dot(tab: MobileSessionTab | undefined, now: number) {
 }
 
 describe('session tab status on the phone clock', () => {
+  it('preserves phone display and action inputs with optional origins through the wire codec', () => {
+    const base = terminal(PHONE_NOW - MINUTE)
+    if (base.type !== 'terminal' || !base.agentStatus) {
+      throw new Error('Expected terminal status')
+    }
+    const status = {
+      ...base.agentStatus,
+      agentType: 'claude',
+      providerSession: { key: 'session_id' as const, id: 'session-1' }
+    }
+    const results = [[], [SESSION_TABS_TAB_DELTA_RUNTIME_CAPABILITY]].flatMap((capabilities) => {
+      const encoder = createSessionTabsTabDeltaEncoder(capabilities)
+      const decoder = createSessionTabsTabDeltaDecoder()
+      return [undefined, PHONE_NOW - 10 * MINUTE].map((origin, version) => {
+        const tab = {
+          ...base,
+          agentStatus: {
+            ...status,
+            ...(origin === undefined ? {} : { firstStateStartedAt: origin })
+          }
+        }
+        const frame = {
+          type: 'snapshot',
+          worktree: 'wt-1',
+          snapshotVersion: version + 1,
+          tabs: [tab, { ...base, id: 'quiet' }],
+          activeTabId: tab.id,
+          activeTabType: 'terminal' as const
+        }
+        const sent = version === 0 ? encoder.full(frame) : encoder.update(frame)
+        expect(Object.hasOwn(sent, 'tabsDelta')).toBe(capabilities.length > 0 && version > 0)
+        const response: unknown = JSON.parse(
+          JSON.stringify({ id: 'stream-1', ok: true, result: sent })
+        )
+        if (!isRpcResponse(response) || !response.ok) {
+          throw new Error('Expected accepted RPC envelope')
+        }
+        const decoded = decoder.decode(response.result)
+        deepStrictEqual(decoded, { ok: true as const, result: frame })
+        const received = withRememberedNativeChatIdentity(
+          withSessionTabStatusReceipts(decoded.result.tabs, [], PHONE_NOW),
+          []
+        )[0]
+        if (received.type !== 'terminal' || !received.agentStatus) {
+          throw new Error('Expected received terminal status')
+        }
+        return {
+          dot: dot(received, PHONE_NOW),
+          agent: resolveMobileTerminalTabAgentId(received),
+          chat: resolveMobileNativeChat(received),
+          sendAccepted: shouldDismissKeyboardAfterTerminalSend(received, true),
+          chatAllowed: canShowMobileNativeChat(received),
+          stopEpoch: received.agentStatus.stateStartedAt,
+          clearsStop: shouldClearNativeChatWorkingSuppression({
+            working: received.agentStatus.state === 'working',
+            interrupted: true,
+            workingEpoch: received.agentStatus.stateStartedAt,
+            previousWorkingEpoch: status.stateStartedAt
+          })
+        }
+      })
+    })
+    expect(results).toEqual(
+      Array.from({ length: 4 }, () => ({
+        dot: 'working',
+        agent: 'claude',
+        chat: {
+          agent: 'claude',
+          sessionId: 'session-1',
+          sessionLive: true,
+          transcriptPath: null,
+          agentConfirmed: true
+        },
+        sendAccepted: true,
+        chatAllowed: true,
+        stopEpoch: status.stateStartedAt,
+        clearsStop: false
+      }))
+    )
+  })
+
   it.each([
     ['an hour behind', -60 * MINUTE],
     ['an hour ahead', 60 * MINUTE]
   ])('ages a host %s from when the phone saw the evidence', (_label, skew) => {
     const first = withSessionTabStatusReceipts([terminal(PHONE_NOW + skew)], [], PHONE_NOW)
     expect(dot(first[0], PHONE_NOW)).toBe('working')
-    // A replay of the same evidence is a repaint, so the window keeps its first start.
     const replay = withSessionTabStatusReceipts(
       [terminal(PHONE_NOW + skew)],
       first,

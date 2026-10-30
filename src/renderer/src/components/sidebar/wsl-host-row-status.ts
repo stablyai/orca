@@ -25,6 +25,12 @@ export function getWslHostRowHealth(
 }
 
 export function getWslHostStatusLabel(status: WslHostStatus | undefined): string | null {
+  if (status?.removalPending) {
+    return translate(
+      'auto.components.sidebar.wslHostRowStatus.removalPending',
+      'Removal didn’t finish'
+    )
+  }
   switch (status?.state) {
     case undefined:
     case 'ready':
@@ -45,14 +51,12 @@ export function getWslHostStatusLabel(status: WslHostStatus | undefined): string
   }
 }
 
-/** A WSL host row's second line: what it is, then the liveness state when it is not plain. */
 export function getWslHostRowDetail(status: WslHostStatus | undefined): string {
   const kind = translate('auto.components.sidebar.wslHostRowStatus.kind', 'WSL distro')
   const label = getWslHostStatusLabel(status)
   return label ? `${kind} · ${label}` : kind
 }
 
-/** Where a WSL host's row and settings say the experiment is off. */
 export function getWslHostsTurnedOffLabel(): string {
   return translate(
     'auto.components.sidebar.wslHostRowStatus.turnedOff',
@@ -64,7 +68,6 @@ export function getWslHostsTurnOnLabel(): string {
   return translate('auto.components.terminal.pane.WslHostUnavailableBanner.turnOn', 'Turn on')
 }
 
-/** The same state, short enough for a host-picker row. */
 export function getWslHostRowTurnedOffDetail(): string {
   return translate(
     'auto.components.sidebar.wslHostRowStatus.turnedOffShort',
@@ -72,7 +75,21 @@ export function getWslHostRowTurnedOffDetail(): string {
   )
 }
 
-/** This build ships no orcad template, so no WSL host can run; full sentence for dialogs. */
+export function getWslHostsPausedLabel(): string {
+  return translate(
+    'auto.components.sidebar.wslHostRowStatus.paused',
+    'WSL hosts are paused in this build. Your saved hosts and their projects keep working; adding hosts and moving projects onto them is paused.'
+  )
+}
+
+export function getWslHostsPausedShortLabel(): string {
+  return translate(
+    'auto.components.sidebar.wslHostRowStatus.pausedShort',
+    'Adding WSL distros is paused in this build.'
+  )
+}
+
+/** Explain missing orcad templates in dialogs; without them WSL hosts cannot run. */
 export function getWslHostServerFilesMissingLabel(): string {
   return translate(
     'auto.components.sidebar.wslHostRowStatus.serverFilesMissing',
@@ -80,7 +97,6 @@ export function getWslHostServerFilesMissingLabel(): string {
   )
 }
 
-/** The same state, short enough for a host-picker row. */
 export function getWslHostRowServerFilesMissingDetail(): string {
   return translate(
     'auto.components.sidebar.wslHostRowStatus.serverFilesMissingShort',

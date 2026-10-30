@@ -17,7 +17,7 @@ import { useAppStore } from '@/store'
 import { TooltipProvider } from '../ui/tooltip'
 import { RuntimeServerRow } from './runtime-server-row'
 
-// Why: menu items render inline as buttons so the row's menu actions are queryable.
+// Render menus inline so row actions remain queryable.
 vi.mock('../ui/dropdown-menu', () => ({
   DropdownMenu: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -55,8 +55,7 @@ function answeredStatus(): RuntimeStatus {
     authoritativeWindowId: 1,
     liveTabCount: 0,
     liveLeafCount: 0,
-    // Why real versions: an omitted protocol version is a compat block, which is its own
-    // disconnected verdict and would mask what this file is measuring.
+    // Supply real versions so compatibility blocking cannot mask the reachability behavior under test.
     runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
     minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
   }
@@ -115,10 +114,7 @@ afterEach(() => {
   useAppStore.setState(initialState, true)
 })
 
-// Settings > Available Hosts and the repository host-setup section render the same host from the
-// same entry. This row derived its own answer from raw `entry.status`, so a probe that did not
-// come back flipped it to "error" and swapped Disconnect for Connect while the other surface,
-// which already reads the shared verdict, still showed the host as reachable.
+// Unverifiable probes must preserve the shared reachability verdict across server rows and repository setup, including Disconnect.
 it('keeps offering Disconnect while a ready host answers an unverifiable probe', () => {
   setEntry({
     status: null,
@@ -131,8 +127,6 @@ it('keeps offering Disconnect while a ready host answers an unverifiable probe',
   expect(screen.queryByRole('button', { name: /^connect$/i })).toBeNull()
 })
 
-// The other direction must still work: a transport the host actually dropped is a host you
-// reconnect to, and the row has to offer that.
 it('offers Connect once the transport itself is down', () => {
   setEntry({
     status: null,

@@ -1,12 +1,9 @@
 import { RELAY_CLOSE_CODE, type RelayRegion } from '@orca-cloud/relay-contract'
 import { hostCohortBucket } from './host-cohort-bucket.js'
 
-// Rehome on reconnect (step 1, C): a host that reconnects anyway, sitting on a reserve cell
-// outside the region it asked for, is booked in its own region instead. Never a disconnect,
-// never a 503; every rule that fails leaves today's answer.
+// Rehome only on an existing reconnect outside the requested region; failed rules retain sticky answer, never force disconnect/503.
 
-// Below this share of free seats over the target region's reserve ceilings, nobody moves in.
-// B spills at 0% free, so a spilled host comes back only once there is real room.
+// Require 10% target headroom above the 0% spill line so spilled hosts return only with real room.
 export const RESERVE_REHOME_TARGET_FREE_SHARE = 0.1
 // Two installs sharing one identity replace each other with PEER_DROPPED.
 export const RESERVE_REHOME_PEER_DROPPED_MS = 10 * 60_000
@@ -51,8 +48,7 @@ export class ReserveRehome {
     return this.input.percent > 0
   }
 
-  // Rules 1 and 4-7 for a host already known to be on a reserve cell outside its region. The
-  // first rule that fails, or null with the source cell's token taken.
+  // For a reserve host outside its region, return first failing admission rule or take source token and return null.
   admit(input: {
     identity: Identity
     sourceCellId: string
@@ -134,8 +130,7 @@ function hostKey(identity: Identity): string {
   return `${identity.userId}\u0000${identity.relayHostId}`
 }
 
-// The operator's regional rehome switch (relay_region_rehome_control), cached: unknown, failed
-// or stale reads as off. Polled only on a director with C switched on.
+// Cache operator regional rehome switch; unknown/failed/stale means off. Poll only enabled directors.
 export class ReserveRehomeSwitch {
   private last: { enabled: boolean; notBefore: number; readAt: number } | null = null
   private timer: ReturnType<typeof setInterval> | null = null

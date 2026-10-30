@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JiraClientForSite } from './authenticated-request'
 import { credentialDecryptionMessage } from '../../shared/integration-credential-errors'
-import { getJiraSummaryLookupErrorCode } from '../../shared/jira-summary-lookup'
+import { getJiraSummaryLookupErrorCode } from '../../shared/jira/jira-summary-lookup'
 
 const {
   clearTokenMock,

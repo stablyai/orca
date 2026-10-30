@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as UpdaterModule from './updater'
 import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
+import { updaterMainWindow } from './updater-test-main-window'
 import type { LinuxRootPackageType, UpdateStatus } from '../shared/update-status-types'
 
 const {
@@ -52,7 +53,7 @@ describe('updater externally managed Linux installs', () => {
     })
     const send = vi.fn()
     const updater = await loadUpdaterModule()
-    updater.setupAutoUpdater({ webContents: { send } } as never, {
+    updater.setupAutoUpdater(updaterMainWindow(send), {
       getLastUpdateCheckAt: () => Date.now(),
       installMode: 'interactive'
     })
@@ -98,6 +99,7 @@ describe('updater externally managed Linux installs', () => {
     expect(lastStatus(send)).toEqual({
       state: 'error',
       message: EXTERNALLY_MANAGED_MESSAGE,
+      messageCode: 'linuxPackageExternallyManaged',
       version: '1.0.61',
       retryable: false
     })

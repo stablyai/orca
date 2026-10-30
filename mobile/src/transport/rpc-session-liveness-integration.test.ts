@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect } from './rpc-client'
-import { encodeTerminalStreamFrame, TerminalStreamOpcode } from './terminal-stream-protocol'
+import {
+  encodeTerminalStreamFrame,
+  TerminalStreamOpcode
+} from '../../../src/shared/terminal-stream-protocol'
 
 vi.mock('./direct-e2ee-framing-policy', () => import('./legacy-direct-framing-test-policy'))
 
@@ -70,6 +73,7 @@ const originalWebSocket = globalThis.WebSocket
 beforeEach(() => {
   vi.useFakeTimers()
   sockets.length = 0
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies the socket constructor, states, handlers, send and close consumed by the client.
   globalThis.WebSocket = MockWebSocket as unknown as typeof WebSocket
 })
 
@@ -109,6 +113,121 @@ describe('physical session liveness', () => {
     }
   })
 
+  it.each(['app-resume', 'network-change'] as const)(
+    'ends a silent direct socket after one 4s miss on %s',
+    async (reason) => {
+      const client = connect('ws://desktop.invalid', 'token', 'server-key')
+      const socket = sockets[0]
+      if (!socket) {
+        throw new Error('Expected a direct socket')
+      }
+      socket.authenticate()
+
+      try {
+        client.notifyForeground(reason)
+        await vi.advanceTimersByTimeAsync(3_999)
+        expect(client.getState()).toBe('connected')
+        await vi.advanceTimersByTimeAsync(1)
+        expect(socket.close).toHaveBeenCalledOnce()
+        expect(client.getState()).toBe('reconnecting')
+      } finally {
+        client.close()
+      }
+    }
+  )
+
+  it('upgrades a focus probe on resume without letting repeated nudges extend the deadline', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = sockets[0]
+    if (!socket) {
+      throw new Error('Expected a direct socket')
+    }
+    socket.authenticate()
+
+    try {
+      client.notifyForeground('focus')
+      await vi.advanceTimersByTimeAsync(1_000)
+      client.notifyForeground('app-resume')
+      await vi.advanceTimersByTimeAsync(3_000)
+      client.notifyForeground('network-change')
+      expect(client.getState()).toBe('connected')
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(socket.close).toHaveBeenCalledOnce()
+      expect(client.getState()).toBe('reconnecting')
+    } finally {
+      client.close()
+    }
+  })
+
+  it('checks a distinct background return after a recently answered network probe', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = sockets[0]
+    if (!socket) {
+      throw new Error('Expected a direct socket')
+    }
+    socket.authenticate()
+
+    try {
+      client.notifyForeground('network-change')
+      const probe: unknown = JSON.parse(socket.sent.at(-1)?.replace(/^encrypted:/, '') ?? 'null')
+      if (!probe || typeof probe !== 'object' || !('id' in probe)) {
+        throw new Error('Expected the network probe')
+      }
+      socket.onmessage?.({
+        data: `encrypted:${JSON.stringify({ id: probe.id, ok: true, result: {} })}`
+      })
+      await vi.advanceTimersByTimeAsync(1_000)
+      client.notifyForeground('app-resume')
+      await vi.advanceTimersByTimeAsync(4_000)
+      expect(socket.close).toHaveBeenCalledOnce()
+      expect(client.getState()).toBe('reconnecting')
+    } finally {
+      client.close()
+    }
+  })
+
+  it('ends a silent socket after one 4s miss when a caller stopped hearing back', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = sockets[0]!
+    socket.authenticate()
+
+    try {
+      // Just heard from, so not suspect yet.
+      const probes = () => socket.sent.filter((frame) => frame.includes('mobile-liveness-'))
+      client.probeLivenessNow?.()
+      await vi.advanceTimersByTimeAsync(4_000)
+      expect(probes()).toHaveLength(0)
+
+      client.probeLivenessNow?.()
+      expect(probes()).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(3_999)
+      expect(socket.close).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+
+      expect(socket.close).toHaveBeenCalledOnce()
+      expect(client.getState()).toBe('reconnecting')
+    } finally {
+      client.close()
+    }
+  })
+
+  it('turns a tolerant probe already running into a decisive one', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = sockets[0]!
+    socket.authenticate()
+
+    try {
+      client.notifyForeground('focus')
+      await vi.advanceTimersByTimeAsync(4_000)
+      client.probeLivenessNow?.()
+      await vi.advanceTimersByTimeAsync(4_000)
+
+      expect(socket.close).toHaveBeenCalledOnce()
+    } finally {
+      client.close()
+    }
+  })
+
   it('counts authenticated terminal binary output as liveness', async () => {
     const client = connect('ws://desktop.invalid', 'token', 'server-key')
     const socket = sockets[0]!
@@ -123,7 +242,7 @@ describe('physical session liveness', () => {
       })
     })
     await Promise.resolve()
-    await vi.advanceTimersByTimeAsync(8_000)
+    await vi.advanceTimersByTimeAsync(24_000)
 
     expect(socket.close).not.toHaveBeenCalled()
     expect(client.getState()).toBe('connected')
@@ -167,7 +286,7 @@ describe('physical session liveness', () => {
     client.close()
   })
 
-  it('does not let probe replies consume the authentication retry budget', () => {
+  it('does not let probe replies consume the authentication retry budget', async () => {
     const client = connect('ws://desktop.invalid', 'token', 'server-key')
     const socket = sockets[0]!
     socket.authenticate()
@@ -176,15 +295,32 @@ describe('physical session liveness', () => {
       client.notifyForeground()
       const request = socket.sent
         .map((payload) => payload.replace(/^encrypted:/, ''))
-        .map((payload) => JSON.parse(payload) as { id?: string; method?: string })
-        .findLast((payload) => payload.method === 'status.get')
+        .flatMap((payload) => {
+          const value: unknown = JSON.parse(payload)
+          return value &&
+            typeof value === 'object' &&
+            'method' in value &&
+            value.method === 'status.get' &&
+            'id' in value &&
+            typeof value.id === 'string'
+            ? [{ id: value.id }]
+            : []
+        })
+        .at(-1)
+      expect(socket.sent.filter((payload) => payload.includes('status.get'))).toHaveLength(
+        index + 1
+      )
+      if (!request) {
+        throw new Error('Expected a written liveness probe')
+      }
       socket.onmessage?.({
         data: `encrypted:${JSON.stringify({
-          id: request?.id,
+          id: request.id,
           ok: false,
           error: { code: 'unauthorized', message: 'Unauthorized' }
         })}`
       })
+      await vi.advanceTimersByTimeAsync(10_000)
     }
 
     expect(client.getState()).toBe('connected')

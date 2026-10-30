@@ -8,6 +8,7 @@ import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import type { GrokAccountStatus } from '../../../../shared/rate-limit-types'
 import { SearchableSetting } from './SearchableSetting'
+import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
 const GROK_CLI_DOCS_URL = 'https://docs.x.ai/build/overview'
 
 export function GrokAccountsSection(): React.JSX.Element {
@@ -35,7 +36,7 @@ export function GrokAccountsSection(): React.JSX.Element {
     }
   }, [])
 
-  // Why: after a background usage fetch, sign-in state may change — reload status then.
+  // Usage refreshes can change sign-in state; reload status on arrival.
   useEffect(() => {
     void loadStatus()
   }, [loadStatus, grokUsage?.updatedAt])
@@ -52,12 +53,10 @@ export function GrokAccountsSection(): React.JSX.Element {
 
   const signedIn = status?.signedIn === true
   const tokenFresh = status?.tokenFresh === true
-  // Why: unified-billing accounts have no weekly credits; surface their
-  // monthly included usage instead of hiding the usage row entirely.
+  // Unified billing has monthly included usage instead of weekly credits; keep its usage row visible.
   const usageIsWeekly = Boolean(grokUsage?.weekly)
   const usageWindow = grokUsage?.weekly ?? grokUsage?.monthly ?? null
-  // Why: hiding the row entirely left signed-in users with no explanation when
-  // Grok reports no percentage — never let unknown usage read as healthy (#15740).
+  // Explain unreported usage instead of hiding the row or implying healthy allowance (#15740).
   const unavailableReason =
     signedIn && !usageWindow && grokUsage?.status === 'unavailable'
       ? (grokUsage.error ?? null)
@@ -81,6 +80,7 @@ export function GrokAccountsSection(): React.JSX.Element {
         <a
           href={GROK_CLI_DOCS_URL}
           target="_blank"
+          onClick={openAppHttpLinkFromAnchor}
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         >
