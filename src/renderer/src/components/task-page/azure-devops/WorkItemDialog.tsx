@@ -139,7 +139,8 @@ export function AzureDevOpsWorkItemDialog(
         <DialogHeader>
           {detail ? (
             <>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              {/* Why: pr-10 keeps the "Open in Azure DevOps" link clear of the dialog's own close button. */}
+              <div className="flex items-center gap-2 pr-10 text-xs text-muted-foreground">
                 <WorkItemTypeBadge type={detail.workItemType} metadata={metadata} showName />
                 <span className="tabular-nums">{detail.id}</span>
                 <a
