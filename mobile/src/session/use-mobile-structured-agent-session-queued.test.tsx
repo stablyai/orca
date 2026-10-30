@@ -301,9 +301,12 @@ describe('mobile structured queued messages', () => {
         })
         await mountSession(CAPABLE, {
           ...snapshotEvent(),
-          working: true,
-          latestTurn: null,
-          nextQueuedMessageId: null
+          page: {
+            ...snapshotEvent().page,
+            working: true,
+            latestTurn: null,
+            nextQueuedMessageId: null
+          }
         })
         await act(async () => {})
         expect(hook!.isWorking).toBe(true)
@@ -327,9 +330,12 @@ describe('mobile structured queued messages', () => {
         await act(async () =>
           listener?.({
             ...snapshotEvent(),
-            working: false,
-            latestTurn: null,
-            nextQueuedMessageId: null
+            page: {
+              ...snapshotEvent().page,
+              working: false,
+              latestTurn: null,
+              nextQueuedMessageId: null
+            }
           })
         )
         await act(async () => {
@@ -337,7 +343,9 @@ describe('mobile structured queued messages', () => {
             alternate: true
           })
         })
-        expect(requestOf('agentSession.send', 2).params.delivery).toBeUndefined()
+        expect(requestOf('agentSession.send', 2).params.delivery).toBe(
+          behavior === 'queue' ? 'queue-if-active' : undefined
+        )
       }
     )
 
@@ -349,9 +357,12 @@ describe('mobile structured queued messages', () => {
       )
       await mountSession(CAPABLE, {
         ...snapshotEvent(),
-        working: true,
-        latestTurn: null,
-        nextQueuedMessageId: null
+        page: {
+          ...snapshotEvent().page,
+          working: true,
+          latestTurn: null,
+          nextQueuedMessageId: null
+        }
       })
       expect(hook!.sendMenu).toBe('queue')
       await act(async () => {

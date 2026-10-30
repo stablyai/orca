@@ -143,6 +143,7 @@ describe('remote runtime request connection integration', () => {
           }
           return repo
         },
+        getClientSettings: () => ({ nativeChatFollowUpBehavior: 'steer' }),
         onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
           clientEventListeners.add(listener)
           return () => clientEventListeners.delete(listener)
@@ -304,6 +305,7 @@ describe('remote runtime request connection integration', () => {
           subscriptionCleanups.delete(id)
         },
         onClientDisconnected: () => {},
+        getClientSettings: () => ({ nativeChatFollowUpBehavior: 'steer' }),
         onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
           clientEventListeners.add(listener)
           return () => clientEventListeners.delete(listener)
@@ -551,6 +553,7 @@ describe('remote runtime request connection integration', () => {
           }
         },
         onClientDisconnected: () => {},
+        getClientSettings: () => ({ nativeChatFollowUpBehavior: 'steer' }),
         onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
           clientEventListeners.add(listener)
           return () => clientEventListeners.delete(listener)
