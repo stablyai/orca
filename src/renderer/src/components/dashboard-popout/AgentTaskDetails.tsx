@@ -49,7 +49,7 @@ function TaskDetailsForm({
       }
   )
   const [error, setError] = useState('')
-  const canVerify = hasCompletedResponse(card)
+  const canVerify = hasCompletedResponse(card) && card.verdict === undefined
   const fields = [
     { key: 'title', label: translate('dashboardPopout.task.title', 'Task name'), max: 120 },
     {

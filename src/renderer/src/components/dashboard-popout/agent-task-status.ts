@@ -35,7 +35,13 @@ export function taskNoteIdentity(card: DashboardCard): string {
 }
 
 export function taskObservation(card: DashboardCard): string {
-  return JSON.stringify([card.startedAt, card.finishedAt, card.stateChangedAt, card.dotState])
+  return JSON.stringify([
+    card.startedAt,
+    card.finishedAt,
+    card.stateChangedAt,
+    card.dotState,
+    card.verdict ?? null
+  ])
 }
 
 export function currentTaskNote(
@@ -60,6 +66,7 @@ export function taskResultVerified(card: DashboardCard, note?: DashboardTaskNote
   const current = currentTaskNote(card, note)
   return (
     hasCompletedResponse(card) &&
+    card.verdict === undefined &&
     current?.status === 'verified' &&
     current.reviewReference.trim().length > 0
   )
@@ -84,6 +91,15 @@ export function taskBucket(card: DashboardCard, note?: DashboardTaskNote): Dashb
 
 export function taskStatusLabel(card: DashboardCard, note?: DashboardTaskNote): string {
   const bucket = taskBucket(card, note)
+  if (card.verdict === 'failed') {
+    return translate('dashboardPopout.task.failed', 'Agent reported a failure')
+  }
+  if (card.verdict === 'interrupted') {
+    return translate('dashboardPopout.task.interrupted', 'Agent was stopped')
+  }
+  if (card.verdict === 'unconfirmed') {
+    return translate('dashboardPopout.task.unconfirmed', 'Response could not be confirmed')
+  }
   if (taskResultVerified(card, note)) {
     return translate('dashboardPopout.task.verified', 'Result verified')
   }

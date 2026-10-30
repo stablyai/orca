@@ -10,6 +10,7 @@ import {
   taskNoteIdentity,
   taskObservation,
   taskResultVerified,
+  taskStatusLabel,
   type DashboardTaskNote
 } from './agent-task-status'
 
@@ -60,6 +61,15 @@ describe('dashboard task outcomes', () => {
     ).toBe(false)
     expect(taskResultVerified(done, note(done))).toBe(true)
     expect(taskResultVerified(done, { ...note(done), reviewReference: ' ' })).toBe(false)
+  })
+
+  it('does not let a manual review hide a reported failure or unconfirmed outcome', () => {
+    for (const verdict of ['failed', 'interrupted', 'unconfirmed'] as const) {
+      const faulty = { ...done, verdict }
+      expect(currentTaskNote(faulty, note(done))).toBeUndefined()
+      expect(taskResultVerified(faulty, note(faulty))).toBe(false)
+      expect(taskStatusLabel(faulty, note(faulty))).not.toBe('Result verified')
+    }
   })
 
   it('invalidates all old details when the agent starts or completes a new turn', () => {

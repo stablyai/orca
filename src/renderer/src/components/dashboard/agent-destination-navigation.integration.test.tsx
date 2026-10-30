@@ -184,7 +184,9 @@ describe('Dashboard and retained sidebar destination contract', () => {
           />
         </TooltipProvider>
       )
-      fireEvent.click(screen.getByRole('button', { name: /Open this conversation/ }))
+      // Retained fixture responses predate the board's 24-hour window.
+      fireEvent.click(screen.getByRole('button', { name: 'Show older responses (1)' }))
+      fireEvent.click(screen.getByRole('button', { name: /Responded · not reviewed/ }))
       fireEvent.click(screen.getByRole('button', { name: 'Open worktree' }))
 
       const assertDestination = async (): Promise<void> => {

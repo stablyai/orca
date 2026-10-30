@@ -20678,7 +20678,10 @@
       "reviewRecorded": "Review recorded; add any follow-up.",
       "reviewResponse": "Review the response and record the outcome.",
       "awaitResponse": "Await the next response.",
-      "checkConversation": "Check the conversation before assigning more work."
+      "checkConversation": "Check the conversation before assigning more work.",
+      "failed": "Agent reported a failure",
+      "interrupted": "Agent was stopped",
+      "unconfirmed": "Response could not be confirmed"
     }
   },
   "dashboard": {
