@@ -835,9 +835,7 @@
         "jira": {
           "856083302c": "Jira 接続は新規リクエストに置き換えられました。"
         },
-        "linear": {
-          "37d36984d0": "Linear 接続は新規リクエストに置き換えられました。"
-        },
+        "linear": {},
         "orca": {
           "profiles": {
             "612f7f6861": "プロファイルの作成に失敗しました",
@@ -21983,12 +21981,7 @@
       "fetchMore": "さらに読み込む",
       "connectionFailed": "接続に失敗しました",
       "listLabel": "Linear リスト",
-      "projectsLoadFailed": "プロジェクトを読み込めませんでした。",
       "projectNotFound": "プロジェクトが見つかりませんでした。",
-      "projectLoadFailed": "プロジェクトを読み込めませんでした。",
-      "projectIssuesLoadFailed": "プロジェクトの Issue を読み込めませんでした。",
-      "viewsLoadFailed": "ビューを読み込めませんでした。",
-      "viewContentsLoadFailed": "ビューの内容を読み込めませんでした。",
       "issuesLoadFailed": "Linear の Issue を読み込めませんでした。",
       "apiKeyHint": "Orca で使う Linear ワークスペースの個人 API キーを貼り付けてください。すでに接続済みの場合、保存されたキーを置き換えます。",
       "remoteKeyStorage": "このキーは現在のリモートランタイムに保存されます。",

@@ -835,9 +835,7 @@
         "jira": {
           "856083302c": "Jira 连接已被新的请求取代。"
         },
-        "linear": {
-          "37d36984d0": "Linear 连接已被新的请求取代。"
-        },
+        "linear": {},
         "orca": {
           "profiles": {
             "612f7f6861": "创建配置文件失败",
@@ -21984,12 +21982,7 @@
       "fetchMore": "加载更多",
       "connectionFailed": "连接失败",
       "listLabel": "Linear 列表",
-      "projectsLoadFailed": "无法加载项目。",
       "projectNotFound": "未找到项目。",
-      "projectLoadFailed": "无法加载项目。",
-      "projectIssuesLoadFailed": "无法加载项目 issue。",
-      "viewsLoadFailed": "无法加载视图。",
-      "viewContentsLoadFailed": "无法加载视图内容。",
       "issuesLoadFailed": "无法加载 Linear issue。",
       "apiKeyHint": "粘贴你希望 Orca 使用的 Linear 工作区的个人 API 密钥。如果该工作区已连接，Orca 会替换其已存储的密钥。",
       "remoteKeyStorage": "此密钥由当前远程运行时存储。",

@@ -2121,6 +2121,7 @@
       "requestFailed": "Anfrage fehlgeschlagen: {{method}}"
     },
     "header": {
+      "workspaceDetailsHint": "Zeigt den vollständigen Namen des Arbeitsbereichs und wo er sich befindet",
       "backToWorktrees": "Zurück zu den Worktrees",
       "moreActions": "Weitere Sitzungsaktionen",
       "openFileExplorer": "Datei-Explorer öffnen",

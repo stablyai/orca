@@ -2117,6 +2117,7 @@
       "requestFailed": "リクエストに失敗しました: {{method}}"
     },
     "header": {
+      "workspaceDetailsHint": "ワークスペースの完全な名前と場所を表示します",
       "backToWorktrees": "ワークツリー一覧に戻る",
       "moreActions": "セッションのその他の操作",
       "openFileExplorer": "ファイルエクスプローラーを開く",

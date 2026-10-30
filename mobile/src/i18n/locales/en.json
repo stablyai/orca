@@ -1811,6 +1811,7 @@
       "previewLabel": "{{title}} preview"
     },
     "header": {
+      "workspaceDetailsHint": "Shows the full workspace name and where it is",
       "showSidebar": "Show sidebar",
       "backToWorktrees": "Back to worktrees",
       "terminalTitle": "Terminal",

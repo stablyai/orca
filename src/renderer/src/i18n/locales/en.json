@@ -1326,9 +1326,7 @@
         "jira": {
           "856083302c": "Jira connection was superseded by a newer request."
         },
-        "linear": {
-          "37d36984d0": "Linear connection was superseded by a newer request."
-        },
+        "linear": {},
         "orca": {
           "profiles": {
             "612f7f6861": "Failed to create profile",
@@ -22702,12 +22700,7 @@
       "addAccess": "Add Linear access",
       "listLabel": "Linear list",
       "fetchMore": "Fetch more",
-      "projectsLoadFailed": "Failed to load projects.",
       "projectNotFound": "Project was not found.",
-      "projectLoadFailed": "Failed to load project.",
-      "projectIssuesLoadFailed": "Failed to load project issues.",
-      "viewsLoadFailed": "Failed to load views.",
-      "viewContentsLoadFailed": "Failed to load view contents.",
       "issuesLoadFailed": "Failed to load Linear issues.",
       "connectionFailed": "Connection failed",
       "apiKeyHint": "Paste a Personal API key for the Linear workspace you want Orca to use. If that workspace is already connected, Orca replaces its stored key.",

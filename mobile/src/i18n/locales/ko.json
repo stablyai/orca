@@ -2117,6 +2117,7 @@
       "requestFailed": "요청 실패: {{method}}"
     },
     "header": {
+      "workspaceDetailsHint": "워크스페이스의 전체 이름과 위치를 표시합니다",
       "backToWorktrees": "워크트리로 돌아가기",
       "moreActions": "세션 작업 더 보기",
       "openFileExplorer": "파일 탐색기 열기",

@@ -1278,9 +1278,7 @@
         "jira": {
           "856083302c": "Die Jira-Verbindung wurde durch eine neuere Anfrage ersetzt."
         },
-        "linear": {
-          "37d36984d0": "Die Linear-Verbindung wurde durch eine neuere Anfrage ersetzt."
-        },
+        "linear": {},
         "orca": {
           "profiles": {
             "612f7f6861": "Profil konnte nicht erstellt werden",
@@ -22350,10 +22348,7 @@
       "issuesLoadFailed": "Linear-Issues konnten nicht geladen werden.",
       "listLabel": "Linear-Liste",
       "localKeyStorage": "Schlüssel der lokalen Laufzeitumgebung werden auf diesem Gerät gespeichert, nach Möglichkeit im verschlüsselten Speicher von Electron.",
-      "projectIssuesLoadFailed": "Projekt-Issues konnten nicht geladen werden.",
-      "projectLoadFailed": "Projekt konnte nicht geladen werden.",
       "projectNotFound": "Das Projekt wurde nicht gefunden.",
-      "projectsLoadFailed": "Projekte konnten nicht geladen werden.",
       "remoteKeyStorage": "Dieser Schlüssel wird von der aktiven entfernten Laufzeitumgebung gespeichert.",
       "titleUpdateFailed": "Der Titel konnte nicht aktualisiert werden.",
       "truncated": {
@@ -22370,8 +22365,6 @@
       },
       "updateAccess": "Zugriff aktualisieren",
       "updateWorkspaceAccess": "Linear-Zugriff für {{workspace}} aktualisieren",
-      "viewContentsLoadFailed": "Inhalte der Ansicht konnten nicht geladen werden.",
-      "viewsLoadFailed": "Ansichten konnten nicht geladen werden.",
       "workspaceApiKeyHint": "Einen persönlichen API-Schlüssel für {{workspace}} einfügen. Ist dieser Arbeitsbereich bereits verbunden, ersetzt Orca den gespeicherten Schlüssel."
     }
   },

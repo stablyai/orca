@@ -65,6 +65,7 @@ export function mobileWebAppBundleBudgetBytes(manifest) {
 
 // Measure sorted route prefixes with routes.slice(0,n), excluding locale catalogs: distinct importer sets determine chunks, not route count.
 // Re-measure table when routes change; it is envelope’s only input, and pins must fail rather than permit arbitrary ceiling bumps.
+// PROVISIONAL: merged-tree measurement pending; retain the previous sweep only for measurement checkout.
 export const MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP = [
   ['./_layout.tsx', 4],
   ['./h/[hostId]/[...page].tsx', 8],

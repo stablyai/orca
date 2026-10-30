@@ -1,3 +1,4 @@
+import { linearIssueReadFixture } from '@/store/slices/linear-slice-test-harness'
 // @vitest-environment happy-dom
 
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
@@ -24,6 +25,7 @@ const mocks = vi.hoisted(() => ({
     checkLinearConnection: vi.fn(),
     linearStatus: { connected: false, viewer: null, selectedWorkspaceId: 'focused-workspace' },
     linearStatusChecked: true,
+    linearStatusContextKey: 'local#0',
     settings: null,
     preflightStatus: null,
     preflightStatusChecked: true,
@@ -41,7 +43,17 @@ vi.mock('@/lib/gitlab-work-item-source-lookup', () => ({
   lookupGitLabWorkItemByPathForSource: vi.fn()
 }))
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: typeof mocks.state) => unknown) => selector(mocks.state)
+  useAppStore: Object.assign(
+    (selector: (state: unknown) => unknown) =>
+      selector({
+        ...mocks.state,
+        listLinearIssues: (...args: Parameters<typeof mocks.state.listLinearIssues>) =>
+          linearIssueReadFixture(() => mocks.state.listLinearIssues(...args)),
+        searchLinearIssues: (...args: Parameters<typeof mocks.state.searchLinearIssues>) =>
+          linearIssueReadFixture(() => mocks.state.searchLinearIssues(...args))
+      }),
+    { getState: () => mocks.state, subscribe: () => () => {} }
+  )
 }))
 vi.mock('@/lib/local-preflight-context', () => ({
   getLocalPreflightContext: () => ({}),
@@ -230,6 +242,11 @@ describe('smart workspace explicit source connection', () => {
       })
     )
     expect(result.current.linearIssues).toEqual([first, second])
+    expect(result.current.linearLoading).toBe(true)
+    expect(result.current.searchResultRows).toMatchObject([
+      { kind: 'linear', issue: first },
+      { kind: 'linear', issue: second }
+    ])
     act(() => result.current.setLinearWorkspaceId('first'))
     await waitFor(() => expect(result.current.linearIssues).toEqual([first]))
     const replacementSecond = deferred<LinearIssue[]>()
@@ -242,6 +259,8 @@ describe('smart workspace explicit source connection', () => {
     expect(result.current.searchResultRows).toMatchObject([{ kind: 'linear', issue: second }])
     expect(result.current.linearLoading).toBe(false)
     const otherHost: TaskSourceContext = { ...source, hostId: 'runtime:other-host' }
+    const otherHostReplacement = deferred<LinearIssue[]>()
+    mocks.state.searchLinearIssues.mockReturnValue(otherHostReplacement.promise)
     rerender({ context: otherHost, query: 'launch' })
     await waitFor(() =>
       expect(mocks.state.searchLinearIssues).toHaveBeenLastCalledWith('launch', 12, {
@@ -249,6 +268,30 @@ describe('smart workspace explicit source connection', () => {
         workspaceId: 'all'
       })
     )
+    expect(result.current.linearIssues).toEqual([])
+    expect(result.current.searchResultRows).toEqual([])
+    expect(result.current.linearLoading).toBe(true)
+    await act(async () => otherHostReplacement.resolve([first, second]))
+    expect(result.current.linearIssues).toEqual([first, second])
+    expect(result.current.linearLoading).toBe(false)
+    const emptyReplacement = deferred<LinearIssue[]>()
+    mocks.state.searchLinearIssues.mockReturnValueOnce(emptyReplacement.promise)
+    rerender({ context: otherHost, query: 'nothing matches' })
+    await waitFor(() =>
+      expect(mocks.state.searchLinearIssues).toHaveBeenLastCalledWith('nothing matches', 12, {
+        sourceContext: otherHost,
+        workspaceId: 'all'
+      })
+    )
+    expect(result.current.linearLoading).toBe(true)
+    expect(result.current.searchResultRows).toMatchObject([
+      { kind: 'linear', issue: first },
+      { kind: 'linear', issue: second }
+    ])
+    await act(async () => emptyReplacement.resolve([]))
+    expect(result.current.linearIssues).toEqual([])
+    expect(result.current.searchResultRows).toEqual([])
+    expect(result.current.linearLoading).toBe(false)
     unmount()
     const reopened = renderHook(() =>
       useWorkItemSourceFoundation({ ...props(source), defaultLinearWorkspaceId: 'all' })
