@@ -82,7 +82,7 @@ const styles = themedStyleSheet(() => ({
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.input,
+    borderRadius: radii.control,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 2,
     marginTop: spacing.md,

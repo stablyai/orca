@@ -111,7 +111,7 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.bgPanel,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 2,
     gap: spacing.sm,
@@ -129,7 +129,7 @@ const styles = themedStyleSheet(() => ({
   icon: {
     width: 32,
     height: 32,
-    borderRadius: 9,
+    borderRadius: radii.tile,
     backgroundColor: colors.bgRaised,
     alignItems: 'center',
     justifyContent: 'center'

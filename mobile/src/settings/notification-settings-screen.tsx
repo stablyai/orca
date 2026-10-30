@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect } from 'expo-router'
 import type { NotificationSettingsOperations } from './notification-settings-operations'
 import { ChevronLeft } from 'lucide-react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { NotificationPermissionState } from '../notifications/notification-permissions'
@@ -213,7 +213,7 @@ const styles = themedStyleSheet(() => ({
   backButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.sm
@@ -225,7 +225,7 @@ const styles = themedStyleSheet(() => ({
   },
   section: {
     backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   row: {
@@ -254,7 +254,7 @@ const styles = themedStyleSheet(() => ({
     marginBottom: spacing.md,
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm,
-    borderRadius: 8,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   settingsButtonPressed: {

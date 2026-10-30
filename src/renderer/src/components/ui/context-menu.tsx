@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { cva, type VariantProps } from 'class-variance-authority'
 import { ChevronRightIcon, CircleIcon } from 'lucide-react'
 import * as ContextMenuPrimitive from 'radix-ui/context-menu'
 
@@ -50,12 +51,25 @@ function ContextMenuSubTrigger({
   )
 }
 
+const contentAnimationVariants = cva('', {
+  variants: {
+    animation: {
+      default:
+        'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:duration-150 data-[state=open]:zoom-in-[0.98]',
+      none: 'data-[state=closed]:pointer-events-none'
+    }
+  },
+  defaultVariants: { animation: 'default' }
+})
+
 function ContextMenuSubContent({
   className,
+  animation,
   style,
   alignOffset = -5,
   ...props
-}: React.ComponentProps<typeof ContextMenuPrimitive.SubContent>) {
+}: React.ComponentProps<typeof ContextMenuPrimitive.SubContent> &
+  VariantProps<typeof contentAnimationVariants>) {
   return (
     <ContextMenuPrimitive.Portal>
       <ContextMenuPrimitive.SubContent
@@ -63,7 +77,8 @@ function ContextMenuSubContent({
         // Level the first submenu row with its trigger (border + padding).
         alignOffset={alignOffset}
         className={cn(
-          'z-[70] min-w-[11rem] origin-(--radix-context-menu-content-transform-origin) overflow-hidden rounded-[11px] border border-black/10 bg-[rgba(255,255,255,0.78)] p-[4px] text-black dark:text-white shadow-[0_6px_16px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-xl backdrop-saturate-150 supports-[not_(backdrop-filter:blur(1px))]:bg-popover dark:supports-[not_(backdrop-filter:blur(1px))]:bg-popover [@media(prefers-reduced-transparency:reduce)]:bg-popover dark:[@media(prefers-reduced-transparency:reduce)]:bg-popover [@media(prefers-reduced-transparency:reduce)]:backdrop-filter-none dark:border-black/60 dark:bg-popover/75 dark:shadow-[0_16px_34px_rgba(0,0,0,0.40),inset_0_0_0_1px_rgba(255,255,255,0.12)] data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:duration-150 data-[state=open]:zoom-in-[0.98]',
+          'z-[70] min-w-[11rem] origin-(--radix-context-menu-content-transform-origin) overflow-hidden rounded-[11px] border border-black/10 bg-[rgba(255,255,255,0.78)] p-[4px] text-black dark:text-white shadow-[0_6px_16px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-xl backdrop-saturate-150 supports-[not_(backdrop-filter:blur(1px))]:bg-popover dark:supports-[not_(backdrop-filter:blur(1px))]:bg-popover [@media(prefers-reduced-transparency:reduce)]:bg-popover dark:[@media(prefers-reduced-transparency:reduce)]:bg-popover [@media(prefers-reduced-transparency:reduce)]:backdrop-filter-none dark:border-black/60 dark:bg-popover/75 dark:shadow-[0_16px_34px_rgba(0,0,0,0.40),inset_0_0_0_1px_rgba(255,255,255,0.12)]',
+          contentAnimationVariants({ animation }),
           className
         )}
         // Portal submenus outside the scrollable parent to prevent overflow clipping.
@@ -77,15 +92,18 @@ function ContextMenuSubContent({
 
 function ContextMenuContent({
   className,
+  animation,
   style,
   ...props
-}: React.ComponentProps<typeof ContextMenuPrimitive.Content>) {
+}: React.ComponentProps<typeof ContextMenuPrimitive.Content> &
+  VariantProps<typeof contentAnimationVariants>) {
   return (
     <ContextMenuPrimitive.Portal>
       <ContextMenuPrimitive.Content
         data-slot="context-menu-content"
         className={cn(
-          'z-[70] max-h-(--radix-context-menu-content-available-height) min-w-[11rem] origin-(--radix-context-menu-content-transform-origin) overflow-x-hidden overflow-y-auto scrollbar-sleek rounded-[11px] border border-black/10 bg-[rgba(255,255,255,0.78)] p-[4px] text-black dark:text-white shadow-[0_6px_16px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-xl backdrop-saturate-150 supports-[not_(backdrop-filter:blur(1px))]:bg-popover dark:supports-[not_(backdrop-filter:blur(1px))]:bg-popover [@media(prefers-reduced-transparency:reduce)]:bg-popover dark:[@media(prefers-reduced-transparency:reduce)]:bg-popover [@media(prefers-reduced-transparency:reduce)]:backdrop-filter-none dark:border-black/60 dark:bg-popover/75 dark:shadow-[0_16px_34px_rgba(0,0,0,0.40),inset_0_0_0_1px_rgba(255,255,255,0.12)] data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:duration-150 data-[state=open]:zoom-in-[0.98]',
+          'z-[70] max-h-(--radix-context-menu-content-available-height) min-w-[11rem] origin-(--radix-context-menu-content-transform-origin) overflow-x-hidden overflow-y-auto scrollbar-sleek rounded-[11px] border border-black/10 bg-[rgba(255,255,255,0.78)] p-[4px] text-black dark:text-white shadow-[0_6px_16px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-xl backdrop-saturate-150 supports-[not_(backdrop-filter:blur(1px))]:bg-popover dark:supports-[not_(backdrop-filter:blur(1px))]:bg-popover [@media(prefers-reduced-transparency:reduce)]:bg-popover dark:[@media(prefers-reduced-transparency:reduce)]:bg-popover [@media(prefers-reduced-transparency:reduce)]:backdrop-filter-none dark:border-black/60 dark:bg-popover/75 dark:shadow-[0_16px_34px_rgba(0,0,0,0.40),inset_0_0_0_1px_rgba(255,255,255,0.12)]',
+          contentAnimationVariants({ animation }),
           className
         )}
         // Disable native dragging so overlapping titlebar regions cannot intercept menu clicks.
