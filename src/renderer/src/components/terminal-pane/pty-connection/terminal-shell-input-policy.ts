@@ -4,7 +4,6 @@ import type { AgentType } from '../../../../../shared/agent-status-types'
 import { AGENT_INTERRUPT_SETTLE_MS } from '../../../../../shared/agent-interrupt-intent'
 import { resolvePaneAgentOwner } from '../../../../../shared/pane-agent-owner'
 import { titleAfterInferredInterrupt } from '../../../../../shared/terminal-pane-title-reset'
-import { MANUAL_AGENT_COMMAND_MAX_CHARS } from './pty-connect-limits'
 import type { createTerminalOwnerPolicy } from './terminal-owner-policy'
 import type { PtyPaneStartup } from '../pty-connection-types'
 
@@ -17,7 +16,7 @@ export function createTerminalShellInputPolicy(services: {
   readTitle: () => string | null
   showTitle: (title: string) => void
   neutralTerminalTitle: () => string
-  requestKnownWindowsShiftEnterReconfirmation: () => void
+  requestAcceptedInputDiscovery: () => void
 }) {
   const observeAcceptedShellCommandInput = (data: string): void => {
     if (
@@ -26,86 +25,9 @@ export function createTerminalShellInputPolicy(services: {
       data.includes('\x03') ||
       data.includes('\x04')
     ) {
-      // Why: shells without OSC 133 give no command/exit boundary. An accepted
-      // submit or interrupt revokes stale trusted Shift+Enter routing and confirms once.
-      services.requestKnownWindowsShiftEnterReconfirmation()
-    }
-    if (services.owner.commandInferredPaneAgent) {
-      return
-    }
-    // Why: bytes typed inside a live agent TUI are prompt text, not shell
-    // commands, even if they spell another agent binary name.
-    if (services.owner.hasFreshPaneAgentSurface()) {
-      services.owner.resetPendingShellCommandLine()
-      return
-    }
-    if (services.owner.shellCommandInferenceSuspendedUntilCommandEnd) {
-      if (data.includes('\x03') || data.includes('\x15')) {
-        services.owner.shellCommandInferenceSuspendedUntilCommandEnd = false
-        services.owner.resetPendingShellCommandLine()
-      }
-      if (data.includes('\r') || data.includes('\n')) {
-        services.owner.shellCommandInferenceSuspendedUntilCommandEnd = false
-      }
-      return
-    }
-    if (data.length > MANUAL_AGENT_COMMAND_MAX_CHARS) {
-      services.owner.resetPendingShellCommandLine()
-      services.owner.shellCommandInferenceSuspendedUntilCommandEnd =
-        !data.includes('\r') && !data.includes('\n')
-      return
-    }
-    for (let index = 0; index < data.length; index += 1) {
-      const char = data[index]!
-      if (char === '\r' || char === '\n') {
-        services.owner.shellCommandInferenceSuspendedUntilCommandEnd = false
-        services.owner.rememberCommandInferredPaneAgent()
-        if (services.owner.commandInferredPaneAgent) {
-          return
-        }
-        continue
-      }
-      if (char === '\x7f' || char === '\b') {
-        services.owner.deletePendingShellCommandCharacter()
-        continue
-      }
-      if (char === '\x17') {
-        services.owner.deletePendingShellCommandWord()
-        continue
-      }
-      if (char === '\x03' || char === '\x15') {
-        services.owner.resetPendingShellCommandLine()
-        continue
-      }
-      if (char === '\x1b') {
-        const nextIndex = services.owner.consumeShellCommandCsiSequence(data, index)
-        if (nextIndex !== null) {
-          index = nextIndex - 1
-          continue
-        }
-        services.owner.resetPendingShellCommandLine()
-        continue
-      }
-      if (char < ' ') {
-        services.owner.resetPendingShellCommandLine()
-        continue
-      }
-      if (char >= ' ') {
-        services.owner.appendPendingShellCommandInput(char)
-        if (services.owner.shellCommandInferenceSuspendedUntilCommandEnd) {
-          return
-        }
-      }
+      services.requestAcceptedInputDiscovery()
     }
   }
-  /**
-   * Resolves the authoritative owner agent type for this pane, checking tab launch,
-   * pane startup, typed command ownership, and store state configuration.
-   *
-   * Why: launch ownership wins so Pi-compatible live titles/hooks can't repaint an
-   * OMP-owned pane back to Pi; command ownership covers manually typed `omp`
-   * in generic terminals where launch metadata does not exist.
-   */
   const getAuthoritativePaneAgent = (): AgentType | undefined => {
     const state = useAppStore.getState()
     const tab = (state.tabsByWorktree[services.worktreeId] ?? []).find(
@@ -116,28 +38,14 @@ export function createTerminalShellInputPolicy(services: {
         launchAgent: tab?.launchAgent,
         startupLaunchAgent: services.startup?.launchAgent,
         initialStatusAgent: services.startup?.initialAgentStatus?.agent,
-        commandInferredAgent: services.owner.commandInferredPaneAgent,
         hookAgent: state.agentStatusByPaneKey[services.paneKey]?.agentType
       }) ?? undefined
     )
   }
-  // Why: the renderer veto (owner evidence beating a Gemini-looking title) must
-  // use only pane-scoped, CURRENT ownership. getAuthoritativePaneAgent leads
-  // with the tab-shared `tab.launchAgent` and a never-cleared
-  // `paneStartup.launchAgent`, which would let a sibling split pane or a reused
-  // pane keep WebGL for a genuine Gemini terminal (#7428 regression class).
-  // Launch identity is excluded, and the never-clearing startup seed
-  // (`paneStartup.initialAgentStatus`) too; a stale or `done` explicit row is
-  // ignored via the freshness predicate so a reused pane cannot inherit a prior
-  // agent's veto. Only live foreground command inference and a fresh, active
-  // hook row count. A genuine OMP/Pi pane stays protected owner-independently by
-  // the isPiAgentTitle guard inside isGeminiTerminalTitle.
+  // Only a fresh active pane hook may veto the renderer; tab/startup identity can outlive a split's agent.
   const getPaneScopedRendererOwner = (): AgentType | undefined => {
     const entry = useAppStore.getState().agentStatusByPaneKey[services.paneKey]
-    return (
-      services.owner.commandInferredPaneAgent ??
-      (services.owner.isFreshActivePaneAgentEntry(entry) ? entry.agentType : undefined)
-    )
+    return services.owner.isFreshActivePaneAgentEntry(entry) ? entry.agentType : undefined
   }
   const clearInferredInterruptWorkingTitle = (): void => {
     const state = useAppStore.getState()

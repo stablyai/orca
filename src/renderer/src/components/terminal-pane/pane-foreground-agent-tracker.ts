@@ -1,10 +1,5 @@
-import {
-  isAgentForegroundWrapperProcess,
-  recognizeAgentProcess,
-  type RecognizedAgentProcess
-} from '../../../../shared/agent-process-recognition'
+import type { RecognizedAgentProcess } from '../../../../shared/agent-process-recognition'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../shared/agent-title-owner'
-import { isShellProcess } from '../../../../shared/shell-process-detection'
 import type { TerminalAgent } from '../../../../shared/terminal-agent'
 import { createPaneForegroundProcessReader } from './pane-foreground-process-reader'
 import { FOREGROUND_COMMAND_READS } from '../../../../shared/foreground-command-settle'
@@ -21,6 +16,7 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
   hasReadInFlight: () => boolean
   onVisiblePtyBound: (expectsAgent?: boolean) => boolean
   onCommandStarted: (expectedAgent?: TerminalAgent | null) => void
+  onAcceptedInputBoundary: () => void
   onAgentStartupObserved: () => void
   /** True when pane identity must remain visible until an async shell confirmation. */
   onCommandFinished: () => boolean
@@ -115,10 +111,15 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
       hasForegroundAgentEvidence ||
       hasKnownAgentEvidence ||
       hasAgentExpectation
-    const { processName, remoteEvidenceVerdict, expectedIncarnationId, remote } = await readProcess(
-      ptyId,
-      requiresRoutingConfirmation
-    )
+    const {
+      processName,
+      remoteEvidenceVerdict,
+      expectedIncarnationId,
+      remote,
+      recognized,
+      shellProcess,
+      wrapperProcess
+    } = await readProcess(ptyId, requiresRoutingConfirmation)
     // Fence pending inspection so an old PTY cannot publish identity into its replacement.
     if (
       disposed ||
@@ -129,12 +130,6 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
       settleAbortedRead(generation)
       return
     }
-    const recognized =
-      remoteEvidenceVerdict === 'live'
-        ? recognizeAgentProcess(processName)
-        : remoteEvidenceVerdict !== null
-          ? null
-          : recognizeAgentProcess(processName)
     if (recognized) {
       hasForegroundAgentEvidence = true
       hasAgentExpectation = false
@@ -162,8 +157,7 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
     const shouldRetry =
       retryDelay !== undefined &&
       (shouldRetryExpectedIdentity ||
-        (processName !== null &&
-          (reason === 'command' || isAgentForegroundWrapperProcess(processName))))
+        (processName !== null && (reason === 'command' || wrapperProcess)))
     if (shouldRetry) {
       // Bound retries across PowerShell-to-WMIC enrichment, which may initially hide a live agent.
       scheduleRead(retryDelay, retryIndex + 1, reason)
@@ -182,7 +176,7 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
       if (
         (hasForegroundAgentEvidence || hasKnownAgentEvidence) &&
         processName !== null &&
-        isShellProcess(processName)
+        shellProcess
       ) {
         clearAgentEvidence()
         deps.publish({ agent: null, shellForeground: true })
@@ -205,7 +199,7 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
         deps.onCommandFinishedUnavailable?.()
         return
       }
-      if ((hasForegroundAgentEvidence || hasKnownAgentEvidence) && !isShellProcess(processName)) {
+      if ((hasForegroundAgentEvidence || hasKnownAgentEvidence) && !shellProcess) {
         // Settle any visible confirmation this read replaced, or its retained capability has no remaining owner to release it.
         deps.onVisibleForegroundSettled?.('inconclusive')
         return
@@ -250,15 +244,26 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
         releaseRetainedCapability(hadReadBeforeCommandStart)
         return
       }
-      const alreadyHasKnownIdentity = deps.hasKnownAgentIdentity?.() === true
-      hasAgentExpectation = expectedAgent !== null
-      if (alreadyHasKnownIdentity) {
-        hasKnownAgentEvidence = true
-      }
+      hasAgentExpectation = hasAgentExpectation || expectedAgent !== null
+      hasKnownAgentEvidence ||= deps.hasKnownAgentIdentity?.() === true
       // New commands invalidate routing authority; launch/hook expectations and remote markers supply no identity before fresh host evidence.
       if (deps.isRemotePtyId?.(ptyId) !== true) {
         deps.publish({ agent: null, shellForeground: false })
       }
+      scheduleRead(FOREGROUND_COMMAND_READS.settleMs, 0, 'command')
+    },
+    onAcceptedInputBoundary() {
+      if (disposed || !trackablePtyId()) {
+        return
+      }
+      // Join the current bounded iteration; repeated input must not postpone its next read.
+      hasAgentExpectation = true
+      if (hasPendingRead()) {
+        return
+      }
+      startupSampled = false
+      cancelPendingRead()
+      hasKnownAgentEvidence ||= deps.hasKnownAgentIdentity?.() === true
       scheduleRead(FOREGROUND_COMMAND_READS.settleMs, 0, 'command')
     },
     onAgentStartupObserved() {
@@ -279,9 +284,7 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
     },
     onCommandFinished() {
       startupSampled = false
-      if (deps.hasKnownAgentIdentity?.() === true) {
-        hasKnownAgentEvidence = true
-      }
+      hasKnownAgentEvidence ||= deps.hasKnownAgentIdentity?.() === true
       // Any identity read cancelled by rapid 133;C→D needs reconfirmation; trusting D could latch shell state and permanently hide a reattached agent.
       const hadReadBeforeCommandFinish = hasPendingRead()
       cancelPendingRead()

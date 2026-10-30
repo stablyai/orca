@@ -14,8 +14,6 @@ import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../../shared/tui-agent-co
 
 import { createTerminalLaunchAgentPolicy } from './terminal-launch-agent-policy'
 
-import type { TerminalAgent } from '../../../../../shared/terminal-agent'
-
 export function createTerminalForegroundPolicy(services: TerminalForegroundServices) {
   const {
     paneHasLiveHookAgentIcon,
@@ -163,7 +161,6 @@ export function createTerminalForegroundPolicy(services: TerminalForegroundServi
   ): void => {
     const subject = captureTerminalFactSubject(services.paneKey)
     let cleanupLaunch = subject.launch
-    services.clearCommandInferredPaneAgentAfterPtySideEffects()
     visibleForegroundSamplePending = false
     const shouldDeferStatusDrop = paneForegroundAgentTracker.onCommandFinished()
     // Why: the finished command may have moved HEAD or the index (e.g.
@@ -240,9 +237,6 @@ export function createTerminalForegroundPolicy(services: TerminalForegroundServi
     // identity from local process state, with remote/SSH excluded by the tracker.
     visibleForegroundSamplePending = paneForegroundAgentTracker.onVisiblePtyBound(expectsAgent)
   }
-  const startAcceptedInferredCommand = (agent: TerminalAgent): void => {
-    paneForegroundAgentTracker.onCommandStarted(agent)
-  }
   const requestKnownWindowsShiftEnterReconfirmation = () => {
     const foreground = useAppStore.getState().paneForegroundAgentByPaneKey[services.paneKey]
     // Why: daemon reattach/launch metadata is display-only until a live
@@ -280,6 +274,14 @@ export function createTerminalForegroundPolicy(services: TerminalForegroundServi
       })
     }
   }
+  const requestAcceptedInputDiscovery = (): void => {
+    deferredCommandFinishedStatusDrop = null
+    deferredConfirmedShellReconcile = null
+    requestKnownWindowsShiftEnterReconfirmation()
+    visibleForegroundSamplePending = false
+    visibleForegroundSampleSettled = false
+    paneForegroundAgentTracker.onAcceptedInputBoundary()
+  }
   const handleCommandStarted = (): void => {
     // Why: a new command invalidates cleanup waiting on the previous D; only
     // a later confirmed shell boundary may retire this pane's live identity.
@@ -287,9 +289,7 @@ export function createTerminalForegroundPolicy(services: TerminalForegroundServi
     dismissRetainedProgramResult(services.paneKey, useAppStore.getState())
     visibleForegroundSamplePending = false
     visibleForegroundSampleSettled = false
-    // Why: typed commands can be aliases, so they only widen the bounded
-    // process-confirmation window; they never become routing evidence.
-    paneForegroundAgentTracker.onCommandStarted(services.getCommandInferredAgent())
+    paneForegroundAgentTracker.onCommandStarted()
   }
   const commandLifecycle = createTerminalCommandLifecycle({
     onCommandStarted: handleCommandStarted,
@@ -332,7 +332,7 @@ export function createTerminalForegroundPolicy(services: TerminalForegroundServi
     handleCommandFinished,
     finishCapturedCommand,
     sampleVisiblePaneForegroundAgent,
-    startAcceptedInferredCommand,
+    requestAcceptedInputDiscovery,
     requestKnownWindowsShiftEnterReconfirmation,
     handleCommandStarted,
     commandLifecycle

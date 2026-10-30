@@ -79,7 +79,6 @@ export function createTerminalResidentStatusCallbacks(
   const onAgentExited = () => {
     context.presentation?.onAgentExited()
     context.owner.clearSuppressedTitleSideEffects()
-    context.owner.clearCommandInferredPaneAgent()
     context.foreground.requestKnownWindowsShiftEnterReconfirmation()
     services.setCacheTimerStartedAt(binding.paneKey, null)
     context.shellInput.clearTitleOnlyInterruptTimer()

@@ -1,6 +1,5 @@
 import { shouldSuppressTitleCompletionForFreshHook } from './terminal-title-completion-policy'
-import { createShellCommandCsiCursor } from './shell-command-csi-cursor'
-import { detectAgentStatusFromTitle, isClaudeAgent } from '@/lib/agent-status'
+import { isClaudeAgent } from '@/lib/agent-status'
 import { useAppStore } from '@/store'
 import {
   isFreshNonDoneAgentStatus,
@@ -11,19 +10,9 @@ import { registerAgentHookTerminalLifecycleHandler } from '../agent-hook-termina
 import type { AgentCompletionStatusSnapshot } from '../agent-completion-coordinator-types'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-title-owner'
 
-import { recognizeAgentLaunchCommand } from '../../../../../shared/agent-command-line-intent'
-import type { TerminalAgent } from '../../../../../shared/terminal-agent'
-import { isTuiAgent } from '../../../../../shared/tui-agent-config'
-
-import { MANUAL_AGENT_COMMAND_MAX_CHARS } from './pty-connect-limits'
-
 export function createTerminalOwnerPolicy(services: {
   paneKey: string
-  tabId: string
-  worktreeId: string
   setCacheTimerStartedAt: (paneKey: string, startedAt: number | null) => void
-  readTitle: () => string | null
-  startAcceptedInferredCommand: (agent: TerminalAgent) => void
   setFocusReportSuppressionForAgentCompletion: (
     title: string | undefined,
     agent: AgentType | undefined
@@ -31,125 +20,8 @@ export function createTerminalOwnerPolicy(services: {
   queueAgentIdleTerminalModeReset: () => void
   clearFocusReportSuppression: () => void
 }) {
-  // Why: infer pane ownership from a manually typed agent command (e.g. `omp`) by
-  // shadowing the shell's current command line, for generic terminals where no
-  // launch metadata exists. Consumed by getAuthoritativePaneAgent below.
-  let commandInferredPaneAgent: TerminalAgent | null = null
-  let pendingShellCommandLine: string = ''
-  let pendingShellCommandCursor: number = 0
-  let commandInferredPaneAgentGeneration: number = 0
-  let shellCommandInferenceSuspendedUntilCommandEnd: boolean = false
-  const resetPendingShellCommandLine = (): void => {
-    pendingShellCommandLine = ''
-    pendingShellCommandCursor = 0
-  }
-  const rememberCommandInferredPaneAgent = (): void => {
-    const commandLine = pendingShellCommandLine.trim()
-    resetPendingShellCommandLine()
-    const candidateAgent = commandLine
-      ? (recognizeAgentLaunchCommand(commandLine)?.agent ?? null)
-      : null
-    const state = useAppStore.getState()
-    const registeredLaunchAgent =
-      state.agentLaunchConfigByPaneKey[services.paneKey]?.identity.agentType
-    // Why: input inside a live TUI can spell another agent command; process or
-    // pane-scoped launch ownership is stronger than typed shell inference.
-    const hasStrongerAgentOwnership =
-      Boolean(state.paneForegroundAgentByPaneKey[services.paneKey]?.agent) ||
-      isTuiAgent(registeredLaunchAgent)
-    const nextAgent = hasStrongerAgentOwnership ? null : candidateAgent
-    commandInferredPaneAgent = nextAgent
-    commandInferredPaneAgentGeneration += 1
-    if (nextAgent) {
-      services.startAcceptedInferredCommand(nextAgent)
-    }
-  }
-  const clearCommandInferredPaneAgent = (): void => {
-    commandInferredPaneAgent = null
-    resetPendingShellCommandLine()
-    commandInferredPaneAgentGeneration += 1
-  }
-  const clearCommandInferredPaneAgentAfterPtySideEffects = (): void => {
-    const generation = commandInferredPaneAgentGeneration
-    resetPendingShellCommandLine()
-    queueMicrotask(() => {
-      setTimeout(() => {
-        if (commandInferredPaneAgentGeneration === generation) {
-          clearCommandInferredPaneAgent()
-        }
-      }, 0)
-    })
-  }
-  const appendPendingShellCommandInput = (text: string): void => {
-    const available = MANUAL_AGENT_COMMAND_MAX_CHARS - pendingShellCommandLine.length
-    if (available <= 0) {
-      shellCommandInferenceSuspendedUntilCommandEnd = true
-      return
-    }
-    const inserted = text.slice(0, available)
-    pendingShellCommandLine =
-      pendingShellCommandLine.slice(0, pendingShellCommandCursor) +
-      inserted +
-      pendingShellCommandLine.slice(pendingShellCommandCursor)
-    pendingShellCommandCursor += inserted.length
-    if (inserted.length < text.length) {
-      shellCommandInferenceSuspendedUntilCommandEnd = true
-    }
-  }
-  const deletePendingShellCommandWord = (): void => {
-    const beforeCursor = pendingShellCommandLine.slice(0, pendingShellCommandCursor)
-    const afterCursor = pendingShellCommandLine.slice(pendingShellCommandCursor)
-    const nextBeforeCursor = beforeCursor.replace(/[^\S\r\n]*\S+[^\S\r\n]*$/, '')
-    pendingShellCommandLine = nextBeforeCursor + afterCursor
-    pendingShellCommandCursor = nextBeforeCursor.length
-  }
-  const cancelSuspendedShellCommandInference = (): void => {
-    if (!shellCommandInferenceSuspendedUntilCommandEnd) {
-      return
-    }
-    shellCommandInferenceSuspendedUntilCommandEnd = false
-    resetPendingShellCommandLine()
-  }
-  const deletePendingShellCommandCharacter = (): void => {
-    if (pendingShellCommandCursor === 0) {
-      return
-    }
-    pendingShellCommandLine =
-      pendingShellCommandLine.slice(0, pendingShellCommandCursor - 1) +
-      pendingShellCommandLine.slice(pendingShellCommandCursor)
-    pendingShellCommandCursor -= 1
-  }
-  const deletePendingShellCommandCharacterAtCursor = (): void => {
-    if (pendingShellCommandCursor >= pendingShellCommandLine.length) {
-      return
-    }
-    pendingShellCommandLine =
-      pendingShellCommandLine.slice(0, pendingShellCommandCursor) +
-      pendingShellCommandLine.slice(pendingShellCommandCursor + 1)
-  }
-  const movePendingShellCommandCursor = (delta: number): void => {
-    pendingShellCommandCursor = Math.min(
-      pendingShellCommandLine.length,
-      Math.max(0, pendingShellCommandCursor + delta)
-    )
-  }
-  const consumeShellCommandCsiSequence = createShellCommandCsiCursor({
-    move: movePendingShellCommandCursor,
-    set: (position) => {
-      pendingShellCommandCursor = position
-    },
-    length: () => pendingShellCommandLine.length,
-    deleteCharacter: deletePendingShellCommandCharacterAtCursor,
-    reset: resetPendingShellCommandLine
-  })
-  const getLivePaneAgentTitle = (): string | null => {
-    const state = useAppStore.getState()
-    const runtimeTitle = services.readTitle()
-    const tabTitle = (state.tabsByWorktree[services.worktreeId] ?? []).find(
-      (entry) => entry.id === services.tabId
-    )?.title
-    return runtimeTitle ?? tabTitle ?? null
-  }
+  // Compatibility for input cancellation callers; typed command state no longer exists.
+  const cancelSuspendedShellCommandInference = (): void => {}
   // Why: a pane-scoped explicit row only counts as current ownership evidence
   // when it is fresh and not already `done` — a stale or completed row is a
   // leftover from a prior agent that may no longer own the shell.
@@ -222,57 +94,8 @@ export function createTerminalOwnerPolicy(services: {
     services.paneKey,
     handleAgentHookTerminalLifecycle
   )
-  const hasFreshPaneAgentSurface = (): boolean => {
-    const entry = useAppStore.getState().agentStatusByPaneKey[services.paneKey]
-    if (isFreshActivePaneAgentEntry(entry)) {
-      return true
-    }
-    const liveTitle = getLivePaneAgentTitle()
-    return detectAgentStatusFromTitle(liveTitle ?? '') !== null
-  }
   return {
-    get commandInferredPaneAgent() {
-      return commandInferredPaneAgent
-    },
-    set commandInferredPaneAgent(value: TerminalAgent | null) {
-      commandInferredPaneAgent = value
-    },
-    get pendingShellCommandLine() {
-      return pendingShellCommandLine
-    },
-    set pendingShellCommandLine(value: string) {
-      pendingShellCommandLine = value
-    },
-    get pendingShellCommandCursor() {
-      return pendingShellCommandCursor
-    },
-    set pendingShellCommandCursor(value: number) {
-      pendingShellCommandCursor = value
-    },
-    get commandInferredPaneAgentGeneration() {
-      return commandInferredPaneAgentGeneration
-    },
-    set commandInferredPaneAgentGeneration(value: number) {
-      commandInferredPaneAgentGeneration = value
-    },
-    get shellCommandInferenceSuspendedUntilCommandEnd() {
-      return shellCommandInferenceSuspendedUntilCommandEnd
-    },
-    set shellCommandInferenceSuspendedUntilCommandEnd(value: boolean) {
-      shellCommandInferenceSuspendedUntilCommandEnd = value
-    },
-    resetPendingShellCommandLine,
-    rememberCommandInferredPaneAgent,
-    clearCommandInferredPaneAgent,
-    clearCommandInferredPaneAgentAfterPtySideEffects,
-    appendPendingShellCommandInput,
-    deletePendingShellCommandWord,
     cancelSuspendedShellCommandInference,
-    deletePendingShellCommandCharacter,
-    deletePendingShellCommandCharacterAtCursor,
-    movePendingShellCommandCursor,
-    consumeShellCommandCsiSequence,
-    getLivePaneAgentTitle,
     isFreshActivePaneAgentEntry,
     shouldSuppressTitleCompletionForFreshHook,
     get pendingSuppressedTitleSideEffects() {
@@ -285,7 +108,6 @@ export function createTerminalOwnerPolicy(services: {
     applyAgentCompletionSideEffects,
     preserveSuppressedTitleSideEffects,
     handleAgentHookTerminalLifecycle,
-    unregisterAgentHookTerminalLifecycle,
-    hasFreshPaneAgentSurface
+    unregisterAgentHookTerminalLifecycle
   }
 }

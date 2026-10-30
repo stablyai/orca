@@ -14,7 +14,6 @@ export function isSshSessionGoneError(error: unknown): boolean {
   )
 }
 export const PTY_CONNECT_DIAG_LIMIT = 200
-export const MANUAL_AGENT_COMMAND_MAX_CHARS = 4096
 export const STARTUP_DRAFT_PASTE_QUIET_MS = 1500
 // Bound connect grace so wedged RPCs cannot suppress input recovery forever; late reattach does not authorize killing pre-existing sessions.
 export const TRANSPORT_CONNECT_SETTLE_GRACE_MS = 60_000

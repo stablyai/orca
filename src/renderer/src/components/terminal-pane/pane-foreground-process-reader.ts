@@ -1,3 +1,8 @@
+import {
+  isAgentForegroundWrapperProcess,
+  recognizeAgentProcess
+} from '../../../../shared/agent-process-recognition'
+import { isShellProcess } from '../../../../shared/shell-process-detection'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 import { getRemoteRuntimeTerminalHandle } from '@/runtime/runtime-terminal-stream'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
@@ -78,7 +83,13 @@ export function createPaneForegroundProcessReader(deps: {
       processName,
       remoteEvidenceVerdict,
       expectedIncarnationId,
-      remote
+      remote,
+      recognized:
+        remoteEvidenceVerdict !== null && remoteEvidenceVerdict !== 'live'
+          ? null
+          : recognizeAgentProcess(processName),
+      shellProcess: processName !== null && isShellProcess(processName),
+      wrapperProcess: processName !== null && isAgentForegroundWrapperProcess(processName)
     }
   }
 }

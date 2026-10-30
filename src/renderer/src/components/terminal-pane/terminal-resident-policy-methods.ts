@@ -69,14 +69,7 @@ export function createTerminalResidentPolicyMethods(
       if (intent === null) {
         context.acceptedInputGeneration += 1
       }
-      if (
-        data.includes('\r') ||
-        data.includes('\n') ||
-        data.includes('\x03') ||
-        data.includes('\x04')
-      ) {
-        context.foreground.requestKnownWindowsShiftEnterReconfirmation()
-      }
+      context.shellInput.observeAcceptedShellCommandInput(data)
     },
     binding,
     bindPty,

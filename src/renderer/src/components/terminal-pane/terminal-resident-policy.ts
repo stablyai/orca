@@ -159,8 +159,6 @@ export function createTerminalResidentPolicy(
   const owner = createTerminalOwnerPolicy({
     setCacheTimerStartedAt: services.setCacheTimerStartedAt,
     ...binding,
-    readTitle: () => currentTitle,
-    startAcceptedInferredCommand: (agent) => foreground.startAcceptedInferredCommand(agent),
     setFocusReportSuppressionForAgentCompletion,
     queueAgentIdleTerminalModeReset,
     clearFocusReportSuppression: () => presentationPorts.current?.clearFocusReportSuppression()
@@ -172,8 +170,7 @@ export function createTerminalResidentPolicy(
     readTitle: () => currentTitle,
     showTitle,
     neutralTerminalTitle: neutralTitle,
-    requestKnownWindowsShiftEnterReconfirmation: () =>
-      foreground.requestKnownWindowsShiftEnterReconfirmation()
+    requestAcceptedInputDiscovery: () => foreground.requestAcceptedInputDiscovery()
   })
   const input = createTerminalInputPolicy({
     paneKey: binding.paneKey,
@@ -188,10 +185,7 @@ export function createTerminalResidentPolicy(
     getPtyId,
     getExpectedIncarnationId: () => identity?.incarnationId ?? null,
     isVisible: () => presentationPorts.current?.isVisible() === true,
-    getCommandInferredAgent: () => owner.commandInferredPaneAgent,
     observeForegroundAgentProcess: (process) => completion.observeForegroundAgentProcess(process),
-    clearCommandInferredPaneAgentAfterPtySideEffects:
-      owner.clearCommandInferredPaneAgentAfterPtySideEffects,
     flushPendingInterruptInference: input.flushPendingInterruptInference,
     dropCommandFinishedStatusIfSameTurn: input.dropCommandFinishedStatusIfSameTurn,
     onConfirmedShellForeground: titleEffects.onConfirmedShellForeground
