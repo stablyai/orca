@@ -1,4 +1,7 @@
-import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  closeTestJournalHostDatabase
+} from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import '../unused-default-rpc-methods.test-fixture'
 /** Pre-dispatch failures prove no effects and record the real cause; a lost reply after dispatch remains unknown. Explicitly unsupported chat is refused before creation. */
 
@@ -25,7 +28,6 @@ import {
   launchFailureWithoutEffectsCode,
   agentLaunchFailureMessage
 } from './agent-launch-failure-code'
-import { closeTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcDispatchStreamingOptions } from '../dispatcher-stream-options'
 import {
