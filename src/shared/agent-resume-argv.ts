@@ -84,6 +84,10 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id' ? ['kiro-cli', '--resume-id', id] : null
     case 'hermes':
       return providerSession.key === 'session_id' ? ['hermes', '--resume', id] : null
+    // Why: `--resume` alone picks the globally most-recent session; pin the id so the
+    // right pane's session comes back.
+    case 'junie':
+      return providerSession.key === 'session_id' ? ['junie', '--resume', '--session-id', id] : null
   }
 }
 

@@ -16,6 +16,10 @@ describe('agent session resume metadata', () => {
     expect(isResumableTuiAgent('jcode')).toBe(true)
   })
 
+  it('treats junie as a resumable TUI agent', () => {
+    expect(isResumableTuiAgent('junie')).toBe(true)
+  })
+
   it.each([
     ['claude', { session_id: 'claude-session' }, { key: 'session_id', id: 'claude-session' }],
     ['codex', { session_id: 'codex-session' }, { key: 'session_id', id: 'codex-session' }],
@@ -58,6 +62,11 @@ describe('agent session resume metadata', () => {
       'hermes',
       { session_id: '20261020_221305_5e3a1c' },
       { key: 'session_id', id: '20261020_221305_5e3a1c' }
+    ],
+    [
+      'junie',
+      { session_id: 'session-260501-101200-abcd' },
+      { key: 'session_id', id: 'session-260501-101200-abcd' }
     ]
   ] as const)('extracts %s provider session ids', (source, payload, expected) => {
     expect(extractAgentProviderSession(source, payload)).toEqual(expected)
@@ -98,7 +107,13 @@ describe('agent session resume metadata', () => {
     ],
     ['jcode', { key: 'session_id', id: 'session_jc_1' }, ['jcode', '--resume', 'session_jc_1']],
     ['hermes', { key: 'session_id', id: 's1' }, ['hermes', '--resume', 's1']],
-    ['dsh', { key: 'session_id', id: 's1' }, ['dsh-tui', '--backend=dsh', '--resume', 's1']]
+    ['dsh', { key: 'session_id', id: 's1' }, ['dsh-tui', '--backend=dsh', '--resume', 's1']],
+    // Why pinned by id: bare `--resume` reopens the globally most-recent session.
+    [
+      'junie',
+      { key: 'session_id', id: 'session-260501-101200-abcd' },
+      ['junie', '--resume', '--session-id', 'session-260501-101200-abcd']
+    ]
   ] as const)('builds %s resume argv', (agent, providerSession, expected) => {
     expect(getAgentResumeArgv(agent, providerSession)).toEqual(expected)
   })

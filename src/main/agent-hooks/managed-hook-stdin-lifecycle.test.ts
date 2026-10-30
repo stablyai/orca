@@ -76,6 +76,7 @@ import { DevinHookService } from '../devin/hook-service'
 import { DroidHookService } from '../droid/hook-service'
 import { GeminiHookService } from '../gemini/hook-service'
 import { GrokHookService } from '../grok/hook-service'
+import { JunieHookService } from '../junie/hook-service'
 import { KimiHookService } from '../kimi/hook-service'
 
 import { openClaudeHookService } from '../openclaude/hook-service'
@@ -158,6 +159,10 @@ const REMOTE_INSTALLERS = [
   {
     agent: 'kimi',
     install: (sftp: SFTPWrapper) => new KimiHookService().installRemote(sftp, REMOTE_HOME)
+  },
+  {
+    agent: 'junie',
+    install: (sftp: SFTPWrapper) => new JunieHookService().installRemote(sftp, REMOTE_HOME)
   }
 ] as const
 
@@ -173,7 +178,8 @@ const LOCAL_INSTALLERS = [
   { agent: 'droid', install: () => new DroidHookService().install() },
   { agent: 'gemini', install: () => new GeminiHookService().install() },
   { agent: 'grok', install: () => new GrokHookService().install() },
-  { agent: 'kimi', install: () => new KimiHookService().install() }
+  { agent: 'kimi', install: () => new KimiHookService().install() },
+  { agent: 'junie', install: () => new JunieHookService().install() }
 ] as const
 
 type HookRun = {
@@ -314,7 +320,8 @@ describe('Windows managed hook stdin structure', () => {
         (name) => name.endsWith('-hook.cmd') && !name.startsWith('antigravity-')
       )
       mainBatchScripts.push('antigravity-hook.cmd')
-      expect(mainBatchScripts).toHaveLength(12)
+      // One managed `.cmd` per script-writing agent (openclaude reuses Claude's).
+      expect(mainBatchScripts).toHaveLength(13)
       for (const fileName of mainBatchScripts) {
         const script = readFileSync(join(hooksDir, fileName), 'utf8')
         expect(script, `${fileName} port guard`).toContain(
@@ -394,7 +401,7 @@ describe('Windows managed hook stdin structure', () => {
             name.endsWith('-hook.sh') ||
             (name.endsWith('-hook.cmd') && !name.startsWith('antigravity-'))
         )
-        expect(mainScripts).toHaveLength(12)
+        expect(mainScripts).toHaveLength(13)
         for (const fileName of mainScripts) {
           const scriptPath = join(hooksDir, fileName)
           const executable = fileName.endsWith('.cmd')

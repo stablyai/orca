@@ -6,12 +6,12 @@ import { openTranscriptReadStream, wslGatedStat } from '../native-chat/wsl-trans
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { asRecord, extractString } from './session-scanner-values'
 import {
-  KimiSessionIndexCache,
-  KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS,
-  KIMI_WORK_DIR_CACHE_TTL_MS
-} from './session-scanner-kimi-index-cache'
+  SessionIndexCache,
+  SESSION_INDEX_CACHE_MAX_PATHS,
+  SESSION_INDEX_CACHE_TTL_MS
+} from './session-scanner-session-index-cache'
 
-export { KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS, KIMI_WORK_DIR_CACHE_TTL_MS }
+export { SESSION_INDEX_CACHE_MAX_PATHS, SESSION_INDEX_CACHE_TTL_MS }
 
 export function resolveKimiSessionsDir(override?: string): string {
   if (override?.trim()) {
@@ -55,7 +55,7 @@ export function kimiPrimaryAgentWirePath(
 }
 
 // Share parsed indexes by path and file identity; one home can hold many sessions.
-const workDirCacheByIndexPath = new KimiSessionIndexCache()
+const workDirCacheByIndexPath = new SessionIndexCache()
 
 export function clearKimiSessionIndexCache(): void {
   workDirCacheByIndexPath.clear()

@@ -37,6 +37,7 @@ export type TuiAgent =
   | 'copilot'
   | 'grok'
   | 'devin'
+  | 'junie' // JetBrains Junie
   | 'ante' // Ante (Antigma Labs)
   | 'trae'
   | 'muse' // Muse (Meta `muse` CLI)

@@ -22,7 +22,8 @@ export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>>
   dsh: 'deepseek.com',
   omp: 'omp.sh',
   kilo: 'kilo.ai',
-  droid: 'factory.ai'
+  droid: 'factory.ai',
+  junie: 'jetbrains.com'
 }
 
 export const isMobileTuiAgent: (value: unknown) => value is TuiAgent = isTuiAgent

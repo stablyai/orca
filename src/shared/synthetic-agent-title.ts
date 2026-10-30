@@ -20,7 +20,8 @@ export const SYNTHETIC_AGENT_TITLE_AGENTS = [
   'droid',
   'hermes',
   'devin',
-  'zcode'
+  'zcode',
+  'junie'
 ] as const satisfies readonly TuiAgent[]
 
 export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleProfile> = {
@@ -82,6 +83,14 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
     // Captured zcode-composer-ready.txt has no OSC 0/1/2; synthesize every state for tui-idle detection.
     // Its endlessly repainting ASCII banner also prevents quiescence detection.
     synthesizeWorkingTitle: true
+  },
+  junie: {
+    workingLabel: 'Junie',
+    permissionLabel: 'Junie - action required',
+    idleLabel: 'Junie ready',
+    // Why: Junie writes the running task name as its own OSC 0 working title; only
+    // synthesize terminal states so that label survives.
+    synthesizeWorkingTitle: false
   }
 }
 
