@@ -80,7 +80,8 @@ export const FILE_METHODS = [
         params.worktree,
         params.relativePath,
         params.navigation,
-        ...(params.line === undefined ? [] : [{ line: params.line, column: params.column }])
+        params.line === undefined ? undefined : { line: params.line, column: params.column },
+        params.preview
       )
   }),
   defineMethod({

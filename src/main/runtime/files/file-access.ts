@@ -38,7 +38,8 @@ export class RuntimeFileAccess {
     worktreeSelector: string,
     relativePath: string,
     navigation?: RuntimeNavigationTarget,
-    position?: RuntimeFileOpenPosition
+    position?: RuntimeFileOpenPosition,
+    preview = false
   ): Promise<RuntimeFileOpenResult> {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const { worktree } = target
@@ -56,13 +57,20 @@ export class RuntimeFileAccess {
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
     // Reject missing paths/directories before clients treat opened:true as success.
     await this.assertOpenTargetIsFile(filePath, target)
+    // Other kinds have no preview, so they open as source like an unflagged open.
+    const openPreview = preview && (kind === 'markdown' || /\.html?$/i.test(relativePath))
+    const trailing: [RuntimeFileOpenPosition?, boolean?] = openPreview
+      ? [position, true]
+      : position
+        ? [position]
+        : []
     await this.host.openFile(
       worktree.id,
       filePath,
       relativePath,
       runtimeOwnerForTarget(target),
       navigation,
-      ...(position ? [position] : [])
+      ...trailing
     )
     return { worktree: worktree.id, relativePath, kind, opened: true }
   }

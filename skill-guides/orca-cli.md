@@ -242,6 +242,11 @@ Terminal rules:
 - For long output, use cursor reads. After a limited tail preview, page from `oldestCursor`; after a cursor read, continue with `nextCursor` while `limited` is true and `nextCursor !== latestCursor`.
 - `--direction vertical` splits left/right. `--direction horizontal` splits top/bottom.
 
+## Files
+
+- `orca file open <path> --json` opens a file as a tab without moving the user; add `--focus` only when the user asked to see it.
+- To show the user rendered HTML or Markdown rather than its source, add `--preview`. Other file types, previews the workspace cannot show, and older hosts open the source.
+
 <!-- host-capability: artifact-publishing -->
 
 ## Artifacts
