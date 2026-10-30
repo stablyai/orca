@@ -41,6 +41,7 @@ type Request = { method: string; params: unknown }
 
 function hostClient(commit: (method: string, requests: Request[]) => Promise<string> | string) {
   const requests: Request[] = []
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the upload path calls only sendRequest, which this fake supplies.
   const client = {
     sendRequest: vi.fn(async (method: string, params: unknown): Promise<RpcResponse> => {
       requests.push({ method, params })
