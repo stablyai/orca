@@ -431,7 +431,7 @@ describe('moveProjectsToWslHost', () => {
   })
 
   it('is unreachable with the internal WSL hosts gate closed', async () => {
-    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '0')
     const connectHost = vi.spyOn(world.deps, 'connectHost')
     expect(await previewWslMove(world.deps, request)).toEqual({
       outcome: 'refused',

@@ -440,8 +440,8 @@ describe('runPendingWslDriveUncConversions', () => {
 
   // Any platform finishes a journaled conversion once the gate is open; only the gate stops it.
   it.each([
-    ['on Windows', 'win32', ''],
-    ['off Windows', 'linux', '']
+    ['on Windows', 'win32', '0'],
+    ['off Windows', 'linux', '0']
   ])(
     'leaves a journaled conversion untouched with the gate closed, %s',
     (_case, platform, gate) => {
