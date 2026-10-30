@@ -34,6 +34,14 @@ import type { ReplacedTab } from '../../shared/workspace-layout/workspace-layout
 
 type DriverState = RuntimeTerminalDriverState
 
+type TerminalRevealReply = {
+  tabId: string
+  title?: string | null
+  identity?: TerminalRevealIdentity
+  /** Tabs the same window write closed: a replace's replaced tab. */
+  closed?: string[]
+}
+
 export type RuntimeNotifier = {
   automationsChanged?(payload: {
     selector?: { kind: 'self' } | { kind: 'ssh'; targetId: string } | { kind: 'orphan' }
@@ -97,16 +105,7 @@ export type RuntimeNotifier = {
       /** The tab this terminal takes the slot of, closed by the same window write. */
       replaces?: ReplacedTab
     }
-  ):
-    | Promise<{
-        tabId: string
-        title?: string | null
-        identity?: TerminalRevealIdentity
-        /** Tabs the same window write closed: a replace's replaced tab. */
-        closed?: string[]
-      }>
-    | { tabId: string; title?: string | null; identity?: TerminalRevealIdentity }
-    | void
+  ): Promise<TerminalRevealReply> | TerminalRevealReply | void
   /** Shows an agent launch's tab before its process exists; the pane attaches when it does. */
   publishAgentLaunchTab?(
     request: Omit<AgentLaunchTabPublishRequest, 'requestId'>
