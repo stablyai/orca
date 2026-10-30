@@ -240,7 +240,7 @@ it.each(['same', 'replace'] as const)(
     } else {
       expect(transport.getInputSource?.()).toBe(a)
       await expect(accepted).resolves.toBe(true)
-      expect(delivered.join('')).toContain(text + 'accepted-A')
+      expect(delivered.join('')).toContain(`${text}accepted-A`)
       expect(delivered.join('')).not.toContain('blocked-immediate-A')
       expect(a.sendInputImmediate('immediate-A')).toBe(true)
       expect(h.inputFrameTexts().join('')).toContain('immediate-A')
