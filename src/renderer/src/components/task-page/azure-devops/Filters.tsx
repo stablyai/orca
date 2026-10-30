@@ -72,6 +72,28 @@ export function collectAzureDevOpsFilterOptions(
 }
 
 /**
+ * The iterations the given items actually sit in, named from the team's own list where
+ * it has them: a project-wide view shows items under iterations no team configures.
+ */
+function iterationsOfItems(
+  items: AzureDevOpsWorkItem[],
+  iterations: AzureDevOpsIteration[]
+): AzureDevOpsIteration[] {
+  const known = new Map(iterations.map((i) => [i.path, i]))
+  return sortedUnique(items.map((i) => i.iterationPath).filter(Boolean)).map(
+    (path) =>
+      known.get(path) ?? {
+        id: path,
+        name: path.split('\\').pop() ?? path,
+        path,
+        timeFrame: null,
+        startDate: null,
+        finishDate: null
+      }
+  )
+}
+
+/**
  * Options describe what the active view shows: a board keeps the completed cards the
  * backlog drops, so its `Done`/`Closed` states, tags and assignees only exist there,
  * and the Work items view spans the project rather than one team's areas.
@@ -90,7 +112,11 @@ export function collectAzureDevOpsViewFilterOptions(args: {
       : args.view === 'workItems'
         ? args.workItems
         : args.backlogItems
-  return collectAzureDevOpsFilterOptions(items, args.iterations)
+  return collectAzureDevOpsFilterOptions(
+    items,
+    // The team's iterations describe the team's backlog and board; this view is the project's.
+    args.view === 'workItems' ? iterationsOfItems(items, args.iterations) : args.iterations
+  )
 }
 
 function toggle(set: ReadonlySet<string>, value: string): Set<string> {

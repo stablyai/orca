@@ -75,6 +75,62 @@ describe('collectAzureDevOpsViewFilterOptions', () => {
     })
     expect(loading.states).toEqual(['Approved'])
   })
+
+  it('offers the iterations the Work items view loaded, not only the team’s own', () => {
+    const teamIteration = {
+      id: 'i-1',
+      name: 'Sprint 1',
+      path: 'P\\Sprint 1',
+      timeFrame: 'current' as const,
+      startDate: null,
+      finishDate: null
+    }
+    const options = collectAzureDevOpsViewFilterOptions({
+      view: 'workItems',
+      boardItems: null,
+      workItems: [
+        item(1, { iterationPath: 'P\\Sprint 1' }),
+        item(2, { iterationPath: 'P\\Other team\\Sprint 9' }),
+        item(3, { iterationPath: '' })
+      ],
+      backlogItems,
+      iterations: [teamIteration]
+    })
+    // Sorted by path, with the team's own entry keeping its name and time frame.
+    expect(options.iterations).toEqual([
+      {
+        id: 'P\\Other team\\Sprint 9',
+        name: 'Sprint 9',
+        path: 'P\\Other team\\Sprint 9',
+        timeFrame: null,
+        startDate: null,
+        finishDate: null
+      },
+      teamIteration
+    ])
+  })
+
+  it('leaves the backlog and board views on the team’s configured iterations', () => {
+    const iterations = [
+      {
+        id: 'i-1',
+        name: 'Sprint 1',
+        path: 'P\\Sprint 1',
+        timeFrame: null,
+        startDate: null,
+        finishDate: null
+      }
+    ]
+    expect(
+      collectAzureDevOpsViewFilterOptions({
+        view: 'backlog',
+        boardItems: null,
+        workItems: [],
+        backlogItems,
+        iterations
+      }).iterations
+    ).toEqual(iterations)
+  })
 })
 
 describe('collectAzureDevOpsFilterOptions', () => {
