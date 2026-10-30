@@ -1,76 +1,66 @@
 import type Database from '../../sqlite/sync-database'
 import { unrefJournalProjectionTimer } from './journal-saved-state'
 
-export type JournalMaintenanceOwner = {
-  through: number
-  canCompact: () => boolean
-  release: () => void
-}
-const owners = new WeakMap<Database.Database, Map<string, JournalMaintenanceOwner>>()
-export const activeJournalGenerations = new Set<string>()
+export type JournalMaintenanceOwner = { release: () => void }
+const owners = new WeakMap<Database.Database, Set<string>>()
+/** Generations of conversions in flight; the retired-attempt sweep never deletes these. */
+export const activeJournalGenerations = new Set<number>()
 
-/** Rebuild and retention share this lease; user appends never acquire it. */
+/** Conversion, cache rebuild and reclamation share this per-chat lease; user writes never take it. */
 export function ownJournalMaintenance(
   database: Database.Database,
   sessionId: string,
-  epoch: string,
-  through: number
+  epoch: string
 ): JournalMaintenanceOwner | null {
   let held = owners.get(database)
   if (!held) {
-    held = new Map()
+    held = new Set()
     owners.set(database, held)
   }
   const key = `${sessionId}\n${epoch}`
-  if (held.has(key) || (readers.get(database)?.get(key) ?? 0) > 0) {
+  if (held.has(key)) {
     return null
   }
   const registry = held
-  const owner = {
-    through,
-    canCompact: () => (readers.get(database)?.get(key) ?? 0) === 0,
+  registry.add(key)
+  let released = false
+  return {
     release: () => {
-      if (registry.get(key) === owner) {
+      if (!released) {
+        released = true
         registry.delete(key)
       }
     }
   }
-  held.set(key, owner)
-  return owner
 }
 
-const readers = new WeakMap<Database.Database, Map<string, number>>()
+const wakers = new WeakMap<Database.Database, (sessionId: string) => void>()
 
-/** A cacheless read can join a repair; a compactor must recheck canCompact on every page. */
-export function protectJournalOutcomeRead(
-  db: Database.Database,
-  sessionId: string,
-  epoch: string
+/** The database's one maintenance runner serves a chat whose saved state lags its writes. */
+export function registerJournalMaintenance(
+  database: Database.Database,
+  wake: (sessionId: string) => void
 ): () => void {
-  let held = readers.get(db)
-  if (!held) {
-    held = new Map()
-    readers.set(db, held)
-  }
-  const key = `${sessionId}\n${epoch}`
-  const registry = held
-  registry.set(key, (registry.get(key) ?? 0) + 1)
+  wakers.set(database, wake)
   return () => {
-    const count = registry.get(key) ?? 0
-    if (count <= 1) {
-      registry.delete(key)
-    } else {
-      registry.set(key, count - 1)
+    if (wakers.get(database) === wake) {
+      wakers.delete(database)
     }
   }
 }
 
-function createPace(
+export function requestJournalMaintenance(database: Database.Database, sessionId: string): void {
+  wakers.get(database)?.(sessionId)
+}
+
+export type JournalPace = { work: <T>(unit: () => T) => T; rest: () => Promise<void> }
+
+/** A 10% duty cycle for background maintenance only: a chat open or a send is never charged. */
+export function createJournalPace(
   now: () => number,
   delay: (ms: number) => Promise<void>
-): { work: <T>(unit: () => T) => T; rest: () => Promise<void> } {
+): JournalPace {
   let worked = 0
-  let resting: Promise<void> | null = null
   return {
     work<T>(unit: () => T): T {
       const start = now()
@@ -81,31 +71,15 @@ function createPace(
       }
     },
     async rest(): Promise<void> {
-      if (resting) {
-        await resting
-      } else if (worked >= 25) {
-        const ms = worked * 9
+      const ms = worked >= 25 ? worked * 9 : 0
+      if (ms > 0) {
         worked = 0
-        resting = delay(ms).finally(() => {
-          resting = null
-        })
-        await resting
-      } else {
-        await delay(0)
       }
+      await delay(ms)
     }
   }
 }
 
-const processPace = createPace(
-  () => performance.now(),
-  (ms) => new Promise<void>((resolve) => unrefJournalProjectionTimer(setTimeout(resolve, ms)))
-)
-
-/** Conversion, cache rebuild, catch-up and reclamation charge one process-wide duty budget. */
-export function journalCatchUpPace(
-  now?: () => number,
-  delay?: (ms: number) => Promise<void>
-): ReturnType<typeof createPace> {
-  return now && delay ? createPace(now, delay) : processPace
+export function journalMaintenanceDelay(ms: number): Promise<void> {
+  return new Promise<void>((resolve) => unrefJournalProjectionTimer(setTimeout(resolve, ms)))
 }

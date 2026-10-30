@@ -5,9 +5,7 @@ import { readJournalSessionEpoch } from './journal-row-table'
 import { JournalOutcomeConversion } from './journal-outcome-conversion'
 import { JournalOutcomeRebuild } from './journal-outcome-rebuild'
 import { ownJournalMaintenance, type JournalMaintenanceOwner } from './journal-maintenance'
-import { logJournalProjectionFailure } from './journal-saved-state'
 
-export { journalCatchUpPace } from './journal-maintenance'
 export type JournalCatchUpStep = 'advanced' | 'current' | 'parked' | 'stale' | 'retired' | 'failed'
 export type JournalCatchUpPacing = {
   work: <T>(unit: () => T) => T
@@ -22,19 +20,21 @@ export class JournalProjectionCatchUp {
   private verify = false
   private disposed = false
   private coverage = 0
+  /** Why the last page returned 'failed'; the runner parks content failures and backs off others. */
+  failure: unknown = null
 
   constructor(
     private readonly database: JournalHostDatabase,
     readonly sessionId: string,
-    readonly epoch: string,
-    _pageRows?: number
+    readonly epoch: string
   ) {}
 
   get through(): number {
     return this.coverage
   }
 
-  async load(pacing: JournalCatchUpPacing): Promise<'ready' | 'stopped' | 'parked'> {
+  /** 'stopped' means this chat cannot proceed now (owner held, epoch changed, closing). */
+  async load(pacing: JournalCatchUpPacing): Promise<'ready' | 'stopped'> {
     if (this.disposed || this.database.isClosed) {
       return 'stopped'
     }
@@ -45,12 +45,7 @@ export class JournalProjectionCatchUp {
       if (pacing.work(() => sweepJournalOutcomePage(this.database))) {
         return 'ready'
       }
-      this.owner = ownJournalMaintenance(
-        this.database.db,
-        this.sessionId,
-        this.epoch,
-        source?.through ?? 0
-      )
+      this.owner = ownJournalMaintenance(this.database.db, this.sessionId, this.epoch)
       if (!this.owner) {
         return 'stopped'
       }
@@ -67,7 +62,7 @@ export class JournalProjectionCatchUp {
       }
       this.verify = false
     }
-    return this.rebuild ? this.rebuild.load(pacing) : 'ready'
+    return 'ready'
   }
 
   page(): JournalCatchUpStep {
@@ -87,12 +82,7 @@ export class JournalProjectionCatchUp {
       }
       if (step === 'current') {
         this.coverage = this.rebuild?.through ?? 0
-        this.conversion?.close()
-        this.conversion = null
-        this.rebuild?.close()
-        this.rebuild = null
-        this.owner?.release()
-        this.owner = null
+        this.release()
         // A converted generation still needs its disposable cache built.
         return this.coverage === 0 ? 'advanced' : 'current'
       }
@@ -101,7 +91,7 @@ export class JournalProjectionCatchUp {
       }
       return step
     } catch (error) {
-      logJournalProjectionFailure(this.sessionId, error)
+      this.failure = error
       this.close()
       return 'failed'
     }
@@ -109,6 +99,10 @@ export class JournalProjectionCatchUp {
 
   close(): void {
     this.disposed = true
+    this.release()
+  }
+
+  private release(): void {
     this.conversion?.close()
     this.conversion = null
     this.rebuild?.close()

@@ -50,15 +50,6 @@ export class StructuredAgentSessionConversations extends Map<
     super()
   }
 
-  repairOpenJournalProjection = async (sessionId: string): Promise<boolean> => {
-    const session = this.get(sessionId)
-    if (!session) {
-      return false
-    }
-    await session.journal.repairProjection()
-    return true
-  }
-
   loadedSessionIds = (): string[] =>
     [...this].flatMap(([sessionId, { child }]) => (child ? [sessionId] : []))
 

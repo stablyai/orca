@@ -26,16 +26,13 @@ export function installAgentSessionAttachments(deps: {
   stateDirectory: string
   store: Pick<AgentSessionRecordStore, 'getRecord' | 'isSessionUnreadable'>
   journalDatabase: Pick<JournalHostDatabase, 'readOnly' | 'isClosed' | 'db' | 'writeAutocommit'>
-  journalBackfill?: {
-    database: JournalHostDatabase
-    repairOpen: (sessionId: string) => Promise<boolean>
-  }
+  journalBackfill?: { database: JournalHostDatabase }
   logger: StructuredAgentSessionLogger
 }): void {
   stopAgentSessionAttachments()
   if (deps.journalBackfill) {
-    const { database, repairOpen } = deps.journalBackfill
-    journalBackfill = startJournalStateBackfill({ database: () => database, repairOpen }, (error) =>
+    const { database } = deps.journalBackfill
+    journalBackfill = startJournalStateBackfill({ database: () => database }, (error) =>
       deps.logger.warn('chat state backfill failed', { scope: 'journal-state-backfill', error })
     )
   }

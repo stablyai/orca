@@ -1,15 +1,20 @@
-import { randomUUID } from 'node:crypto'
 import type { JournalHostDatabase } from './journal-host-database'
 import { createJournalReducerState, type JournalReducerState } from './journal-reducer'
 import { parseJournalRow, type JournalRow } from './journal-row-schema'
 import { readJournalRowsWithin, readJournalSessionEpoch } from './journal-row-table'
-import { journalOutcomeSource, publishJournalOutcomeSource } from './journal-outcome-format'
+import {
+  journalOutcomeSource,
+  publishJournalOutcomeSource,
+  startJournalOutcomeGeneration
+} from './journal-outcome-format'
 import {
   persistJournalOutcomeRows,
+  readJournalOutcomePage,
   rebuildJournalOutcomePages,
   JOURNAL_OUTCOME_PAGE_BYTES,
   JOURNAL_OUTCOME_PAGE_ROWS
 } from './journal-outcome-table'
+import { journalOutcomeScalars, type JournalOutcome } from './journal-outcome-codec'
 import { activeJournalGenerations } from './journal-maintenance'
 import {
   journalEntryJson,
@@ -21,8 +26,7 @@ import type { JournalCatchUpStep, JournalCatchUpPacing } from './journal-project
 // Intended: private conversion state and paced publication keep bookkeeping off the send path.
 export class JournalOutcomeConversion {
   private state: JournalReducerState
-  private readonly generation = randomUUID()
-  private started = false
+  private generation = 0
   private verified = -1
   private disposed = false
   publicationMs = 0
@@ -39,14 +43,15 @@ export class JournalOutcomeConversion {
     return this.state.lastSequence
   }
 
+  /** The first verify compares the whole staged generation with the complete input fold; later
+   * ones reconcile only the outcomes staged after the verified sequence, so a chat that keeps
+   * writing pays for its tail, never for the whole chat again. */
   async verify(pacing: JournalCatchUpPacing): Promise<boolean> {
-    const pages = rebuildJournalOutcomePages(
-      () => this.database.db,
-      this.sessionId,
-      this.epoch,
-      this.generation,
-      this.through
-    )
+    const target = this.through
+    const pages =
+      this.verified < 0
+        ? fullVerify(this.database, this.state, this.generation)
+        : tailVerify(this.database, this.state, this.generation, this.verified)
     let step = pacing.work(() => pages.next())
     while (!step.done) {
       if (
@@ -58,27 +63,15 @@ export class JournalOutcomeConversion {
       }
       step = pacing.work(() => pages.next())
     }
-    const compare = equalJournalStatePages(this.state, step.value)
-    let match = pacing.work(() => compare.next())
-    while (!match.done) {
-      if (
-        !(await pacing.rest()) ||
-        this.disposed ||
-        readJournalSessionEpoch(this.database.db, this.sessionId) !== this.epoch
-      ) {
-        return false
-      }
-      match = pacing.work(() => compare.next())
-    }
-    if (!match.value) {
+    if (!step.value) {
       throw new Error('converted journal outcomes differ from the complete input fold')
     }
-    this.verified = this.through
+    this.verified = target
     return true
   }
 
   page(): JournalCatchUpStep | 'verify' {
-    const { database, sessionId, epoch, generation } = this
+    const { database, sessionId, epoch } = this
     let publicationStarted: number | undefined
     const result = database.transaction(
       (db) => {
@@ -88,20 +81,15 @@ export class JournalOutcomeConversion {
         if (journalOutcomeSource(db, sessionId, epoch)) {
           return 'retired'
         }
-        if (!this.started) {
-          db.prepare('INSERT INTO journal_outcome_attempts VALUES (?, ?, ?)').run(
-            sessionId,
-            epoch,
-            generation
-          )
-          activeJournalGenerations.add(generation)
-          this.started = true
+        if (this.generation === 0) {
+          this.generation = startJournalOutcomeGeneration(db, sessionId, epoch)
+          activeJournalGenerations.add(this.generation)
         }
         const newest = db
-          .prepare(`SELECT generation FROM journal_outcome_attempts
-        WHERE session_id = ? AND epoch = ? ORDER BY rowid DESC LIMIT 1`)
+          .prepare(`SELECT MAX(generation) AS generation FROM journal_outcome_attempts
+          WHERE session_id = ? AND epoch = ?`)
           .get(sessionId, epoch)
-        if (newest?.generation !== generation) {
+        if (newest?.generation !== this.generation) {
           return 'retired'
         }
         const stored = readJournalRowsWithin(
@@ -132,7 +120,7 @@ export class JournalOutcomeConversion {
           const transition = persistJournalOutcomeRows(
             db,
             this.state,
-            generation,
+            this.generation,
             rows,
             (row) => times.get(row.seq) ?? row.ts,
             true
@@ -147,7 +135,7 @@ export class JournalOutcomeConversion {
         }
         // No tail remains at the verified epoch/attempt/sequence. Publication changes metadata only.
         publicationStarted = performance.now()
-        publishJournalOutcomeSource(db, sessionId, epoch, generation, this.through)
+        publishJournalOutcomeSource(db, sessionId, epoch, this.generation, this.through)
         return 'current'
       },
       false,
@@ -169,6 +157,80 @@ export class JournalOutcomeConversion {
     activeJournalGenerations.delete(this.generation)
     this.state = createJournalReducerState(this.sessionId, this.epoch)
   }
+}
+
+function* fullVerify(
+  database: JournalHostDatabase,
+  state: JournalReducerState,
+  generation: number
+): Generator<void, boolean> {
+  const rebuilt = yield* rebuildJournalOutcomePages(
+    () => database.db,
+    state.sessionId,
+    state.epoch,
+    generation,
+    state.lastSequence
+  )
+  return yield* equalJournalStatePages(state, rebuilt)
+}
+
+/** Compaction left one staged row per key, so rows after `verified` are exactly the tail's keys:
+ * each must hold the private fold's current value (or its absence). */
+function* tailVerify(
+  database: JournalHostDatabase,
+  state: JournalReducerState,
+  generation: number,
+  verified: number
+): Generator<void, boolean> {
+  const scalars = journalOutcomeScalars(state)
+  const collections = new Map<string, Lookup>([['queue.cards', state.queue.cards]])
+  for (const [path, value] of Object.entries(state)) {
+    if (value instanceof Map) {
+      collections.set(path, value)
+    } else if (value instanceof Set) {
+      collections.set(path, { has: (key) => value.has(key), get: (key) => key })
+    }
+  }
+  let after = { seq: verified + 1, field: '', key: '' }
+  for (;;) {
+    const values = readJournalOutcomePage(database.db, generation, after, state.lastSequence)
+    const last = values.at(-1)
+    if (!last) {
+      return true
+    }
+    for (const value of values) {
+      if (!tailValueMatches(value, scalars, collections)) {
+        return false
+      }
+    }
+    after = { seq: last.seq, field: last.field, key: last.key }
+    yield
+  }
+}
+
+type Lookup = { has: (key: unknown) => boolean; get: (key: unknown) => unknown }
+
+function tailValueMatches(
+  value: JournalOutcome,
+  scalars: Record<string, unknown>,
+  collections: Map<string, Lookup>
+): boolean {
+  const key: unknown = JSON.parse(value.key)
+  if (value.field === '$') {
+    return typeof key === 'string' && value.json === JSON.stringify(scalars[key])
+  }
+  const live = collections.get(value.field)
+  if (!live || value.deleted) {
+    return live !== undefined && !live.has(key)
+  }
+  if (!live.has(key)) {
+    return false
+  }
+  const current = live.get(key)
+  return (
+    value.json ===
+    (value.field === 'items' ? JSON.stringify(current) : journalEntryJson(key, current))
+  )
 }
 
 /** Compares insertion order and presence in byte-bounded units, excluding live Stop settlement. */
