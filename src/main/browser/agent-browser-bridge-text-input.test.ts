@@ -196,7 +196,10 @@ describe('AgentBrowserBridge', () => {
     expect(agentBrowserCommandsIn(stdinWrites)).toEqual([])
   })
 
-  it('sets the files on the input a picker button opens in its cross-site frame', async () => {
+  it.each([
+    ['its cross-site frame', 'frame-session'],
+    ['the page its cross-site frame messages', undefined]
+  ])('sets the files on the input a picker button opens in %s', async (_case, chooserSession) => {
     const file = import.meta.filename
     const listeners: Parameters<typeof wc.debugger.on>[1][] = []
     wc.debugger.on.mockImplementation((event, listener) => {
@@ -211,7 +214,7 @@ describe('AgentBrowserBridge', () => {
           : null
       if (declaration === FILE_UPLOAD_TARGET_FUNCTION) {
         // The page reports the picker its click opened on the frame's own session.
-        const event = [{}, 'Page.fileChooserOpened', { backendNodeId: 7 }, 'frame-session']
+        const event = [{}, 'Page.fileChooserOpened', { backendNodeId: 7 }, chooserSession ?? '']
         listeners.forEach((listener) => Reflect.apply(listener, undefined, event))
         return { result: { value: false } }
       }
@@ -234,7 +237,8 @@ describe('AgentBrowserBridge', () => {
     expect(sent).toContainEqual([
       'DOM.setFileInputFiles',
       { files: [file], objectId: 'input-7' },
-      'frame-session'
+      // The page session is Electron's default, so its commands carry no session id.
+      ...(chooserSession ? [chooserSession] : [])
     ])
     expect(sent.at(-1)).toEqual([
       'Page.setInterceptFileChooserDialog',

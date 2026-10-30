@@ -79,7 +79,9 @@ export const SELECT_OPTION_TARGET_FUNCTION = `function () {
 export const FILE_UPLOAD_TARGET_FUNCTION = `function () {
   if (this.matches(':disabled')) return 'it is disabled';
   if (this.localName === 'input' && this.type === 'file') return true;
-  this.click();
+  // SVG controls have no click(); a dispatched click still reaches their handlers.
+  if (typeof this.click === 'function') this.click();
+  else this.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, composed: true }));
   return false;
 }`
 

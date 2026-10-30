@@ -13,11 +13,15 @@ export type FileChooserInterception = {
   release(): Promise<void>
 }
 
-/** Catches file choosers opened from one CDP session's frames instead of showing the OS dialog. */
+/**
+ * Catches file choosers opened from a frame's CDP session, or from the page's (a click activates
+ * ancestor frames too), instead of showing the OS dialog.
+ */
 export async function interceptFileChooser(
   wc: WebContents,
-  sessionId: string | undefined
+  frameSessionId: string | undefined
 ): Promise<FileChooserInterception> {
+  const sessionIds = [...new Set([undefined, frameSessionId])]
   let resolveOpened: (opened: OpenedFileChooser) => void = () => {}
   const opened = new Promise<OpenedFileChooser>((resolve) => {
     resolveOpened = resolve
@@ -28,31 +32,36 @@ export async function interceptFileChooser(
     params: { backendNodeId?: number } | undefined,
     eventSessionId?: string
   ): void => {
-    if (method === 'Page.fileChooserOpened' && (eventSessionId || undefined) === sessionId) {
+    const sessionId = eventSessionId || undefined
+    if (method === 'Page.fileChooserOpened' && sessionIds.includes(sessionId)) {
       resolveOpened({ backendNodeId: params?.backendNodeId ?? null, sessionId })
     }
   }
   wc.debugger.on('message', onMessage)
   const release = async (): Promise<void> => {
     wc.debugger.removeListener('message', onMessage)
-    await sendGuestCdpCommand(
-      wc,
-      'Page.setInterceptFileChooserDialog',
-      { enabled: false },
-      sessionId
-    ).catch(() => {})
+    for (const sessionId of sessionIds) {
+      await sendGuestCdpCommand(
+        wc,
+        'Page.setInterceptFileChooserDialog',
+        { enabled: false },
+        sessionId
+      ).catch(() => {})
+    }
   }
   try {
-    // Cross-site frame sessions report choosers only with Page on; the page session already has it.
-    if (sessionId !== undefined) {
-      await sendGuestCdpCommand(wc, 'Page.enable', {}, sessionId)
+    for (const sessionId of sessionIds) {
+      // Cross-site frame sessions report choosers only with Page on; the page session already has it.
+      if (sessionId !== undefined) {
+        await sendGuestCdpCommand(wc, 'Page.enable', {}, sessionId)
+      }
+      await sendGuestCdpCommand(
+        wc,
+        'Page.setInterceptFileChooserDialog',
+        { enabled: true },
+        sessionId
+      )
     }
-    await sendGuestCdpCommand(
-      wc,
-      'Page.setInterceptFileChooserDialog',
-      { enabled: true },
-      sessionId
-    )
   } catch (error) {
     await release()
     throw error

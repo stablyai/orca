@@ -72,7 +72,6 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
         await assertUploadFilesExist(filePaths)
         const target = await this.captureElement(sessionName, element)
         const { wc, captured } = target
-        // A picker button opens its input in its own frame or a same-process child of it.
         const chooser = await interceptFileChooser(wc, captured.sessionId)
         try {
           const isFileInput = await this.callElementFunction(

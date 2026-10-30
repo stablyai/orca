@@ -150,6 +150,15 @@ describe('element target checks', () => {
     expect(clicks).toEqual(['button'])
   })
 
+  it('clicks an SVG picker control, which has no click() of its own', () => {
+    const svg = mount('<svg role="button"></svg>').querySelector('svg')!
+    let clicked = false
+    document.body.addEventListener('click', () => (clicked = true))
+
+    expect(callOn(svg, FILE_UPLOAD_TARGET_FUNCTION)).toBe(false)
+    expect(clicked).toBe(true)
+  })
+
   it('refuses upload on a disabled control without clicking it', () => {
     const body = mount('<input type="file" disabled><button disabled>Attach</button>')
     const button = body.querySelector('button')!
