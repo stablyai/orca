@@ -184,3 +184,29 @@ it('holds initial capability acquisition, then exposes truthful failure and know
   })
   expect(getStatus).toHaveBeenCalledTimes(1)
 })
+
+it('offers a Desktop-only ZCode chat while Chat UI is off', () => {
+  mocks.publishing = true
+  mocks.catalog.mockReturnValue(
+    ['claude', 'codex', 'opencode', 'zcode'].map((agent) => ({ agent, capabilities: {} }))
+  )
+  useAppStore.setState({
+    settings: {
+      ...getDefaultSettings('/home/me'),
+      experimentalNativeChat: false,
+      disabledTuiAgents: []
+    }
+  })
+  const hook = renderHook(() => useNewTabAgentMenuRows('one', true, { kind: 'local' }))
+  expect(mocks.subscribe).toHaveBeenCalledTimes(1)
+  act(() =>
+    mocks.subscribe.mock.calls[0][3].onEvent({
+      type: 'availability',
+      agents: [{ agent: 'zcode', state: 'available', chatProgram: 'available' }]
+    })
+  )
+  expect(
+    hook.result.current.state === 'settled' &&
+      hook.result.current.rows.find((row) => row.agent === 'zcode')
+  ).toMatchObject({ kind: 'chat', executionHostId: 'local' })
+})

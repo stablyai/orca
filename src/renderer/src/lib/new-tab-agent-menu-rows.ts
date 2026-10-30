@@ -75,21 +75,45 @@ export function buildNewTabAgentMenuRows(args: {
   /** The agents Orca can open as a chat. */
   chatAgents: readonly TuiAgent[]
   hostChatAnswer: (agent: TuiAgent) => HostChatAnswer
+  /** Agents whose chat program exists even when their terminal CLI does not. */
+  chatProgramAvailable?: (agent: TuiAgent) => boolean
 }): NewTabAgentMenuRow[] {
   const { settings } = args
   const defaultAgent = settings?.defaultTuiAgent
   const installed = filterEnabledTuiAgents(args.detectedOnHost ?? [], settings?.disabledTuiAgents)
+  const programAvailable = args.chatProgramAvailable ?? (() => false)
+  const chatProviders = filterEnabledTuiAgents(args.chatAgents, settings?.disabledTuiAgents)
   if (!isNativeChatEnabled(settings) || args.hostChatAnswer('claude') === 'no-chats') {
-    return orderAgents(defaultAgent, installed).map((agent) => ({ kind: 'terminal', agent }))
+    const chatOnly = chatProviders.filter(
+      (agent) =>
+        !installed.includes(agent) &&
+        programAvailable(agent) &&
+        args.hostChatAnswer(agent) === 'yes' &&
+        isNativeChatProviderDisplayedOn(settings, agent, [...installed, agent])
+    )
+    return [
+      ...orderAgents(defaultAgent, chatOnly).map((agent) => ({ kind: 'chat' as const, agent })),
+      ...orderAgents(
+        defaultAgent,
+        installed.filter((agent) => !chatOnly.includes(agent))
+      ).map((agent) => ({ kind: 'terminal' as const, agent }))
+    ]
   }
   const runnable: TuiAgent[] = []
   const unavailable = new Map<TuiAgent, ChatUnavailableReason>()
-  for (const agent of filterEnabledTuiAgents(args.chatAgents, settings?.disabledTuiAgents)) {
-    if (!isNativeChatProviderDisplayedOn(settings, agent, args.detectedOnHost)) {
+  for (const agent of chatProviders) {
+    const programRuns = programAvailable(agent)
+    if (
+      !isNativeChatProviderDisplayedOn(
+        settings,
+        agent,
+        programRuns ? [...installed, agent] : args.detectedOnHost
+      )
+    ) {
       continue
     }
     const answer = args.hostChatAnswer(agent)
-    if (answer === 'yes' && installed.includes(agent)) {
+    if (answer === 'yes' && (installed.includes(agent) || programRuns)) {
       runnable.push(agent)
     } else {
       unavailable.set(

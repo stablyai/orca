@@ -27,7 +27,8 @@ export function resolveAgentMenuSelection(input: {
   if (agent === null) {
     return { ready: true, cli: false }
   }
-  const wantsChat = surface !== 'terminal' && isNativeChatDefaultFor(input.settings, agent)
+  const wantsChat =
+    surface === 'chat' || (surface !== 'terminal' && isNativeChatDefaultFor(input.settings, agent))
   const canBeChat = ['yes', 'not-yet-known', 'not-on-host'].includes(answer)
   const pending =
     (surface !== 'terminal' && input.settings == null) ||

@@ -11,9 +11,10 @@
 
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
-import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
+import type { StructuredAgentCommandSettings } from '../native-chat/structured-agent-command-resolution'
 import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
+import { resolveZcodeCliInvocation, type ZcodeCliInvocation } from './zcode-cli-invocation'
 import { ZCODE_STRUCTURED_AGENT } from './zcode-structured-agent-definition'
 
 export type ZcodeStructuredLaunch = {
@@ -26,8 +27,30 @@ export type ZcodeStructuredLaunch = {
 }
 
 export type ZcodeStructuredLaunchPartDeps = {
-  /** Overridden in tests; production scans the boot-cached PATH and version-manager dirs. */
-  resolveCommand?: (options?: { pathEnv?: string | null; homePath?: string }) => string
+  resolveInvocation?: typeof resolveZcodeCliInvocation
+}
+
+function resolveInvocation(
+  environment: Record<string, string>,
+  commandSettings: StructuredAgentCommandSettings,
+  deps: ZcodeStructuredLaunchPartDeps
+): ZcodeCliInvocation {
+  const pathEnv = environment.PATH ?? environment.Path
+  const homePath = environment.HOME ?? environment.USERPROFILE
+  return (deps.resolveInvocation ?? resolveZcodeCliInvocation)({
+    commandSettings,
+    ...(pathEnv ? { pathEnv } : {}),
+    ...(homePath ? { homePath } : {})
+  })
+}
+
+export function zcodeAppServerArgs(invocation: ZcodeCliInvocation): string[] {
+  return [
+    ...invocation.prefixArgs,
+    'app-server',
+    '--stdio',
+    ...(invocation.source === 'desktop-bundle' ? ['--surface', 'desktop'] : [])
+  ]
 }
 
 /** ZCode's part of a launch: its `ZCODE_HOME`, the app-server binary, and the resume it proved. */
@@ -42,30 +65,34 @@ export function zcodeStructuredLaunchPart(
       throw new Error(`zcode sessions pin ${pinned}, not ${accountHome.variable}`)
     }
     const environment = await basis.environment()
-    const pathEnv = environment.PATH ?? environment.Path ?? null
-    const homePath = environment.HOME ?? environment.USERPROFILE
-    const command = (deps.resolveCommand ?? resolveZcodeCommand)({
-      pathEnv,
-      ...(homePath ? { homePath } : {})
-    })
+    const invocation = resolveInvocation(environment, basis.commandSettings(), deps)
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     return {
       launch: {
-        command,
-        args: ['app-server', '--stdio'],
+        command: invocation.command,
+        args: zcodeAppServerArgs(invocation),
         resumeSessionId: head?.handle.nativeId ?? null,
         workspacePath: await basis.launchDirectory()
       },
-      env: { ...environment, ZCODE_HOME: accountHome.path },
+      env: {
+        ...environment,
+        ZCODE_HOME: accountHome.path,
+        ...invocation.envOverlay
+      },
       inheritedEnvToDelete: STRUCTURED_CHILD_ENV_TO_DELETE
     }
   }
 }
 
-/** PATH first, then the version-manager and system install directories the shared resolver scans. */
-export function resolveZcodeCommand(options?: {
-  pathEnv?: string | null
-  homePath?: string
-}): string {
-  return resolveCliCommand('zcode', options)
+/** The app-server program an installed Desktop app or standalone CLI exposes. */
+export function resolveZcodeChatProgram(
+  environment: Record<string, string>,
+  commandSettings: StructuredAgentCommandSettings,
+  deps: ZcodeStructuredLaunchPartDeps = {}
+): { command: string; env: Record<string, string> } {
+  const invocation = resolveInvocation(environment, commandSettings, deps)
+  return {
+    command: invocation.command,
+    env: { ...environment, ...invocation.envOverlay }
+  }
 }

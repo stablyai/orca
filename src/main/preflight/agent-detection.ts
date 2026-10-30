@@ -42,6 +42,10 @@ import {
 import { invalidateWslGuestEnvironment } from '../wsl/wsl-guest-environment'
 import { prunePreflightWslCache } from '../preflight-wsl-cache'
 import { detectAgentCommandsOnHost } from './agent-command-detection'
+import {
+  resolveZcodeCliInvocation,
+  zcodeDesktopTerminalRefusal
+} from '../zcode/zcode-cli-invocation'
 export { detectAgentCommandsOnHost } from './agent-command-detection'
 
 export type PreflightStatus = {
@@ -140,15 +144,25 @@ async function detectCommandRuntime(
 }
 
 export async function detectInstalledAgents(context?: PreflightRuntimeContext): Promise<string[]> {
+  const wslTarget = getPreflightWslTarget(context)
   const commands = getTuiAgentDetectionProbeCommands(
     KNOWN_TUI_AGENT_DETECTION_COMMANDS,
-    getPreflightWslTarget(context) ? 'wsl' : process.platform
+    wslTarget ? 'wsl' : process.platform
   )
-  return resolveDetectedTuiAgentIds(
+  const detected = resolveDetectedTuiAgentIds(
     KNOWN_TUI_AGENT_DETECTION_COMMANDS,
     await detectAgentCommandsOnHost(commands, { context }),
-    getPreflightWslTarget(context) ? 'wsl' : process.platform
+    wslTarget ? 'wsl' : process.platform
   )
+  if (wslTarget || !detected.includes('zcode')) {
+    return detected
+  }
+  const invocation = resolveZcodeCliInvocation({
+    pathEnv: process.env.PATH ?? process.env.Path
+  })
+  return zcodeDesktopTerminalRefusal(invocation)
+    ? detected.filter((agent) => agent !== 'zcode')
+    : detected
 }
 
 export async function detectInstalledAgentsWithShellPathHydration(

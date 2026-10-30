@@ -26,7 +26,7 @@ export type StructuredAgentSessionTransportOverrides = {
   acpLaunchCommand?: Pick<AcpStructuredLaunchPartDeps, 'resolveCommand' | 'probeVersion'>
   openClaudeConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']
   openZcodeConnection?: ZcodeStructuredSessionAdapterDeps['openConnection']
-  resolveZcodeCommand?: ZcodeStructuredLaunchPartDeps['resolveCommand']
+  resolveZcodeInvocation?: ZcodeStructuredLaunchPartDeps['resolveInvocation']
   /** Scripted app-servers carry fake pids the real start-time read cannot answer for. */
   readProcessStartTime?: CodexStructuredSessionAdapterDeps['readProcessStartTime']
   /** The shipped startup limits unless a test shortens them. */

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as LocalCommandResolver from './command-path-resolver'
+import type * as ZcodeCliInvocation from '../zcode/zcode-cli-invocation'
 
 const {
   handleMock,
@@ -32,6 +33,7 @@ const {
 }))
 
 const runWslProcessMock = vi.hoisted(() => vi.fn())
+const resolveZcodeCliInvocationMock = vi.hoisted(() => vi.fn())
 // Why the runner and not child_process: WSL agent detection goes through
 // runWslProcess now, so a child_process mock never sees it.
 vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
@@ -75,6 +77,11 @@ vi.mock('../pty/windows-environment-path', () => ({
   mergePersistedWindowsPath: mergePersistedWindowsPathMock
 }))
 
+vi.mock('../zcode/zcode-cli-invocation', async (importOriginal) => ({
+  ...(await importOriginal<typeof ZcodeCliInvocation>()),
+  resolveZcodeCliInvocation: resolveZcodeCliInvocationMock
+}))
+
 vi.mock('../bitbucket/client', () => ({
   getBitbucketAuthStatus: getBitbucketAuthStatusMock
 }))
@@ -100,6 +107,7 @@ describe('preflight', () => {
 
   beforeEach(() => {
     runWslProcessMock.mockReset()
+    resolveZcodeCliInvocationMock.mockReset()
     resetPreflightMocks(
       {
         handleMock,
@@ -117,6 +125,31 @@ describe('preflight', () => {
       },
       handlers
     )
+  })
+
+  it('removes a Desktop-only ZCode bundle from terminal agent inventory', async () => {
+    execFileAsyncMock.mockImplementation(async (_command, args) => {
+      if (String(args[0]) !== 'zcode') {
+        throw new Error('not found')
+      }
+      return {
+        environmentResolved: true,
+        code: 0,
+        stdout: '/opt/ZCode/zcode\n',
+        stderr: '',
+        timedOut: false
+      }
+    })
+    resolveZcodeCliInvocationMock.mockReturnValue({
+      command: '/opt/ZCode/zcode',
+      prefixArgs: ['/opt/ZCode/resources/glm/zcode.cjs'],
+      envOverlay: { ELECTRON_RUN_AS_NODE: '1' },
+      identity: 'desktop',
+      source: 'desktop-bundle'
+    })
+
+    await expect(detectInstalledAgents()).resolves.toEqual([])
+    expect(resolveZcodeCliInvocationMock).toHaveBeenCalledOnce()
   })
 
   afterEach(() => {

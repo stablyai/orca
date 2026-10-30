@@ -139,7 +139,7 @@ export function useAgentMenuObservation(
   const state = useAppStore.getState()
   const input = buildAgentLaunchRouteInput(state, { agent: 'claude', workspace })
   const chatEnabled = isNativeChatEnabled(settings)
-  const plain = !chatEnabled || hostChatAnswer(input) === 'no-chats'
+  const plain = hostChatAnswer(input) === 'no-chats'
   const local = facts.executionHostId === LOCAL_EXECUTION_HOST_ID
   // Why a branch: a host publishing availability answers every agent from its one health snapshot;
   // an older host shows this client's facts, and the click's admission states the host's refusal.
@@ -227,7 +227,8 @@ export function useAgentMenuObservation(
     !unresolvedTarget &&
     !inventoryFailed &&
     ((detection.detectedIds === null && detectionTarget !== undefined) ||
-      (!plain &&
+      (chatEnabled &&
+        !plain &&
         (capabilityPending ||
           (!local && localAcquiring) ||
           availability?.state === 'pending' ||
@@ -251,6 +252,9 @@ export function useAgentMenuObservation(
     // An agent the host could not check keeps this client's facts; the click's admission decides.
     return !verdict || verdict === 'refused' ? 'not-on-host' : preliminary
   }
+  const chatProgramAvailable = (agent: TuiAgent): boolean =>
+    availability?.state === 'received' &&
+    availability.byAgent.get(agent)?.chatProgram === 'available'
   const executionHostId = unresolvedTarget
     ? undefined
     : parseExecutionHostId(facts.executionHostId)?.id
@@ -258,7 +262,8 @@ export function useAgentMenuObservation(
     settings,
     detectedOnHost: detection.detectedIds,
     chatAgents,
-    hostChatAnswer: answerFor
+    hostChatAnswer: answerFor,
+    chatProgramAvailable
   }).map((row) => ({ ...row, executionHostId }))
   const model: NewTabAgentMenuModel = loading
     ? {

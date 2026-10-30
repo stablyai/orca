@@ -24,3 +24,31 @@ it.each([true, false])('uses workspace installation for unchosen agents: %s', (i
     })
   ).toEqual(installed ? [{ kind: 'chat', agent: 'opencode' }] : [])
 })
+
+it('offers a Desktop-only chat program when Chat UI is off', () => {
+  expect(
+    buildNewTabAgentMenuRows({
+      ...input,
+      settings: { experimentalNativeChat: false, disabledTuiAgents },
+      detectedOnHost: ['claude'],
+      chatAgents: ['zcode'],
+      hostChatAnswer: (agent) => (agent === 'zcode' ? 'yes' : 'no-chats'),
+      chatProgramAvailable: (agent) => agent === 'zcode'
+    })
+  ).toEqual([
+    { kind: 'chat', agent: 'zcode' },
+    { kind: 'terminal', agent: 'claude' }
+  ])
+})
+
+it('offers a chat when its program exists without its terminal CLI', () => {
+  expect(
+    buildNewTabAgentMenuRows({
+      ...input,
+      detectedOnHost: [],
+      chatAgents: ['zcode'],
+      hostChatAnswer: (agent) => (agent === 'zcode' ? 'yes' : 'no-chats'),
+      chatProgramAvailable: (agent) => agent === 'zcode'
+    })
+  ).toEqual([{ kind: 'chat', agent: 'zcode' }])
+})

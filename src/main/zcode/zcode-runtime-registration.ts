@@ -15,7 +15,10 @@ import type {
 } from '../runtime/structured-agent-runtime-registration-types'
 import { ZcodeStructuredSessionAdapter } from './zcode-structured-session-adapter'
 import { ZCODE_STRUCTURED_AGENT } from './zcode-structured-agent-definition'
-import { zcodeStructuredLaunchPart } from './zcode-structured-launch-resolution'
+import {
+  resolveZcodeChatProgram,
+  zcodeStructuredLaunchPart
+} from './zcode-structured-launch-resolution'
 import { ZCODE_CLI_CONVERSATIONS } from './zcode-cli-conversations'
 
 export const ZCODE_RUNTIME_METADATA: StructuredAgentRuntimeMetadata = {
@@ -26,6 +29,9 @@ export const ZCODE_RUNTIME_METADATA: StructuredAgentRuntimeMetadata = {
     reason: 'zcode app-server lists no models without a session'
   }),
   ...ZCODE_CLI_CONVERSATIONS,
+  chatProgram: {
+    resolve: (env, commandSettings) => resolveZcodeChatProgram(env, commandSettings)
+  },
   supportsLocation: (location) => supportsSupervisedProviderChildLocation(location),
   resolveAccountHome: async ({ launchEnv }) =>
     agentSessionAccountHome(
@@ -42,7 +48,7 @@ export function createZcodeAdapter(
     resolveLaunch: composeStructuredLaunch(
       ZCODE_STRUCTURED_AGENT,
       structuredAgentLaunchSources(context),
-      zcodeStructuredLaunchPart({ resolveCommand: deps.resolveZcodeCommand })
+      zcodeStructuredLaunchPart({ resolveInvocation: deps.resolveZcodeInvocation })
     ),
     ...(deps.openZcodeConnection ? { openConnection: deps.openZcodeConnection } : {}),
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
