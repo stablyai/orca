@@ -1,4 +1,4 @@
-import type { BrowserSnapshotOptions } from '../../../shared/rpc-contract/browser-params'
+import type { BrowserSnapshotOptions } from '../../../shared/rpc-contract/browser-observation-params'
 import type { AgentBrowserBridge } from '../../browser/agent-browser-bridge'
 import { BrowserError } from '../../browser/browser-error'
 import { webContents } from 'electron'

@@ -19,7 +19,7 @@ import {
 } from './external-chromium-tab-projection'
 import { ExternalChromiumTabRegistry } from './external-chromium-tab-registry'
 import { agentBrowserSnapshotArgs } from '../browser/agent-browser-snapshot-arguments'
-import { Snapshot } from '../../shared/rpc-contract/browser-params'
+import { Snapshot } from '../../shared/rpc-contract/browser-observation-params'
 const AgentBrowserSnapshot = z.object({
   refs: z
     .record(z.string(), z.object({ name: z.string().optional(), role: z.string().optional() }))

@@ -1,4 +1,4 @@
-import type { BrowserScreenshotOptions } from '../../shared/rpc-contract/browser-params'
+import type { BrowserScreenshotOptions } from '../../shared/rpc-contract/browser-observation-params'
 import { randomUUID } from 'node:crypto'
 import { readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'

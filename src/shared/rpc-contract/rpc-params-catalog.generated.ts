@@ -96,6 +96,7 @@ import {
 import { CertificateProceed } from './browser-core-params'
 import { MouseClick } from './browser-extras-params'
 import { BrowserIdentitySet, ProfileCreate } from './browser-identity-params'
+import { Screenshot, Snapshot } from './browser-observation-params'
 import {
   Check,
   ClipboardWrite,
@@ -126,7 +127,6 @@ import {
   ProfileDelete,
   ProfileImportFromBrowser,
   Screencast,
-  Screenshot,
   Scroll,
   Select,
   SelectorPath,
@@ -135,7 +135,6 @@ import {
   SetHeaders,
   SetMedia,
   SetOffline,
-  Snapshot,
   StorageKey,
   StorageKeyValue,
   TabClose,

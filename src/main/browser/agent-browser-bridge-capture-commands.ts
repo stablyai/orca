@@ -1,4 +1,4 @@
-import type { BrowserScreenshotOptions } from '../../shared/rpc-contract/browser-params'
+import type { BrowserScreenshotOptions } from '../../shared/rpc-contract/browser-observation-params'
 import { z } from 'zod'
 import { app, nativeImage, type WebContents } from 'electron'
 import type { BrowserScreenshotResult, BrowserEvalResult } from '../../shared/runtime-types'

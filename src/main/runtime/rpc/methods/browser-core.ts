@@ -14,11 +14,9 @@ import {
   Is,
   Keypress,
   LimitParam,
-  Screenshot,
   Scroll,
   Select,
   SelectorPath,
-  Snapshot,
   TabCurrent,
   TabClose,
   TabList,
@@ -27,6 +25,7 @@ import {
   Upload,
   Wait
 } from '../../../../shared/rpc-contract/browser-params'
+import { Screenshot, Snapshot } from '../../../../shared/rpc-contract/browser-observation-params'
 import {
   BrowserOpenUrlParams,
   BrowserTabCreateParams
