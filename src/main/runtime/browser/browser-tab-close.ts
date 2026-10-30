@@ -43,40 +43,40 @@ export class RuntimeBrowserTabClose {
     if (clientPage) {
       return retireRuntimeBrowserClientPage(this.host, clientPage)
     }
-    const namedPageId =
-      typeof params.page === 'string' && params.page.length > 0 ? params.page : null
-    const explicitPage = namedPageId !== null
+    const pageParam = typeof params.page === 'string' && params.page.length > 0 ? params.page : null
     const bridge = this.host.getAgentBrowserBridge()
     if (!bridge) {
       // Even without a live browser session, a retained row may still need retirement.
       if (
-        namedPageId &&
+        pageParam &&
         params.worktree &&
         this.targets.retireGhostBrowserSessionRow(
           (await this.host.resolveWorkspaceSelector(params.worktree)).id,
-          namedPageId
+          pageParam
         )
       ) {
         return { closed: true }
       }
       throw new BrowserError('browser_no_tab', 'No browser session is active')
     }
-    const worktreeId = explicitPage
-      ? params.worktree
-        ? (await this.host.resolveWorkspaceSelector(params.worktree)).id
-        : undefined
-      : await this.targets.resolveBrowserWorktreeId(params.worktree)
+    // An index names a listed row, which then closes exactly like `--page`.
+    const indexed =
+      pageParam === null && params.index !== undefined
+        ? await this.listedTabAt(params.index, params.worktree)
+        : null
+    const namedPageId = pageParam ?? indexed?.browserPageId ?? null
+    const explicitPage = namedPageId !== null
+    const worktreeId = indexed
+      ? (indexed.worktreeId ?? undefined)
+      : explicitPage
+        ? params.worktree
+          ? (await this.host.resolveWorkspaceSelector(params.worktree)).id
+          : undefined
+        : await this.targets.resolveBrowserWorktreeId(params.worktree)
 
     let tabId: string | null = null
     if (namedPageId !== null) {
       tabId = namedPageId
-    } else if (params.index !== undefined) {
-      const tabs = bridge.getRegisteredTabs(worktreeId)
-      const entries = [...tabs.entries()]
-      if (params.index < 0 || params.index >= entries.length) {
-        throw new Error(`Tab index ${params.index} out of range (0-${entries.length - 1})`)
-      }
-      tabId = entries[params.index][0]
     } else {
       // Unmounted tabs need renderer fallback when the bridge has not registered them.
       const tabs = bridge.getRegisteredTabs(worktreeId)
@@ -139,5 +139,17 @@ export class RuntimeBrowserTabClose {
     await closeBrowserTabInRenderer(win, tabId, worktreeId)
 
     return { closed: true }
+  }
+
+  // Why the listing: indexes must match `tab list`, which includes restored tabs not yet loaded.
+  private async listedTabAt(index: number, worktree: string | undefined) {
+    const tabs = (await this.queries.browserTabList({ worktree })).tabs
+    if (!Number.isInteger(index) || index < 0 || index >= tabs.length) {
+      throw new BrowserError(
+        'browser_tab_not_found',
+        `Tab index ${index} out of range (0-${tabs.length - 1})`
+      )
+    }
+    return tabs[index]
   }
 }

@@ -890,6 +890,7 @@ const ORCA_CLI_BROWSER_REFERENCE_MARKDOWN = [
   "- After `ORCA tab switch`, pass the new page's `browserPageId`.",
   "- A popup window a page opens (sign-in, payment) is listed in `ORCA tab list --json` as a `popup-<n>` page with `openerBrowserPageId`. If a click seems to do nothing, check `tab list`, then drive the popup with `--page popup-<n>`. When it closes, continue on the opener page.",
   "- Browser commands default to the current worktree. `--page` reaches the page in any worktree unless you also pass `--worktree <selector>`. Use `--worktree all` only intentionally.",
+  "- `tab list` shows every tab in the tab bar. After a restart, tabs the user has not opened report `loaded: false`; `tab switch` or any `--page` command loads one in the background without changing the user's visible tab.",
   "- Use typed tab commands (`ORCA tab list/create/close/switch`), not `ORCA exec --command \"tab ...\"`, so Orca keeps UI state synchronized.",
   "- Use `ORCA set device` or `ORCA viewport --mobile`, not `ORCA exec --command \"set device ...\"`, so the page also gets touch input and `pointer: coarse`. Each page load (reload, `goto`, link click) resets it, so run it again after navigating.",
   "- Prefer `wait --text`, `--url`, `--selector`, or `--load` after async page changes instead of bare timeouts. Avoid `--load networkidle` except on pages known to go quiet: polling, websockets and streaming keep it from ever resolving.",
