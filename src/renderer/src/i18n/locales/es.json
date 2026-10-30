@@ -4871,6 +4871,7 @@
           "recentSessions": "Sesiones recientes",
           "recentSessionsDescription": "Sesiones locales de omp más recientes en este ámbito.",
           "sessionCount_one": "{{count}} sesión",
+          "sessionCount_many": "{{count}} sesiones",
           "sessionCount_other": "{{count}} sesiones",
           "tokenAccountingNote": "Los tokens de razonamiento se muestran por separado y nunca cuentan para los totales de salida. Las escrituras de caché se registran aparte de las lecturas de caché.",
           "dailyScopeCaption": "Los totales diarios abarcan todo el uso local de omp; el ámbito se aplica a sesiones, desgloses y sesiones recientes."
