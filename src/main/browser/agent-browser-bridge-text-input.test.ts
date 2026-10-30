@@ -240,7 +240,8 @@ describe('AgentBrowserBridge', () => {
       // The page session is Electron's default, so its commands carry no session id.
       ...(chooserSession ? [chooserSession] : [])
     ])
-    expect(sent.at(-1)).toEqual([
+    expect(sent).toContainEqual(['Page.setInterceptFileChooserDialog', { enabled: false }])
+    expect(sent).toContainEqual([
       'Page.setInterceptFileChooserDialog',
       { enabled: false },
       'frame-session'
