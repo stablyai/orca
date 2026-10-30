@@ -18,6 +18,7 @@ export class QueuedMessageEditLeases {
   private timerAt: number | null = null
   private wake: (() => void) | undefined
   private disposed = false
+  private revision = 0
 
   constructor(
     private readonly rows: () => readonly QueuedMessageRow[],
@@ -27,6 +28,13 @@ export class QueuedMessageEditLeases {
   /** Wake the queue even when no journal activity follows expiry. */
   onDeadline(wake: () => void): void {
     this.wake = wake
+  }
+
+  version(): number {
+    if (this.timerAt !== null && this.timerAt <= this.now()) {
+      this.heldIds()
+    }
+    return this.revision
   }
 
   /** Transaction callers supply their own card snapshot. */
@@ -42,6 +50,7 @@ export class QueuedMessageEditLeases {
       lapsed ||= lease.until <= now
       if (lease.until <= now || !row || !leaseMatchesRow(lease, row)) {
         this.leases.delete(key)
+        this.revision++
       }
     }
     this.schedule()
@@ -79,6 +88,7 @@ export class QueuedMessageEditLeases {
       until: this.now() + QUEUED_MESSAGE_EDIT_LEASE_MS
     }
     this.leases.set(leaseKey(key), lease)
+    this.revision++
     this.schedule()
     return this.answer(lease)
   }
@@ -99,6 +109,7 @@ export class QueuedMessageEditLeases {
   release(key: EditLeaseKey, messageId: string): void {
     if (this.leases.get(leaseKey(key))?.messageId === messageId) {
       this.leases.delete(leaseKey(key))
+      this.revision++
       this.schedule()
     }
   }
@@ -107,6 +118,7 @@ export class QueuedMessageEditLeases {
     for (const [key, lease] of this.leases) {
       if (lease.messageId === messageId) {
         this.leases.delete(key)
+        this.revision++
       }
     }
     this.schedule()
@@ -115,6 +127,7 @@ export class QueuedMessageEditLeases {
   dispose(): void {
     this.disposed = true
     this.leases.clear()
+    this.revision++
     this.schedule()
   }
 
@@ -147,6 +160,7 @@ export class QueuedMessageEditLeases {
         for (const [key, lease] of this.leases) {
           if (lease.until <= now) {
             this.leases.delete(key)
+            this.revision++
           }
         }
         this.schedule()

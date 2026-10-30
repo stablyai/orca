@@ -139,6 +139,10 @@ export class AgentSessionJournal {
     return this.identity.agent
   }
 
+  get inputOrder() {
+    return this.state.inputOrder
+  }
+
   /** Only rows from this handle's opening epoch can predate the open. */
   wroteBeforeOpen(sequence: number | undefined): boolean {
     return (

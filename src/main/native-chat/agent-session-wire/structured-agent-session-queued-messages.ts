@@ -28,6 +28,10 @@ import { agentSessionAttachmentExpiredRefusal } from './structured-agent-session
 import { isAgentSessionAttachmentExpiredError } from '../agent-session-attachments/agent-session-attachment-claims'
 import { captureStructuredExecutionOptions } from './structured-agent-session-execution-options'
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
+import {
+  selectStructuredAgentSessionInput,
+  structuredInputExecutionWorking
+} from './structured-agent-session-input-selection'
 
 /** Preserve order and holds; only automatic drain stops at edit leases, which still count as admission backlog. */
 function oldestActionableQueuedMessage(
@@ -66,12 +70,20 @@ export function structuredQueueHold(input: StructuredQueueGateInput): Structured
 export function nextStructuredQueuedMessage(
   input: StructuredQueueGateInput & { journal: AgentSessionJournal }
 ): QueuedMessageRow | null {
-  const next = oldestActionableQueuedMessage(input.journal, true)
-  // Check cheap working state before the prompt scan on every streamed frame.
-  if (next === null || input.work.working()) {
+  if (structuredInputExecutionWorking(input.journal, input.work)) {
     return null
   }
-  return structuredQueueHold(input) === null ? next : null
+  const selected = selectStructuredAgentSessionInput(input.journal)
+  const next = selected.kind === 'card' ? selected.card : null
+  // Check cheap working state before the prompt scan on every streamed frame.
+  if (next === null) {
+    return null
+  }
+  return !input.record ||
+    structuredAgentSessionSendBlock(input.record) ||
+    input.work.hasActionablePrompt()
+    ? null
+    : next
 }
 
 /** Queue behind work/actionable backlog; held or returned cards cannot trap a fresh send that lifts their pause. */
@@ -215,9 +227,11 @@ export class StructuredAgentSessionQueuedMessageDrain {
     }
     // Skip serialized work during token streams; settlement/generation-end schedules a fresh gate check.
     try {
+      const work = this.deps.currentWork(sessionId)
       if (
-        oldestActionableQueuedMessage(journal, true) === null ||
-        this.deps.currentWork(sessionId)?.working() !== false
+        !work ||
+        nextStructuredQueuedMessage({ journal, record: this.deps.getRecord(sessionId), work }) ===
+          null
       ) {
         return
       }

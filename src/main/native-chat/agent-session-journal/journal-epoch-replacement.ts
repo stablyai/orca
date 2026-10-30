@@ -52,6 +52,8 @@ import { assertJournalFence } from './journal-write-guards'
 import type { JournalOperationReceipt } from './journal-row-writer'
 
 import type { JournalAttachmentClaim } from './journal-submission-hook'
+import { queuedChangeOf } from './journal-queue-retention'
+import { journalInputAcceptance } from './journal-input-provenance'
 
 export type JournalReplacementItem = AgentJournalProducerLinkage & {
   echoOf?: JournalItemEcho['echoOf']
@@ -85,7 +87,9 @@ export function replaceJournalEpoch(input: {
   onPublished: (loaded: JournalLoad) => void
 }): void {
   const epoch = input.mintEpoch()
-  const state = createJournalReducerState(input.identity.sessionId, epoch)
+  const state = createJournalReducerState(input.identity.sessionId, epoch, (id) =>
+    journalInputAcceptance(input.database.db, input.identity.sessionId, id)
+  )
   const providerHandle = agentSessionJournalProviderHandle(input.identity)
   const previousOrigin = input.previous?.historyOrigin
   const restate =
@@ -130,24 +134,34 @@ export function replaceJournalEpoch(input: {
     applyJournalRow(state, row)
     rows.push(row)
   }
-  for (const { messageId, change } of input.queue.cards) {
-    if (change) {
-      const row = buildJournalQueueRow(
-        state,
-        messageId,
-        change,
-        state.lastSequence + 1,
-        input.now()
-      )
-      applyJournalRow(state, row)
-      rows.push(row)
-    }
-  }
   // Accepted-but-unhanded messages must survive provider history replacement.
   const queued = [...(input.previous?.submissions.values() ?? [])]
     .filter(isQueuedAgentJournalSubmission)
     .sort((a, b) => (a.acceptedSequence ?? 0) - (b.acceptedSequence ?? 0))
+  const staged = new Set<string>()
+  const appendQueue = (messageId: string, change: Parameters<typeof buildJournalQueueRow>[2]) => {
+    const row = buildJournalQueueRow(state, messageId, change, state.lastSequence + 1, input.now())
+    applyJournalRow(state, row)
+    rows.push(row)
+  }
+  const rebuilt = new Map<string, number>()
   for (const submission of queued) {
+    // Retain the actual pre-admission queue facts until their direct input's obligation dies.
+    for (const messageId of staged) {
+      appendQueue(messageId, { op: 'withdrawn' })
+    }
+    staged.clear()
+    const prefix = input.previous?.inputOrder.prefix(submission.clientMessageId) ?? []
+    const linked = submission.queuedMessageId
+      ? input.previous?.queue.cards.get(submission.queuedMessageId)
+      : undefined
+    for (const card of linked ? [...prefix, linked] : prefix) {
+      appendQueue(card.messageId, {
+        ...queuedChangeOf(card),
+        queuedAt: { epoch, sequence: state.lastSequence }
+      })
+      staged.add(card.messageId)
+    }
     const body = input.previous?.items.get(
       agentJournalSubmissionKey(submission.clientMessageId)
     )?.body
@@ -165,6 +179,56 @@ export function replaceJournalEpoch(input: {
     })
     applyJournalRow(state, row)
     rows.push(row)
+    rebuilt.set(submission.clientMessageId, row.seq)
+  }
+  for (const messageId of staged) {
+    appendQueue(messageId, { op: 'withdrawn' })
+  }
+  for (const { messageId, change } of input.queue.cards) {
+    if (!change) {
+      continue
+    }
+    const prior = input.previous?.queue.cards.get(messageId)
+    let queuedAt = change.op === 'queued' ? change.queuedAt : null
+    if (queuedAt && input.previous) {
+      const boundary = queuedAt
+      const comparable = queued.flatMap((submission) => {
+        if (boundary.epoch === input.previous?.epoch && submission.acceptedSequence !== undefined) {
+          return [{ submission, sequence: submission.acceptedSequence }]
+        }
+        const original = journalInputAcceptance(
+          input.database.db,
+          input.identity.sessionId,
+          submission.clientMessageId
+        )
+        if (original?.epoch !== boundary.epoch) {
+          return []
+        }
+        return [{ submission, sequence: original.sequence }]
+      })
+      if (comparable.length === queued.length) {
+        const earlier = comparable.filter((entry) => entry.sequence <= boundary.sequence)
+        queuedAt = {
+          epoch,
+          sequence: Math.max(
+            1,
+            ...earlier.flatMap((entry) => rebuilt.get(entry.submission.clientMessageId) ?? [])
+          )
+        }
+      }
+    }
+    appendQueue(
+      messageId,
+      change.op === 'queued'
+        ? {
+            ...change,
+            queuedAt,
+            ...(prior?.state === 'dispatched' && prior.consumedAs
+              ? { attempt: prior.consumedAs }
+              : {})
+          }
+        : change
+    )
   }
   const { lifted, liveStop, reopened } = input.queuePause
   const place = () => ({ state, seq: state.lastSequence + 1, fence: input.fence, ts: input.now() })

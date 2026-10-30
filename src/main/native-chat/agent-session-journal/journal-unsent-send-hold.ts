@@ -203,8 +203,27 @@ function headOfQueuePositions(
   const others = cards.filter((card) => !inHead(card)).map((card) => card.position)
   const anchor = others.length > 0 ? Math.min(...others) : 1
   const first = anchor - earlier.length - placed.length
+  const forcedPlaces = new Map<string, number>()
+  for (const { submission, body } of batch) {
+    const prefix = journal.inputOrder.prefix(submission.clientMessageId)
+    if (!body || prefix.length === 0) {
+      continue
+    }
+    const ids = new Set(prefix.map((card) => card.messageId))
+    const retained = cards.filter((card) => ids.has(card.messageId))
+    const after = Math.max(
+      ...(retained.length > 0 ? retained : prefix).map((card) => card.position),
+      ...forcedPlaces.values()
+    )
+    const following = cards.filter((card) => card.position > after).map((card) => card.position)
+    const before = following.length > 0 ? Math.min(...following) : after + 2
+    forcedPlaces.set(submission.clientMessageId, (after + before) / 2)
+  }
   return {
     earlier: earlier.map((messageId, index) => ({ messageId, position: first + index })),
-    placed: placed.map((move, index) => ({ ...move, position: first + earlier.length + index }))
+    placed: placed.map((move, index) => ({
+      ...move,
+      position: forcedPlaces.get(move.messageId) ?? first + earlier.length + index
+    }))
   }
 }

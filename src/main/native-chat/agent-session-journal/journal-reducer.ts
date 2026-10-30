@@ -1,4 +1,5 @@
 import { journalItemDeclaresEcho } from './journal-item-echo'
+import { JournalInputOrder } from './journal-input-order'
 // Live append and replay share this fold. Revisions change content, preserving creation position
 // and unspecified producer linkage; queued/rejected submissions use their handoff/settlement positions.
 
@@ -79,10 +80,15 @@ export type JournalReducerState = {
   normalizedHandOffs: Set<string>
   /** The queued messages, folded from their own rows and their hand-offs (`journal-queue-fold.ts`). */
   queue: JournalQueueState
+  inputOrder: JournalInputOrder
   historyOrigin: JournalHistoryOrigin | null
 }
 
-export function createJournalReducerState(sessionId: string, epoch: string): JournalReducerState {
+export function createJournalReducerState(
+  sessionId: string,
+  epoch: string,
+  originalAcceptance?: ConstructorParameters<typeof JournalInputOrder>[0]
+): JournalReducerState {
   return {
     sessionId,
     epoch,
@@ -108,6 +114,7 @@ export function createJournalReducerState(sessionId: string, epoch: string): Jou
     queuedHandOffPlaces: new Map(),
     normalizedHandOffs: new Set(),
     queue: createJournalQueueState(),
+    inputOrder: new JournalInputOrder(originalAcceptance),
     historyOrigin: null
   }
 }
@@ -117,8 +124,10 @@ export function applyJournalRow(
   row: JournalRow,
   savedAt = row.ts
 ): void {
+  state.inputOrder.beforeRow(state, row)
   applyJournalRowFacts(state, row, savedAt)
   foldJournalQueueRow(state, row)
+  state.inputOrder.afterRow(state, row)
 }
 
 function applyJournalRowFacts(state: JournalReducerState, row: JournalRow, savedAt: number): void {
