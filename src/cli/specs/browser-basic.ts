@@ -41,7 +41,7 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = withBrowserPageTarget(
     ],
     notes: [
       'Without flags the snapshot is the whole accessibility tree, including page text.',
-      '--delta history is kept per page and flag set; a navigation or a large change returns the whole tree again.'
+      'Each page keeps one --delta baseline: a navigation, a large change or different flags return the whole tree again and replace it.'
     ]
   },
   {
@@ -50,7 +50,9 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = withBrowserPageTarget(
     usage:
       'orca screenshot [--format <png|jpeg>] [--if-changed] [--annotate] [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'format', 'if-changed', 'annotate', 'worktree'],
-    notes: ['The image is in CSS pixels, so its x/y match page coordinates for `orca mouse`.']
+    notes: [
+      "In Orca's desktop browser the image is in CSS pixels, so its x/y match page coordinates for `orca mouse`."
+    ]
   },
   {
     path: ['click'],

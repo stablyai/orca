@@ -75,7 +75,7 @@ export function saveBrowserScreenshot(
 }
 
 export function formatScreenshot(result: SavedBrowserScreenshot): string {
-  if (!result.path) {
+  if (result.changed === false) {
     return 'Screenshot unchanged since the last --if-changed capture; nothing saved'
   }
   const legend = (result.annotations ?? []).map(

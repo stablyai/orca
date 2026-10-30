@@ -6,7 +6,7 @@ const {
   existsSyncMock,
   readFileSyncMock,
   rmSyncMock,
-  createFromPathMock,
+  createFromBufferMock,
   stdinWrites
 } = vi.hoisted(() => ({
   execFileMock: vi.fn(),
@@ -14,7 +14,7 @@ const {
   existsSyncMock: vi.fn(() => false),
   readFileSyncMock: vi.fn(() => Buffer.from('')),
   rmSyncMock: vi.fn(),
-  createFromPathMock: vi.fn(),
+  createFromBufferMock: vi.fn(),
   stdinWrites: [] as string[]
 }))
 
@@ -32,7 +32,7 @@ vi.mock('electron', () => {
   return {
     app: { getPath: vi.fn(() => '/app'), getAppPath: vi.fn(() => '/project'), isPackaged: false },
     webContents: { fromId: webContentsFromIdMock },
-    nativeImage: { createFromPath: createFromPathMock }
+    nativeImage: { createFromBuffer: createFromBufferMock }
   }
 })
 const { CdpWsProxyMock } = vi.hoisted(() => {
@@ -179,15 +179,19 @@ describe('AgentBrowserBridge', () => {
 
   it('returns screenshots in CSS pixels and deletes the file agent-browser wrote', async () => {
     const wc = mockWebContents(100)
-    wc.debugger.sendCommand.mockResolvedValue({ cssVisualViewport: { clientWidth: 800 } })
+    // A 15px classic scrollbar narrows the CSS width; the height still gives the true 2x ratio.
+    wc.debugger.sendCommand.mockResolvedValue({
+      cssVisualViewport: { clientWidth: 785, clientHeight: 600 }
+    })
     webContentsFromIdMock.mockReturnValue(wc)
     const resized = { toPNG: () => Buffer.from('css-png') }
     const captured = {
       getSize: () => ({ width: 1600, height: 1200 }),
       resize: vi.fn(() => resized)
     }
-    createFromPathMock.mockReturnValue(captured)
+    createFromBufferMock.mockReturnValue(captured)
     existsSyncMock.mockReturnValue(true)
+    readFileSyncMock.mockReturnValue(Buffer.from('device-png'))
     const spawns = succeedRecordingAgentBrowserSpawns(execFileMock, stdinWrites, {
       path: '/ab-tmp/shot.png',
       changed: true

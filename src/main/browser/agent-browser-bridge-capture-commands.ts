@@ -1,4 +1,4 @@
-import { existsSync, rmSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { z } from 'zod'
 import { nativeImage, type WebContents } from 'electron'
 import type {
@@ -26,14 +26,11 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
     browserPageId?: string
   ): Promise<BrowserScreenshotResult> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName, target) => {
+      const wc = this.requireTargetWebContents(target)
       const raw = await this.execAgentBrowser(sessionName, agentBrowserScreenshotArgs(options), {
         cliArgv: true
       })
-      return this.readScreenshotFromResult(
-        raw,
-        options.format,
-        this.requireTargetWebContents(target)
-      )
+      return this.readScreenshotFromResult(raw, options.format, wc)
     })
   }
 
@@ -75,10 +72,7 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
       throw new BrowserError('browser_error', `Screenshot file not found: ${path}`)
     }
     try {
-      const image = await scaleToCssPixels(nativeImage.createFromPath(path), wc)
-      const data = (screenshotFormat === 'jpeg' ? image.toJPEG(90) : image.toPNG()).toString(
-        'base64'
-      )
+      const data = await readInCssPixels(path, screenshotFormat, wc)
       return { data, format: screenshotFormat, changed, annotations }
     } finally {
       // agent-browser keeps every capture in its own temp folder; the bytes are ours now.
@@ -165,27 +159,41 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
 }
 
 const CssViewportMetrics = z.object({
-  cssVisualViewport: z.object({ clientWidth: z.number().positive() })
+  cssVisualViewport: z.object({ clientWidth: z.number(), clientHeight: z.number() })
 })
 
-// HiDPI captures come back in device pixels; CSS pixels keep x/y equal to page coordinates.
-async function scaleToCssPixels(
-  image: Electron.NativeImage,
+// Captures come back in device pixels (HiDPI, zoom, emulated DPR); CSS pixels keep x/y equal to page coordinates.
+async function readInCssPixels(
+  path: string,
+  format: 'png' | 'jpeg',
   wc: WebContents
-): Promise<Electron.NativeImage> {
+): Promise<string> {
   const lease = acquireElectronDebugger(wc)
   let metrics: unknown
   try {
     metrics = await sendGuestCdpCommand(wc, 'Page.getLayoutMetrics', {})
+  } catch (error) {
+    throw new BrowserError(
+      'browser_error',
+      `Screenshot failed: ${error instanceof Error ? error.message : String(error)}`
+    )
   } finally {
     lease.release()
   }
-  const parsed = CssViewportMetrics.safeParse(metrics)
-  if (!parsed.success) {
-    return image
+  const bytes = readFileSync(path)
+  const viewport = CssViewportMetrics.safeParse(metrics)
+  const image = nativeImage.createFromBuffer(bytes)
+  const { width, height } = image.getSize()
+  if (!viewport.success || width === 0 || height === 0) {
+    return bytes.toString('base64')
   }
-  const cssWidth = Math.round(parsed.data.cssVisualViewport.clientWidth)
-  return image.getSize().width > cssWidth
-    ? image.resize({ width: cssWidth, quality: 'best' })
-    : image
+  // The viewport sizes leave out scrollbars the image includes; the axis without one gives the true ratio.
+  const { clientWidth, clientHeight } = viewport.data.cssVisualViewport
+  const scale = Math.max(clientWidth / width, clientHeight / height)
+  const cssWidth = Math.round(width * scale)
+  if (!(scale > 0) || cssWidth >= width) {
+    return bytes.toString('base64')
+  }
+  const resized = image.resize({ width: cssWidth, quality: 'best' })
+  return (format === 'jpeg' ? resized.toJPEG(90) : resized.toPNG()).toString('base64')
 }

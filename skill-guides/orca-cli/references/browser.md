@@ -5,17 +5,17 @@ Pin one page, snapshot it once, then act on it. Each action reports what it chan
 ```text
 ORCA tab current --json
 ORCA goto --page <browserPageId> --url https://example.com --json
-ORCA snapshot --page <browserPageId> --interactive --delta
+ORCA snapshot --page <browserPageId> --interactive
 ORCA click --page <browserPageId> --element @e3 --json
 ```
 
 Choosing what to look at, cheapest first:
 
 - `snapshot --interactive` lists only controls and links with their refs, often under half the size of the whole tree. It leaves out page text, including error and status messages.
-- Add `--delta` and the next snapshot with the same flags returns only what changed: "no change", or which lines of your last tree to replace and with what. The first call, a navigation, or a large change returns the whole tree again; `--full` asks for the whole tree and restarts the baseline.
+- `--delta` is the cheap second look, for example after a `wait` with no action in between: it returns only what changed since the last `--delta` snapshot of that page, as "no change" or which lines of that tree to replace and with what. Each page keeps one baseline: a navigation, a large change, or a `--delta` call with different flags returns the whole tree again and replaces it. `--full` asks for the whole tree and restarts the baseline.
 - `--selector <css>` limits the tree to one part of the page, `--depth <n>` limits nesting, `--compact` drops empty structure, and `--urls` adds link targets.
 - To read page text, run `exec --command "read"` (the page as Markdown) or a plain `snapshot` (the whole tree with its text).
-- `screenshot` saves a PNG and prints its path; open that file to see the page. Its pixels are CSS pixels, so x/y read off it work with `ORCA mouse`. `--annotate` labels each control with its ref, and `--if-changed` saves nothing when the page looks the same as last time.
+- `screenshot` saves a PNG of the visible page and prints its path; open that file to see the page. In Orca's desktop browser its pixels are CSS pixels, so x/y read off it work with `ORCA mouse`. `full-screenshot` saves the whole page the same way. `--annotate` labels each control with its ref, and `--if-changed` saves nothing when the page looks the same as last time.
 
 Common commands:
 
@@ -23,6 +23,7 @@ Common commands:
 ORCA goto --page <browserPageId> --url <url> --json
 ORCA back --page <browserPageId> --json
 ORCA reload --page <browserPageId> --json
+ORCA snapshot --page <browserPageId> --interactive
 ORCA snapshot --page <browserPageId> --interactive --delta
 ORCA snapshot --page <browserPageId> --selector main --depth 4
 ORCA screenshot --page <browserPageId>
