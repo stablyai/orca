@@ -14,7 +14,11 @@ import type {
 } from './headless-dispatch'
 import type { AutomationRunTargetResult } from './run-target-resolution'
 import type { AutomationRunWriter } from './automation-run-writer'
-import type { AutomationRunFailure } from '../../shared/automation-run-failure-copy'
+import {
+  automationRunFailure,
+  type AutomationRunFailure
+} from '../../shared/automation-run-failure-copy'
+import { parseWslDistroHold } from '../../shared/wsl-distro-stopped-hold'
 
 export type HeadlessAutomationDispatchContext = {
   automation: Automation
@@ -38,6 +42,12 @@ function describeDispatchError(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+/** A launch the runtime held for a stopped WSL distro is a retryable skip, not a crash (E9). */
+function heldForStoppedWslDistro(error: unknown): AutomationRunFailure | null {
+  const hold = parseWslDistroHold(describeDispatchError(error))
+  return hold ? automationRunFailure('wslDistroStopped', { distro: hold.distro }) : null
+}
+
 export async function runHeadlessAutomationDispatch(
   ctx: HeadlessAutomationDispatchContext
 ): Promise<AutomationRun> {
@@ -59,14 +69,15 @@ export async function runHeadlessAutomationDispatch(
   try {
     launch = await ctx.dispatcher({ automation, run, target })
   } catch (error) {
+    const refusal =
+      error instanceof AutomationDispatchRefusedError
+        ? error.failure
+        : heldForStoppedWslDistro(error)
     return runs.updateRun({
       runId: run.id,
-      status:
-        error instanceof AutomationDispatchRefusedError ? 'skipped_unavailable' : 'dispatch_failed',
+      status: refusal ? 'skipped_unavailable' : 'dispatch_failed',
       workspaceId: automation.workspaceId,
-      ...(error instanceof AutomationDispatchRefusedError
-        ? error.failure
-        : { error: describeDispatchError(error) })
+      ...(refusal ?? { error: describeDispatchError(error) })
     })
   }
   const launchRunTarget = {

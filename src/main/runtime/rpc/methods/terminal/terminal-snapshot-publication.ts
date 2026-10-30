@@ -97,6 +97,7 @@ type SnapshotVariableMeta = Pick<
   | 'kittyKeyboardFlags'
   | 'alternateScreen'
   | 'terminalOwner'
+  | 'lastTitle'
 >
 
 type TerminalBufferSource = Pick<OrcaRuntimeService, 'serializeTerminalBuffer'>
@@ -117,6 +118,7 @@ export type MobileSnapshotByteBudget = {
     | 'kittyKeyboardFlags'
     | 'alternateScreen'
     | 'terminalOwner'
+    | 'lastTitle'
     | 'truncatedByByteBudget'
   >
 }
@@ -157,6 +159,7 @@ function budgetedPublication(
     kittyKeyboardFlags: serialized.kittyKeyboardFlags,
     alternateScreen: serialized.alternateScreen,
     terminalOwner: serialized.terminalOwner,
+    lastTitle: serialized.lastTitle,
     data
   }
 }

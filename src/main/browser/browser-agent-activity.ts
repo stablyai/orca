@@ -105,6 +105,10 @@ export class BrowserAgentActivity {
     }
   }
 
+  isActive(browserPageId: string): boolean {
+    return this.pages.has(browserPageId)
+  }
+
   end(browserPageId: string): void {
     const page = this.pages.get(browserPageId)
     if (!page) {

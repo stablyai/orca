@@ -6,6 +6,7 @@ const {
   getProfileMock,
   getRouteIdentityMock,
   importCookiesFromBrowserMock,
+  importCookiesFromFileMock,
   requireRouteBrowserProfileMock,
   recordClientRouteImportSourceMock,
   selectBrowserProfileMock
@@ -21,6 +22,7 @@ const {
   getProfileMock: vi.fn(),
   getRouteIdentityMock: vi.fn(),
   importCookiesFromBrowserMock: vi.fn(),
+  importCookiesFromFileMock: vi.fn(),
   requireRouteBrowserProfileMock: vi.fn(),
   recordClientRouteImportSourceMock: vi.fn(),
   selectBrowserProfileMock: vi.fn()
@@ -29,6 +31,7 @@ const {
 vi.mock('./cookies/browser-cookie-import', () => ({
   detectInstalledBrowsers: detectInstalledBrowsersMock,
   importCookiesFromBrowser: importCookiesFromBrowserMock,
+  importCookiesFromFile: importCookiesFromFileMock,
   selectBrowserProfile: selectBrowserProfileMock
 }))
 vi.mock('./browser-route-partition-binding-runtime', () => ({
@@ -47,7 +50,7 @@ vi.mock('./paired-runtime-browser-client-host-runtime', () => ({
   getPairedRuntimeBrowserClientRouteIdentity: getRouteIdentityMock
 }))
 
-const { importCookiesIntoClientRoutePartition } =
+const { importCookieFileIntoClientRoutePartition, importCookiesIntoClientRoutePartition } =
   await import('./browser-client-route-cookie-import')
 
 const routeIdentity = {
@@ -85,6 +88,7 @@ beforeEach(() => {
   getProfileMock.mockReturnValue({ id: 'default', partition: 'persist:legacy-server-profile' })
   detectInstalledBrowsersMock.mockReturnValue([chrome])
   importCookiesFromBrowserMock.mockResolvedValue({ ok: true, summary: { importedCookies: 4 } })
+  importCookiesFromFileMock.mockResolvedValue({ ok: true, summary: { importedCookies: 2 } })
 })
 
 describe('importCookiesIntoClientRoutePartition', () => {
@@ -167,5 +171,31 @@ describe('importCookiesIntoClientRoutePartition', () => {
       ok: false,
       reason: 'Session profile not found.'
     })
+  })
+})
+
+describe('importCookieFileIntoClientRoutePartition', () => {
+  const target = { environmentId: 'env-a', browserProfileId: 'default' }
+
+  it('opens no picker when the desktop hosts no pages for the server', async () => {
+    getRouteIdentityMock.mockReturnValue(null)
+    const pickFile = vi.fn()
+
+    expect(await importCookieFileIntoClientRoutePartition(target, pickFile)).toBeNull()
+    expect(pickFile).not.toHaveBeenCalled()
+  })
+
+  it('imports the picked file into the route partition a browser import uses', async () => {
+    await importCookiesIntoClientRoutePartition(request)
+    const routePartition = importCookiesFromBrowserMock.mock.calls[0]?.[1]
+
+    const result = await importCookieFileIntoClientRoutePartition(target, async () => '/tmp/c.json')
+
+    expect(result).toMatchObject({ ok: true, profileId: 'default' })
+    expect(importCookiesFromFileMock).toHaveBeenCalledWith('/tmp/c.json', routePartition)
+    expect(routePartition).not.toBe('persist:legacy-server-profile')
+    expect(recordClientRouteImportSourceMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ source: expect.objectContaining({ browserFamily: 'manual' }) })
+    )
   })
 })

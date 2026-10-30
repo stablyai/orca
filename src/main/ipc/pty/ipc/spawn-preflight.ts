@@ -94,7 +94,8 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
     resolveStartupCwd: ctx.deps.resolvePtySpawnStartupCwd,
     ...(args.wslPassiveRestore === true
       ? {
-          passiveWslRestore: {
+          wslStartHold: {
+            wslPassiveRestore: true,
             sessionId: ctx.effectiveSessionId,
             isNewSession: ctx.ownsNewIncarnation,
             attachOnly: args.attachOnlyView === true
@@ -109,6 +110,7 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
   ctx.startupCwdFallback = target.startupCwdFallback
   ctx.terminalRuntimeOptions = target.terminalRuntimeOptions
   ctx.expectedWslDistro = target.expectedWslDistro
+  ctx.wslHoldReadAnchor = target.wslHoldReadAnchor
   ctx.codexSelectionTarget = target.codexSelectionTarget
   ctx.spawnTiming.mark('preflight')
   args.env = withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget)

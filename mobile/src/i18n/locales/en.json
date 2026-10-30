@@ -80,18 +80,25 @@
       "loadFailed": "Could not load paired desktops.",
       "pairDesktop": "Pair a desktop and try again.",
       "connectDesktop": "Connect a desktop and try again.",
-      "updateDesktop": "Update your desktop to run this test.",
       "desktopUnreachable": "Could not reach the desktop. Try again.",
       "accepted": "Accepted by Orca’s push service. Check for the notification.",
-      "reconnectPhone": "Reconnect to register this phone for notifications.",
       "rateLimited": "Too many notifications. Try again later.",
       "pushServiceFailed": "Could not send through Orca’s push service. Try again.",
       "sendFailed": "Could not send push test.",
       "troubleReceivingAlerts": "Having trouble receiving alerts?",
-      "description": "Send a test through Orca’s push service.",
+      "description": "Test push delivery, or a local notification when push is unavailable.",
       "sending": "Sending…",
       "sendButton": "Send test notification",
-      "troubleshooting": "Troubleshooting"
+      "troubleshooting": "Troubleshooting",
+      "localTitle": "Test notification",
+      "localBody": "Local notification test from this phone.",
+      "localScheduled": "{{reason}} Local test scheduled. Check for the notification. This checks display only; it does not verify agent alert delivery.",
+      "disabled": "Notifications are turned off in Orca. Enable notifications and try again.",
+      "osDisabled": "Notifications are turned off in system settings. Allow notifications and try again.",
+      "noToken": "No push token is available on this phone.",
+      "unsupportedHost": "This desktop does not support push notifications. Update it to receive push.",
+      "registrationPending": "Push registration is not ready on this desktop. Try again shortly.",
+      "liveFallbackScheduled": "{{reason}} Local test scheduled. Check for the notification. Live alerts are available while Orca is running and connected."
     },
     "notificationSettingsScreen": {
       "loadFailed": "Could not load notification settings. Try again.",
@@ -198,6 +205,7 @@
     },
     "pairScan": {
       "invalidQrCode": "Not a valid Orca QR code",
+      "downloadQrCode": "That's the download code. Scan the pairing code in step 2 on your desktop.",
       "invalidPairingCode": "Not a valid pairing code — copy it from your computer and paste again",
       "connectTimedOut": "Couldn't connect within {{seconds}}s — see log below for where it stalled",
       "pairingFailed": "Pairing failed: {{error}}",
@@ -360,7 +368,8 @@
       "sameNetwork": "Both devices must be on the same LAN (unless connected through Tailscale).",
       "sameSubnet": "Ethernet and WiFi must share the same subnet.",
       "reconnectWifi": "Try reconnecting WiFi on both devices.",
-      "firewallTitle": "Firewall Blocking Port 6768",
+      "firewallTitle": "Firewall Blocking Port {{port}}",
+      "linuxFirewall": "Linux: sudo ufw allow {{port}}",
       "macosFirewall": "macOS: System Settings → Network → Firewall — allow Orca.",
       "windowsFirewall": "Windows: Defender Firewall → Allow app — enable Orca for Private networks.",
       "restrictedNetwork": "Corporate/school networks may block P2P — try a personal hotspot.",
@@ -1192,15 +1201,15 @@
       "mergeRequest": "MR !{{number}}"
     },
     "terminalShortcutSettings": {
-      "shortcutBar": "SHORTCUT BAR",
-      "shortcutBarDescription": "Toggle keys to show or hide them, and hold the grip to drag a key into the order you want on the terminal shortcut bar.",
       "resetDefaults": "Reset Defaults",
       "resetDescription": "Show every built-in shortcut key in the original order",
       "customShortcuts": "CUSTOM SHORTCUTS",
       "empty": "No custom shortcuts defined yet.",
       "removeShortcut": "Remove {{label}}",
       "addShortcut": "Add Custom Shortcut…",
-      "addDescription": "Create key combo or text macro"
+      "addDescription": "Create key combo or text macro",
+      "moreKeys": "MORE KEYS",
+      "moreKeysDescription": "These keys sit under ⋯ on the terminal key row. Toggle keys to show or hide them, and hold the grip to drag a key into the order you want. A key already on the row, like Esc or the arrows, is left out of ⋯."
     },
     "voiceModelList": {
       "modelSize": "{{size}} MB",
@@ -1275,6 +1284,11 @@
       "detailsChangedMessage": "The account or reset offer changed before the host contacted Codex. Review the updated details, then confirm again.",
       "resetFailed": "Could not reset rate limits",
       "confirmTitle": "Use a rate-limit reset?"
+    },
+    "nativeScreenRecovery": {
+      "title": "Something went wrong",
+      "tryAgain": "Try again",
+      "home": "Home"
     }
   },
   "pullRequest": {
@@ -1688,14 +1702,6 @@
       "preparingMic": "Preparing microphone",
       "uploadingImage": "Uploading image to host"
     },
-    "diffCommentLineRow": {
-      "diffLine": "{{title}} diff line {{line}}",
-      "addNote": "Add note on line {{line}}",
-      "line": "Line {{line}}",
-      "deleteNote": "Delete note on line {{line}}",
-      "placeholder": "Add review note",
-      "saveNote": "Save note"
-    },
     "markdownReader": {
       "readOnly": "Read only",
       "changedOnDesktop": "Changed on desktop",
@@ -1747,15 +1753,23 @@
     },
     "accessoryKeys": {
       "dismissKeyboard": "Dismiss keyboard",
-      "dismissKeyboardHint": "Hides the software keyboard and keeps the current terminal session open.",
-      "switchToDesktopMode": "Switch to desktop mode",
-      "switchToPhoneMode": "Switch to phone mode",
-      "switchToBufferedInput": "Switch to buffered command input",
-      "switchToLiveInput": "Switch to live terminal input",
-      "pasteFromClipboard": "Paste from clipboard",
-      "paste": "Paste",
       "sendKey": "Send {{label}}",
-      "addCustomShortcut": "Add custom shortcut"
+      "modifierHint": "Applies to the next key. Double tap to keep it on.",
+      "typeCharacter": "Type {{character}}",
+      "control": "Control",
+      "escape": "Escape",
+      "shiftTab": "Shift Tab",
+      "enter": "Enter",
+      "interrupt": "Interrupt terminal",
+      "tab": "Tab",
+      "alt": "Alt",
+      "shift": "Shift",
+      "keysModeLabel": "Keys mode: typing goes straight to the terminal. Switch to Message mode",
+      "messageModeLabel": "Message mode: write, then send. Switch to Keys mode",
+      "keysMode": "Keys",
+      "messageMode": "Message",
+      "moreKeys": "More keys and actions",
+      "showKeyboard": "Show keyboard"
     },
     "activeContent": {
       "noTabs": "No tabs in this session",
@@ -1769,8 +1783,10 @@
     "commandDock": {
       "liveInputLabel": "Live terminal input",
       "liveInputHint": "Typed text is sent directly to the active terminal",
-      "commandPlaceholder": "Type a command…",
-      "sendCommand": "Send command"
+      "sendCommand": "Send command",
+      "messageAgentPlaceholder": "Message {{agent}}",
+      "theAgent": "the agent",
+      "writeCommandPlaceholder": "Write a command, then send"
     },
     "contentRow": {
       "dismissCreationWarning": "Dismiss workspace creation warning"
@@ -2063,7 +2079,8 @@
     "useNativeChatDictation": {
       "insertFailedCopied": "Couldn't insert dictation, so it was copied to the clipboard",
       "insertFailed": "Couldn't insert dictation",
-      "inserted": "Dictation inserted"
+      "inserted": "Dictation inserted",
+      "stoppedAfterSilence": "Stopped after a minute of silence"
     },
     "quickCommandLaunch": {
       "editBeforeRunning": "Edit this quick command before running it",
@@ -2249,7 +2266,8 @@
       "cleared": "Terminal cleared"
     },
     "useSessionTerminalSendActions": {
-      "inputTooLarge": "Input too large (max 256 KiB)"
+      "inputTooLarge": "Input too large (max 256 KiB)",
+      "liveInputInterrupted": "Live input interrupted. Field cleared; check the terminal before continuing."
     },
     "useTerminalPaste": {
       "clipboardReadFailed": "Couldn't read the clipboard",
@@ -2462,6 +2480,29 @@
       "chatNotFound": "Orca can't find this chat.",
       "startNewChat": "Start a new chat to continue.",
       "tryAgain": "Try again."
+    },
+    "terminalArrowPad": {
+      "label": "Arrow keys",
+      "hint": "Tap a side for one arrow press, or hold and drag to repeat",
+      "up": "Up",
+      "down": "Down",
+      "left": "Left",
+      "right": "Right"
+    },
+    "terminalMoreKeys": {
+      "sendKey": "Send {{label}}",
+      "paste": "Paste",
+      "sending": "Sending…",
+      "photo": "Photo",
+      "file": "File",
+      "desktopWidth": "Desktop width",
+      "phoneWidth": "Phone width",
+      "keys": "Keys",
+      "combos": "Combos",
+      "yourKeys": "Your keys",
+      "deleteKeyHint": "Long press to delete this key",
+      "addCustomKey": "Add custom key",
+      "addKey": "Add key"
     }
   },
   "chat": {
@@ -3018,7 +3059,9 @@
       "cherryPickState": "cherry-pick",
       "changedCount": "{{count}} changed",
       "stagedCount": "{{count}} staged",
-      "branchCount": "{{count}} on branch"
+      "branchCount": "{{count}} on branch",
+      "completingMerge": "Completing…",
+      "completeMerge": "Complete merge"
     },
     "content": {
       "reconnecting": "Reconnecting to desktop...",
@@ -3298,6 +3341,14 @@
       "planModelUnavailable": "Model \"{{model}}\" is not available for {{label}}.",
       "planModelWithoutThinking": "Model \"{{model}}\" does not support a thinking effort level.",
       "planThinkingLevelInvalid": "Thinking level \"{{level}}\" is not valid for {{model}}."
+    },
+    "conflictActions": {
+      "resolveFile": "{{action}}: {{path}}",
+      "needsNewerHost": "Update Orca on the computer running this workspace to resolve merge conflicts from your phone.",
+      "markResolved": "Mark as resolved",
+      "keepFile": "Keep file",
+      "keepDeletion": "Keep deletion",
+      "completeMergeFailed": "Complete merge failed"
     }
   },
   "newWorkspace": {
@@ -3867,6 +3918,21 @@
     },
     "worktreeCreateRetry": {
       "createFailed": "Failed to create workspace"
+    },
+    "hostedMerge": {
+      "merged": "Merged",
+      "closed": "Closed",
+      "conflicts": "Conflicts",
+      "behind": "Behind",
+      "blocked": "Blocked",
+      "checksPending": "Checks pending",
+      "ableToMerge": "Able to merge",
+      "unknown": "Unknown"
+    },
+    "pagination": {
+      "pageUnreachable": "Page {{page}} is beyond what GitHub search can return.",
+      "loadPageFailed": "Page {{page}} could not be loaded from GitHub.",
+      "noMoreResults": "No more results on page {{page}}."
     }
   },
   "terminal": {

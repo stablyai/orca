@@ -47,7 +47,8 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
     const direction = opts.direction ?? 'horizontal'
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(
       `id:${pty.worktreeId}`,
-      createdWorktree
+      createdWorktree,
+      { wslUserAct: opts.wslUserAct === true }
     )
     const sourceAuthority = this.resolveTerminalSplitSourceAuthority(
       workspace.id,

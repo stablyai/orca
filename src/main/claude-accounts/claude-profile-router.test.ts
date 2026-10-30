@@ -1,3 +1,4 @@
+import { runProcess } from '@orca/process-host'
 import { spawnSync } from 'node:child_process'
 import {
   chmodSync,
@@ -35,6 +36,10 @@ import {
   installClaudeProfileRouter
 } from './claude-profile-installed-router'
 import { ClaudeObservedConfigDirs } from './claude-observed-config-dirs'
+
+vi.mock('@orca/process-host', () => ({ runProcess: vi.fn() }))
+const command = vi.hoisted(() => ({ path: '/unused-claude' }))
+vi.mock('../codex-cli/command', () => ({ resolveClaudeCommand: () => command.path }))
 
 const shell = vi.hoisted(() => ({ hang: false }))
 vi.mock('../startup/login-shell-environment', () => ({
@@ -156,6 +161,49 @@ function claudeShellProbe(root: string): (env: Record<string, string>, rc?: stri
 }
 
 describe('ClaudeProfileRouter', () => {
+  it.each([
+    ['launcher 0.1.0\n2.1.310 (Claude Code)', '2.1.310'],
+    ['11.17.0', undefined]
+  ] as const)(
+    'passes identified version or unknown to enabled profile setup: %s',
+    async (stdout, version) => {
+      const f = fixture()
+      f.settings.agentStatusHooksEnabled = true
+      command.path = join(f.root, 'claude')
+      vi.mocked(runProcess).mockResolvedValue({
+        stdout,
+        stderr: '',
+        code: 0,
+        signal: null,
+        timedOut: false
+      })
+      const runSetup = vi.fn(async () => ({
+        outcome: 'prepared' as const,
+        warnings: [],
+        surfaces: {}
+      }))
+      const router = new ClaudeProfileRouter({
+        getSettings: () => f.settings,
+        dataRoot: f.dataRoot,
+        userHome: f.userHome,
+        env: {},
+        runSetup
+      })
+      await router.prepareAccount('a')
+      await router.prepareAccount('b')
+      expect(runSetup).toHaveBeenCalledTimes(2)
+      for (const accountId of ['a', 'b']) {
+        expect(runSetup).toHaveBeenCalledWith(
+          expect.objectContaining({
+            profile: expect.objectContaining({ accountId }),
+            hooks: true,
+            claudeVersion: version
+          })
+        )
+      }
+    }
+  )
+
   it('runs an account with no login of its own on System default while that is signed in to it', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const f = fixture()

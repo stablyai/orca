@@ -99,6 +99,7 @@
       "connecting": "Connexion…",
       "invalidPairingCode": "Code d'appairage invalide — copiez-le depuis votre ordinateur et collez-le à nouveau.",
       "invalidQrCode": "QR code Orca invalide",
+      "downloadQrCode": "C’est le code de téléchargement. Scannez le code d’association à l’étape 2 sur votre ordinateur.",
       "openDesktopStep": "Ouvrez Orca sur votre ordinateur",
       "openMobileSettingsStep": "Allez dans Paramètres → Mobile",
       "openSettings": "Ouvrir les paramètres",
@@ -1002,9 +1003,7 @@
       "empty": "Aucun raccourci personnalisé défini pour le moment.",
       "removeShortcut": "Supprimer {{label}}",
       "resetDefaults": "Rétablir les valeurs par défaut",
-      "resetDescription": "Afficher toutes les touches de raccourci intégrées dans l'ordre initial",
-      "shortcutBar": "BARRE DE RACCOURCIS",
-      "shortcutBarDescription": "Activez ou désactivez les touches pour les afficher ou les masquer. Maintenez le doigt sur la poignée pour faire glisser une touche à la position souhaitée dans la barre de raccourcis du terminal."
+      "resetDescription": "Afficher toutes les touches de raccourci intégrées dans l'ordre initial"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "Utiliser une réinitialisation des limites de débit ?",
@@ -1046,6 +1045,11 @@
       "folder": "Dossier",
       "project": "Projet {{repo}}",
       "remoteHost": "Hôte distant"
+    },
+    "nativeScreenRecovery": {
+      "title": "Une erreur est survenue",
+      "tryAgain": "Réessayer",
+      "home": "Accueil"
     }
   },
   "connection": {
@@ -1139,7 +1143,8 @@
       "checkTailnet": "Vérifiez que l'ordinateur n'est pas en veille et apparaît connecté à votre tailnet.",
       "desktopTitle": "Application de bureau arrêtée",
       "disableVpn": "Désactivez ce VPN ou activez le routage fractionné / « Autoriser le LAN ».",
-      "firewallTitle": "Pare-feu bloquant le port 6768",
+      "firewallTitle": "Pare-feu bloquant le port {{port}}",
+      "linuxFirewall": "Linux: sudo ufw allow {{port}}",
       "keepTailscaleOn": "Les adresses d'hôte comme 100.x.x.x ou *.ts.net passent par Tailscale — laissez-le ACTIVÉ.",
       "macosFirewall": "macOS : Réglages Système → Réseau → Pare-feu — autorisez Orca.",
       "notificationNetwork": "Essayez les données mobiles ou un autre réseau Wi-Fi. Si les alertes arrivent après ce changement, votre réseau retarde peut-être leur réception.",
@@ -1890,16 +1895,8 @@
   },
   "session": {
     "accessoryKeys": {
-      "addCustomShortcut": "Ajouter un raccourci personnalisé",
       "dismissKeyboard": "Masquer le clavier",
-      "dismissKeyboardHint": "Masque le clavier virtuel et garde la session de terminal en cours ouverte.",
-      "paste": "Coller",
-      "pasteFromClipboard": "Coller depuis le presse-papiers",
-      "sendKey": "Envoyer {{label}}",
-      "switchToBufferedInput": "Basculer vers la saisie de commandes en mémoire tampon",
-      "switchToDesktopMode": "Passer en mode bureau",
-      "switchToLiveInput": "Basculer vers la saisie directe dans le terminal",
-      "switchToPhoneMode": "Basculer en mode téléphone"
+      "sendKey": "Envoyer {{label}}"
     },
     "activeContent": {
       "createTab": "Créer un onglet",
@@ -2025,21 +2022,12 @@
       "titleRight": "Fermer les onglets à droite ?"
     },
     "commandDock": {
-      "commandPlaceholder": "Saisissez une commande…",
       "liveInputHint": "Le texte saisi est envoyé directement au terminal actif.",
       "liveInputLabel": "Saisie en direct dans le terminal",
       "sendCommand": "Envoyer la commande"
     },
     "contentRow": {
       "dismissCreationWarning": "Ignorer l'avertissement de création de l'espace de travail"
-    },
-    "diffCommentLineRow": {
-      "addNote": "Ajouter une note à la ligne {{line}}",
-      "deleteNote": "Supprimer la note à la ligne {{line}}",
-      "diffLine": "{{title}}, ligne {{line}} du diff",
-      "line": "Ligne {{line}}",
-      "placeholder": "Ajouter une note de revue",
-      "saveNote": "Enregistrer la note"
     },
     "diffLineRow": {
       "addNoteLabel": "Ajouter une note à la ligne {{line}}",
@@ -2560,7 +2548,8 @@
     "useNativeChatDictation": {
       "insertFailed": "Impossible d'insérer la dictée",
       "insertFailedCopied": "Impossible d'insérer la dictée ; elle a été copiée dans le presse-papiers",
-      "inserted": "Dictée insérée"
+      "inserted": "Dictée insérée",
+      "stoppedAfterSilence": "Arrêt après une minute de silence"
     },
     "useNativeChatStop": {
       "stopNotSent": "Commande d'arrêt non envoyée",
@@ -2593,7 +2582,8 @@
       "saveFailed": "Échec de l'enregistrement de la commande rapide"
     },
     "useSessionTerminalSendActions": {
-      "inputTooLarge": "Saisie trop volumineuse (max. 256 Kio)"
+      "inputTooLarge": "Saisie trop volumineuse (max. 256 Kio)",
+      "liveInputInterrupted": "Saisie en direct interrompue. Le champ a été vidé ; vérifiez le terminal avant de continuer."
     },
     "useStartup": {
       "wakeAgents": "Ouvrez Orca sur l'hôte pour réveiller les agents en veille."
@@ -2788,19 +2778,26 @@
     "notificationDisplayTest": {
       "accepted": "Test accepté par le service de notifications push d'Orca. Vérifiez si vous avez reçu la notification.",
       "connectDesktop": "Connectez-vous à un ordinateur, puis réessayez.",
-      "description": "Envoyez un test via le service de notifications push d'Orca.",
+      "description": "Testez la réception push, ou une notification locale si le push est indisponible.",
       "desktopUnreachable": "Impossible de joindre l'ordinateur. Réessayez.",
       "loadFailed": "Impossible de charger les ordinateurs appairés.",
       "pairDesktop": "Appairez un ordinateur, puis réessayez.",
       "pushServiceFailed": "Impossible d'envoyer le test via le service de notifications push d'Orca. Réessayez.",
       "rateLimited": "Trop de notifications. Réessayez plus tard.",
-      "reconnectPhone": "Reconnectez-vous pour enregistrer ce téléphone auprès du service de notifications.",
       "sendButton": "Envoyer une notification de test",
       "sendFailed": "Impossible d'envoyer la notification push de test.",
       "sending": "Envoi…",
       "troubleReceivingAlerts": "Vous avez du mal à recevoir les alertes ?",
       "troubleshooting": "Dépannage",
-      "updateDesktop": "Mettez Orca à jour sur votre ordinateur pour lancer ce test."
+      "localTitle": "Notification de test",
+      "localBody": "Test de notification locale depuis ce téléphone.",
+      "localScheduled": "{{reason}} Test local programmé. Vérifiez la notification. Ce test vérifie uniquement son affichage, pas la réception des alertes des agents.",
+      "disabled": "Les notifications sont désactivées dans Orca. Activez-les et réessayez.",
+      "osDisabled": "Les notifications sont désactivées dans les réglages système. Autorisez-les et réessayez.",
+      "noToken": "Aucun jeton push n’est disponible sur ce téléphone.",
+      "unsupportedHost": "Cet ordinateur ne prend pas en charge les notifications push. Mettez-le à jour pour les recevoir.",
+      "registrationPending": "L’inscription push n’est pas encore prête sur cet ordinateur. Réessayez dans un instant.",
+      "liveFallbackScheduled": "{{reason}} Test local programmé. Vérifiez la notification. Les alertes en direct sont disponibles tant qu’Orca est en cours d’exécution et connecté."
     },
     "notificationSettingsScreen": {
       "description": "Recevez une notification sur cet appareil lorsqu'un agent a besoin de votre intervention ou termine une tâche.",

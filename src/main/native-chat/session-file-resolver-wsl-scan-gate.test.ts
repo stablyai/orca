@@ -138,6 +138,18 @@ describe('Codex WSL scan gate', () => {
     expect(mocks.walk).not.toHaveBeenCalled()
   })
 
+  it('skips running-distro roots when a host hook path is not flushed yet', async () => {
+    await expect(
+      resolveSessionFilePath('codex', 'session-id', {
+        transcriptPath: `${LOCAL_SESSIONS_DIR}\\2026\\rollout-1-session-id.jsonl`
+      })
+    ).resolves.toBeNull()
+
+    expect(mocks.walk).toHaveBeenCalled()
+    expect(mocks.walk.mock.calls.some(([dir]) => dir.startsWith('\\\\wsl'))).toBe(false)
+    expect(mocks.gate).not.toHaveBeenCalled()
+  })
+
   it('surfaces the hook-path refusal when the id search also misses', async () => {
     const refusal = new WslTranscriptFsError('unavailable', 'stuck permits')
     mocks.gate.mockImplementation(async (options: { operation?: string; path: string }) => {

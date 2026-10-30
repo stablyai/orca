@@ -50,7 +50,7 @@ describe('inline visuals launch preference', () => {
     const launch = await createClaudeStructuredLaunchResolver({
       store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
       resolveWorkspacePath: async () => '/repo',
-      resolveCommand: () => '/bin/claude',
+      resolveCommand: () => ({ command: '/bin/claude', prefixArgs: [] }),
       resolveAuthPolicy: () => ({ account: 'system' }),
       resolveLaunchArgs: () => ['--add-dir', '/user/notes', '--plugin-dir', '/user/plugin'],
       resolveEnv: () => ({ [NATIVE_CHAT_SCRATCH_DIR_ENV]: '/inherited', KEEP: 'yes' }),
@@ -91,7 +91,7 @@ describe('inline visuals launch preference', () => {
         pinLaunchDirectory: vi.fn()
       },
       resolveWorkspacePath: async () => '/repo',
-      resolveCommand: () => '/bin/codex',
+      resolveCommand: () => ({ command: '/bin/codex', prefixArgs: [] }),
       resolveLaunchArgs: () => [],
       resolveEnvironment: async () => ({
         [NATIVE_CHAT_SCRATCH_DIR_ENV]: '/inherited',

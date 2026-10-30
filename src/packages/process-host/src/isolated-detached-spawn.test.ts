@@ -160,6 +160,24 @@ describe('spawnDetachedWithoutInheritance', () => {
     expect(killed.kill()).toBe(false)
   })
 
+  it('logs a child whose breakaway from our job was denied, and still starts it', async () => {
+    onPlatform('win32')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    setIsolatedSpawner(() => ({ pid: 7, exitWatchError: null, breakawayDenied: true }))
+
+    const child = spawnDetachedWithoutInheritance({ program: 'C:\\wsl.exe' })
+    await once(child, 'spawn')
+
+    expect(child.pid).toBe(7)
+    expect(warn).toHaveBeenCalledWith(
+      "[process-host] pid 7 could not break away from this process's job"
+    )
+    warn.mockClear()
+    setIsolatedSpawner(() => ({ pid: 8, exitWatchError: null, breakawayDenied: false }))
+    spawnDetachedWithoutInheritance({ program: 'C:\\wsl.exe' })
+    expect(warn).not.toHaveBeenCalled()
+  })
+
   it('reports a native spawn failure as an error event, like libuv', async () => {
     onPlatform('win32')
     setIsolatedSpawner(() => {

@@ -13,6 +13,7 @@ import {
 } from './structured-agent-session-launch-prompt'
 import type { StructuredAgentLaunchReceipt } from './agent-session/launch/structured-agent-session-launch-recovery'
 import {
+  structuredAgentSessionMessageSelection,
   structuredAgentSessionOptionView,
   structuredAgentSessionSendSelection
 } from '../../../shared/structured-agent-session-option-view'
@@ -21,6 +22,7 @@ import {
   applyStructuredLaunchHeldOptions,
   applyStructuredLaunchExplicitOptions,
   holdStructuredLaunchCreatePicks,
+  structuredLaunchOptionOverlay,
   settleStructuredLaunchCreateOptions
 } from './structured-agent-session-launch-options'
 import { structuredAgentSessionDrawnValues } from '../../../shared/structured-agent-session-option-snapshot'
@@ -51,14 +53,16 @@ export function prepareStructuredLaunchCreateMessage(
     return
   }
   const firstMessage = prepareStructuredLaunchPromptForCreate(intent.sessionId, intent.target)
-  const requested = structuredLaunchCreateOptions(state)
+  const { options: requested, selection } = structuredLaunchCreateOptions(state)
   const options =
     requested && state.selection.explicit && !optionsMode
       ? structuredLaunchCompatibleOptions(intent.agent, requested)
       : requested
   const params = {
     ...intent.params,
-    ...(firstMessage ? { firstMessage } : {}),
+    ...(firstMessage
+      ? { firstMessage: { ...firstMessage, ...(selection !== undefined ? { selection } : {}) } }
+      : {}),
     ...(options ? { options } : {}),
     ...(optionsMode ? { optionsMode } : {})
   }
@@ -90,38 +94,51 @@ function omitStructuredLaunchPermissionMode(state: StructuredLaunchState): void 
 }
 
 /** The first turn uses held picks over the action's choices over the chat's shown selection. */
-function structuredLaunchCreateOptions(
-  state: StructuredLaunchState
-): Readonly<Record<string, string>> | undefined {
-  const { intent, selection } = state
-  const requested = structuredLaunchRequestedOptions(selection)
+function structuredLaunchCreateOptions(state: StructuredLaunchState): {
+  options?: Readonly<Record<string, string>>
+  selection?: Readonly<Record<string, string>>
+} {
+  const { intent } = state
+  const overlay = structuredLaunchOptionOverlay(state)
+  const requested = structuredLaunchRequestedOptions({ ...state.selection, held: overlay })
   const firstFrame = firstFrameOptionState(intent.agent, intent.target, {
     newLaunch: !intent.params.resumeFrom,
     worktree: intent.params.worktree,
     seedsModel: intent.seedOptions?.model !== undefined
   })
   // Create has always carried options, so any host takes what the chat shows.
-  const view = structuredAgentSessionOptionView(firstFrame, intent.seedOptions, selection.held)
+  const view = structuredAgentSessionOptionView(
+    firstFrame,
+    intent.seedOptions,
+    { ...requested, ...overlay },
+    state.selection.explicit
+  )
   const drawn = structuredAgentSessionDrawnValues(view)
-  // Each held value as the picker draws it; the held picks themselves stay as the user made them.
+  // Model and effort remain raw action input; tier retains its existing display projection.
   const held = Object.fromEntries(
-    Object.entries(selection.held).map(([id, encoded]) => {
-      const value = id === 'model' ? undefined : drawn[id]?.value
+    Object.entries(overlay).map(([id, encoded]) => {
+      const value = id === 'model' || id === 'effort' ? undefined : drawn[id]?.value
       const shown = value === undefined ? null : encodeStructuredAgentSessionOptionValue(id, value)
       return [id, shown ?? encoded]
     })
   )
-  holdStructuredLaunchCreatePicks(state, selection.held)
-  if (requested?.model !== undefined) {
-    // The view draws under a re-picked model only; an action's own model keeps picks as made.
-    return requested.model === selection.held.model ? { ...requested, ...held } : requested
+  holdStructuredLaunchCreatePicks(state)
+  const options =
+    requested?.model !== undefined
+      ? requested.model === overlay.model
+        ? { ...requested, ...held }
+        : requested
+      : {
+          ...structuredAgentSessionSendSelection(view),
+          ...requested,
+          ...held
+        }
+  return {
+    ...(Object.keys(options).length ? { options } : {}),
+    ...(intent.sendSelectionSupport
+      ? { selection: structuredAgentSessionMessageSelection(view) }
+      : {})
   }
-  const options = {
-    ...structuredAgentSessionSendSelection(view),
-    ...requested,
-    ...held
-  }
-  return Object.keys(options).length ? options : undefined
 }
 
 /** Later picks use the normal option path without holding publication behind startup. */
@@ -133,7 +150,7 @@ export function publishStructuredLaunchCreateOptions(
     return applyStructuredLaunchExplicitOptions(state, receipt)
   }
   settleStructuredLaunchCreateOptions(state, state.intent.params.options ?? {})
-  void applyStructuredLaunchHeldOptions(state, receipt).catch((error: unknown) => {
+  void applyStructuredLaunchHeldOptions(state, receipt, false).catch((error: unknown) => {
     console.warn('[native-chat] applying a launch option failed', error)
   })
   return receipt

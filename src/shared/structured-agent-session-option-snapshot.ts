@@ -13,6 +13,10 @@ import type {
   SessionOptionValue
 } from './native-chat/input/native-chat-session-options'
 import type { TrackedNativeChatSessionOption } from './native-chat/input/native-chat-session-option-state'
+import {
+  catalogEffortLevels,
+  effectiveAgentEffort
+} from './structured-agent-session-effective-effort'
 import { effectiveServiceTier } from './structured-agent-session-effective-tier'
 import { serviceTierOption } from './structured-agent-session-discovered-model'
 import {
@@ -130,9 +134,24 @@ function drawnModelControls(state: StructuredAgentSessionOptionState) {
   const normalises =
     shown.shown.currentId !== null &&
     structuredAgentSessionDescribedModel(state, shown.shown.currentId) !== undefined
-  const values = normalises
+  let values = normalises
     ? valuesUnderControls(catalog, controls, record.values, state.olderHost === true)
     : record.values
+  if (record.agent === 'pi' && state.reportedEffort !== undefined) {
+    values = { ...values, effort: { value: state.reportedEffort, source: 'reported' } }
+  }
+  const requested = values.effort
+  if (
+    normalises &&
+    record.agent === 'pi' &&
+    typeof requested?.value === 'string' &&
+    requested.source !== 'reported'
+  ) {
+    const effort = effectiveAgentEffort(requested.value, catalogEffortLevels(controls))
+    if (effort && effort !== requested.value) {
+      values = { ...values, effort: { ...requested, value: effort } }
+    }
+  }
   return { catalog, models, ...shown, controls, values }
 }
 
@@ -164,7 +183,6 @@ function modelOptionSnapshot(state: StructuredAgentSessionOptionState): SessionO
     return [PROVIDER_DEFAULT_MODEL_PLACEHOLDER]
   }
   const { catalog, models, shown, controlsModelId, isCliDefault, controls, values } = drawn
-  const { record } = state
   const snapshot =
     models.length === 0
       ? []
@@ -183,9 +201,10 @@ function modelOptionSnapshot(state: StructuredAgentSessionOptionState): SessionO
     ? withUnlistedEffort(
         catalog,
         controlsModelId,
-        record.values.effort,
+        values.effort,
         state.verifiedModelIds,
-        snapshot
+        snapshot,
+        state.record.agent
       )
     : [PROVIDER_DEFAULT_MODEL_PLACEHOLDER]
 }
@@ -234,7 +253,9 @@ export function canSetStructuredAgentSessionOption(
     return (
       descriptor?.settable === true &&
       descriptor.kind.type === 'select' &&
-      descriptor.kind.choices.some((choice) => choice.value === value)
+      (value === 'own'
+        ? state.permissionOwnSupported === true
+        : descriptor.kind.choices.some((choice) => choice.value === value))
     )
   }
   return (

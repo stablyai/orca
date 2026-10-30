@@ -59,6 +59,8 @@ export type WorktreeApi = {
     args: ForgetRemovedWorktreesForExecutionHostArgs
   ) => Promise<ForgetRemovedWorktreesForExecutionHostResult>
   cancelListDetected?: (args: { providerRequestId: ProviderRequestId }) => Promise<void>
+  /** User act: scan a local repo inside its WSL distro's user-act scope, which may start it. */
+  scanStartingWslDistro?: (args: { repoId: string }) => Promise<void>
   create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
   adoptProvisionedRoot: (args: AdoptProvisionedRootArgs) => Promise<CreateWorktreeResult>
   /** Local creates report progress by creationId; remote/runtime creates emit nothing. */
@@ -92,7 +94,10 @@ export type WorktreeApi = {
   sleep: (request: WorkspaceSleepRequest) => Promise<WorkspaceSleepOutcome[]>
   sleepReopened: (worktreeId: string) => Promise<void>
   /** True once running, so the renderer's subsequent spawn reattaches. */
-  resumeSleptPane: (pane: { worktreeId: string; tabId: string; leafId: string }) => Promise<boolean>
+  resumeSleptPane: (
+    pane: { worktreeId: string; tabId: string; leafId: string },
+    automatic?: boolean
+  ) => Promise<boolean>
   /** Drops main's workspace-sleep record only while no tab holds its pane. */
   retireStrandedSleepRecord: (args: { worktreeId: string; paneKey: string }) => Promise<void>
   remove: (args: {

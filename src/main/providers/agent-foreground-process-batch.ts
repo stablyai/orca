@@ -15,7 +15,7 @@ import {
   type ProcessTableIndex,
   type ProcessTableIndexStats
 } from '../../shared/process-table-index'
-import type { ProcessTableRow } from '../../shared/process-table-snapshot'
+import { unreadableArgvName, type ProcessTableRow } from '../../shared/process-table-snapshot'
 import { getStrictProcessTableSnapshot } from '../../shared/process-table-snapshot-reader'
 import { resolveRemoteForegroundEvidenceFromRows } from './agent-foreground-process-remote-evidence'
 
@@ -209,6 +209,14 @@ export function resolveAgentForegroundProcessesFromIndex(
       occupancy.rowsByProcessGroup.get(root.pgid) === 1
     const allCandidates = rowsByOwner.get(root.pid) ?? []
     const foregroundCandidates = allCandidates.filter((row) => row.pgid === root.tpgid)
+    // A foreground process whose argv ps withheld could be the agent: absence of a name proves nothing.
+    if (foregroundCandidates.some((row) => unreadableArgvName(row.command) !== null)) {
+      return {
+        available: false,
+        processName: request.fallbackProcess ?? null,
+        reason: 'argv_unreadable'
+      }
+    }
     const fallbackProcess = request.fallbackProcess
     const wrapperFallback =
       typeof fallbackProcess === 'string' && isAgentForegroundWrapperProcess(fallbackProcess)

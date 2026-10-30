@@ -97,6 +97,7 @@
       "connecting": "接続中…",
       "invalidPairingCode": "ペアリングコードが無効です。コンピュータからコピーして、もう一度貼り付けてください。",
       "invalidQrCode": "Orca の有効な QR コードではありません",
+      "downloadQrCode": "これはダウンロード用のコードです。デスクトップのステップ2にあるペアリングコードをスキャンしてください。",
       "openDesktopStep": "コンピュータで Orca を開く",
       "openMobileSettingsStep": "「設定」→「モバイル」を開く",
       "openSettings": "設定を開く",
@@ -956,9 +957,7 @@
       "empty": "カスタムショートカットはまだ設定されていません。",
       "removeShortcut": "{{label}} を削除",
       "resetDefaults": "初期設定に戻す",
-      "resetDescription": "すべての組み込みショートカットキーを元の順序で表示",
-      "shortcutBar": "ショートカットバー",
-      "shortcutBarDescription": "キーの表示・非表示を切り替えられます。ドラッグハンドルを長押ししてキーをドラッグすると、ターミナルのショートカットバーのキーを好みの順序に並べ替えられます。"
+      "resetDescription": "すべての組み込みショートカットキーを元の順序で表示"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "レート制限のリセット枠を使用しますか？",
@@ -999,6 +998,11 @@
       "folder": "フォルダー",
       "project": "プロジェクト {{repo}}",
       "remoteHost": "リモートホスト"
+    },
+    "nativeScreenRecovery": {
+      "title": "問題が発生しました",
+      "tryAgain": "再試行",
+      "home": "ホーム"
     }
   },
   "connection": {
@@ -1092,7 +1096,8 @@
       "checkTailnet": "デスクトップがスリープ状態になっておらず、tailnet 内で接続済みと表示されていることを確認してください。",
       "desktopTitle": "デスクトップアプリが未起動",
       "disableVpn": "その VPN を無効にするか、スプリットトンネリングまたは「LAN を許可」を有効にしてください。",
-      "firewallTitle": "ファイアウォールがポート 6768 をブロック",
+      "firewallTitle": "ファイアウォールがポート {{port}} をブロック",
+      "linuxFirewall": "Linux: sudo ufw allow {{port}}",
       "keepTailscaleOn": "100.x.x.x や *.ts.net のようなホストアドレスには Tailscale 経由で接続します。Tailscale をオンにしておいてください。",
       "macosFirewall": "macOS: 「システム設定」→「ネットワーク」→「ファイアウォール」で Orca を許可してください。",
       "notificationNetwork": "モバイルデータ通信か別の Wi-Fi ネットワークを試してください。切り替え後に通知が届く場合は、元のネットワークで配信が遅れている可能性があります。",
@@ -1829,16 +1834,8 @@
   },
   "session": {
     "accessoryKeys": {
-      "addCustomShortcut": "カスタムショートカットを追加",
       "dismissKeyboard": "キーボードを閉じる",
-      "dismissKeyboardHint": "現在のターミナルセッションを開いたまま、ソフトウェアキーボードを非表示にします。",
-      "paste": "貼り付け",
-      "pasteFromClipboard": "クリップボードから貼り付け",
-      "sendKey": "{{label}} を送信",
-      "switchToBufferedInput": "バッファー式のコマンド入力に切り替え",
-      "switchToDesktopMode": "デスクトップモードに切り替え",
-      "switchToLiveInput": "ターミナルへのリアルタイム入力に切り替え",
-      "switchToPhoneMode": "スマートフォンモードに切り替え"
+      "sendKey": "{{label}} を送信"
     },
     "activeContent": {
       "createTab": "タブを作成",
@@ -1948,21 +1945,12 @@
       "titleRight": "右側のタブを閉じますか？"
     },
     "commandDock": {
-      "commandPlaceholder": "コマンドを入力してください…",
       "liveInputHint": "入力したテキストは、選択中のターミナルに直接送信されます。",
       "liveInputLabel": "ターミナルへのリアルタイム入力",
       "sendCommand": "コマンドを送信"
     },
     "contentRow": {
       "dismissCreationWarning": "ワークスペース作成の警告を閉じる"
-    },
-    "diffCommentLineRow": {
-      "addNote": "{{line}} 行目にメモを追加",
-      "deleteNote": "{{line}} 行目のメモを削除",
-      "diffLine": "{{title}} の差分 {{line}} 行目",
-      "line": "{{line}} 行目",
-      "placeholder": "レビューメモを追加",
-      "saveNote": "メモを保存"
     },
     "diffLineRow": {
       "addNoteLabel": "{{line}} 行目にメモを追加",
@@ -2480,7 +2468,8 @@
     "useNativeChatDictation": {
       "insertFailed": "ディクテーションの結果を挿入できませんでした。",
       "insertFailedCopied": "ディクテーションの結果を挿入できず、クリップボードにコピーしました。",
-      "inserted": "ディクテーションの結果を挿入しました。"
+      "inserted": "ディクテーションの結果を挿入しました。",
+      "stoppedAfterSilence": "1分間音声がなかったため停止しました。"
     },
     "useNativeChatStop": {
       "stopNotSent": "停止要求を送信できませんでした。",
@@ -2513,7 +2502,8 @@
       "saveFailed": "クイックコマンドの保存に失敗しました"
     },
     "useSessionTerminalSendActions": {
-      "inputTooLarge": "入力データが大きすぎます（最大 256 KiB）。"
+      "inputTooLarge": "入力データが大きすぎます（最大 256 KiB）。",
+      "liveInputInterrupted": "ライブ入力が中断されました。入力欄をクリアしました。続行する前にターミナルを確認してください。"
     },
     "useStartup": {
       "wakeAgents": "スリープ中の Agent を再開するには、ホストで Orca を開いてください。"
@@ -2705,19 +2695,26 @@
     "notificationDisplayTest": {
       "accepted": "Orca のプッシュサービスが通知を受け付けました。通知が届いているか確認してください。",
       "connectDesktop": "デスクトップに接続してから再試行してください。",
-      "description": "Orca のプッシュサービス経由でテスト通知を送信します。",
+      "description": "プッシュ通知の配信をテストします。プッシュを利用できない場合はローカル通知をテストします。",
       "desktopUnreachable": "デスクトップに接続できませんでした。再試行してください。",
       "loadFailed": "ペアリング済みのデスクトップ一覧を読み込めませんでした。",
       "pairDesktop": "デスクトップとペアリングしてから再試行してください。",
       "pushServiceFailed": "Orca のプッシュサービス経由で送信できませんでした。再試行してください。",
       "rateLimited": "通知が多すぎます。しばらくしてから再試行してください。",
-      "reconnectPhone": "このスマートフォンを通知の受信先として登録するには、再接続してください。",
       "sendButton": "テスト通知を送信する",
       "sendFailed": "テスト用のプッシュ通知を送信できませんでした。",
       "sending": "送信中…",
       "troubleReceivingAlerts": "通知が届きませんか？",
       "troubleshooting": "トラブルシューティング",
-      "updateDesktop": "このテストを実行するには、デスクトップを更新してください。"
+      "localTitle": "テスト通知",
+      "localBody": "この端末からのローカル通知テストです。",
+      "localScheduled": "{{reason}} ローカルテストを予約しました。通知を確認してください。このテストは表示のみを確認し、Agentのアラート配信は確認しません。",
+      "disabled": "Orca の通知がオフになっています。通知を有効にして、もう一度お試しください。",
+      "osDisabled": "システム設定で通知がオフになっています。通知を許可して、もう一度お試しください。",
+      "noToken": "この端末ではプッシュトークンを利用できません。",
+      "unsupportedHost": "このデスクトップはプッシュ通知に対応していません。受信するには更新してください。",
+      "registrationPending": "このデスクトップではプッシュ登録がまだ完了していません。しばらくしてからもう一度お試しください。",
+      "liveFallbackScheduled": "{{reason}} ローカルテストを予約しました。通知を確認してください。Orca が実行中で接続されている間は、リアルタイムのアラートを受信できます。"
     },
     "notificationSettingsScreen": {
       "description": "Agent が入力を必要とするときやタスクを完了したときに、このデバイスに通知が届きます。",

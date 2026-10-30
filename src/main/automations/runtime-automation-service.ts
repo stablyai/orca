@@ -108,9 +108,13 @@ function bindHeadlessRunTerminalRetention(
       return true
     },
     // Shared workspaces must close run panes rather than accumulate sleeping tabs.
-    runOwnsWorkspace: (run) =>
-      run.workspaceId !== null &&
-      store.getWorktreeMeta(run.workspaceId)?.automationProvenance?.automationRunId === run.id,
+    runOwnsWorkspace: (run) => {
+      const provenance = run.workspaceId
+        ? store.getWorktreeMeta(run.workspaceId)?.automationProvenance
+        : undefined
+      // Why: a client-origin label names another owner's run, never one of this host's.
+      return provenance?.origin !== 'client' && provenance?.automationRunId === run.id
+    },
     sleepRunWorkspace: async (run) => {
       const ptyId = run.terminalPtyId
       if (!run.workspaceId || !ptyId) {

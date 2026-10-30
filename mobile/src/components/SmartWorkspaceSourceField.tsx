@@ -1,4 +1,4 @@
-import { Pressable, Text, TextInput, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import {
   CircleDot,
   ExternalLink,
@@ -14,7 +14,7 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { TaskProviderLogo } from './TaskProviderLogo'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
+import { TextField } from './composer-input/TextField'
 
 type Props = {
   composer: MobileComposerSource
@@ -102,8 +102,9 @@ export function SmartWorkspaceSourceField({
         </View>
       ) : (
         // Use real TextInput sharing composer.name with docked picker field so typed text survives native focus handoff.
-        <TextInput
-          style={[styles.input, disabled && styles.disabled]}
+        <TextField
+          // A non-interactive sheet is mid-swap, not disabled, so it stays undimmed.
+          style={disabled ? undefined : styles.enabled}
           value={composer.name}
           onChangeText={composer.setName}
           onFocus={openDrawer}
@@ -112,7 +113,6 @@ export function SmartWorkspaceSourceField({
             'components.smartWorkspaceSourceField.searchPlaceholder',
             'Type a name or search a source'
           )}
-          placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
           autoCorrect={false}
           // Return opens picker, never submits create form during focus handoff.
@@ -138,18 +138,8 @@ const styles = themedStyleSheet(() => ({
     fontWeight: '400',
     color: colors.textMuted
   },
-  input: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    color: colors.textPrimary
-  },
-  disabled: {
-    opacity: 0.55
+  enabled: {
+    opacity: 1
   },
   pill: {
     flexDirection: 'row',

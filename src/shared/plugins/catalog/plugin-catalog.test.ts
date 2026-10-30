@@ -7,7 +7,11 @@ import {
   selectPluginCatalogRelease
 } from './plugin-catalog'
 import { pluginCatalogReleaseSchema } from './plugin-catalog-release'
-import { PLUGIN_MARKETPLACE_ENTRY_LIMIT, pluginMarketplaceSchema } from './plugin-marketplace'
+import {
+  PLUGIN_MARKETPLACE_ENTRY_LIMIT,
+  pluginMarketplaceListingSchema,
+  pluginMarketplaceSchema
+} from './plugin-marketplace'
 
 function release(version: string, minimumOrca = '1.4.0') {
   return pluginCatalogReleaseSchema.parse({
@@ -75,6 +79,17 @@ describe('plugin catalog', () => {
     expect(parsed.plugins[1]?.categories).toHaveLength(16)
     expect(parsed.plugins[1]?.categories.slice(0, 2)).toEqual(['themes', 'c0'])
     expect(parsed.plugins[1]?.releases.map((r) => r.version)).toEqual(['1.1.0'])
+  })
+
+  it('reads the owner id without carrying it into the cached listing', () => {
+    const parsed = pluginCatalogSchema.parse(
+      catalog([entry('acme.one', { ownerId: 1_234 }), entry('acme.two', { ownerId: 'acme' })])
+    )
+    expect(parsed.plugins.map((plugin) => plugin.id)).toEqual(['acme.one', 'acme.two'])
+    expect(parsed.plugins[0]).not.toHaveProperty('ownerId')
+    // Why strict: older Orca reads the cached listing back with this shape after a downgrade.
+    const { name, owner, plugins } = parsed
+    expect(pluginMarketplaceListingSchema.safeParse({ name, owner, plugins }).success).toBe(true)
   })
 
   it('trims an oversized catalog and release list instead of refusing it', () => {

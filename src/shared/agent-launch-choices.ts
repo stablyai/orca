@@ -15,6 +15,7 @@ export type AgentLaunchChoices = Partial<Record<TuiAgent, AgentModelOptionChoice
 export type AgentChoiceCliForm =
   | { kind: 'value'; names: readonly string[]; lift: 'separate-and-long-equals' | 'never' }
   | { kind: 'config'; names: readonly string[]; key: string; lift: 'codex-bare-string' | 'never' }
+  | { kind: 'settings'; names: readonly string[]; key: string; lift: 'merged-json' }
   | { kind: 'recipe'; words: readonly string[]; value: AgentPermissionChoice }
 
 export function normalizeAgentModelOptionChoices(

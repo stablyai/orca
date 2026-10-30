@@ -53,7 +53,13 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
     opts: OwnedMobileTerminalCreateOptions = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     this.pruneOwnedMobileDispatchRecipes()
-    const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
+    const workspace = await this.resolveTerminalWorkspaceLaunchScope(
+      `id:${worktreeId}`,
+      undefined,
+      {
+        wslUserAct: opts.wslUserAct === true
+      }
+    )
     const cwd = this.resolveWorkspaceTerminalStartupCwd(workspace, opts.cwd)
     // Why: an SSH sessionId means reattach; only synthesize local serve ids so SSH fresh terminals still call pty.spawn.
     const stableSessionId =
@@ -133,7 +139,8 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
           `id:${worktreeId}`,
           opts.createMutation.id,
           true,
-          (_selector, handle) => create(handle)
+          (_selector, handle) => create(handle),
+          { wslUserAct: opts.wslUserAct === true }
         )
       : await create()
     if (terminal.ptyId) {

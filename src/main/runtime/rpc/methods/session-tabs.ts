@@ -18,7 +18,7 @@ import {
 import { SESSION_TAB_MARKDOWN_METHODS } from './session-tab-markdown-methods'
 import { SESSION_TAB_MUTATION_METHODS } from './session-tab-mutation-methods'
 import { createSessionTabsRetirementProofDelta } from './session-tabs-retirement-proof-delta'
-import { restoreStructuredTabsIfSupported } from './structured-session-tab-restore'
+import { prepareStructuredTabsIfSupported } from './structured-session-tab-restore'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../ai-vault/structured-session-ownership'
 import { SessionTabsUnsubscribeAllParams } from '../../../../shared/rpc-contract/session-tabs-params'
 import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
@@ -31,7 +31,7 @@ export const SESSION_TAB_METHODS = [
     permission: 'workspace',
     params: WorktreeTabSelector,
     handler: async (params, { runtime, pairedDeviceId, clientKind, clientCapabilities }) => {
-      await restoreStructuredTabsIfSupported({ runtime, clientKind, clientCapabilities })
+      await prepareStructuredTabsIfSupported({ runtime, clientKind, clientCapabilities })
       return projectSessionTabsForClient(
         await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId, {
           includeInitialSurfaceLaunch: true
@@ -46,7 +46,7 @@ export const SESSION_TAB_METHODS = [
     permission: 'workspace',
     params: null,
     handler: async (_params, context) => {
-      await restoreStructuredTabsIfSupported(context)
+      await prepareStructuredTabsIfSupported(context)
       return listSessionTabsInventory(context)
     }
   }),
@@ -162,7 +162,7 @@ export const SESSION_TAB_METHODS = [
         register(explicitWorktreeId)
       }
       try {
-        await restoreStructuredTabsIfSupported({ runtime, clientKind, clientCapabilities })
+        await prepareStructuredTabsIfSupported({ runtime, clientKind, clientCapabilities })
         if (released) {
           return
         }

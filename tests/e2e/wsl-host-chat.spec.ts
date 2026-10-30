@@ -137,10 +137,12 @@ test.describe('native chat on a WSL host', () => {
       await start.click()
       await expect
         .poll(() => fakeWslConnects(connectLogFile).length, { timeout: 60_000 })
-        .toBeGreaterThan(connectsBeforeStart)
+        .toBe(connectsBeforeStart + 1)
       await expect(stoppedNotice).toBeHidden({ timeout: 60_000 })
       await send('after Start')
       await expectReplyAfter('after Start')
+      // One Start is one connect: a second would rerun the server's launch in the distro.
+      expect(fakeWslConnects(connectLogFile)).toHaveLength(connectsBeforeStart + 1)
       await page.screenshot({ path: testInfo.outputPath('wsl-host-chat-after-start.png') })
 
       const connectsBeforeStop = await stopDistro()

@@ -29,6 +29,8 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
   skills?: readonly AgentJournalSkillRef[]
   /** Sent only when the host advertises `agent-session.queued-messages.v1`. */
   delivery?: 'queue-if-active'
+  /** Sent only when the host advertises `agent-session.send-selection.v1`. */
+  selection?: Readonly<Record<string, string>>
   /** Sent only when the host advertises `agent-session.send-options.v1`. */
   options?: Readonly<Record<string, string>>
   deadline?: number
@@ -57,7 +59,8 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
     fields: {
       body,
       ...(input.delivery ? { delivery: input.delivery } : {}),
-      ...(input.options ? { options: input.options } : {})
+      ...(input.options ? { options: input.options } : {}),
+      ...(input.selection !== undefined ? { selection: input.selection } : {})
     },
     clientOperationId: input.clientMessageId,
     timeoutMs

@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+// @vitest-environment happy-dom
 import { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-send-mutation'
 import {
   clearNativeChatComposerDraftsForTests,
@@ -101,8 +102,37 @@ it.each([10, 100])(
     expect(structuredTransport.onError).toHaveBeenCalledTimes(2)
     expect(structuredTransport.onError).toHaveBeenNthCalledWith(1, null, undefined)
     expect(structuredTransport.onError).toHaveBeenNthCalledWith(2, null, undefined)
-    expect(kinds).toBeGreaterThanOrEqual(count)
-    expect(names).toBeGreaterThanOrEqual(count)
+    expect({ kinds, names }).toEqual({ kinds: 0, names: 0 })
+  }
+)
+
+it.each([
+  undefined,
+  [],
+  [
+    { name: 'fast', kind: 'command' as const },
+    { name: 'permissions', kind: 'command' as const }
+  ]
+])(
+  'sends provider commands with attachments under inventory %j and retains refused drafts',
+  async (inventory) => {
+    for (const text of ['/fast', '/permissions']) {
+      for (const accepted of [true, false]) {
+        clearNativeChatComposerDraftsForTests()
+        const { send, structuredTransport, setDraft } = harness('codex')
+        structuredTransport.sessionCommands = inventory
+        vi.mocked(structuredTransport.send).mockReturnValue(accepted)
+        updateNativeChatComposerDraft('tab-1:pane', { text, images: [ATTACHMENT] }, 'immediate')
+        await send(text)
+        expect(structuredTransport.send).toHaveBeenCalledExactlyOnceWith(text, [ATTACHMENT])
+        if (accepted) {
+          expect(setDraft).toHaveBeenCalledWith('')
+        } else {
+          expect(setDraft).not.toHaveBeenCalled()
+          expect(readNativeChatComposerDraft('tab-1:pane').text).toBe(text)
+        }
+      }
+    }
   }
 )
 
@@ -110,8 +140,7 @@ it.each([10, 100])(
 describe('attachment guard follows what the host claims', () => {
   it.each([
     ['claude', '/clear'],
-    ['claude', '/model'],
-    ['codex', '/permissions']
+    ['claude', '/model']
   ] as const)('refuses attachments on the host-claimed %s command %s', (agent, text) => {
     const { send, structuredTransport } = harness(agent)
     send(text)
@@ -122,6 +151,8 @@ describe('attachment guard follows what the host claims', () => {
   })
 
   it.each([
+    ['codex', '/permissions'],
+    ['claude', '/fast'],
     ['claude', '/init'],
     ['claude', '/review'],
     ['codex', '/goal ship the fix']
@@ -178,17 +209,12 @@ describe('reports the sends that bring the latest into view', () => {
     expect(onSubmitted).toHaveBeenCalledOnce()
   })
 
-  it('reports nothing for a host command chat sessions do not run', async () => {
+  it('reports a provider command sent without an inventory', async () => {
     const onSubmitted = vi.fn()
     const { send, structuredTransport } = harness('codex', undefined, onSubmitted)
-    send('/permissions', [])
-    await vi.waitFor(() =>
-      expect(structuredTransport.onError).toHaveBeenCalledWith(
-        expect.stringContaining('not available in chat sessions'),
-        undefined
-      )
-    )
-    expect(onSubmitted).not.toHaveBeenCalled()
+    await send('/permissions', [])
+    expect(structuredTransport.send).toHaveBeenCalledWith('/permissions', [])
+    expect(onSubmitted).toHaveBeenCalledOnce()
   })
 })
 

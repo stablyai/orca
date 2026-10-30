@@ -190,6 +190,11 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
     return null
   }
 
+  /** The same title for main's synthetic title producer, which must see its own frames. */
+  getTrackedPtyTitle(ptyId: string): string | null {
+    return this.getTrackedRawTitleForPty(ptyId)
+  }
+
   protected isLiveCursorNativeTitle(rawTitle: string, meta?: TerminalTitleFactMeta): boolean {
     return isCursorNativeAgentTitle(rawTitle) && meta?.staleWorkingTitleClear !== true
   }

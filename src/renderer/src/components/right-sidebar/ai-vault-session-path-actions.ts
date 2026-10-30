@@ -4,6 +4,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import { aiVaultSessionLogFilePath } from '../../../../shared/ai-vault-session-log-resource'
 import { isAiVaultSyntheticSessionPath } from '../../../../shared/ai-vault-session-deletion'
 import { revealInFileManager } from '@/lib/reveal-in-file-manager'
 
@@ -16,18 +17,14 @@ export function canUseLocalAiVaultSessionPathActions(
   return normalizeExecutionHostId(executionHostId) === LOCAL_EXECUTION_HOST_ID
 }
 
-/** Open only local single-file logs until remote/synthetic sessions have provider-owned log-resource contracts. */
+/** File viewing needs a conversation resource on this computer, not a session storage locator. */
 export function canOpenAiVaultSessionLogInOrca(
-  session: Pick<AiVaultSession, 'filePath' | 'executionHostId'>
+  session: Pick<AiVaultSession, 'agent' | 'filePath' | 'executionHostId'>
 ): boolean {
-  const filePath = session.filePath?.trim()
-  if (!filePath) {
-    return false
-  }
-  if (!canUseLocalAiVaultSessionPathActions(session.executionHostId)) {
-    return false
-  }
-  return !isAiVaultSyntheticSessionPath(filePath)
+  return (
+    canUseLocalAiVaultSessionPathActions(session.executionHostId) &&
+    aiVaultSessionLogFilePath(session) !== null
+  )
 }
 
 /** Reveals a session's log or cwd in the OS file manager, judged by the session's own host. */

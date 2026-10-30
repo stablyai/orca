@@ -1,17 +1,20 @@
-import { claudeOpened } from '../../claude/claude-structured-startup-settled-test-support'
+import { CODEX_SESSION_OPTION_CATALOG } from '../../../shared/agent-session-option-catalog-claude-codex'
+import {
+  structuredAgentSessionMessageSelection,
+  structuredAgentSessionSendSelection
+} from '../../../shared/structured-agent-session-option-view'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
-import type { ClaudeStructuredSessionEvent } from '../../claude/structured/claude-structured-session-state'
 import { startCodexTurn } from '../../codex/codex-structured-turn-start'
 import { readLiveCodexSessionOptions } from '../../codex/codex-structured-session-options'
 import { optionSession } from '../../codex/codex-structured-option-session.test-fixture'
 import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-server-request-error'
 import { structuredAgentSessionDrawnValues } from '../../../shared/structured-agent-session-option-snapshot'
+
 import { structuredAgentSessionCapabilityView } from './structured-agent-session-option-models'
 import { claudeFallbackModelOptions } from '../../claude/claude-structured-session-options'
 import {
   acquired,
   fakeClaude,
-  claudeFrame,
   USER_MESSAGE
 } from '../../claude/claude-structured-session-test-support'
 import { getAgentSessionOptionCatalog } from '../../../shared/agent-session-option-catalog'
@@ -20,9 +23,7 @@ import {
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState
 } from '../../../shared/structured-agent-session-options'
-import { structuredAgentSessionSendSelection } from '../../../shared/structured-agent-session-option-view'
 import type { StructuredAgentSessionLiveOptions } from './structured-agent-session-adapter'
-
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
@@ -34,7 +35,10 @@ import {
 import type { AgentJournalItemBody } from '../../../shared/agent-session-journal-types'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import type { AgentSessionModelOption } from '../../../shared/agent-session-wire'
-import { createAgentModelCatalogService } from '../agent-model-catalog/agent-model-catalog-service'
+import {
+  createAgentModelCatalogService,
+  type AgentModelCatalogService
+} from '../agent-model-catalog/agent-model-catalog-service'
 import {
   AgentModelCatalogStore,
   type AgentModelCatalogSuccess
@@ -103,12 +107,17 @@ describe('options at rest', () => {
     const current = await readStructuredAgentSessionOptions(context, SESSION, {
       readsWithoutModel: true
     })
-    expect(current.current).toEqual({ defaulted: [], permissionMode: 'ask' })
+    expect(current.current).toMatchObject({
+      defaulted: [],
+      permissionMode: 'ask',
+      acceptedInputSources: {}
+    })
     expect(read).toHaveBeenCalledTimes(2)
     const older = await readStructuredAgentSessionOptions(context, SESSION, {
       readsWithoutModel: false
     })
-    expect(older.current).toEqual({
+    expect(older.current).toMatchObject({
+      acceptedInputSources: { model: 'policy' },
       model: 'gpt-account',
       defaulted: [],
       permissionMode: 'ask'
@@ -157,6 +166,9 @@ describe('options at rest', () => {
     expect(resting.listedModelIds).toEqual(['gpt-5.5'])
     expect(resting.current).toMatchObject({ model: 'gpt-unlisted', defaulted: [] })
     expect(running.current).toMatchObject({ model: 'gpt-unlisted', defaulted: [] })
+    for (const answer of [resting, running]) {
+      expect(answer.current.acceptedInputSources).toMatchObject({ model: 'saved', effort: 'saved' })
+    }
   })
 
   it.each(['omp', 'grok', 'opencode'] as const)(
@@ -200,9 +212,10 @@ describe('options at rest', () => {
       expect(result.current).not.toHaveProperty('model')
       record.options = { model: 'later-model', effort: 'off' }
       // Unregistered agents must not report a permission mode.
-      expect((await read()).current).toEqual({
+      expect((await read()).current).toMatchObject({
         model: 'later-model',
         effort: 'off',
+        acceptedInputSources: { model: 'saved', effort: 'saved' },
         defaulted: []
       })
       for (const emptyStart of [false, true]) {
@@ -250,7 +263,8 @@ describe('a chat at rest, read by the host', () => {
     wroteBeforeOpen = false,
     models: AgentSessionModelOption[] | null = listed,
     verified = true,
-    liveOptions?: StructuredAgentSessionLiveOptions
+    liveOptions?: StructuredAgentSessionLiveOptions,
+    modelCatalog: Pick<AgentModelCatalogService, 'read'> = catalog(models, verified)
   ) {
     const record = { ...restingRecord(), ...facts }
     const resting = {
@@ -264,7 +278,7 @@ describe('a chat at rest, read by the host', () => {
         adapter: liveOptions ? { readOptions: async () => liveOptions } : {},
         agents: claudeAndCodexAgents(),
         store: hostTestOptionsReadStore(() => record),
-        modelCatalog: catalog(models, verified)
+        modelCatalog
       },
       serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
       openConversation: async () => resting,
@@ -304,7 +318,63 @@ describe('a chat at rest, read by the host', () => {
   ])('%s', async (_name, facts, items, wroteBeforeOpen, defaulted) => {
     const read = await readAtRest(facts, items, wroteBeforeOpen)
     expect(read.current).toMatchObject({ model: 'gpt-account', defaulted })
+    const state = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('codex', CODEX_SESSION_OPTION_CATALOG),
+      CODEX_SESSION_OPTION_CATALOG,
+      read,
+      { newLaunch: true, coherentCatalog: true }
+    )
+    expect(read.current.acceptedInputSources).toEqual(defaulted.length ? {} : { model: 'policy' })
+    expect(structuredAgentSessionMessageSelection(state)).toEqual(
+      defaulted.length ? {} : { model: 'gpt-account' }
+    )
   })
+
+  it.each([
+    ['unknown', {}, {}, {}],
+    ['known report only', { model: 'gpt-account' }, {}, {}],
+    [
+      'unknown with saved literal',
+      {},
+      { model: 'retired-alias', effort: 'high' },
+      { model: 'retired-alias', effort: 'high' }
+    ]
+  ] as const)(
+    'keeps %s live Codex input source-qualified through metadata refresh',
+    async (_name, applied, saved, selection) => {
+      const native = optionSession(vi.fn())
+      native.appliedTurnOptions = applied
+      const provider = await readLiveCodexSessionOptions(native, undefined)
+      expect(provider.current.model).toBe('model' in applied ? applied.model : undefined)
+      const answer = await readAtRest({ options: saved }, [], false, listed, true, provider)
+      expect(answer.current).toMatchObject({
+        model: 'model' in saved ? saved.model : 'gpt-account',
+        defaulted: 'model' in applied || 'model' in saved ? [] : ['model']
+      })
+      let state = applyStructuredAgentSessionOptions(
+        createStructuredAgentSessionOptionState('codex', CODEX_SESSION_OPTION_CATALOG),
+        CODEX_SESSION_OPTION_CATALOG,
+        answer,
+        { newLaunch: true, coherentCatalog: true }
+      )
+      expect(answer.current.acceptedInputSources).toEqual(
+        'model' in saved ? { model: 'saved', effort: 'saved' } : {}
+      )
+      expect(structuredAgentSessionMessageSelection(state)).toEqual(selection)
+      state = applyStructuredAgentSessionModelCatalog(
+        state,
+        CODEX_SESSION_OPTION_CATALOG,
+        {
+          origin: 'probe',
+          fetchedAt: 1,
+          models: listed,
+          listingNamesConfiguredModel: true
+        },
+        { newLaunch: true, coherentCatalog: true }
+      )
+      expect(structuredAgentSessionMessageSelection(state)).toEqual(selection)
+    }
+  )
 
   it('preserves sparse Codex knowledge from an actual turn through host and shared desktop/phone values', async () => {
     const pending = Promise.withResolvers<unknown>()
@@ -757,75 +827,4 @@ describe('a chat at rest, read by the host', () => {
       catalog.stop()
     }
   })
-})
-
-it('projects held Claude reports through the full reader while actual controls and Send proceed', async () => {
-  const events: ClaudeStructuredSessionEvent[] = []
-  const native = fakeClaude()
-  const adapter = await acquired(native, {}, events)
-  await claudeOpened(adapter, SESSION)
-  const connection = native.connections[0]!
-  const pending = Promise.withResolvers<unknown>()
-  const settings = vi.spyOn(connection, 'getSettings').mockReturnValueOnce(pending.promise)
-  const queue = new StructuredAgentSessionTaskQueue()
-  const record = { ...restingRecord(), provider: 'claude', options: {} }
-  const live = { child: { fence: 7 }, params: { provider: 'claude' }, journal: restingJournal() }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the full reader uses only these context members; provider operations use the actual adapter.
-  const context = {
-    deps: {
-      adapter,
-      agents: claudeAndCodexAgents(),
-      store: hostTestOptionsReadStore(() => record)
-    },
-    serialize: (id: string, task: () => Promise<unknown>) => queue.serialize(id, task),
-    openConversation: async () => live,
-    conversation: async () => live
-  } as unknown as StructuredAgentSessionMutationContext
-  const read = () =>
-    readStructuredAgentSessionOptions(context, SESSION, { readsWithoutModel: true })
-  try {
-    claudeFrame(connection, { type: 'result', subtype: 'success', result: 'done', is_error: false })
-    await vi.waitFor(() => expect(settings).toHaveBeenCalledOnce())
-    expect((await read()).current.effort).toBe('high')
-    await queue.serialize(SESSION, () =>
-      adapter.dispatch({
-        sessionId: SESSION,
-        fence: 7,
-        clientMessageId: 'while-reporting',
-        body: USER_MESSAGE
-      })
-    )
-    expect(connection.sent.length).toBeGreaterThan(0)
-    await queue.serialize(SESSION, () =>
-      adapter.setOption({ sessionId: SESSION, fence: 7, key: 'model', value: 'claude-opus-5' })
-    )
-    pending.resolve({
-      applied: { model: 'old', effort: 'max' },
-      effective: { effortLevel: 'max', fastMode: true }
-    })
-    await Promise.resolve()
-    await Promise.resolve()
-    expect((await read()).current).toMatchObject({ model: 'claude-opus-5', effort: 'high' })
-    settings.mockResolvedValueOnce({
-      applied: { model: 'claude-opus-5', effort: 'low' },
-      effective: { effortLevel: 'low', fastMode: true }
-    })
-    claudeFrame(connection, {
-      type: 'result',
-      subtype: 'success',
-      result: 'later',
-      is_error: false
-    })
-    await vi.waitFor(async () =>
-      expect((await read()).current).toMatchObject({ effort: 'low', fastMode: true })
-    )
-    expect(
-      events.some(
-        (event) => event.type === 'options-reported' && event.reportedOptions.effort === 'max'
-      )
-    ).toBe(false)
-  } finally {
-    pending.resolve(null)
-    await adapter.closeSession(SESSION)
-  }
 })

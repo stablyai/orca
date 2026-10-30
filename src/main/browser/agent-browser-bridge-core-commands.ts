@@ -8,7 +8,7 @@ import { assertClipboardTextWriteWithinLimitWithYield } from '../../shared/clipb
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import { BrowserError } from './cdp-bridge'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
-import { focusedValueSetExpression } from './agent-browser-bridge-input'
+import { FILL_ELEMENT_FUNCTION } from './browser-element-functions'
 import { EMBEDDED_NAVIGATION_TIMEOUT_MS } from './agent-browser-bridge-types'
 import {
   isAbortedNavigationError,
@@ -34,9 +34,14 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserClickResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return (await this.execAgentBrowser(sessionName, ['click', element])) as BrowserClickResult
-    })
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (sessionName) => {
+        return (await this.execAgentBrowser(sessionName, ['click', element])) as BrowserClickResult
+      },
+      { elements: [element] }
+    )
   }
 
   async dblclick(
@@ -44,9 +49,18 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserClickResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return (await this.execAgentBrowser(sessionName, ['dblclick', element])) as BrowserClickResult
-    })
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (sessionName) => {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: agent-browser's dblclick --json answers the BrowserClickResult shape.
+        return (await this.execAgentBrowser(sessionName, [
+          'dblclick',
+          element
+        ])) as BrowserClickResult
+      },
+      { elements: [element] }
+    )
   }
 
   async goto(url: string, worktreeId?: string, browserPageId?: string): Promise<BrowserGotoResult> {
@@ -145,24 +159,16 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
     browserPageId?: string
   ): Promise<BrowserFillResult> {
     await assertClipboardTextWriteWithinLimitWithYield(value)
-    // agent-browser's CDP insertion loses focus in Electron guests; use the browser input pipeline.
+    // agent-browser's fill types into whatever holds focus and sends text per character; set the
+    // resolved element's value in one call instead.
     return this.enqueueTargetedCommand(
       worktreeId,
       browserPageId,
       async (sessionName) => {
-        if (!(await this.isExplicitContentEditableTarget(sessionName, element))) {
-          await this.execAgentBrowser(sessionName, ['focus', element])
-          // One stdin edit avoids argv limits and repeated copying of the growing field value.
-          await this.execAgentBrowser(sessionName, ['eval', '--stdin'], {
-            stdinText: focusedValueSetExpression(JSON.stringify(value), { dispatchEvents: true })
-          })
-          return { filled: element } as BrowserFillResult
-        }
-
-        await this.fillExplicitContentEditable(sessionName, element, value)
-        return { filled: element } as BrowserFillResult
+        await this.actOnElement(sessionName, element, 'fill', FILL_ELEMENT_FUNCTION, [value])
+        return { filled: element }
       },
-      { requireScopedTarget: true }
+      { requireScopedTarget: true, elements: [element] }
     )
   }
 }

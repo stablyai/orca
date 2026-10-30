@@ -7,10 +7,23 @@ import type { ProviderProcessLaunch } from '../provider-process/provider-process
 import type { ScriptedAgentChild } from '../runtime/structured-agent-scripted-child.test-fixture'
 import type { PiRpcConnection } from './rpc-session'
 
+type PiScriptOptions = {
+  signedOut?: boolean
+  model?: {
+    provider: string
+    id: string
+    reasoning: boolean
+    thinkingLevelMap?: Record<string, string | null>
+  }
+  /** Recorded native responses for requested levels, rather than a second clamp implementation. */
+  appliedEfforts?: Readonly<Record<string, string>>
+}
+
 class ScriptedPiConnection implements PiRpcConnection {
   closed = false
   rootVerdict: PiRpcConnection['rootVerdict'] = 'live'
   processless = false
+  spawnAbsence: PiRpcConnection['spawnAbsence'] = null
   lastCloseResult: PiRpcConnection['lastCloseResult'] = null
   readonly pid: number
   readonly file: string
@@ -18,7 +31,11 @@ class ScriptedPiConnection implements PiRpcConnection {
   private readonly exitListeners = new Set<() => void>()
   private firstStateRead = true
   private streaming = false
-  private model = { provider: 'scripted', id: 'model-1', reasoning: true }
+  private model: NonNullable<PiScriptOptions['model']> = {
+    provider: 'scripted',
+    id: 'model-1',
+    reasoning: true
+  }
   private effort = 'medium'
 
   constructor(
@@ -30,8 +47,11 @@ class ScriptedPiConnection implements PiRpcConnection {
     private readonly onClosed: () => void,
     number: number,
     /** A Pi with no login runs the unknown provider and lists no model. */
-    private readonly signedOut = false
+    private readonly signedOut = false,
+    private readonly options: PiScriptOptions = {},
+    private readonly inputs: { command: string; params: Record<string, unknown> }[] = []
   ) {
+    this.model = options.model ?? this.model
     this.pid = 42_000 + number
     const sessionIndex = launch.args.indexOf('--session')
     this.file =
@@ -46,6 +66,7 @@ class ScriptedPiConnection implements PiRpcConnection {
       throw new Error('Scripted Pi connection closed')
     }
     this.wire.push(command)
+    this.inputs.push({ command, params: { ...params } })
     if (command === 'get_state') {
       if (this.firstStateRead) {
         this.firstStateRead = false
@@ -71,7 +92,7 @@ class ScriptedPiConnection implements PiRpcConnection {
       return this.model
     }
     if (command === 'set_thinking_level' && typeof params.level === 'string') {
-      this.effort = params.level
+      this.effort = this.options.appliedEfforts?.[params.level] ?? params.level
       return {}
     }
     if (command === 'abort') {
@@ -85,6 +106,7 @@ class ScriptedPiConnection implements PiRpcConnection {
     if (this.closed || frame.type !== 'prompt' || typeof frame.message !== 'string') {
       throw new Error('Scripted Pi requires a live prompt')
     }
+    this.inputs.push({ command: 'prompt', params: { message: frame.message, effort: this.effort } })
     this.received.push(frame.message)
     this.wire.push(`prompt:${frame.message}`)
     if (this.signedOut) {
@@ -110,6 +132,10 @@ class ScriptedPiConnection implements PiRpcConnection {
     if (this.script.completeTurns) {
       this.endTurn('stop')
     }
+  }
+
+  setNativeEffort(level: string): void {
+    this.effort = level
   }
 
   releaseHandshake(): void {
@@ -196,13 +222,16 @@ class ScriptedPiConnection implements PiRpcConnection {
 export type ScriptedPiChild = ScriptedAgentChild & {
   /** Every request command and prompt any spawn received, in order. */
   wire(): readonly string[]
+  inputs(): readonly { command: string; params: Record<string, unknown> }[]
   signIn(): void
+  setNativeEffort(level: string): void
 }
 
-export const piScriptedChild = (options: { signedOut?: boolean } = {}): ScriptedPiChild => {
+export const piScriptedChild = (options: PiScriptOptions = {}): ScriptedPiChild => {
   const children: ScriptedPiConnection[] = []
   const received: string[] = []
   const wire: string[] = []
+  const inputs: { command: string; params: Record<string, unknown> }[] = []
   let resumed = 0
   let closed = 0
   let signedOut = options.signedOut ?? false
@@ -245,7 +274,9 @@ export const piScriptedChild = (options: { signedOut?: boolean } = {}): Scripted
             closed += 1
           },
           children.length + 1,
-          signedOut
+          signedOut,
+          options,
+          inputs
         )
         children.push(child)
         return child
@@ -259,6 +290,8 @@ export const piScriptedChild = (options: { signedOut?: boolean } = {}): Scripted
     resumes: () => resumed,
     closes: () => closed,
     wire: () => wire,
+    inputs: () => inputs,
+    setNativeEffort: (level) => children.at(-1)?.setNativeEffort(level),
     signIn: () => {
       signedOut = false
     }

@@ -42,6 +42,7 @@ export function mockBrowserManager(
       end: () => {}
     }),
     showAgentPointer: async () => {},
+    isAgentUsingPage: () => false,
     ...overrides
   } as unknown as BrowserManager
 }

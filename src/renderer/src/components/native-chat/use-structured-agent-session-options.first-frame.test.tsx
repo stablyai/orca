@@ -3,6 +3,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as HostCapability from '@/runtime/structured-agent-session-host-capability'
+import type * as LaunchOptions from '@/lib/structured-agent-session-launch-options'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn(), coherent: false }))
 
@@ -19,7 +20,8 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 vi.mock('./native-chat-session-option-settings-write', () => ({
   enqueueSessionOptionSettingsWrite: vi.fn()
 }))
-vi.mock('@/lib/structured-agent-session-launch-options', () => ({
+vi.mock('@/lib/structured-agent-session-launch-options', async (original) => ({
+  ...(await original<typeof LaunchOptions>()),
   holdStructuredAgentSessionLaunchOption: vi.fn(),
   getStructuredAgentSessionLaunchSelection: () => null
 }))
@@ -100,6 +102,7 @@ function renderNewChat(args: {
   seedOptions?: Record<string, string>
   explicitOptions?: Record<string, string>
   sessionId?: string
+  restored?: boolean
 }) {
   const frames: Pill[] = []
   const view = renderHook(() => {
@@ -115,8 +118,7 @@ function renderNewChat(args: {
       unloadedTurnRevisions: undefined,
       mutate: vi.fn(),
       launch: {
-        kind: 'new',
-        heldOptions: {},
+        kind: args.restored ? 'resume' : 'new',
         worktree: 'id:wt-1',
         ...(args.explicitOptions ? { explicitOptions: args.explicitOptions } : {}),
         ...(args.seedOptions ? { seedOptions: args.seedOptions } : {})
@@ -149,6 +151,37 @@ describe('a new chat picker’s first frame', () => {
     mocks.call.mockReset()
     mocks.coherent = false
     resetHostModelCatalogSnapshotsForTests()
+  })
+
+  it('Pi cached first paint and late precise catalog keep the supported remembered composer value', async () => {
+    const row = {
+      id: 'openai/gpt-5',
+      label: 'GPT-5',
+      isDefault: false,
+      efforts: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'].map((value) => ({
+        value,
+        label: value
+      }))
+    }
+    const list: Listed = { origin: 'probe', models: [row], fetchedAt: 1 }
+    catalogAnswers(() => Promise.resolve(list))
+    await preloadHostModelCatalogSnapshots(LOCAL_TARGET, ['pi'])
+    const remembered = { model: row.id, effort: 'off' }
+    const first = renderNewChat({ agent: 'pi', seedOptions: remembered })
+    expect(first.frames[0]).toMatchObject({ model: row.id, effort: 'minimal' })
+    expect(
+      first.result.current.optionSnapshot.find((option) => option.id === 'effort')
+    ).toMatchObject({ kind: { currentValue: 'minimal', choices: row.efforts } })
+    first.unmount()
+    resetHostModelCatalogSnapshotsForTests()
+    const next = deferred<AgentSessionModelCatalogResult>()
+    catalogAnswers(() => next.promise)
+    const late = renderNewChat({ agent: 'pi', seedOptions: remembered, restored: true })
+    expect(late.frames[0]).toEqual(PLACEHOLDER)
+    await act(async () => next.resolve(list))
+    await waitFor(() => expect(late.frames.at(-1)?.effort).toBe('minimal'))
+    expect(remembered.effort).toBe('off')
+    late.unmount()
   })
 
   it('shows the unlisted action model rather than a saved or listed replacement on every pending frame', async () => {
@@ -360,11 +393,13 @@ it('refuses typed literals while the current fence awaits options, then accepts 
   const pending = deferred<AgentSessionOptionsResult>()
   let reads = 0
   mocks.call.mockImplementation((_target: unknown, method: string) =>
-    method === 'agentSession.options'
-      ? ++reads === 1
-        ? Promise.resolve({ models: [], current: {} })
-        : pending.promise
-      : Promise.resolve({ origin: 'unknown' })
+    method === 'agentSession.setOption'
+      ? Promise.resolve({ ok: true, value: { options: { model: 'literal' } } })
+      : method === 'agentSession.options'
+        ? ++reads === 1
+          ? Promise.resolve({ models: [], current: {} })
+          : pending.promise
+        : Promise.resolve({ origin: 'unknown' })
   )
   const mutate = vi.fn().mockResolvedValue({
     status: 'accepted',
@@ -394,10 +429,20 @@ it('refuses typed literals while the current fence awaits options, then accepts 
     expect(await view.result.current.setStructuredOption('model', 'literal')).toBe(false)
   )
   expect(mutate).not.toHaveBeenCalled()
+  expect(mocks.call.mock.calls.filter((call) => call[1] === 'agentSession.setOption')).toEqual([])
   await act(async () => pending.resolve({ models: [], current: {} }))
   await act(async () =>
     expect(await view.result.current.setStructuredOption('model', 'literal')).toBe(true)
   )
-  expect(mutate).toHaveBeenCalledTimes(1)
+  expect(mocks.call).toHaveBeenCalledWith(
+    LOCAL_TARGET,
+    'agentSession.setOption',
+    {
+      envelope: expect.objectContaining({ sessionId: 'locked-chat', expectedRuntimeFence: 2 }),
+      key: 'model',
+      value: 'literal'
+    },
+    {}
+  )
   view.unmount()
 })

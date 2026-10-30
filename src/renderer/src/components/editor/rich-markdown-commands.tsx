@@ -72,8 +72,7 @@ export function syncDocLinkMenu(
     setDocLinkMenu(null)
     return
   }
-  const codeMarkType = state.schema.marks.code
-  if (codeMarkType && state.doc.rangeHasMark($from.pos, $from.pos, codeMarkType)) {
+  if (editor.isActive('code')) {
     setDocLinkMenu(null)
     return
   }

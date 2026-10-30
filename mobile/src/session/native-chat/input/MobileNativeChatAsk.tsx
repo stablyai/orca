@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import type { AskAnswerSelection } from '../../../../../src/shared/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
@@ -16,7 +16,7 @@ import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { TEXT_INPUT_FONT_SIZE } from '../../../platform/text-input-font-size'
+import { MessageBox } from '../../../components/composer-input/MessageBox'
 import { MobileNativeChatCardHeaderAction } from '../../MobileNativeChatCardHeaderAction'
 import { useMobileNativeChatAskAutoAdvance } from './use-mobile-native-chat-ask-auto-advance'
 import { MobileNativeChatAskOptionRow } from './MobileNativeChatAskOptionRow'
@@ -243,16 +243,15 @@ export function MobileNativeChatAsk({
           />
         ) : null}
         {otherSelected || typesOnly(index) ? (
-          <TextInput
-            ref={inputRef}
+          <MessageBox
+            inputRef={inputRef}
             onFocus={revealReply}
-            style={styles.input}
-            value={otherText[index]}
+            style={styles.other}
+            value={otherText[index] ?? ''}
             onChangeText={(v) => setOther(index, v)}
             placeholder={
               freeTextInput?.placeholder ?? t('chat.ask.answerPlaceholder', 'Type your answer')
             }
-            placeholderTextColor={colors.textMuted}
             // A declared input (Pi's `input`) is one line unless it asks for more, as on desktop.
             multiline={freeTextInput ? freeTextInput.multiline === true : true}
             autoFocus
@@ -339,15 +338,7 @@ const styles = themedStyleSheet(() => ({
     fontWeight: '600',
     marginVertical: spacing.sm
   },
-  input: {
-    backgroundColor: colors.bgRaised,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
-    color: colors.textPrimary,
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    padding: spacing.sm,
-    minHeight: 44,
+  other: {
     marginBottom: spacing.xs
   },
   footer: {
