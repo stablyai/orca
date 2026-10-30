@@ -58,7 +58,9 @@ function fileListState(count: number, dirty: boolean): FileListState {
                 canDiscard: true,
                 stageActionId: 'stage:src/uncommitted.ts',
                 unstageActionId: 'unstage:src/uncommitted.ts',
-                discardActionId: 'discard:src/uncommitted.ts'
+                discardActionId: 'discard:src/uncommitted.ts',
+                conflictResolutions: [],
+                resolveActionId: 'resolve:src/uncommitted.ts'
               }
             ]
           }
@@ -75,6 +77,7 @@ function fileListState(count: number, dirty: boolean): FileListState {
     openFile: vi.fn(async () => {}),
     openBranchDiff: vi.fn(async () => {}),
     runGitAction: vi.fn(async () => true),
+    resolveConflict: vi.fn(async () => {}),
     setDiscardTarget: vi.fn()
   }
 }

@@ -13,6 +13,8 @@ export abstract class AgentBrowserBridgeState {
   // Isolate each worktree's tab selection.
   protected readonly activeWebContentsPerWorktree = new Map<string, number>()
   protected activeWebContentsId: number | null = null
+  // A person's tab pick waiting for the agent's tab to go idle; the undefined key is the global target.
+  protected readonly heldPersonSelections = new Map<string | undefined, number>()
   protected readonly sessions = new Map<string, SessionState>()
   protected readonly commandQueues = new Map<string, QueuedCommand[]>()
   protected readonly processingQueues = new Set<string>()

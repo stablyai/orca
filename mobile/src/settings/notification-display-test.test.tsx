@@ -6,6 +6,7 @@ import { findAllByHostType } from '../test-support/react-test-renderer-host-node
 
 const mocks = vi.hoisted(() => ({
   loadHosts: vi.fn(),
+<<<<<<< HEAD
   loadPushNotificationsEnabled: vi.fn(async () => true),
   clients: [] as { state: string; client: { sendRequest: ReturnType<typeof vi.fn> } }[],
   getDevicePushToken: vi.fn(async (): Promise<{ platform: 'android'; token: string } | null> => ({
@@ -13,6 +14,15 @@ const mocks = vi.hoisted(() => ({
     token: 'fcm-1'
   })),
   sendLocalNotificationDisplayTest: vi.fn(async () => {})
+=======
+  token: vi.fn(),
+  supported: vi.fn(),
+  completion: { completed: Promise.resolve(true), signal: new AbortController().signal },
+  enabled: vi.fn(),
+  permission: vi.fn(),
+  schedule: vi.fn(),
+  clients: [] as { state: string; client: { sendRequest: ReturnType<typeof vi.fn> } }[]
+>>>>>>> upstream/main
 }))
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
@@ -25,18 +35,46 @@ vi.mock('../storage/preferences', () => ({
 }))
 vi.mock('../transport/host-store', () => ({ loadHostCatalog: mocks.loadHosts }))
 vi.mock('../transport/use-all-host-clients', () => ({ useAllHostClients: () => mocks.clients }))
+<<<<<<< HEAD
 vi.mock('../notifications/push-token', () => ({ getDevicePushToken: mocks.getDevicePushToken }))
 vi.mock('../notifications/push-socket-fallback', () => ({
   sendLocalNotificationDisplayTest: mocks.sendLocalNotificationDisplayTest
 }))
+=======
+vi.mock('../notifications/push-token', () => ({ getDevicePushToken: mocks.token }))
+vi.mock('../notifications/push-registration', () => ({
+  getHostPushSupported: mocks.supported,
+  getHostPushSupportCompletion: () => mocks.completion
+}))
+vi.mock('../storage/preferences', () => ({ loadPushNotificationsEnabled: mocks.enabled }))
+vi.mock('../notifications/notification-permissions', () => ({
+  getNotificationPermissionState: mocks.permission
+}))
+vi.mock('../notifications/notification-delivery-preferences', () => ({
+  loadNotificationDeliveryPreferences: async () => ({ sound: true })
+}))
+vi.mock('../notifications/desktop-notification-channel', () => ({
+  ensureDesktopNotificationChannel: vi.fn(),
+  DESKTOP_NOTIFICATION_CHANNEL_ID: 'orca-desktop'
+}))
+vi.mock('expo-notifications', () => ({ scheduleNotificationAsync: mocks.schedule }))
+>>>>>>> upstream/main
 
 let renderer: ReactTestRenderer
 beforeEach(() => {
   mocks.loadHosts.mockReset().mockResolvedValue([{ id: 'first' }, { id: 'second' }])
   mocks.loadPushNotificationsEnabled.mockReset().mockResolvedValue(true)
   mocks.clients = []
+<<<<<<< HEAD
   mocks.getDevicePushToken.mockReset().mockResolvedValue({ platform: 'android', token: 'fcm-1' })
   mocks.sendLocalNotificationDisplayTest.mockReset().mockResolvedValue(undefined)
+=======
+  mocks.token.mockReset().mockResolvedValue({ platform: 'ios', token: 'token' })
+  mocks.supported.mockReset().mockReturnValue(true)
+  mocks.enabled.mockReset().mockResolvedValue(true)
+  mocks.permission.mockReset().mockResolvedValue({ granted: true })
+  mocks.schedule.mockReset().mockResolvedValue('local')
+>>>>>>> upstream/main
 })
 afterEach(() => act(() => renderer?.unmount()))
 
@@ -91,8 +129,15 @@ it('explains when every desktop needs registration or an update', async () => {
     client: { sendRequest: vi.fn().mockResolvedValue(response) }
   }))
   await send()
+<<<<<<< HEAD
   expect(mocks.sendLocalNotificationDisplayTest).not.toHaveBeenCalled()
   expect(JSON.stringify(renderer.toJSON())).toContain('Reconnect to register this phone')
+=======
+  const output = JSON.stringify(renderer.toJSON())
+  expect(output).toContain('Push registration is not ready')
+  expect(output).toContain('This checks display only')
+  expect(output).not.toContain('Live alerts are available')
+>>>>>>> upstream/main
 })
 
 it('sends a local test when no connected desktop can register a phone without push', async () => {
@@ -159,3 +204,38 @@ it.each([false, true])('explains missing pairing or connection (paired=%s)', asy
     paired ? 'Connect a desktop' : 'Pair a desktop'
   )
 })
+
+it.each(['no-token', 'old-host'])('explains %s and schedules only a local test', async (reason) => {
+  const request = vi.fn().mockResolvedValue({ ok: false, error: { code: 'method_not_found' } })
+  mocks.clients = [{ state: 'connected', client: { sendRequest: request } }]
+  if (reason === 'no-token') {
+    mocks.token.mockResolvedValue(null)
+  } else {
+    mocks.supported.mockReturnValue(false)
+    mocks.token.mockReturnValue(new Promise(() => {}))
+  }
+  await send()
+  expect(mocks.schedule).toHaveBeenCalledOnce()
+  expect(request).not.toHaveBeenCalled()
+  const output = JSON.stringify(renderer.toJSON())
+  expect(output).toContain(reason === 'no-token' ? 'No push token' : 'does not support push')
+  expect(output).toContain('Local test scheduled')
+  expect(output).toContain('while Orca is running and connected')
+})
+
+it.each(['app', 'os'])(
+  'explains notifications disabled by %s without sending any test',
+  async (disabledBy) => {
+    const request = vi.fn().mockResolvedValue({ ok: true, result: { accepted: true } })
+    mocks.clients = [{ state: 'connected', client: { sendRequest: request } }]
+    if (disabledBy === 'app') {
+      mocks.enabled.mockResolvedValue(false)
+    } else {
+      mocks.permission.mockResolvedValue({ granted: false })
+    }
+    await send()
+    expect(JSON.stringify(renderer.toJSON())).toContain('Notifications are turned off')
+    expect(request).not.toHaveBeenCalled()
+    expect(mocks.schedule).not.toHaveBeenCalled()
+  }
+)

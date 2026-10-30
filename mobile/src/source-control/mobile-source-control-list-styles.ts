@@ -108,6 +108,25 @@ export const listStyles = themedStyleSheet(() => ({
     alignItems: 'center',
     justifyContent: 'center'
   },
+  conflictActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.xs
+  },
+  conflictActionButton: {
+    minHeight: 30,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radii.button,
+    backgroundColor: colors.bgRaised,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  conflictActionText: {
+    color: colors.textPrimary,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
+  },
   iconButtonPressed: {
     backgroundColor: colors.bgRaised
   },

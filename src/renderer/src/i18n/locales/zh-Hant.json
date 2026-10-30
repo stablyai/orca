@@ -465,15 +465,9 @@
       },
       "providers": {
         "title": "提供者",
-        "description": "選擇要以聊天方式開啟的代理程式。關閉後，已安裝的代理程式會在終端機中開啟。",
         "searchAgents": "代理程式",
         "searchCli": "CLI",
         "searchTerminal": "終端機",
-        "agentDisabled": "已在「代理程式」設定中關閉",
-        "installed": "已安裝",
-        "notInstalled": "未安裝",
-        "install": "安裝",
-        "toggleLabel": "以聊天方式開啟 {{value0}}",
         "antigravityDescription": "Antigravity 聊天會執行由 Orca 下載至此主機的伺服器，與 agy CLI 各自獨立。",
         "antigravityNotSignedIn": "尚未登入。聊天需另外登入 Antigravity，與終端機中的 agy 帳戶分開使用。",
         "antigravityAccount": "帳戶",
@@ -722,7 +716,6 @@
       "defaultOpensAs": "{{value0}} 的開啟方式",
       "defaultOpensAsChat": "聊天",
       "defaultOpensAsCli": "CLI",
-      "defaultOpensAsScope": "適用於從這台電腦啟動的新 {{value0}} 工作階段，包括在已配對主機上啟動的工作階段。與「提供者」中對應的開關一致。",
       "save": "儲存",
       "clearDefault": "清除預設代理程式",
       "autoUnsupported": "此主機上的 Orca 需更新至較新版本才能使用自動模式。",
@@ -772,7 +765,11 @@
         "description": "讓每個 Codex 帳戶以及你自己的 ~/.codex 都能繼續在其他帳戶中開始的對話。關閉後，每個帳戶的歷史記錄將保持獨立。關閉不會移除任何已共用的內容。",
         "unsupported": "請更新 {{host}} 上的 Orca 以在那裡變更此設定。",
         "updateFailed": "無法更新 {{host}} 上的設定。"
-      }
+      },
+      "installCliForTerminal": "安裝 {{value0}} CLI 即可在終端機中開啟。",
+      "chatRuntime": "聊天執行環境",
+      "chatChoiceTitle": "以聊天或 CLI 開啟",
+      "chatChoiceDescription": "選擇每個代理程式以聊天或其 CLI 開啟。"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "符號連結",
@@ -19719,7 +19716,7 @@
       "heroBody": "只需下載一次，共 {{size}} MB。執行此聊天的電腦上，所有 {{agent}} 聊天皆可共用。",
       "heroBodyNoSize": "只需下載一次。執行此聊天的電腦上，所有 {{agent}} 聊天皆可共用。",
       "stripSize": "在執行此聊天的電腦上下載 {{size}} MB",
-      "settingsHint": "也可在「設定 › 聊天 › 供應商」中找到",
+      "settingsHint": "也可在「設定 › 代理程式」中找到",
       "installShort": "安裝",
       "tryAgain": "再試一次",
       "cancelShort": "取消",

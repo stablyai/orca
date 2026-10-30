@@ -4,6 +4,8 @@ import { defineFixture } from '../../component-fixtures/component-fixture'
 import { makeTab } from '@/store/slices/store-test-helpers'
 import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
 import { NativeChatAgentMessageCard } from './NativeChatAgentMessageCard'
+import { MessageRow } from './NativeChatMessageRow'
+import { projectStructuredAgentStartItem } from '../../../../shared/structured-agent-start-projection'
 import { NativeChatUserMessageRow } from './NativeChatUserMessageRow'
 
 const workspace = 'agent-message-fixture'
@@ -11,6 +13,21 @@ const image =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAPAAAAA8CAIAAADXHaAKAAAAvklEQVR4nO3SUQkAIBTAwBfUAAawP5YQhHFwAfaxWftAxnwvgIcMTYqhSTE0KYYmxdCkGJoUQ5NiaFIMTYqhSTE0KYYmxdCkGJoUQ5NiaFIMTYqhSTE0KYYmxdCkGJoUQ5NiaFIMTYqhSTE0KYYmxdCkGJoUQ5NiaFIMTYqhSTE0KYYmxdCkGJoUQ5NiaFIMTYqhSTE0KYYmxdCkGJoUQ5NiaFIMTYqhSTE0KYYmxdCkGJoUQ5NiaFIMTYqhSbm/mJH95bvMnAAAAABJRU5ErkJggg=='
 const prose =
   'First paragraph with **real Markdown**, a [web link](https://example.com) and inline `code`.\n\nSecond paragraph keeps its own spacing. This longer line wraps differently in the narrow frame, so Show more is based on rendered lines.\n\n![Example image](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAPAAAAA8CAIAAADXHaAKAAAAvklEQVR4nO3SUQkAIBTAwBfUAAawP5YQhHFwAfaxWftAxnwvgIcMTYqhSTE0KYYmxdCkGJoUQ5NiaFIMTYqhSTE0KYYmxdCkGJoUQ5NiaFIMTYqhSTE0KYYmxdCkGJoUQ5NiaFIMTYqhSTE0KYYmxdCkGJoUQ5NiaFIMTYqhSTE0KYYmxdCkGJoUQ5NiaFIMTYqhSTE0KYYmxdCkGJoUQ5NiaFIMTYqhSTE0KYYmxdCkGJoUQ5NiaFIMTYqhSbm/mJH95bvMnAAAAABJRU5ErkJggg==)\n\nLast paragraph after the image.'
+const started = projectStructuredAgentStartItem({
+  itemId: 'started',
+  revision: 1,
+  sequence: 7,
+  observedAt: 1_800_000_000_000,
+  body: {
+    kind: 'agent-start',
+    dispatchId: 'fixture-dispatch',
+    task: prose,
+    worker: {
+      party: { address: 'term_sender', terminalHandle: 'term_sender', orcaSessionId: null },
+      name: 'Parser worker'
+    }
+  }
+})!
 function cards() {
   const human: NativeChatMessage = {
     id: 'human',
@@ -21,6 +38,12 @@ function cards() {
   }
   return (
     <div className="space-y-4 p-4">
+      <MessageRow
+        message={started}
+        expandSignal={false}
+        onScrollMessageToTop={() => {}}
+        runtimeContext={{ worktreeId: workspace, worktreePath: null, target: { kind: 'local' } }}
+      />
       {(['task', 'coordinator', 'worker', 'generic'] as const).map((kind, i) => {
         const from: AgentMessageSource = {
           kind: 'agent',

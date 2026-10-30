@@ -58,13 +58,7 @@
         "antigravitySignInNeeded": "Los chats necesitan un inicio de sesión de Antigravity, independiente de tu cuenta de agy en la terminal.",
         "searchAgents": "agentes",
         "searchTerminal": "Terminal",
-        "installed": "Instalado",
-        "notInstalled": "No instalado",
-        "install": "Instalar",
-        "searchCli": "CLI",
-        "toggleLabel": "Abrir {{value0}} como chat",
-        "agentDisabled": "Desactivado en la configuración del agente",
-        "description": "Elige qué agentes se abren como chat. Si desactivas esta opción, los agentes instalados se abren en una terminal."
+        "searchCli": "CLI"
       },
       "permissionsDescriptionOwnAgents": "Los chats nuevos siguen el permiso de cada agente en Configuración → Agentes."
     },
@@ -326,7 +320,6 @@
       "defaultOpensAs": "Abrir {{value0}} como",
       "defaultOpensAsChat": "Chat",
       "defaultOpensAsCli": "CLI",
-      "defaultOpensAsScope": "Se aplica a las nuevas sesiones de {{value0}} iniciadas desde este equipo, incluso en hosts emparejados. Coincide con su interruptor en Proveedores.",
       "save": "Guardar",
       "clearDefault": "Borrar agente predeterminado",
       "customArgsBadge": "Personalizado",
@@ -382,7 +375,11 @@
         "description": "Permite que cada cuenta de Codex, y tu propio ~/.codex, reanude conversaciones iniciadas en las demás. Desactívalo para mantener separado el historial de cada cuenta. Desactivarlo no elimina nada de lo que ya se compartió.",
         "unsupported": "Actualiza Orca en {{host}} para cambiar este ajuste allí.",
         "updateFailed": "No se pudo actualizar el ajuste en {{host}}."
-      }
+      },
+      "installCliForTerminal": "Instala la CLI de {{value0}} para abrirlo en un terminal.",
+      "chatRuntime": "Entorno de chat",
+      "chatChoiceTitle": "Abrir como chat o CLI",
+      "chatChoiceDescription": "Elige si cada agente se abre como chat o en su CLI."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "enlace simbólico",
@@ -20196,7 +20193,7 @@
       "heroBody": "Descarga única de {{size}} MB. La comparten los chats de {{agent}} en el equipo que ejecuta este chat.",
       "heroBodyNoSize": "Descarga única. La comparten los chats de {{agent}} en el equipo que ejecuta este chat.",
       "stripSize": "Descarga de {{size}} MB en el equipo que ejecuta este chat",
-      "settingsHint": "También en Ajustes › Chat › Proveedores",
+      "settingsHint": "También en Ajustes › Agentes",
       "installShort": "Instalar",
       "tryAgain": "Reintentar",
       "cancelShort": "Cancelar",
@@ -22746,6 +22743,14 @@
       "markFile": "Marcar {{path}} como visto",
       "unmarkFile": "Desmarcar {{path}} como visto"
     }
+  },
+  "agentPicker": {
+    "search": "Buscar agentes y configuraciones…",
+    "configure": "Configurar {{agent}}",
+    "arguments": "Argumentos",
+    "argumentsHint": "Solo se aplica a los inicios de CLI.",
+    "launchChat": "Iniciar chat",
+    "launchTerminal": "Iniciar terminal"
   },
   "wslMove": {
     "entry": {

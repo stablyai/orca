@@ -58,13 +58,7 @@
         "antigravitySignInNeeded": "聊天需要单独的 Antigravity 登录，与终端中的 agy 帐户分开。",
         "searchAgents": "智能体",
         "searchTerminal": "终端",
-        "installed": "已安装",
-        "notInstalled": "未安装",
-        "install": "安装",
-        "searchCli": "CLI",
-        "agentDisabled": "已在智能体设置中关闭",
-        "description": "选择哪些智能体以聊天方式打开。关闭后，已安装的智能体将在终端中打开。",
-        "toggleLabel": "以聊天方式打开 {{value0}}"
+        "searchCli": "CLI"
       },
       "permissionsDescriptionOwnAgents": "新聊天遵循设置 → 智能体中各智能体的权限。"
     },
@@ -329,7 +323,6 @@
       "defaultOpensAs": "{{value0}} 的打开方式",
       "defaultOpensAsChat": "聊天",
       "defaultOpensAsCli": "CLI",
-      "defaultOpensAsScope": "适用于从这台电脑启动的新 {{value0}} 会话，包括在已配对主机上启动的会话。与提供方中的开关一致。",
       "save": "保存",
       "clearDefault": "清除默认智能体",
       "customArgsBadge": "自定义",
@@ -379,7 +372,11 @@
         "description": "让每个 Codex 账户以及你自己的 ~/.codex 都能继续在其他账户中开始的对话。关闭后，每个账户的历史记录将保持独立。关闭不会移除任何已共享的内容。",
         "unsupported": "请更新 {{host}} 上的 Orca 以在那里更改此设置。",
         "updateFailed": "无法更新 {{host}} 上的设置。"
-      }
+      },
+      "installCliForTerminal": "安装 {{value0}} CLI 即可在终端中打开。",
+      "chatRuntime": "聊天运行时",
+      "chatChoiceTitle": "以聊天或 CLI 打开",
+      "chatChoiceDescription": "选择每个智能体以聊天还是其 CLI 打开。"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "符号链接",
@@ -19613,7 +19610,7 @@
       "heroBody": "一次性下载 {{size}} MB，由运行此聊天的电脑上的 {{agent}} 聊天共用。",
       "heroBodyNoSize": "一次性下载，由运行此聊天的电脑上的 {{agent}} 聊天共用。",
       "stripSize": "在运行此聊天的电脑上下载 {{size}} MB",
-      "settingsHint": "也可在 设置 › 聊天 › 供应商 中安装",
+      "settingsHint": "也可在 设置 › 智能体 中安装",
       "installShort": "安装",
       "tryAgain": "重试",
       "cancelShort": "取消",
@@ -22059,6 +22056,14 @@
       "markFile": "将 {{path}} 标记为已查看",
       "unmarkFile": "取消 {{path}} 的已查看标记"
     }
+  },
+  "agentPicker": {
+    "search": "搜索智能体和配置…",
+    "configure": "配置 {{agent}}",
+    "arguments": "参数",
+    "argumentsHint": "仅适用于 CLI 启动。",
+    "launchChat": "启动聊天",
+    "launchTerminal": "启动终端"
   },
   "wslMove": {
     "entry": {

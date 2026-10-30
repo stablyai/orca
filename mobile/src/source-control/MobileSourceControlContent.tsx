@@ -50,6 +50,7 @@ export function MobileSourceControlContent({ state, primaryAction }: Props) {
     cancelGenerateCommitMessage,
     openFile,
     openBranchDiff,
+    resolveConflict,
     runGitAction
   } = state
   const ioBusy = busyAction !== null || openingPath !== null || openingBranchPath !== null
@@ -67,6 +68,7 @@ export function MobileSourceControlContent({ state, primaryAction }: Props) {
         state={{
           sections,
           openFile,
+          resolveConflict,
           runGitAction,
           setDiscardTarget,
           shouldShowBranchCompareSection: state.shouldShowBranchCompareSection,
@@ -84,6 +86,7 @@ export function MobileSourceControlContent({ state, primaryAction }: Props) {
     [
       sections,
       openFile,
+      resolveConflict,
       runGitAction,
       setDiscardTarget,
       state.shouldShowBranchCompareSection,

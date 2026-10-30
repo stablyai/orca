@@ -23,6 +23,7 @@ import {
   getStagedCommitContext,
   getStatus,
   getSubmoduleStatus,
+  resolveConflict,
   stageFile,
   stageWorktreeChanges,
   unstageFile
@@ -78,6 +79,8 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
     getDiff: (worktreePath, filePath, staged, compareAgainstHead) =>
       getDiff(worktreePath, filePath, staged, compareAgainstHead, interactive),
     stageFile: (worktreePath, filePath) => stageFile(worktreePath, filePath, interactive),
+    resolveConflict: (worktreePath, filePath, resolution) =>
+      resolveConflict(worktreePath, filePath, resolution, interactive),
     unstageFile: (worktreePath, filePath) => unstageFile(worktreePath, filePath, interactive),
     bulkStageFiles: async (worktreePath, filePaths, scope) => {
       if (scope) {

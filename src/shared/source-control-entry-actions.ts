@@ -20,7 +20,8 @@ export function canDiscardStatusEntry(entry: GitStatusEntry): boolean {
   )
 }
 
-export type ConflictResolution = 'mark_resolved' | 'keep_file' | 'keep_deletion'
+export const CONFLICT_RESOLUTIONS = ['mark_resolved', 'keep_file', 'keep_deletion'] as const
+export type ConflictResolution = (typeof CONFLICT_RESOLUTIONS)[number]
 
 /** Staging the worktree is Git's resolution; a missing worktree file can only resolve as a deletion. */
 export function getConflictResolutions(entry: GitStatusEntry): ConflictResolution[] {

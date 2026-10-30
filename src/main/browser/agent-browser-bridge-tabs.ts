@@ -2,14 +2,74 @@ import type { BrowserTabInfo, BrowserTabListResult } from '../../shared/runtime-
 import { BrowserError } from './cdp-bridge'
 import type { ResolvedBrowserCommandTarget } from './agent-browser-bridge-types'
 import { AgentBrowserBridgeState } from './agent-browser-bridge-state'
+import { isAgentRpcCaller } from '../runtime/rpc/rpc-caller-identity'
+import { getActiveRpcCaller } from '../runtime/rpc/rpc-active-caller'
 
 export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
   setActiveTab(webContentsId: number, worktreeId?: string): void {
-    this.activeWebContentsId = webContentsId
-    if (worktreeId) {
-      this.activeWebContentsPerWorktree.set(worktreeId, webContentsId)
+    if (isAgentRpcCaller(getActiveRpcCaller())) {
+      this.pointAgentAt(webContentsId, worktreeId)
+    } else {
+      this.selectForPerson(webContentsId, worktreeId)
     }
     this.options.onTabsChanged?.(worktreeId)
+  }
+
+  protected pointAgentAt(webContentsId: number, worktreeId?: string): void {
+    for (const key of routingKeys(worktreeId)) {
+      this.setRoutedWebContentsId(key, webContentsId)
+    }
+    // Mark the new tab now, or a person's pick before the agent's next command would take it.
+    const browserPageId = this.resolveTabIdSafe(webContentsId)
+    if (browserPageId) {
+      this.browserManager.beginAgentCommand(browserPageId).end()
+    }
+  }
+
+  // A person's pick never pulls an agent off the tab it is driving; it applies once that tab goes idle.
+  private selectForPerson(webContentsId: number, worktreeId?: string): void {
+    for (const key of routingKeys(worktreeId)) {
+      const current = this.routedWebContentsId(key)
+      if (current !== null && current !== webContentsId && this.isAgentUsingTab(current)) {
+        this.heldPersonSelections.set(key, webContentsId)
+      } else {
+        this.setRoutedWebContentsId(key, webContentsId)
+        this.heldPersonSelections.delete(key)
+      }
+    }
+  }
+
+  protected applyHeldPersonSelections(worktreeId?: string): void {
+    for (const key of routingKeys(worktreeId)) {
+      const held = this.heldPersonSelections.get(key)
+      const current = this.routedWebContentsId(key)
+      if (held === undefined || (current !== null && this.isAgentUsingTab(current))) {
+        continue
+      }
+      this.heldPersonSelections.delete(key)
+      if (this.getWebContents(held)) {
+        this.setRoutedWebContentsId(key, held)
+      }
+    }
+  }
+
+  private isAgentUsingTab(webContentsId: number): boolean {
+    const browserPageId = this.resolveTabIdSafe(webContentsId)
+    return browserPageId !== null && this.browserManager.isAgentUsingPage(browserPageId)
+  }
+
+  private routedWebContentsId(key: string | undefined): number | null {
+    return key === undefined
+      ? this.activeWebContentsId
+      : (this.activeWebContentsPerWorktree.get(key) ?? null)
+  }
+
+  private setRoutedWebContentsId(key: string | undefined, webContentsId: number): void {
+    if (key === undefined) {
+      this.activeWebContentsId = webContentsId
+    } else {
+      this.activeWebContentsPerWorktree.set(key, webContentsId)
+    }
   }
 
   protected selectFallbackActiveWebContents(
@@ -53,10 +113,7 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
     }
   }
   onTabChanged(webContentsId: number, worktreeId?: string): void {
-    this.activeWebContentsId = webContentsId
-    if (worktreeId) {
-      this.activeWebContentsPerWorktree.set(worktreeId, webContentsId)
-    }
+    this.selectForPerson(webContentsId, worktreeId)
     this.options.onTabsChanged?.(worktreeId)
   }
   getRegisteredTabs(worktreeId?: string): Map<string, number> {
@@ -82,6 +139,7 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
   }
 
   tabList(worktreeId?: string): BrowserTabListResult {
+    this.applyHeldPersonSelections(worktreeId)
     const tabs = this.getRegisteredTabs(worktreeId)
     // Match command routing without changing active-tab selection during discovery.
     let activeWcId =
@@ -162,6 +220,7 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
   }
 
   protected resolveActiveTab(worktreeId?: string): ResolvedBrowserCommandTarget {
+    this.applyHeldPersonSelections(worktreeId)
     const tabs = this.getRegisteredTabs(worktreeId)
 
     if (tabs.size === 0) {
@@ -232,4 +291,8 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
     const [onlyWorktreeId] = worktreesWithLiveTabs
     return this.resolveActiveTab(onlyWorktreeId)
   }
+}
+
+function routingKeys(worktreeId: string | undefined): (string | undefined)[] {
+  return worktreeId ? [undefined, worktreeId] : [undefined]
 }

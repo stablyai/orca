@@ -15,6 +15,7 @@ import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import type { GitPushTarget, GitWorktreeInfo } from '../../shared/worktree/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
+import type { ConflictResolution } from '../../shared/source-control-entry-actions'
 import type { GitProviderStatusOptions } from './git-provider-status-options'
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
 
@@ -39,6 +40,11 @@ export type IGitProvider = {
     compareAgainstHead?: boolean
   ): Promise<GitDiffResult>
   stageFile(worktreePath: string, filePath: string): Promise<void>
+  resolveConflict(
+    worktreePath: string,
+    filePath: string,
+    resolution: ConflictResolution
+  ): Promise<void>
   unstageFile(worktreePath: string, filePath: string): Promise<void>
   bulkStageFiles(
     worktreePath: string,

@@ -277,14 +277,8 @@
         "antigravityAccount": "Compte",
         "antigravitySignInNeeded": "Les discussions nécessitent une connexion Antigravity, distincte de votre compte agy du terminal.",
         "searchTerminal": "Terminal",
-        "installed": "Installé",
-        "notInstalled": "Non installé",
-        "install": "Installer",
         "searchAgents": "agents",
-        "searchCli": "CLI",
-        "agentDisabled": "Désactivé dans les paramètres de l'agent",
-        "description": "Choisissez les agents à ouvrir dans un chat. Si cette option est désactivée, un agent installé s’ouvre dans un terminal.",
-        "toggleLabel": "Ouvrir {{value0}} dans un chat"
+        "searchCli": "CLI"
       },
       "permissionsDescriptionOwnAgents": "Les nouveaux chats suivent l’autorisation de chaque agent dans Paramètres → Agents."
     },
@@ -546,7 +540,6 @@
       "defaultOpensAs": "Ouvrir {{value0}} en tant que",
       "defaultOpensAsChat": "Chat",
       "defaultOpensAsCli": "CLI",
-      "defaultOpensAsScope": "S’applique aux nouvelles sessions {{value0}} lancées depuis cet ordinateur, y compris sur les hôtes associés. Correspond à son interrupteur dans Fournisseurs.",
       "save": "Enregistrer",
       "clearDefault": "Effacer l'agent par défaut",
       "customArgsBadge": "Personnalisé",
@@ -602,7 +595,11 @@
         "description": "Permet à chaque compte Codex, ainsi qu'à votre propre ~/.codex, de reprendre les conversations commencées sur les autres. Désactivez-le pour garder l'historique de chaque compte séparé. Le désactiver ne supprime rien de ce qui a déjà été partagé.",
         "unsupported": "Mettez à jour Orca sur {{host}} pour y modifier ce réglage.",
         "updateFailed": "Impossible de mettre à jour le réglage sur {{host}}."
-      }
+      },
+      "installCliForTerminal": "Installez la CLI {{value0}} pour l’ouvrir dans un terminal.",
+      "chatRuntime": "Environnement de chat",
+      "chatChoiceTitle": "Ouvrir en chat ou en CLI",
+      "chatChoiceDescription": "Choisissez si chaque agent s’ouvre en chat ou dans sa CLI."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "lien symbolique",
@@ -20416,7 +20413,7 @@
       "heroBody": "Téléchargement unique de {{size}} Mo, partagé par les conversations {{agent}} sur l’ordinateur qui exécute cette conversation.",
       "heroBodyNoSize": "Téléchargement unique, partagé par les conversations {{agent}} sur l’ordinateur qui exécute cette conversation.",
       "stripSize": "Téléchargement de {{size}} Mo sur l’ordinateur qui exécute cette conversation",
-      "settingsHint": "Aussi dans Paramètres › Chat › Fournisseurs",
+      "settingsHint": "Aussi dans Paramètres › Agents",
       "installShort": "Installer",
       "tryAgain": "Réessayer",
       "cancelShort": "Annuler",
@@ -22746,6 +22743,14 @@
       "markFile": "Marquer {{path}} comme consulté",
       "unmarkFile": "Ne plus marquer {{path}} comme consulté"
     }
+  },
+  "agentPicker": {
+    "search": "Rechercher des agents et des configurations…",
+    "configure": "Configurer {{agent}}",
+    "arguments": "Arguments",
+    "argumentsHint": "S’applique uniquement aux lancements CLI.",
+    "launchChat": "Lancer le chat",
+    "launchTerminal": "Lancer le terminal"
   },
   "wslMove": {
     "entry": {

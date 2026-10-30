@@ -2,7 +2,7 @@ import type { AgentMessageSender, AgentMessageSource } from './agent-session-mes
 import type { AgentStatusEntry } from '../agent-status-types'
 
 export const AGENT_MESSAGE_FOLDED_LINES = 3
-export type AgentMessageHeading = 'task' | 'coordinator' | 'worker' | 'generic'
+export type AgentMessageHeading = 'started' | 'task' | 'coordinator' | 'worker' | 'generic'
 export type AgentMessageSenderView = Readonly<{
   agentType?: AgentStatusEntry['agentType']
   progress?: number
@@ -20,7 +20,13 @@ export type AgentMessageSenderView = Readonly<{
     | 'permission'
 }>
 
-export function agentMessageHeading(from: AgentMessageSource): AgentMessageHeading {
+export function agentMessageHeading(
+  from: AgentMessageSource,
+  agentStart = false
+): AgentMessageHeading {
+  if (agentStart) {
+    return 'started'
+  }
   if (from.orchestration?.message === 'task') {
     return 'task'
   }

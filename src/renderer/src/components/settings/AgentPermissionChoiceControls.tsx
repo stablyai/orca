@@ -1,3 +1,4 @@
+import { AgentPermissionMenuOptions } from './AgentPermissionMenuOptions'
 import { ChevronDown, X } from 'lucide-react'
 import type { Ref } from 'react'
 import type { AgentChatPermissionMode } from '../../../../shared/agent-chat-permission-mode'
@@ -10,8 +11,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '../ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
@@ -165,7 +164,9 @@ export function AgentPermissionMenu({
   inheritLabel,
   disabled,
   size = 'xs',
-  layout = 'inline'
+  layout = 'inline',
+  showInherited = true,
+  rawValue
 }: {
   agentId: string
   label: string
@@ -173,7 +174,10 @@ export function AgentPermissionMenu({
   inheritLabel?: string
   disabled?: boolean
   size?: 'xs' | 'sm'
-  layout?: 'inline' | 'stacked'
+  /** Row: muted label left and the menu right, like the chat composer's option rows. */
+  layout?: 'inline' | 'stacked' | 'row'
+  showInherited?: boolean
+  rawValue?: string
 }): React.JSX.Element {
   const followAll =
     inheritLabel ?? translate('settings.agents.permissionSameAsAll', 'Same as all agents')
@@ -184,10 +188,16 @@ export function AgentPermissionMenu({
         'flex min-w-0',
         layout === 'stacked'
           ? 'flex-col items-stretch gap-2'
-          : 'flex-wrap items-center gap-x-3 gap-y-1'
+          : layout === 'row'
+            ? 'min-h-7 items-center justify-between gap-3'
+            : 'flex-wrap items-center gap-x-3 gap-y-1'
       )}
     >
-      {layout === 'stacked' ? (
+      {layout === 'row' ? (
+        <span className="text-xs text-muted-foreground">
+          {translate('settings.agents.rowPermissions', 'Permissions')}
+        </span>
+      ) : layout === 'stacked' ? (
         <Label variant="settings">
           {translate('settings.agents.rowPermissions', 'Permissions')}
         </Label>
@@ -209,39 +219,25 @@ export function AgentPermissionMenu({
           >
             <span className="flex min-w-0 items-center gap-1.5 text-xs">
               {permission.source === 'all' ? <span className="shrink-0">{followAll} ·</span> : null}
-              <AgentPermissionChoiceName choice={permission.choice} ownLabel={ownLabel} truncate />
+              <AgentPermissionChoiceName
+                choice={rawValue ? 'own' : permission.choice}
+                ownLabel={rawValue ?? ownLabel}
+                truncate
+              />
             </span>
             <ChevronDown className="size-3 shrink-0" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" collisionPadding={8} className="w-72">
-          <DropdownMenuRadioGroup
-            value={permission.source === 'all' ? 'default' : permission.choice}
-          >
-            <DropdownMenuRadioItem
-              value="default"
-              disabled={disabled}
-              onSelect={() => permission.onSelect('default')}
-            >
-              <span className="flex min-w-0 items-center gap-1.5 py-0.5">
-                <span className="shrink-0">{followAll} ·</span>
-                <AgentPermissionChoiceName
-                  choice={permission.defaultChoice}
-                  ownLabel={ownLabel}
-                  truncate
-                />
-              </span>
-            </DropdownMenuRadioItem>
-            <DropdownMenuSeparator />
-            <AgentPermissionChoiceItems
-              choices={permission.choices}
-              agent={agentId}
-              ownLabel={ownLabel}
-              chatOwnSupported={permission.chatOwnSupported === true}
-              disabled={disabled}
-              onSelect={permission.onSelect}
-            />
-          </DropdownMenuRadioGroup>
+        <DropdownMenuContent align="start" collisionPadding={8} className="w-80">
+          <AgentPermissionMenuOptions
+            agentId={agentId}
+            permission={permission}
+            disabled={disabled}
+            rawValue={rawValue}
+            showInherited={showInherited}
+            followAll={followAll}
+            ownLabel={ownLabel}
+          />
         </DropdownMenuContent>
       </DropdownMenu>
       {permission.terminalChoice === 'own' && permission.chatChoice ? (
@@ -264,7 +260,8 @@ function AgentArgsChoiceChip({
   disabled,
   chipRef,
   buttonRef,
-  choiceKey
+  choiceKey,
+  source
 }: {
   label: string
   flag: string
@@ -273,6 +270,7 @@ function AgentArgsChoiceChip({
   chipRef?: Ref<HTMLSpanElement>
   buttonRef?: Ref<HTMLButtonElement>
   choiceKey: string
+  source?: 'arguments'
 }): React.JSX.Element {
   return (
     <Tooltip>
@@ -302,7 +300,7 @@ function AgentArgsChoiceChip({
               }
             }}
             aria-label={
-              choiceKey !== 'permissionMode'
+              source === 'arguments' || choiceKey !== 'permissionMode'
                 ? translate('settings.agents.choiceChipRemove', 'Remove {{flag}}', { flag })
                 : translate(
                     'settings.agents.permissionChipRemove',
@@ -317,22 +315,24 @@ function AgentArgsChoiceChip({
         </span>
       </TooltipTrigger>
       <TooltipContent>
-        {choiceKey !== 'permissionMode'
-          ? translate(
-              'settings.agents.choiceChipTooltip',
-              'Added by {{choice}}. Remove it to use the default.',
-              {
-                choice:
-                  choiceKey === 'model'
-                    ? translate('settings.sourceControl.actionModel.model', 'Model')
-                    : translate('settings.sourceControl.actionModel.effort', 'Effort')
-              }
-            )
-          : translate(
-              'settings.agents.permissionChipTooltip',
-              'Added by Permissions. Remove it to use {{agent}}’s own settings.',
-              { agent: label }
-            )}
+        {source === 'arguments'
+          ? translate('agentPicker.argumentsHint', 'Applies only to CLI launches.')
+          : choiceKey !== 'permissionMode'
+            ? translate(
+                'settings.agents.choiceChipTooltip',
+                'Added by {{choice}}. Remove it to use the default.',
+                {
+                  choice:
+                    choiceKey === 'model'
+                      ? translate('settings.sourceControl.actionModel.model', 'Model')
+                      : translate('settings.sourceControl.actionModel.effort', 'Effort')
+                }
+              )
+            : translate(
+                'settings.agents.permissionChipTooltip',
+                'Added by Permissions. Remove it to use {{agent}}’s own settings.',
+                { agent: label }
+              )}
       </TooltipContent>
     </Tooltip>
   )
@@ -343,6 +343,7 @@ export type AgentArgsChoice = {
   label: string
   flag: string
   onRemove: (text: string) => string
+  source?: 'arguments'
 }
 
 export function AgentArgsChoiceChips({
@@ -369,6 +370,7 @@ export function AgentArgsChoiceChips({
           choiceKey={chip.key}
           label={chip.label}
           flag={chip.flag}
+          source={chip.source}
           disabled={disabled}
           buttonRef={index === chips.length - 1 ? buttonRef : undefined}
           onRemove={() => onRemove(chip)}
