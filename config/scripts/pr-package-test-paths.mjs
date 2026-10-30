@@ -47,7 +47,7 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'config/scripts/windows-process-tree-gyp-rebuild.test.mjs',
   'config/scripts/package-electron-runtime-contract.test.mjs',
   'config/scripts/electron-builder-runtime-resources.test.mjs',
-  'src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts',
+  // browser-client-page-renderer-lifecycle runs only in the Linux Electron lane: its subject isn't Windows-specific, and here it raced the Windows Electron spawn tests (EBUSY/0xC0000005).
   'src/main/browser/browser-route-webrtc-egress.electron.test.ts',
   'src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts',
   'src/main/providers/windows-conpty-wide-char-duplication.node-pty.test.ts',
