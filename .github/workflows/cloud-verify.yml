@@ -35,7 +35,7 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     name: Secret scan
     runs-on: ubuntu-22.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -114,6 +114,7 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     name: Container security (${{ matrix.app }})
     runs-on: ubuntu-22.04
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:

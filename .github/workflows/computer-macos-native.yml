@@ -38,6 +38,7 @@ jobs:
   mac-native-owner-smoke:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     runs-on: macos-15
+    timeout-minutes: 25
     permissions:
       contents: read
     steps:
