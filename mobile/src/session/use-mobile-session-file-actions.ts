@@ -1,6 +1,11 @@
-import { useRef, useCallback } from 'react'
+import { useRef, useCallback, useState } from 'react'
 import { openExternalLink } from '../platform/external-link'
+import { triggerSelection } from '../platform/haptics'
 import { useMobileFileTapHandlers } from './use-mobile-file-tap-handlers'
+import {
+  displayTitleFromTerminalUrl,
+  type PendingTerminalUrlTap
+} from './MobileTerminalUrlTapSheet'
 import { resolveMobileNativeChatSessionId } from './native-chat/mobile-native-chat-eligibility'
 import { activateOpenedSourceControlDiffTab } from './opened-mobile-session-tab'
 import { useProvideSessionScreenHandlers } from './session-screen-handlers'
@@ -89,11 +94,10 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     onResumedTerminal: switchTab
   })
 
-  const handleTerminalOpenUrl = useCallback(
-    (handle: string, url: string) => {
-      if (handle !== activeHandleRef.current) {
-        return
-      }
+  const [pendingTerminalUrlTap, setPendingTerminalUrlTap] =
+    useState<PendingTerminalUrlTap | null>(null)
+  const openTerminalUrl = useCallback(
+    (url: string) => {
       // Why: browser.tabCreate resolves a real worktree, which the floating
       // sentinel doesn't have — open taps in the phone browser instead.
       if (terminalLinkOpenMode === 'phone-browser' || isFloatingWorkspaceRoute) {
@@ -104,7 +108,27 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     },
     [terminalLinkOpenMode, isFloatingWorkspaceRoute]
   )
+  const handleTerminalOpenUrl = useCallback(
+    (handle: string, url: string) => {
+      if (handle !== activeHandleRef.current) {
+        return
+      }
+      const trimmedUrl = url.trim()
+      if (!trimmedUrl) {
+        return
+      }
+      triggerSelection()
+      setPendingTerminalUrlTap({
+        title: displayTitleFromTerminalUrl(trimmedUrl),
+        url: trimmedUrl,
+        onOpen: () => openTerminalUrl(trimmedUrl)
+      })
+    },
+    [openTerminalUrl]
+  )
   return {
+    pendingTerminalUrlTap,
+    setPendingTerminalUrlTap,
     handleFileTap,
     handleNativeChatFileTap,
     handleOpenedFileDiffActivationSeqRef,
