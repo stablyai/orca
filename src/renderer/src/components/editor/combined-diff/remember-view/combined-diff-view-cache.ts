@@ -1,7 +1,6 @@
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 import { setWithLRU } from '@/lib/scroll-cache'
 import type { DiffSection } from '../../diff-section-types'
-import { reloadableBodyCharacters } from './reloadable-diff-body-characters'
 
 export type CachedCombinedDiffViewState = {
   entrySignature: string
@@ -144,6 +143,31 @@ export function rememberCombinedDiffView(
   trimInactiveDiffBodies()
 }
 
+// Dirty edits and save conflicts must survive invalidation; loading and on-demand sections hold no body to release.
+function isReloadableSection(section: DiffSection): boolean {
+  return (
+    !section.dirty && !section.saveConflict && !section.loading && section.loadOnDemand !== true
+  )
+}
+
+function reloadableBodyCharacters(section: DiffSection): number {
+  if (!isReloadableSection(section)) {
+    return 0
+  }
+  const result = section.diffResult
+  // Text results mirror the section strings; binary bodies live only in the result.
+  return (
+    section.originalContent.length +
+    section.modifiedContent.length +
+    (result && result.originalContent !== section.originalContent
+      ? result.originalContent.length
+      : 0) +
+    (result && result.modifiedContent !== section.modifiedContent
+      ? result.modifiedContent.length
+      : 0)
+  )
+}
+
 function cachedBodyCharacters(view: CachedCombinedDiffViewState): number {
   let characters = bodyCharactersBySections.get(view.sections)
   if (characters === undefined) {
@@ -183,20 +207,14 @@ function trimInactiveDiffBodies(): void {
   }
 }
 
-// Invalidate clean sections only; dirty cached edits survive until their guarded save or conflict action handles disk changes.
+// Dirty cached edits survive until their guarded save or conflict action handles disk changes.
 function invalidateCleanSections(
   view: CachedCombinedDiffViewState,
   isStale: (section: DiffSection) => boolean
 ): CachedCombinedDiffViewState {
   let changed = false
   const sections = view.sections.map((section) => {
-    if (
-      section.dirty ||
-      section.saveConflict ||
-      section.loading ||
-      section.loadOnDemand === true ||
-      !isStale(section)
-    ) {
+    if (!isReloadableSection(section) || !isStale(section)) {
       return section
     }
     changed = true

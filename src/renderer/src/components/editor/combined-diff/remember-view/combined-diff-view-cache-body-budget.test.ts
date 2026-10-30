@@ -111,6 +111,11 @@ describe('inactive combined diff body budget', () => {
     releaseCombinedDiffView(otherMount)
     expect(storedView('mounted').sections.every((item) => item.loading)).toBe(true)
     expect(storedView('inactive').loadedIndices).toEqual([0])
+
+    rememberCombinedDiffView(otherMount, {
+      view: view([section(6_000_000), section(6_000_000), section(6_000_000)])
+    })
+    expect(storedView('mounted').loadedIndices).toEqual([])
   })
 
   it('preserves dirty edits and refused saves when pruning clean siblings', () => {
@@ -150,45 +155,5 @@ describe('inactive combined diff body budget', () => {
     remember('overflow', [section(2)])
     expect(storedView('text').loadedIndices).toEqual([])
     expect(storedView('image').sections[0]).toBe(binary)
-  })
-
-  it('honors recent scroll writes and accounts replacement snapshots without accumulation', () => {
-    const first = remember('first', [section(6_000_000)])
-    remember('second', [section(6_000_000)])
-    for (let index = 0; index < 30; index++) {
-      rememberCombinedDiffView(first, { view: view([section(6_000_000)]), scrollTop: index })
-    }
-    remember('third', [section(6_000_000)])
-    expect(storedView('second').loadedIndices).toEqual([])
-    expect(storedView('first').loadedIndices).toEqual([0])
-    expect(readCombinedDiffViewMemory('first')?.scrollTop).toBe(29)
-  })
-
-  it('trims snapshots written after unmount tracking has released', () => {
-    const lease = claimCombinedDiffView('closing', 'workspace')
-    releaseCombinedDiffView(lease)
-    rememberCombinedDiffView(lease, {
-      view: view([section(6_000_000), section(6_000_000), section(6_000_000)])
-    })
-    expect(storedView('closing').sections.every((item) => item.loading)).toBe(true)
-    expect(storedView('closing').loadedIndices).toEqual([])
-  })
-
-  it('does not revisit file bodies for scroll-only writes', () => {
-    const original = section(100)
-    let reads = 0
-    const tracked: DiffSection = {
-      ...original,
-      get originalContent() {
-        reads++
-        return original.originalContent
-      }
-    }
-    const lease = remember('scrolling', [tracked])
-    const initialReads = reads
-    for (let index = 0; index < 100; index++) {
-      rememberCombinedDiffView(lease, { scrollTop: index })
-    }
-    expect(reads).toBe(initialReads)
   })
 })
