@@ -1,8 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { agentSessionHostStatusBody } from '../../shared/agent-session-host-status-rows'
 import { agentSessionFailureFact } from '../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
-import * as historyBoundary from './acp-history-boundary'
 import * as historyBatch from '../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
 import { journalLifecycleMutationItemId } from '../native-chat/agent-session-journal/journal-lifecycle-mutation'
 import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
@@ -166,7 +164,7 @@ describe('ACP recovered history boundaries', () => {
               row.body.blocks.some((block) => block.type === 'text' && block.text === 'TOOL-OK')
           )
         ).toBe(true)
-        expect(JSON.stringify(rows)).not.toContain('Continued outside')
+        expect(dividers(rows)).toHaveLength(0)
         if (opening === 1) {
           recovered = structuredClone(rows)
         } else {
@@ -236,7 +234,7 @@ describe('ACP recovered history boundaries', () => {
         (row) => row.body.kind === 'status' && row.body.failure?.kind === 'usageLimitReached'
       )
     ).toHaveLength(1)
-    expect(JSON.stringify(recovered)).not.toContain('Continued outside')
+    expect(dividers(recovered)).toHaveLength(0)
     await catchUp(replay)
     expect(await fixture.rig.rows()).toEqual(recovered)
     await chatSend(fixture, 'next:4', 'next')
@@ -270,14 +268,7 @@ describe('ACP recovered history boundaries', () => {
     { name: 'unique control', initial: null, middle: 'full', final: 'full', unique: true },
     { name: 'old divider', initial: 'prefix', middle: 'prefix', final: 'prefix', old: true }
   ]
-  it.each(
-    scenarios.flatMap((scenario) =>
-      (['neutral', 'none'] as const).map((presentation) => ({ ...scenario, presentation }))
-    )
-  )('settles $name with $presentation and stays unchanged after disk reopen', async (scenario) => {
-    vi.spyOn(historyBoundary, 'acpHistoryBoundary').mockReturnValue(
-      scenario.presentation === 'neutral' ? agentSessionHostStatusBody('history-loaded') : null
-    )
+  it.each(scenarios)('settles $name without a notice across reopens', async (scenario) => {
     const { fixture, catchUp, warn } = await setup(OPENCODE_ACP_DIALECT, 'user-message-id')
     const rig = fixture.rig
     await chatSend(fixture, 'retained', 'keep')
@@ -303,6 +294,11 @@ describe('ACP recovered history boundaries', () => {
       await rig.journal.appendItem(
         { provider: 'legacy', agent: AGENT, sessionId: SESSION, recordId: 'continued-outside:A' },
         continuedOutsideNotice(true),
+        { fence: 1, turnScope: { kind: 'thread' } }
+      )
+      await rig.journal.appendItem(
+        { provider: 'legacy', agent: AGENT, sessionId: SESSION, recordId: 'continued-outside:B' },
+        { kind: 'status', presentation: 'history-loaded', text: 'Saved replay notice' },
         { fence: 1, turnScope: { kind: 'thread' } }
       )
     }
@@ -405,6 +401,7 @@ describe('ACP recovered history boundaries', () => {
         expect(await deferred.drained()).toEqual({ ok: true })
         const rows = journal.snapshot().items
         expect(rows.slice(0, native.length)).toEqual(native)
+        expect(dividers(rows)).toHaveLength(0)
         expect(new Set(resolved).size).toBe(resolved.length)
         for (const plan of plans) {
           expect(new Set(plan.keys).size).toBe(plan.keys.length)
@@ -469,15 +466,7 @@ describe('ACP recovered history boundaries', () => {
                 row.body.kind === 'status' && row.body.presentation === 'continued-outside-rewound'
             )!
             const corrected = rows.find((row) => row.itemId === old.itemId)
-            if (scenario.presentation === 'neutral') {
-              expect(corrected).toMatchObject({
-                sequence: old.sequence,
-                revision: old.revision + 1,
-                body: { presentation: 'history-loaded' }
-              })
-            } else {
-              expect(corrected).toBeUndefined()
-            }
+            expect(corrected).toBeUndefined()
             // The same imported target can subsequently acquire its missing tail without a new boundary.
             replay = [
               ...a('prefix and tail'),
@@ -495,9 +484,7 @@ describe('ACP recovered history boundaries', () => {
               dialect: OPENCODE_ACP_DIALECT,
               assertCurrent: () => {}
             })
-            expect(dividers(journal.snapshot().items)).toHaveLength(
-              scenario.presentation === 'neutral' ? 2 : 0
-            )
+            expect(dividers(journal.snapshot().items)).toHaveLength(0)
             expect(
               journal
                 .snapshot()
@@ -560,7 +547,7 @@ describe('ACP recovered history boundaries', () => {
     await catchUp(full)
     const settled = await fixture.rig.rows()
     expect(JSON.stringify(settled)).toContain('bee')
-    expect(dividers(settled)).toHaveLength(2)
+    expect(dividers(settled)).toHaveLength(0)
     const journal = await fixture.rig.reopenJournal()
     const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     deferred.bind({ journal, fence: 1, publish: () => {} })

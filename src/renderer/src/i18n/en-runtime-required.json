@@ -1647,7 +1647,6 @@
         "continuedOutside": "Continued outside this chat.",
         "continuedOutsideRewound": "Continued outside this chat. Earlier replies above are no longer in this conversation's history.",
         "historyItemTooLarge": "This part of the chat was too large to show.",
-        "historyLoaded": "Loaded from the agent's history.",
         "historyRepaired": "Part of this chat's history couldn't be loaded.",
         "orcaStopCanContinue": "You can continue in this conversation.",
         "orcaStopCrash": "Orca on {{machine}} stopped unexpectedly while this response was in progress.",

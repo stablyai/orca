@@ -1,5 +1,5 @@
 // A reopened chat catches up on turns its agent replays that the chat never saw, against real
-// OpenCode 2.0.14 and Grok 1.0.62 recordings: once, in order, under one divider, and never a turn
+// OpenCode 2.0.14 and Grok 1.0.62 recordings: once, in order, without a notice, and never a turn
 // the chat already holds.
 
 import {
@@ -87,12 +87,12 @@ describe('ACP history catch-up', () => {
       before.map((row) => row.itemId)
     )
     const added = partial.slice(before.length)
-    expect(added[0]?.body).toMatchObject({ kind: 'status', presentation: 'history-loaded' })
+    expect(dividers(partial)).toHaveLength(0)
     expect(userTexts(added)).toEqual([expect.stringContaining('sleep 40')])
 
     await catchUp(replay)
     const complete = await fixture.rig.rows()
-    expect(dividers(complete)).toHaveLength(1)
+    expect(dividers(complete)).toHaveLength(0)
     expect(userTexts(complete)).toEqual([expect.stringContaining('sleep 40')])
     expect(complete.filter((row) => row.body.kind === 'tool-call')).toHaveLength(3)
 
@@ -135,7 +135,7 @@ describe('ACP history catch-up', () => {
       'Reply with exactly the word ONE.',
       expect.stringContaining('TWO-TOOL')
     ])
-    expect(dividers(rows)).toHaveLength(1)
+    expect(dividers(rows)).toHaveLength(0)
     expect((await fixture.rig.turns()).map((turn) => turn.state)).toEqual([
       'completed',
       'completed'
@@ -233,7 +233,7 @@ describe('ACP history catch-up', () => {
       { blocks: [{ text: 'prefix and full tail' }] },
       { blocks: [{ text: 'second' }] }
     ])
-    expect(dividers(complete)).toHaveLength(1)
+    expect(dividers(complete)).toHaveLength(0)
     await catchUp(full)
     expect(await rig.rows()).toEqual(complete)
     const reopened = await rig.reopenJournal()
@@ -286,7 +286,7 @@ describe('ACP history catch-up', () => {
     expect(
       rows.filter((row) => row.body.kind === 'message' && row.body.role === 'reasoning')
     ).toHaveLength(1)
-    expect(dividers(rows)).toHaveLength(1)
+    expect(dividers(rows)).toHaveLength(0)
     expect(
       rows.filter(
         (row) =>
@@ -599,7 +599,7 @@ describe('ACP history catch-up', () => {
     expect(await fixture.rig.rows()).toEqual(rows)
   })
   it.each(['refused', 'direct', 'queued', 'card', 'empty'] as const)(
-    'places the divider from visible retained content with a %s submission',
+    'imports without a notice beside a %s submission',
     async (scenario) => {
       const { fixture, catchUp } = await setup(GROK_ACP_DIALECT, 'prompt-id')
       const { journal } = fixture.rig
@@ -651,7 +651,7 @@ describe('ACP history catch-up', () => {
       ]
       await catchUp(replay)
       const rows = await fixture.rig.rows()
-      expect(dividers(rows)).toHaveLength(scenario === 'refused' || scenario === 'direct' ? 1 : 0)
+      expect(dividers(rows)).toHaveLength(0)
       expect(rows.slice(0, before.length)).toEqual(before)
       expect(journal.submissions()).toEqual(submissions)
       await catchUp(replay)

@@ -35,7 +35,11 @@ export async function setup(dialect: AcpDialect, identity: AcpHistoryTurnIdentit
 
 export function dividers(rows: AgentJournalRenderItem[]): AgentJournalRenderItem[] {
   return rows.filter(
-    (row) => row.body.kind === 'status' && row.body.presentation === 'history-loaded'
+    (row) =>
+      row.body.kind === 'status' &&
+      ['history-loaded', 'continued-outside', 'continued-outside-rewound'].includes(
+        row.body.presentation ?? ''
+      )
   )
 }
 

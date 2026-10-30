@@ -3,8 +3,6 @@
 import type { AgentJournalPlainStatusItem } from './agent-session-journal-types'
 
 export const AGENT_SESSION_HOST_STATUS_COPY = {
-  /** Provider history does not establish whether a turn was written outside Orca. */
-  'history-loaded': "Loaded from the agent's history.",
   /** A repair skipped rows it could not read. */
   'history-repaired': "Part of this chat's history couldn't be loaded.",
   /** In place of an item too large for any history page. */

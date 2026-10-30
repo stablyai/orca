@@ -31,6 +31,7 @@ import {
 } from './acp-history-scaling-counts.test-fixture'
 import { work } from './acp-history-scaling-operations.test-fixture'
 import { catchUpAcpHistory } from './acp-history-catch-up'
+import { dividers } from './acp-history-catch-up.test-support'
 import {
   acpHistoryTurns,
   type AcpIdentifiedHistoryTurn,
@@ -42,9 +43,7 @@ import { acpNamedTextKey } from './acp-turn-messages'
 import { OPENCODE_ACP_DIALECT } from './acp-dialects/opencode-dialect'
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
 import * as historyBatch from '../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
-import * as historyBoundary from './acp-history-boundary'
 import { journalLifecycleMutationItemId } from '../native-chat/agent-session-journal/journal-lifecycle-mutation'
-import { agentSessionHostStatusBody } from '../../shared/agent-session-host-status-rows'
 
 afterEach(closeProviderTimelineRigs)
 const scope: AcpHistoryScope = {
@@ -306,82 +305,76 @@ async function measureCatchUp(
   return counts
 }
 
-// Instrumented 20/200 journal settlement and disk reopens in both boundary modes need extra CI time.
+// Instrumented 20/200 journal settlement and disk reopens need extra CI time.
 it('bounds composed fresh/held content and old dividers at 20 and 200', async () => {
-  for (const boundary of [agentSessionHostStatusBody('history-loaded'), null]) {
-    const seam = vi.spyOn(historyBoundary, 'acpHistoryBoundary').mockReturnValue(boundary)
-    try {
-      const populations: {
-        first: Awaited<ReturnType<typeof measureCatchUp>>
-        unchanged: Awaited<ReturnType<typeof measureCatchUp>>
-      }[] = []
-      for (const n of [20, 200]) {
-        const rig = await openProviderTimelineRig()
-        for (let i = 0; i < n; i++) {
-          await native(rig, `native-${i}`, `native-${i}`)
-        }
-        const nativeRows = structuredClone(await rig.rows())
-        const population = (size: number, text: string) =>
-          Array.from({ length: size }, (_, i) => [
-            user(`outside-${i}`, `outside-${i}`),
-            frame({
-              sessionUpdate: 'agent_message_chunk',
-              messageId: `answer-${i}`,
-              content: { type: 'text', text }
-            })
-          ]).flat()
-        await catchUp(rig, population(n / 2, 'prefix'))
-        for (let i = 0; i < n / 2; i++) {
-          await rig.journal.appendItem(
-            {
-              provider: 'legacy',
-              agent: AGENT,
-              sessionId: SESSION,
-              recordId: `continued-outside:outside-${i}`
-            },
-            historyBatch.continuedOutsideNotice(true),
-            { fence: 1, turnScope: { kind: 'thread' } }
-          )
-        }
-        const frames = [...population(n, 'middle'), ...population(n, 'final')]
-        const first = await measureCatchUp(rig, frames, true)
-        const after = await rig.rows()
-        expect(after.slice(0, nativeRows.length)).toEqual(nativeRows)
-        expect(
-          after.filter(
-            (row) =>
-              row.body.kind === 'message' &&
-              row.body.role === 'assistant' &&
-              row.body.blocks.some((block) => block.type === 'text' && block.text === 'final')
-          )
-        ).toHaveLength(n)
-        expect(first.expectations).toBe(n)
-        expect(new Set(first.resolvedKeys).size).toBe(first.mutations)
-        expect(new Set(first.correctedDividers).size).toBe(n / 2 + (boundary ? 1 : 0))
-        expect(first.correctedDividers).toHaveLength(n / 2 + (boundary ? 1 : 0))
-        const unchanged = await repeat(rig, frames)
-        expect(unchanged.expectations).toBe(0)
-        expect(unchanged.mutations).toBe(0)
-        populations.push({ first, unchanged })
-      }
-      for (const phase of ['first', 'unchanged'] as const) {
-        for (const operation of [
-          'dividerKeyBuilds',
-          'compositionReads',
-          'compositionWrites',
-          'catchUp',
-          'translationObservations',
-          'translatedItems'
-        ] as const) {
-          const small = populations[0]![phase][operation]
-          expect(small).toBeGreaterThan(0)
-          // V8 coverage ranges vary after warmup; indexed source/composition counts are exact.
-          const factor = operation === 'catchUp' ? 12 : 11
-          expect(populations[1]![phase][operation]).toBeLessThanOrEqual(small * factor)
-        }
-      }
-    } finally {
-      seam.mockRestore()
+  const populations: {
+    first: Awaited<ReturnType<typeof measureCatchUp>>
+    unchanged: Awaited<ReturnType<typeof measureCatchUp>>
+  }[] = []
+  for (const n of [20, 200]) {
+    const rig = await openProviderTimelineRig()
+    for (let i = 0; i < n; i++) {
+      await native(rig, `native-${i}`, `native-${i}`)
+    }
+    const nativeRows = structuredClone(await rig.rows())
+    const population = (size: number, text: string) =>
+      Array.from({ length: size }, (_, i) => [
+        user(`outside-${i}`, `outside-${i}`),
+        frame({
+          sessionUpdate: 'agent_message_chunk',
+          messageId: `answer-${i}`,
+          content: { type: 'text', text }
+        })
+      ]).flat()
+    await catchUp(rig, population(n / 2, 'prefix'))
+    for (let i = 0; i < n / 2; i++) {
+      await rig.journal.appendItem(
+        {
+          provider: 'legacy',
+          agent: AGENT,
+          sessionId: SESSION,
+          recordId: `continued-outside:outside-${i}`
+        },
+        historyBatch.continuedOutsideNotice(true),
+        { fence: 1, turnScope: { kind: 'thread' } }
+      )
+    }
+    const frames = [...population(n, 'middle'), ...population(n, 'final')]
+    const first = await measureCatchUp(rig, frames, true)
+    const after = await rig.rows()
+    expect(after.slice(0, nativeRows.length)).toEqual(nativeRows)
+    expect(dividers(after)).toHaveLength(0)
+    expect(
+      after.filter(
+        (row) =>
+          row.body.kind === 'message' &&
+          row.body.role === 'assistant' &&
+          row.body.blocks.some((block) => block.type === 'text' && block.text === 'final')
+      )
+    ).toHaveLength(n)
+    expect(first.expectations).toBe(n)
+    expect(new Set(first.resolvedKeys).size).toBe(first.mutations)
+    expect(new Set(first.correctedDividers).size).toBe(n / 2)
+    expect(first.correctedDividers).toHaveLength(n / 2)
+    const unchanged = await repeat(rig, frames)
+    expect(unchanged.expectations).toBe(0)
+    expect(unchanged.mutations).toBe(0)
+    populations.push({ first, unchanged })
+  }
+  for (const phase of ['first', 'unchanged'] as const) {
+    for (const operation of [
+      'dividerKeyBuilds',
+      'compositionReads',
+      'compositionWrites',
+      'catchUp',
+      'translationObservations',
+      'translatedItems'
+    ] as const) {
+      const small = populations[0]![phase][operation]
+      expect(small).toBeGreaterThan(0)
+      // V8 coverage ranges vary after warmup; indexed source/composition counts are exact.
+      const factor = operation === 'catchUp' ? 12 : 11
+      expect(populations[1]![phase][operation]).toBeLessThanOrEqual(small * factor)
     }
   }
 }, 120000)
@@ -415,11 +408,7 @@ it('bounds actual first/reopened search and repeated source activation at 20 and
             row.body.kind === 'message' && row.body.role === 'user' ? [row.body.blocks] : []
           )
       ).toEqual(Array.from({ length: n }, (_, i) => [{ type: 'text', text: `outside-${i}` }]))
-      expect(
-        after.filter(
-          (row) => row.body.kind === 'status' && row.body.presentation === 'history-loaded'
-        )
-      ).toHaveLength(k === 0 ? 0 : 1)
+      expect(dividers(after)).toHaveLength(0)
       const unchanged = await repeat(rig, frames)
       for (const count of [first, unchanged]) {
         expect(count.suffix).toBeLessThanOrEqual(n * Math.ceil(Math.log2(n + 1)))

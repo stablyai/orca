@@ -2723,7 +2723,6 @@
     "hostStatus": {
       "historyRepaired": "Part of this chat's history couldn't be loaded.",
       "historyItemTooLarge": "This part of the chat was too large to show.",
-      "historyLoaded": "Loaded from the agent's history.",
       "continuedOutside": "Continued outside this chat.",
       "continuedOutsideRewound": "Continued outside this chat. Earlier replies above are no longer in this conversation's history."
     },

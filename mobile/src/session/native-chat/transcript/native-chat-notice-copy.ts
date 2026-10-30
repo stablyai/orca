@@ -10,7 +10,6 @@ export function nativeChatNoticeCopy(t: Translate) {
 
 export function nativeChatHostStatusCopy(t: Translate) {
   return {
-    'history-loaded': t('chat.hostStatus.historyLoaded', "Loaded from the agent's history."),
     'history-repaired': t(
       'chat.hostStatus.historyRepaired',
       "Part of this chat's history couldn't be loaded."

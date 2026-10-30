@@ -326,8 +326,7 @@ describe('MobileNativeChatMessage', () => {
 
   it.each([
     ['system', 'history-item-too-large'],
-    ['user', 'history-item-too-large'],
-    ['system', 'history-loaded']
+    ['user', 'history-item-too-large']
   ] as const)(
     'renders a %s host notice as selectable muted text rather than a markdown answer',
     (role, presentation) => {

@@ -37,8 +37,6 @@ import { nativeChatAntigravitySignInContent } from './native-chat-antigravity-se
 import { formatUsageLimitResetClock } from '../../../../shared/agent-session-usage-limit'
 
 const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string> = {
-  'history-loaded': () =>
-    translate('components.native-chat.notices.historyLoaded', HOST_STATUS_COPY['history-loaded']),
   'history-repaired': () =>
     translate(
       'components.native-chat.notices.historyRepaired',
