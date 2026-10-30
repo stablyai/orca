@@ -7,7 +7,7 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../../shared/agent-session-resume'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
-import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
+import type { AgentStartedTelemetry, WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
 import type { ClosedTerminalTabTombstonesByTabId } from '../../../shared/closed-terminal-tab-tombstones'
 import type { PendingWorktreeCreation } from './pending-worktree-creation'
 
@@ -73,4 +73,6 @@ export type InitialTerminalOptions = {
   seedUserDefaultSurface?: boolean
   /** The host a create targeted: a same-path twin on another host cannot make the owner ambiguous. */
   executionHostId?: ExecutionHostId
+  /** Applied only when auto-create already won; never treated as explicit launch work. */
+  seedStartupIfEmpty?: WorktreeStartupPayload
 }

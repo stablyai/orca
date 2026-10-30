@@ -40,6 +40,7 @@ export type GatedEmptyWorkspaceReseedIntent = {
   callerProvidesSurface: boolean
   seedUserDefaultSurface: boolean
   executionHostId?: ExecutionHostId
+  seedStartupIfEmpty?: WorktreeStartupPayload
 }
 
 /** Re-seed after an empty gate unless its activation owns the surface or no longer owns the host. */
@@ -47,7 +48,8 @@ export function reseedGatedEmptyWorkspace(
   workspaceKey: string,
   intent: GatedEmptyWorkspaceReseedIntent
 ): void {
-  const { callerProvidesSurface, seedUserDefaultSurface, executionHostId } = intent
+  const { callerProvidesSurface, seedUserDefaultSurface, executionHostId, seedStartupIfEmpty } =
+    intent
   const state = useAppStore.getState()
   if (
     callerProvidesSurface === true ||
@@ -66,7 +68,8 @@ export function reseedGatedEmptyWorkspace(
     undefined,
     {
       reseedEmptiedWorkspace: true,
-      ...(seedUserDefaultSurface ? { seedUserDefaultSurface: true } : {})
+      ...(seedUserDefaultSurface ? { seedUserDefaultSurface: true } : {}),
+      ...(seedStartupIfEmpty ? { seedStartupIfEmpty } : {})
     }
   )
 }
@@ -236,6 +239,11 @@ export function ensureWorktreeHasInitialTerminal(
       return existingTerminalTabId
     }
     return null
+  }
+
+  // Why: seed-if-empty is not explicit launch work; only apply it when auto-create already won.
+  if (!sequencedStartup && shouldAutoCreate) {
+    sequencedStartup = opts?.seedStartupIfEmpty
   }
 
   const templatedTabId = applyDefaultTerminalTabs(
