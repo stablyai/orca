@@ -1,23 +1,7 @@
 import React from 'react'
-import {
-  LoaderCircle,
-  MessageSquare,
-  Plus,
-  SendHorizontal,
-  SlidersHorizontal,
-  Sparkles,
-  X
-} from 'lucide-react'
+import { LoaderCircle, MessageSquare, Plus, SendHorizontal, Sparkles, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import {
   getPRCommentAudienceEmptyLabel,
@@ -25,13 +9,38 @@ import {
 } from '@/lib/pr-comment-audience-labels'
 import { translate } from '@/i18n/i18n'
 import { ResolvedCommentGroupsSection } from './comment-group'
-import {
-  getPRCommentsListDisplayModeLabel,
-  PR_COMMENT_LIST_DISPLAY_MODES,
-  type PRCommentsListDisplayMode,
-  type PRCommentsListProps,
-  useCommentsListState
-} from './use-comments-list-state'
+import { PRCommentOptionsMenu } from './comment-options-menu'
+import { type PRCommentsListProps, useCommentsListState } from './use-comments-list-state'
+
+function HiddenResolvedThreadsNote({
+  count,
+  onShow
+}: {
+  count: number
+  onShow: () => void
+}): React.JSX.Element {
+  return (
+    <div className="mx-3 mb-2 flex items-center justify-between gap-2 rounded-md border border-dashed border-border px-2.5 py-1.5 text-2xs text-muted-foreground">
+      <span>
+        {translate(
+          'auto.components.right.sidebar.checks.panel.commentOptions.hiddenResolved',
+          '{{count}} resolved threads hidden',
+          { count }
+        )}
+      </span>
+      <button
+        type="button"
+        className="font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm"
+        onClick={onShow}
+      >
+        {translate(
+          'auto.components.right.sidebar.checks.panel.commentOptions.showResolved',
+          'Show'
+        )}
+      </button>
+    </div>
+  )
+}
 
 export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
   const {
@@ -58,6 +67,9 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
     setCommentFilter,
     displayMode,
     setDisplayMode,
+    hideResolved,
+    setHideResolved,
+    hiddenResolvedThreadCount,
     replyingCommentId,
     setReplyingCommentId,
     isAddingComment,
@@ -92,7 +104,7 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
             {translate('auto.components.right.sidebar.checks.panel.content.94557d68e2', 'Comments')}
           </span>
           {comments.length > 0 && (
-            <span className={presentation.sectionCount}>{comments.length}</span>
+            <span className={presentation.sectionCount}>{commentCounts.all}</span>
           )}
           <div className="-mr-1 ml-auto flex items-center gap-0.5">
             {canShowResolveWithAI && (
@@ -206,40 +218,12 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
               </>
             )}
             {comments.length > 0 && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    className="text-muted-foreground hover:text-foreground"
-                    aria-label={translate(
-                      'auto.components.right.sidebar.checks.panel.content.f5cf324efa',
-                      'Comment display options'
-                    )}
-                  >
-                    <SlidersHorizontal className="size-3" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" side="bottom" sideOffset={6}>
-                  <DropdownMenuLabel>
-                    {translate(
-                      'auto.components.right.sidebar.checks.panel.content.5e6e5a13fa',
-                      'View'
-                    )}
-                  </DropdownMenuLabel>
-                  <DropdownMenuRadioGroup
-                    value={displayMode}
-                    onValueChange={(value) => setDisplayMode(value as PRCommentsListDisplayMode)}
-                  >
-                    {PR_COMMENT_LIST_DISPLAY_MODES.map((mode) => (
-                      <DropdownMenuRadioItem key={mode} value={mode}>
-                        {getPRCommentsListDisplayModeLabel(mode)}
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <PRCommentOptionsMenu
+                displayMode={displayMode}
+                hideResolved={hideResolved}
+                onDisplayModeChange={setDisplayMode}
+                onHideResolvedChange={setHideResolved}
+              />
             )}
             {onAddComment && !isAddingComment && (
               <Tooltip>
@@ -380,6 +364,12 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
             </>
           )}
         </div>
+      )}
+      {comments.length > 0 && hiddenResolvedThreadCount > 0 && (
+        <HiddenResolvedThreadsNote
+          count={hiddenResolvedThreadCount}
+          onShow={() => setHideResolved(false)}
+        />
       )}
       {onAddComment && comments.length > 0 && isAddingComment && renderAddCommentComposer(false)}
     </div>

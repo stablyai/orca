@@ -14015,7 +14015,6 @@
                 "a7f0c7e8d1": "Queue",
                 "8a621a2c4f": "Grouped",
                 "b13f85d75c": "Timeline",
-                "f5cf324efa": "Comment display options",
                 "5e6e5a13fa": "View",
                 "actionRequiredHint": "Needs a manual action on GitHub (e.g. approving the run) to unblock merging.",
                 "b3195cba33": "Unmark author as bot",
@@ -14187,6 +14186,15 @@
                   "title": "{{reviewLabelCap}} not supported here",
                   "body": "This repository provider does not support creating a {{reviewLabel}} from Orca."
                 }
+              },
+              "commentOptions": {
+                "triggerActive": "Comment options ({{value0}})",
+                "title": "Comment options",
+                "hideResolved": "Hide resolved threads",
+                "hiddenResolved": "{{count}} resolved threads hidden",
+                "hiddenResolved_one": "{{count}} resolved thread hidden",
+                "hiddenResolved_other": "{{count}} resolved threads hidden",
+                "showResolved": "Show"
               }
             }
           },

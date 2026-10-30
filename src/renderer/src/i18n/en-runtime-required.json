@@ -425,6 +425,10 @@
           },
           "checks": {
             "panel": {
+              "commentOptions": {
+                "hiddenResolved_one": "{{count}} resolved thread hidden",
+                "hiddenResolved_other": "{{count}} resolved threads hidden"
+              },
               "content": {
                 "commitsBehind_one": "{{count}} commit behind",
                 "commitsBehind_other": "{{count}} commits behind",

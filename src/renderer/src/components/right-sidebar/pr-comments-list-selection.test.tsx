@@ -61,6 +61,24 @@ vi.mock('@/components/ui/dropdown-menu', () => {
         {children}
       </button>
     ),
+    DropdownMenuCheckboxItem: ({
+      children,
+      checked,
+      onCheckedChange
+    }: {
+      children: ReactNode
+      checked?: boolean
+      onCheckedChange?: (checked: boolean) => void
+    }) => (
+      <button
+        type="button"
+        role="menuitemcheckbox"
+        aria-checked={checked}
+        onClick={() => onCheckedChange?.(!checked)}
+      >
+        {children}
+      </button>
+    ),
     DropdownMenuSeparator: () => <hr />,
     DropdownMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
   }
@@ -75,12 +93,29 @@ import {
   type PRCommentsListSelectionClearRequest
 } from './pr-comments-list-selection'
 import { PRCommentsList } from './checks-panel/comments-list'
+import { useAppStore } from '@/store'
+import { getDefaultSettings } from '../../../../shared/constants'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 let container: HTMLDivElement
 let root: Root
+const realUpdateSettings = useAppStore.getState().updateSettings
+
+function seedCommentSettings(overrides: Partial<GlobalSettings> = {}): void {
+  // In-memory updateSettings so menu changes round-trip through the store without IPC.
+  useAppStore.setState({
+    settings: { ...getDefaultSettings('/tmp'), ...overrides },
+    updateSettings: async (updates) => {
+      useAppStore.setState((state) => ({
+        settings: state.settings ? { ...state.settings, ...updates } : state.settings
+      }))
+    }
+  })
+}
 
 beforeEach(() => {
   clearPRCommentsListSelectionsForTests()
+  seedCommentSettings()
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -92,6 +127,7 @@ afterEach(() => {
   })
   container.remove()
   clearPRCommentsListSelectionsForTests()
+  useAppStore.setState({ settings: null, updateSettings: realUpdateSettings })
 })
 
 function comment(overrides: Partial<PRComment>): PRComment {
@@ -601,5 +637,73 @@ describe('PRCommentsList comment ordering', () => {
     selectDisplayMode('Timeline')
 
     expect(renderedGroupOrder(threadLabels)).toEqual(['Quiet thread.', 'Replied thread.'])
+  })
+})
+
+describe('PRCommentsList hide resolved threads', () => {
+  const resolvedThreadComments = [
+    comment({
+      id: 1,
+      body: 'Still open.',
+      threadId: 'thread-open',
+      path: 'src/a.ts',
+      isResolved: false
+    }),
+    comment({
+      id: 2,
+      body: 'Already fixed.',
+      threadId: 'thread-done',
+      path: 'src/b.ts',
+      isResolved: true
+    }),
+    comment({
+      id: 3,
+      body: 'Fixed reply.',
+      threadId: 'thread-done',
+      path: 'src/b.ts',
+      isResolved: true
+    }),
+    comment({
+      id: 4,
+      body: 'Top-level note.',
+      url: 'https://github.com/acme/widgets/pull/42#issuecomment-4'
+    })
+  ]
+
+  it('drops resolved threads from the list and counts, and Show turns the filter off', () => {
+    seedCommentSettings({ prCommentsHideResolved: true })
+    renderList({ comments: resolvedThreadComments })
+
+    expect(container.textContent).toContain('Still open.')
+    expect(container.textContent).toContain('Top-level note.')
+    expect(container.textContent).not.toContain('Resolved · 1')
+    expect(container.textContent).toContain('1 resolved thread hidden')
+    expect(hasButton('Comment options (1 filter)')).toBe(true)
+
+    clickButton('Show')
+
+    expect(useAppStore.getState().settings?.prCommentsHideResolved).toBe(false)
+    expect(container.textContent).toContain('Resolved · 1')
+    expect(container.textContent).not.toContain('resolved thread hidden')
+
+    clickButton('Hide resolved threads')
+
+    expect(useAppStore.getState().settings?.prCommentsHideResolved).toBe(true)
+    expect(container.textContent).toContain('1 resolved thread hidden')
+  })
+
+  it('keeps the chosen view after the list remounts', () => {
+    renderList({ comments: resolvedThreadComments })
+    selectDisplayMode('Timeline')
+    expect(useAppStore.getState().settings?.prCommentsDisplayMode).toBe('timeline')
+
+    act(() => {
+      root.unmount()
+    })
+    root = createRoot(container)
+    renderList({ comments: resolvedThreadComments })
+
+    // Timeline has no triage sections, so the grouped-only "Needs review" heading stays away.
+    expect(container.textContent).not.toContain('Needs review')
   })
 })

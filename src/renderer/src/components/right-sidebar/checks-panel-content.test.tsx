@@ -301,7 +301,7 @@ describe('PRCommentsList', () => {
     expect(markup.indexOf('aria-label="Add comment"')).toBeLessThan(
       markup.indexOf('Existing review context')
     )
-    expect(markup.indexOf('aria-label="Comment display options"')).toBeLessThan(
+    expect(markup.indexOf('aria-label="Comment options"')).toBeLessThan(
       markup.indexOf('aria-label="Add comment"')
     )
     expect(markup).toContain('lucide-plus')
